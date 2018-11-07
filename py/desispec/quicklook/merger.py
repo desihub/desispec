@@ -71,7 +71,7 @@ def modify_tasks(myDict):
         myDict = transferKEY(myDict, "METRICS", "FLEXURE", "BOXCAREXTRACT", keyList)
 
     ################  
-    keyList = ["XYSHIFTS_NORMAL_RANGE", "XYSHIFTS_WARN_RANGE", "XYSHIFTS_REF"]
+    keyList = ["XYSHIFTS_NORMAL_RANGE", "XYSHIFTS_WARN_RANGE", "XYSHIFTS_DARK_REF", "XYSHIFTS_GRAY_REF","XYSHIFTS_BRIGHT_REF"]
     if "EXTRACT_QP" in myDict:
         myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "EXTRACT_QP", keyList)
     elif "BOXCAREXTRACT" in myDict:
