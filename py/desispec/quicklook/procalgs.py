@@ -891,12 +891,12 @@ class SkySub_QL(pas.PipelineAlg):
 
         return (sframe,skymodel)
 
-class FluxCalibration(pas.PipelineAlg):
+class ApplyFluxCalibration(pas.PipelineAlg):
     """PA to apply flux calibration to the given sframe
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Flux Calibration"
+            name="Apply Flux Calibration"
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
 
     def run(self,*args,**kwargs):

@@ -11,7 +11,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ApplyFiberFlat_QP, SkySub_QP, FluxCalibration]
+Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ApplyFiberFlat_QP, SkySub_QP, ApplyFluxCalibration]
 Algorithms:
     Initialize:
         QA: 
@@ -65,7 +65,7 @@ Algorithms:
             Calculate_SNR:
                 #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
                 PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-10, 10.], FIDSNR_TGT_WARN_RANGE: [-15., 15.], FIDSNR_TGT_BRIGHT_REF:[1.,2.], FIDSNR_TGT_DARK_REF:[1.,2.], FIDSNR_TGT_GRAY_REF:[1.,2.], FIDMAG: 22.}
-    FluxCalibration:
+    ApplyFluxCalibration:
         QA:
             Sky_Rband:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],

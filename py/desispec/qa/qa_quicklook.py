@@ -1771,7 +1771,7 @@ class Calculate_SNR(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
