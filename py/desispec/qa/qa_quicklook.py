@@ -1674,21 +1674,21 @@ class Integrate_Spec(MonitoringAlg):
         integrals=np.array(integrals)
 
         #- Convert calibrated flux to fiber magnitude
-        fibermags=np.zeros(integrals.shape)
-        fibermags[integrals>0]=zeropoint-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        specmags=np.zeros(integrals.shape)
+        specmags[integrals>0]=zeropoint-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
 
         #- Calculate delta_mag (remove sky fibers first)
         objects=frame.fibermap['OBJTYPE']
         skyfibers=np.where(objects=="SKY")[0]
         immags_nosky=list(magnitudes)
-        fibmags_nosky=list(fibermags)
+        specmags_nosky=list(specmags)
         for skyfib in range(len(skyfibers)):
             immags_nosky.remove(immags_nosky[skyfibers[skyfib]])
-            fibmags_nosky.remove(fibmags_nosky[skyfibers[skyfib]])
+            specmags_nosky.remove(specmags_nosky[skyfibers[skyfib]])
             for skyfibindex in range(len(skyfibers)):
                 skyfibers[skyfibindex]-=1
        
-        delta_mag=np.array(fibmags_nosky)-np.array(immags_nosky)
+        delta_mag=np.array(specmags_nosky)-np.array(immags_nosky)
         delm = np.nan_to_num(delta_mag)
         
         #- average integrals over fibers of each object type and get imaging magnitudes
@@ -1730,7 +1730,7 @@ class Integrate_Spec(MonitoringAlg):
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
 
         #SE: should not have any nan or inf at this point nut let's keep it for saftety measures here 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SPECMAG":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         get_outputs(qafile,qafig,retval,'plot_integral')
         return retval    
