@@ -56,15 +56,19 @@ class TestQA(unittest.TestCase):
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
 
-    def _make_frame(self, camera='b0', flavor='science', night=None, expid=None, nspec=3, objtype=None):
+    def _make_frame(self, camera='b0', flavor='science', night=None, expid=None, nspec=3):
         # Init
         if night is None:
             night = self.nights[0]
         if expid is None:
             expid = self.expids[0]
         # Generate
-        frame = get_frame_data(nspec=nspec, objtype=objtype)
+        frame = get_frame_data(nspec=nspec)
         frame.meta = dict(CAMERA=camera, FLAVOR=flavor, NIGHT=night, EXPID=expid)
+        if flavor in ('arc', 'flat', 'zero', 'dark'):
+            frame.fibermap['OBJTYPE'] = 'CAL'
+            frame.fibermap['DESI_TARGET'] = 0
+
         return frame
 
     def _write_flat_file(self, camera='b0', night=None, expid=None):
@@ -77,7 +81,7 @@ class TestQA(unittest.TestCase):
         frame_file = findfile('frame', night=night, expid=expid, specprod_dir=self.testDir, camera=camera)
         fflat_file = findfile('fiberflat', night=night, expid=expid, specprod_dir=self.testDir, camera=camera)
         # Frames
-        fb = self._make_frame(camera=camera, flavor='flat', nspec=10, objtype='FLAT')
+        fb = self._make_frame(camera=camera, flavor='flat', nspec=10)
         _ = write_frame(frame_file, fb)
         self.files_written.append(frame_file)
         # Fiberflats

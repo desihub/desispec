@@ -40,6 +40,11 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     log = get_logger()
     outfile = makepath(outfile, 'frame')
 
+    #- Ignore some known and harmless units warnings
+    import warnings
+    warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fits unit.*")
+    warnings.filterwarnings('ignore', message=".*'10\*\*6 arcsec.* did not parse as fits unit.*")
+
     if header is not None:
         hdr = fitsheader(header)
     else:
@@ -105,6 +110,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
                         hdu.header[key] = (value, frame.scores_comments[value])
 
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
+
     os.rename(outfile+'.tmp', outfile)
 
     return outfile

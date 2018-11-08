@@ -7,6 +7,8 @@ from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.io import empty_fibermap
 
+from desitarget.targetmask import desi_mask
+
 def get_calib_from_frame(frame):
     """ Generate a FluxCalib object given an input Frame
     fc with essentially no error
@@ -36,7 +38,7 @@ def get_fiberflat_from_frame(frame):
     ff = FiberFlat(frame.wave, fiberflat, ffivar)
     return ff
 
-def get_frame_data(nspec=10, objtype=None):
+def get_frame_data(nspec=10):
     """
     Return basic test data for desispec.frame object:
     """
@@ -57,11 +59,9 @@ def get_frame_data(nspec=10, objtype=None):
     ivar = np.ones(flux.shape) / sigma**2
     mask = np.zeros(flux.shape, dtype=int)
     fibermap = empty_fibermap(nspec, 1500)
-    if objtype is None:
-        fibermap['OBJTYPE'] = 'QSO'
-        fibermap['OBJTYPE'][0:3] = 'STD'  # For flux tests
-    else:
-        fibermap['OBJTYPE'] = objtype
+    fibermap['OBJTYPE'] = 'TGT'
+    fibermap['DESI_TARGET'] = desi_mask.QSO
+    fibermap['DESI_TARGET'][0:3] = desi_mask.STD_FAINT  # For flux tests
 
     meta = dict(EXPTIME = 1.0)
     frame = Frame(wave, flux, ivar, mask,resol_data,fibermap=fibermap, meta=meta)

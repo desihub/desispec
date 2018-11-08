@@ -18,7 +18,8 @@ from astropy.table import Table
 from pytz import utc
 
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
-                        BigInteger, Integer, String, Float, DateTime)
+                        BigInteger, Integer, String, Float, DateTime,
+                        bindparam)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
@@ -63,16 +64,29 @@ class Truth(SchemaMixin, Base):
     templateid = Column(Integer, nullable=False)
     seed = Column(BigInteger, nullable=False)
     mag = Column(Float, nullable=False)
+    magfilter = Column(String, nullable=False)
     flux_g = Column(Float, nullable=False)
     flux_r = Column(Float, nullable=False)
     flux_z = Column(Float, nullable=False)
     flux_w1 = Column(Float, nullable=False)
     flux_w2 = Column(Float, nullable=False)
-    oiiflux = Column(Float, nullable=False)
-    hbetaflux = Column(Float, nullable=False)
-    teff = Column(Float, nullable=False)
-    logg = Column(Float, nullable=False)
-    feh = Column(Float, nullable=False)
+    oiiflux = Column(Float, nullable=False, default=-9999.0)
+    hbetaflux = Column(Float, nullable=False, default=-9999.0)
+    ewoii = Column(Float, nullable=False, default=-9999.0)
+    ewhbeta = Column(Float, nullable=False, default=-9999.0)
+    d4000 = Column(Float, nullable=False, default=-9999.0)
+    vdisp = Column(Float, nullable=False, default=-9999.0)
+    oiidoublet = Column(Float, nullable=False, default=-9999.0)
+    oiiihbeta = Column(Float, nullable=False, default=-9999.0)
+    oiihbeta = Column(Float, nullable=False, default=-9999.0)
+    niihbeta = Column(Float, nullable=False, default=-9999.0)
+    siihbeta = Column(Float, nullable=False, default=-9999.0)
+    mabs_1450 = Column(Float, nullable=False, default=-9999.0)
+    bal_templateid = Column(Integer, nullable=False, default=-1)
+    truez_norsd = Column(Float, nullable=False, default=-9999.0)
+    teff = Column(Float, nullable=False, default=-9999.0)
+    logg = Column(Float, nullable=False, default=-9999.0)
+    feh = Column(Float, nullable=False, default=-9999.0)
 
     def __repr__(self):
         return ("<Truth(targetid={0.targetid:d}, " +
@@ -92,6 +106,18 @@ class Truth(SchemaMixin, Base):
                 "flux_w2={0.flux_w2:f}, " +
                 "oiiflux={0.oiiflux:f}, " +
                 "hbetaflux={0.hbetaflux:f}, " +
+                "ewoii={0.ewoii:f}, " +
+                "ewhbeta={0.ewhbeta:f}, " +
+                "d4000={0.d4000:f}, " +
+                "vdisp={0.vdisp:f}, " +
+                "oiidoublet={0.oiidoublet:f}, " +
+                "oiiihbeta={0.oiiihbeta:f}, " +
+                "oiihbeta={0.oiihbeta:f}, " +
+                "niihbeta={0.niihbeta:f}, " +
+                "siihbeta={0.siihbeta:f}, " +
+                "mabs_1450={0.mabs_1450:f}, " +
+                "bal_templateid={0.bal_templateid:d}, " +
+                "truez_norsd={0.truez_norsd:f}, " +
                 "teff={0.teff:f}, " +
                 "logg={0.logg:f}, " +
                 "feh={0.feh:f}" +
@@ -342,10 +368,10 @@ class FiberAssign(SchemaMixin, Base):
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
     mws_target = Column(BigInteger, nullable=False)
-    ra = Column(Float, nullable=False)
-    dec = Column(Float, nullable=False)
-    xfocal_design = Column(Float, nullable=False)
-    yfocal_design = Column(Float, nullable=False)
+    target_ra = Column(Float, nullable=False)
+    target_dec = Column(Float, nullable=False)
+    design_x = Column(Float, nullable=False)
+    design_y = Column(Float, nullable=False)
     brickname = Column(String, index=True, nullable=False)
 
     def __repr__(self):
@@ -357,9 +383,9 @@ class FiberAssign(SchemaMixin, Base):
                 "targetid={0.targetid:d}, " +
                 "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
                 "mws_target={0.mws_target:d}, " +
-                "ra={0.ra:f}, dec={0.dec:f}, " +
-                "xfocal_design={0.xfocal_design:f}, " +
-                "yfocal_design={0.yfocal_design:f}, " +
+                "target_ra={0.target_ra:f}, target_dec={0.target_dec:f}, " +
+                "design_x={0.design_x:f}, " +
+                "design_y={0.design_y:f}, " +
                 "brickname='{0.brickname}')>").format(self)
 
 
@@ -482,6 +508,68 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
     return
 
 
+def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
+    """Add data from columns in other HDUs of the Truth table.
+
+    Parameters
+    ----------
+    filepath : :class:`str`
+        Full path to the data file.
+    hdu : :class:`int` or :class:`str`, optional
+        Read a data table from this HDU (default 2).
+    chunksize : :class:`int`, optional
+        If set, update database `chunksize` rows at a time (default 50000).
+    skip : :func:`tuple`, optional
+        Do not load columns with these names (default, ``('SLOPES', 'EMLINES')``)
+    """
+    tcls = Truth
+    tn = tcls.__tablename__
+    t = tcls.__table__
+    if filepath.endswith('.fits'):
+        with fits.open(filepath) as hdulist:
+            data = hdulist[hdu].data
+    elif filepath.endswith('.ecsv'):
+        data = Table.read(filepath, format='ascii.ecsv')
+    else:
+        log.error("Unrecognized data file, %s!", filepath)
+        return
+    log.info("Read data from %s.", filepath)
+    try:
+        colnames = data.names
+    except AttributeError:
+        colnames = data.colnames
+    for col in colnames:
+        if data[col].dtype.kind == 'f':
+            bad = np.isnan(data[col])
+            if np.any(bad):
+                nbad = bad.sum()
+                log.warning("%d rows of bad data detected in column " +
+                            "%s of %s.", nbad, col, filepath)
+    log.info("Integrity check complete on %s.", tn)
+    # if rowfilter is None:
+    #     good_rows = np.ones((maxrows,), dtype=np.bool)
+    # else:
+    #     good_rows = rowfilter(data[0:maxrows])
+    # data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
+    data_list = [data[col].tolist() for col in colnames if col != 'EMLINES']
+    data_names = [col.lower() for col in colnames if col != 'EMLINES']
+    data_names[0] = 'b_targetid'
+    finalrows = len(data_list[0])
+    log.info("Initial column conversion complete on %s.", tn)
+    del data
+    data_rows = list(zip(*data_list))
+    del data_list
+    log.info("Converted columns into rows on %s.", tn)
+    for k in range(finalrows//chunksize + 1):
+        data_chunk = [dict(zip(data_names, row))
+                      for row in data_rows[k*chunksize:(k+1)*chunksize]]
+        q = t.update().where(t.c.targetid == bindparam('b_targetid'))
+        if len(data_chunk) > 0:
+            engine.execute(q, data_chunk)
+            log.info("Updated %d rows in %s.",
+                     min((k+1)*chunksize, finalrows), tn)
+
+
 def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
     """Load zbest files into the zcat table.
 
@@ -569,7 +657,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
 
 
 def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
-                     latest_epoch=False):
+                     latest_epoch=False, last_column='BRICKNAME'):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -590,6 +678,8 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
         If set, create q3c index on the table.
     latest_epoch : :class:`bool`, optional
         If set, search for the latest tile file among several epochs.
+    last_column : :class:`str`, optional
+        Do not load columns past this name (default 'BRICKNAME').
     """
     fiberpath = os.path.join(datapath, 'tile_*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
@@ -623,19 +713,22 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     #
     # Read the identified tile files.
     #
+    data_index = None
     for tileid in latest_tiles:
         epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
         log.info("Read data from %s.", f)
-        for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
+        for col in ('TARGET_RA', 'TARGET_DEC', 'DESIGN_X', 'DESIGN_Y'):
             data[col][np.isnan(data[col])] = -9999.0
             assert not np.any(np.isnan(data[col]))
             assert np.all(np.isfinite(data[col]))
         n_rows = len(data)
+        if data_index is None:
+            data_index = data.names.index(last_column) + 1
         data_list = ([[tileid]*n_rows] +
-                     [data[col].tolist() for col in data.names])
-        data_names = ['tileid'] + [col.lower() for col in data.names]
+                     [data[col].tolist() for col in data.names[:data_index]])
+        data_names = ['tileid'] + [col.lower() for col in data.names[:data_index]]
         log.info("Initial column conversion complete on tileid = %d.", tileid)
         data_rows = list(zip(*data_list))
         log.info("Converted columns into rows on tileid = %d.", tileid)
@@ -645,22 +738,26 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
                  n_rows, FiberAssign.__tablename__, tileid)
         dbSession.commit()
     if q3c:
-        q3c_index('fiberassign')
+        q3c_index('fiberassign', ra='target_ra')
     return
 
 
-def q3c_index(table):
+def q3c_index(table, ra='ra'):
     """Create a q3c index on a table.
 
     Parameters
     ----------
     table : :class:`str`
         Name of the table to index.
+    ra : :class:`str`, optional
+        If the RA, Dec columns are called something besides "ra" and "dec",
+        set its name.  For example, ``ra='target_ra'``.
     """
-    q3c_sql = """CREATE INDEX ix_{table}_q3c_ang2ipix ON {schema}.{table} (q3c_ang2ipix(ra, dec));
+    q3c_sql = """CREATE INDEX ix_{table}_q3c_ang2ipix ON {schema}.{table} (q3c_ang2ipix({ra}, {dec}));
     CLUSTER {schema}.{table} USING ix_{table}_q3c_ang2ipix;
     ANALYZE {schema}.{table};
-    """.format(schema=schemaname, table=table)
+    """.format(ra=ra, dec=ra.lower().replace('ra', 'dec'),
+               schema=schemaname, table=table)
     log.info("Creating q3c index on %s.%s.", schemaname, table)
     dbSession.execute(q3c_sql)
     log.info("Finished q3c index on %s.%s.", schemaname, table)
@@ -905,6 +1002,12 @@ def main():
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())
+    #
+    # Update truth table.
+    #
+    for h in ('BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'WD'):
+        update_truth(os.path.join(options.datapath, 'targets', 'truth.fits'),
+                     'TRUTH_' + h)
     #
     # Load fiber assignment files.
     #

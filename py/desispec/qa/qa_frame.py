@@ -351,8 +351,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
             s2n_dict['CAMERA'] = camera
             s2n_dict['EXPID'] = expid
             s2n_dict['PANAME'] = 'SNRFit'
-            s2n_dict['METRICS']['RA'] = frame.fibermap['RA_OBS']
-            s2n_dict['METRICS']['DEC'] = frame.fibermap['DEC_OBS']
+            s2n_dict['METRICS']['RA'] = frame.fibermap['FIBER_RA']
+            s2n_dict['METRICS']['DEC'] = frame.fibermap['FIBER_DEC']
             #import pdb; pdb.set_trace()
             qa_plots_ql.plot_SNR(s2n_dict, qafig, objlist, [[]]*len(objlist), coeff)
 

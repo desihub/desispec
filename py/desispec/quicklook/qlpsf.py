@@ -64,7 +64,7 @@ class PSF(object):
             for j,i in enumerate(ispec): 
                 res[j]=self.traceset.x_vs_wave(i,wavelength[i])
         else :
-            print("ispec.size=",ispec.size,"wavelength.size=",wavelength.size)
+            ### print("ispec.size=",ispec.size,"wavelength.size=",wavelength.size)
             res=np.zeros((ispec.size,wavelength.size))
             for j,i in enumerate(ispec): 
                 res[j]=self.traceset.x_vs_wave(i,wavelength)

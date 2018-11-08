@@ -231,7 +231,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     from desimodel.footprint import radec2pix
     nside=64
-    pixels = np.unique(radec2pix(nside, fibermap['RA_TARGET'], fibermap['DEC_TARGET']))
+    pixels = np.unique(radec2pix(nside, fibermap['TARGET_RA'], fibermap['TARGET_DEC']))
 
     num_missing = 0
     for pix in pixels:

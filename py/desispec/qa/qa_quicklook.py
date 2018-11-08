@@ -25,6 +25,7 @@ from desispec.frame import Frame as fr
 from desispec.preproc import _parse_sec_keyword
 from desispec.util import runcmd
 from desispec.qproc.qframe import QFrame
+from desispec.fluxcalibration import isStdStar
 import astropy
 from astropy.io import fits
 
@@ -1305,7 +1306,6 @@ class Sky_Rband(MonitoringAlg):
         #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
    
         filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
-        mags=frame.fibermap['MAG']
 
         if (filt == 'r'):
             
@@ -1317,8 +1317,8 @@ class Sky_Rband(MonitoringAlg):
             from desimodel.focalplane import fiber_area_arcsec2
         
             wsky = np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
-            xsky = frame.fibermap["X_FVCOBS"][wsky]
-            ysky = frame.fibermap["Y_FVCOBS"][wsky]    
+            xsky = frame.fibermap["DESIGN_X"][wsky]
+            ysky = frame.fibermap["DESIGN_Y"][wsky]
             apsky = desimodel.focalplane.fiber_area_arcsec2(xsky,ysky)
             expt = frame.meta["EXPTIME"]
             
@@ -1609,34 +1609,33 @@ class Integrate_Spec(MonitoringAlg):
             fibmap =fits.open(kwargs['FiberMap'])
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
 
-        #- Get filter index, file, and zero point
-        #- Zero point values from perture photometry of C26202 from 20121102
+        retval["NIGHT"] = frame.meta["NIGHT"]
+
+        ra = frame.fibermap["TARGET_RA"]
+        dec = frame.fibermap["TARGET_DEC"]
+
+        flux=frame.flux
+        wave=frame.wave
+        #- Grab magnitudes for appropriate filter
         if camera[0].lower() == 'b':
-            filterindex=0 #- DECAM_G
+            band = 'G'
             responsefilter='decam2014-g'
             zeropoint=25.296
         elif camera[0].lower() == 'r':
-            filterindex=1 #- DECAM_R
+            band = 'R'
             responsefilter='decam2014-r'
             zeropoint=25.374
         elif camera[0].lower() == 'z':
-            filterindex=2 #- DECAM_Z
+            band = 'Z'
             responsefilter='decam2014-z'
             zeropoint=25.064
         else:
-            log.warning("Camera not in b, r, or z channels...")
-        magnitudes=np.zeros(frame.nspec)
-        
-        from desitarget.targetmask import desi_mask
+            raise ValueError("Camera {} not in b, r, or z channels...".format(camera))
 
-        #- Grab magnitudes for appropriate filter
-        for obj in range(frame.nspec):
-            #SE: identify the associated fibers and get rid of the inf values in the mag array from fibermaps for non-sky objects
-            if (fibermap['DESI_TARGET'][obj] & desi_mask.mask('SKY') == 0):
-               if frame.fibermap['MAG'][obj][filterindex] != np.inf:
-                 magnitudes[obj]=frame.fibermap['MAG'][obj][filterindex]
-               else:
-                log.info('Fiber number {} in this camera has invalid[inf] magnitude in the fibermap'.format(obj))
+        magnitudes=np.zeros(frame.nspec) + 99.0  #- Use 99 for negative flux
+        key = 'FLUX_'+band
+        ii = frame.fibermap[key] > 0
+        magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
             
         #- Get filter response information from speclite
         if os.path.exists(os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite')):
@@ -1698,7 +1697,7 @@ class Integrate_Spec(MonitoringAlg):
 
         objtypes=sorted(list(set(objects)))
         if "SKY" in objtypes: objtypes.remove("SKY")
-        starfibers=None
+        starfibers=np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
         for T in objtypes:
             fibers=np.where(objects==T)[0]
             objmags=magnitudes[fibers]
@@ -1710,9 +1709,8 @@ class Integrate_Spec(MonitoringAlg):
             integ_avg_tgt.append(integ_avg)
 
             if T == "STD":
-                   starfibers=fibers
-                   int_stars=integ
-                   int_average=integ_avg
+                int_stars=integ
+                int_average=integ_avg
 
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
@@ -1805,8 +1803,8 @@ class Calculate_SNR(MonitoringAlg):
         
         retval["NIGHT"] = night = frame.meta["NIGHT"]
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        ra = fibermap["TARGET_RA"]
+        dec = fibermap["TARGET_DEC"]
         objlist = sorted(set(fibermap["OBJTYPE"]))
 
         if 'SKY' in objlist:

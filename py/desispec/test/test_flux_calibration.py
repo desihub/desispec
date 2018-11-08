@@ -18,6 +18,7 @@ from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibr
 from desiutil.log import get_logger
 import desispec.io
 from desispec.test.util import get_frame_data, get_models
+from desitarget.targetmask import desi_mask
 
 import speclite.filters
 
@@ -73,39 +74,13 @@ class TestFluxCalibration(unittest.TestCase):
 
         stdwave=np.linspace(3000,11000,10000)
         stdflux=np.cos(stdwave)+100.
-        mags=np.array((20,21))
-        filters=['SDSS_I','SDSS_R']
-        #This should use SDSS_R for calibration
-        normflux=normalize_templates(stdwave,stdflux,mags,filters)
-
+        mag = 20.0
+        normflux=normalize_templates(stdwave,stdflux,mag,'DECAM_R')
         self.assertEqual(stdflux.shape, normflux.shape)
 
-        r = speclite.filters.load_filter('sdss2010-r')
-        rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
-        self.assertAlmostEqual(rmag, mags[1])
-
-    def test_check_filters(self):
-        filterlist=['SDSS_U','SDSS_G','SDSS_R','SDSS_I','SDSS_Z','DECAM_U','DECAM_G','DECAM_R',
-'DECAM_I','DECAM_Z','DECAM_Y','WISE_W1','WISE_W2']
-        filters=['XXXX','YYYY','ZZZZ']
-        stdwave=np.linspace(3000,11000,10000)
-        stdflux=np.cos(stdwave)+100.
-        mags=np.array([20,21,22])
-
-        # No correct filters
-        with self.assertRaises(SystemExit):
-            normflux=normalize_templates(stdwave,stdflux,mags,filters)
-
-        filters=filters+['DECAM_R']
-        #This should use DECAM_R for calibration
-        mags=np.concatenate([mags,np.array([23])])
-        normflux=normalize_templates(stdwave,stdflux,mags,filters)
         r = speclite.filters.load_filter('decam2014-r')
         rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
-        self.assertAlmostEqual(rmag, mags[-1])
-
-        #check dimensionality
-        self.assertEqual(stdflux.shape, normflux.shape)
+        self.assertAlmostEqual(rmag, mag)
 
     def test_compute_fluxcalibration(self):
         """ Test compute_fluxcalibration interface
@@ -117,7 +92,8 @@ class TestFluxCalibration(unittest.TestCase):
         modelwave,modelflux=get_models()
         # pick std star fibers
         stdfibers=np.random.choice(9,3,replace=False) # take 3 std stars fibers
-        frame.fibermap['OBJTYPE'][stdfibers] = 'STD'
+        frame.fibermap['DESI_TARGET'][stdfibers] = desi_mask.STD_FAINT
+
         input_model_wave=modelwave
         input_model_flux=modelflux[0:3] # assuming the first three to be best models,3 is exclusive here
         fluxCalib =compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers=stdfibers,nsig_clipping=4.)
