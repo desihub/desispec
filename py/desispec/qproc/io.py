@@ -67,7 +67,7 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
 
     if qframe.sigma is None :
         qframe.sigma=np.zeros(qframe.flux.shape,dtype=np.float)
-    hdus.append( fits.ImageHDU(qframe.sigma.astype('f4'), name='SIGMA') )
+    hdus.append( fits.ImageHDU(qframe.sigma.astype('f4'), name='YSIGMA') )
 
     hdus.append( fits.ImageHDU(qframe.wave.astype('f8'), name='WAVELENGTH') )
     hdus[-1].header['BUNIT'] = 'Angstrom'
