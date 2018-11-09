@@ -51,8 +51,8 @@ class TestSky(unittest.TestCase):
         fibermap = desispec.io.empty_fibermap(self.nspec, 1500)
         fibermap['OBJTYPE'][0::2] = 'SKY'
         
-        x=fibermap["X_TARGET"]
-        y=fibermap["Y_TARGET"]
+        x=fibermap["DESIGN_X"]
+        y=fibermap["DESIGN_Y"]
         x = x-np.mean(x)
         y = y-np.mean(y)
         if np.std(x)>0 : x /= np.std(x)

@@ -133,8 +133,8 @@ def all_tasks(night, nside, expid=None):
         if (flavor != "arc") and (flavor != "flat"):
             # This will be used to track which healpix pixels are
             # touched by fibers from each spectrograph.
-            ra = np.array(fmdata["RA_TARGET"], dtype=np.float64)
-            dec = np.array(fmdata["DEC_TARGET"], dtype=np.float64)
+            ra = np.array(fmdata["TARGET_RA"], dtype=np.float64)
+            dec = np.array(fmdata["TARGET_DEC"], dtype=np.float64)
 
             # rm NaN (possible depending on versions of fiberassign)
             valid_coordinates  = (np.isnan(ra)==False)&(np.isnan(dec)==False)
@@ -1127,7 +1127,7 @@ class DataBasePostgres(DataBase):
             try:
                 self._conn = pg2.connect(host=self._host, port=self._port,
                     user=self._user, dbname=self._dbname)
-            except psycopg2.OperationalError as err:
+            except pg2.OperationalError as err:
                 log = get_logger()
                 log.debug("PostgreSQL connection failed with '{}', will sleep and retry".format(err))
                 if ntry > maxtry:

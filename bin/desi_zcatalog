@@ -44,6 +44,13 @@ def match(table1,table2,key="TARGETID") :
     ok=(i21>=0)
     for k in table2.dtype.names :
         if k in table1.dtype.names : continue # do not duplicate columns
+
+        #- Special cases of known 2D columns that will fail append_fields
+        if k == 'DCHISQ':
+            log=get_logger()
+            log.warning('Dropping 2D column {}'.format(k))
+            continue
+
         table1=append_fields(table1,k,np.zeros(k1.size).astype(table2[k].dtype)) 
         table1[k][ok]=table2[k][i21[ok]] # unmatched values are set the 0 value corresponding to the dtype
     return table1
