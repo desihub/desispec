@@ -1803,7 +1803,7 @@ class Calculate_SNR(MonitoringAlg):
 
         ra = fibermap["TARGET_RA"]
         dec = fibermap["TARGET_DEC"]
-        objlist = sorted(set(fibermap["OBJTYPE"]))
+        objlist = ['ELG','LRG','QSO','STAR']
 
         if 'SKY' in objlist:
             objlist.remove('SKY')
