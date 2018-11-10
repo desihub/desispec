@@ -2,10 +2,28 @@
 desispec Change Log
 ===================
 
-0.25.1 (unreleased)
+0.26.1 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.26.0 (2018-11-08)
+-------------------
+
+Major non-backwards compatible changes:
+
+* Update to new fibermap format for consistency with targeting and
+  fiber assignment (PR `#717`_).
+* Include GAIN in preproc headers (PR `#715`_).
+* Prototype data transfer status report webpage (PR `#714`_).
+* Integrate qproc/qframe into quicklook (PR `#713`_).
+* Quicklook flux calib and config edits (PR `#707`_).
+
+.. _`#707`: https://github.com/desihub/desispec/pull/707
+.. _`#713`: https://github.com/desihub/desispec/pull/713
+.. _`#714`: https://github.com/desihub/desispec/pull/714
+.. _`#715`: https://github.com/desihub/desispec/pull/715
+.. _`#717`: https://github.com/desihub/desispec/pull/717
 
 0.25.0 (2018-10-24)
 -------------------

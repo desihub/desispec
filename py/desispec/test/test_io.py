@@ -6,6 +6,7 @@ from __future__ import absolute_import, division
 # The line above will help with 2to3 support.
 import unittest
 import os
+import sys
 import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
@@ -203,6 +204,9 @@ class TestIO(unittest.TestCase):
         write_bintable(self.testfile, data, header=hdr, extname='FOOBAR', clobber=True)
 
 
+    #- Some macs fail `assert_called_with` tests due to equivalent paths
+    #- of `/private/var` vs. `/var`, so skip this test on Macs.
+    @unittest.skipIf(sys.platform == 'darwin', "Skipping memmap test on Mac.")
     @unittest.skipIf(skipMock, "Skipping test that requires unittest.mock.")
     def test_supports_memmap(self):
         """Test utility to detect when memory-mapping is not possible.
@@ -461,10 +465,13 @@ class TestIO(unittest.TestCase):
             c1 = fibermap[key]
             c2 = fm[key]
             #- Endianness may change, but kind, size, shape, and values are same
-            self.assertEqual(c1.dtype.kind, c2.dtype.kind)
-            self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
             self.assertEqual(c1.shape, c2.shape)
             self.assertTrue(np.all(c1 == c2))
+            if c1.dtype.kind == 'U':
+                self.assertTrue(c2.dtype.kind in ('S', 'U'))
+            else:
+                self.assertEqual(c1.dtype.kind, c2.dtype.kind)
+                self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
 
     def test_stdstar(self):
         """Test reading and writing standard star files.
@@ -747,6 +754,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(night1, '20150102')
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
+    @unittest.skipIf(True, "NERSC is out; download will fail")
     def test_download(self):
         """Test desiutil.io.download.
         """

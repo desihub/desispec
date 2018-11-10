@@ -93,9 +93,20 @@ class TaskStarFit(BaseTask):
         opts = {}
         starmodels = None
         if "DESI_BASIS_TEMPLATES" in os.environ:
-            filenames = glob.glob(os.environ["DESI_BASIS_TEMPLATES"]+"/star_templates_*.fits")
+            filenames = sorted(glob.glob(os.environ["DESI_BASIS_TEMPLATES"]+"/stdstar_templates_*.fits"))
             if len(filenames) > 0 :
-                starmodels = filenames[0]
+                starmodels = filenames[-1]
+            else:
+                filenames = sorted(glob.glob(os.environ["DESI_BASIS_TEMPLATES"]+"/star_templates_*.fits"))
+                log.warning('Unable to find stdstar templates in {}; using star templates instead'.format(
+                    os.getenv('DESI_BASIS_TEMPLATES')))
+                if len(filenames) > 0 :
+                    starmodels = filenames[-1]
+                else:
+                    msg = 'Unable to find stdstar or star templates in {}'.format(
+                        os.getenv('DESI_BASIS_TEMPLATES'))
+                    log.error(msg)
+                    raise RuntimeError(msg)
         else:
             log.error("DESI_BASIS_TEMPLATES not set!")
             raise RuntimeError("could not find the stellar templates")
@@ -104,7 +115,6 @@ class TaskStarFit(BaseTask):
 
         opts["delta-color"] = 0.2
         opts["color"] = "G-R"
-
 
         return opts
 

@@ -11,7 +11,7 @@ from desispec.io.fluxcalibration import write_flux_calibration
 from desispec.io.qa import load_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
-from desispec.fluxcalibration import compute_flux_calibration
+from desispec.fluxcalibration import compute_flux_calibration, isStdStar
 from desiutil.log import get_logger
 from desispec.qa import qa_plots
 
@@ -57,6 +57,13 @@ def parse(options=None):
 def main(args) :
 
     log=get_logger()
+
+    cmd = ['desi_compute_fluxcalibration',]
+    for key, value in args.__dict__.items():
+        if value is not None:
+            cmd += ['--'+key, str(value)]
+    cmd = ' '.join(cmd)
+    log.info(cmd)
 
     log.info("read frame")
     # read frame
@@ -124,11 +131,11 @@ def main(args) :
 
     ## check whether star fibers from args.models are consistent with fibers from fibermap
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
-    w = np.where(fibermap["OBJTYPE"][model_fibers%500] != 'STD')[0]
-    
-    if len(w)>0:
+    fibermap_std_indices = np.where(isStdStar(fibermap['DESI_TARGET']))[0]
+    if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
         for i in model_fibers%500:
-            log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
+            log.error("inconsistency with spectrum {}, OBJTYPE='{}', DESI_TARGET={} in fibermap".format(
+                (i, fibermap["OBJTYPE"][i], fibermap["DESI_TARGET"][i])))
         sys.exit(12)
 
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500)

@@ -21,7 +21,6 @@ from desispec.cosmics import reject_cosmic_rays_1d
 
 import argparse
 
-
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Compute the fiber flat field correction from a DESI continuum lamp frame")
     parser.add_argument('-i','--infile', type = str, default = None, required=True,

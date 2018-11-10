@@ -63,7 +63,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
    status   Overview of production.
    (------- Mid-Level --------)
    chain    Run all ready tasks for multiple pipeline steps.
-   cleanup  Reset tasks from "running" back to "ready".
+   cleanup  Reset "running" (or optionally "failed") tasks back to "ready".
    (------- Low-Level --------)
    tasks    Get all possible tasks for a given type and states.
    check    Check the status of tasks.

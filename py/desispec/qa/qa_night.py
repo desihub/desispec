@@ -41,7 +41,8 @@ class QA_Night(QA_MultiExp):
         nights = get_nights(specprod_dir=self.specprod_dir)
         # Check the night exists
         if self.night not in nights:
-            raise IOError("Bad input night for this production")
+            raise IOError("Night {} not in known nights in {}".format(
+                self.night, self.specprod_dir))
         # Load up
         self.mexp_dict[self.night] = {}
         for exposure in get_exposures(self.night, specprod_dir = self.specprod_dir):

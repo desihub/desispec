@@ -81,9 +81,9 @@ def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
                 sys.stdout.flush()
 
                 #- Determine healpix, allowing for NaN
-                columns = ['RA_TARGET', 'DEC_TARGET']
+                columns = ['TARGET_RA', 'TARGET_DEC']
                 fibermap = fitsio.read(filename, 'FIBERMAP', columns=columns)
-                ra, dec = fibermap['RA_TARGET'], fibermap['DEC_TARGET']
+                ra, dec = fibermap['TARGET_RA'], fibermap['TARGET_DEC']
                 ok = ~np.isnan(ra) & ~np.isnan(dec)
                 ra, dec = ra[ok], dec[ok]
                 allpix = desimodel.footprint.radec2pix(nside, ra, dec)
@@ -462,7 +462,7 @@ def frames2spectra(frames, pix, nside=64):
         rdat[x] = list()
         scores[x] = list()
         for xf in xframes:
-            ra, dec = xf.fibermap['RA_TARGET'], xf.fibermap['DEC_TARGET']
+            ra, dec = xf.fibermap['TARGET_RA'], xf.fibermap['TARGET_DEC']
             ok = ~np.isnan(ra) & ~np.isnan(dec)
             ra[~ok] = 0.0
             dec[~ok] = 0.0
@@ -488,10 +488,7 @@ def frames2spectra(frames, pix, nside=64):
             fibermap = np.hstack(fibermap)
 
         if len(scores[x]) > 0:
-            try:
-                scores[x] = np.hstack(scores[x])
-            except:
-                import IPython; IPython.embed()
+            scores[x] = np.hstack(scores[x])
 
     #- Combine scores into a single table
     #- Why doesn't np.vstack work for this? (says invalid type promotion)

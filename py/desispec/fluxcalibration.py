@@ -19,6 +19,30 @@ from astropy import units
 import multiprocessing
 from pkg_resources import resource_exists, resource_filename
 
+def isStdStar(desi_target, bright=None):
+    """
+    Determines if target(s) are standard stars
+
+    Args:
+        desi_target: int or array of DESI_TARGET targeting bit mask(s)
+
+    Optional:
+        bright: if True, only bright time standards; if False, only darktime, otherwise both
+
+    Returns bool or array of bool
+
+    TODO: move out of scripts/stdstars.py
+    """
+    from desitarget.targetmask import desi_mask
+    yes = (desi_target & desi_mask.STD_WD) != 0
+    if bright is None:
+        yes |= (desi_target & desi_mask.mask('STD_WD|STD_FAINT|STD_BRIGHT')) != 0
+    elif bright:
+        yes |= (desi_target & desi_mask.mask('STD_WD|STD_BRIGHT')) != 0
+    else:
+        yes |= (desi_target & desi_mask.mask('STD_WD|STD_FAINT')) != 0
+
+    return yes
 
 def applySmoothingFilter(flux,width=200) :
     """ Return a smoothed version of the input flux array using a median filter
@@ -743,14 +767,14 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     return coef,z,chi2/ndata
 
 
-def normalize_templates(stdwave, stdflux, mags, filters):
+def normalize_templates(stdwave, stdflux, mag, filter_name):
     """Returns spectra normalized to input magnitudes.
 
     Args:
         stdwave : 1D array of standard star wavelengths [Angstroms]
         stdflux : 1D observed flux
-        mags : 1D array of observed AB magnitudes
-        filters : list of filter names for mags, e.g. ['SDSS_r', 'DECAM_g', ...]
+        mag : float desired magnitude
+        filter_name : filter_name, e.g. DECAM_G, DECAM_R
 
     Returns:
         stdwave : same as input
@@ -759,31 +783,13 @@ def normalize_templates(stdwave, stdflux, mags, filters):
     Only SDSS_r band is assumed to be used for normalization for now.
     """
     log = get_logger()
-
-    nstdwave=stdwave.size
-    normflux=np.array(nstdwave)
-
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
+    filter_response=load_filter(filter_name)
+    apMag=filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave)
+    scalefac=10**((apMag-mag)/2.5)
+    log.debug('scaling mag {:.3f} to {:.3f} using scalefac {:.3f}'.format(apMag,mag, scalefac))
+    normflux=stdflux*scalefac
 
-    for i,v in enumerate(filters):
-        #Normalizing using only SDSS_R band magnitude
-        if v.upper() == 'SDSS_R' or v.upper() =='DECAM_R' or v.upper()=='DECAM_G' :
-            #-TODO: Add more filters for calibration. Which one should be used if multiple mag available?
-            refmag=mags[i]
-            filter_response=load_filter(v)
-            apMag=filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave)
-            log.info('scaling {} mag {:f} to {:f}.'.format(v, apMag,refmag))
-            scalefac=10**((apMag-refmag)/2.5)
-            normflux=stdflux*scalefac
-
-            break  #- found SDSS_R or DECAM_R; we can stop now
-        count=0
-        for k,f in enumerate(['SDSS_R','DECAM_R','DECAM_G']):
-            ii,=np.where((np.asarray(filters)==f))
-            count=count+ii.shape[0]
-        if (count==0):
-            log.error("No magnitude given for SDSS_R, DECAM_R or DECAM_G filters")
-            sys.exit(0)
     return normflux
 
 def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=4.,deg=2,debug=False):
@@ -827,7 +833,14 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
-    stdfibers = np.intersect1d( np.where(frame.fibermap['OBJTYPE'] == 'STD')[0] , input_model_fibers)
+    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+    assert len(stdfibers) > 0
+
+    if not np.all(np.in1d(stdfibers, input_model_fibers)):
+        bad = set(input_model_fibers) - set(stdfibers)
+        log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
+        stdfibers = np.intersect1d(stdfibers, input_model_fibers)
+
     stdstars = frame[stdfibers]
 
     nwave=stdstars.nwave
@@ -838,6 +851,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     # resample model to data grid and convolve by resolution
     model_flux=np.zeros((nstds, nwave))
     convolved_model_flux=np.zeros((nstds, nwave))
+
     for fiber in range(model_flux.shape[0]) :
         model_flux[fiber]=resample_flux(stdstars.wave,input_model_wave,input_model_flux[fiber])
         convolved_model_flux[fiber]=stdstars.R[fiber].dot(model_flux[fiber])
@@ -1159,7 +1173,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     exptime = frame.meta['EXPTIME']
 
     # Standard stars
-    stdfibers = np.where((frame.fibermap['OBJTYPE'] == 'STD'))[0]
+    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
     stdstars = frame[stdfibers]
     nstds = len(stdfibers)
     #try:

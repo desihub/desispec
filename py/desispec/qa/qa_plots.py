@@ -21,6 +21,7 @@ import matplotlib.gridspec as gridspec
 
 from desispec import util
 from desispec.io import makepath
+from desispec.fluxcalibration import isStdStar
 
 from desiutil import plots as desiu_p
 
@@ -337,9 +338,8 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     log = get_logger()
 
     # Standard stars
-    #stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
     exptime = frame.meta['EXPTIME']
-    stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
+    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
     stdstars = frame[stdfibers]
     #nstds = np.sum(stdfibers)
     nstds = len(stdfibers)
@@ -475,8 +475,8 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     yfiber = np.zeros(nfiber)
     for ii,fiber in enumerate(frame.fibers):
         mt = np.where(fiber == fibermap['FIBER'])[0]
-        xfiber[ii] = fibermap['X_TARGET'][mt]
-        yfiber[ii] = fibermap['Y_TARGET'][mt]
+        xfiber[ii] = fibermap['DESIGN_X'][mt]
+        yfiber[ii] = fibermap['DESIGN_Y'][mt]
     area = fiber_area_arcsec2(xfiber,yfiber)
     mean_area = np.mean(area)
 
@@ -584,8 +584,8 @@ def exposure_fiberflat(channel, expid, metric, outfile=None):
         fibermap = frame.fibermap
         gdp = fiberflat.mask == 0
         # X,Y
-        x.append([fibermap['X_TARGET']])
-        y.append([fibermap['Y_TARGET']])
+        x.append([fibermap['DESIGN_X']])
+        y.append([fibermap['DESIGN_Y']])
         area = fiber_area_arcsec2(x[-1], y[-1])
         mean_area = np.mean(area)
         # Metric
@@ -698,8 +698,8 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
                 continue
             fibermap = frame.fibermap
             # X,Y
-            x += [fibermap['X_TARGET'].flatten()]
-            y += [fibermap['Y_TARGET'].flatten()]
+            x += [fibermap['DESIGN_X'].flatten()]
+            y += [fibermap['DESIGN_Y'].flatten()]
             # Metric
             if metric == 'resid':
                 # Setup

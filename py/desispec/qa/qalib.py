@@ -11,6 +11,8 @@ from desiutil import stats as dustat
 from desiutil.log import get_logger
 from desispec.io.meta import findfile
 from desispec.preproc import _parse_sec_keyword
+from desispec.fluxcalibration import isStdStar
+from desitarget.targetmask import desi_mask
 
 log=get_logger()
 
@@ -347,8 +349,8 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     qadict['NREJ'] = int(skymodel.nrej)
 
     if quick_look:
-        qadict['RA'] = frame.fibermap['RA_TARGET']
-        qadict['DEC'] = frame.fibermap['DEC_TARGET']
+        qadict['RA'] = frame.fibermap['TARGET_RA']
+        qadict['DEC'] = frame.fibermap['TARGET_DEC']
 
     # Grab sky fibers on this frame
     skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
@@ -439,6 +441,32 @@ def SN_ratio(flux,ivar):
     medsnr = np.median(snr, axis=1)
     return medsnr #, totsnr
 
+def _get_mags(frame):
+    '''Extract frame.fibermap fluxes into mags depending upon camera
+
+    Args:
+        frame: Frame object
+
+    Returns array of magnitudes, using 99.0 when flux<0
+
+    b camera frames return g-band magnitudes;
+    r camera -> r-mags; z camera -> z-mags
+    '''
+    camera = frame.meta['CAMERA'].lower()
+    if camera.startswith('b'):
+        flux = frame.fibermap['FLUX_G']
+    elif camera.startswith('r'):
+        flux = frame.fibermap['FLUX_R']
+    elif camera.startswith('z'):
+        flux = frame.fibermap['FLUX_Z']
+    else:
+        raise ValueError('camera {} should start with b,r,z'.format(camera))
+
+    mags = np.zeros(len(flux)) + 99.0  #- use 99 for bad mags
+    ii = flux>0
+    mags[ii] = 22.5 - 2.5*np.log10(flux[ii])
+
+    return mags
 
 def SignalVsNoise(frame,params,fidboundary=None):
     """
@@ -454,59 +482,32 @@ def SignalVsNoise(frame,params,fidboundary=None):
         fidboundary : list of slices indicating where to select in fiber
             and wavelength directions for each amp (output of slice_fidboundary function)
     """
-    thisfilter='DECAM_R' #- should probably come from param. Hard coding for now
-    mags=frame.fibermap['MAG']
-    filters=frame.fibermap['FILTER']
+    mags = _get_mags(frame)
 
     medsnr=SN_ratio(frame.flux,frame.ivar)
 
     #- Calculate median SNR per bin and associate with imaging Mag. for ELG fibers
-    elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
+    elgfibers=np.where((frame.fibermap['DESI_TARGET'] & desi_mask.ELG) != 0)[0]
     elg_medsnr=medsnr[elgfibers]
-    elg_mag=np.zeros(len(elgfibers))
-    for ii,fib in enumerate(elgfibers):
-        if thisfilter not in filters[fib]:
-            #- raise ValueError("{} is not available filter for fiber {}".format(thisfilter,fib))
-            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
-            elg_mag[ii]=None
-        else:
-            elg_mag[ii]=mags[fib][filters[fib]==thisfilter]
+    elg_mag=mags[elgfibers]
     elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
 
     #- Calculate median SNR, associate with imaging Mag for LRGs
-    lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
+    lrgfibers=np.where((frame.fibermap['DESI_TARGET'] & desi_mask.LRG) != 0)[0]
     lrg_medsnr=medsnr[lrgfibers]
-    lrg_mag=np.zeros(len(lrgfibers))
-    for ii,fib in enumerate(lrgfibers):
-        if thisfilter not in filters[fib]:
-            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
-            lrg_mag[ii]=None
-        else:
-            lrg_mag[ii]=mags[fib][filters[fib]==thisfilter]
+    lrg_mag=mags[lrgfibers]
     lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
 
     #- Calculate median SNR, associate with imaging Mag. for QSOs
-    qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
+    qsofibers=np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
     qso_medsnr=medsnr[qsofibers]
-    qso_mag=np.zeros(len(qsofibers))
-    for ii,fib in enumerate(qsofibers):
-        if thisfilter not in filters[fib]:
-            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
-            qso_mag[ii]=None
-        else:
-            qso_mag[ii]=mags[fib][filters[fib]==thisfilter]
+    qso_mag=mags[qsofibers]
     qso_snr_mag=np.array((qso_medsnr,qso_mag))
 
     #- Calculate median SNR, associate with Mag. for STD stars
-    stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
+    stdfibers=np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
     std_medsnr=medsnr[stdfibers]
-    std_mag=np.zeros(len(stdfibers))
-    for ii,fib in enumerate(stdfibers):
-        if thisfilter not in filters[fib]:
-            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
-            std_mag[ii]=None
-        else:
-            std_mag[ii]=mags[fib][filters[fib]==thisfilter]
+    std_mag=mags[stdfibers]
     std_snr_mag=np.array((std_medsnr,std_mag))
 
     #- Median S/N for different amp zones.
@@ -525,11 +526,25 @@ def SignalVsNoise(frame,params,fidboundary=None):
     elg_fidmag_snr = []
     star_fidmag_snr = []
 
-    ra = frame.fibermap['RA_TARGET']
-    dec = frame.fibermap['DEC_TARGET']
+    ra = frame.fibermap['TARGET_RA']
+    dec = frame.fibermap['TARGET_DEC']
 
     #- fill QA dict with metrics:
-    qadict={"RA":ra, "DEC":dec, "MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag, "ELG_FIDMAG_SNR":elg_fidmag_snr, "STAR_FIDMAG_SNR":star_fidmag_snr}
+    qadict={
+        "RA":ra, "DEC":dec,
+        "MEDIAN_SNR":medsnr,
+        "MEDIAN_AMP_SNR":average_amp,
+        "ELG_FIBERID":elgfibers.tolist(),
+        "ELG_SNR_MAG": elg_snr_mag,
+        "LRG_FIBERID":lrgfibers.tolist(),
+        "LRG_SNR_MAG": lrg_snr_mag,
+        "QSO_FIBERID": qsofibers.tolist(),
+        "QSO_SNR_MAG": qso_snr_mag,
+        "STAR_FIBERID": stdfibers.tolist(),
+        "STAR_SNR_MAG":std_snr_mag,
+        "ELG_FIDMAG_SNR":elg_fidmag_snr,
+        "STAR_FIDMAG_SNR":star_fidmag_snr
+    }
 
     return qadict
 
@@ -597,31 +612,42 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     """
 
     #- Get imaging magnitudes and calculate SNR
-    magnitudes=frame.fibermap['MAG']
     fmag=22.0
     if "FIDMAG" in params:
         fmag=params["FIDMAG"]
-    filters=frame.fibermap['FILTER']
     mediansnr=SN_ratio(frame.flux,frame.ivar)
     qadict={"MEDIAN_SNR":mediansnr}
     exptime=frame.meta["EXPTIME"]
     ivar=frame.ivar
 
-    if camera[0] == 'b':
-        thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
+    if "Filter" in params:
+        thisfilter=params["Filter"]
+    elif camera[0] == 'b':
+        thisfilter='DECAM_G'
     elif camera[0] =='r':
         thisfilter='DECAM_R'
     else:
         thisfilter='DECAM_Z'
-    if "Filter" in params:
-        thisfilter=params["Filter"]
+
     qadict["FIT_FILTER"] = thisfilter
     qadict["EXPTIME"] = exptime
 
-    mag_filters=[]
-    for mag in range(magnitudes.shape[0]):
-        mag_filters.append([magnitudes[mag][0],magnitudes[mag][1],magnitudes[mag][2]])
-    qadict["MAGNITUDES"]=mag_filters
+    if thisfilter in ('DECAM_G', 'BASS_G'):
+        photflux = frame.fibermap['FLUX_G']
+    elif thisfilter in ('DECAM_R', 'BASS_R'):
+        photflux = frame.fibermap['FLUX_R']
+    elif thisfilter in ('DECAM_Z', 'MZLS_Z'):
+        photflux = frame.fibermap['FLUX_Z']
+    else:
+        raise ValueError('Unknown filter {}'.format(thisfilter))
+
+    mag_grz = np.zeros((3, frame.nspec)) + 99.0
+    for i, colname in enumerate(['FLUX_G', 'FLUX_R', 'FLUX_Z']):
+        ok = frame.fibermap[colname] > 0
+        mag_grz[i, ok] = 22.5 - 2.5 * np.log10(frame.fibermap[colname][ok])
+
+    qadict["MAGNITUDES"]=mag_grz
+    qadict["FILTERS"] = ['G', 'R', 'Z']
 
     qadict["OBJLIST"]=list(objlist)
 
@@ -663,20 +689,23 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     snrmag=[]
     badfibs=[]
     fitsnr=[]
-    for T in objlist:
-        fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
+    elgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.ELG) != 0)[0]
+    lrgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.LRG) != 0)[0]
+    qsofibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
+    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+
+    for T, fibers in (
+            ['ELG', elgfibers],
+            ['LRG', lrgfibers],
+            ['QSO', qsofibers],
+            ['STAR', stdfibers],
+            ):
         objvar=np.array(var)[fibers]
         medsnr=mediansnr[fibers]
         mags=np.zeros(medsnr.shape)
-        if T=="STD":# this should be fixed "STAR" or "STD" should be used consistently everywhere!
-            T="STAR"
-        for ii,fib in enumerate(fibers):
-            if thisfilter not in filters[fib]:
-                log.warning("WARNING!!! {} magnitude is not available filter for fiber {}".format(thisfilter,fib))
-                mags[ii]=None
-            else:
-                mags[ii]=magnitudes[fib][filters[fib]==thisfilter]
-        
+        ok = (photflux[fibers] > 0)
+        mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
+
         try:
 	    #- Determine invalid SNR and mag values and remove
             m=mags
@@ -754,8 +783,8 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     qadict["FITCOEFF_TGT"]=fitcoeff
     qadict["SNR_RESID"]=resid_snr
     qadict["FIDSNR_TGT"]=fidsnr_tgt
-    qadict["RA"]=frame.fibermap['RA_TARGET']
-    qadict["DEC"]=frame.fibermap['DEC_TARGET']
+    qadict["RA"]=frame.fibermap['TARGET_RA']
+    qadict["DEC"]=frame.fibermap['TARGET_DEC']
 
     return qadict,badfibs,fitsnr
 
