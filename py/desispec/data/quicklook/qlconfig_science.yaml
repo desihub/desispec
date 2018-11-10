@@ -11,7 +11,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ApplyFiberFlat_QP, SkySub_QP, FluxCalibration]
+Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ApplyFiberFlat_QP, SkySub_QP, ApplyFluxCalibration]
 Algorithms:
     Initialize:
         QA: 
@@ -61,8 +61,11 @@ Algorithms:
                          PEAKCOUNT_NORMAL_RANGE: [-2.0, 2.0],
                          PEAKCOUNT_WARN_RANGE: [-4.0, 4.0],PEAKCOUNT_BRIGHT_REF:[10.0],PEAKCOUNT_DARK_REF:[10.0],PEAKCOUNT_GRAY_REF:[10.0]}
     SkySub_QP:
-        QA: {}
-    FluxCalibration:
+        QA:
+            Calculate_SNR:
+                #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
+                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-10, 10.], FIDSNR_TGT_WARN_RANGE: [-15., 15.], FIDSNR_TGT_BRIGHT_REF:[1.,2.], FIDSNR_TGT_DARK_REF:[1.,2.], FIDSNR_TGT_GRAY_REF:[1.,2.], FIDMAG: 22.}
+    ApplyFluxCalibration:
         QA:
             Sky_Rband:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
@@ -72,6 +75,3 @@ Algorithms:
                          SKYRBAND_WARN_RANGE: [-2.0, 2.0], SKYRBAND_BRIGHT_REF:[100.], SKYRBAND_DARK_REF:[100.], SKYRBAND_GRAY_REF:[100.]}
             Integrate_Spec:
                 PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-10.0, 10.0], DELTAMAG_TGT_WARN_RANGE: [-15., 15.],DELTAMAG_TGT_BRIGHT_REF:[4.0,4.0],DELTAMAG_TGT_DARK_REF:[4.0,4.0],DELTAMAG_TGT_GRAY_REF:[4.0,4.0]}
-            Calculate_SNR:
-                #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
-                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-10, 10.], FIDSNR_TGT_WARN_RANGE: [-15., 15.], FIDSNR_TGT_BRIGHT_REF:[1.,2.], FIDSNR_TGT_DARK_REF:[1.,2.], FIDSNR_TGT_GRAY_REF:[1.,2.], FIDMAG: 22.}
