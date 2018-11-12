@@ -443,6 +443,12 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
                 nbad = bad.sum()
                 log.warning("%d rows of bad data detected in column " +
                             "%s of %s.", nbad, col, filepath)
+                #
+                # Temporary workaround for bad flux values, see
+                # https://github.com/desihub/desitarget/issues/397
+                #
+                if col.lower().startswith('flux'):
+                    data[col][0:maxrows][bad] = 0.0
     log.info("Integrity check complete on %s.", tn)
     if rowfilter is None:
         good_rows = np.ones((maxrows,), dtype=np.bool)
