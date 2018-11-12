@@ -1591,8 +1591,8 @@ class Integrate_Spec(MonitoringAlg):
         refmetrics=inputs["refmetrics"]
         if isinstance(frame,QFrame):
             frame = frame.asframe()
-        ra=frame.fibermap["RA_TARGET"]
-        dec=frame.fibermap["DEC_TARGET"]
+        ra=frame.fibermap["TARGET_RA"]
+        dec=frame.fibermap["TARGET_DEC"]
         flux=frame.flux
         ivar=frame.ivar
         wave=frame.wave

@@ -88,7 +88,13 @@ for zbestfile in zbestfiles:
     if args.fibermap :
         fibermap = fitsio.read(zbestfile, 'FIBERMAP')
         # new zbest structured array with two more columns ...
-        ndtype=np.dtype( zbest.dtype.descr + [("RA",str(fibermap["RA_TARGET"].dtype)),("DEC",str(fibermap["DEC_TARGET"].dtype)),("MAG",str(fibermap["MAG"].dtype),fibermap["MAG"].shape[-1])])
+        ndtype=np.dtype( zbest.dtype.descr + [
+            ("RA",str(fibermap["TARGET_RA"].dtype)),
+            ("DEC",str(fibermap["TARGET_DEC"].dtype)),
+            ("FLUX_G",str(fibermap["FLUX_G"].dtype)),
+            ("FLUX_R",str(fibermap["FLUX_R"].dtype)),
+            ("FLUX_Z",str(fibermap["FLUX_Z"].dtype)),
+            ])
         nzbest=np.zeros(zbest.shape,dtype=ndtype)
         # copy 
         for k in zbest.dtype.names : nzbest[k]=zbest[k]
@@ -97,9 +103,11 @@ for zbestfile in zbestfiles:
         # because the fibermap can contain several entries for the same target
         tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
         tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
-        nzbest["RA"] = fibermap["RA_TARGET"][tmp2]
-        nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
-        nzbest["MAG"][:,:] = fibermap["MAG"][tmp2,:]
+        nzbest["RA"] = fibermap["TARGET_RA"][tmp2]
+        nzbest["DEC"] = fibermap["TARGET_DEC"][tmp2]
+        nzbest["FLUX_G"] = fibermap["FLUX_G"][tmp2]
+        nzbest["FLUX_R"] = fibermap["FLUX_R"][tmp2]
+        nzbest["FLUX_Z"] = fibermap["FLUX_Z"][tmp2]
         zbest=nzbest
     data.append(zbest)
    

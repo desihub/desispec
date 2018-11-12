@@ -5,7 +5,7 @@ desispec Change Log
 0.26.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix desi_zcatalog RA_TARGET vs. TARGET_RA
 
 0.26.0 (2018-11-08)
 -------------------
