@@ -447,8 +447,8 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
                 # Temporary workaround for bad flux values, see
                 # https://github.com/desihub/desitarget/issues/397
                 #
-                if col.lower().startswith('flux'):
-                    data[col][0:maxrows][bad] = 0.0
+                if 'flux' in col.lower():
+                    data[col][0:maxrows][bad] = -9999.0
     log.info("Integrity check complete on %s.", tn)
     if rowfilter is None:
         good_rows = np.ones((maxrows,), dtype=np.bool)
@@ -557,8 +557,8 @@ def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
     # else:
     #     good_rows = rowfilter(data[0:maxrows])
     # data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
-    data_list = [data[col].tolist() for col in colnames if col != 'EMLINES']
-    data_names = [col.lower() for col in colnames if col != 'EMLINES']
+    data_list = [data[col].tolist() for col in colnames if col not in skip]
+    data_names = [col.lower() for col in colnames if col not in skip]
     data_names[0] = 'b_targetid'
     finalrows = len(data_list[0])
     log.info("Initial column conversion complete on %s.", tn)
