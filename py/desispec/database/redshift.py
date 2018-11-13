@@ -378,7 +378,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
                 # Temporary workaround for bad flux values, see
                 # https://github.com/desihub/desitarget/issues/397
                 #
-                if 'flux' in col.lower():
+                if col in ('FLUX_R',):
                     data[col][0:maxrows][bad] = -9999.0
     log.info("Integrity check complete on %s.", tn)
     if rowfilter is None:
