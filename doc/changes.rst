@@ -5,7 +5,9 @@ desispec Change Log
 0.26.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Update redshift database data model and workaround a minor bad data problem (PR `#722`_).
+
+.. _`#722`: https://github.com/desihub/desispec/pull/722
 
 0.26.0 (2018-11-08)
 -------------------
@@ -43,7 +45,7 @@ Major non-backwards compatible changes:
 
   * New QL calibration QA metrics (PR `#677`_).
   * Update QL to use xytraceset instead of custom PSF (PR `#682`_).
-  * Cleanup for robustness and maintainability (PR `#693`_). 
+  * Cleanup for robustness and maintainability (PR `#693`_).
 
 * Offline QA updates
 
