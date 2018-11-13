@@ -1591,8 +1591,8 @@ class Integrate_Spec(MonitoringAlg):
         refmetrics=inputs["refmetrics"]
         if isinstance(frame,QFrame):
             frame = frame.asframe()
-        ra=frame.fibermap["RA_TARGET"]
-        dec=frame.fibermap["DEC_TARGET"]
+        ra=frame.fibermap["TARGET_RA"]
+        dec=frame.fibermap["TARGET_DEC"]
         flux=frame.flux
         ivar=frame.ivar
         wave=frame.wave
@@ -1610,9 +1610,6 @@ class Integrate_Spec(MonitoringAlg):
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
 
         retval["NIGHT"] = frame.meta["NIGHT"]
-
-        ra = frame.fibermap["TARGET_RA"]
-        dec = frame.fibermap["TARGET_DEC"]
 
         flux=frame.flux
         wave=frame.wave
@@ -1673,21 +1670,21 @@ class Integrate_Spec(MonitoringAlg):
         integrals=np.array(integrals)
 
         #- Convert calibrated flux to fiber magnitude
-        fibermags=np.zeros(integrals.shape)
-        fibermags[integrals>0]=zeropoint-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        specmags=np.zeros(integrals.shape)
+        specmags[integrals>0]=zeropoint-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
 
         #- Calculate delta_mag (remove sky fibers first)
         objects=frame.fibermap['OBJTYPE']
         skyfibers=np.where(objects=="SKY")[0]
         immags_nosky=list(magnitudes)
-        fibmags_nosky=list(fibermags)
+        specmags_nosky=list(specmags)
         for skyfib in range(len(skyfibers)):
             immags_nosky.remove(immags_nosky[skyfibers[skyfib]])
-            fibmags_nosky.remove(fibmags_nosky[skyfibers[skyfib]])
+            specmags_nosky.remove(specmags_nosky[skyfibers[skyfib]])
             for skyfibindex in range(len(skyfibers)):
                 skyfibers[skyfibindex]-=1
        
-        delta_mag=np.array(fibmags_nosky)-np.array(immags_nosky)
+        delta_mag=np.array(specmags_nosky)-np.array(immags_nosky)
         delm = np.nan_to_num(delta_mag)
         
         #- average integrals over fibers of each object type and get imaging magnitudes
@@ -1727,8 +1724,8 @@ class Integrate_Spec(MonitoringAlg):
 
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
 
-        #SE: should not have any nan or inf at this point nut let's keep it for saftety measures here 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
+        #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBERMAG": magnitudes, "SPECMAG":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         get_outputs(qafile,qafig,retval,'plot_integral')
         return retval    
@@ -1769,7 +1766,7 @@ class Calculate_SNR(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1805,10 +1802,7 @@ class Calculate_SNR(MonitoringAlg):
 
         ra = fibermap["TARGET_RA"]
         dec = fibermap["TARGET_DEC"]
-        objlist = sorted(set(fibermap["OBJTYPE"]))
-
-        if 'SKY' in objlist:
-            objlist.remove('SKY')
+        objlist = ['ELG','LRG','QSO','STAR']
 
         #- select band for mag, using DECAM_R if present
         if param is None:
