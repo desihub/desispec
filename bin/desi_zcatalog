@@ -89,11 +89,11 @@ for zbestfile in zbestfiles:
         fibermap = fitsio.read(zbestfile, 'FIBERMAP')
         # new zbest structured array with two more columns ...
         ndtype=np.dtype( zbest.dtype.descr + [
-            ("RA",str(fibermap["TARGET_RA"].dtype)),
-            ("DEC",str(fibermap["TARGET_DEC"].dtype)),
-            ("FLUX_G",str(fibermap["FLUX_G"].dtype)),
-            ("FLUX_R",str(fibermap["FLUX_R"].dtype)),
-            ("FLUX_Z",str(fibermap["FLUX_Z"].dtype)),
+            ("RA", "f8"),
+            ("DEC", "f8"),
+            ("FLUX_G", "f4"),
+            ("FLUX_R", "f4"),
+            ("FLUX_Z", "f4"),
             ])
         nzbest=np.zeros(zbest.shape,dtype=ndtype)
         # copy 
@@ -103,11 +103,21 @@ for zbestfile in zbestfiles:
         # because the fibermap can contain several entries for the same target
         tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
         tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
-        nzbest["RA"] = fibermap["TARGET_RA"][tmp2]
-        nzbest["DEC"] = fibermap["TARGET_DEC"][tmp2]
-        nzbest["FLUX_G"] = fibermap["FLUX_G"][tmp2]
-        nzbest["FLUX_R"] = fibermap["FLUX_R"][tmp2]
-        nzbest["FLUX_Z"] = fibermap["FLUX_Z"][tmp2]
+        if "TARGET_RA" in fibermap.dtype.names:
+            #- new format: TARGET_RA/DEC + FLUX
+            nzbest["RA"] = fibermap["TARGET_RA"][tmp2]
+            nzbest["DEC"] = fibermap["TARGET_DEC"][tmp2]
+            nzbest["FLUX_G"] = fibermap["FLUX_G"][tmp2]
+            nzbest["FLUX_R"] = fibermap["FLUX_R"][tmp2]
+            nzbest["FLUX_Z"] = fibermap["FLUX_Z"][tmp2]
+        else:
+            #- old format: RA/DEC_TARGET + MAG
+            nzbest["RA"] = fibermap["RA_TARGET"][tmp2]
+            nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
+            nzbest["FLUX_G"] = 10**(0.4*(22.5 - fibermap["MAG"][:,0][tmp2]))
+            nzbest["FLUX_R"] = 10**(0.4*(22.5 - fibermap["MAG"][:,1][tmp2]))
+            nzbest["FLUX_Z"] = 10**(0.4*(22.5 - fibermap["MAG"][:,2][tmp2]))
+
         zbest=nzbest
     data.append(zbest)
    
