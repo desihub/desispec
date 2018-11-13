@@ -24,31 +24,6 @@ class Config(object):
         Note:
         rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
         """
-
-        #- load the config file and extract command line/config information
-        #with open(configfile,'r') as cfile:
-        #    self.conf = yaml.load(cfile)
-        #    cfile.close()
-
-        #- Use filelock if available; needed at KPNO with docker+NFS
-        #try:
-            #from filelock import FileLock
-            #lock = FileLock("{}.lock".format(configfile))
-        #except ImportError:
-            #class NullContextManager(object):
-                #def __init__(self):
-                    #pass
-                #def __enter__(self):
-                    #pass
-                #def __exit__(self, *args):
-                    #pass
-
-            #lock = NullContextManager()
-            
-        #from filelock import FileLock
-        #lock = FileLock("{}.lock".format(configfile))
-        
-        #with lock:
         with open(configfile, 'r') as f:
             self.conf = yaml.load(f)
             f.close()
@@ -109,17 +84,6 @@ class Config(object):
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
         self._qaRefKeys = qaRefKeys
-        #self._qaRefKeys={"Check_HDUs":"CHECKHDUS","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
-
-    @property
-    def mode(self):
-        """ what mode of QL, online? offline?
-        """
-        return self._palist.mode
-
-    @property
-    def qlf(self):
-        return self._qlf
 
     @property
     def palist(self): 
@@ -269,21 +233,10 @@ class Config(object):
         yaml outputfile for the set of qas for a given pa
         Name and default locations of files are handled by desispec.io.meta.findfile
         """
-
-        #- both PA level and QA level outputs
-        qa_pa_outfile = {}
-        qa_pa_outfig = {}
+        #- QA level outputs
         qa_outfile = {}
         qa_outfig = {}
         for PA in self.palist:
-            #- pa level outputs
-            if self.dumpintermediates:
-                qa_pa_outfile[PA] = self.io_qa_pa(PA)[0]
-                qa_pa_outfig[PA] = self.io_qa_pa(PA)[1]
-            else:
-                qa_pa_outfile[PA] = None
-                qa_pa_outfig[PA] = None
-            #- qa_level output
             for QA in self.qalist[PA]:
                 qa_outfile[QA] = self.io_qa(QA)[0]
                 qa_outfig[QA] = self.io_qa(QA)[1]
@@ -293,18 +246,17 @@ class Config(object):
                 if not os.path.exists(path):
                     os.makedirs(path)
 
-        return ((qa_outfile,qa_outfig),(qa_pa_outfile,qa_pa_outfig))
+        return (qa_outfile,qa_outfig)
+#        return ((qa_outfile,qa_outfig),(qa_pa_outfile,qa_pa_outfig))
 
     @property
     def qaargs(self):
-
         qaopts = {}
         referencemetrics=[]        
-
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 if self.plots:
-                    qaplot = self.dump_qa()[0][1][qa]
+                    qaplot = self.dump_qa()[1][qa]
                 else:
                     qaplot = None
 
@@ -312,9 +264,9 @@ class Config(object):
                 params=self._qaparams(qa)
                 qaopts[qa]={'night' : self.night, 'expid' : self.expid,
                             'camera': self.camera, 'paname': PA, 'PSFFile': self.psf_filename,
-                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
+                            'amps': self.amps, 'qafile': self.dump_qa()[0][qa],
                             'qafig': qaplot, 'FiberMap': self.fibermap,
-                            'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
+                            'param': params, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa,
                             'plots' : self.plots
                             }
@@ -337,7 +289,6 @@ class Config(object):
         return qaopts
 
     def _qaparams(self,qa):
-            
         params={}
         if self.algorithms is not None:
             for PA in self.palist:
@@ -347,25 +298,6 @@ class Config(object):
             # RK:  Need to settle optimal error handling in cases like this.
             raise qlexceptions.ParameterException("Run time PARAMs not provided for QA")
 
-            #if qa == 'Count_Pixels':
-            #    params[qa]= dict(
-            #                    CUTLO = 100,
-            #                     CUTHI = 500
-            #                    )
-            #elif qa == 'CountSpectralBins':
-            #    params[qa]= dict(
-            #                     CUTLO = 100,   # low threshold for number of counts
-            #                     CUTMED = 250,
-            #                     CUTHI = 500
-            #                    )
-            #elif qa == 'Sky_Residual':
-            #    params[qa]= dict(
-            #                     PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-            #                     PER_RESID=95.,   # Percentile for residual distribution
-            #                     BIN_SZ=0.1,) # Bin size for residual/sigma histogram
-            #else:
-            #    params[qa]= dict()
-        
         return params[qa]
 
     def io_qa_pa(self,paname):
@@ -432,7 +364,6 @@ class Config(object):
         """
         config: desispec.quicklook.qlconfig.Config object
         """
-
         self.log.debug("Building Full Configuration")
         if self.conf["Program"] == '': 
             conf["Program"] = self.conf["Flavor"]
@@ -455,11 +386,11 @@ class Config(object):
         hdulist=pyfits.open(self.rawfile)
         primary_header=hdulist[0].header
         camera_header =hdulist[self.camera].header
-        
+
         hdulist.close()
         calibration_data=read_ccd_calibration(camera_header,primary_header)
         self.calibpsf=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["PSF"])
-        
+
         if self.psfid is None:
             self.psf_filename=findfile('psf',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
@@ -474,29 +405,7 @@ class Config(object):
 
         #SE: QL no longer get references from a template or merged json 
         #- Get reference metrics from template json file
-        #if self.templateid is None:
-            #template=os.path.join(os.environ['QL_CONFIG_DIR'],'templates','ql-mergedQA-{}-{}.json'.format(self.camera,self.program))
-        #else:
-            #template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-
         self.reference=None
-        #if os.path.isfile(template):
-            #try:
-                #with open(template) as reference:
-                    #self.log.info("Reading template file {}".format(template))
-                    #refdict=json.load(reference)
-                    #tasks=refdict["TASKS"]
-                    #tasklist=[]
-                    #for task in tasks.keys():
-                        #tasklist.append(task)
-                    #ref_met=[]
-                    #for ttask in tasklist:
-                        #ref_met.append(tasks[ttask]['METRICS'])
-                    #self.reference=ref_met
-            #except:
-                #self.log.warning("WARNING, template file is malformed %s"%template)
-        #else:
-            #self.log.warning("WARNING, can't open template file %s"%template)
 
         outconfig={}
         outconfig['Night'] = self.night
@@ -510,7 +419,7 @@ class Config(object):
 
         pipeline = []
         for ii,PA in enumerate(self.palist):
-            pipe={'OutputFile': self.dump_qa()[1][0][PA]} #- integrated QAs for that PA. 
+            pipe={}
             pipe['PA'] = {'ClassName': PA, 'ModuleName': self.pamodule, 'kwargs': self.paargs[PA]}
             pipe['QAs']=[]
             for jj, QA in enumerate(self.qalist[PA]):
@@ -528,7 +437,6 @@ class Config(object):
 
         #- Check if all the files exist for this QL configuraion
         check_config(outconfig,self.singqa)
-
         return outconfig
 
 def check_config(outconfig,singqa):
@@ -558,96 +466,31 @@ def check_config(outconfig,singqa):
 
     return 
 
-
 class Palist(object):
-    
     """
     Generate PA list and QA list for the Quicklook Pipeline for the given exposure
     """
-    def __init__(self,thislist=None,algorithms=None,flavor=None,mode=None):
+    def __init__(self,thislist=None,algorithms=None):
         """
         thislist: given list of PAs
         algorithms: Algorithm list coming from config file: e.g desispec/data/quicklook/qlconfig_dark.yaml
         flavor: only needed if new list is to be built.
         mode: online offline?
         """
-        self.mode=mode
         self.thislist=thislist
         self.algorithms=algorithms
         self.palist=self._palist()
         self.qalist=self._qalist()
-        qlog=qllogger.QLLogger(name="QLConfig")
-        self.log=qlog.getlog()
-        
+
     def _palist(self):
-        
-        if self.thislist is not None:
-            pa_list=self.thislist
-        else: #- construct palist
-            if self.flavor == 'arc':
-                pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract','ResolutionFit'] #- class names for respective PAs (see desispec.quicklook.procalgs)
-            elif self.flavor == "flat":
-                pa_list=['Initialize','Preproc','BoxcarExtract','ComputeFiberflat_QL']
-            elif self.flavor == 'bias' or self.flavor == 'dark':
-                pa_list=['Initialize','Preproc']
-            elif self.flavor == 'science':
-                pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
-            else:
-                self.log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
-                sys.exit(0)
+        palist=self.thislist
         self.pamodule='desispec.quicklook.procalgs'
-        return pa_list       
-    
+        return palist       
 
     def _qalist(self):
-
-        if self.thislist is not None:
-            qalist={}
-            for PA in self.thislist:
-                qalist[PA]=self.algorithms[PA]['QA'].keys()
-        else:
-            if self.flavor == 'arc':
-                QAs_initial=['Bias_From_Overscan']
-                QAs_preproc=['Get_RMS','Count_Pixels']
-                QAs_bootcalib=['Calc_XWSigma']
-                QAs_extract=['CountSpectralBins']
-                QAs_resfit=['Check_Resolution']
-            elif self.flavor =="flat":
-                QAs_initial=['Bias_From_Overscan']
-                QAs_preproc=['Get_RMS','Count_Pixels']
-                QAs_extract=['CountSpectralBins']
-                QAs_computeflat=['Check_FiberFlat']
-            elif self.flavor == 'bias' or self.flavor == 'dark':
-                QAs_initial=['Bias_From_Overscan']
-                QAs_preproc=['Get_RMS','Count_Pixels']
-            elif self.flavor =="science":
-                QAs_initial=['Bias_From_Overscan']
-                QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
-                QAs_extract=['CountSpectralBins']
-                QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-                #QAs_SkySub=['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']
-                QAs_SkySub=['Sky_Rband','Integrate_Spec','Calculate_SNR']
-
-            qalist={}
-            for PA in self.palist:
-                if PA == 'Initialize':
-                    qalist[PA] = QAs_initial
-                elif PA == 'Preproc':
-                    qalist[PA] = QAs_preproc
-                elif PA == 'BootCalibration':
-                    qalist[PA] = QAs_bootcalib
-                elif PA == 'BoxcarExtract':
-                    qalist[PA] = QAs_extract
-                elif PA == 'ResolutionFit':
-                    qalist[PA] = QAs_resfit
-                elif PA == 'ComputeFiberflat_QL':
-                    qalist[PA] = QAs_computeflat
-                elif PA == 'ApplyFiberFlat_QL':
-                    qalist[PA] = QAs_apfiberflat
-                elif PA == 'SkySub_QL':
-                    qalist[PA] = QAs_SkySub
-                else:
-                    qalist[PA] = None #- No QA for this PA
+        qalist={}
+        for PA in self.thislist:
+            qalist[PA]=self.algorithms[PA]['QA'].keys()
         self.qamodule='desispec.qa.qa_quicklook'
         return qalist
 
