@@ -105,11 +105,11 @@ class Target(SchemaMixin, Base):
     dec = Column(Float, nullable=False)
     ra_ivar = Column(Float, nullable=False)
     dec_ivar = Column(Float, nullable=False)
-    dchisq_0 = Column(Float, nullable=False)
-    dchisq_1 = Column(Float, nullable=False)
-    dchisq_2 = Column(Float, nullable=False)
-    dchisq_3 = Column(Float, nullable=False)
-    dchisq_4 = Column(Float, nullable=False)
+    dchisq_psf = Column(Float, nullable=False)
+    dchisq_rex = Column(Float, nullable=False)
+    dchisq_dev = Column(Float, nullable=False)
+    dchisq_exp = Column(Float, nullable=False)
+    dchisq_comp = Column(Float, nullable=False)
     flux_g = Column(Float, nullable=False)
     flux_r = Column(Float, nullable=False)
     flux_z = Column(Float, nullable=False)
@@ -904,7 +904,7 @@ def main():
               {'filepath': os.path.join(options.datapath, 'targets', 'targets.fits'),
                'tcls': Target,
                'hdu': 'TARGETS',
-               'expand': {'DCHISQ': ('dchisq_0', 'dchisq_1', 'dchisq_2', 'dchisq_3', 'dchisq_4',)},
+               'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_comp',)},
                'convert': None,
                'index': None,
                'q3c': postgresql,
