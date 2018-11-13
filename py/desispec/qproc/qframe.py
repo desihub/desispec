@@ -163,5 +163,5 @@ class QFrame(object):
         return Frame(wave=wavelength,flux=rflux,ivar=rivar,mask=None,resolution_data=None,\
                      fibers=self.fibers, spectrograph=None, meta=self.meta, fibermap=self.fibermap,\
                      chi2pix=None,scores=None,scores_comments=None,\
-                     wsigma=None,ndiag=1, suppress_res_warning=True)
+                     wsigma=self.sigma,ndiag=1, suppress_res_warning=True)
         

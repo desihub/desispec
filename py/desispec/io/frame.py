@@ -76,8 +76,8 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if frame.resolution_data is not None:
         hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     elif frame.wsigma is not None:
-        log.debug("Using sigma widths from QUICKRESOLUTION")
-        qrimg=fits.ImageHDU(frame.wsigma.astype('f4'), name='QUICKRESOLUTION' )
+        log.debug("Using ysigma from qproc")
+        qrimg=fits.ImageHDU(frame.wsigma.astype('f4'), name='YSIGMA' )
         qrimg.header["NDIAG"] =frame.ndiag
         hdus.append(qrimg)
     if fibermap is not None:

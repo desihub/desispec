@@ -891,12 +891,12 @@ class SkySub_QL(pas.PipelineAlg):
 
         return (sframe,skymodel)
 
-class FluxCalibration(pas.PipelineAlg):
+class ApplyFluxCalibration(pas.PipelineAlg):
     """PA to apply flux calibration to the given sframe
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Flux Calibration"
+            name="Apply Flux Calibration"
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
 
     def run(self,*args,**kwargs):
@@ -925,46 +925,60 @@ class FluxCalibration(pas.PipelineAlg):
     def run_pa(self,frame,calibfile,dumpfile=None):
         from desispec.io.fluxcalibration import read_flux_calibration
         from desispec.fluxcalibration import apply_flux_calibration
+        from desispec.fluxcalibration import FluxCalib
 
-        #- Read in calibration file
-        fluxcalib=read_flux_calibration(calibfile)
-
-        #- Calculate average calibration vector
-        nonzerocalib=[]
-        for i in range(fluxcalib.calib.shape[0]):
-            if np.mean(fluxcalib.calib[i]) != 0.0:
-                nonzerocalib.append(fluxcalib.calib[i])
-        avgcalibvector=np.zeros(fluxcalib.calib.shape[1])
-        for j in range(fluxcalib.calib.shape[1]):
-            vals=[]
-            for k in range(len(nonzerocalib)):
-                vals.append(nonzerocalib[k][j])
-            avgcalibvector[j]=np.mean(vals)
-
-        #- Check if frame and fluxcalib are on same wavelength grid
-        samegrid=False
-        if len(frame.wave) == len(fluxcalib.wave):
-            mval=np.max(np.abs(frame.wave-fluxcalib.wave))
-            if mval < 0.001:
-                samegrid=True
-
-        #- Convert fluxcalib.calib to average vector
-        if samegrid:
-            for k in range(fluxcalib.calib.shape[0]):
-                fluxcalib.calib[k]=avgcalibvector
-        #- If frame/calib wavelength ranges are different, resample calib vector
-        else:
-            from desispec.fluxcalibration import FluxCalib
-            from desispec.quicklook.palib import resample_spec
-            newcalib=[]
-            newivar=[]
-            for l in range(frame.flux.shape[0]):
-                cal,iv=resample_spec(fluxcalib.wave,avgcalibvector,frame.wave,ivar=fluxcalib.ivar[0]) #RS: using single ivar array, this can be updated if we need to be more meticulous here
-                newcalib.append(cal)
-                newivar.append(iv)
-            newcalib=np.array(newcalib)
-            newivar=np.array(newivar)
-            fluxcalib=FluxCalib(frame.wave,newcalib,newivar,frame.mask)
+         # This try/except statement is a temporary placeholder to get output, will change once calibration information is available
+        try:
+            #- If a calibration file exists, read in file
+            fluxcalib=read_flux_calibration(calibfile)
+            log.info("Creating FluxCalib object from {}".format(calibfile))
+    
+            #- Calculate average calibration vector
+            nonzerocalib=[]
+            for i in range(fluxcalib.calib.shape[0]):
+                if np.mean(fluxcalib.calib[i]) != 0.0:
+                    nonzerocalib.append(fluxcalib.calib[i])
+            avgcalibvector=np.zeros(fluxcalib.calib.shape[1])
+            for j in range(fluxcalib.calib.shape[1]):
+                vals=[]
+                for k in range(len(nonzerocalib)):
+                    vals.append(nonzerocalib[k][j])
+                avgcalibvector[j]=np.mean(vals)
+    
+            #- Check if frame and fluxcalib are on same wavelength grid
+            samegrid=False
+            if len(frame.wave) == len(fluxcalib.wave):
+                mval=np.max(np.abs(frame.wave-fluxcalib.wave))
+                if mval < 0.001:
+                    samegrid=True
+    
+            #- Convert fluxcalib.calib to average vector
+            if samegrid:
+                for k in range(fluxcalib.calib.shape[0]):
+                    fluxcalib.calib[k]=avgcalibvector
+            #- If frame/calib wavelength ranges are different, resample calib vector
+            else:
+                from desispec.quicklook.palib import resample_spec
+                newcalib=[]
+                newivar=[]
+                for l in range(frame.flux.shape[0]):
+                    cal,iv=resample_spec(fluxcalib.wave,avgcalibvector,frame.wave,ivar=fluxcalib.ivar[0]) #RS: using single ivar array, this can be updated if we need to be more meticulous here
+                    newcalib.append(cal)
+                    newivar.append(iv)
+                newcalib=np.array(newcalib)
+                newivar=np.array(newivar)
+                fluxcalib=FluxCalib(frame.wave,newcalib,newivar,frame.mask)
+        except:
+            # If calibration file doesn't exist, create an artificial FluxCalib object
+            log.warning("Calibration file not found, creating artifical FluxCalib object")
+            calibvector=[]
+            calibivar=[]
+            for i in range(frame.nspec):
+                calibvector.append(np.ones(frame.nwave))
+                calibivar.append(np.ones(frame.nwave))
+            calibvector=np.array(calibvector)
+            calibivar=np.array(calibivar)
+            fluxcalib=FluxCalib(frame.wave,calibvector,calibivar,frame.mask)
         apply_flux_calibration(frame,fluxcalib)
 
         if dumpfile is not None:
