@@ -248,12 +248,12 @@ class ZCat(SchemaMixin, Base):
     subtype = Column(String, index=True, nullable=False)
     ncoeff = Column(BigInteger, nullable=False)
     deltachi2 = Column(Float, nullable=False)
+    brickname = Column(String, index=True, nullable=False)
+    numexp = Column(Integer, nullable=False, default=-1)
+    numtile = Column(Integer, nullable=False)
     #
     # Columns that are just copied from the target table.
     #
-    # brickname = Column(String, index=True, nullable=False)
-    # numexp = Column(Integer, nullable=False, default=-1)
-    # numtile = Column(Integer, nullable=False)
     # brickid = Column(Integer, nullable=False)
     # brick_objid = Column(Integer, nullable=False)
     # ra = Column(Float, nullable=False)
