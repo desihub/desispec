@@ -18,7 +18,7 @@ from astropy.table import Table
 from pytz import utc
 
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
-                        BigInteger, Integer, String, Float, DateTime,
+                        BigInteger, Boolean, Integer, String, Float, DateTime,
                         bindparam)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
@@ -89,112 +89,112 @@ class Truth(SchemaMixin, Base):
     feh = Column(Float, nullable=False, default=-9999.0)
 
     def __repr__(self):
-        return ("<Truth(targetid={0.targetid:d}, " +
-                "mockid={0.mockid:d}, " +
-                "contam_target={0.contam_target:d}, " +
-                "truez={0.truez:f}, " +
-                "truespectype='{0.truespectype}', " +
-                "templatetype='{0.templatetype}', " +
-                "templatesubtype='{0.templatesubtype}', " +
-                "templateid={0.templateid:d}, " +
-                "seed={0.seed:d}, " +
-                "mag={0.mag:f}, " +
-                "flux_g={0.flux_g:f}, " +
-                "flux_r={0.flux_r:f}, " +
-                "flux_z={0.flux_z:f}, " +
-                "flux_w1={0.flux_w1:f}, " +
-                "flux_w2={0.flux_w2:f}, " +
-                "oiiflux={0.oiiflux:f}, " +
-                "hbetaflux={0.hbetaflux:f}, " +
-                "ewoii={0.ewoii:f}, " +
-                "ewhbeta={0.ewhbeta:f}, " +
-                "d4000={0.d4000:f}, " +
-                "vdisp={0.vdisp:f}, " +
-                "oiidoublet={0.oiidoublet:f}, " +
-                "oiiihbeta={0.oiiihbeta:f}, " +
-                "oiihbeta={0.oiihbeta:f}, " +
-                "niihbeta={0.niihbeta:f}, " +
-                "siihbeta={0.siihbeta:f}, " +
-                "mabs_1450={0.mabs_1450:f}, " +
-                "bal_templateid={0.bal_templateid:d}, " +
-                "truez_norsd={0.truez_norsd:f}, " +
-                "teff={0.teff:f}, " +
-                "logg={0.logg:f}, " +
-                "feh={0.feh:f}" +
-                ")>").format(self)
+        return "<Truth(targetid={0.targetid:d})>".format(self)
 
 
 class Target(SchemaMixin, Base):
     """Representation of the target table.
     """
 
+    release = Column(Integer, nullable=False)
     brickid = Column(Integer, nullable=False)
     brickname = Column(String, nullable=False)
     brick_objid = Column(Integer, nullable=False)
+    morphtype = Column(String, nullable=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
+    ra_ivar = Column(Float, nullable=False)
+    dec_ivar = Column(Float, nullable=False)
+    dchisq_0 = Column(Float, nullable=False)
+    dchisq_1 = Column(Float, nullable=False)
+    dchisq_2 = Column(Float, nullable=False)
+    dchisq_3 = Column(Float, nullable=False)
+    dchisq_4 = Column(Float, nullable=False)
     flux_g = Column(Float, nullable=False)
     flux_r = Column(Float, nullable=False)
     flux_z = Column(Float, nullable=False)
     flux_w1 = Column(Float, nullable=False)
     flux_w2 = Column(Float, nullable=False)
-    shapeexp_r = Column(Float, nullable=False)
-    shapeexp_e1 = Column(Float, nullable=False)
-    shapeexp_e2 = Column(Float, nullable=False)
-    shapedev_r = Column(Float, nullable=False)
-    shapedev_e1 = Column(Float, nullable=False)
-    shapedev_e2 = Column(Float, nullable=False)
+    flux_ivar_g = Column(Float, nullable=False)
+    flux_ivar_r = Column(Float, nullable=False)
+    flux_ivar_z = Column(Float, nullable=False)
+    flux_ivar_w1 = Column(Float, nullable=False)
+    flux_ivar_w2 = Column(Float, nullable=False)
+    mw_transmission_g = Column(Float, nullable=False)
+    mw_transmission_r = Column(Float, nullable=False)
+    mw_transmission_z = Column(Float, nullable=False)
+    mw_transmission_w1 = Column(Float, nullable=False)
+    mw_transmission_w2 = Column(Float, nullable=False)
+    nobs_g = Column(Integer, nullable=False)
+    nobs_r = Column(Integer, nullable=False)
+    nobs_z = Column(Integer, nullable=False)
+    fracflux_g = Column(Float, nullable=False)
+    fracflux_r = Column(Float, nullable=False)
+    fracflux_z = Column(Float, nullable=False)
+    fracmasked_g = Column(Float, nullable=False)
+    fracmasked_r = Column(Float, nullable=False)
+    fracmasked_z = Column(Float, nullable=False)
+    fracin_g = Column(Float, nullable=False)
+    fracin_r = Column(Float, nullable=False)
+    fracin_z = Column(Float, nullable=False)
+    allmask_g = Column(Float, nullable=False)
+    allmask_r = Column(Float, nullable=False)
+    allmask_z = Column(Float, nullable=False)
     psfdepth_g = Column(Float, nullable=False)
     psfdepth_r = Column(Float, nullable=False)
     psfdepth_z = Column(Float, nullable=False)
     galdepth_g = Column(Float, nullable=False)
     galdepth_r = Column(Float, nullable=False)
     galdepth_z = Column(Float, nullable=False)
-    mw_transmission_g = Column(Float, nullable=False)
-    mw_transmission_r = Column(Float, nullable=False)
-    mw_transmission_z = Column(Float, nullable=False)
-    mw_transmission_w1 = Column(Float, nullable=False)
-    mw_transmission_w2 = Column(Float, nullable=False)
+    fracdev = Column(Float, nullable=False)
+    fracdev_ivar = Column(Float, nullable=False)
+    shapedev_r = Column(Float, nullable=False)
+    shapedev_r_ivar = Column(Float, nullable=False)
+    shapedev_e1 = Column(Float, nullable=False)
+    shapedev_e1_ivar = Column(Float, nullable=False)
+    shapedev_e2 = Column(Float, nullable=False)
+    shapedev_e2_ivar = Column(Float, nullable=False)
+    shapeexp_r = Column(Float, nullable=False)
+    shapeexp_r_ivar = Column(Float, nullable=False)
+    shapeexp_e1 = Column(Float, nullable=False)
+    shapeexp_e1_ivar = Column(Float, nullable=False)
+    shapeexp_e2 = Column(Float, nullable=False)
+    shapeexp_e2_ivar = Column(Float, nullable=False)
+    fiberflux_g = Column(Float, nullable=False)
+    fiberflux_r = Column(Float, nullable=False)
+    fiberflux_z = Column(Float, nullable=False)
+    fibertotflux_g = Column(Float, nullable=False)
+    fibertotflux_r = Column(Float, nullable=False)
+    fibertotflux_z = Column(Float, nullable=False)
+    ref_id = Column(BigInteger, nullable=False)
+    gaia_phot_g_mean_mag = Column(Float, nullable=False)
+    gaia_phot_g_mean_flux_over_error = Column(Float, nullable=False)
+    gaia_phot_bp_mean_mag = Column(Float, nullable=False)
+    gaia_phot_bp_mean_flux_over_error = Column(Float, nullable=False)
+    gaia_phot_rp_mean_mag = Column(Float, nullable=False)
+    gaia_phot_rp_mean_flux_over_error = Column(Float, nullable=False)
+    gaia_astrometric_excess_noise = Column(Float, nullable=False)
+    gaia_duplicated_source = Column(Boolean, nullable=False)
+    parallax = Column(Float, nullable=False)
+    parallax_ivar = Column(Float, nullable=False)
+    pmra = Column(Float, nullable=False)
+    pmra_ivar = Column(Float, nullable=False)
+    pmdec = Column(Float, nullable=False)
+    pmdec_ivar = Column(Float, nullable=False)
+    brightstarinblob = Column(Boolean, nullable=False)
+    ebv = Column(Float, nullable=False)
+    photsys = Column(String, nullable=False)
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
     mws_target = Column(BigInteger, nullable=False)
-    hpxpixel = Column(BigInteger, nullable=False)
+    priority = Column(BigInteger, nullable=False)
     subpriority = Column(Float, nullable=False)
+    numobs = Column(BigInteger, nullable=False)
+    hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
-        return ("<Target(brickid={0.brickid:d}, " +
-                "brickname='{0.brickname}', " +
-                "brick_objid={0.brick_objid:d}, " +
-                "ra={0.ra:f}, dec={0.dec:f}, " +
-                "flux_g={0.flux_g:f}, " +
-                "flux_r={0.flux_r:f}, " +
-                "flux_z={0.flux_z:f}, " +
-                "flux_w1={0.flux_w1:f}, " +
-                "flux_w2={0.flux_w2:f}, " +
-                "shapeexp_r={0.shapeexp_r:f}," +
-                "shapeexp_e1={0.shapeexp_e1:f}," +
-                "shapeexp_e2={0.shapeexp_e2:f}," +
-                "shapedev_r={0.shapedev_r:f}, " +
-                "shapedev_e1={0.shapedev_e1:f}," +
-                "shapedev_e2={0.shapedev_e2:f}," +
-                "psfdepth_g={0.psfdepth_g:f}, " +
-                "psfdepth_r={0.psfdepth_r:f}, " +
-                "psfdepth_z={0.psfdepth_z:f}, " +
-                "galdepth_g={0.galdepth_g:f}, " +
-                "galdepth_r={0.galdepth_r:f}, " +
-                "galdepth_z={0.galdepth_z:f}, " +
-                "mw_transmission_g={0.mw_transmission_g:f}, " +
-                "mw_transmission_r={0.mw_transmission_r:f}, " +
-                "mw_transmission_z={0.mw_transmission_z:f}, " +
-                "mw_transmission_w1={0.mw_transmission_w1:f}, " +
-                "mw_transmission_w2={0.mw_transmission_w2:f}, " +
-                "targetid={0.targetid:d}, " +
-                "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
-                "mws_target={0.mws_target:d}, " +
-                "hpxpixel={0.hpxpixel:d}, " +
-                "subpriority={0.subpriority:f}" +
-                ")>").format(self)
+        return "<Target(targetid={0.targetid})>".format(self)
 
 
 class ObsList(SchemaMixin, Base):
@@ -221,24 +221,7 @@ class ObsList(SchemaMixin, Base):
     # dateobs = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
-        return ("<ObsList(" +
-                "expid={0.expid:d}, " +
-                "tileid={0.tileid:d}, " +
-                "passnum={0.passnum:d}, " +
-                "ra={0.ra:f}, dec={0.dec:f}, " +
-                "ebmv={0.ebmv:f}, " +
-                "night='{0.night}', " +
-                "mjd={0.mjd:f}, " +
-                "exptime={0.exptime:f}, " +
-                "seeing={0.seeing:f}, " +
-                "transparency={0.transparency:f}, " +
-                "airmass={0.airmass:f}," +
-                "moonfrac={0.moonfrac:f}, " +
-                "moonalt={0.moonalt:f}, " +
-                "moonsep={0.moonsep:f}" +
-                "program='{0.program}'," +
-                "flavor='{0.flavor}'" +
-                ")>").format(self)
+        return "<ObsList(expid={0.expid:d})>".format(self)
 
 
 class ZCat(SchemaMixin, Base):
@@ -265,94 +248,46 @@ class ZCat(SchemaMixin, Base):
     subtype = Column(String, index=True, nullable=False)
     ncoeff = Column(BigInteger, nullable=False)
     deltachi2 = Column(Float, nullable=False)
-    brickname = Column(String, index=True, nullable=False)
-    numexp = Column(Integer, nullable=False, default=-1)
-    numtile = Column(Integer, nullable=False)
-    brickid = Column(Integer, nullable=False)
-    brick_objid = Column(Integer, nullable=False)
-    ra = Column(Float, nullable=False)
-    dec = Column(Float, nullable=False)
-    flux_g = Column(Float, nullable=False)
-    flux_r = Column(Float, nullable=False)
-    flux_z = Column(Float, nullable=False)
-    flux_w1 = Column(Float, nullable=False)
-    flux_w2 = Column(Float, nullable=False)
-    mw_transmission_g = Column(Float, nullable=False)
-    mw_transmission_r = Column(Float, nullable=False)
-    mw_transmission_z = Column(Float, nullable=False)
-    mw_transmission_w1 = Column(Float, nullable=False)
-    mw_transmission_w2 = Column(Float, nullable=False)
-    psfdepth_g = Column(Float, nullable=False)
-    psfdepth_r = Column(Float, nullable=False)
-    psfdepth_z = Column(Float, nullable=False)
-    galdepth_g = Column(Float, nullable=False)
-    galdepth_r = Column(Float, nullable=False)
-    galdepth_z = Column(Float, nullable=False)
-    shapedev_r = Column(Float, nullable=False)
-    shapedev_e1 = Column(Float, nullable=False)
-    shapedev_e2 = Column(Float, nullable=False)
-    shapeexp_r = Column(Float, nullable=False)
-    shapeexp_e1 = Column(Float, nullable=False)
-    shapeexp_e2 = Column(Float, nullable=False)
-    subpriority = Column(Float, nullable=False)
-    desi_target = Column(BigInteger, nullable=False)
-    bgs_target = Column(BigInteger, nullable=False)
-    mws_target = Column(BigInteger, nullable=False)
-    hpxpixel = Column(BigInteger, nullable=False)
+    #
+    # Columns that are just copied from the target table.
+    #
+    # brickname = Column(String, index=True, nullable=False)
+    # numexp = Column(Integer, nullable=False, default=-1)
+    # numtile = Column(Integer, nullable=False)
+    # brickid = Column(Integer, nullable=False)
+    # brick_objid = Column(Integer, nullable=False)
+    # ra = Column(Float, nullable=False)
+    # dec = Column(Float, nullable=False)
+    # flux_g = Column(Float, nullable=False)
+    # flux_r = Column(Float, nullable=False)
+    # flux_z = Column(Float, nullable=False)
+    # flux_w1 = Column(Float, nullable=False)
+    # flux_w2 = Column(Float, nullable=False)
+    # mw_transmission_g = Column(Float, nullable=False)
+    # mw_transmission_r = Column(Float, nullable=False)
+    # mw_transmission_z = Column(Float, nullable=False)
+    # mw_transmission_w1 = Column(Float, nullable=False)
+    # mw_transmission_w2 = Column(Float, nullable=False)
+    # psfdepth_g = Column(Float, nullable=False)
+    # psfdepth_r = Column(Float, nullable=False)
+    # psfdepth_z = Column(Float, nullable=False)
+    # galdepth_g = Column(Float, nullable=False)
+    # galdepth_r = Column(Float, nullable=False)
+    # galdepth_z = Column(Float, nullable=False)
+    # shapedev_r = Column(Float, nullable=False)
+    # shapedev_e1 = Column(Float, nullable=False)
+    # shapedev_e2 = Column(Float, nullable=False)
+    # shapeexp_r = Column(Float, nullable=False)
+    # shapeexp_e1 = Column(Float, nullable=False)
+    # shapeexp_e2 = Column(Float, nullable=False)
+    # subpriority = Column(Float, nullable=False)
+    # desi_target = Column(BigInteger, nullable=False)
+    # bgs_target = Column(BigInteger, nullable=False)
+    # mws_target = Column(BigInteger, nullable=False)
+    # hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
-        return ("<ZCat(" +
-                "targetid={0.targetid:d}, " +
-                "chi2={0.chi2:f}, " +
-                "coeff_0={0.coeff_0:f}, " +
-                "coeff_1={0.coeff_1:f}, " +
-                "coeff_2={0.coeff_2:f}, " +
-                "coeff_3={0.coeff_3:f}, " +
-                "coeff_4={0.coeff_4:f}, " +
-                "coeff_5={0.coeff_5:f}, " +
-                "coeff_6={0.coeff_6:f}, " +
-                "coeff_7={0.coeff_7:f}, " +
-                "coeff_8={0.coeff_8:f}, " +
-                "coeff_9={0.coeff_9:f}, " +
-                "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
-                "npixels={0.npixels:d}, " +
-                "spectype='{0.spectype}', " +
-                "subtype='{0.subtype}', " +
-                "ncoeff={0.ncoeff:d}, " +
-                "deltachi2={0.deltachi2:f}, " +
-                "brickname='{0.brickname}', " +
-                "numexp={0.numexp:d}, " +
-                "numtile={0.numtile:d}, " +
-                "brickid={0.brickid:d}, " +
-                "brick_objid={0.brick_objid:d}, " +
-                "ra={0.ra:f}, dec={0.dec:f}, " +
-                "flux_g={0.flux_g:f}, " +
-                "flux_r={0.flux_r:f}, " +
-                "flux_z={0.flux_z:f}, " +
-                "flux_w1={0.flux_w1:f}, " +
-                "flux_w2={0.flux_w2:f}, " +
-                "mw_transmission_g={0.mw_transmission_g:f}, " +
-                "mw_transmission_r={0.mw_transmission_r:f}, " +
-                "mw_transmission_z={0.mw_transmission_z:f}, " +
-                "mw_transmission_w1={0.mw_transmission_w1:f}, " +
-                "mw_transmission_w2={0.mw_transmission_w2:f}, " +
-                "psfdepth_g={0.psfdepth_g:f}, " +
-                "psfdepth_r={0.psfdepth_r:f}, " +
-                "psfdepth_z={0.psfdepth_z:f}, " +
-                "galdepth_g={0.galdepth_g:f}, " +
-                "galdepth_r={0.galdepth_r:f}, " +
-                "galdepth_z={0.galdepth_z:f}, " +
-                "shapedev_r={0.shapedev_r:f}, " +
-                "shapedev_e1={0.shapedev_e1:f}," +
-                "shapedev_e2={0.shapedev_e2:f}," +
-                "shapeexp_r={0.shapeexp_r:f}," +
-                "shapeexp_e1={0.shapeexp_e1:f}," +
-                "shapeexp_e2={0.shapeexp_e2:f}," +
-                "subpriority={0.subpriority:f}, " +
-                "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
-                "mws_target={0.mws_target:d}, " +
-                "hpxpixel={0.hpxpixel:d}" +
-                ")>").format(self)
+        return "<ZCat(targetid={0.targetid:d})>".format(self)
 
 
 class FiberAssign(SchemaMixin, Base):
@@ -373,20 +308,16 @@ class FiberAssign(SchemaMixin, Base):
     design_x = Column(Float, nullable=False)
     design_y = Column(Float, nullable=False)
     brickname = Column(String, index=True, nullable=False)
+    fiberstatus = Column(Integer, nullable=False)
+    design_q = Column(Float, nullable=False)
+    design_s = Column(Float, nullable=False)
+    lambda_ref = Column(Float, nullable=False)
+    objtype = Column(String, nullable=False)
+    petal_loc = Column(Integer, nullable=False)
+    device_loc = Column(Integer, nullable=False)
 
     def __repr__(self):
-        return ("<FiberAssign(tileid={0.tileid:d}, " +
-                "fiber={0.fiber:d}, " +
-                "location={0.location:d}, " +
-                "numtarget={0.numtarget:d}, " +
-                "priority={0.priority:d}, " +
-                "targetid={0.targetid:d}, " +
-                "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
-                "mws_target={0.mws_target:d}, " +
-                "target_ra={0.target_ra:f}, target_dec={0.target_dec:f}, " +
-                "design_x={0.design_x:f}, " +
-                "design_y={0.design_y:f}, " +
-                "brickname='{0.brickname}')>").format(self)
+        return "<FiberAssign(tileid={0.tileid:d}, fiber={0.fiber:d})>".format(self)
 
 
 def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
@@ -663,7 +594,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
 
 
 def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
-                     latest_epoch=False, last_column='BRICKNAME'):
+                     latest_epoch=False, last_column='DEVICE_LOC'):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -725,10 +656,20 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
         log.info("Read data from %s.", f)
-        for col in ('TARGET_RA', 'TARGET_DEC', 'DESIGN_X', 'DESIGN_Y'):
-            data[col][np.isnan(data[col])] = -9999.0
-            assert not np.any(np.isnan(data[col]))
-            assert np.all(np.isfinite(data[col]))
+        for col in data.names[:data_index]:
+            if data[col].dtype.kind == 'f':
+                bad = np.isnan(data[col])
+                if np.any(bad):
+                    nbad = bad.sum()
+                    log.warning("%d rows of bad data detected in column " +
+                                "%s of %s.", nbad, col, f)
+                    #
+                    # This replacement may be deprecated in the future.
+                    #
+                    if col in ('TARGET_RA', 'TARGET_DEC', 'DESIGN_X', 'DESIGN_Y'):
+                        data[col][bad] = -9999.0
+                assert not np.any(np.isnan(data[col]))
+                assert np.all(np.isfinite(data[col]))
         n_rows = len(data)
         if data_index is None:
             data_index = data.names.index(last_column) + 1
@@ -963,7 +904,7 @@ def main():
               {'filepath': os.path.join(options.datapath, 'targets', 'targets.fits'),
                'tcls': Target,
                'hdu': 'TARGETS',
-               'expand': None,
+               'expand': {'DCHISQ': ('dchisq_0', 'dchisq_1', 'dchisq_2', 'dchisq_3', 'dchisq_4',)},
                'convert': None,
                'index': None,
                'q3c': postgresql,
