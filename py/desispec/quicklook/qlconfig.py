@@ -126,15 +126,17 @@ class Config(object):
         if self.dumpintermediates:
             framefile=self.dump_pa("BoxcarExtract")
             fframefile=self.dump_pa("ApplyFiberFlat_QL")
-            sframefile=self.dump_pa("SkySub_QL")
-            framefile=self.dump_pa("Extract_QP")
+            qlsframefile=self.dump_pa("SkySub_QL")
+            qframefile=self.dump_pa("Extract_QP")
             fframefile=self.dump_pa("ApplyFiberFlat_QP")
             sframefile=self.dump_pa("SkySub_QP")
             cframefile=self.dump_pa("ApplyFluxCalibration")
 
         else:
+            qframefile=None
             framefile=None
             fframefile=None
+            qlsframefile=None
             sframefile=None
             cframefile=None
 
@@ -152,7 +154,7 @@ class Config(object):
 
         paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.calibpsf,'usesigma': self.usesigma, 'dumpfile': framefile}
         
-        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': qframefile}
 
         paopt_resfit={'PSFinputfile': self.psf_filename, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
@@ -167,7 +169,7 @@ class Config(object):
             outskyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
         else:
             outskyfile=None
-        paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile, 'Apply_resolution': self.usesigma}
+        paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': qlsframefile, 'Apply_resolution': self.usesigma}
         paopt_skysub_qp={'dumpfile': sframefile, 'Apply_resolution': False}
 
         paopts={}
@@ -430,7 +432,6 @@ class Config(object):
 
         outconfig['PipeLine'] = pipeline
         outconfig['RawImage'] = self.rawfile
-        outconfig['OutputFile'] = self.outputfile
         outconfig['singleqa'] = self.singqa
         outconfig['Timeout'] = self.timeout
         outconfig['FiberFlatFile'] = self.fiberflat

@@ -151,13 +151,7 @@ def runpipeline(pl,convdict,conf):
                     schemaStep.addMetrics(res['METRICS'])
                 except Exception as e:
                     log.warning("Failed to run QA {}. Got Exception {}".format(qa.name,e),exc_info=True)
-            if len(qaresult):
-                if conf["DumpIntermediates"]:
-                    f = open(paconf[s]["OutputFile"],"w")
-                    f.write(yaml.dump(yamlify(qaresult)))
-                    hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
-            else:
-                hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
+            hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
             QAresults.append([pa.name,qaresult])
         hb.stop("Pipeline processing finished. Serializing result")
     else:
