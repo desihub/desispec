@@ -31,7 +31,7 @@ while /bin/true; do
     #
     # Find symlinks at KPNO.
     #
-    for (( k=0; k < ${n_source}; k++)); do
+    for (( k=0; k < ${n_source}; k++ )); do
         src=${source_directories[$k]}
         staging=${staging_directories[$k]}
         dest=${destination_directories[$k]}
