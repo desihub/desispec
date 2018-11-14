@@ -1304,8 +1304,8 @@ class SkySub_QP(pas.PipelineAlg):
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         # convert for QA
-        sframe=qframe.asframe()
-        tmpsky=np.interp(sframe.wave,qframe.wave[0],skymodel[0])
-        skymodel = SkyModel(sframe.wave,np.tile(tmpsky,(sframe.nspec,1)),np.ones(sframe.flux.shape),np.zeros(sframe.flux.shape,dtype="int32"))
+#        sframe=qframe.asframe()
+#        tmpsky=np.interp(sframe.wave,qframe.wave[0],skymodel[0])
+#        skymodel = SkyModel(sframe.wave,np.tile(tmpsky,(sframe.nspec,1)),np.ones(sframe.flux.shape),np.zeros(sframe.flux.shape,dtype="int32"))
         
-        return (sframe,skymodel)
+        return (qframe,skymodel)
