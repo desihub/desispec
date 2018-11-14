@@ -913,19 +913,22 @@ class ApplyFluxCalibration(pas.PipelineAlg):
         if "CalibFile" in kwargs:
             calibfile=kwargs["CalibFile"]
         else:
-            log.critical("Must provide a calibration file.")
+            log.critical("Must provide a calibration file")
             sys.exit()
 
-        dumpfile=None
-        if "dumpfile" in kwargs:
-            dumpfile=kwargs["dumpfile"]
+        if "outputfile" in kwargs:
+            outputfile=kwargs["outputfile"]
+        else:
+            log.critical("Must provide output file to write cframe")
+            sys.exit()
 
-        return self.run_pa(input_frame,calibfile,dumpfile=dumpfile)
+        return self.run_pa(input_frame,calibfile,outputfile=outputfile)
 
-    def run_pa(self,frame,calibfile,dumpfile=None):
+    def run_pa(self,frame,calibfile,outputfile=None):
         from desispec.io.fluxcalibration import read_flux_calibration
-        from desispec.fluxcalibration import apply_flux_calibration
+        from desispec.quicklook.palib import apply_flux_calibration
         from desispec.fluxcalibration import FluxCalib
+        from desispec.qproc.io import write_qframe
 
          # This try/except statement is a temporary placeholder to get output, will change once calibration information is available
         try:
@@ -944,7 +947,7 @@ class ApplyFluxCalibration(pas.PipelineAlg):
                 for k in range(len(nonzerocalib)):
                     vals.append(nonzerocalib[k][j])
                 avgcalibvector[j]=np.mean(vals)
-    
+
             #- Check if frame and fluxcalib are on same wavelength grid
             samegrid=False
             if len(frame.wave) == len(fluxcalib.wave):
@@ -974,18 +977,15 @@ class ApplyFluxCalibration(pas.PipelineAlg):
             calibvector=[]
             calibivar=[]
             for i in range(frame.nspec):
-                calibvector.append(np.ones(frame.nwave))
-                calibivar.append(np.ones(frame.nwave))
+                calibvector.append(np.ones(frame.wave.shape[1]))
+                calibivar.append(np.ones(frame.wave.shape[1]))
             calibvector=np.array(calibvector)
             calibivar=np.array(calibivar)
-            fluxcalib=FluxCalib(frame.wave,calibvector,calibivar,frame.mask)
+            fluxcalib=FluxCalib(frame.wave[0],calibvector,calibivar,frame.mask)
         apply_flux_calibration(frame,fluxcalib)
 
-        if dumpfile is not None:
-            night = frame.meta['NIGHT']
-            expid = frame.meta['EXPID']
-            io.write_frame(dumpfile, frame)
-            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+        write_qframe(outputfile,frame)
+        log.info("Wrote flux calibrated frame file %s after %s"%(outputfile,self.name))
 
         return frame
 
