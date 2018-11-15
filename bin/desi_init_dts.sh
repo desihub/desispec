@@ -3,6 +3,10 @@
 # Sean McManus 2015/11/17
 # Adapted for DESI: Benjamin Weaver 2018-0627
 #
+# DESI Environment
+source /global/common/software/desi/desi_environment.sh test-release
+module use -a ${HOME}/software/${NERSC_HOST}/modulefiles
+module load desispec/my-master
 # Program or script you want to run
 PROGRAM=desi_dts.sh
 # Command line options for PRGFILE
