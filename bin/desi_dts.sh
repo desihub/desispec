@@ -16,7 +16,8 @@ n_source=${#source_directories[@]}
 run_pipeline=/bin/true
 pipeline_host=edison
 ssh="/bin/ssh -q ${pipeline_host}"
-sleep=10m
+# sleep=10m
+sleep=1m
 #
 # Functions
 #
