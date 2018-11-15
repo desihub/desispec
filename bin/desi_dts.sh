@@ -110,13 +110,13 @@ while /bin/true; do
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
-                            sprun desi_dts_status --last flats ${night} ${exposure}
+                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --last flats ${night} ${exposure}
                         elif [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]]; then
                             sprun ${ssh} /global/u1/d/desi/wrap_desi_night arcs \
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
-                            sprun desi_dts_status --last arcs ${night} ${exposure}
+                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --last arcs ${night} ${exposure}
                         #
                         # if night done run redshifts
                         #
@@ -125,9 +125,9 @@ while /bin/true; do
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
-                            sprun desi_dts_status --last science ${night} ${exposure}
+                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --last science ${night} ${exposure}
                         else
-                            sprun desi_dts_status ${night} ${exposure}
+                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status ${night} ${exposure}
                         fi
                     else
                         echo "INFO: ${night}/${exposure} appears to be test data.  Skipping pipeline activation." >> ${log}
@@ -139,7 +139,7 @@ while /bin/true; do
                     :
                 else
                     echo "ERROR: rsync problem detected!" >> ${log}
-                    sprun desi_dts_status --failure ${night} ${exposure}
+                    sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --failure ${night} ${exposure}
                 fi
             done
         else
