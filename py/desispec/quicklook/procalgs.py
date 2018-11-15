@@ -184,49 +184,6 @@ class Flexure(pas.PipelineAlg):
         return img
 
 
-class BootCalibration(pas.PipelineAlg):
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Boot Calibration"
-        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
-        
-    def run(self,*args,**kwargs):
-        if 'ArcLampImage' not in kwargs: 
-            #raise qlexceptions.ParameterException("Need ArcLampImage")
-            log.critical("Need ArcLampImage")
-            sys.exit()
-
-        if 'FlatImage' not in kwargs:
-            #raise qlexceptions.ParameterException("Need FlatImage")
-            log.critical("Need FlatImage")
-            sys.exit()
-
-        if 'outputFile' not in kwargs:
-            #raise qlexceptions.ParameterException("Need outputFile")
-            log.critical("Need outputFile")
-            sys.exit()
-
-        if "Deg" not in kwargs:
-            deg=5 #- 5th order legendre polynomial
-        else:
-            deg=kwargs["Deg"]
-
-        flatimage=kwargs["FlatImage"]
-        arcimage=kwargs["ArcLampImage"]
-        outputfile=kwargs["outputFile"]
-
-        return self.run_pa(deg,flatimage,arcimage,outputfile,args)
-
-    def run_pa(self,deg,flatimage,arcimage,outputfile,args):
-        from desispec.util import runcmd
-        cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
-        if runcmd(cmd) !=0:
-            raise RuntimeError('desi_bootcalib failed, psfboot not written')
-
-        img=args[0]
-        return img
-
-
 class BoxcarExtract(pas.PipelineAlg):
     from desispec.quicklook.qlboxcar import do_boxcar
     from desispec.maskbits import ccdmask

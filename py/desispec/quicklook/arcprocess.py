@@ -119,7 +119,7 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
 
 def write_psffile(infile,wcoeffs,wcoeffs_wavemin,wcoeffs_wavemax,outfile,wavestepsize=None):
     """
-    extract psfbootfile, add wcoeffs, and make a new psf file preserving the traces etc.
+    extract psf file, add wcoeffs, and make a new psf file preserving the traces etc.
     psf module will load this
     """
 
