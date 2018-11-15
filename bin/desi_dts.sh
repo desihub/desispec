@@ -98,7 +98,7 @@ while /bin/true; do
                         #
                         # Run update
                         #
-                        sprun ${ssh} /global/u1/d/desi/wrap_desi_night update \
+                        sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night update \
                             --night ${night} --expid ${exposure} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
@@ -106,13 +106,13 @@ while /bin/true; do
                         # if (flat|arc) done, run flat|arc update.
                         #
                         if [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} /global/u1/d/desi/wrap_desi_night flats \
+                            sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night flats \
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
                             sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --last flats ${night} ${exposure}
                         elif [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} /global/u1/d/desi/wrap_desi_night arcs \
+                            sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night arcs \
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
@@ -121,7 +121,7 @@ while /bin/true; do
                         # if night done run redshifts
                         #
                         elif [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} /global/u1/d/desi/wrap_desi_night redshifts \
+                            sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night redshifts \
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
