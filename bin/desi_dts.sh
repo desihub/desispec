@@ -7,9 +7,11 @@ log=${HOME}/desi_dts.log
 #
 # Source, staging and destination should be in 1-1-1 correspondence.
 #
-source_directories=(/data/dts/exposures/raw)
-staging_directories=($(/bin/realpath ${DESI_ROOT}/spectro/staging/raw))
-destination_directories=($(/bin/realpath ${DESI_SPECTRO_DATA}))
+source_directories=(/data/dts/exposures/test)
+# staging_directories=($(/bin/realpath ${DESI_ROOT}/spectro/staging/raw))
+staging_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/staging/raw))
+# destination_directories=($(/bin/realpath ${DESI_SPECTRO_DATA}))
+destination_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/data))
 n_source=${#source_directories[@]}
 run_pipeline=/bin/false
 pipeline_host=edison
