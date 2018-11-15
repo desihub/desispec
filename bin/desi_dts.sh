@@ -15,6 +15,7 @@ destination_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/data))
 n_source=${#source_directories[@]}
 run_pipeline=/bin/true
 pipeline_host=edison
+desi_night=$(/bin/realpath ${HOME}/bin/wrap_desi_night)
 ssh="/bin/ssh -q ${pipeline_host}"
 # sleep=10m
 sleep=1m
@@ -38,6 +39,7 @@ while /bin/true; do
         src=${source_directories[$k]}
         staging=${staging_directories[$k]}
         dest=${destination_directories[$k]}
+        status_dir=$(/bin/dirname ${staging})/status
         links=$(ssh -q dts /bin/find ${src} -type l 2>/dev/null)
         if [[ -n "${links}" ]]; then
             for l in ${links}; do
@@ -99,7 +101,7 @@ while /bin/true; do
                         #
                         # Run update
                         #
-                        sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night update \
+                        sprun ${ssh} ${desi_night} update \
                             --night ${night} --expid ${exposure} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
@@ -107,28 +109,28 @@ while /bin/true; do
                         # if (flat|arc) done, run flat|arc update.
                         #
                         if [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night flats \
+                            sprun ${ssh} ${desi_night} flats \
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
-                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --last flats ${night} ${exposure}
+                            sprun desi_dts_status --directory ${status_dir} --last flats ${night} ${exposure}
                         elif [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night arcs \
+                            sprun ${ssh} ${desi_night} arcs \
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
-                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --last arcs ${night} ${exposure}
+                            sprun desi_dts_status --directory ${status_dir} --last arcs ${night} ${exposure}
                         #
                         # if night done run redshifts
                         #
                         elif [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} /global/u1/d/desi/bin/wrap_desi_night redshifts \
+                            sprun ${ssh} ${desi_night} redshifts \
                                 --night ${night} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
-                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --last science ${night} ${exposure}
+                            sprun desi_dts_status --directory ${status_dir} --last science ${night} ${exposure}
                         else
-                            sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status ${night} ${exposure}
+                            sprun desi_dts_status --directory ${status_dir} ${night} ${exposure}
                         fi
                     else
                         echo "INFO: ${night}/${exposure} appears to be test data.  Skipping pipeline activation." >> ${log}
@@ -140,7 +142,7 @@ while /bin/true; do
                     :
                 else
                     echo "ERROR: rsync problem detected!" >> ${log}
-                    sprun desi_dts_status --directory ${CSCRATCH}/desi/spectro/staging/status --failure ${night} ${exposure}
+                    sprun desi_dts_status --directory ${status_dir} --failure ${night} ${exposure}
                 fi
             done
         else
