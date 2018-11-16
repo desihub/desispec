@@ -381,16 +381,13 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         log.warning("Bad Sky Subtraction in {:d} fibers".format(
                 qadict['NBAD_PCHI']))
     # Median residual
-    qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
+    qadict['RESID'] = float(np.median(res)) # Median residual (counts)
     log.info("Median residual for sky fibers = {:g}".format(
-        qadict['MED_RESID']))
+        qadict['RESID']))
 
     # Residual percentiles
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
-
-    #SE: commented by popular demand!
-    #qadict['RESID'] = []
 
     qadict["SKYFIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes

@@ -1489,10 +1489,11 @@ class Sky_Residual(MonitoringAlg):
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
+        skymodel=args[1]
 
-        return self.run_qa(frame,inputs)
+        return self.run_qa(frame,skymodel,inputs)
 
-    def run_qa(self,frame,inputs):
+    def run_qa(self,frame,skymodel,inputs):
         from desispec.sky import qa_skysub
         camera=inputs["camera"]
         paname=inputs["paname"]
@@ -1527,6 +1528,7 @@ class Sky_Residual(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
+        retval["PARAMS"] = param
 
         qadict=qalib.sky_resid(param,frame,skymodel,quick_look=True)
 
