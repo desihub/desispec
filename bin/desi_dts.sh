@@ -64,7 +64,8 @@ while /bin/true; do
                 #
                 # Has exposure already been transferred?
                 #
-                if [[ ! -d ${staging}/${night}/${exposure} ]]; then
+                if [[ ! -d ${staging}/${night}/${exposure} && \
+                    ! -d ${dest}/${night}/${exposure} ]]; then
                     sprun /bin/rsync --verbose --no-motd \
                         --recursive --copy-dirlinks --times --omit-dir-times \
                         dts:${src}/${night}/${exposure}/ ${staging}/${night}/${exposure}/
@@ -89,62 +90,71 @@ while /bin/true; do
                     #
                     if [[ -f ${staging}/${night}/${exposure}/checksum-${night}-${exposure}.sha256sum ]]; then
                         (cd ${staging}/${night}/${exposure} && /bin/sha256sum --quiet --check checksum-${night}-${exposure}.sha256sum) &>> ${log}
-                        # TODO: Add error handling.
+                        checksum_status=$?
                     else
                         echo "WARNING: no checksum file for ${night}/${exposure}." >> ${log}
+                        checksum_status=0
                     fi
                     #
-                    # Set up DESI_SPECTRO_DATA.
+                    # Did we pass checksums?
                     #
-                    [[ ! -d ${dest}/${night} ]] && \
-                        sprun /bin/mkdir -p ${dest}/${night}
-                    #
-                    # "Copy" data into DESI_SPECTRO_DATA.
-                    #
-                    [[ ! -L ${dest}/${night}/${exposure} ]] && \
-                        sprun /bin/ln -s ${staging}/${night}/${exposure} ${dest}/${night}/${exposure}
-                    #
-                    # Is this a "realistic" exposure?
-                    #
-                    if ${run_pipeline} && \
-                       [[ -f ${dest}/${night}/${exposure}/desi-${exposure}.fits.fz && \
-                          -f ${dest}/${night}/${exposure}/fibermap-${exposure}.fits ]]; then
+                    if [[ "${checksum_status}" == "0" ]]; then
                         #
-                        # Run update
+                        # Set up DESI_SPECTRO_DATA.
                         #
-                        sprun ${ssh} ${desi_night} update \
-                            --night ${night} --expid ${exposure} \
-                            --nersc ${pipeline_host} --nersc_queue realtime \
-                            --nersc_maxnodes 25
+                        [[ ! -d ${dest}/${night} ]] && \
+                            sprun /bin/mkdir -p ${dest}/${night}
                         #
-                        # if (flat|arc) done, run flat|arc update.
+                        # Move data into DESI_SPECTRO_DATA.
                         #
-                        if [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} ${desi_night} flats \
-                                --night ${night} \
+                        [[ ! -d ${dest}/${night}/${exposure} ]] && \
+                            sprun /bin/mv ${staging}/${night}/${exposure} ${dest}/${night}
+                        #
+                        # Is this a "realistic" exposure?
+                        #
+                        if ${run_pipeline} && \
+                            [[ -f ${dest}/${night}/${exposure}/desi-${exposure}.fits.fz && \
+                               -f ${dest}/${night}/${exposure}/fibermap-${exposure}.fits ]]; then
+                            #
+                            # Run update
+                            #
+                            sprun ${ssh} ${desi_night} update \
+                                --night ${night} --expid ${exposure} \
                                 --nersc ${pipeline_host} --nersc_queue realtime \
                                 --nersc_maxnodes 25
-                            sprun desi_dts_status --directory ${status_dir} --last flats ${night} ${exposure}
-                        elif [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} ${desi_night} arcs \
-                                --night ${night} \
-                                --nersc ${pipeline_host} --nersc_queue realtime \
-                                --nersc_maxnodes 25
-                            sprun desi_dts_status --directory ${status_dir} --last arcs ${night} ${exposure}
-                        #
-                        # if night done run redshifts
-                        #
-                        elif [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]]; then
-                            sprun ${ssh} ${desi_night} redshifts \
-                                --night ${night} \
-                                --nersc ${pipeline_host} --nersc_queue realtime \
-                                --nersc_maxnodes 25
-                            sprun desi_dts_status --directory ${status_dir} --last science ${night} ${exposure}
+                            #
+                            # if (flat|arc) done, run flat|arc update.
+                            #
+                            if [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]]; then
+                                sprun ${ssh} ${desi_night} flats \
+                                    --night ${night} \
+                                    --nersc ${pipeline_host} --nersc_queue realtime \
+                                    --nersc_maxnodes 25
+                                sprun desi_dts_status --directory ${status_dir} --last flats ${night} ${exposure}
+                            elif [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]]; then
+                                sprun ${ssh} ${desi_night} arcs \
+                                    --night ${night} \
+                                    --nersc ${pipeline_host} --nersc_queue realtime \
+                                    --nersc_maxnodes 25
+                                sprun desi_dts_status --directory ${status_dir} --last arcs ${night} ${exposure}
+                            #
+                            # if night done run redshifts
+                            #
+                            elif [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]]; then
+                                sprun ${ssh} ${desi_night} redshifts \
+                                    --night ${night} \
+                                    --nersc ${pipeline_host} --nersc_queue realtime \
+                                    --nersc_maxnodes 25
+                                sprun desi_dts_status --directory ${status_dir} --last science ${night} ${exposure}
+                            else
+                                sprun desi_dts_status --directory ${status_dir} ${night} ${exposure}
+                            fi
                         else
-                            sprun desi_dts_status --directory ${status_dir} ${night} ${exposure}
+                            echo "INFO: ${night}/${exposure} appears to be test data.  Skipping pipeline activation." >> ${log}
                         fi
                     else
-                        echo "INFO: ${night}/${exposure} appears to be test data.  Skipping pipeline activation." >> ${log}
+                        echo "ERROR: checksum problem detected for ${night}/${exposure}!" >> ${log}
+                        sprun desi_dts_status --directory ${status_dir} --failure ${night} ${exposure}
                     fi
                 elif [[ "${status}" == "done" ]]; then
                     #
