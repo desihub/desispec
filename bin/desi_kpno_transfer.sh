@@ -15,6 +15,9 @@ source_directories=(/data/dts/exposures/raw)
 # staging_directories=($(/bin/realpath ${DESI_ROOT}/spectro/staging/raw))
 destination_directories=($(/bin/realpath ${DESI_SPECTRO_DATA}))
 n_source=${#source_directories[@]}
+# The existence of this file will shut down data transfers.
+kill_switch=${HOME}/stop_dts
+# Wait this long before checking for new data.
 sleep=10m
 #
 # Functions
@@ -29,6 +32,10 @@ function sprun {
 #
 while /bin/true; do
     /bin/date +'%Y-%m-%dT%H:%M:%S%z' >> ${log}
+    if [[ -f ${kill_switch} ]]; then
+        echo "${kill_switch} detected, shutting down transfer script." >> ${log}
+        exit 0
+    fi
     #
     # Find symlinks at KPNO.
     #

@@ -13,10 +13,16 @@ staging_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/staging/raw))
 # destination_directories=($(/bin/realpath ${DESI_SPECTRO_DATA}))
 destination_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/data))
 n_source=${#source_directories[@]}
+# Enable activation of the DESI pipeline.  If this is /bin/false, only
+# transfer files.
 run_pipeline=/bin/true
 pipeline_host=edison
-desi_night=$(/bin/realpath ${HOME}/bin/wrap_desi_night)
+# The existence of this file will shut down data transfers.
+kill_switch=${HOME}/stop_dts
+# Call this executable on the pipeline host.
+desi_night=$(/bin/realpath ${HOME}/bin/wrap_desi_night.sh)
 ssh="/bin/ssh -q ${pipeline_host}"
+# Wait this long before checking for new data.
 # sleep=10m
 sleep=1m
 #
@@ -32,6 +38,10 @@ function sprun {
 #
 while /bin/true; do
     /bin/date +'%Y-%m-%dT%H:%M:%S%z' >> ${log}
+    if [[ -f ${kill_switch} ]]; then
+        echo "${kill_switch} detected, shutting down transfer daemon." >> ${log}
+        exit 0
+    fi
     #
     # Find symlinks at KPNO.
     #
@@ -40,7 +50,7 @@ while /bin/true; do
         staging=${staging_directories[$k]}
         dest=${destination_directories[$k]}
         status_dir=$(/bin/dirname ${staging})/status
-        links=$(ssh -q dts /bin/find ${src} -type l 2>/dev/null)
+        links=$(ssh -q dts /bin/find ${src} -type l 2>/dev/null | sort)
         if [[ -n "${links}" ]]; then
             for l in ${links}; do
                 exposure=$(/bin/basename ${l})
