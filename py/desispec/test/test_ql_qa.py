@@ -252,7 +252,7 @@ class TestQL_QA(unittest.TestCase):
 
         qa1=qalib.sky_resid(param,frame1,skym1)
         qa2=qalib.sky_resid(param,frame2,skym2)
-        self.assertLess(qa1['MED_RESID'],qa2['MED_RESID']) #- residuals must be smaller for case 1
+        self.assertLess(qa1['RESID'],qa2['RESID']) #- residuals must be smaller for case 1
 
     def testSignalVsNoise(self):
         import copy
