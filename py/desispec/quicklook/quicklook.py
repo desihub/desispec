@@ -111,7 +111,7 @@ def runpipeline(pl,convdict,conf):
     qlog=qllogger.QLLogger()
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
-    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'], conf['Program'])
+    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'],conf['Program'],convdict)
     QAresults=[] 
     if singqa is None:
         for s,step in enumerate(pl):

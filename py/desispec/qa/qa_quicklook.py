@@ -1722,10 +1722,8 @@ class Integrate_Spec(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
-
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBERMAG": magnitudes, "SPECMAG":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         get_outputs(qafile,qafig,retval,'plot_integral')
         return retval    

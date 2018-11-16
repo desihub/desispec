@@ -646,7 +646,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         ok = frame.fibermap[colname] > 0
         mag_grz[i, ok] = 22.5 - 2.5 * np.log10(frame.fibermap[colname][ok])
 
-    qadict["MAGNITUDES"]=mag_grz
     qadict["FILTERS"] = ['G', 'R', 'Z']
 
     qadict["OBJLIST"]=list(objlist)
