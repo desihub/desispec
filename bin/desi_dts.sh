@@ -7,11 +7,12 @@ log=${HOME}/desi_dts.log
 #
 # Source, staging and destination should be in 1-1-1 correspondence.
 #
-source_directories=(/data/dts/exposures/test)
-# staging_directories=($(/bin/realpath ${DESI_ROOT}/spectro/staging/raw))
-staging_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/staging/raw))
-# destination_directories=($(/bin/realpath ${DESI_SPECTRO_DATA}))
-destination_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/data))
+source_directories=(/data/dts/exposures/raw)
+# source_directories=(/data/dts/exposures/test)
+staging_directories=($(/bin/realpath ${DESI_ROOT}/spectro/staging/raw))
+# staging_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/staging/raw))
+destination_directories=($(/bin/realpath ${DESI_SPECTRO_DATA}))
+# destination_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/data))
 n_source=${#source_directories[@]}
 # Enable activation of the DESI pipeline.  If this is /bin/false, only
 # transfer files.
@@ -23,8 +24,8 @@ kill_switch=${HOME}/stop_dts
 desi_night=$(/bin/realpath ${HOME}/bin/wrap_desi_night.sh)
 ssh="/bin/ssh -q ${pipeline_host}"
 # Wait this long before checking for new data.
-# sleep=10m
-sleep=1m
+sleep=10m
+# sleep=1m
 #
 # Functions
 #
