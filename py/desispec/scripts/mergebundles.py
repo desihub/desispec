@@ -77,7 +77,7 @@ def main(args):
     flux = np.zeros( (nspec, nwave) )
     ivar = np.zeros( (nspec, nwave) )
     R = np.zeros( (nspec, ndiag, nwave) )
-    fibermap = desispec.io.empty_fibermap(nspec, specmin=fibermin)
+    fibermap = None
     mask = np.zeros( (nspec, nwave), dtype=np.uint32)
     chi2pix = np.zeros( (nspec, nwave) )
 
@@ -98,9 +98,14 @@ def main(args):
         flux[ii] = xflux
         ivar[ii] = xivar
         R[ii] = xR
-        fibermap[ii] = xfibermap
         mask[ii] = xmask
         chi2pix[ii] = xchi2pix
+
+        if fibermap is None:
+            fibermap = np.zeros(nspec, dtype=xfibermap.dtype)
+            fibermap['FIBER'] = np.arange(fibermin, fibermin+nspec)
+
+        fibermap[ii] = xfibermap
 
     #- Write it out
     print("Writing", args.output)
