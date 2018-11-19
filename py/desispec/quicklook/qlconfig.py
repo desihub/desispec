@@ -367,10 +367,6 @@ class Config(object):
         config: desispec.quicklook.qlconfig.Config object
         """
         self.log.debug("Building Full Configuration")
-        if self.conf["Program"] == '': 
-            conf["Program"] = self.conf["Flavor"]
-        else:   
-            self.program = self.conf["Program"]
         self.debuglevel = self.conf["Debuglevel"]
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
@@ -388,6 +384,8 @@ class Config(object):
         hdulist=pyfits.open(self.rawfile)
         primary_header=hdulist[0].header
         camera_header =hdulist[self.camera].header
+
+        self.program=primary_header['PROGRAM']
 
         hdulist.close()
         calibration_data=read_ccd_calibration(camera_header,primary_header)
