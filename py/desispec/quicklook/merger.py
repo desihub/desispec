@@ -355,16 +355,17 @@ class QL_QAMerger:
         #general_Info = esnEditDic(self.__stepsArr)
 
         # Get flux information from fibermap and convert to fiber magnitudes
-        if camera[0].lower()=='b':decamfilter='G'
-        elif camera[0].lower()=='r': decamfilter='R'
-        elif camera[0].lower()=='z': decamfilter='Z'
-        fibloindex=int(camera[1])*500
-        fibhiindex=int(camera[1])*500+500
-        flux=convdict['FiberMap']['FLUX_{}'.format(decamfilter)][fibloindex:fibhiindex]
-        fibermags=22.5-2.5*np.log10(flux)
-
-        self.__schema={'NIGHT':night, 'EXPID':expid, 'CAMERA':camera,'FLAVOR':flavor,'PROGRAM':program, 'PIPELINE_STEPS':self.__stepsArr,'FIBER_MAGS':fibermags}
-        
+        if flavor == 'science':
+            if camera[0].lower()=='b':decamfilter='G'
+            elif camera[0].lower()=='r': decamfilter='R'
+            elif camera[0].lower()=='z': decamfilter='Z'
+            fibloindex=int(camera[1])*500
+            fibhiindex=int(camera[1])*500+500
+            flux=convdict['FiberMap']['FLUX_{}'.format(decamfilter)][fibloindex:fibhiindex]
+            fibermags=22.5-2.5*np.log10(flux) 
+            self.__schema={'NIGHT':night, 'EXPID':expid, 'CAMERA':camera,'FLAVOR':flavor,'PROGRAM':program, 'PIPELINE_STEPS':self.__stepsArr,'FIBER_MAGS':fibermags}
+        else:
+            self.__schema={'NIGHT':night, 'EXPID':expid, 'CAMERA':camera,'FLAVOR':flavor,'PROGRAM':program, 'PIPELINE_STEPS':self.__stepsArr}
         
     class QL_Step:
         def __init__(self,paName,paramsDict,metricsDict):
