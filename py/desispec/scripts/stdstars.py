@@ -12,6 +12,7 @@ import sys
 import numpy as np
 from astropy.io import fits
 from astropy import units
+from astropy.table import Table
 
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates,isStdStar
@@ -187,7 +188,7 @@ def main(args) :
             frame.resolution_data = frame.resolution_data[starindices]
 
     nstars = starindices.size
-    fibermap = fibermap[starindices]
+    fibermap = Table(fibermap[starindices])
 
     # READ MODELS
     ############################################
@@ -196,6 +197,19 @@ def main(args) :
 
     # COMPUTE MAGS OF MODELS FOR EACH STD STAR MAG
     ############################################
+
+    #- Support older fibermaps
+    if 'PHOTSYS' not in fibermap.colnames:
+        log.warning('Old fibermap format; using defaults for missing columns')
+        log.warning("    PHOTSYS = 'S'")
+        log.warning("    MW_TRANSMISSION_G/R/Z = 1.0")
+        log.warning("    EBV = 0.0")
+        fibermap['PHOTSYS'] = 'S'
+        fibermap['MW_TRANSMISSION_G'] = 1.0
+        fibermap['MW_TRANSMISSION_R'] = 1.0
+        fibermap['MW_TRANSMISSION_Z'] = 1.0
+        fibermap['EBV'] = 0.0
+
     model_filters = dict()
     if 'S' in fibermap['PHOTSYS']:
         for filter_name in ['DECAM_G', 'DECAM_R', 'DECAM_Z']:
