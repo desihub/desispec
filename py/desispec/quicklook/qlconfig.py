@@ -13,8 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. 
     expand_config will expand out to full format as needed by quicklook.setup
     """
-
-    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plots=None,store_res=None):
+    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plots=None,store_res=None,plotconfig=None):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
@@ -71,6 +70,13 @@ class Config(object):
         self.dumpintermediates = False
         self.writepreprocfile = self.conf["WritePreprocfile"]
         self.writeskymodelfile = False
+
+        #- Load plotting configuration file
+        self.plotconf = None
+        if plotconfig:
+            with open(plotconfig, 'r') as pf:
+                self.plotconf = yaml.load(pf)
+                pf.close()
 
         # RS: use --resolution to store full resolution informtion
         if store_res:
@@ -525,6 +531,7 @@ class Config(object):
         outconfig['singleqa'] = self.singqa
         outconfig['Timeout'] = self.timeout
         outconfig['FiberFlatFile'] = self.fiberflat
+        outconfig['PlotConfig'] = self.plotconf
 
         #- Check if all the files exist for this QL configuraion
         check_config(outconfig,self.singqa)

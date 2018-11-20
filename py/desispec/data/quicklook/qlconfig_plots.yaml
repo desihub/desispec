@@ -1,0 +1,15 @@
+# Example Configuration to plot desired metrics
+#- Metrics to be plotted: check qa_quicklook.py, qalib.py, or output jsons for available metrics
+METRICS: NOISE_AMP
+#- Type of plot: AMP (per amp plots), FIBER (per fiber plots), PETAL (focal plane plot per camera)
+TYPE: AMP
+#- Title of plot/x & y variables
+TITLE: RMS Noise per amp
+XTITLE: None
+YTITLE: None
+#- Does plot require heatmap?
+HEATMAP: True
+#- Limit x & y ranges if applicable
+XLIMIT: None
+YLIMIT: None
+
