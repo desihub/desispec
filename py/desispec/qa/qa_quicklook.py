@@ -775,6 +775,8 @@ class Calc_XWSigma(MonitoringAlg):
         dp=param['PIXEL_RANGE']/2
         #- Get wavelength ranges around peaks
         peaks=param['{}_PEAKS'.format(camera[0].upper())]
+        #- Maximum allowed fit sigma value
+        maxsigma=param['MAX_SIGMA']
 
         xfails=[]
         wfails=[]
@@ -807,7 +809,11 @@ class Calc_XWSigma(MonitoringAlg):
                 try:
                     xpopt,xpcov=curve_fit(qalib.gauss,np.arange(len(xpix_peak)),image.pix[int(ypixel),xpix_peak])
                     xs=np.abs(xpopt[2])
-                    xsig.append(xs)
+                    if xs <= maxsigma:
+                        xsig.append(xs)
+                    else:
+                        xfail=[fiber,peaks[peak]]
+                        xfails.append(xfail)
                 except:
                     xfail=[fiber,peaks[peak]]
                     xfails.append(xfail)
@@ -815,7 +821,11 @@ class Calc_XWSigma(MonitoringAlg):
                 try:
                     wpopt,wpcov=curve_fit(qalib.gauss,np.arange(len(ypix_peak)),image.pix[ypix_peak,int(xpixel)])
                     ws=np.abs(wpopt[2])
-                    wsig.append(ws)
+                    if ws <= maxsigma:
+                        wsig.append(ws)
+                    else:
+                        wfail=[fiber,peaks[peak]]
+                        wfails.append(wfail)
                 except:
                     wfail=[fiber,peaks[peak]]
                     wfails.append(wfail)
