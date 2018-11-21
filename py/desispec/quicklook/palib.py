@@ -138,3 +138,36 @@ def get_resolution(wave,nspec,tset,usesigma=False):
             
     return resolution_data
 
+def apply_flux_calibration(frame,fluxcalib):
+    """
+    Apply flux calibration to sky subtracted qframe
+    Use offline algorithm, but assume qframe object is input 
+    and that it is on native ccd wavelength grid
+    Calibration vector is resampled to frame wavelength grid
+
+    frame: QFrame object
+    fluxcalib: FluxCalib object
+
+    Modifies frame.flux and frame.ivar
+    """
+    from desispec.quicklook.palib import resample_spec
+
+    nfibers=frame.nspec
+
+    resample_calib=[]
+    resample_ivar=[]
+    for i in range(nfibers):
+        rescalib,resivar=resample_spec(fluxcalib.wave,fluxcalib.calib[i],frame.wave[i],ivar=fluxcalib.ivar[i])
+        resample_calib.append(rescalib)
+        resample_ivar.append(resivar)
+    fluxcalib.calib=np.array(resample_calib)
+    fluxcalib.ivar=np.array(resample_ivar)
+
+    C = fluxcalib.calib
+    frame.flux=frame.flux*(C>0)/(C+(C==0))
+    frame.ivar*=(fluxcalib.ivar>0)*(C>0)
+    for j in range(nfibers):
+        ok=np.where(frame.ivar[j]>0)[0]
+        if ok.size>0:
+            frame.ivar[j,ok]=1./(1./(frame.ivar[j,ok]*C[j,ok]**2)+frame.flux[j,ok]**2/(fluxcalib.ivar[j,ok]*C[j,ok]**4))
+

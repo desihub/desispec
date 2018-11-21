@@ -14,7 +14,7 @@ def do_boxcar(image,tset,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=F
         tset: desispec.xytraceset like object
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
-        usesigma: if True, use sigma from psfboot file(xsigma) or psf file (wsigma) to calculate resolution data. 
+        usesigma: if True, use sigma from psf file (ysigma) to calculate resolution data. 
         quick_resolution:  whether to calculate the resolution matrix or use QuickResolution object
     Returns flux, ivar, resolution
     """
@@ -130,8 +130,6 @@ def do_boxcar(image,tset,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=F
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
     #- Get resolution from the psf  
-    #if quick_resolution and  (hasattr(psf,"wcoeff") or hasattr(psf,'xsigma_boot')): ###?
-    #    return fflux,iivar,None
     resolution=get_resolution(wtarget,nspec,tset,usesigma=usesigma)
 
     return fflux,iivar,resolution
