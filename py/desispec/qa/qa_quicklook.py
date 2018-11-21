@@ -1640,7 +1640,7 @@ class Integrate_Spec(MonitoringAlg):
         if os.path.exists(os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite')):
             responsefile=os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite','speclite','data','filters','{}.ecsv'.format(responsefilter))
         else:
-            os.log.critical("Must have speclite package to compute fiber magnitudes.")
+            log.critical("Must have speclite package and define DESI_PRODUCT_ROOT (your DESI software area) to compute fiber magnitudes.")
 
         #- Grab wavelength and response information from file
         rfile=np.genfromtxt(responsefile)
