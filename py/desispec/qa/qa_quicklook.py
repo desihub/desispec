@@ -1645,10 +1645,8 @@ class Integrate_Spec(MonitoringAlg):
         magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
             
         #- Get filter response information from speclite
-        if os.path.exists(os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite')):
-            responsefile=os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite','speclite','data','filters','{}.ecsv'.format(responsefilter))
-        else:
-            os.log.critical("Must have speclite package to compute fiber magnitudes.")
+        from pkg_resources import resource_filename
+        responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
 
         #- Grab wavelength and response information from file
         rfile=np.genfromtxt(responsefile)
