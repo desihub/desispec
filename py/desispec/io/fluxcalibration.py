@@ -133,7 +133,7 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
     hx = fits.HDUList()
     hx.append( fits.PrimaryHDU(averagefluxcalib.average_calib.astype('f4')) )
     hx[-1].header['EXTNAME'] = 'AVERAGEFLUXCALIB'
-    hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
+    hx[-1].header['BUNIT'] = ('10**+17 cm2 count / erg', 'i.e. (elec/A/s) / (1e-17 erg/s/cm2/A)')
     hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction.astype('f4'), name='ATMOSPHERIC_EXTINCTION') )
     hx[-1].header['PAIRMASS'] = averagefluxcalib.pivot_airmass
     hx.append( fits.ImageHDU(averagefluxcalib.seeing_term.astype('f4'), name='SEEING_TERM') )
