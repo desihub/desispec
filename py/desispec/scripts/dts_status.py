@@ -42,6 +42,8 @@ def main():
                       help="Exposure number.")
     options = prsr.parse_args()
     json_file = os.path.join(options.directory, 'dts_status.json')
+    if not os.path.exists(options.directory):
+        os.makedirs(options.directory)
     if options.install:
         for ext in ('html', 'js'):
             src = resource_filename('desispec', 'data/dts/dts_status.' + ext)
@@ -50,8 +52,11 @@ def main():
             else:
                 shutil.copy(src, options.directory)
     row = [options.night, options.expid, not options.failure, options.last]
-    with open(json_file) as j:
-        s = json.load(j)
+    try:
+        with open(json_file) as j:
+            s = json.load(j)
+    except FileNotFoundError:
+        s = []
     s.insert(0, row)
     k = lambda x: x[0]*10000000 + x[1]
     s = sorted(s, key=k, reverse=True)

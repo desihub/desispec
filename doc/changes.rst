@@ -6,12 +6,13 @@ desispec Change Log
 -------------------
 
 * Support mockobs fibermap format with fewer columns (PR `#733`_).
-* Fix desi_zcatalog RA_TARGET vs. TARGET_RA (PR `#723`_)
+* Upgrade data transfer script and add additional scripts (PR `#732`_).
+* Fix desi_zcatalog RA_TARGET vs. TARGET_RA (PR `#723`_).
 * Update redshift database data model and workaround a minor bad data problem (PR `#722`_).
-
 
 .. _`#722`: https://github.com/desihub/desispec/pull/722
 .. _`#723`: https://github.com/desihub/desispec/pull/723
+.. _`#732`: https://github.com/desihub/desispec/pull/732
 .. _`#733`: https://github.com/desihub/desispec/pull/733
 
 0.26.0 (2018-11-08)

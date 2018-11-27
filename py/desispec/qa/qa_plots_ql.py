@@ -352,10 +352,10 @@ def plot_integral(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    integral=np.array(qa_dict["METRICS"]["FIBERMAG"])
+    integral=np.array(qa_dict["METRICS"]["SPEC_MAGS"])
 
     fig=plt.figure()
-    plt.suptitle("Calculated Fiber Magnitudes, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    plt.suptitle("Integrated Spectral Magnitudes, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     index=np.arange(len(integral))
     ax1=fig.add_subplot(111)
     hist_med=ax1.bar(index,integral,color='b',align='center')

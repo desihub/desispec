@@ -1489,10 +1489,11 @@ class Sky_Residual(MonitoringAlg):
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
+        skymodel=args[1]
 
-        return self.run_qa(frame,inputs)
+        return self.run_qa(frame,skymodel,inputs)
 
-    def run_qa(self,frame,inputs):
+    def run_qa(self,frame,skymodel,inputs):
         from desispec.sky import qa_skysub
         camera=inputs["camera"]
         paname=inputs["paname"]
@@ -1527,6 +1528,7 @@ class Sky_Residual(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
+        retval["PARAMS"] = param
 
         qadict=qalib.sky_resid(param,frame,skymodel,quick_look=True)
 
@@ -1638,7 +1640,7 @@ class Integrate_Spec(MonitoringAlg):
         if os.path.exists(os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite')):
             responsefile=os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite','speclite','data','filters','{}.ecsv'.format(responsefilter))
         else:
-            os.log.critical("Must have speclite package to compute fiber magnitudes.")
+            log.critical("Must have speclite package and define DESI_PRODUCT_ROOT (your DESI software area) to compute fiber magnitudes.")
 
         #- Grab wavelength and response information from file
         rfile=np.genfromtxt(responsefile)
@@ -1722,10 +1724,8 @@ class Integrate_Spec(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
-
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBERMAG": magnitudes, "SPECMAG":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         get_outputs(qafile,qafig,retval,'plot_integral')
         return retval    

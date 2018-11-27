@@ -15,9 +15,7 @@ Timeout: 120.0
 Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ComputeFiberflat_QP]
 Algorithms:
     Initialize:
-        QA: 
-            Check_HDUs:
-                PARAMS: {}
+        QA: {}
     Preproc:
         QA: 
             Bias_From_Overscan:
