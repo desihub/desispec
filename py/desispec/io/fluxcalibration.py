@@ -120,6 +120,74 @@ def read_flux_calibration(filename):
     return fluxcalib
 
 
+def write_average_flux_calibration(outfile, averagefluxcalib):
+    """Writes average flux calibration.
+
+    Args:
+        outfile : output file name
+        averagefluxcalib : AverageFluxCalib object
+
+    Options:
+        header : dict-like object of key/value pairs to include in header
+    """
+    hx = fits.HDUList()
+    hx.append( fits.PrimaryHDU(averagefluxcalib.average_calib.astype('f4')) )
+    hx[-1].header['EXTNAME'] = 'AVERAGEFLUXCALIB'
+    hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
+    hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction.astype('f4'), name='ATMOSPHERIC_EXTINCTION') )
+    hx[-1].header['PAIRMASS'] = averagefluxcalib.pivot_airmass
+    hx.append( fits.ImageHDU(averagefluxcalib.seeing_term.astype('f4'), name='SEEING_TERM') )
+    hx[-1].header['PSEEING'] = averagefluxcalib.pivot_seeing
+    hx.append( fits.ImageHDU(averagefluxcalib.wave.astype('f4'), name='WAVELENGTH') )
+    hx[-1].header['BUNIT'] = 'Angstrom'
+    if averagefluxcalib.atmospheric_extinction_uncertainty is not None :
+      hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction_uncertainty.astype('f4'), name='ATMOSPHERIC_EXTINCTION_UNCERTAINTY') )
+    if averagefluxcalib.seeing_term_uncertainty is not None :
+        hx.append( fits.ImageHDU(averagefluxcalib.seeing_term_uncertainty.astype('f4'), name='SEEING_TERM_UNCERTAINTY') )
+    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
+    os.rename(outfile+'.tmp', outfile)
+
+    return outfile
+
+
+def read_average_flux_calibration(filename):
+    """Read average flux calibration file; returns an AverageFluxCalib object
+    """
+    
+    # Avoid a circular import conflict at package install/build_sphinx time.
+    from ..averagefluxcalibration import AverageFluxCalib
+    fx = fits.open(filename, memmap=False, uint=True)
+    average_calib = native_endian(fx[0].data.astype('f8'))
+    atmospheric_extinction = native_endian(fx["ATMOSPHERIC_EXTINCTION"].data.astype('f8'))
+    seeing_term            = native_endian(fx["SEEING_TERM"].data.astype('f8'))
+    pivot_airmass          = fx["ATMOSPHERIC_EXTINCTION"].header["PAIRMASS"]
+    pivot_seeing           = fx["SEEING_TERM"].header["PSEEING"]
+    wave                   = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+    if "ATMOSPHERIC_EXTINCTION_UNCERTAINTY" in fx :
+        atmospheric_extinction_uncertainty = native_endian(fx["ATMOSPHERIC_EXTINCTION_UNCERTAINTY"].data.astype('f8'))
+    else :
+        atmospheric_extinction_uncertainty = None
+    if "SEEING_TERM_UNCERTAINTY" in fx :
+        seeing_term_uncertainty = native_endian(fx["SEEING_TERM_UNCERTAINTY"].data.astype('f8'))
+    else :
+        seeing_term_uncertainty = None
+    
+
+
+    afluxcalib = AverageFluxCalib(wave=wave,
+                                  average_calib=average_calib,
+                                  atmospheric_extinction=atmospheric_extinction,
+                                  seeing_term=seeing_term,
+                                  pivot_airmass=pivot_airmass,
+                                  pivot_seeing=pivot_seeing,
+                                  atmospheric_extinction_uncertainty=atmospheric_extinction_uncertainty,
+                                  seeing_term_uncertainty=seeing_term_uncertainty)
+    fx.close()
+    return afluxcalib
+
+
+
+
 def read_stdstar_templates(stellarmodelfile):
     """
     Reads an input stellar model file
