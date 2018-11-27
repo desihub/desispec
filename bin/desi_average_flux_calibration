@@ -89,19 +89,43 @@ if __name__ == '__main__':
     for line in skylines :
         skymask[np.abs(wave-line)<2]=1
     mcalib=np.interp(wave,wave[skymask==0],mcalib[skymask==0])
+
+    # telluric mask
+    ###########################################################
+    telluricmask=np.zeros(wave.size)
+    # mask telluric lines
+    srch_filename = "data/arc_lines/telluric_lines.txt"
+    if not resource_exists('desispec', srch_filename):
+        log.error("Cannot find telluric mask file {:s}".format(srch_filename))
+        raise Exception("Cannot find telluric mask file {:s}".format(srch_filename))
+    telluric_mask_filename = resource_filename('desispec', srch_filename)
+    telluric_features = np.loadtxt(telluric_mask_filename)
+    log.debug("Masking telluric features from file %s"%telluric_mask_filename)
+    for feature in telluric_features :
+        telluricmask[(wave>=feature[0])&(wave<=feature[1])]=1
+
     
     # fit a smooth multiplicative component per exposure
     ###########################################################
-    res=200. #A, resolution of spline
-    twave=np.linspace(wave[0]+res/2,wave[-1]-res/2,int((wave[-1]-wave[0])/res))
+    res=300. #A, resolution of spline
+    tmpwave=np.linspace(wave[0]+res/2,wave[-1]-res/2,int((wave[-1]-wave[0])/res))
+    # keep only wave knots outside of telluric mask
+    twave=list()
+    for w in tmpwave :
+        ok=True
+        for feature in telluric_features :
+            ok &= ((w<feature[0])|(w>feature[1]))
+        if ok : 
+            twave.append(w)
+    twave=np.array(twave)
     
-    ncalibs=np.zeros(calibs.shape)
+    ncalibs=calibs.copy()
     for e in range(nexp) :
         # define a spline
         dcal=calibs[e]/(mcalib+(mcalib==0))
-        tck=scipy.interpolate.splrep(wave,dcal,w=(mcalib>0)*(skymask==0),task=-1,t=twave,k=3)
+        tck=scipy.interpolate.splrep(wave,dcal,w=(mcalib>0)*(skymask==0)*(telluricmask==0),task=-1,t=twave,k=3)
         correction = scipy.interpolate.splev(wave,tck)
-        ncalibs[e]=mcalib*correction # this does not have any low frequency noise any more, but we have lost the telluric feature variations
+        ncalibs[e][telluricmask==0]=(mcalib*correction)[telluricmask==0] # this does not have any low frequency noise any more, except on telluric features
     
     # fit mean + several multiplicative smooth components
     ###########################################################
@@ -143,42 +167,39 @@ if __name__ == '__main__':
             Aii=np.linalg.inv(A[:,:,i])
             dMi=Aii.dot(B[:,i])
             M[:,i] += dMi
-            
-            #print("res.shape=",res.shape)
-            #print("M[:,i].shape=",M[:,i].shape)
-            #print("X.shape=",X.shape)
-            #print("M[:,i].dot(X).shape=",(M[:,i].dot(X).shape))
-            
             rms = np.std(res[:,i]-M[:,i].dot(X))
             ME[:,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
             
-    
-    if True :
-        # refit high res airmass term on telluric features
-        # with the other model components fixed
-        ###########################################################
-        telluricmask=np.zeros(wave.size)
-        # mask telluric lines
-        srch_filename = "data/arc_lines/telluric_lines.txt"
-        if not resource_exists('desispec', srch_filename):
-            log.error("Cannot find telluric mask file {:s}".format(srch_filename))
-            raise Exception("Cannot find telluric mask file {:s}".format(srch_filename))
-        telluric_mask_filename = resource_filename('desispec', srch_filename)
-        telluric_features = np.loadtxt(telluric_mask_filename)
-        log.debug("Masking telluric features from file %s"%telluric_mask_filename)
-        for feature in telluric_features :
-            telluricmask[(wave>=feature[0])&(wave<=feature[1])]=1
-
-        for i in np.where(telluricmask>0)[0] :
-            ok = np.where(calibs[:,i]>0)[0]
-            dcal = -2.5*np.log10(calibs[ok,i])-(M[0,i]+X[2,ok]*M[2,i])
-            b=np.sum(dcal*X[1][ok])
-            a=np.sum(X[1][ok]**2)
-            M[1][i]  = b/a
-            ME[1][i] = 1./np.sqrt(a)*np.std(dcal- M[1][i]*X[1][ok]) # approximate uncertainty on model
+    # smooth the seeing term over telluric features, freeze it and refit the two
+    # other terms on telluric features
+    tck=scipy.interpolate.splrep(wave,M[2],task=-1,t=twave,k=3)
+    M[2] = scipy.interpolate.splev(wave,tck)
+    # this estimation of uncertainty is very approximative
+    tck=scipy.interpolate.splrep(wave,ME[2],task=-1,t=twave,k=3)
+    ME[2] = scipy.interpolate.splev(wave,tck)
+        
+    lmod   = X.T.dot(M)
+    res    = lcal-lmod
+    npar=2
+    B = np.zeros((npar,wave.size))
+    A = np.zeros((npar,npar,wave.size))
+    for i in range(npar) :
+        B[i]   = np.sum(weight*res*X[i][:,None],axis=0)
+        for j in range(i,npar) :
+            A[i,j] = np.sum(weight*X[i][:,None]*X[j][:,None],axis=0)
+            if j !=i : A[j,i] = A[i,j]
+    # solve the linear system per wavelength
+    for i in range(wave.size) :
+        if A[0,0,i]>0 :
+            Aii=np.linalg.inv(A[:,:,i])
+            dMi=Aii.dot(B[:,i])
+            M[:2,i] += dMi
+            rms = np.std(res[:,i]-M[:2,i].dot(X[:2]))
+            ME[:2,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
     
     # interpolate over sky lines
-    M[1]=np.interp(wave,wave[skymask==0],M[1][skymask==0])
+    for c in range(3) :
+        M[c]=np.interp(wave,wave[skymask==0],M[c][skymask==0])
     
     fluxcal=AverageFluxCalib(wave=wave,
                              average_calib=10**(-0.4*M[0]),
