@@ -130,23 +130,23 @@ class TestQL_PA(unittest.TestCase):
         
 
     #- Individual tests already exist in offline tests. So we will mostly test the call etc. here
-    def testPreproc(self):
-        pa=PA.Preproc('Preproc',self.config,logger=log)
-        log.info("Test preproc")
-        inp=self.rawimage
-        rawshape=inp[self.camera.upper()].data.shape
-        bias=np.zeros(rawshape)
-        pixflat=np.ones(rawshape)
-        mask = np.random.randint(0, 2, size=(1000,800))
-        pargs={}
-        pargs["camera"]=self.camera
-        pargs["Bias"]=bias
-        pargs["PixFlat"]=pixflat
-        pargs["Mask"]=mask
-        pargs["DumpIntermediates"]=True
-        pargs["dumpfile"]=self.pixfile
-        img=pa(inp,**pargs) 
-        self.assertTrue(np.all(img.mask == mask))
+#    def testPreproc(self):
+#        pa=PA.Preproc('Preproc',self.config,logger=log)
+#        log.info("Test preproc")
+#        inp=self.rawimage
+#        rawshape=inp[self.camera.upper()].data.shape
+#        bias=np.zeros(rawshape)
+#        pixflat=np.ones(rawshape)
+#        mask = np.random.randint(0, 2, size=(1000,800))
+#        pargs={}
+#        pargs["camera"]=self.camera
+#        pargs["Bias"]=bias
+#        pargs["PixFlat"]=pixflat
+#        pargs["Mask"]=mask
+#        pargs["DumpIntermediates"]=True
+#        pargs["dumpfile"]=self.pixfile
+#        img=pa(inp,**pargs) 
+#        self.assertTrue(np.all(img.mask == mask))
 
 
 if __name__ == '__main__':

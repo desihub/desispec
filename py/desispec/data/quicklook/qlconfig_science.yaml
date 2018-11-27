@@ -14,6 +14,7 @@ Timeout: 120.0
 Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ApplyFiberFlat_QP, SkySub_QP, ApplyFluxCalibration]
 Algorithms:
     Initialize:
+        PEAKS: {B_PEAKS: [3914.4,5578.9], R_PEAKS: [6301.9,7342.8], Z_PEAKS: [8432.4,9378.5]}
         QA: 
             Check_HDUs:
                 PARAMS: {}

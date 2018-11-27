@@ -20,10 +20,9 @@ log=qlog.getlog()
 
 class Initialize(pas.PipelineAlg):
     """
-    This is particularly needed to run some QAs before preprocessing. 
-    It reads rawimage and does input = output. e.g QA to run after this PA: bias from overscan etc"
+    This PA takes information from the fibermap and raw header
+    and adds it to the general info section of the merged dictionary
     """
-
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Ready"
@@ -32,27 +31,73 @@ class Initialize(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            #raise qlexceptions.ParameterException("Missing input parameter")
             log.critical("Missing input parameter!")
             sys.exit()
-
         if not self.is_compatible(type(args[0])):
-            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
             log.critical("Incompatible input!")
             sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        input_raw=args[0]
-            
-        return self.run_pa(input_raw)
+        raw=args[0]
+        fibermap=kwargs['FiberMap']
+        camera=kwargs['Camera']
+        peaks=kwargs['Peaks']
 
-    def run_pa(self,raw):
-        """ 
-        We don't need to dump the raw file again here, so skipping"
-        """
-        return raw
+        return self.run_pa(raw,fibermap,camera,peaks)
 
-    def get_default_config(self):
-        return {}
+    def run_pa(self,raw,fibermap,camera,peaks):
+        import pytz
+        import datetime
+        from desitarget.targetmask import desi_mask
+        from desispec.fluxcalibration import isStdStar
+
+        print(raw[0].header)
+        #- Create general info dictionary to be sent to merged json
+        general_info={}
+
+        #- Get information from raw header
+        general_info['AIRMASS']=raw[0].header['AIRMASS']
+        general_info['SEEING']=raw[0].header['SEEING']
+        general_info['EXPTIME']=raw[0].header['EXPTIME']
+        general_info['PROGRAM']=raw[0].header['PROGRAM']
+#        general_info['FITS_DESISPEC_VERION']=raw[0].header['FITS_DESISPEC_VERSION']
+#        general_info['PROC_DESISPEC_VERION']=raw[0].header['PROC_DESISPEC_VERSION']
+#        general_info['PROC_QuickLook_VERION']=raw[0].header['PROC_QuickLook_VERSION']
+
+        #- Get information from fibermap
+        general_info['FLUX_G']=fibermap['FLUX_G']
+        general_info['FLUX_R']=fibermap['FLUX_R']
+        general_info['FLUX_Z']=fibermap['FLUX_Z']
+
+        #- Limit RA and DEC to 5 decimal places
+        targetra=fibermap['TARGET_RA']
+        general_info['RA']=[float("%.5f"%ra) for ra in targetra]
+        targetdec=fibermap['TARGET_DEC']
+        general_info['DEC']=[float("%.5f"%dec) for dec in targetdec]
+
+        #- Find fibers in camera per target type
+        minfiber=int(camera[1])*500
+        maxfiber=minfiber+499
+        elgfibers=np.where((fibermap['DESI_TARGET']&desi_mask.ELG)!=0)[0]
+        general_info['ELG_FIBERID']=[elgfib for elgfib in elgfibers if minfiber <= elgfib <= maxfiber]
+        lrgfibers=np.where((fibermap['DESI_TARGET']&desi_mask.LRG)!=0)[0]
+        general_info['LRG_FIBERID']=[lrgfib for lrgfib in lrgfibers if minfiber <= lrgfib <= maxfiber]
+        qsofibers=np.where((fibermap['DESI_TARGET']&desi_mask.QSO)!=0)[0]
+        general_info['QSO_FIBERID']=[qsofib for qsofib in qsofibers if minfiber <= qsofib <= maxfiber]
+        skyfibers=np.where((fibermap['DESI_TARGET']&desi_mask.SKY)!=0)[0]
+        general_info['SKY_FIBERID']=[skyfib for skyfib in skyfibers if minfiber <= skyfib <= maxfiber]
+        general_info['NSKY_FIB']=len(general_info['SKY_FIBERID'])
+        stdfibers=np.where(isStdStar(fibermap['DESI_TARGET']))[0]
+        general_info['STAR_FIBERID']=[stdfib for stdfib in stdfibers if minfiber <= stdfib <= maxfiber]
+
+        #- Get peaks from configuration file
+        general_info['B_PEAKS']=peaks['B_PEAKS']
+        general_info['R_PEAKS']=peaks['R_PEAKS']
+        general_info['z_PEAKS']=peaks['Z_PEAKS']
+
+        #- Get current time information
+        general_info['QLrun_datime_UTC']=datetime.datetime.now(tz=pytz.utc).isoformat()
+
+        return (raw,general_info)
 
 
 class Preproc(pas.PipelineAlg):
@@ -78,7 +123,7 @@ class Preproc(pas.PipelineAlg):
             log.critical("Incompatible input!")
             sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        input_raw=args[0]
+        input_raw=args[0][0]
 
         dumpfile=None
         if "dumpfile" in kwargs:

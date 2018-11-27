@@ -157,7 +157,12 @@ class Config(object):
                 self.wavelength='7420,9830,0.8'
 
         #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
-        paopt_initialize={'camera': self.camera}
+
+        peaks=None
+        if 'Initialize' in self.algorithms.keys():
+            if 'PEAKS' in self.algorithms['Initialize'].keys():
+                peaks=self.algorithms['Initialize']['PEAKS']
+        paopt_initialize={'FiberMap':self.fibermap,'Camera':self.camera,'Peaks':peaks}
 
         if self.writepreprocfile:
             preprocfile=self.dump_pa("Preproc")
