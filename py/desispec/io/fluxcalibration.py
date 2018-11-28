@@ -132,18 +132,18 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
     """
     hx = fits.HDUList()
     hx.append( fits.PrimaryHDU(averagefluxcalib.average_calib.astype('f4')) )
-    hx[-1].header['EXTNAME'] = 'AVERAGEFLUXCALIB'
+    hx[-1].header['EXTNAME'] = 'FLUXCALIB'
     hx[-1].header['BUNIT'] = ('10**+17 cm2 count / erg', 'i.e. (elec/A/s) / (1e-17 erg/s/cm2/A)')
-    hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction.astype('f4'), name='ATMOSPHERIC_EXTINCTION') )
+    hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction.astype('f4'), name='ATERM') )
     hx[-1].header['PAIRMASS'] = averagefluxcalib.pivot_airmass
-    hx.append( fits.ImageHDU(averagefluxcalib.seeing_term.astype('f4'), name='SEEING_TERM') )
+    hx.append( fits.ImageHDU(averagefluxcalib.seeing_term.astype('f4'), name='STERM') )
     hx[-1].header['PSEEING'] = averagefluxcalib.pivot_seeing
     hx.append( fits.ImageHDU(averagefluxcalib.wave.astype('f4'), name='WAVELENGTH') )
     hx[-1].header['BUNIT'] = 'Angstrom'
     if averagefluxcalib.atmospheric_extinction_uncertainty is not None :
-      hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction_uncertainty.astype('f4'), name='ATMOSPHERIC_EXTINCTION_UNCERTAINTY') )
+      hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction_uncertainty.astype('f4'), name='ATERM_ERR') )
     if averagefluxcalib.seeing_term_uncertainty is not None :
-        hx.append( fits.ImageHDU(averagefluxcalib.seeing_term_uncertainty.astype('f4'), name='SEEING_TERM_UNCERTAINTY') )
+        hx.append( fits.ImageHDU(averagefluxcalib.seeing_term_uncertainty.astype('f4'), name='STERM_ERR') )
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
@@ -158,17 +158,17 @@ def read_average_flux_calibration(filename):
     from ..averagefluxcalibration import AverageFluxCalib
     fx = fits.open(filename, memmap=False, uint=True)
     average_calib = native_endian(fx[0].data.astype('f8'))
-    atmospheric_extinction = native_endian(fx["ATMOSPHERIC_EXTINCTION"].data.astype('f8'))
-    seeing_term            = native_endian(fx["SEEING_TERM"].data.astype('f8'))
-    pivot_airmass          = fx["ATMOSPHERIC_EXTINCTION"].header["PAIRMASS"]
-    pivot_seeing           = fx["SEEING_TERM"].header["PSEEING"]
+    atmospheric_extinction = native_endian(fx["ATERM"].data.astype('f8'))
+    seeing_term            = native_endian(fx["STERM"].data.astype('f8'))
+    pivot_airmass          = fx["ATERM"].header["PAIRMASS"]
+    pivot_seeing           = fx["STERM"].header["PSEEING"]
     wave                   = native_endian(fx["WAVELENGTH"].data.astype('f8'))
-    if "ATMOSPHERIC_EXTINCTION_UNCERTAINTY" in fx :
-        atmospheric_extinction_uncertainty = native_endian(fx["ATMOSPHERIC_EXTINCTION_UNCERTAINTY"].data.astype('f8'))
+    if "ATERM_ERR" in fx :
+        atmospheric_extinction_uncertainty = native_endian(fx["ATERM_ERR"].data.astype('f8'))
     else :
         atmospheric_extinction_uncertainty = None
-    if "SEEING_TERM_UNCERTAINTY" in fx :
-        seeing_term_uncertainty = native_endian(fx["SEEING_TERM_UNCERTAINTY"].data.astype('f8'))
+    if "STERM_ERR" in fx :
+        seeing_term_uncertainty = native_endian(fx["STERM_ERR"].data.astype('f8'))
     else :
         seeing_term_uncertainty = None
     
