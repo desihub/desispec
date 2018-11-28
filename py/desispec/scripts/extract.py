@@ -439,7 +439,7 @@ def main_mpi(args, comm=None, timing=None):
 
      # Resolve difference timer data
 
-     if type(timing) is dict:
+    if type(timing) is dict:
         timing["read_input"] = mark_read_input - mark_start
         timing["preparation"] = mark_preparation - mark_read_input
         timing["total_extraction"] = time_total_extraction
