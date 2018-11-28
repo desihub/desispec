@@ -123,6 +123,8 @@ def runpipeline(pl,convdict,conf):
                 hb.start("Running {}".format(step[0].name))
                 oldinp=inp #-  copy for QAs that need to see earlier input
                 inp=pa(inp,**pargs)
+                if step[0].name == 'Initialize':
+                    schemaStep.addMetrics(inp[1])
             except Exception as e:
                 log.critical("Failed to run PA {} error was {}".format(step[0].name,e),exc_info=True)
                 sys.exit("Failed to run PA {}".format(step[0].name))
@@ -158,7 +160,6 @@ def runpipeline(pl,convdict,conf):
         import numpy as np
         qa=None
         qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],[],['Sky_Rband','Integrate_Spec','Calculate_SNR']]
-
 
         singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
@@ -205,7 +206,6 @@ def runpipeline(pl,convdict,conf):
 
     #- merge QAs for this pipeline execution
     #- RS: don't write merged file if running single QA
-   
     if singqa is None:
         log.debug("Dumping mergedQAs")
         from desispec.io import findfile
@@ -215,11 +215,8 @@ def runpipeline(pl,convdict,conf):
                           camera=conf['Camera'],
                           specprod_dir=specprod_dir)
 
-        # SE: disabled the functionality of writing yamls
-        #schemaMerger.writeToFile(destFile)
-        #log.info("Wrote merged QA file {}".format(destFile))
         schemaMerger.writeTojsonFile(destFile)
-        log.info("Wrote merged QA file {}".format(destFile))#.split('.yaml')[0]+'.json'))
+        log.info("Wrote merged QA file {}".format(destFile))
         if isinstance(inp,tuple):
            return inp[0]
         else:
