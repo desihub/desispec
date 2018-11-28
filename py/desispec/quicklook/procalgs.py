@@ -56,7 +56,7 @@ class Initialize(pas.PipelineAlg):
         #- Get information from raw header
         general_info['AIRMASS']=raw[0].header['AIRMASS']
         general_info['SEEING']=raw[0].header['SEEING']
-#        general_info['EXPTIME']=raw[0].header['EXPTIME']
+        general_info['EXPTIME']=raw[0].header['EXPTIME']
 #        general_info['PROGRAM']=raw[0].header['PROGRAM'].upper()
 #        general_info['FITS_DESISPEC_VERION']=raw[0].header['FITS_DESISPEC_VERSION']
 #        general_info['PROC_DESISPEC_VERION']=raw[0].header['PROC_DESISPEC_VERSION']

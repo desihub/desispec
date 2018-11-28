@@ -259,7 +259,6 @@ def reOrderDict(mergeDict):
 ###################################
 
 def EditDic(Camera):
-    exptime = delKey(Camera, "EXPTIME")
     program = delKey(Camera, "PROGRAM")
     sciprog = ["DARK","GRAY","BRIGHT"]
     QAlist=["BIAS_AMP","LITFRAC_AMP","NOISE_AMP","XWSIGMA","XYSHIFTS","NGOODFIB","DELTAMAG_TGT","FIDSNR_TGT","SKYRBAND","PEAKCOUNT", "SKYCONT"]    
@@ -313,7 +312,7 @@ def EditDic(Camera):
 
     datetime.datetime.now(datetime.timezone.utc)
     datetime.datetime.now(tz=pytz.utc)
-    Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime,"PROGRAM":program.upper(),"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver,"SKY_FIBERID":skyfib_id,"ELG_FIBERID":elg_fiberid,"LRG_FIBERID":lrg_fiberid,"QSO_FIBERID":qso_fiberid,"STAR_FIBERID":star_fiberid,"B_PEAKS":b_peaks,"R_PEAKS":r_peaks,"Z_PEAKS":z_peaks,"FIBER_MAGS":fibermags,"NSKY_FIB":nskyfib}
+    Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime,"PROGRAM":program.upper(),"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver,"SKY_FIBERID":skyfib_id,"ELG_FIBERID":elg_fiberid,"LRG_FIBERID":lrg_fiberid,"QSO_FIBERID":qso_fiberid,"STAR_FIBERID":star_fiberid,"B_PEAKS":b_peaks,"R_PEAKS":r_peaks,"Z_PEAKS":z_peaks,"FIBER_MAGS":fibermags,"NSKY_FIB":nskyfib}
 
     all_Steps  = delKey(Camera, "PIPELINE_STEPS")   # returns a list of dictionaries, each holding one step
     step_dict = {}
@@ -322,6 +321,7 @@ def EditDic(Camera):
         step_dict[step_Name] = step
     Camera["PIPELINE_STEPS"]=step_dict
 
+    Camera['GENERAL_INFO']['EXPTIME']=step_dict['INITIALIZE']['METRICS']['EXPTIME']
     Camera['GENERAL_INFO']['AIRMASS']=step_dict['INITIALIZE']['METRICS']['AIRMASS']
     Camera['GENERAL_INFO']['SEEING']=step_dict['INITIALIZE']['METRICS']['SEEING']
     Camera['GENERAL_INFO']['RA']=step_dict['INITIALIZE']['METRICS']['RA']
