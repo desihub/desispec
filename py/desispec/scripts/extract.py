@@ -184,7 +184,9 @@ regularize: {regularize}
 #- recent addition of mask and chi2pix code required nearly identical edits
 #- in two places.  Could main(args) just call main_mpi(args, comm=None) ?
 
-def main_mpi(args, comm=None):
+def main_mpi(args, comm=None, timing=None):
+
+    mark_start = time.time()
 
     log = get_logger()
 
@@ -211,6 +213,8 @@ def main_mpi(args, comm=None):
         img = comm.bcast(img, root=0)
 
     psf = load_psf(psf_file)
+
+    mark_read_input = time.time()
 
     # get spectral range
 
@@ -314,9 +318,15 @@ def main_mpi(args, comm=None):
     if comm is not None:
         comm.barrier()
 
+    mark_preparation = time.time()
+
+    time_total_extraction = 0.0
+    time_total_write_output = 0.0
+
     failcount = 0
 
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
+        mark_iteration_start = time.time()
         outbundle = "{}_{:02d}.fits".format(outroot, b)
         outmodel = "{}_model_{:02d}.fits".format(outroot, b)
 
@@ -363,6 +373,8 @@ def main_mpi(args, comm=None):
                         fibers=bfibers, meta=img.meta, fibermap=bfibermap,
                         chi2pix=chi2pix)
 
+            mark_extraction = time.time()
+
             #- Write output
             frame.meta['BUNIT'] = 'photon/bin'
             io.write_frame(outbundle, frame)
@@ -383,6 +395,11 @@ def main_mpi(args, comm=None):
             failcount += 1
             sys.stdout.flush()
 
+    mark_write_output = time.time()
+
+    time_total_extraction += mark_extraction - mark_iteration_start
+    time_total_write_output += mark_write_output - mark_extraction
+
     if comm is not None:
         failcount = comm.allreduce(failcount)
 
@@ -390,7 +407,9 @@ def main_mpi(args, comm=None):
         # all processes throw
         raise RuntimeError("some extraction bundles failed")
 
+    time_merge = None
     if rank == 0:
+        mark_merge_start = time.time()
         mergeopts = [
             '--output', args.output,
             '--force',
@@ -414,3 +433,17 @@ def main_mpi(args, comm=None):
                 os.remove(outmodel)
 
             fits.writeto(args.model, model)
+
+        mark_merge_end = time.time()
+        time_merge = mark_merge_end - mark_merge_start
+
+     # Resolve difference timer data
+
+     if type(timing) is dict:
+        timing["read_input"] = mark_read_input - mark_start
+        timing["preparation"] = mark_preparation - mark_read_input
+        timing["total_extraction"] = time_total_extraction
+        timing["total_write_output"] = time_total_write_output
+        timing["merge"] = time_merge
+
+
