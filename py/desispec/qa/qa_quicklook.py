@@ -1645,8 +1645,11 @@ class Integrate_Spec(MonitoringAlg):
         magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
             
         #- Get filter response information from speclite
-        from pkg_resources import resource_filename
-        responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+        try:
+            from pkg_resources import resource_filename
+            responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+        except:
+            log.critical("Could not find filter response file, can't compute spectral magnitudes")
 
         #- Grab wavelength and response information from file
         rfile=np.genfromtxt(responsefile)
@@ -1657,7 +1660,7 @@ class Integrate_Spec(MonitoringAlg):
             rwave[i]=10.*rfile[i][0] # convert to angstroms
             response[i]=rfile[i][1]
 
-        #- Put 
+        #- Convole flux with response information 
         res=np.zeros(frame.wave.shape)
         for w in range(response.shape[0]):
             if w >= 1 and w<= response.shape[0]-2:
