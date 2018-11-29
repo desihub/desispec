@@ -234,25 +234,26 @@ class TestQL_QA(unittest.TestCase):
         counts2=qalib.countpix(pix,nsig=4) #- counts above 4 sigma
         self.assertLess(counts2,counts1)
 
-    def test_sky_resid(self):
-        import copy
-        param = dict(
-                     PCHI_RESID=0.05,PER_RESID=95.,BIN_SZ=0.1)
-        qadict=qalib.sky_resid(param,self.frame,self.skymodel,quick_look=True)
-        kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
-        self.assertEqual(qadict['NSKY_FIB'],len(kk))
-
-        #- run with different sky flux
-        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
-        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
-        frame1=copy.deepcopy(self.frame)
-        frame2=copy.deepcopy(self.frame)
-        desispec.sky.subtract_sky(frame1,skym1)
-        desispec.sky.subtract_sky(frame2,skym2)
-
-        qa1=qalib.sky_resid(param,frame1,skym1)
-        qa2=qalib.sky_resid(param,frame2,skym2)
-        self.assertLess(qa1['MED_RESID'],qa2['MED_RESID']) #- residuals must be smaller for case 1
+# RS: remove this test because this QA isn't used
+#    def test_sky_resid(self):
+#        import copy
+#        param = dict(
+#                     PCHI_RESID=0.05,PER_RESID=95.,BIN_SZ=0.1)
+#        qadict=qalib.sky_resid(param,self.frame,self.skymodel,quick_look=True)
+#        kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
+#        self.assertEqual(qadict['NSKY_FIB'],len(kk))
+#
+#        #- run with different sky flux
+#        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
+#        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
+#        frame1=copy.deepcopy(self.frame)
+#        frame2=copy.deepcopy(self.frame)
+#        desispec.sky.subtract_sky(frame1,skym1)
+#        desispec.sky.subtract_sky(frame2,skym2)
+#
+#        qa1=qalib.sky_resid(param,frame1,skym1)
+#        qa2=qalib.sky_resid(param,frame2,skym2)
+#        self.assertLess(qa1['RESID'],qa2['RESID']) #- residuals must be smaller for case 1
 
     def testSignalVsNoise(self):
         import copy

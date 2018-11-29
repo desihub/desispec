@@ -184,49 +184,6 @@ class Flexure(pas.PipelineAlg):
         return img
 
 
-class BootCalibration(pas.PipelineAlg):
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Boot Calibration"
-        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
-        
-    def run(self,*args,**kwargs):
-        if 'ArcLampImage' not in kwargs: 
-            #raise qlexceptions.ParameterException("Need ArcLampImage")
-            log.critical("Need ArcLampImage")
-            sys.exit()
-
-        if 'FlatImage' not in kwargs:
-            #raise qlexceptions.ParameterException("Need FlatImage")
-            log.critical("Need FlatImage")
-            sys.exit()
-
-        if 'outputFile' not in kwargs:
-            #raise qlexceptions.ParameterException("Need outputFile")
-            log.critical("Need outputFile")
-            sys.exit()
-
-        if "Deg" not in kwargs:
-            deg=5 #- 5th order legendre polynomial
-        else:
-            deg=kwargs["Deg"]
-
-        flatimage=kwargs["FlatImage"]
-        arcimage=kwargs["ArcLampImage"]
-        outputfile=kwargs["outputFile"]
-
-        return self.run_pa(deg,flatimage,arcimage,outputfile,args)
-
-    def run_pa(self,deg,flatimage,arcimage,outputfile,args):
-        from desispec.util import runcmd
-        cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
-        if runcmd(cmd) !=0:
-            raise RuntimeError('desi_bootcalib failed, psfboot not written')
-
-        img=args[0]
-        return img
-
-
 class BoxcarExtract(pas.PipelineAlg):
     from desispec.quicklook.qlboxcar import do_boxcar
     from desispec.maskbits import ccdmask
@@ -913,19 +870,22 @@ class ApplyFluxCalibration(pas.PipelineAlg):
         if "CalibFile" in kwargs:
             calibfile=kwargs["CalibFile"]
         else:
-            log.critical("Must provide a calibration file.")
+            log.critical("Must provide a calibration file")
             sys.exit()
 
-        dumpfile=None
-        if "dumpfile" in kwargs:
-            dumpfile=kwargs["dumpfile"]
+        if "outputfile" in kwargs:
+            outputfile=kwargs["outputfile"]
+        else:
+            log.critical("Must provide output file to write cframe")
+            sys.exit()
 
-        return self.run_pa(input_frame,calibfile,dumpfile=dumpfile)
+        return self.run_pa(input_frame,calibfile,outputfile=outputfile)
 
-    def run_pa(self,frame,calibfile,dumpfile=None):
+    def run_pa(self,frame,calibfile,outputfile=None):
         from desispec.io.fluxcalibration import read_flux_calibration
-        from desispec.fluxcalibration import apply_flux_calibration
+        from desispec.quicklook.palib import apply_flux_calibration
         from desispec.fluxcalibration import FluxCalib
+        from desispec.qproc.io import write_qframe
 
          # This try/except statement is a temporary placeholder to get output, will change once calibration information is available
         try:
@@ -944,7 +904,7 @@ class ApplyFluxCalibration(pas.PipelineAlg):
                 for k in range(len(nonzerocalib)):
                     vals.append(nonzerocalib[k][j])
                 avgcalibvector[j]=np.mean(vals)
-    
+
             #- Check if frame and fluxcalib are on same wavelength grid
             samegrid=False
             if len(frame.wave) == len(fluxcalib.wave):
@@ -974,18 +934,15 @@ class ApplyFluxCalibration(pas.PipelineAlg):
             calibvector=[]
             calibivar=[]
             for i in range(frame.nspec):
-                calibvector.append(np.ones(frame.nwave))
-                calibivar.append(np.ones(frame.nwave))
+                calibvector.append(np.ones(frame.wave.shape[1]))
+                calibivar.append(np.ones(frame.wave.shape[1]))
             calibvector=np.array(calibvector)
             calibivar=np.array(calibivar)
-            fluxcalib=FluxCalib(frame.wave,calibvector,calibivar,frame.mask)
+            fluxcalib=FluxCalib(frame.wave[0],calibvector,calibivar,frame.mask)
         apply_flux_calibration(frame,fluxcalib)
 
-        if dumpfile is not None:
-            night = frame.meta['NIGHT']
-            expid = frame.meta['EXPID']
-            io.write_frame(dumpfile, frame)
-            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+        write_qframe(outputfile,frame)
+        log.info("Wrote flux calibrated frame file %s after %s"%(outputfile,self.name))
 
         return frame
 
@@ -1304,8 +1261,8 @@ class SkySub_QP(pas.PipelineAlg):
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         # convert for QA
-        sframe=qframe.asframe()
-        tmpsky=np.interp(sframe.wave,qframe.wave[0],skymodel[0])
-        skymodel = SkyModel(sframe.wave,np.tile(tmpsky,(sframe.nspec,1)),np.ones(sframe.flux.shape),np.zeros(sframe.flux.shape,dtype="int32"))
+#        sframe=qframe.asframe()
+#        tmpsky=np.interp(sframe.wave,qframe.wave[0],skymodel[0])
+#        skymodel = SkyModel(sframe.wave,np.tile(tmpsky,(sframe.nspec,1)),np.ones(sframe.flux.shape),np.zeros(sframe.flux.shape,dtype="int32"))
         
-        return (sframe,skymodel)
+        return (qframe,skymodel)

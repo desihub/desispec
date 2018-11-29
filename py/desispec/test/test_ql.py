@@ -154,10 +154,11 @@ class TestQL(unittest.TestCase):
         raw_hdr['RDNOISE2'] = 3.0
         raw_hdr['RDNOISE3'] = 3.0
         raw_hdr['RDNOISE4'] = 3.0
-        
+
+        primary_header={'PROGRAM':program}
         data=np.zeros((4096,4204))+200.
         raw_data=data.astype(int)
-        write_raw(rawfile,raw_data,raw_hdr)
+        write_raw(rawfile,raw_data,raw_hdr,primary_header=primary_header)
 
         #- Generate fibermap file
         fibermapfile = os.path.join(dataDir,'fibermap-00000314.fits')

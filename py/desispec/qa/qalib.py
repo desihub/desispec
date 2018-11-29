@@ -346,7 +346,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     """
     # Output dict
     qadict = {}
-    qadict['NREJ'] = int(skymodel.nrej)
+#    qadict['NREJ'] = int(skymodel.nrej)
 
     if quick_look:
         qadict['RA'] = frame.fibermap['TARGET_RA']
@@ -362,7 +362,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     #flux = frame.flux[skyfibers]
 
     # Record median flux
-    qadict['MED_SKY'] = np.median(skymodel.flux[skyfibers])  # Counts
+    #qadict['MED_SKY'] = np.median(skymodel[skyfibers])  # Counts
 
     #- Residuals
     res=frame.flux[skyfibers] #- as this frame is already sky subtracted
@@ -381,16 +381,13 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         log.warning("Bad Sky Subtraction in {:d} fibers".format(
                 qadict['NBAD_PCHI']))
     # Median residual
-    qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
+    qadict['RESID'] = float(np.median(res)) # Median residual (counts)
     log.info("Median residual for sky fibers = {:g}".format(
-        qadict['MED_RESID']))
+        qadict['RESID']))
 
     # Residual percentiles
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
-
-    #SE: commented by popular demand!
-    #qadict['RESID'] = []
 
     qadict["SKYFIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes
@@ -646,7 +643,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         ok = frame.fibermap[colname] > 0
         mag_grz[i, ok] = 22.5 - 2.5 * np.log10(frame.fibermap[colname][ok])
 
-    qadict["MAGNITUDES"]=mag_grz
     qadict["FILTERS"] = ['G', 'R', 'Z']
 
     qadict["OBJLIST"]=list(objlist)

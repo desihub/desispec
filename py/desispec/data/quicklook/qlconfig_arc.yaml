@@ -16,9 +16,7 @@ Timeout: 120.0
 Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ResolutionFit]
 Algorithms:
     Initialize:
-        QA: 
-            Check_HDUs:
-                PARAMS: {}
+        QA: {}
     Preproc:
         QA: 
             Bias_From_Overscan:
