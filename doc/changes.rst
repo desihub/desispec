@@ -5,6 +5,8 @@ desispec Change Log
 0.26.1 (unreleased)
 -------------------
 
+* Add support for average flux calibration model in ccd_calibration_data
+  repo (PR `#735`_).
 * Support mockobs fibermap format with fewer columns (PR `#733`_).
 * Upgrade data transfer script and add additional scripts (PR `#732`_).
 * Fix desi_zcatalog RA_TARGET vs. TARGET_RA (PR `#723`_).
@@ -14,6 +16,7 @@ desispec Change Log
 .. _`#723`: https://github.com/desihub/desispec/pull/723
 .. _`#732`: https://github.com/desihub/desispec/pull/732
 .. _`#733`: https://github.com/desihub/desispec/pull/733
+.. _`#735`: https://github.com/desihub/desispec/pull/735
 
 0.26.0 (2018-11-08)
 -------------------
