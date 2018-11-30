@@ -57,6 +57,7 @@ def get_inputs(*args,**kwargs):
     inputs["fibermap"]=None
     if "FiberMap" in kwargs: inputs["fibermap"]=kwargs["FiberMap"]
 
+    if "Peaks" in kwargs: inputs["Peaks"]=kwargs["Peaks"]
 
     if "qafile" in kwargs: inputs["qafile"] = kwargs["qafile"]
     else: inputs["qafile"]=None
@@ -739,6 +740,7 @@ class Calc_XWSigma(MonitoringAlg):
         psffile=inputs["psf"]
         psf=desispec.quicklook.qlpsf.PSF(psffile)
         amps=inputs["amps"]
+        allpeaks=inputs["Peaks"]
         qafile=inputs["qafile"]
         qafig=inputs["qafig"]
         param=inputs["param"]
@@ -756,9 +758,7 @@ class Calc_XWSigma(MonitoringAlg):
             fibmap =fits.open(kwargs['FiberMap'])
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
 
-        
         retval["NIGHT"] = image.meta["NIGHT"]
-
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
@@ -774,7 +774,8 @@ class Calc_XWSigma(MonitoringAlg):
         #- Define number of pixels to be fit
         dp=param['PIXEL_RANGE']/2
         #- Get wavelength ranges around peaks
-        peaks=param['{}_PEAKS'.format(camera[0].upper())]
+        peaks=allpeaks['{}_PEAKS'.format(camera[0].upper())]
+        print(peaks)
 
         xfails=[]
         wfails=[]
@@ -1402,6 +1403,7 @@ class Sky_Peaks(MonitoringAlg):
         paname=inputs["paname"]
         fibermap=inputs["fibermap"]
         amps=inputs["amps"]
+        allpeaks=inputs["Peaks"]
         qafile=inputs["qafile"]
         qafig=inputs["qafig"]
         param=inputs["param"]
@@ -1429,6 +1431,9 @@ class Sky_Peaks(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
+        param['B_PEAKS']=allpeaks['B_PEAKS']
+        param['R_PEAKS']=allpeaks['R_PEAKS']
+        param['Z_PEAKS']=allpeaks['Z_PEAKS']
 
         #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
         nspec_counts, sky_counts, skyfibers, nskyfib= sky_peaks(param, frame)

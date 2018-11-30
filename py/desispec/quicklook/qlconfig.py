@@ -283,8 +283,11 @@ class Config(object):
                             'plots' : self.plots
                             }
                 if qa == 'Calc_XWSigma':
+                    qaopts[qa]['Peaks']=self.algorithms['Initialize']['PEAKS']
                     qaopts[qa]['Flavor']=self.flavor
                     qaopts[qa]['PSFFile']=self.calibpsf
+                if qa == 'Sky_Peaks':
+                    qaopts[qa]['Peaks']=self.algorithms['Initialize']['PEAKS']
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir

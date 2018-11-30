@@ -57,7 +57,7 @@ class Initialize(pas.PipelineAlg):
         general_info['AIRMASS']=raw[0].header['AIRMASS']
         general_info['SEEING']=raw[0].header['SEEING']
         general_info['EXPTIME']=raw[0].header['EXPTIME']
-#        general_info['PROGRAM']=raw[0].header['PROGRAM'].upper()
+        general_info['PROGRAM']=raw[0].header['PROGRAM'].upper()
 #        general_info['FITS_DESISPEC_VERION']=raw[0].header['FITS_DESISPEC_VERSION']
 #        general_info['PROC_DESISPEC_VERION']=raw[0].header['PROC_DESISPEC_VERSION']
 #        general_info['PROC_QuickLook_VERION']=raw[0].header['PROC_QuickLook_VERSION']
@@ -67,9 +67,10 @@ class Initialize(pas.PipelineAlg):
         #- Limit flux info to fibers in camera
         minfiber=int(camera[1])*500
         maxfiber=minfiber+499
-#        general_info['FLUX_G']=fibermap['FLUX_G'][minfiber:maxfiber+1]
-#        general_info['FLUX_R']=fibermap['FLUX_R'][minfiber:maxfiber+1]
-#        general_info['FLUX_Z']=fibermap['FLUX_Z'][minfiber:maxfiber+1]
+        fibermags=[]
+        for flux in ['FLUX_G','FLUX_R','FLUX_Z']:
+            fibermags.append(22.5-2.5*np.log10(fibermap[flux][minfiber:maxfiber+1]))
+        general_info['FIBER_MAGS']=fibermags
 
         #- Limit RA and DEC to 5 decimal places
         targetra=fibermap['TARGET_RA'][minfiber:maxfiber+1]
@@ -78,25 +79,25 @@ class Initialize(pas.PipelineAlg):
         general_info['DEC']=[float("%.5f"%dec) for dec in targetdec]
 
         #- Find fibers in camera per target type
-#        elgfibers=np.where((fibermap['DESI_TARGET']&desi_mask.ELG)!=0)[0]
-#        general_info['ELG_FIBERID']=[elgfib for elgfib in elgfibers if minfiber <= elgfib <= maxfiber]
-#        lrgfibers=np.where((fibermap['DESI_TARGET']&desi_mask.LRG)!=0)[0]
-#        general_info['LRG_FIBERID']=[lrgfib for lrgfib in lrgfibers if minfiber <= lrgfib <= maxfiber]
-#        qsofibers=np.where((fibermap['DESI_TARGET']&desi_mask.QSO)!=0)[0]
-#        general_info['QSO_FIBERID']=[qsofib for qsofib in qsofibers if minfiber <= qsofib <= maxfiber]
-#        skyfibers=np.where((fibermap['DESI_TARGET']&desi_mask.SKY)!=0)[0]
-#        general_info['SKY_FIBERID']=[skyfib for skyfib in skyfibers if minfiber <= skyfib <= maxfiber]
-#        general_info['NSKY_FIB']=len(general_info['SKY_FIBERID'])
-#        stdfibers=np.where(isStdStar(fibermap['DESI_TARGET']))[0]
-#        general_info['STAR_FIBERID']=[stdfib for stdfib in stdfibers if minfiber <= stdfib <= maxfiber]
-#
-#        #- Get peaks from configuration file
-#        general_info['B_PEAKS']=peaks['B_PEAKS']
-#        general_info['R_PEAKS']=peaks['R_PEAKS']
-#        general_info['z_PEAKS']=peaks['Z_PEAKS']
-#
-#        #- Get current time information
-#        general_info['QLrun_datime_UTC']=datetime.datetime.now(tz=pytz.utc).isoformat()
+        elgfibers=np.where((fibermap['DESI_TARGET']&desi_mask.ELG)!=0)[0]
+        general_info['ELG_FIBERID']=[elgfib for elgfib in elgfibers if minfiber <= elgfib <= maxfiber]
+        lrgfibers=np.where((fibermap['DESI_TARGET']&desi_mask.LRG)!=0)[0]
+        general_info['LRG_FIBERID']=[lrgfib for lrgfib in lrgfibers if minfiber <= lrgfib <= maxfiber]
+        qsofibers=np.where((fibermap['DESI_TARGET']&desi_mask.QSO)!=0)[0]
+        general_info['QSO_FIBERID']=[qsofib for qsofib in qsofibers if minfiber <= qsofib <= maxfiber]
+        skyfibers=np.where((fibermap['DESI_TARGET']&desi_mask.SKY)!=0)[0]
+        general_info['SKYFIBERID']=[skyfib for skyfib in skyfibers if minfiber <= skyfib <= maxfiber]
+        general_info['NSKY_FIB']=len(general_info['SKYFIBERID'])
+        stdfibers=np.where(isStdStar(fibermap['DESI_TARGET']))[0]
+        general_info['STAR_FIBERID']=[stdfib for stdfib in stdfibers if minfiber <= stdfib <= maxfiber]
+
+        #- Get peaks from configuration file
+        general_info['B_PEAKS']=peaks['B_PEAKS']
+        general_info['R_PEAKS']=peaks['R_PEAKS']
+        general_info['z_PEAKS']=peaks['Z_PEAKS']
+
+        #- Get current time information
+        general_info['QLrun_datime_UTC']=datetime.datetime.now(tz=pytz.utc).isoformat()
 
         return (raw,general_info)
 
