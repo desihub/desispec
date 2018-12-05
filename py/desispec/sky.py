@@ -396,8 +396,8 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
             current_ivar[f][ii] = input_ivar[f][ii]
     
     # need focal plane coordinates
-    x = frame.fibermap["X_TARGET"]
-    y = frame.fibermap["Y_TARGET"]
+    x = frame.fibermap["DESIGN_X"]
+    y = frame.fibermap["DESIGN_Y"]
     
     # normalize for numerical stability
     xm = np.mean(x)
@@ -656,13 +656,13 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     
     
     # need focal plane coordinates of fibers
-    x = frame.fibermap["X_TARGET"][skyfibers]
-    y = frame.fibermap["Y_TARGET"][skyfibers]
+    x = frame.fibermap["DESIGN_X"][skyfibers]
+    y = frame.fibermap["DESIGN_Y"][skyfibers]
     # normalize for numerical stability
-    xm = np.mean(frame.fibermap["X_TARGET"])
-    ym = np.mean(frame.fibermap["Y_TARGET"])
-    xs = np.std(frame.fibermap["X_TARGET"])
-    ys = np.std(frame.fibermap["Y_TARGET"])
+    xm = np.mean(frame.fibermap["DESIGN_X"])
+    ym = np.mean(frame.fibermap["DESIGN_Y"])
+    xs = np.std(frame.fibermap["DESIGN_X"])
+    ys = np.std(frame.fibermap["DESIGN_Y"])
     if xs==0 : xs = 1
     if ys==0 : ys = 1
     x = (x-xm)/xs
@@ -882,8 +882,8 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     for i in range(frame.nspec):
         # compute monomials
         M = []
-        xi=(frame.fibermap["X_TARGET"][i]-xm)/xs
-        yi=(frame.fibermap["Y_TARGET"][i]-ym)/ys
+        xi=(frame.fibermap["DESIGN_X"][i]-xm)/xs
+        yi=(frame.fibermap["DESIGN_Y"][i]-ym)/ys
         for dx in range(angular_variation_deg+1) :
             for dy in range(angular_variation_deg+1-dx) :
                 M.append((xi**dx)*(yi**dy))

@@ -682,8 +682,8 @@ def qa_fiberflat(param, frame, fiberflat):
 
     # x, y, area
     fibermap = frame.fibermap
-    x = fibermap['X_TARGET']
-    y = fibermap['Y_TARGET']
+    x = fibermap['DESIGN_X']
+    y = fibermap['DESIGN_Y']
     area = fiber_area_arcsec2(x, y)
     mean_area = np.mean(area)
     norm_area = area / mean_area

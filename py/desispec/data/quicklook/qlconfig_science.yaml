@@ -11,12 +11,10 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL]
+Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ApplyFiberFlat_QP, SkySub_QP, ApplyFluxCalibration]
 Algorithms:
     Initialize:
-        QA: 
-            Check_HDUs:
-                PARAMS: {}
+        QA: {} 
     Preproc:
         QA: 
             Bias_From_Overscan:
@@ -26,17 +24,18 @@ Algorithms:
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_BRIGHT_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_DARK_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_GRAY_REF:[0.3,0.3,0.4,0.4]}
             Calc_XWSigma:
-                PARAMS: {B_PEAKS: [5578.9],
-                         R_PEAKS: [6301.9],
-                         Z_PEAKS: [9378.5],
+                PARAMS: {B_PEAKS: [3914.4,5578.9],
+                         R_PEAKS: [6301.9,7342.8],
+                         Z_PEAKS: [8432.4,9378.5],
                          PIXEL_RANGE: 7,
+                         MAX_SIGMA: 10,
                          XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
                          XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_BRIGHT_REF:[1.1,1.8],XWSIGMA_DARK_REF:[1.1,1.8],XWSIGMA_GRAY_REF:[1.1,1.8]}
     Flexure:
         QA:
             Trace_Shifts:
                 PARAMS: {XYSHIFTS_NORMAL_RANGE: [-1.0,1.0], XYSHIFTS_WARN_RANGE: [-2.0,2.0],XYSHIFTS_BRIGHT_REF:[0.,0.],XYSHIFTS_DARK_REF:[0.,0.],XYSHIFTS_GRAY_REF:[0.,0.]}
-    BoxcarExtract:
+    Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],
             r: [5630,7740,0.8],
@@ -46,7 +45,7 @@ Algorithms:
         QA: 
             CountSpectralBins:
                 PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1., 1.], NGOODFIB_WARN_RANGE: [-2., 2.],NGOODFIB_BRIGHT_REF:[500],NGOODFIB_DARK_REF:[500],NGOODFIB_GRAY_REF:[500]}
-    ApplyFiberFlat_QL:
+    ApplyFiberFlat_QP:
         QA:
             Sky_Continuum:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
@@ -60,9 +59,13 @@ Algorithms:
                          Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
                          PEAKCOUNT_NORMAL_RANGE: [-2.0, 2.0],
                          PEAKCOUNT_WARN_RANGE: [-4.0, 4.0],PEAKCOUNT_BRIGHT_REF:[10.0],PEAKCOUNT_DARK_REF:[10.0],PEAKCOUNT_GRAY_REF:[10.0]}
-    SkySub_QL:
-        QA: 
-
+    SkySub_QP:
+        QA:
+            Calculate_SNR:
+                #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
+                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-10, 10.], FIDSNR_TGT_WARN_RANGE: [-15., 15.], FIDSNR_TGT_BRIGHT_REF:[1.,2.], FIDSNR_TGT_DARK_REF:[1.,2.], FIDSNR_TGT_GRAY_REF:[1.,2.], FIDMAG: 22.}
+    ApplyFluxCalibration:
+        QA:
             Sky_Rband:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],
@@ -70,7 +73,4 @@ Algorithms:
                          SKYRBAND_NORMAL_RANGE: [-1.0, 1.0],
                          SKYRBAND_WARN_RANGE: [-2.0, 2.0], SKYRBAND_BRIGHT_REF:[100.], SKYRBAND_DARK_REF:[100.], SKYRBAND_GRAY_REF:[100.]}
             Integrate_Spec:
-                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-6.0, 6.0], DELTAMAG_TGT_WARN_RANGE: [-10., 10.],DELTAMAG_TGT_BRIGHT_REF:[4.0,4.0],DELTAMAG_TGT_DARK_REF:[4.0,4.0],DELTAMAG_TGT_GRAY_REF:[4.0,4.0]}
-            Calculate_SNR:
-                #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
-                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-10, 10.], FIDSNR_TGT_WARN_RANGE: [-15., 15.], FIDSNR_TGT_BRIGHT_REF:[1.,2.], FIDSNR_TGT_DARK_REF:[1.,2.], FIDSNR_TGT_GRAY_REF:[1.,2.], FIDMAG: 22.}
+                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-10.0, 10.0], DELTAMAG_TGT_WARN_RANGE: [-15., 15.],DELTAMAG_TGT_BRIGHT_REF:[4.0,4.0],DELTAMAG_TGT_DARK_REF:[4.0,4.0],DELTAMAG_TGT_GRAY_REF:[4.0,4.0]}

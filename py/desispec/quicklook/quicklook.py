@@ -23,166 +23,6 @@ from desispec.quicklook.merger import QL_QAMerger
 from desispec.quicklook import procalgs
 from desiutil.io import yamlify
 
-def testconfig(outfilename="qlconfig.yaml"):
-    """
-    Make a test Config file, should be provided by the QL framework
-    Below the %% variables are replaced by actual object when the respective
-    algorithm is executed.
-    """
-    qlog=qllogger.QLLogger()
-    log=qlog.getlog()
-    url=None #- QA output will be posted to QLF if set true
-
-    conf={'BiasImage':os.environ['BIASIMAGE'],# path to bias image
-          'DarkImage':os.environ['DARKIMAGE'],# path to dark image
-          'DataType':'Exposure',# type of input ['Exposure','Arc','Dark']
-          'DebugLevel':20, # debug level
-          'Period':5.0, # Heartbeat Period (Secs)
-          'Timeout': 120.0, # Heartbeat Timeout (Secs)
-          'DumpIntermediates':False, # whether to dump output of each step
-          'FiberFlatFile':os.environ['FIBERFLATFILE'], # path to fiber flat field file
-          'FiberFlatImage':os.environ['FIBERFLATIMAGE'], # for psf calibration
-          'ArcLampImage':os.environ['ARCLAMPIMAGE'], # for psf calibration
-          'SkyFile':os.environ['SKYFILE'], # path to Sky file
-          'FiberMap':os.environ['FIBERMAP'],# path to fiber map
-          'RawImage':os.environ['PIXIMAGE'],#path to input image
-          'PixelFlat':os.environ['PIXELFLAT'], #path to pixel flat image
-          'PSFFile':os.environ['PSFFILE'],  # for boxcar this can be bootcalib psf or specter psf file
-          #'PSFFile_sp':os.environ['PSFFILE_sp'], # .../desimodel/data/specpsf/psf-r.fits (for running 2d extraction)
-          'basePath':os.environ['DESIMODEL'],
-          'OutputFile':'lastframe_QL-r0-00000004.fits', # output file from last pipeline step. Need to output intermediate steps? Most likely after boxcar extraction?
-          'PipeLine':[{'PA':{"ModuleName":"desispec.quicklook.procalgs",
-                             "ClassName":"BiasSubtraction",
-                             "Name":"Bias Subtraction",
-                             "kwargs":{"BiasImage":"%%BiasImage"}
-                             },
-                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Get_RMS",
-                               "Name":"Get RMS",
-                               "kwargs":{},
-                               },
-                              {"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Count_Pixels",
-                               "Name":"Count Pixels",
-                               "kwargs":{'Width':3.}
-                               }
-                              ],
-                       "StepName":"Preprocessing-Bias Subtraction",
-                       "OutputFile":"QA_biassubtraction.yaml"
-                       },
-                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
-                             "ClassName":"DarkSubtraction",
-                             "Name":"Dark Subtraction",
-                             "kwargs":{"DarkImage":"%%DarkImage"}
-                             },
-                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Get_RMS",
-                               "Name":"Get RMS",
-                               "kwargs":{},
-                               },
-                              {"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Count_Pixels",
-                               "Name":"Count Pixels",
-                               "kwargs":{'Width':3.},
-                               }
-                              ],
-                       "StepName":"Preprocessing-Dark Subtraction",
-                       "OutputFile":"QA_darksubtraction.yaml"
-                       },
-                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
-                             "ClassName":"PixelFlattening",
-                             "Name":"Pixel Flattening",
-                             "kwargs":{"PixelFlat":"%%PixelFlat"}
-                             },
-                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Get_RMS",
-                               "Name":"Get RMS",
-                               "kwargs":{},
-                               },
-                              {"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Count_Pixels",
-                               "Name":"Count Pixels",
-                               "kwargs":{'Width':3.},
-                               }
-                              ],
-                       "StepName":"Preprocessing-Pixel Flattening",
-                       "OutputFile":"QA_pixelflattening.yaml"
-                       },
-                      #{'PA':{"ModuleName":"desispec.quicklook.procalgs",
-                      #       "ClassName":"BoxcarExtraction",
-                      #       "Name":"Boxcar Extraction",
-                      #       "kwargs":{"PSFFile":"%%PSFFile",
-                      #                 "BoxWidth":2.5,
-                      #                 "DeltaW":0.5,
-                      #                 "Nspec":500
-                      #                 }
-                      #       },
-                      # 'QAs':[],
-                      # "StepName":"Boxcar Extration",
-                      # "OutputFile":"QA_boxcarextraction.yaml"
-                      # },
-                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
-                             "ClassName":"Extraction_2d",
-                             "Name":"2D Extraction",
-                             "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
-                                       "Nspec":10,
-                                       "Wavelength": "5630,7740,0.5",
-                                       "FiberMap":"%%FiberMap" #need this for qa_skysub downstream as well.
-                                       }
-                             },
-                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"CountSpectralBins",
-                               "Name":"Count Bins above n",
-                               "kwargs":{'thresh':100,
-                                         'camera':"r0",
-                                         'expid':"%08d"%2,
-                                         'url':url
-                                        }
-                               }
-                             ],
-                       "StepName":"2D Extraction",
-                       "OutputFile":"qa-extract-r0-00000002.yaml"
-                       },
-                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
-                             "ClassName": "ApplyFiberFlat",
-                             "Name": "Apply Fiberflat",
-                             "kwargs":{"FiberFlatFile":"%%FiberFlatFile"
-                                      }
-                             },
-                       'QAs':[],
-                       "StepName":"Apply Fiberflat",
-                       "Outputfile":"apply_fiberflat_QA.yaml"
-                      },
-                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
-                             "ClassName":"SubtractSky",
-                             "Name": "Sky Subtraction",
-                             "kwargs":{"SkyFile":"%%SkyFile"
-                                      }
-                             },
-                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Calculate_SNR",
-                               "Name":"Calculate Signal-to-Noise ratio",
-                               "kwargs":{'SkyFile':"%%SkyFile",
-                                         'camera':"r0",
-                                         'expid':"%08d"%2,
-                                         'url':url
-                                        }
-                               }
-                             ],
-                       "StepName": "Sky Subtraction",
-                       "OutputFile":"qa-r0-00000002.yaml"
-                      }
-                      ]
-          }
-
-    if "yaml" in outfilename:
-        f=open(outfilename,"w")
-        yaml.dump(conf,f)
-        f.close()
-    else:
-        log.warning("Only yaml defined. Use yaml format in the output config file")
-        sys.exit(0)
-
 def get_chan_spec_exp(inpname,camera=None):
     """
     Get channel, spectrograph and expid from the filename itself
@@ -271,7 +111,7 @@ def runpipeline(pl,convdict,conf):
     qlog=qllogger.QLLogger()
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
-    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'], conf['Program'])
+    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'],conf['Program'],convdict)
     QAresults=[] 
     if singqa is None:
         for s,step in enumerate(pl):
@@ -311,19 +151,13 @@ def runpipeline(pl,convdict,conf):
                     schemaStep.addMetrics(res['METRICS'])
                 except Exception as e:
                     log.warning("Failed to run QA {}. Got Exception {}".format(qa.name,e),exc_info=True)
-            if len(qaresult):
-                if conf["DumpIntermediates"]:
-                    f = open(paconf[s]["OutputFile"],"w")
-                    f.write(yaml.dump(yamlify(qaresult)))
-                    hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
-            else:
-                hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
+            hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
             QAresults.append([pa.name,qaresult])
         hb.stop("Pipeline processing finished. Serializing result")
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],[],['Sky_Rband','Integrate_Spec','Calculate_SNR']]
 
 
         singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
@@ -498,16 +332,6 @@ def setup_pipeline(config):
         hbeat.start("Reading PixelFlat Image {}".format(pixelflatfile))
         pixelflatimage=imIO.read_image(pixelflatfile)
         convdict["PixelFlat"]=pixelflatimage
-
-    if fiberflatimagefile:
-        hbeat.start("Reading FiberFlat Image {}".format(fiberflatimagefile))
-        fiberflatimage=imIO.read_image(fiberflatimagefile)
-        convdict["FiberFlatImage"]=fiberflatimage
-
-    if arclampimagefile:
-        hbeat.start("Reading ArcLampImage {}".format(arclampimagefile))
-        arclampimage=imIO.read_image(arclampimagefile)
-        convdict["ArcLampImage"]=arclampimage
 
     if fiberflatfile:
         hbeat.start("Reading FiberFlat {}".format(fiberflatfile))

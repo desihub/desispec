@@ -32,9 +32,15 @@ class Initialize(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
         input_raw=args[0]
             
         return self.run_pa(input_raw)
@@ -63,9 +69,15 @@ class Preproc(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
         input_raw=args[0]
 
         dumpfile=None
@@ -73,7 +85,10 @@ class Preproc(pas.PipelineAlg):
             dumpfile=kwargs["dumpfile"]
 
         if 'camera' not in kwargs: 
-            raise qlexceptions.ParameterException("Need Camera to run preprocess on raw files")
+            #raise qlexceptions.ParameterException("Need Camera to run preprocess on raw files")
+            log.critical("Need Camera to run preprocess on raw files")
+            sys.exit()
+
         else: 
             camera=kwargs["camera"]
         if camera.upper() not in input_raw:
@@ -137,11 +152,19 @@ class Flexure(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if 'preprocFile' not in kwargs:
-            raise qlexceptions.ParameterException("Must provide preproc file for desi_compute_trace_shifts")
+            #raise qlexceptions.ParameterException("Must provide preproc file for desi_compute_trace_shifts")
+            log.critical("Must provide preproc file for desi_compute_trace_shifts")
+            sys.exit()
+
         if 'inputPSFFile' not in kwargs:
-            raise qlexceptions.ParameterException("Must provide input psf file desi_compute_trace_shifts")
+            #raise qlexceptions.ParameterException("Must provide input psf file desi_compute_trace_shifts")
+            log.critical("Must provide input psf file desi_compute_trace_shifts")
+            sys.exit()
+        
         if 'outputPSFFile' not in kwargs:
-            raise qlexceptions.ParameterException("Must provide output psf file")
+            #raise qlexceptions.ParameterException("Must provide output psf file")
+            log.critical("Must provide output psf file")
+            sys.exit()
 
         preproc_file=kwargs["preprocFile"]
         input_file=kwargs["inputPSFFile"]
@@ -161,41 +184,6 @@ class Flexure(pas.PipelineAlg):
         return img
 
 
-class BootCalibration(pas.PipelineAlg):
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Boot Calibration"
-        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
-        
-    def run(self,*args,**kwargs):
-        if 'ArcLampImage' not in kwargs: 
-            raise qlexceptions.ParameterException("Need ArcLampImage")
-        if 'FlatImage' not in kwargs:
-            raise qlexceptions.ParameterException("Need FlatImage")
-        if 'outputFile' not in kwargs:
-            raise qlexceptions.ParameterException("Need outputFile")
-
-        if "Deg" not in kwargs:
-            deg=5 #- 5th order legendre polynomial
-        else:
-            deg=kwargs["Deg"]
-
-        flatimage=kwargs["FlatImage"]
-        arcimage=kwargs["ArcLampImage"]
-        outputfile=kwargs["outputFile"]
-
-        return self.run_pa(deg,flatimage,arcimage,outputfile,args)
-
-    def run_pa(self,deg,flatimage,arcimage,outputfile,args):
-        from desispec.util import runcmd
-        cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
-        if runcmd(cmd) !=0:
-            raise RuntimeError('desi_bootcalib failed, psfboot not written')
-
-        img=args[0]
-        return img
-
-
 class BoxcarExtract(pas.PipelineAlg):
     from desispec.quicklook.qlboxcar import do_boxcar
     from desispec.maskbits import ccdmask
@@ -208,11 +196,19 @@ class BoxcarExtract(pas.PipelineAlg):
     def run(self,*args,**kwargs):
 
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "PSFFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need PSF File")
+            #raise qlexceptions.ParameterException("Need PSF File")
+            log.critical("Need PSF File")
+            sys.exit()
 
         input_image=args[0]
 
@@ -345,11 +341,20 @@ class Extraction_2d(pas.PipelineAlg):
     def run(self,*args,**kwargs):
 
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "PSFFile_sp" not in kwargs:
-            raise qlexceptions.ParameterException("Need PSF File")
+            #raise qlexceptions.ParameterException("Need PSF File")
+            log.critical("Need PSF File")
+            sys.exit()
+
         from specter.psf import load_psf
 
         input_image=args[0]
@@ -454,12 +459,21 @@ class ComputeFiberflat(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         input_frame=args[0] #- frame object to calculate fiberflat from
         if "outputFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+            #raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+            log.critical("Need output file name to write fiberflat File")
+            sys.exit()
+
         outputfile=kwargs["outputFile"]            
 
         return self.run_pa(input_frame,outputfile)
@@ -484,12 +498,21 @@ class ComputeFiberflat_QL(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        
         input_frame=args[0] #- frame object to calculate fiberflat from
         if "outputFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+            #raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+            log.critical("Need output file name to write fiberflat File")
+            sys.exit()
+        
         outputfile=kwargs["outputFile"]            
 
         return self.run_pa(input_frame,outputfile)
@@ -547,12 +570,20 @@ class ApplyFiberFlat(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "FiberFlatFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fiberflat file")
-        
+            #raise qlexceptions.ParameterException("Need Fiberflat file")
+            log.critical("Need Fiberflat file")
+            sys.exit()
+
         input_frame=args[0]
 
 
@@ -577,11 +608,20 @@ class ApplyFiberFlat_QL(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "FiberFlatFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fiberflat file")
+            #raise qlexceptions.ParameterException("Need Fiberflat file")
+            log.critical("Need Fiberflat file")
+            sys.exit()
+
         
         input_frame=args[0]
 
@@ -617,16 +657,28 @@ class ComputeSky(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+    
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "FiberFlatFile" not in kwargs: #- need this as fiberflat has to apply to frame first
-            raise qlexceptions.ParameterException("Need Fiberflat frame file")
+            #raise qlexceptions.ParameterException("Need Fiberflat frame file")
+            log.critical("Need Fiberflat frame file!")
+            sys.exit()
+
         input_frame=args[0] #- frame object to calculate sky from
         if "FiberMap" in kwargs:
             fibermap=kwargs["FiberMap"]
         if "Outfile" not in kwargs:
-            raise qlexceptions.ParameterException("Need output file name to write skymodel")
+            #raise qlexceptions.ParameterException("Need output file name to write skymodel")
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         fiberflat=kwargs["FiberFlatFile"]
         outputfile=kwargs["Outfile"]
         return self.run_pa(input_frame,fiberflat,outputfile)
@@ -655,9 +707,15 @@ class ComputeSky_QL(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         input_frame=args[0] #- frame object to calculate sky from. Should be fiber flat corrected
         if "FiberMap" in kwargs:
             fibermap=kwargs["FiberMap"]
@@ -667,7 +725,9 @@ class ComputeSky_QL(pas.PipelineAlg):
             apply_resolution=kwargs["Apply_resolution"]
 
         if "Outfile" not in kwargs:
-            raise qlexceptions.ParameterException("Need output file name to write skymodel")
+            #raise qlexceptions.ParameterException("Need output file name to write skymodel")
+            log.critical("Need output file name to write skymodel!")
+            sys.exit()
 
         outputfile=kwargs["Outfile"]
         return self.run_pa(input_frame,outputfile,fibermap=fibermap,apply_resolution=apply_resolution)
@@ -692,11 +752,20 @@ class SkySub(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "SkyFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need Skymodel file")
+            #raise qlexceptions.ParameterException("Need Skymodel file")
+            log.critical("Need Skymodel file!")
+            sys.exit()
+
 
         input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
         skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
@@ -724,9 +793,14 @@ class SkySub_QL(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
 
         input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
 
@@ -774,6 +848,104 @@ class SkySub_QL(pas.PipelineAlg):
 
         return (sframe,skymodel)
 
+class ApplyFluxCalibration(pas.PipelineAlg):
+    """PA to apply flux calibration to the given sframe
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Apply Flux Calibration"
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            log.critical("Missing input parameter!")
+            sys.exit()
+
+        if not self.is_compatible(type(args[0][0])):
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0][0])))
+
+        input_frame=args[0][0]
+
+        if "CalibFile" in kwargs:
+            calibfile=kwargs["CalibFile"]
+        else:
+            log.critical("Must provide a calibration file")
+            sys.exit()
+
+        if "outputfile" in kwargs:
+            outputfile=kwargs["outputfile"]
+        else:
+            log.critical("Must provide output file to write cframe")
+            sys.exit()
+
+        return self.run_pa(input_frame,calibfile,outputfile=outputfile)
+
+    def run_pa(self,frame,calibfile,outputfile=None):
+        from desispec.io.fluxcalibration import read_flux_calibration
+        from desispec.quicklook.palib import apply_flux_calibration
+        from desispec.fluxcalibration import FluxCalib
+        from desispec.qproc.io import write_qframe
+
+         # This try/except statement is a temporary placeholder to get output, will change once calibration information is available
+        try:
+            #- If a calibration file exists, read in file
+            fluxcalib=read_flux_calibration(calibfile)
+            log.info("Creating FluxCalib object from {}".format(calibfile))
+    
+            #- Calculate average calibration vector
+            nonzerocalib=[]
+            for i in range(fluxcalib.calib.shape[0]):
+                if np.mean(fluxcalib.calib[i]) != 0.0:
+                    nonzerocalib.append(fluxcalib.calib[i])
+            avgcalibvector=np.zeros(fluxcalib.calib.shape[1])
+            for j in range(fluxcalib.calib.shape[1]):
+                vals=[]
+                for k in range(len(nonzerocalib)):
+                    vals.append(nonzerocalib[k][j])
+                avgcalibvector[j]=np.mean(vals)
+
+            #- Check if frame and fluxcalib are on same wavelength grid
+            samegrid=False
+            if len(frame.wave) == len(fluxcalib.wave):
+                mval=np.max(np.abs(frame.wave-fluxcalib.wave))
+                if mval < 0.001:
+                    samegrid=True
+    
+            #- Convert fluxcalib.calib to average vector
+            if samegrid:
+                for k in range(fluxcalib.calib.shape[0]):
+                    fluxcalib.calib[k]=avgcalibvector
+            #- If frame/calib wavelength ranges are different, resample calib vector
+            else:
+                from desispec.quicklook.palib import resample_spec
+                newcalib=[]
+                newivar=[]
+                for l in range(frame.flux.shape[0]):
+                    cal,iv=resample_spec(fluxcalib.wave,avgcalibvector,frame.wave,ivar=fluxcalib.ivar[0]) #RS: using single ivar array, this can be updated if we need to be more meticulous here
+                    newcalib.append(cal)
+                    newivar.append(iv)
+                newcalib=np.array(newcalib)
+                newivar=np.array(newivar)
+                fluxcalib=FluxCalib(frame.wave,newcalib,newivar,frame.mask)
+        except:
+            # If calibration file doesn't exist, create an artificial FluxCalib object
+            log.warning("Calibration file not found, creating artifical FluxCalib object")
+            calibvector=[]
+            calibivar=[]
+            for i in range(frame.nspec):
+                calibvector.append(np.ones(frame.wave.shape[1]))
+                calibivar.append(np.ones(frame.wave.shape[1]))
+            calibvector=np.array(calibvector)
+            calibivar=np.array(calibivar)
+            fluxcalib=FluxCalib(frame.wave[0],calibvector,calibivar,frame.mask)
+        apply_flux_calibration(frame,fluxcalib)
+
+        write_qframe(outputfile,frame)
+        log.info("Wrote flux calibrated frame file %s after %s"%(outputfile,self.name))
+
+        return frame
+
 class ResolutionFit(pas.PipelineAlg):
 
     """
@@ -787,12 +959,19 @@ class ResolutionFit(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
 
         if "PSFoutfile" not in kwargs:
-             raise qlexceptions.ParameterException("Missing psfoutfile in the arguments")
+            #raise qlexceptions.ParameterException("Missing psfoutfile in the arguments")
+            log.critical("Missing psfoutfile in the arguments!")
+            sys.exit()
 
         psfoutfile=kwargs["PSFoutfile"]
         psfinfile=kwargs["PSFinputfile"] 
@@ -855,11 +1034,19 @@ class Extract_QP(pas.PipelineAlg):
     def run(self,*args,**kwargs):
 
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+       
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "PSFFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need PSF File")
+            #raise qlexceptions.ParameterException("Need PSF File")
+            log.critical("Need PSF file!")
+            sys.exit()
 
         input_image=args[0]
 
@@ -941,7 +1128,7 @@ class Extract_QP(pas.PipelineAlg):
         qframe = qproc_boxcar_extraction(traceset,input_image,fibers=fibers, width=width, fibermap=fibermap)
         
         if dumpfile is not None:
-            io.write_qframe(dumpfile, qframe, fibermap=fibermap)
+            write_qframe(dumpfile, qframe, fibermap=fibermap)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         return qframe
@@ -954,6 +1141,36 @@ class Extract_QP(pas.PipelineAlg):
                 ("Nspec",500,"number of spectra to extract")
                 }
 
+class ComputeFiberflat_QP(pas.PipelineAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="ComputeFiberflat"
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_frame=args[0] #- frame object to calculate fiberflat from
+        if "outputFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+        outputfile=kwargs["outputFile"]
+
+        return self.run_pa(input_frame,outputfile)
+
+    def run_pa(self,qframe,outputfile):
+        from desispec.qproc.qfiberflat import qproc_compute_fiberflat
+        import desispec.io.fiberflat as ffIO
+
+        fibflat=qproc_compute_fiberflat(qframe)
+
+        ffIO.write_fiberflat(outputfile,fibflat,header=qframe.meta)
+        log.info("Wrote fiberflat file {}".format(outputfile))
+
+        fflatfile = ffIO.read_fiberflat(outputfile)
+
+        return fflatfile
 
 class ApplyFiberFlat_QP(pas.PipelineAlg):
     """
@@ -966,12 +1183,20 @@ class ApplyFiberFlat_QP(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
         if "FiberFlatFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fiberflat file")
-        
+            #raise qlexceptions.ParameterException("Need Fiberflat file")
+            log.critical("Need Fiberflat file!")
+            sys.exit()
+
         input_qframe=args[0]
 
         dumpfile=None
@@ -990,7 +1215,7 @@ class ApplyFiberFlat_QP(pas.PipelineAlg):
         if dumpfile is not None:
             night = qframe.meta['NIGHT']
             expid = qframe.meta['EXPID']
-            io.write_qframe(dumpfile, qframe)
+            write_qframe(dumpfile, qframe)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         return qframe
@@ -1007,9 +1232,13 @@ class SkySub_QP(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
 
         input_qframe=args[0] #- this must be flat field applied before sky subtraction in the pipeline
 
@@ -1032,8 +1261,8 @@ class SkySub_QP(pas.PipelineAlg):
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         # convert for QA
-        sframe=qframe.asframe()
-        tmpsky=np.interp(sframe.wave,qframe.wave[0],skymodel[0])
-        skymodel = SkyModel(sframe.wave,np.tile(tmpsky,(sframe.nspec,1)),np.ones(sframe.flux.shape),np.zeros(sframe.flux.shape,dtype="int32"))
+#        sframe=qframe.asframe()
+#        tmpsky=np.interp(sframe.wave,qframe.wave[0],skymodel[0])
+#        skymodel = SkyModel(sframe.wave,np.tile(tmpsky,(sframe.nspec,1)),np.ones(sframe.flux.shape),np.zeros(sframe.flux.shape,dtype="int32"))
         
-        return (sframe,skymodel)
+        return (qframe,skymodel)

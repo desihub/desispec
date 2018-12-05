@@ -281,7 +281,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     fibermap = io.read_fibermap(io.findfile('fibermap', night, expid))
     from desimodel.footprint import radec2pix
     nside=64
-    pixels = np.unique(radec2pix(nside, fibermap['RA_TARGET'], fibermap['DEC_TARGET']))
+    pixels = np.unique(radec2pix(nside, fibermap['TARGET_RA'], fibermap['TARGET_DEC']))
     for pix in pixels:
         outputs.append( io.findfile('spectra', groupname=pix) )
 

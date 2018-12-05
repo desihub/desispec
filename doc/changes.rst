@@ -2,10 +2,39 @@
 desispec Change Log
 ===================
 
-0.25.1 (unreleased)
+0.26.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Add support for average flux calibration model in ccd_calibration_data
+  repo (PR `#735`_).
+* Support mockobs fibermap format with fewer columns (PR `#733`_).
+* Upgrade data transfer script and add additional scripts (PR `#732`_).
+* Fix desi_zcatalog RA_TARGET vs. TARGET_RA (PR `#723`_).
+* Update redshift database data model and workaround a minor bad data problem (PR `#722`_).
+
+.. _`#722`: https://github.com/desihub/desispec/pull/722
+.. _`#723`: https://github.com/desihub/desispec/pull/723
+.. _`#732`: https://github.com/desihub/desispec/pull/732
+.. _`#733`: https://github.com/desihub/desispec/pull/733
+.. _`#735`: https://github.com/desihub/desispec/pull/735
+
+0.26.0 (2018-11-08)
+-------------------
+
+Major non-backwards compatible changes:
+
+* Update to new fibermap format for consistency with targeting and
+  fiber assignment (PR `#717`_).
+* Include GAIN in preproc headers (PR `#715`_).
+* Prototype data transfer status report webpage (PR `#714`_).
+* Integrate qproc/qframe into quicklook (PR `#713`_).
+* Quicklook flux calib and config edits (PR `#707`_).
+
+.. _`#707`: https://github.com/desihub/desispec/pull/707
+.. _`#713`: https://github.com/desihub/desispec/pull/713
+.. _`#714`: https://github.com/desihub/desispec/pull/714
+.. _`#715`: https://github.com/desihub/desispec/pull/715
+.. _`#717`: https://github.com/desihub/desispec/pull/717
 
 0.25.0 (2018-10-24)
 -------------------
@@ -25,7 +54,7 @@ desispec Change Log
 
   * New QL calibration QA metrics (PR `#677`_).
   * Update QL to use xytraceset instead of custom PSF (PR `#682`_).
-  * Cleanup for robustness and maintainability (PR `#693`_). 
+  * Cleanup for robustness and maintainability (PR `#693`_).
 
 * Offline QA updates
 

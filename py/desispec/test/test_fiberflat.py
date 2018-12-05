@@ -331,7 +331,7 @@ class TestFiberFlat(unittest.TestCase):
         # create a fake fibermap
         fibermap = io.empty_fibermap(nspec, nwave)
         for i in range(0, nspec):
-            fibermap['OBJTYPE'][i] = 'FAKE'
+            fibermap['OBJTYPE'][i] = 'BAD'
         io.write_fibermap(self.testfibermap, fibermap)
 
         #- write out the frame

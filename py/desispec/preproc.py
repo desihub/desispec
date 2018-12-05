@@ -411,6 +411,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     '''
     log=get_logger()
 
+    header = header.copy()
+
     calibration_data = None
     
     if ccd_calibration_filename is not False :

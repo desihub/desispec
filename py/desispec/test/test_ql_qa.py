@@ -15,6 +15,7 @@ import astropy.io.fits as fits
 from desispec.quicklook import qllogger
 import desispec.io
 import desispec.image
+from desitarget.targetmask import desi_mask
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -46,12 +47,12 @@ class TestQL_QA(unittest.TestCase):
     #- Create some test data
     def setUp(self):
 
-        self.rawfile = 'test-raw-abcd.fits'
-        self.pixfile = 'test-pix-abcd.fits'
-        self.xwfile = 'test-xw-abcd.fits'
-        self.framefile = 'test-frame-abcd.fits'
-        self.fibermapfile = 'test-fibermap-abcd.fits'
-        self.skyfile = 'test-sky-abcd.fits'
+        self.rawfile = 'test-raw-abcde.fits'
+        self.pixfile = 'test-pix-abcde.fits'
+        self.xwfile = 'test-xw-abcde.fits'
+        self.framefile = 'test-frame-abcde.fits'
+        self.fibermapfile = 'test-fibermap-abcde.fits'
+        self.skyfile = 'test-sky-abcde.fits'
         self.qafile = 'test_qa.yaml'
         self.qajson = 'test_qa.json'
         self.qafig = 'test_qa.png'
@@ -160,15 +161,28 @@ class TestQL_QA(unittest.TestCase):
         self.image = desispec.image.Image(img_pix, img_ivar, img_mask, camera='z1',meta=hdr)
         desispec.io.write_image(self.pixfile, self.image)
 
-        self.fibermap = desispec.io.empty_fibermap(30)
-        self.fibermap['OBJTYPE'][::2]='ELG'
-        self.fibermap['OBJTYPE'][::3]='STD'
-        self.fibermap['OBJTYPE'][::5]='QSO'
-        self.fibermap['OBJTYPE'][::9]='LRG'
-        self.fibermap['OBJTYPE'][::7]='SKY'
-        #- add a filter and arbitrary magnitude
-        self.fibermap['MAG'][:29]=np.tile(np.random.uniform(18,20,29),5).reshape(29,5) #- Last fiber left
-        self.fibermap['FILTER'][:29]=np.tile(['DECAM_Z','..','..','..','..'],(29,1)) #- last fiber left 
+        #- Create a fibermap with purposefully overlapping targeting bits
+        n = 30
+        self.fibermap = desispec.io.empty_fibermap(n)
+        self.fibermap['OBJTYPE'][:] = 'TGT'
+        self.fibermap['DESI_TARGET'][::2] |= desi_mask.ELG
+        self.fibermap['DESI_TARGET'][::5] |= desi_mask.QSO
+        self.fibermap['DESI_TARGET'][::7] |= desi_mask.LRG
+
+        #- add some arbitrary fluxes
+        for key in ['FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']:
+            self.fibermap[key] = 10**((22.5 - np.random.uniform(18, 21, size=n))/2.5)
+
+        #- Make some standards; these still have OBJTYPE = 'TGT'
+        ii = [6,18,29]
+        self.fibermap['DESI_TARGET'][ii] = desi_mask.STD_FAINT
+
+        #- set some targets to SKY
+        ii = self.skyfibers = [5,10,21]
+        self.fibermap['OBJTYPE'][ii] = 'SKY'
+        self.fibermap['DESI_TARGET'][ii] = desi_mask.SKY
+        for key in ['FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']:
+            self.fibermap[key][ii] = np.random.normal(scale=100, size=len(ii))
 
         desispec.io.write_fibermap(self.fibermapfile, self.fibermap)
 
@@ -220,25 +234,26 @@ class TestQL_QA(unittest.TestCase):
         counts2=qalib.countpix(pix,nsig=4) #- counts above 4 sigma
         self.assertLess(counts2,counts1)
 
-    def test_sky_resid(self):
-        import copy
-        param = dict(
-                     PCHI_RESID=0.05,PER_RESID=95.,BIN_SZ=0.1)
-        qadict=qalib.sky_resid(param,self.frame,self.skymodel,quick_look=True)
-        kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
-        self.assertEqual(qadict['NSKY_FIB'],len(kk))
-
-        #- run with different sky flux
-        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
-        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
-        frame1=copy.deepcopy(self.frame)
-        frame2=copy.deepcopy(self.frame)
-        desispec.sky.subtract_sky(frame1,skym1)
-        desispec.sky.subtract_sky(frame2,skym2)
-
-        qa1=qalib.sky_resid(param,frame1,skym1)
-        qa2=qalib.sky_resid(param,frame2,skym2)
-        self.assertLess(qa1['MED_RESID'],qa2['MED_RESID']) #- residuals must be smaller for case 1
+# RS: remove this test because this QA isn't used
+#    def test_sky_resid(self):
+#        import copy
+#        param = dict(
+#                     PCHI_RESID=0.05,PER_RESID=95.,BIN_SZ=0.1)
+#        qadict=qalib.sky_resid(param,self.frame,self.skymodel,quick_look=True)
+#        kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
+#        self.assertEqual(qadict['NSKY_FIB'],len(kk))
+#
+#        #- run with different sky flux
+#        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
+#        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
+#        frame1=copy.deepcopy(self.frame)
+#        frame2=copy.deepcopy(self.frame)
+#        desispec.sky.subtract_sky(frame1,skym1)
+#        desispec.sky.subtract_sky(frame2,skym2)
+#
+#        qa1=qalib.sky_resid(param,frame1,skym1)
+#        qa2=qalib.sky_resid(param,frame2,skym2)
+#        self.assertLess(qa1['RESID'],qa2['RESID']) #- residuals must be smaller for case 1
 
     def testSignalVsNoise(self):
         import copy
@@ -265,9 +280,6 @@ class TestQL_QA(unittest.TestCase):
         #- test for tracer not present 
         nullfibermap=desispec.io.empty_fibermap(10)
         qa=qalib.SignalVsNoise(self.frame,params)
-
-        self.assertEqual(self.fibermap['MAG'][29][0],0)   #- No mag for last fiber
-        self.assertEqual(self.fibermap['FILTER'][29][0],'') #- No filter for last fiber
 
         self.assertEqual(len(qa['MEDIAN_SNR']),30)
 
@@ -430,7 +442,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["singleqa"]=None
         qargs["param"]={'B_CONT': ["4000, 4500", "5250, 5550"],'R_CONT': ["5950, 6200", "6990, 7230"],'Z_CONT': ["8120, 8270", "9110, 9280"]}
         resl=qa(inp,**qargs)
-        self.assertTrue(resl["METRICS"]["SKYFIBERID"]==[0,7,14,21,28]) #- as defined in the fibermap
+        self.assertTrue(resl["METRICS"]["SKYFIBERID"]==self.skyfibers) #- as defined in the fibermap
         self.assertTrue(resl["METRICS"]["SKYCONT"]>0)
         
     def testSkyPeaks(self):

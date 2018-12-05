@@ -3,6 +3,8 @@
 # Sean McManus 2015/11/17
 # Adapted for DESI: Benjamin Weaver 2018-0627
 #
+# DESI Environment
+source /global/common/software/desi/desi_environment.sh master
 # Program or script you want to run
 PROGRAM=desi_dts.sh
 # Command line options for PRGFILE
@@ -17,11 +19,20 @@ PRGFILE=$(basename $PROGRAM)
 
 THISHOST=$(hostname -s)
 
+# The existence of this file will shut down data transfers.
+kill_switch=${HOME}/stop_dts
+
 start() {
+
+  if [ -f ${kill_switch} ]; then
+    echo "${kill_switch} detected, will not attempt to start $PRGFILE."
+    return 0
+  fi
   if [ "$(pgrep $PRGFILE 2> /dev/null)" ]; then
     echo "$THISHOST $PRGFILE is already started."
-      return 1
+    return 1
   fi
+
   # Daemonize: You must disconnect stdin, stdout, and stderr, and make it ignore the hangup signal (SIGHUP).
   nohup $NICE $PROGRAM $PROGOPTS  &>/dev/null &
   # Alternatively, use double background

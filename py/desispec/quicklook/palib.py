@@ -26,7 +26,7 @@ def project(x1,x2):
     e1[-1]=1.5*x1[-1]-0.5*x1[-2]
     e1lo = e1[:-1]  # make upper and lower bounds arrays vs. index
     e1hi = e1[1:]
-  
+
     e2=np.zeros(len(x2)+1)
     e2[1:-1]=(x2[:-1]+x2[1:])/2.0  # bin edges for resampled grid
     e2[0]=1.5*x2[0]-0.5*x2[1]
@@ -52,10 +52,14 @@ def project(x1,x2):
                Pr[ii,k[0]+1] = 1.0  # middle bin fully contained in e2
                q = k[0]+2
             else : q = k[0]+1  # point to bin partially contained in current e2 bin
-            emin = e1lo[q]
-            emax = e2[ii+1]
-            dx = (emax-emin)/(e1hi[q]-e1lo[q])
-            Pr[ii,q] = dx
+
+            try:
+                emin = e1lo[q]
+                emax = e2[ii+1]
+                dx = (emax-emin)/(e1hi[q]-e1lo[q])
+                Pr[ii,q] = dx
+            except:
+                pass
 
     #- edge: 
     if x2[-1]==x1[-1]:
@@ -105,7 +109,6 @@ def resample_spec(wave,flux,outwave,ivar=None):
         newivar*=(np.gradient(outwave))**2.0
         return newflux, newivar
 
-
 def get_resolution(wave,nspec,tset,usesigma=False):
     """
     Calculates approximate resolution values at given wavelengths in the format that can directly
@@ -134,4 +137,37 @@ def get_resolution(wave,nspec,tset,usesigma=False):
             resolution_data[ispec]=Rsig.data
             
     return resolution_data
+
+def apply_flux_calibration(frame,fluxcalib):
+    """
+    Apply flux calibration to sky subtracted qframe
+    Use offline algorithm, but assume qframe object is input 
+    and that it is on native ccd wavelength grid
+    Calibration vector is resampled to frame wavelength grid
+
+    frame: QFrame object
+    fluxcalib: FluxCalib object
+
+    Modifies frame.flux and frame.ivar
+    """
+    from desispec.quicklook.palib import resample_spec
+
+    nfibers=frame.nspec
+
+    resample_calib=[]
+    resample_ivar=[]
+    for i in range(nfibers):
+        rescalib,resivar=resample_spec(fluxcalib.wave,fluxcalib.calib[i],frame.wave[i],ivar=fluxcalib.ivar[i])
+        resample_calib.append(rescalib)
+        resample_ivar.append(resivar)
+    fluxcalib.calib=np.array(resample_calib)
+    fluxcalib.ivar=np.array(resample_ivar)
+
+    C = fluxcalib.calib
+    frame.flux=frame.flux*(C>0)/(C+(C==0))
+    frame.ivar*=(fluxcalib.ivar>0)*(C>0)
+    for j in range(nfibers):
+        ok=np.where(frame.ivar[j]>0)[0]
+        if ok.size>0:
+            frame.ivar[j,ok]=1./(1./(frame.ivar[j,ok]*C[j,ok]**2)+frame.flux[j,ok]**2/(fluxcalib.ivar[j,ok]*C[j,ok]**4))
 

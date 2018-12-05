@@ -7,6 +7,7 @@ import numpy as np
 
 from astropy.io import fits
 
+from desitarget.targetmask import desi_mask
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
@@ -115,7 +116,9 @@ class TestBinScripts(unittest.TestCase):
         fibermap = io.empty_fibermap(self.nspec, 1500)
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
-            fibermap['OBJTYPE'][i+1] = 'STD'
+            fibermap['DESI_TARGET'][i] = desi_mask.SKY
+            fibermap['OBJTYPE'][i+1] = 'TGT'
+            fibermap['DESI_TARGET'][i+1] = desi_mask.STD_FAINT
         return fibermap
 
     def _write_fibermap(self):
@@ -168,7 +171,7 @@ class TestBinScripts(unittest.TestCase):
         outputs = [self.fiberflatfile,self.qa_calib_file,self.qafig]
         inputs = [self.framefile,]
         err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, 0)
+        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
 
         #- Confirm that the output file can be read as a fiberflat
         ff1 = io.read_fiberflat(self.fiberflatfile)
@@ -205,7 +208,7 @@ class TestBinScripts(unittest.TestCase):
         inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.stdfile]
         outputs = [self.calibfile,self.qa_data_file,self.qafig,]
         err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, 0)
+        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
 
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)
@@ -227,7 +230,7 @@ class TestBinScripts(unittest.TestCase):
         inputs  = [self.framefile, self.fiberflatfile]
         outputs = [self.skyfile,self.qa_data_file,self.qafig,]
         err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, 0)
+        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
 
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)

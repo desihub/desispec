@@ -7,68 +7,95 @@ IO routines for fibermap.
 import os
 import warnings
 import numpy as np
-from astropy.table import Table
+from astropy.table import Table, Column
 
 from desiutil.depend import add_dependencies
 from desispec.io.util import fitsheader, write_bintable, makepath
 
-fibermap_columns = [
-    ('OBJTYPE', (str, 10)),
-    ('TARGETCAT', (str, 20)),
-    ('BRICKNAME', (str, 8)),
-    ('TARGETID', 'i8'),
-    ('DESI_TARGET', 'i8'),
-    ('BGS_TARGET', 'i8'),
-    ('MWS_TARGET', 'i8'),
-    ('MAG', 'f4', (5,)),
-    ('FILTER', (str, 10), (5,)),
-    ('SPECTROID', 'i4'),
-    ('POSITIONER', 'i4'),   #- deprecated; use LOCATION
-    ('LOCATION',   'i4'),
-    ('DEVICE_LOC', 'i4'),
-    ('PETAL_LOC',  'i4'),
-    ('FIBER', 'i4'),
-    ('LAMBDAREF', 'f4'),
-    ('RA_TARGET', 'f8'),
-    ('DEC_TARGET', 'f8'),
-    ('RA_OBS', 'f8'), ('DEC_OBS', 'f8'),
-    ('X_TARGET', 'f8'), ('Y_TARGET', 'f8'),
-    ('X_FVCOBS', 'f8'), ('Y_FVCOBS', 'f8'),
-    ('Y_FVCERR', 'f4'), ('X_FVCERR', 'f4'),
-    ]
+#- Subset of columns that come from original target catalog
+target_columns = [
+    ('TARGETID',    'i8', '', 'Unique target ID'),
+    ('DESI_TARGET', 'i8', '', 'Dark survey + calibration targeting bits'),
+    ('BGS_TARGET',  'i8', '', 'Bright Galaxy Survey targeting bits'),
+    ('MWS_TARGET',  'i8', '', 'Milky Way Survey targeting bits'),
+    ('SECONDARY_TARGET', 'i8', '', 'Secondary program targeting bits'),
+    #- TBD: COMM_TARGET, SVn_TARGET, ...
+    ('TARGET_RA',   'f8', 'degree', 'Target Right Ascension [degrees]'),
+    ('TARGET_DEC',  'f8', 'degree', 'Target declination [degrees]'),
+    ('TARGET_RA_IVAR', 'f8', '1/degree**2', 'Inverse variance of TARGET_RA'),
+    ('TARGET_DEC_IVAR', 'f8','1/degree**2', 'Inverse variance of TARGET_DEC'),
+    ('BRICKID',     'i8', '', 'Imaging Surveys brick ID'),
+    ('BRICK_OBJID', 'i8', '', 'Imaging Surveys OBJID on that brick'),
+    ('MORPHTYPE', (str, 4), '', 'Imaging Surveys morphological type'),
+    ('PRIORITY',    'i4', '', 'Assignment priority; larger=higher priority'),
+    ('SUBPRIORITY', 'f8', '', 'Assignment subpriority [0-1)'),
+    ('REF_ID',      'i8', '', 'Astrometric catalog reference ID (SOURCE_ID from Gaia)'),
+    ('PMRA',        'f4', 'marcsec/year', 'Proper motion in +RA direction (already including cos(dec))'),
+    ('PMDEC',       'f4', 'marcsec/year', 'Proper motion in +dec direction'),
+    ('PMRA_IVAR',   'f4', 'year**2/marcsec**2', 'Inverse variance of PMRA'),
+    ('PMDEC_IVAR',  'f4', 'year**2/marcsec**2', 'Inverse variance of PMDEC'),
+    ('FLUX_G',      'f4', 'nanomaggies', 'g-band flux'),
+    ('FLUX_R',      'f4', 'nanomaggies', 'r-band flux'),
+    ('FLUX_Z',      'f4', 'nanomaggies', 'z-band flux'),
+    ('FLUX_W1',     'f4', 'nanomaggies', 'WISE W1-band flux'),
+    ('FLUX_W2',     'f4', 'nanomaggies', 'WISE W2-band flux'),
+    ('FLUX_IVAR_G', 'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_G'),
+    ('FLUX_IVAR_R', 'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_R'),
+    ('FLUX_IVAR_Z', 'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_Z'),
+    ('FLUX_IVAR_W1','f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W1'),
+    ('FLUX_IVAR_W2','f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W2'),
+    ('FIBERFLUX_G', 'f4', 'nanomaggies', 'g-band object model flux for 1" seeing and 1.5" diameter fiber'),
+    ('FIBERFLUX_R', 'f4', 'nanomaggies', 'r-band object model flux for 1" seeing and 1.5" diameter fiber'),
+    ('FIBERFLUX_Z', 'f4', 'nanomaggies', 'z-band object model flux for 1" seeing and 1.5" diameter fiber'),
+    ('FIBERFLUX_W1', 'f4', 'nanomaggies', 'W1-band object model flux for 1" seeing and 1.5" diameter fiber'),
+    ('FIBERFLUX_W2', 'f4', 'nanomaggies', 'W2-band object model flux for 1" seeing and 1.5" diameter fiber'),
+    ('FIBERTOTFLUX_G', 'f4', 'nanomaggies', 'like FIBERFLUX_G but including all objects overlapping this location'),
+    ('FIBERTOTFLUX_R', 'f4', 'nanomaggies', 'like FIBERFLUX_R but including all objects overlapping this location'),
+    ('FIBERTOTFLUX_Z', 'f4', 'nanomaggies', 'like FIBERFLUX_Z but including all objects overlapping this location'),
+    ('FIBERTOTFLUX_W1', 'f4', 'nanomaggies', 'like FIBERFLUX_W1 but including all objects overlapping this location'),
+    ('FIBERTOTFLUX_W2', 'f4', 'nanomaggies', 'like FIBERFLUX_W2 but including all objects overlapping this location'),
+    ('MW_TRANSMISSION_G', 'f4', '', 'Milky Way dust transmission in g [0-1]'),
+    ('MW_TRANSMISSION_R', 'f4', '', 'Milky Way dust transmission in r [0-1]'),
+    ('MW_TRANSMISSION_Z', 'f4', '', 'Milky Way dust transmission in z [0-1]'),
+    ('EBV', 'f4', '', 'Galactic extinction E(B-V) reddening from SFD98'),
+    ('PHOTSYS', (str, 1), '', 'N for BASS/MzLS, S for DECam')
+]
 
-fibermap_comments = dict(
-    FIBER        = "Fiber ID [0-4999]",
-    POSITIONER   = "Positioner ID [0-4999] (deprecated)",
-    LOCATION     = "Positioner location ID 1000*PETAL + DEVICE",
-    PETAL_LOC    = "Petal location on focal plane [0-9]",
-    DEVICE_LOC   = "Device location on petal [0-542]",
-    SPECTROID    = "Spectrograph ID [0-9]",
-    TARGETID     = "Unique target ID",
-    TARGETCAT    = "Name/version of the target catalog",
-    BRICKNAME    = "Brickname from target imaging",
-    OBJTYPE      = "Target type [ELG, LRG, QSO, STD, STAR, SKY]",
-    LAMBDAREF    = "Reference wavelength at which to align fiber",
-    DESI_TARGET  = "DESI dark+calib targeting bit mask",
-    BGS_TARGET   = "DESI Bright Galaxy Survey targeting bit mask",
-    MWS_TARGET   = "DESI Milky Way Survey targeting bit mask",
-    RA_TARGET    = "Target right ascension [degrees]",
-    DEC_TARGET   = "Target declination [degrees]",
-    X_TARGET     = "X on focal plane derived from (RA,DEC)_TARGET",
-    Y_TARGET     = "Y on focal plane derived from (RA,DEC)_TARGET",
-    X_FVCOBS     = "X location observed by Fiber View Cam [mm]",
-    Y_FVCOBS     = "Y location observed by Fiber View Cam [mm]",
-    X_FVCERR     = "X location uncertainty from Fiber View Cam [mm]",
-    Y_FVCERR     = "Y location uncertainty from Fiber View Cam [mm]",
-    RA_OBS       = "RA of obs from (X,Y)_FVCOBS and optics [deg]",
-    DEC_OBS      = "dec of obs from (X,Y)_FVCOBS and optics [deg]",
-    MAG          = "magnitudes in each of the filters",
-    FILTER       = "SDSS_R, DECAM_Z, WISE1, etc.",
-    #- Optional columns, used by spectra but not by frames
-    NIGHT        = "Night of exposure YYYYMMDD",
-    EXPID        = "Exposure ID",
-    TILEID       = "Tile ID",
-)
+#- Columns added by fiberassign
+fiberassign_columns = target_columns.copy()
+fiberassign_columns.extend([
+    ('FIBER',       'i4', '', 'Fiber ID on the CCDs [0-4999]'),
+    ('PETAL_LOC',   'i4', '', 'Petal location [0-9]'),
+    ('DEVICE_LOC',  'i4', '', 'Device location on focal plane [0-523]'),
+    ('LOCATION',    'i4', '', 'FP location PETAL_LOC*1000 + DEVICE_LOC'),
+    ('FIBERSTATUS', 'i4', '', 'Fiber status; 0=good'),
+    ('OBJTYPE', (str, 3), '', 'SKY, TGT, NON'),
+    ('LAMBDA_REF',  'f4', 'Angstrom', 'Wavelength at which fiber was centered'),
+    ('DESIGN_X',    'f4', 'mm', 'Expected CS5 X on focal plane'),
+    ('DESIGN_Y',    'f4', 'mm', 'Expected CS5 Y on focal plane'),
+    ('DESIGN_Q',    'f4', 'deg', 'Expected CS5 Q azimuthal coordinate'),
+    ('DESIGN_S',    'f4', 'mm', 'Expected CS5 S radial distance along curved focal surface'),
+    ('NUMTARGET',   'i2', '', 'Number of targets covered by positioner'),
+])
+
+#- Columns added by ICS for final fibermap
+fibermap_columns = fiberassign_columns.copy()
+fibermap_columns.extend([
+    ('FIBER_RA',        'f8', 'degree', 'RA of actual fiber position'),
+    ('FIBER_DEC',       'f8', 'degree', 'DEC of actual fiber position'),
+    ('FIBER_RA_IVAR',   'f4', '1/degree**2', 'Inverse variance of FIBER_RA [not set yet]'),
+    ('FIBER_DEC_IVAR',  'f4', '1/degree**2', 'Inverse variance of FIBER_DEC [not set yet]'),
+    ('DELTA_X',         'f4', 'mm', 'CS5 X difference between requested and actual position'),
+    ('DELTA_Y',         'f4', 'mm', 'CS5 Y difference between requested and actual position'),
+    ('DELTA_X_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_X [not set yet]'),
+    ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
+    ('NUM_ITER',        'i4', '', 'Number of positioner iterations'),
+    ('SPECTROID',       'i4', '', 'Hardware ID of spectrograph'),
+])
+
+#- fibermap_comments[colname] = 'comment to include in FITS header'
+fibermap_comments = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns])
+fibermap_dtype = [tmp[0:2] for tmp in fibermap_columns]
 
 def empty_fibermap(nspec, specmin=0):
     """Return an empty fibermap ndarray to be filled in.
@@ -82,18 +109,20 @@ def empty_fibermap(nspec, specmin=0):
     import desimodel.io
 
     assert 0 <= nspec <= 5000, "nspec {} should be within 0-5000".format(nspec)
-    fibermap = Table(np.zeros(nspec, dtype=fibermap_columns))
-    fibermap['FIBER'] = np.arange(specmin, specmin+nspec)
+    fibermap = Table()
+    for (name, dtype, unit, comment) in fibermap_columns:
+        c = Column(name=name, dtype=dtype, unit=unit, length=nspec)
+        fibermap.add_column(c)
+
+    #- Fill in some values
+    fibermap['FIBER'][:] = np.arange(specmin, specmin+nspec)
     fibers_per_spectrograph = 500
-    fibermap['SPECTROID'] = fibermap['FIBER'] // fibers_per_spectrograph
+    fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
     fiberpos = desimodel.io.load_fiberpos()
     ii = slice(specmin, specmin+nspec)
-    fibermap['X_TARGET'][:]   = fiberpos['X'][ii]
-    fibermap['Y_TARGET'][:]   = fiberpos['Y'][ii]
-    fibermap['X_FVCOBS'][:]   = fiberpos['X'][ii]
-    fibermap['Y_FVCOBS'][:]   = fiberpos['Y'][ii]
-    fibermap['POSITIONER'][:] = fiberpos['LOCATION'][ii]   #- deprecated
+    fibermap['DESIGN_X'][:]   = fiberpos['X'][ii]
+    fibermap['DESIGN_Y'][:]   = fiberpos['Y'][ii]
     fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
 
     if 'PETAL' in fiberpos :
@@ -106,7 +135,17 @@ def empty_fibermap(nspec, specmin=0):
     else :
         print("WARNING, no DEVICE info in desimodel fiberpos")
 
-    fibermap['LAMBDAREF'][:]  = 5400.0
+    fibermap['LAMBDA_REF'][:]  = 5400.0
+    fibermap['NUM_ITER'][:] = 2
+    #- Set MW_TRANSMISSION_* to be slightly less than 1 to trigger dust correction code for testing
+    fibermap['MW_TRANSMISSION_G'][:] = 0.999
+    fibermap['MW_TRANSMISSION_R'][:] = 0.999
+    fibermap['MW_TRANSMISSION_Z'][:] = 0.999
+    fibermap['EBV'][:] = 0.001
+    fibermap['PHOTSYS'][:] = 'S'
+
+    fibermap.meta['EXTNAME'] = 'FIBERMAP'
+    
 
     assert set(fibermap.keys()) == set([x[0] for x in fibermap_columns])
 
@@ -145,7 +184,7 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
     return outfile
 
 
-def read_fibermap(filename) :
+def read_fibermap(filename):
     """Reads a fibermap file and returns its data as an astropy Table
 
     Args:
@@ -154,11 +193,7 @@ def read_fibermap(filename) :
     #- Implementation note: wrapping Table.read() with this function allows us
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
-
     fibermap = Table.read(filename, 'FIBERMAP')
-    if 'FLUX_G' in fibermap.colnames:
-        fibermap = fibermap_new2old(fibermap)
-
     return fibermap
 
 def fibermap_new2old(fibermap):
