@@ -705,39 +705,55 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
                 # Setup
                 s2n_dict = qa_exp.data['frames'][camera]['S2N']
                 med_snr = np.array(s2n_dict['METRICS']['MEDIAN_SNR'])
-                funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME'],
-                                    r2=s2n_dict['METRICS']['r2'])
+                funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
                 fitfunc = funcMap['astro']
+                #
+                import pdb; pdb.set_trace()
+                '''
                 sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
-                coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][sci_idx]
                 all_mags = np.resize(np.array(s2n_dict['METRICS']['MAGNITUDES']), (500, 3))
-                fidx = np.where(np.array(s2n_dict['METRICS']['FILTERS']) == s2n_dict['METRICS']['FIT_FILTER'])[0]
                 mags = all_mags[:, fidx].flatten()
                 gd_mag = np.isfinite(mags)
+                fidx = np.where(np.array(s2n_dict['METRICS']['FILTERS']) == s2n_dict['METRICS']['FIT_FILTER'])[0]
+                '''
 
-                # Need to restrict to Science
-                science_ids = np.array(s2n_dict['METRICS']['SCIENCE_FIBERID'])
-                gd_type = np.zeros_like(gd_mag, dtype=bool)
-                gd_type[science_ids] = True
+                # Loop on object types -- Include stars?
+                tmp_mags, tmp_s2n = [], []
+                for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
+                    coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
 
-                # Second mag cut
-                gd_mag2 = (mags > mag_mnx[0]) & (mags < mag_mnx[1])
+                    '''
+                    # Need to restrict to Science
+                    science_ids = np.array(s2n_dict['METRICS']['SCIENCE_FIBERID'])
+                    gd_type = np.zeros_like(gd_mag, dtype=bool)
+                    gd_type[science_ids] = True
+                    '''
 
-                # Synthesize
-                gd_resid = gd_mag & gd_type & gd_mag2
+                    # Mags
+                    mags=s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
+                    snr=s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
 
-                # Residuals
-                flux = 10 ** (-0.4 * (mags[gd_resid] - 22.5))
-                fit_snr = fitfunc(flux, *coeff)
-                resid = (med_snr[gd_resid] - fit_snr) / fit_snr
+                    # Second mag cut
+                    gd_mag2 = (mags > mag_mnx[0]) & (mags < mag_mnx[1])
 
-                all_resid = np.zeros_like(mags)
-                all_resid[gd_resid] = resid
+                    # Synthesize
+                    gd_resid = gd_mag & gd_type & gd_mag2
 
+                    # Residuals
+                    flux = 10 ** (-0.4 * (mags[gd_resid] - 22.5))
+                    fit_snr = fitfunc(flux, *coeff)
+                    resid = (med_snr[gd_resid] - fit_snr) / fit_snr
+
+                    all_resid = np.zeros_like(mags)
+                    all_resid[gd_resid] = resid
+
+                    # Save
+                    metrics += [all_resid]
+                    tmp_mags += [mags]
+                    tmp_s2n += [med_snr[gd_mag]]
                 # Save
-                metrics += [all_resid]
-                sv_mags += [mags[gd_mag]]
-                sv_s2n += [med_snr[gd_mag]]
+                sv_mags.append(np.concatenate(tmp_mags))
+                sv_s2n.append(np.concatenate(tmp_s2n))
         # Concatenate
         x = np.concatenate(x)
         y = np.concatenate(y)

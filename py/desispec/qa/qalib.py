@@ -551,7 +551,6 @@ def s2n_funcs(exptime=None):
 
     Args:
         exptime: float, optional
-        r2: float, optional  -- RN^2
 
     Returns:
         funcMap: dict
@@ -645,7 +644,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
     qadict["FILTERS"] = ['G', 'R', 'Z']
 
-    qadict["OBJLIST"]=list(objlist)
+    #qadict["OBJLIST"]=list(objlist)
 
     #- Set up fit of SNR vs. Magnitude
 
@@ -685,6 +684,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     snrmag=[]
     badfibs=[]
     fitsnr=[]
+    fitT = []
     elgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.ELG) != 0)[0]
     lrgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.LRG) != 0)[0]
     qsofibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
@@ -756,8 +756,10 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
                         minchi2=chi2
                         fita=guess[0]
                         fitb=guess[1]
+            # Save
             fitcoeff.append([fita,fitb])
             fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
+            fitT.append(T)
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
@@ -779,6 +781,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     qadict["FITCOEFF_TGT"]=fitcoeff
     qadict["SNR_RESID"]=resid_snr
     qadict["FIDSNR_TGT"]=fidsnr_tgt
+    qadict["OBJLIST"]=fitT
     qadict["RA"]=frame.fibermap['TARGET_RA']
     qadict["DEC"]=frame.fibermap['TARGET_DEC']
 

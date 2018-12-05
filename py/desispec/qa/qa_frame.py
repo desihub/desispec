@@ -331,14 +331,10 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
 
     # S/N QA on cframe
     if qatype == 'qa_data':
-        # Obj list
-        objlist = set(frame.fibermap["OBJTYPE"])
-        if 'SKY' in objlist:
-            objlist.remove('SKY')
         # cframe
         cframe_file = frame_file.replace('frame-', 'cframe-')
         cframe = read_frame(cframe_file)
-        qaframe.run_qa('S2N', (cframe, objlist), clobber=clobber)
+        qaframe.run_qa('S2N', (cframe, None), clobber=clobber)
         # Figure?
         if make_plots:
             s2n_dict = copy.deepcopy(qaframe.qa_data['S2N'])
@@ -353,7 +349,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
             s2n_dict['PANAME'] = 'SNRFit'
             s2n_dict['METRICS']['RA'] = frame.fibermap['FIBER_RA']
             s2n_dict['METRICS']['DEC'] = frame.fibermap['FIBER_DEC']
-            #import pdb; pdb.set_trace()
+            objlist = s2n_dict['METRICS']['OBJLIST']
+            # Generate
             qa_plots_ql.plot_SNR(s2n_dict, qafig, objlist, [[]]*len(objlist), coeff)
 
     # FluxCalib QA
