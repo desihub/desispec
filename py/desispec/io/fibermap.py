@@ -95,8 +95,17 @@ def empty_fibermap(nspec, specmin=0):
     fibermap['Y_FVCOBS'][:]   = fiberpos['Y'][ii]
     fibermap['POSITIONER'][:] = fiberpos['LOCATION'][ii]   #- deprecated
     fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
-    fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
-    fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
+
+    if 'PETAL' in fiberpos :
+        fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
+    else :
+        print("WARNING, no PETAL info in desimodel fiberpos")
+
+    if 'DEVICE' in fiberpos :
+        fibermap['DEVICE_LOC'][:]  = fiberpos['DEVICE'][ii]
+    else :
+        print("WARNING, no DEVICE info in desimodel fiberpos")
+
     fibermap['LAMBDAREF'][:]  = 5400.0
 
     assert set(fibermap.keys()) == set([x[0] for x in fibermap_columns])
