@@ -65,9 +65,12 @@ def get_inputs(*args,**kwargs):
     if "qafig" in kwargs: inputs["qafig"]=kwargs["qafig"]
     else: inputs["qafig"]=None
 
+    if "plotconf" in kwargs: inputs["plotconf"]=kwargs["plotconf"]
+    else: inputs["plotconf"]=None
+
     return inputs
 
-def get_outputs(qafile,qafig,retval,plot_func):
+def get_outputs(qafile,qafig,retval,plotconf,plot_func):
     """
     Setup QA file and QA fig
     """
@@ -76,13 +79,20 @@ def get_outputs(qafile,qafig,retval,plot_func):
         log.debug("Output QA data is in {}".format(outfile))
     if qafig is not None:
         import desispec.qa.qa_plots_ql as fig
+        config=None
+        if plotconf:
+            for page in plotconf:
+                for plot in plotconf[page]:
+                    for key in plotconf[page][plot]:
+                        if str(plotconf[page][plot][key]) in retval["METRICS"]:
+                            config=plotconf[page][plot]
         if 'snr' in qafig:
-            plot=getattr(fig,plot_func[0])
-            plot(retval,qafig,plot_func[1],plot_func[2],plot_func[3],plot_func[4],plot_func[5])
+            plotfunc=getattr(fig,plot_func[0])
+            plotfunc(retval,qafig,config,plot_func[1],plot_func[2],plot_func[3],plot_func[4],plot_func[5])
         elif plot_func=='plot_skyRband': pass
         else:
-            plot=getattr(fig,plot_func)
-            plot(retval,qafig)
+            plotfunc=getattr(fig,plot_func)
+            plotfunc(retval,qafig,config)
         log.debug("Output QA fig {}".format(qafig))
 
     return
@@ -421,6 +431,7 @@ class Bias_From_Overscan(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
@@ -479,7 +490,7 @@ class Bias_From_Overscan(MonitoringAlg):
             #retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
             retval["METRICS"]={}
 
-        get_outputs(qafile,qafig,retval,'plot_bias_overscan')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_bias_overscan')
         return retval
 
     def get_default_config(self):
@@ -535,6 +546,7 @@ class Get_RMS(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
@@ -685,7 +697,7 @@ class Get_RMS(MonitoringAlg):
         else:
             retval["METRICS"]={"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
-        get_outputs(qafile,qafig,retval,'plot_RMS')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_RMS')
         return retval    
 
     def get_default_config(self):
@@ -745,6 +757,7 @@ class Calc_XWSigma(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         retval={}
         retval["PANAME"] = paname
@@ -775,7 +788,6 @@ class Calc_XWSigma(MonitoringAlg):
         dp=param['PIXEL_RANGE']/2
         #- Get wavelength ranges around peaks
         peaks=allpeaks['{}_PEAKS'.format(camera[0].upper())]
-        print(peaks)
 
         xfails=[]
         wfails=[]
@@ -899,7 +911,7 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib}#,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
 
-        get_outputs(qafile,qafig,retval,'plot_XWSigma')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_XWSigma')
         return retval
  
     def get_default_config(self):
@@ -954,6 +966,7 @@ class Count_Pixels(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         retval={}
         retval["PANAME"] = paname
@@ -995,7 +1008,7 @@ class Count_Pixels(MonitoringAlg):
 	#        retval["METRICS"]={"NPIX_AMP",npix_amps,'LITFRAC_AMP': litfrac_amps}
         retval["METRICS"]={"LITFRAC_AMP": litfrac_amps}	
 
-        get_outputs(qafile,qafig,retval,'plot_countpix')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_countpix')
         return retval
 
     def get_default_config(self):
@@ -1053,6 +1066,7 @@ class CountSpectralBins(MonitoringAlg):
         qafig=None #inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1115,7 +1129,7 @@ class CountSpectralBins(MonitoringAlg):
 
         retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBERS": good_fibers}
 
-        get_outputs(qafile,qafig,retval,'plot_countspectralbins')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_countspectralbins')
         return retval
 
     def get_default_config(self):
@@ -1170,6 +1184,7 @@ class Sky_Continuum(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1208,7 +1223,7 @@ class Sky_Continuum(MonitoringAlg):
         retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
              
 
-        get_outputs(qafile,qafig,retval,'plot_sky_continuum')        
+        get_outputs(qafile,qafig,retval,plotconf,'plot_sky_continuum')
         return retval
 
     def get_default_config(self):
@@ -1263,6 +1278,7 @@ class Sky_Rband(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1351,7 +1367,7 @@ class Sky_Rband(MonitoringAlg):
 
         retval["METRICS"]={"SKYRBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
 
-        get_outputs(qafile,qafig,retval,'plot_skyRband')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_skyRband')
         return retval
 
     def get_default_config(self):
@@ -1408,7 +1424,8 @@ class Sky_Peaks(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
-        
+        plotconf=inputs["plotconf"]
+
         if isinstance(frame,QFrame):
             frame = frame.asframe()
 
@@ -1446,7 +1463,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
 
-        get_outputs(qafile,qafig,retval,'plot_sky_peaks')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_sky_peaks')
         return retval
 
     def get_default_config(self):
@@ -1508,6 +1525,7 @@ class Sky_Residual(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1541,7 +1559,7 @@ class Sky_Residual(MonitoringAlg):
         for key in qadict.keys():
             retval["METRICS"][key] = qadict[key]
 
-        get_outputs(qafile,qafig,retval,'plot_residuals')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_residuals')
         return retval
 
     def get_default_config(self):
@@ -1596,6 +1614,8 @@ class Integrate_Spec(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+
         if isinstance(frame,QFrame):
             frame = frame.asframe()
         ra=frame.fibermap["TARGET_RA"]
@@ -1732,7 +1752,7 @@ class Integrate_Spec(MonitoringAlg):
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
         retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
-        get_outputs(qafile,qafig,retval,'plot_integral')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_integral')
         return retval    
 
     def get_default_config(self):
@@ -1786,6 +1806,7 @@ class Calculate_SNR(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1833,8 +1854,8 @@ class Calculate_SNR(MonitoringAlg):
 
         rescut=param["RESIDUAL_CUT"]
         sigmacut=param["SIGMA_CUT"]
-        
-        get_outputs(qafile,qafig,retval,['plot_SNR',objlist,badfibs,fitsnr,rescut,sigmacut])
+
+        get_outputs(qafile,qafig,retval,plotconf,['plot_SNR',objlist,badfibs,fitsnr,rescut,sigmacut])
         return retval
 
     def get_default_config(self):
@@ -1891,6 +1912,7 @@ class Check_Resolution(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
 
         retval={}
         retval['PANAME'] = paname
@@ -1934,7 +1956,7 @@ class Check_Resolution(MonitoringAlg):
             
         retval["PARAMS"] = param
 
-        get_outputs(qafile,qafig,retval,'plot_lpolyhist')
+        get_outputs(qafile,qafig,retval,plotconf,'plot_lpolyhist')
         return retval
 
     def get_default_config(self):

@@ -13,7 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. 
     expand_config will expand out to full format as needed by quicklook.setup
     """
-    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plots=None,store_res=None,plotconfig=None):
+    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plots=None,store_res=None):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
@@ -48,8 +48,8 @@ class Config(object):
 
         #- Load plotting configuration file
         self.plotconf = None
-        if plotconfig:
-            with open(plotconfig, 'r') as pf:
+        if plots:
+            with open(plots, 'r') as pf:
                 self.plotconf = yaml.load(pf)
                 pf.close()
 
@@ -280,7 +280,7 @@ class Config(object):
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa,
-                            'plots' : self.plots
+                            'plots' : self.plots, 'plotconf':self.plotconf
                             }
                 if qa == 'Calc_XWSigma':
                     qaopts[qa]['Peaks']=self.algorithms['Initialize']['PEAKS']

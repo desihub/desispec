@@ -1,15 +1,13 @@
 # Example Configuration to plot desired metrics
-#- Metrics to be plotted: check qa_quicklook.py, qalib.py, or output jsons for available metrics
-METRICS: NOISE_AMP
-#- Type of plot: AMP (per amp plots), FIBER (per fiber plots), PETAL (focal plane plot per camera)
-TYPE: AMP
-#- Title of plot/x & y variables
-TITLE: RMS Noise per amp
-XTITLE: None
-YTITLE: None
-#- Does plot require heatmap?
-HEATMAP: True
-#- Limit x & y ranges if applicable
-XLIMIT: None
-YLIMIT: None
+PAGE1:
+    noise_per_amp: {TYPE: PATCH, XVALS: NOISE_AMP, TITLE: Noise per amp, GRID: [2,2]}
+
+PAGE2:
+    bias_per_amp: {TYPE: PATCH, XVALS: BIAS_AMP, TITLE: Bias per amp, GRID: [2,2]}
+
+PAGE3:
+    skycont: {TYPE: 2DPLOT, XVALS: SKYFIBERID, YVALS: SKYCONT_FIBER, TITLE: Sky Continua, XTITLE: Fiber ID, YTITLE: Sky continuum (counts), YRANGE: [140,180]}
+
+PAGE4:
+    specmag_petal: {TYPE: 3DPLOT, XVALS: RA, YVALS: DEC, ZVALS: SPEC_MAGS, TITLE: Spectral Magnitudes on the Focal Plane, XTITLE: RA, YTITLE: DEC, HEAT: Blues}
 

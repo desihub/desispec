@@ -13,7 +13,7 @@ from matplotlib.ticker import FormatStrFormatter
 from desispec.qa import qalib
 from desispec.qa.qalib import s2n_funcs
 
-def plot_countspectralbins(qa_dict,outfile):
+def plot_countspectralbins(qa_dict,outfile,config):
     """
     Plot count spectral bins.
 
@@ -66,7 +66,7 @@ def plot_countspectralbins(qa_dict,outfile):
     plt.tight_layout()
     fig.savefig(outfile)
 
-def plot_countpix(qa_dict,outfile):
+def plot_countpix(qa_dict,outfile,config):
     
     """
     Plot pixel counts above some threshold
@@ -135,7 +135,7 @@ def plot_countpix(qa_dict,outfile):
     plt.tight_layout()
     fig.savefig(outfile)
 
-def plot_bias_overscan(qa_dict,outfile):
+def plot_bias_overscan(qa_dict,outfile,config):
     
     """
     Map of bias from overscan from 4 regions of CCD
@@ -144,20 +144,25 @@ def plot_bias_overscan(qa_dict,outfile):
         qa_dict: qa dictionary from bias_from_overscan qa
         outfile : pdf file of the plot
     """
-    
     expid = qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname = qa_dict["PANAME"]
     params = qa_dict["PARAMS"]
     exptime = qa_dict["EXPTIME"]
-    
-    #bias=qa_dict["METRICS"]["BIAS"]
-    bias_amp=qa_dict["METRICS"]["BIAS_AMP"]
+
+    if config:
+        title=config["TITLE"]
+        bias_amp=qa_dict["METRICS"][config["XVALS"]]
+        grid=config["GRID"]
+    else:
+        title="Bias from overscan region after {}, Camera: {}, ExpID: {}".format(paname,camera,expid)
+        bias_amp=qa_dict["METRICS"]["BIAS_AMP"]
+        grid=[2,2]
+
     fig=plt.figure()
-    plt.suptitle("Bias from overscan region after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    plt.suptitle(title,fontsize=10,y=0.99)
     ax1=fig.add_subplot(111)
-    heatmap1=ax1.pcolor(bias_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    #plt.title('Bias = {:.4f}'.format(bias/exptime), fontsize=10)
+    heatmap1=ax1.pcolor(bias_amp.reshape(grid[0],grid[1]),cmap=plt.cm.OrRd)
     ax1.set_xlabel("Avg. bias value per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
@@ -179,7 +184,7 @@ def plot_bias_overscan(qa_dict,outfile):
                  )
     fig.savefig(outfile)
 
-def plot_XWSigma(qa_dict,outfile):
+def plot_XWSigma(qa_dict,outfile,config):
 
     """
     Plot XWSigma
@@ -187,9 +192,7 @@ def plot_XWSigma(qa_dict,outfile):
     Args:
         qa_dict: qa dictionary from countpix qa
         outfile : file of the plot
-    """
-
-    
+    """    
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
@@ -271,7 +274,7 @@ def plot_XWSigma(qa_dict,outfile):
     plt.tight_layout()
     fig.savefig(outfile)
     
-def plot_RMS(qa_dict,outfile):
+def plot_RMS(qa_dict,outfile,config):
     """
     Plot RMS
     
@@ -279,25 +282,27 @@ def plot_RMS(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
-
-    
-    #rms=qa_dict["METRICS"]["NOISE"]
-    rms_amp=qa_dict["METRICS"]["NOISE_AMP"]
-    #rms_over=qa_dict["METRICS"]["NOISE_OVER"]
-    rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
-    # arm=qa_dict["ARM"]
-    # spectrograph=qa_dict["SPECTROGRAPH"]
-    camera = qa_dict["CAMERA"]
-
+    camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
 
     fig=plt.figure()
-    plt.suptitle("NOISE image counts per amplifier, Camera: {}, ExpID: {}".format(camera,expid),fontsize=10,y=0.99)
-    ax1=fig.add_subplot(211)
-    heatmap1=ax1.pcolor(rms_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    #plt.title('NOISE = {:.4f}'.format(rms), fontsize=10)
-    ax1.set_xlabel("NOISE per Amp (photon counts)",fontsize=10)
+    if config:
+        title=config["TITLE"]
+        rms_amp=qa_dict["METRICS"][config["XVALS"]]
+        grid=config["GRID"]
+        ax1=fig.add_subplot(111)
+    else:
+        title="NOISE image counts per amplifier, Camera: {}, ExpID: {}".format(camera,expid)
+        rms_amp=qa_dict["METRICS"]["NOISE_AMP"]
+        grid=[2,2]
+        ax1=fig.add_subplot(211)
+
+    rms_over_amp=qa_dict["METRICS"]["NOISE_OVERSCAN_AMP"]
+
+    plt.suptitle(title,fontsize=10,y=0.99)
+    heatmap1=ax1.pcolor(rms_amp.reshape(grid[0],grid[1]),cmap=plt.cm.OrRd)
+#    ax1.set_xlabel("NOISE per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
     ax1.annotate("Amp 1\n{:.3f}".format(rms_amp[0]),
@@ -316,31 +321,31 @@ def plot_RMS(qa_dict,outfile):
                  xy=(1.4,1.4),
                  fontsize=10
                  )
-    ax2=fig.add_subplot(212)
-    heatmap2=ax2.pcolor(rms_over_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    #plt.title('NOISE Overscan = {:.4f}'.format(rms_over), fontsize=10)
-    ax2.set_xlabel("NOISE Overscan per Amp (photon counts)",fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
-    ax2.tick_params(axis='y',labelsize=10,labelleft=False)
-    ax2.annotate("Amp 1\n{:.3f}".format(rms_over_amp[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-    ax2.annotate("Amp 2\n{:.3f}".format(rms_over_amp[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-    ax2.annotate("Amp 3\n{:.3f}".format(rms_over_amp[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-    ax2.annotate("Amp 4\n{:.3f}".format(rms_over_amp[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
+    if not config:
+        ax2=fig.add_subplot(212)
+        heatmap2=ax2.pcolor(rms_over_amp.reshape(2,2),cmap=plt.cm.OrRd)
+        ax2.set_xlabel("NOISE Overscan per Amp (photon counts)",fontsize=10)
+        ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax2.tick_params(axis='y',labelsize=10,labelleft=False)
+        ax2.annotate("Amp 1\n{:.3f}".format(rms_over_amp[0]),
+                     xy=(0.4,0.4),
+                     fontsize=10
+                     )
+        ax2.annotate("Amp 2\n{:.3f}".format(rms_over_amp[1]),
+                     xy=(1.4,0.4),
+                     fontsize=10
+                     )
+        ax2.annotate("Amp 3\n{:.3f}".format(rms_over_amp[2]),
+                     xy=(0.4,1.4),
+                     fontsize=10
+                     )
+        ax2.annotate("Amp 4\n{:.3f}".format(rms_over_amp[3]),
+                     xy=(1.4,1.4),
+                     fontsize=10
+                     )
     fig.savefig(outfile)
 
-def plot_integral(qa_dict,outfile):
+def plot_integral(qa_dict,outfile,config):
     import matplotlib.ticker as ticker
     """
     Plot integral.
@@ -352,24 +357,40 @@ def plot_integral(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    integral=np.array(qa_dict["METRICS"]["SPEC_MAGS"])
 
     fig=plt.figure()
-    plt.suptitle("Integrated Spectral Magnitudes, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    index=np.arange(len(integral))
     ax1=fig.add_subplot(111)
-    hist_med=ax1.bar(index,integral,color='b',align='center')
-    ax1.set_xlabel('Fibers',fontsize=10)
-    ax1.set_ylabel('Integral (photon counts)',fontsize=10)
-    ax1.tick_params(axis='x',labelsize=10)
-    ax1.tick_params(axis='y',labelsize=10)
-    ax1.xaxis.set_major_locator(ticker.AutoLocator())
-    #ax1.set_xticklabels(std_fiberid)
-    
-    plt.tight_layout()
+    if config:
+        title=config["TITLE"]
+        xtitle=config["XTITLE"]
+        ytitle=config["YTITLE"]
+        ra=qa_dict["METRICS"][config["XVALS"]]
+        dec=qa_dict["METRICS"][config["YVALS"]]
+        specmags=qa_dict["METRICS"][config["ZVALS"]]
+        colormap=config["HEAT"]
+
+        ax1.set_title(title)
+        ax1.set_xlabel(xtitle)
+        ax1.set_xlabel(ytitle)
+        ax1scatter=ax1.scatter(ra,dec,c=specmags,cmap=colormap)
+        fig.colorbar(ax1scatter)
+
+    else:
+        integral=np.array(qa_dict["METRICS"]["SPEC_MAGS"])
+        plt.suptitle("Integrated Spectral Magnitudes, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+        index=np.arange(len(integral))
+        hist_med=ax1.bar(index,integral,color='b',align='center')
+        ax1.set_xlabel('Fibers',fontsize=10)
+        ax1.set_ylabel('Integral (photon counts)',fontsize=10)
+        ax1.tick_params(axis='x',labelsize=10)
+        ax1.tick_params(axis='y',labelsize=10)
+        ax1.xaxis.set_major_locator(ticker.AutoLocator())
+        #ax1.set_xticklabels(std_fiberid)
+        
+        plt.tight_layout()
     fig.savefig(outfile)
 
-def plot_sky_continuum(qa_dict,outfile):
+def plot_sky_continuum(qa_dict,outfile,config):
 
     """
     Plot mean sky continuum from lower and higher wavelength range for each 
@@ -379,33 +400,44 @@ def plot_sky_continuum(qa_dict,outfile):
         qa_dict: dictionary from sky continuum QA
         outfile: pdf file to save the plot
     """
-            
-
-    
     expid=qa_dict["EXPID"]
-    camera = qa_dict["CAMERA"]
+    camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    skycont_fiber=np.array(qa_dict["METRICS"]["SKYCONT_FIBER"])
-    skycont=qa_dict["METRICS"]["SKYCONT"]
-    index=np.arange(skycont_fiber.shape[0])
-    fiberid=qa_dict["METRICS"]["SKYFIBERID"]
+
+    if config:
+        title=config["TITLE"]
+        xtitle=config["XTITLE"]
+        ytitle=config["YTITLE"]
+        fiberid=qa_dict["METRICS"][config["XVALS"]]
+        skycont_fiber=qa_dict["METRICS"][config["YVALS"]]
+        yrange=config["YRANGE"]
+    else:
+        title="Mean Sky Continuum after {}, Camera: {}, ExpID: {}".format(paname,camera,expid)
+        xtitle="SKY fiber ID"
+        ytitle="Sky Continuum (photon counts)"
+        skycont_fiber=np.array(qa_dict["METRICS"]["SKYCONT_FIBER"])
+        fiberid=qa_dict["METRICS"]["SKYFIBERID"]
+
+    index=np.arange(len(skycont_fiber))
     fig=plt.figure()
-    plt.suptitle("Mean Sky Continuum after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    plt.suptitle(title,fontsize=10,y=0.99)
     
     ax1=fig.add_subplot(111)
     hist_med=ax1.bar(index,skycont_fiber,color='b',align='center')
-    ax1.set_xlabel('SKY fiber ID',fontsize=10)
-    ax1.set_ylabel('Sky Continuum (photon counts)',fontsize=10)
+    ax1.set_xlabel(xtitle,fontsize=10)
+    ax1.set_ylabel(ytitle,fontsize=10)
     ax1.tick_params(axis='x',labelsize=6)
     ax1.tick_params(axis='y',labelsize=10)
     ax1.set_xticks(index)
     ax1.set_xticklabels(fiberid)
     ax1.set_xlim(0)
+    if config:
+        ax1.set_ylim(yrange[0],yrange[1])
 
     plt.tight_layout()
     fig.savefig(outfile)
 
-def plot_sky_peaks(qa_dict,outfile):
+def plot_sky_peaks(qa_dict,outfile,config):
     
     """
     Plot rms of sky peaks for smy fibers across amps
@@ -436,7 +468,7 @@ def plot_sky_peaks(qa_dict,outfile):
     plt.tight_layout()
     fig.savefig(outfile)
 
-def plot_residuals(frame,qa_dict,outfile):
+def plot_residuals(frame,qa_dict,outfile,config):
     import random
     """
     Plot one random sky subtracted, fiber flattened spectrum per object type
@@ -516,7 +548,7 @@ def plot_residuals(frame,qa_dict,outfile):
     fig.savefig(outfile)
 
 
-def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
+def plot_SNR(qa_dict,outfile,config,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
     """
     Plot SNR
 
@@ -655,7 +687,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
 
     fig.savefig(outfile)
 
-def plot_lpolyhist(qa_dict,outfile):
+def plot_lpolyhist(qa_dict,outfile,config):
     """
     Plot histogram for each legendre polynomial coefficient in WSIGMA array.
 
