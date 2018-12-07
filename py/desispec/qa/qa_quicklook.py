@@ -79,20 +79,13 @@ def get_outputs(qafile,qafig,retval,plotconf,plot_func):
         log.debug("Output QA data is in {}".format(outfile))
     if qafig is not None:
         import desispec.qa.qa_plots_ql as fig
-        config=None
-        if plotconf:
-            for page in plotconf:
-                for plot in plotconf[page]:
-                    for key in plotconf[page][plot]:
-                        if str(plotconf[page][plot][key]) in retval["METRICS"]:
-                            config=plotconf[page][plot]
         if 'snr' in qafig:
             plotfunc=getattr(fig,plot_func[0])
-            plotfunc(retval,qafig,config,plot_func[1],plot_func[2],plot_func[3],plot_func[4],plot_func[5])
+            plotfunc(retval,qafig,plotconf,plot_func[1],plot_func[2],plot_func[3],plot_func[4],plot_func[5])
         elif plot_func=='plot_skyRband': pass
         else:
             plotfunc=getattr(fig,plot_func)
-            plotfunc(retval,qafig,config)
+            plotfunc(retval,qafig,plotconf)
         log.debug("Output QA fig {}".format(qafig))
 
     return
