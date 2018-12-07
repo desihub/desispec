@@ -11,7 +11,7 @@ PAGE2:
 
 PAGE3:
     Title: Sky Continuum metrics after Applying Fiberflat
-    skycont: {TYPE: 2DPLOT, XVALS: SKYFIBERID, YVALS: SKYCONT_FIBER, TITLE: Sky Continua, XTITLE: Fiber ID, YTITLE: Sky continuum (counts), YRANGE: [140,180]}
+    skycont: {TYPE: 2DPLOT, XVALS: SKYFIBERID, YVALS: SKYCONT_FIBER, TITLE: Sky Continua, XTITLE: Fiber ID, YTITLE: Sky continuum (counts), YRANGE: [100,300]}
 
 PAGE4:
     Title: Integrate Spectra metrics after Flux Calibration

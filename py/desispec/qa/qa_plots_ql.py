@@ -152,6 +152,7 @@ def plot_bias_overscan(qa_dict,outfile,plotconf):
 
     fig=plt.figure()
     ax1=fig.add_subplot(111)
+    plotconfig=[]
     if plotconf:
         for page in plotconf:
             for plot in plotconf[page]:
@@ -161,6 +162,7 @@ def plot_bias_overscan(qa_dict,outfile,plotconf):
                             title=plotconf[page]['Title']
                             plotconfig=plotconf[page][plot]
 
+    if len(plotconfig) != 0:
         plt.suptitle("{}, Expid={}, Camera={}".format(title,expid,camera),fontsize=10,y=0.99)
         plottitle=plotconfig["TITLE"]
         bias_amp=qa_dict["METRICS"][plotconfig["XVALS"]]
@@ -297,8 +299,9 @@ def plot_RMS(qa_dict,outfile,plotconf):
     pa=qa_dict["PANAME"]
 
     fig=plt.figure()
+
+    plotconfig=[]
     if plotconf:
-        plotconfig=[]
         for page in plotconf:
             for plot in plotconf[page]:
                 if plot != 'Title':
@@ -307,6 +310,7 @@ def plot_RMS(qa_dict,outfile,plotconf):
                             title=plotconf[page]['Title']
                             plotconfig.append(plotconf[page][plot])
 
+    if len(plotconfig) != 0:
         plt.suptitle("{}, Expid={}, Camera={}".format(title,expid,camera),fontsize=10,y=0.99)
         nplots=len(plotconfig)
         nrow=ncol=int(np.ceil(np.sqrt(len(plotconfig))))
@@ -395,6 +399,7 @@ def plot_integral(qa_dict,outfile,plotconf):
 
     fig=plt.figure()
     ax1=fig.add_subplot(111)
+    plotconfig=[]
     if plotconf:
         for page in plotconf:
             for plot in plotconf[page]:
@@ -404,6 +409,7 @@ def plot_integral(qa_dict,outfile,plotconf):
                             title=plotconf[page]['Title']
                             plotconfig=plotconf[page][plot]
 
+    if len(plotconfig) != 0:
         plt.suptitle("{}, Expid={}, Camera={}".format(title,expid,camera),fontsize=10,y=0.99)
         plottitle=plotconfig["TITLE"]
         xtitle=plotconfig["XTITLE"]
@@ -450,6 +456,7 @@ def plot_sky_continuum(qa_dict,outfile,plotconf):
 
     fig=plt.figure()
     ax1=fig.add_subplot(111)
+    plotconfig=[]
     if plotconf:
         for page in plotconf:
             for plot in plotconf[page]:
@@ -459,6 +466,7 @@ def plot_sky_continuum(qa_dict,outfile,plotconf):
                             title=plotconf[page]['Title']
                             plotconfig=plotconf[page][plot]
 
+    if len(plotconfig) != 0:
         plt.suptitle("{}, Expid={}, Camera={}".format(title,expid,camera),fontsize=10,y=0.99)
         plottitle=plotconfig["TITLE"]
         xtitle=plotconfig["XTITLE"]
