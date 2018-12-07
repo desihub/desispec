@@ -308,11 +308,13 @@ def plot_RMS(qa_dict,outfile,plotconf):
                             plotconfig.append(plotconf[page][plot])
 
         plt.suptitle("{}, Expid={}, Camera={}".format(title,expid,camera),fontsize=10,y=0.99)
-        for p in range(len(plotconfig)):
+        nplots=len(plotconfig)
+        nrow=ncol=int(np.ceil(np.sqrt(len(plotconfig))))
+        for p in range(nplots):
             plottitle=plotconfig[p]["TITLE"]
             vals=qa_dict["METRICS"][plotconfig[p]["XVALS"]]
             grid=plotconfig[p]["GRID"]
-            ax=fig.add_subplot('21{}'.format(p+1))
+            ax=fig.add_subplot('{}{}{}'.format(nrow,ncol,p+1))
             ax.set_title(plottitle,fontsize=10)
             heatmap=ax.pcolor(vals.reshape(grid[0],grid[1]),cmap='OrRd')
             ax.tick_params(axis='x',labelsize=10,labelbottom=False)

@@ -2,7 +2,8 @@
 PAGE1:
     Title: Get RMS metrics after Preprocessing
     noise_per_amp: {TYPE: PATCH, XVALS: NOISE_AMP, TITLE: Noise per amp, GRID: [2,2]}
-    overscan_noise_per_amp: {TYPE: PATCH, XVALS: NOISE_AMP, TITLE: Overscan Noise per amp, GRID: [2,2]}
+    overscan_noise_per_amp: {TYPE: PATCH, XVALS: NOISE_OVERSCAN_AMP, TITLE: Overscan Noise per amp, GRID: [2,2]}
+    sigma_amp: {TYPE: PATCH, XVALS: SIGMA_AMP, TITLE: Sigma amp, GRID: [2,2]}
 
 PAGE2:
     Title: Bias from Overscan metrics after Preprocessing
