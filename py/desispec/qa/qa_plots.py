@@ -718,13 +718,6 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
                 for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
                     coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
 
-                    '''
-                    # Need to restrict to Science
-                    science_ids = np.array(s2n_dict['METRICS']['SCIENCE_FIBERID'])
-                    gd_type = np.zeros_like(gd_mag, dtype=bool)
-                    gd_type[science_ids] = True
-                    '''
-
                     # Mags
                     mags = np.array(s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1])
                     snr=s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
