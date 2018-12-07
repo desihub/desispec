@@ -544,21 +544,13 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
     dec=[]
     mags=[]
     snrs=[]
-    #o=np.arange(len(objlist))
-    #for t in range(len(o)):
-    #for t in range(len(objlist)):
+    # Loop on object types
     for oid, otype in enumerate(objlist):
-        #otype=list(objlist)[t]
-        #oid=np.where(np.array(list(objlist))==otype)[0][0]
         mag=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
         snr=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
-        #import pdb; pdb.set_trace()
-        #if otype == 'STD':
-        #    fibers = qa_dict['METRICS']['STAR_FIBERID']
-        #else:
         fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
-        #- Remove invalid values for plotting
-        #  JXP -- This is not a good way to code this in Python
+
+        #  JXP -- The following is not a good way to code this in Python
         badobj = badfibs[oid]
         if len(badobj) > 0:
             fibers = np.array(fibers)
