@@ -544,18 +544,13 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
     dec=[]
     mags=[]
     snrs=[]
-    o=np.arange(len(objlist))
-    for t in range(len(o)):
-        otype=list(objlist)[t]
-        oid=np.where(np.array(list(objlist))==otype)[0][0]
+    # Loop on object types
+    for oid, otype in enumerate(objlist):
         mag=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
         snr=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
-        if otype == 'STD':
-            fibers = qa_dict['METRICS']['STAR_FIBERID']
-        else:
-            fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
-        #- Remove invalid values for plotting
-        #  JXP -- This is not a good way to code this in Python
+        fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
+
+        #  JXP -- The following is not a good way to code this in Python
         badobj = badfibs[oid]
         if len(badobj) > 0:
             fibers = np.array(fibers)
@@ -624,7 +619,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
         resid_plot=ax2.scatter(ra,dec,s=2,c=resids,cmap=plt.cm.bwr)
         fig.colorbar(resid_plot,ticks=[np.min(resids),0,np.max(resids)])
 
-    for i in range(len(o)):
+    for i,otype in enumerate(objlist):
         ax=fig.add_subplot('24{}'.format(i+5))
 
         objtype=objlist[i]
@@ -646,7 +641,12 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
         if i == 0:
             ax.set_ylabel('Median S/N**2',fontsize=8)
         ax.set_xlabel('{} Mag ({})\na={:.2f}, B={:.2f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
-        ax.set_xlim(16,24)
+        if otype == 'STAR':
+            ax.set_xlim(16,20)
+        elif otype == 'QSO':
+            ax.set_xlim(17,23)
+        else:
+            ax.set_xlim(20,25)
         ax.tick_params(axis='x',labelsize=6)
         ax.tick_params(axis='y',labelsize=6)
         ax.semilogy(obj_mag,snr2,'b.',markersize=1)

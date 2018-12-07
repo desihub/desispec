@@ -146,7 +146,8 @@ class QA_Exposure(object):
         for camera, frame_file in frame_files.items():
             if rebuild:
                 qafile, qatype = qafile_from_framefile(frame_file)
-                os.remove(qafile)
+                if os.path.isfile(qafile):
+                    os.remove(qafile)
             # Generate qaframe (and figures?)
             _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False)
         # Reload
