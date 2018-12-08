@@ -5,6 +5,8 @@ desispec Change Log
 0.26.1 (unreleased)
 -------------------
 
+* Use new `desiutil.dust.ext_odonnell` function during flux-calibration
+  (PR `#736`_). 
 * Add support for average flux calibration model in ccd_calibration_data
   repo (PR `#735`_).
 * Support mockobs fibermap format with fewer columns (PR `#733`_).
@@ -18,6 +20,7 @@ desispec Change Log
 .. _`#732`: https://github.com/desihub/desispec/pull/732
 .. _`#733`: https://github.com/desihub/desispec/pull/733
 .. _`#735`: https://github.com/desihub/desispec/pull/735
+.. _`#736`: https://github.com/desihub/desispec/pull/736
 
 0.26.0 (2018-11-08)
 -------------------
