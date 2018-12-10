@@ -7,17 +7,21 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 import os
 
+from astropy.table import Table, vstack
+
 from desiutil.log import get_logger
 from desispec.io import read_params
 from desispec import io as desiio
 from desispec.qa.qa_frame import qaframe_from_frame
 from desispec.io.qa import qafile_from_framefile
+from desispec.io import load_qa_multiexp
 
 # log=get_logger()
 
 
 class QA_Exposure(object):
-    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None, no_load=False, **kwargs):
+    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None,
+                 qa_prod_dir=None, no_load=False, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
 
@@ -108,27 +112,38 @@ class QA_Exposure(object):
             except KeyError:
                 print("Keyword {:s} not present!  Could be a problem".format(key))
 
-    def load_qa_data(self, remove=False):
+    def load_qa_data(self, remove=False, multi_root=None):
         """ Load the QA data files for a given exposure (currently yaml)
         Args:
             remove: bool, optional
               Remove QA frame files
         """
-        qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
-                                  expid=self.expid,
-                                  specprod_dir=self.specprod_dir)
-        # Load into frames
-        for camera,qadata_path in qafiles.items():
-            qa_frame = desiio.load_qa_frame(qadata_path)
-            # Remove?
-            if remove:
-                #import pdb; pdb.set_trace()
-                os.remove(qadata_path)
-            # Test
-            for key in ['expid','night']:
-                assert getattr(qa_frame,key) == getattr(self, key)
-            # Save
-            self.data['frames'][camera] = qa_frame.qa_data
+        if multi_root is None:
+            qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
+                                      expid=self.expid,
+                                      specprod_dir=self.specprod_dir)
+            # Load into frames
+            for camera,qadata_path in qafiles.items():
+                qa_frame = desiio.load_qa_frame(qadata_path)
+                # Remove?
+                if remove:
+                    #import pdb; pdb.set_trace()
+                    os.remove(qadata_path)
+                # Test
+                for key in ['expid','night']:
+                    assert getattr(qa_frame,key) == getattr(self, key)
+                # Save
+                self.data['frames'][camera] = qa_frame.qa_data
+        else:
+            # Load
+            mdict = load_qa_multiexp(multi_root)
+            # Parse
+            for key in mdict[self.night][str(self.expid)].keys():
+                # A bit kludgy
+                if len(key) > 2:
+                    continue
+                # Load em
+                self.data['frames'][key] = mdict[self.night][str(self.expid)][key].copy()
 
     def build_qa_data(self, rebuild=False):
         """
@@ -152,6 +167,56 @@ class QA_Exposure(object):
             _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False)
         # Reload
         self.load_qa_data()
+
+    def s2n_table(self):
+        """
+        Generate a flat Table of QA S/N measurements for the Exposure
+          Includes all fibers of the exposure
+
+        Returns:
+
+        """
+        from desispec.qa.qalib import s2n_funcs
+
+        qa_tbl = Table()
+        # Load up
+        for camera in self.data['frames'].keys():
+            # Sub_tbl
+            sub_tbl = Table()
+            sub_tbl['MEDIAN_SNR'] = self.data['frames'][camera]['S2N']['METRICS']['MEDIAN_SNR']
+            sub_tbl['FIBER'] = np.arange(len(sub_tbl), dtype=int)
+            sub_tbl['CAMERA'] = camera
+            sub_tbl['NIGHT'] = self.night
+            sub_tbl['EXPID'] = self.expid
+            # Ugly S/N (Object/fiber based)
+            s2n_dict = self.data['frames'][camera]['S2N']
+            max_o = np.max([len(otype) for otype in s2n_dict['METRICS']['OBJLIST']])
+            objtype = np.array([' '*max_o]*len(sub_tbl))
+            # Others
+            mags = np.zeros_like(sub_tbl['MEDIAN_SNR'].data)
+            resid = -999. * np.ones_like(sub_tbl['MEDIAN_SNR'].data)
+            # Fitting
+            funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
+            fitfunc = funcMap['astro']
+            for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
+                fibers = np.array(s2n_dict['METRICS']['{:s}_FIBERID'.format(otype)])
+                coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
+                # Set me
+                objtype[fibers] = otype
+                mags[fibers] = np.array(s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1])
+
+                # Residuals
+                flux = 10 ** (-0.4 * (mags[fibers] - 22.5))
+                fit_snr = fitfunc(flux, *coeff)
+                resid[fibers] = (sub_tbl['MEDIAN_SNR'][fibers] - fit_snr) / fit_snr
+            # Sub_tbl
+            sub_tbl['MAGS'] = mags
+            sub_tbl['RESID'] = resid
+            # Stack me
+            qa_tbl = vstack([qa_tbl, sub_tbl])
+            import pdb; pdb.set_trace()
+
+
 
     def __repr__(self):
         """ Print formatting
