@@ -20,7 +20,7 @@ from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 from desispec.parallel import default_nproc
 from desispec.io.filters import load_filter
-from desispec.dustextinction import ext_odonnell
+from desiutil.dust import ext_odonnell
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Fit of standard star spectra in frames.")

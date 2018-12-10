@@ -94,7 +94,7 @@ class Initialize(pas.PipelineAlg):
         #- Get peaks from configuration file
         general_info['B_PEAKS']=peaks['B_PEAKS']
         general_info['R_PEAKS']=peaks['R_PEAKS']
-        general_info['z_PEAKS']=peaks['Z_PEAKS']
+        general_info['Z_PEAKS']=peaks['Z_PEAKS']
 
         #- Get current time information
         general_info['QLrun_datime_UTC']=datetime.datetime.now(tz=pytz.utc).isoformat()

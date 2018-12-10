@@ -12,6 +12,7 @@ import astropy.io.fits as fits
 from desiutil.log import get_logger
 from desispec.util import runcmd
 from desispec.io import read_raw,read_image,read_fibermap,write_image,write_fiberflat,read_fiberflat
+from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.io.xytraceset import read_xytraceset
 from desispec.preproc import read_ccd_calibration
 from desispec.qproc.io import read_qframe,write_qframe
@@ -53,6 +54,8 @@ parser.add_argument('--input-fiberflat', type = str, default = None, required = 
                     help = 'use this fiberflat file and apply it')
 parser.add_argument('--skysub', action='store_true',
                     help = 'perform as simple sky subtraction')
+parser.add_argument('--fluxcalib', action='store_true',
+                    help = 'flux calibration')
 
 t0   = time.time()
 log  = get_logger()
@@ -147,6 +150,28 @@ if args.skysub :
     log.info("sky subtraction")
     qproc_sky_subtraction(qframe)
 
+if args.fluxcalib :
+
+    if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
+        print("ERROR: set the DESI_CCD_CALIBRATION_DATA environment variable")
+        print("Type 'desi_qproc --help' for more options")
+        sys.exit(12)
+    log.info("Choosing fluxcalib using $DESI_CCD_CALIBRATION_DATA/ccd_calibration.yaml and the image header")
+    if calibration_data is None :
+        calibration_data = read_ccd_calibration(image.meta,primary_header)
+    fluxcalib_filename = os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],calibration_data["FLUXCALIB"])
+    fluxcalib = read_average_flux_calibration(fluxcalib_filename)
+    log.info("read average calib in {}".format(fluxcalib_filename))
+    seeing  = qframe.meta["SEEING"]
+    airmass = qframe.meta["AIRMASS"]
+    exptime = qframe.meta["EXPTIME"]
+    exposure_calib = fluxcalib.value(seeing=seeing,airmass=airmass)
+    for q in range(qframe.nspec) :
+        fiber_calib=np.interp(qframe.wave[q],fluxcalib.wave,exposure_calib)*exptime
+        inv_calib = (fiber_calib>0)/(fiber_calib + (fiber_calib==0))
+        qframe.flux[q] *= inv_calib
+        qframe.ivar[q] *= fiber_calib**2*(fiber_calib>0)
+    
 fibers  = parse_fibers(args.fibers)
 if fibers is None : 
     fibers = qframe.flux.shape[0]

@@ -26,6 +26,7 @@ Algorithms:
                 PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_BRIGHT_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_DARK_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_GRAY_REF:[0.3,0.3,0.4,0.4]}
             Calc_XWSigma:
                 PARAMS: {PIXEL_RANGE: 7,
+                         MAX_SIGMA: 10,
                          XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
                          XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_BRIGHT_REF:[1.1,1.8],XWSIGMA_DARK_REF:[1.1,1.8],XWSIGMA_GRAY_REF:[1.1,1.8]}
     Flexure:

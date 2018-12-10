@@ -5,15 +5,22 @@ desispec Change Log
 0.26.1 (unreleased)
 -------------------
 
+* Use new `desiutil.dust.ext_odonnell` function during flux-calibration
+  (PR `#736`_). 
+* Add support for average flux calibration model in ccd_calibration_data
+  repo (PR `#735`_).
 * Support mockobs fibermap format with fewer columns (PR `#733`_).
 * Upgrade data transfer script and add additional scripts (PR `#732`_).
 * Fix desi_zcatalog RA_TARGET vs. TARGET_RA (PR `#723`_).
 * Update redshift database data model and workaround a minor bad data problem (PR `#722`_).
+* Refactor offline QA (S/N) to work with updated object typing
 
 .. _`#722`: https://github.com/desihub/desispec/pull/722
 .. _`#723`: https://github.com/desihub/desispec/pull/723
 .. _`#732`: https://github.com/desihub/desispec/pull/732
 .. _`#733`: https://github.com/desihub/desispec/pull/733
+.. _`#735`: https://github.com/desihub/desispec/pull/735
+.. _`#736`: https://github.com/desihub/desispec/pull/736
 
 0.26.0 (2018-11-08)
 -------------------

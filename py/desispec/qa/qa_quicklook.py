@@ -764,7 +764,7 @@ class Calc_XWSigma(MonitoringAlg):
         
         if image.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
-            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+            retval["PROGRAM"]=program=fibmap[1].header['PROGRAM']
 
         retval["NIGHT"] = image.meta["NIGHT"]
 
@@ -783,6 +783,8 @@ class Calc_XWSigma(MonitoringAlg):
         dp=param['PIXEL_RANGE']/2
         #- Get wavelength ranges around peaks
         peaks=allpeaks['{}_PEAKS'.format(camera[0].upper())]
+        #- Maximum allowed fit sigma value
+        maxsigma=param['MAX_SIGMA']
 
         xfails=[]
         wfails=[]
@@ -815,7 +817,11 @@ class Calc_XWSigma(MonitoringAlg):
                 try:
                     xpopt,xpcov=curve_fit(qalib.gauss,np.arange(len(xpix_peak)),image.pix[int(ypixel),xpix_peak])
                     xs=np.abs(xpopt[2])
-                    xsig.append(xs)
+                    if xs <= maxsigma:
+                        xsig.append(xs)
+                    else:
+                        xfail=[fiber,peaks[peak]]
+                        xfails.append(xfail)
                 except:
                     xfail=[fiber,peaks[peak]]
                     xfails.append(xfail)
@@ -823,7 +829,11 @@ class Calc_XWSigma(MonitoringAlg):
                 try:
                     wpopt,wpcov=curve_fit(qalib.gauss,np.arange(len(ypix_peak)),image.pix[ypix_peak,int(xpixel)])
                     ws=np.abs(wpopt[2])
-                    wsig.append(ws)
+                    if ws <= maxsigma:
+                        wsig.append(ws)
+                    else:
+                        wfail=[fiber,peaks[peak]]
+                        wfails.append(wfail)
                 except:
                     wfail=[fiber,peaks[peak]]
                     wfails.append(wfail)
@@ -873,10 +883,10 @@ class Calc_XWSigma(MonitoringAlg):
 
         #SE: mention the example here when the next lines are ineffective and when they are effective in removing the NaN from XWSIGMA_AMP--> XWSIGMA itself no longer includes any NaN value. As we both know, this is not the way to properly deal with NaNs -->let's see if switching to non-scipy fuction would bring about a better solution
         if len(xsigma)==0:
-            xsigma = [param['XWSIGMA_REF'][0]]
+            xsigma=[param['XWSIGMA_{}_REF'.format(program.upper())][0]]
 
         if len(wsigma)==0:
-            wsigma=[param['XWSIGMA_REF'][1]]
+            wsigma=[param['XWSIGMA_{}_REF'.format(program.upper())][1]]
 
         #- Combine metrics for x and w
         xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
@@ -1657,21 +1667,21 @@ class Integrate_Spec(MonitoringAlg):
         magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
             
         #- Get filter response information from speclite
-        if os.path.exists(os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite')):
-            responsefile=os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite','speclite','data','filters','{}.ecsv'.format(responsefilter))
-        else:
-            log.critical("Must have speclite package and define DESI_PRODUCT_ROOT (your DESI software area) to compute fiber magnitudes.")
+        try:
+            from pkg_resources import resource_filename
+            responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+            #- Grab wavelength and response information from file
+            rfile=np.genfromtxt(responsefile)
+            rfile=rfile[1:] # remove wavelength/response labels
+            rwave=np.zeros(rfile.shape[0])
+            response=np.zeros(rfile.shape[0])
+            for i in range(rfile.shape[0]):
+                rwave[i]=10.*rfile[i][0] # convert to angstroms
+                response[i]=rfile[i][1]
+        except:
+            log.critical("Could not find filter response file, can't compute spectral magnitudes")
 
-        #- Grab wavelength and response information from file
-        rfile=np.genfromtxt(responsefile)
-        rfile=rfile[1:] # remove wavelength/response labels
-        rwave=np.zeros(rfile.shape[0])
-        response=np.zeros(rfile.shape[0])
-        for i in range(rfile.shape[0]):
-            rwave[i]=10.*rfile[i][0] # convert to angstroms
-            response[i]=rfile[i][1]
-
-        #- Put 
+        #- Convole flux with response information 
         res=np.zeros(frame.wave.shape)
         for w in range(response.shape[0]):
             if w >= 1 and w<= response.shape[0]-2:
