@@ -5,6 +5,8 @@ desispec Change Log
 0.26.1 (unreleased)
 -------------------
 
+* DB exposures table loading allows NaN entries for RA,DEC,SEEING,etc.
+  for arc and flat calib exposures (PR `#743`_).
 * Use new `desiutil.dust.ext_odonnell` function during flux-calibration
   (PR `#736`_). 
 * Add support for average flux calibration model in ccd_calibration_data
@@ -21,6 +23,7 @@ desispec Change Log
 .. _`#733`: https://github.com/desihub/desispec/pull/733
 .. _`#735`: https://github.com/desihub/desispec/pull/735
 .. _`#736`: https://github.com/desihub/desispec/pull/736
+.. _`#743`: https://github.com/desihub/desispec/pull/743
 
 0.26.0 (2018-11-08)
 -------------------
