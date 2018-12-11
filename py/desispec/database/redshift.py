@@ -362,7 +362,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         return
     if maxrows == 0:
         maxrows = len(data)
-    log.info("Read data from {} HDU {}.".format(filepath, hdu))
+    log.info("Read data from %s HDU %s", filepath, hdu)
     try:
         colnames = data.names
     except AttributeError:
@@ -470,7 +470,7 @@ def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
     else:
         log.error("Unrecognized data file, %s!", filepath)
         return
-    log.info("Read data from {} HDU {}.".format(filepath, hdu))
+    log.info("Read data from %s HDU %s", filepath, hdu)
     try:
         colnames = data.names
     except AttributeError:
@@ -538,7 +538,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
         brickname = os.path.basename(os.path.dirname(f))
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
-        log.info("Read data from {} HDU {}.".format(f, hdu))
+        log.info("Read data from %s HDU %s.", f, hdu)
         good_targetids = ((data['TARGETID'] != 0) & (data['TARGETID'] != -1))
         #
         # If there are too many targetids, the in_ clause will blow up.
@@ -655,7 +655,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
         epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
-        log.info("Read data from {} HDU {}".format(f, hdu))
+        log.info("Read data from %s HDU %s", f, hdu)
         for col in data.names[:data_index]:
             if data[col].dtype.kind == 'f':
                 bad = np.isnan(data[col])
