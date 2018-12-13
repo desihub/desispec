@@ -56,7 +56,6 @@ class Truth(SchemaMixin, Base):
 
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     mockid = Column(BigInteger, nullable=False)
-    contam_target = Column(BigInteger, nullable=False)
     truez = Column(Float, nullable=False)
     truespectype = Column(String, nullable=False)
     templatetype = Column(String, nullable=False)
