@@ -302,7 +302,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         if make_plots:
             # Do it
             qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=expid,
-                                  specprod_dir=specprod_dir, outdir=output_dir)
+                                  qaprod_dir=qaprod_dir, specprod_dir=specprod_dir, outdir=output_dir)
             if (not os.path.isfile(qafig)) or clobber:
                 qa_plots.frame_fiberflat(qafig, qaframe, frame, fiberflat)
     # SkySub QA
@@ -337,9 +337,9 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
                 write=True
             if make_plots:
                 qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir, outdir=output_dir)
+                                      specprod_dir=specprod_dir, outdir=output_dir, qaprod_dir=qaprod_dir)
                 qafig2 = meta.findfile('qa_skychi_fig', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir, outdir=output_dir)
+                                      specprod_dir=specprod_dir, outdir=output_dir, qaprod_dir=qaprod_dir)
                 if (not os.path.isfile(qafig)) or clobber:
                     qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
                 #qa_plots.frame_skychi(qafig2, frame, skymodel, qaframe)
@@ -355,7 +355,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         if make_plots:
             s2n_dict = copy.deepcopy(qaframe.qa_data['S2N'])
             qafig = meta.findfile('qa_s2n_fig', night=night, camera=camera, expid=expid,
-                              specprod_dir=specprod_dir, outdir=output_dir)
+                              specprod_dir=specprod_dir, outdir=output_dir, qaprod_dir=qaprod_dir)
             #badfibs = np.where(np.isnan(s2n_dict['METRICS']['MEDIAN_SNR']))[0].tolist()
             #sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
             coeff = s2n_dict['METRICS']['FITCOEFF_TGT']#[sci_idx]
@@ -392,7 +392,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
                 write = True
             if make_plots:
                 qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir, outdir=output_dir)
+                                      specprod_dir=specprod_dir, outdir=output_dir, qaprod_dir=qaprod_dir)
                 if (not os.path.isfile(qafig)) or clobber:
                     qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)  # , model_tuple)
     # Write
