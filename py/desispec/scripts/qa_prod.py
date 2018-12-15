@@ -62,6 +62,7 @@ def main(args) :
         else:
             make_frame_plots = False
         # Run
+        import pdb; pdb.set_trace()
         if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
             qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
 
