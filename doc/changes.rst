@@ -11,13 +11,15 @@ desispec Change Log
 * Upgrade data transfer script and add additional scripts (PR `#732`_).
 * Fix desi_zcatalog RA_TARGET vs. TARGET_RA (PR `#723`_).
 * Update redshift database data model and workaround a minor bad data problem (PR `#722`_).
-* Refactor offline QA (S/N) to work with updated object typing
+* Refactor offline QA (S/N) to work with updated object typing (PR `#737`_)
+* Bug fix in QA (S/N) + refactor exposure slurping
 
 .. _`#722`: https://github.com/desihub/desispec/pull/722
 .. _`#723`: https://github.com/desihub/desispec/pull/723
 .. _`#732`: https://github.com/desihub/desispec/pull/732
 .. _`#733`: https://github.com/desihub/desispec/pull/733
 .. _`#735`: https://github.com/desihub/desispec/pull/735
+.. _`#737`: https://github.com/desihub/desispec/pull/737
 
 0.26.0 (2018-11-08)
 -------------------

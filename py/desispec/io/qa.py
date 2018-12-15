@@ -211,7 +211,7 @@ def load_qa_multiexp(inroot):
 
     Args:
         inroot : str
-          filename without format extension
+          base filename without format extension
     Returns:
         odict : dict
     """

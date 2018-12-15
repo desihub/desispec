@@ -15,13 +15,14 @@ from desispec import io as desiio
 from desispec.qa.qa_frame import qaframe_from_frame
 from desispec.io.qa import qafile_from_framefile
 from desispec.io import load_qa_multiexp
+from desispec.io import qaprod_root
 
 # log=get_logger()
 
 
 class QA_Exposure(object):
     def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None,
-                 qa_prod_dir=None, no_load=False, **kwargs):
+                 qaprod_dir=None, no_load=False, multi_root=None, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
 
@@ -37,6 +38,9 @@ class QA_Exposure(object):
             in_data: dict, optional -- Input data
               Mainly for reading from disk
             no_load: bool, optional -- Do not load QA data (rare)
+            multi_root: str, optional
+              Load QA from a slurped file.
+              This is the root and the path is qaprod_dir
 
         Notes:
 
@@ -52,7 +56,12 @@ class QA_Exposure(object):
 
         self.expid = expid
         self.night = night
+        # Paths
         self.specprod_dir = specprod_dir
+        if qaprod_dir is None:
+            qaprod_dir = qaprod_root(self.specprod_dir)
+        self.qaprod_dir  = qaprod_dir
+
         self.flavor = flavor
         self.meta = {}
         self.data = dict(flavor=self.flavor, expid=self.expid,
@@ -63,10 +72,13 @@ class QA_Exposure(object):
             return
 
         if in_data is None:
-            self.load_qa_data(**kwargs)
+            self.load_qa_data(multi_root=multi_root, **kwargs)
         else:
             assert isinstance(in_data,dict)
             self.data = in_data
+
+        # Others
+        self.qa_s2n = None
 
     def fluxcalib(self, outfil):
         """ Perform QA on fluxcalib results for an Exposure
@@ -136,7 +148,7 @@ class QA_Exposure(object):
                 self.data['frames'][camera] = qa_frame.qa_data
         else:
             # Load
-            mdict = load_qa_multiexp(multi_root)
+            mdict = load_qa_multiexp(os.path.join(self.qaprod_dir, multi_root))
             # Parse
             for key in mdict[self.night][str(self.expid)].keys():
                 # A bit kludgy
@@ -188,6 +200,7 @@ class QA_Exposure(object):
             sub_tbl['CAMERA'] = camera
             sub_tbl['NIGHT'] = self.night
             sub_tbl['EXPID'] = self.expid
+            sub_tbl['CHANNEL'] = camera[0]
             # Ugly S/N (Object/fiber based)
             s2n_dict = self.data['frames'][camera]['S2N']
             max_o = np.max([len(otype) for otype in s2n_dict['METRICS']['OBJLIST']])
@@ -212,10 +225,11 @@ class QA_Exposure(object):
             # Sub_tbl
             sub_tbl['MAGS'] = mags
             sub_tbl['RESID'] = resid
+            sub_tbl['OBJTYPE'] = objtype
             # Stack me
             qa_tbl = vstack([qa_tbl, sub_tbl])
-            import pdb; pdb.set_trace()
-
+        # Hold
+        self.qa_s2n = qa_tbl
 
 
     def __repr__(self):
