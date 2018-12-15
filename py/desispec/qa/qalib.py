@@ -696,9 +696,9 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             ['QSO', qsofibers],
             ['STAR', stdfibers],
             ):
-        objvar=np.array(var)[fibers]
-        medsnr=mediansnr[fibers]
-        mags=np.zeros(medsnr.shape)
+        objvar = np.array(var)[fibers]
+        medsnr = mediansnr[fibers]
+        mags = np.zeros(medsnr.shape)
         ok = (photflux[fibers] > 0)
         mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
 

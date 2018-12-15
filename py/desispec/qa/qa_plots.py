@@ -454,6 +454,7 @@ def exposure_fluxcalib(outfil, qa_data):
     plt.close()
     print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
 
+
 def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     """ QA plots for fiber flat
 
@@ -462,6 +463,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
         qaframe:
         frame:
         fiberflat:
+        clobber: bool, optional
 
     Returns:
         Stuff?

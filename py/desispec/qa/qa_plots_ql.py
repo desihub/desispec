@@ -532,10 +532,10 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
     """
 
     
-    med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
+    med_snr=np.array(qa_dict["METRICS"]["MEDIAN_SNR"])
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
-    resids=qa_dict["METRICS"]["SNR_RESID"]
+    resids= np.array(qa_dict["METRICS"]["SNR_RESID"])
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
