@@ -701,7 +701,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None,
             ):
         objvar = np.array(var)[fibers]
         medsnr = mediansnr[fibers]
-        all_medsnr = med_snr.copy()  # In case any are cut below
+        all_medsnr = medsnr.copy()  # In case any are cut below
         mags = np.zeros(medsnr.shape)
         ok = (photflux[fibers] > 0)
         mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
