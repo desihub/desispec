@@ -121,7 +121,7 @@ class QA_MultiExp(object):
         qa_tbl[metric] = out_list
         qa_tbl['EXPID'] = out_expid
         qa_tbl['CAMERA'] = out_cameras
-        # Add expmeta
+        # Add expmeta (includes DATE-OBS)
         for key in out_expmeta[0].keys():
             tmp_list = []
             for exp_meta in out_expmeta:
