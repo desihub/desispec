@@ -216,7 +216,8 @@ class QA_Frame(object):
             self.init_s2n()
             # Run
             qadict,badfibs,fitsnr = SNRFit(inputs[0], self.night, self.camera, self.expid,
-                                           inputs[1], self.qa_data[qatype]['PARAMS'], fidboundary=None)
+                                           inputs[1], self.qa_data[qatype]['PARAMS'], fidboundary=None,
+                                           offline=True)
             # Remove undesired
             for key in ['RA', 'DEC']:
                 qadict.pop(key)
