@@ -129,6 +129,8 @@ class QA_Exposure(object):
         Args:
             remove: bool, optional
               Remove QA frame files
+            multi_root: str, optional
+              If provided, load the QA from a slurped file (preferred because it is fast)
         """
         if multi_root is None:
             qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
