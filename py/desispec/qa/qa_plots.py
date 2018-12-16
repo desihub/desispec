@@ -1009,52 +1009,61 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     else:  # Show
         plt.show()
 
-def prod_avg_s2n(qa_prod, outfile=None, objs=['ELG'], channel='r', xaxis='MJD'):
+def prod_avg_s2n(qa_prod, outfile=None, optypes=['ELG'], xaxis='MJD',
+                 fiducials=None):
 
-    # Hard-code metric for now
-    defs = {}
-    defs['ELG'] = dict(ref_mag={'r': 23.}, color='b')
-    defs['LRG'] = dict(ref_mag={'r': 22.}, color='r')
+    markers = {'b': '*', 'r': 's', 'z': 'o'}
+    # Hard-code metrics for now
+    if fiducials is None:
+        fiducials = {}
+        fiducials['ELG'] = dict(otype='ELG', channel='r', ref_mag=23., color='g')
+        fiducials['LRG'] = dict(otype='LRG', channel='z', ref_mag=22., color='r')
+        fiducials['QSO'] = dict(otype='QSO', channel='b', ref_mag=22, color='b')
+    # Grab em
+    oplots = [fiducials[ftype] for ftype in optypes]
+    nplots = len(oplots)
 
     # Calculate
-    SN_vals = [[] for i in range(len(objs))]
-    SN_sig = [[] for i in range(len(objs))]
-    mjds = [[] for i in range(len(objs))]
-    exps = [[] for i in range(len(objs))]
-    dates = [[] for i in range(len(objs))]
+    SN_vals = [[] for i in range(nplots)]
+    SN_sig = [[] for i in range(nplots)]
+    mjds = [[] for i in range(nplots)]
+    expids = [[] for i in range(nplots)]
+    texps = [[] for i in range(nplots)]
+    dates = [[] for i in range(nplots)]
 
     # Loop on exposure
     for qaexp in qa_prod.qa_exps:
         if qaexp.qa_s2n is None:
             continue
-        # Loop on objtype
-        for itype, otype in enumerate(objs):
-            gdobj = qaexp.qa_s2n['OBJTYPE'] == otype
+        # Loop on objects to plot
+        for itype, oplot in enumerate(oplots):
+            gdobj = qaexp.qa_s2n['OBJTYPE'] == oplot['otype']
             if not np.any(gdobj):
                 continue
             # S/N
             fit_snrs = []
             for wedge in range(10):
-                gdcam = qaexp.qa_s2n['CAMERA'] == '{:s}{:d}'.format(channel, wedge)
+                gdcam = qaexp.qa_s2n['CAMERA'] == '{:s}{:d}'.format(oplot['channel'], wedge)
                 rows = gdcam & gdobj
                 if not np.any(rows):
                     continue
-                #
+                # Grab the first one;  should be the same for all
                 idx = np.where(rows)[0][0]
                 coeff = qaexp.qa_s2n['COEFFS'][idx,:]
                 # Evaluate
                 funcMap = s2n_funcs(exptime=qaexp.qa_s2n.meta['EXPTIME'])
                 fitfunc = funcMap['astro']
-                flux = 10 ** (-0.4 * (defs[otype]['ref_mag']['r'] - 22.5))
+                flux = 10 ** (-0.4 * (oplot['ref_mag'] - 22.5))
                 fit_snrs.append(fitfunc(flux, *coeff))
             SN_vals[itype].append(np.mean(fit_snrs))
             SN_sig[itype].append(np.std(fit_snrs))
             # Meta
             dates[itype].append(qaexp.qa_s2n.meta['DATE-OBS'])
-            exps[itype].append(qaexp.expid)
+            texps[itype].append(qaexp.qa_s2n.meta['EXPTIME'])
+            expids[itype].append(qaexp.expid)
 
     # A bit more prep
-    for itype, otype in enumerate(objs):
+    for itype, oplot in enumerate(oplots):
         atime = Time(dates[itype], format='isot', scale='utc')
         atime.format = 'mjd'
         mjds[itype] = atime.value
@@ -1064,18 +1073,21 @@ def prod_avg_s2n(qa_prod, outfile=None, objs=['ELG'], channel='r', xaxis='MJD'):
     gs = gridspec.GridSpec(1,1)
     ax = plt.subplot(gs[0])
 
-    for itype, otype in enumerate(objs):
+    for itype, oplot in enumerate(oplots):
         # Empty
         if len(dates[itype]) == 0:
             continue
         # Nope, let's plot
         if xaxis == 'MJD':
             xval = mjds[itype]
+        elif xaxis == 'expid':
+            xval = expids[itype]
+        elif xaxis == 'texp':
+            xval = texps[itype]
         # Plot
-        ac = list(defs[otype]['ref_mag'].keys())[0]
-        ax.errorbar(xval, SN_vals[itype], yerr=SN_sig[itype], label='{:s}: {:s}={:0.1f}'.format(
-                        otype, ac, defs[otype]['ref_mag'][ac]), marker='o', ls='none',
-                    color=defs[otype]['color'])
+        ax.errorbar(xval, SN_vals[itype], yerr=SN_sig[itype], label='{:s}: {:s} {:0.1f}'.format(
+                        oplot['otype'], oplot['channel'], oplot['ref_mag']), ls='none',
+                    color=oplot['color'], marker=markers[oplot['channel']])
 
     ax.set_xlabel(xaxis)
     ax.set_ylabel('<S/N>')
@@ -1087,6 +1099,7 @@ def prod_avg_s2n(qa_prod, outfile=None, objs=['ELG'], channel='r', xaxis='MJD'):
     if outfile is not None:
         plt.savefig(outfile)
         print("Wrote QA file: {:s}".format(outfile))
+        plt.close()
     else:  # Show
         plt.show()
 

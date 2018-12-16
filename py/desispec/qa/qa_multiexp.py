@@ -84,15 +84,12 @@ class QA_MultiExp(object):
             # Exposures
             for expid in self.data[night]:
                 # Cameras
-                exp_meta = self.data[night][expid]['meta']
                 if self.data[night][expid]['flavor'] != 'science':
                     continue
                 # Instantiate
                 qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True)
                 qaexp.parse_multi_qa_dict(self.data)
                 qaexp.s2n_table()
-                # Add meta
-                qaexp.qa_s2n.meta = exp_meta
                 # Append
                 self.qa_exps.append(qaexp)
 

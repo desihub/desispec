@@ -164,6 +164,8 @@ class QA_Exposure(object):
         for key in mdict[self.night][str(self.expid)].keys():
             # A bit kludgy
             if len(key) > 2:
+                if key == 'meta':
+                    self.data[key] = mdict[self.night][str(self.expid)][key].copy()
                 continue
             # Load em
             self.data['frames'][key] = mdict[self.night][str(self.expid)][key].copy()
@@ -249,6 +251,8 @@ class QA_Exposure(object):
             qa_tbl = vstack([qa_tbl, sub_tbl])
         # Hold
         self.qa_s2n = qa_tbl
+        # Add meta
+        self.qa_s2n.meta = self.data['meta']
 
 
     def __repr__(self):
