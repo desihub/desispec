@@ -16,6 +16,10 @@ from desispec.io import write_qa_exposure
 from desispec.io import write_qa_multiexp
 from desispec.io import qaprod_root
 
+from desispec.qa import qa_exposure
+from importlib import reload
+reload(qa_exposure)
+
 from desiutil.log import get_logger
 
 # log = get_logger()
@@ -46,7 +50,7 @@ class QA_MultiExp(object):
         self.qaprod_dir = qaprod_dir
         tmp = specprod_dir.split('/')
         self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
-        # Exposure dict
+        # Exposure dict stored as [night][exposure]
         self.mexp_dict = {}
         # QA Exposure objects
         self.qa_exps = []
@@ -69,8 +73,32 @@ class QA_MultiExp(object):
         # Finish
         self.data = odict
 
+    def load_exposure_s2n(self, nights='all', redo=False):
+        # Already loaded?  Should check for the table
+        if (len(self.qa_exps) > 0) and (not redo):
+            return
+        # Nights
+        for night in self.data:
+            if (night not in nights) and (nights != 'all'):
+                continue
+            # Exposures
+            for expid in self.data[night]:
+                # Cameras
+                exp_meta = self.data[night][expid]['meta']
+                if self.data[night][expid]['flavor'] != 'science':
+                    continue
+                # Instantiate
+                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True)
+                qaexp.parse_multi_qa_dict(self.data)
+                qaexp.s2n_table()
+                # Add meta
+                qaexp.qa_s2n.meta = exp_meta
+                # Append
+                self.qa_exps.append(qaexp)
+
     def get_qa_table(self, qatype, metric, nights='all', channels='all'):
-        """ Generate a table of QA values from .data
+        """ Generate a table of QA values for a specific QA METRIC
+
         Args:
             qatype: str
               FIBERFLAT, SKYSUB

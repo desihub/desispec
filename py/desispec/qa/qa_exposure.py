@@ -149,13 +149,24 @@ class QA_Exposure(object):
         else:
             # Load
             mdict = load_qa_multiexp(os.path.join(self.qaprod_dir, multi_root))
-            # Parse
-            for key in mdict[self.night][str(self.expid)].keys():
-                # A bit kludgy
-                if len(key) > 2:
-                    continue
-                # Load em
-                self.data['frames'][key] = mdict[self.night][str(self.expid)][key].copy()
+            self.parse_multi_qa_dict(mdict)
+
+    def parse_multi_qa_dict(self, mdict):
+        """ Deal with different packing of QA data in slurp file
+
+        Args:
+            mdict: dict
+
+        Returns:
+
+        """
+        # Parse
+        for key in mdict[self.night][str(self.expid)].keys():
+            # A bit kludgy
+            if len(key) > 2:
+                continue
+            # Load em
+            self.data['frames'][key] = mdict[self.night][str(self.expid)][key].copy()
 
     def build_qa_data(self, rebuild=False):
         """
@@ -185,6 +196,8 @@ class QA_Exposure(object):
         Generate a flat Table of QA S/N measurements for the Exposure
           Includes all fibers of the exposure
 
+        Args:
+
         Returns:
 
         """
@@ -205,6 +218,8 @@ class QA_Exposure(object):
             s2n_dict = self.data['frames'][camera]['S2N']
             max_o = np.max([len(otype) for otype in s2n_dict['METRICS']['OBJLIST']])
             objtype = np.array([' '*max_o]*len(sub_tbl))
+            # Coeffs
+            coeffs = np.zeros((len(sub_tbl), len(s2n_dict['METRICS']['FITCOEFF_TGT'][0])))
             # Others
             mags = np.zeros_like(sub_tbl['MEDIAN_SNR'].data)
             resid = -999. * np.ones_like(sub_tbl['MEDIAN_SNR'].data)
@@ -213,7 +228,10 @@ class QA_Exposure(object):
             fitfunc = funcMap['astro']
             for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
                 fibers = np.array(s2n_dict['METRICS']['{:s}_FIBERID'.format(otype)])
+                if len(fibers) == 0:
+                    continue
                 coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
+                coeffs[fibers,:] = np.outer(np.ones_like(fibers), coeff)
                 # Set me
                 objtype[fibers] = otype
                 mags[fibers] = np.array(s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1])
@@ -226,6 +244,7 @@ class QA_Exposure(object):
             sub_tbl['MAGS'] = mags
             sub_tbl['RESID'] = resid
             sub_tbl['OBJTYPE'] = objtype
+            sub_tbl['COEFFS'] = coeffs
             # Stack me
             qa_tbl = vstack([qa_tbl, sub_tbl])
         # Hold

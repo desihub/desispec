@@ -10,6 +10,8 @@ import scipy.stats
 import pdb
 import copy
 
+from astropy.time import Time
+
 from desiutil.log import get_logger
 from desispec import fluxcalibration as dsflux
 from desispec.util import set_backend
@@ -28,6 +30,7 @@ from desiutil import plots as desiu_p
 from desispec.io import read_params
 desi_params = read_params()
 
+from desispec.qa.qalib import s2n_funcs
 
 def brick_zbest(outfil, zf, qabrick):
     """ QA plots for Flux calibration in a Frame
@@ -667,7 +670,6 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
     from desispec.io.meta import find_exposure_night, findfile
     from desispec.io.frame import read_meta_frame, read_frame
     from desispec.io.fiberflat import read_fiberflat
-    from desispec.qa.qalib import s2n_funcs
     log = get_logger()
 
     cclrs = get_channel_clrs()
@@ -929,7 +931,6 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     Returns:
 
     """
-    from astropy.time import Time
 
     log = get_logger()
 
@@ -993,7 +994,6 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     for cc in range(3):
         all_ax[cc].set_xlim(xmin,xmax)
 
-
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     if outfile is not None:
@@ -1006,6 +1006,87 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
         if close:
             plt.close()
             pp.close()
+    else:  # Show
+        plt.show()
+
+def prod_avg_s2n(qa_prod, outfile=None, objs=['ELG'], channel='r', xaxis='MJD'):
+
+    # Hard-code metric for now
+    defs = {}
+    defs['ELG'] = dict(ref_mag={'r': 23.}, color='b')
+    defs['LRG'] = dict(ref_mag={'r': 22.}, color='r')
+
+    # Calculate
+    SN_vals = [[] for i in range(len(objs))]
+    SN_sig = [[] for i in range(len(objs))]
+    mjds = [[] for i in range(len(objs))]
+    exps = [[] for i in range(len(objs))]
+    dates = [[] for i in range(len(objs))]
+
+    # Loop on exposure
+    for qaexp in qa_prod.qa_exps:
+        if qaexp.qa_s2n is None:
+            continue
+        # Loop on objtype
+        for itype, otype in enumerate(objs):
+            gdobj = qaexp.qa_s2n['OBJTYPE'] == otype
+            if not np.any(gdobj):
+                continue
+            # S/N
+            fit_snrs = []
+            for wedge in range(10):
+                gdcam = qaexp.qa_s2n['CAMERA'] == '{:s}{:d}'.format(channel, wedge)
+                rows = gdcam & gdobj
+                if not np.any(rows):
+                    continue
+                #
+                idx = np.where(rows)[0][0]
+                coeff = qaexp.qa_s2n['COEFFS'][idx,:]
+                # Evaluate
+                funcMap = s2n_funcs(exptime=qaexp.qa_s2n.meta['EXPTIME'])
+                fitfunc = funcMap['astro']
+                flux = 10 ** (-0.4 * (defs[otype]['ref_mag']['r'] - 22.5))
+                fit_snrs.append(fitfunc(flux, *coeff))
+            SN_vals[itype].append(np.mean(fit_snrs))
+            SN_sig[itype].append(np.std(fit_snrs))
+            # Meta
+            dates[itype].append(qaexp.qa_s2n.meta['DATE-OBS'])
+            exps[itype].append(qaexp.expid)
+
+    # A bit more prep
+    for itype, otype in enumerate(objs):
+        atime = Time(dates[itype], format='isot', scale='utc')
+        atime.format = 'mjd'
+        mjds[itype] = atime.value
+
+    # Setup
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(1,1)
+    ax = plt.subplot(gs[0])
+
+    for itype, otype in enumerate(objs):
+        # Empty
+        if len(dates[itype]) == 0:
+            continue
+        # Nope, let's plot
+        if xaxis == 'MJD':
+            xval = mjds[itype]
+        # Plot
+        ac = list(defs[otype]['ref_mag'].keys())[0]
+        ax.errorbar(xval, SN_vals[itype], yerr=SN_sig[itype], label='{:s}: {:s}={:0.1f}'.format(
+                        otype, ac, defs[otype]['ref_mag'][ac]), marker='o', ls='none',
+                    color=defs[otype]['color'])
+
+    ax.set_xlabel(xaxis)
+    ax.set_ylabel('<S/N>')
+    legend = ax.legend(loc='upper right', borderpad=0.3,
+                       handletextpad=0.3, fontsize='small')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        print("Wrote QA file: {:s}".format(outfile))
     else:  # Show
         plt.show()
 
