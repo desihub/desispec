@@ -205,7 +205,7 @@ class QA_Exposure(object):
         """
         from desispec.qa.qalib import s2n_funcs
 
-        qa_tbl = Table()
+        sub_tbls = []
         # Load up
         for camera in self.data['frames'].keys():
             # Sub_tbl
@@ -247,8 +247,10 @@ class QA_Exposure(object):
             sub_tbl['RESID'] = resid
             sub_tbl['OBJTYPE'] = objtype
             sub_tbl['COEFFS'] = coeffs
-            # Stack me
-            qa_tbl = vstack([qa_tbl, sub_tbl])
+            # Save
+            sub_tbls.append(sub_tbl)
+        # Stack me
+        qa_tbl = vstack(sub_tbls)
         # Hold
         self.qa_s2n = qa_tbl
         # Add meta
