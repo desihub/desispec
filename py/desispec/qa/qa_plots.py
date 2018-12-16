@@ -550,6 +550,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
+
 def exposure_fiberflat(channel, expid, metric, outfile=None):
     """ Generate an Exposure level plot of a FiberFlat metric
     Args:

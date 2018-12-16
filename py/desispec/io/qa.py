@@ -228,15 +228,13 @@ def load_qa_multiexp(inroot):
     return odict
 
 
-def write_qa_multiexp(outroot, qa_mexp, indent=True, skip_rebuild=False):
+def write_qa_multiexp(outroot, mdict, indent=True):
     """Write QA for a given production
 
     Args:
         outroot : str
           filename without format extension
-        qa_prod : QA_Prod object
-        skip_rebuild : bool, optional
-          Do not rebuild the data dict
+        mdict : dict
 
     Returns:
         outfile: str
@@ -246,13 +244,11 @@ def write_qa_multiexp(outroot, qa_mexp, indent=True, skip_rebuild=False):
     outfile = outroot+'.json'
     outfile = makepath(outfile, 'qa')
 
-    if not skip_rebuild:
-        qa_mexp.build_data()
-    ydict = yamlify(qa_mexp.data)  # This works well for JSON too
+    ydict = yamlify(mdict)  # This works well for JSON too
     # Simple json
     with open(outfile, 'wt') as fh:
         json.dump(ydict, fh, indent=indent)
-    log.info('Wrote QA_Prod file: {:s}'.format(outfile))
+    log.info('Wrote QA Multi-Exposure file: {:s}'.format(outfile))
 
     return outfile
 

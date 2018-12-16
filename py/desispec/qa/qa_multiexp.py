@@ -219,20 +219,18 @@ class QA_MultiExp(object):
                 frames_dict = self.mexp_dict[night][exposure]
                 if len(frames_dict) == 0:
                     continue
-                # Load any frame (for the type and meta info)
-                key = list(frames_dict.keys())[0]
-                frame_fil = frames_dict[key]
-                frame_meta = read_meta_frame(frame_fil)
-                qa_exp = QA_Exposure(exposure, night, frame_meta['FLAVOR'],
+                # Load any frame (for the type)
+                qa_exp = QA_Exposure(exposure, night,
                                      specprod_dir=self.specprod_dir, remove=remove)
-                qa_exp.load_meta(frame_meta)
                 # Append
                 self.qa_exps.append(qa_exp)
 
-    def write_qa_exposures(self, outroot=None, **kwargs):
+    def write_qa_exposures(self, outroot=None, skip_rebuild=False, **kwargs):
         """  Write the slurp of QA Exposures to the hard drive
         Args:
             outroot: str
+            skip_rebuild : bool, optional
+              Do not rebuild the data dict
             **kwargs:
 
         Returns:
@@ -241,7 +239,11 @@ class QA_MultiExp(object):
         """
         if outroot is None:
             outroot = self.qaexp_outroot
-        return write_qa_multiexp(outroot, self, **kwargs)
+        # Rebuild?
+        if not skip_rebuild:
+            self.build_data()
+        # Do it
+        return write_qa_multiexp(outroot, self.data, **kwargs)
 
     def __repr__(self):
         """ Print formatting

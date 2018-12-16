@@ -16,12 +16,17 @@ from desispec.qa.qa_frame import qaframe_from_frame
 from desispec.io.qa import qafile_from_framefile
 from desispec.io import load_qa_multiexp
 from desispec.io import qaprod_root
+from desispec.io import read_meta_frame
+from desispec.io import get_files
+from desispec.io import write_qa_exposure
+from desispec.io import write_qa_multiexp
 
 # log=get_logger()
+desi_params = read_params()
 
 
 class QA_Exposure(object):
-    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None,
+    def __init__(self, expid, night, flavor=None, specprod_dir=None, in_data=None,
                  qaprod_dir=None, no_load=False, multi_root=None, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
@@ -31,8 +36,6 @@ class QA_Exposure(object):
         Args:
             expid: int -- Exposure ID
             night: str -- YYYYMMDD
-            flavor: str
-              exposure type (e.g. flat, arc, science)
             specprod_dir(str): Path containing the exposures/ directory to use. If the value
                 is None, then the value of :func:`specprod_root` is used instead.
             in_data: dict, optional -- Input data
@@ -47,23 +50,32 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        desi_params = read_params()
-        assert flavor in desi_params['frame_types'], "Unknown flavor {} for night {} expid {}".format(flavor, night, expid)
-        if flavor in ['science']:
-            self.type = 'data'
-        else:
-            self.type = 'calib'
-
+        # Init
         self.expid = expid
         self.night = night
+        self.meta = {}
         # Paths
         self.specprod_dir = specprod_dir
         if qaprod_dir is None:
             qaprod_dir = qaprod_root(self.specprod_dir)
         self.qaprod_dir  = qaprod_dir
 
+        # Load meta
+        frames_dict = get_files(filetype = str('frame'), night = night,
+                                expid=expid, specprod_dir = self.specprod_dir)
+        frame_file = list(frames_dict.items())[0][1]  # Any one will do
+        frame_meta = read_meta_frame(frame_file)
+        self.load_meta(frame_meta)
+        flavor = self.meta['FLAVOR']  # Over-rides any input value
+
+        assert flavor in desi_params['frame_types'], "Unknown flavor {} for night {} expid {}".format(flavor, night, expid)
+        if flavor in ['science']:
+            self.type = 'data'
+        else:
+            self.type = 'calib'
         self.flavor = flavor
-        self.meta = {}
+
+        # Internal dicts
         self.data = dict(flavor=self.flavor, expid=self.expid,
                          night=self.night, frames={})
 
@@ -113,7 +125,7 @@ class QA_Exposure(object):
     def load_meta(self, frame_meta):
         """ Load meta info from input Frame meta
         Args:
-            frame_meta:
+            frame_meta: dict of meta data from a frame file
         """
         desi_params = read_params()
         for key in desi_params['frame_meta']:
@@ -256,6 +268,18 @@ class QA_Exposure(object):
         # Add meta
         self.qa_s2n.meta = self.data['meta']
 
+    def slurp_into_file(self, multi_root):
+        # Load
+        mdict_root = os.path.join(self.qaprod_dir, multi_root)
+        mdict = load_qa_multiexp(mdict_root)
+        # Check on night
+        if self.night not in mdict.keys():
+            mdict[self.night] = {}
+        # Insert
+        idict = write_qa_exposure('foo', self, ret_dict=True)
+        mdict[self.night][str(self.expid)] = idict[self.night][self.expid]
+        # Write
+        write_qa_multiexp(mdict_root, mdict)
 
     def __repr__(self):
         """ Print formatting
