@@ -28,6 +28,7 @@ Algorithms:
                          R_PEAKS: [6301.9,7342.8],
                          Z_PEAKS: [8432.4,9378.5],
                          PIXEL_RANGE: 7,
+                         MAX_SIGMA: 10,
                          XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
                          XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_BRIGHT_REF:[1.1,1.8],XWSIGMA_DARK_REF:[1.1,1.8],XWSIGMA_GRAY_REF:[1.1,1.8]}
     Flexure:
