@@ -13,6 +13,7 @@ from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import get_nights
 from .qa_multiexp import QA_MultiExp
+from .qa_night import QA_Night
 
 from desiutil.log import get_logger
 
@@ -52,5 +53,40 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
                 self.mexp_dict[night][exposure] = frames_dict
         # Output file names
         self.qaexp_outroot = self.qaprod_dir+'/'+self.prod_name+'_qa'
+        # Nights list
+        self.qa_nights = []
 
 
+    def slurp(self, make_frameqa=False, remove=True, **kwargs):
+        """ Slurp all the individual QA files to generate
+        a list of QA_Exposure objects
+
+        Loops on nights, generating QANight objects along the way
+
+        Args:
+            make_frameqa: bool, optional
+              Regenerate the individual QA files (at the frame level first)
+            remove: bool, optional
+              Remove the individual QA files?
+
+        Returns:
+
+        """
+        from desispec.qa import QA_Exposure
+        log = get_logger()
+        # Remake?
+        if make_frameqa:
+            self.make_frameqa(**kwargs)
+        # Loop on nights
+        # Reset
+        log.info("Resetting QA_Exposure objects")
+        self.qa_exps = []
+        # Loop
+        for night in self.mexp_dict.keys():
+            qaNight = QA_Night(night)
+            qaNight.slurp(remove=remove)
+            # Save nights
+            self.qa_nights.append(qaNight)
+            # Save exposures
+            for qa_exp in QA_Night.qa_exps:
+                self.qa_exps.append(qa_exp)
