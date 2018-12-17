@@ -2,9 +2,12 @@
 desispec Change Log
 ===================
 
-0.26.1 (unreleased)
+0.27.0 (unreleased)
 -------------------
 
+* DB loading targets columns `PRIORITY_INIT` and `NUMOBS_INIT`;
+  requires desitarget/0.27.0 or later for DB loading (PR `#747`_).
+* Fix S/N QA when inputs have NaNs (PR `#746`_).
 * DB exposures table loading allows NaN entries for RA,DEC,SEEING,etc.
   for arc and flat calib exposures (PR `#743`_).
 * Use new `desiutil.dust.ext_odonnell` function during flux-calibration
@@ -28,6 +31,8 @@ desispec Change Log
 .. _`#736`: https://github.com/desihub/desispec/pull/736
 .. _`#737`: https://github.com/desihub/desispec/pull/737
 .. _`#743`: https://github.com/desihub/desispec/pull/743
+.. _`#746`: https://github.com/desihub/desispec/pull/746
+.. _`#747`: https://github.com/desihub/desispec/pull/747
 
 0.26.0 (2018-11-08)
 -------------------
