@@ -110,7 +110,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         specprod_dir = specprod_root()
 
     if qaprod_dir is None and 'qaprod_dir' in required_inputs:
-        qaprod_dir = qaprod_root()
+        qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
 
     if 'specprod' in required_inputs:
         #- Replace / with _ in $SPECPROD so we can use it in a filename
@@ -381,16 +381,16 @@ def specprod_root():
     return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))
 
 
-def qaprod_root():
+def qaprod_root(specprod_dir=None):
     """Return directory root for spectro production QA, i.e.
     ``$DESI_SPECTRO_REDUX/$SPECPROD/QA``.
 
     Raises:
         AssertionError: if these environment variables aren't set.
     """
-    assert 'SPECPROD' in os.environ, 'Missing $SPECPROD environment variable'
-    assert 'DESI_SPECTRO_REDUX' in os.environ, 'Missing $DESI_SPECTRO_REDUX environment variable'
-    return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'QA')
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
+    return os.path.join(specprod_dir, 'QA')
 
 
 def get_pipe_database():

@@ -160,9 +160,10 @@ class QA_MultiExp(object):
                 for camera,frame_fil in self.mexp_dict[night][exposure].items():
                     # Load frame
                     qafile, _ = qafile_from_framefile(frame_fil, qaprod_dir=self.qaprod_dir)
-                    if os.path.isfile(qafile) and (not clobber):
+                    if os.path.isfile(qafile) and (not clobber) and (not make_plots):
                         continue
-                    qaframe_from_frame(frame_fil, make_plots=make_plots, qaprod_dir=self.qaprod_dir)
+                    qaframe_from_frame(frame_fil, make_plots=make_plots, qaprod_dir=self.qaprod_dir,
+                                       clobber=clobber)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files to generate

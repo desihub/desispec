@@ -454,6 +454,7 @@ def exposure_fluxcalib(outfil, qa_data):
     plt.close()
     print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
 
+
 def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     """ QA plots for fiber flat
 
@@ -462,6 +463,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
         qaframe:
         frame:
         fiberflat:
+        clobber: bool, optional
 
     Returns:
         Stuff?
@@ -679,6 +681,10 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
     gs = gridspec.GridSpec(6,2)
     cmap = plt.get_cmap('RdBu')
 
+    # Prep
+    qa_exp.qa_s2n['X'] = 0.
+    qa_exp.qa_s2n['Y'] = 0.
+
     # Load up all the frames
     for ss,channel in enumerate(['b','r','z']):
         # ax
@@ -687,7 +693,7 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
         else:
             ax = plt.subplot(gs[-3:, 1])
 
-        x,y,metrics,sv_s2n,sv_mags = [],[],[], [],[]
+        # Load up X, Y
         for wedge in range(10):
             # Load
             camera=channel+'{:d}'.format(wedge)
@@ -697,81 +703,32 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
             except:
                 continue
             fibermap = frame.fibermap
-            # Metric
-            if metric == 'resid':
-                # Setup
-                s2n_dict = qa_exp.data['frames'][camera]['S2N']
-                med_snr = np.array(s2n_dict['METRICS']['MEDIAN_SNR'])
-                funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
-                fitfunc = funcMap['astro']
-                #
-                '''
-                sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
-                all_mags = np.resize(np.array(s2n_dict['METRICS']['MAGNITUDES']), (500, 3))
-                mags = all_mags[:, fidx].flatten()
-                gd_mag = np.isfinite(mags)
-                fidx = np.where(np.array(s2n_dict['METRICS']['FILTERS']) == s2n_dict['METRICS']['FIT_FILTER'])[0]
-                '''
+            #
+            rows = np.where(qa_exp.qa_s2n['CAMERA'] == camera)[0]
+            qa_exp.qa_s2n['X'][rows] = [fibermap['DESIGN_X'][qa_exp.qa_s2n['FIBER'][rows]]]
+            qa_exp.qa_s2n['Y'][rows] = [fibermap['DESIGN_Y'][qa_exp.qa_s2n['FIBER'][rows]]]
 
-                # Loop on object types -- Include stars?
-                tmp_x, tmp_y, tmp_mags, tmp_s2n = [], [], [], []
-                for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
-                    coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
-
-                    '''
-                    # Need to restrict to Science
-                    science_ids = np.array(s2n_dict['METRICS']['SCIENCE_FIBERID'])
-                    gd_type = np.zeros_like(gd_mag, dtype=bool)
-                    gd_type[science_ids] = True
-                    '''
-
-                    # Mags
-                    mags = np.array(s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1])
-                    snr=s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
-
-                    # Second mag cut
-                    gd_mag2 = (mags > mag_mnx[0]) & (mags < mag_mnx[1])
-
-                    # Synthesize
-                    gd_resid = gd_mag2
-
-                    # S/N
-                    fibers = np.array(s2n_dict['METRICS']['{:s}_FIBERID'.format(otype)])
-                    tmp_s2n += [med_snr[fibers]]
-
-                    # Residuals
-                    flux = 10 ** (-0.4 * (mags[gd_resid] - 22.5))
-                    fit_snr = fitfunc(flux, *coeff)
-                    resid = (med_snr[fibers][gd_resid] - fit_snr) / fit_snr
-
-                    all_resid = np.zeros_like(mags)
-                    all_resid[gd_resid] = resid
-
-                    # Save
-                    metrics += [all_resid]
-                    tmp_mags += [mags]
-                    # X,Y
-                    tmp_x += [fibermap['DESIGN_X'][fibers]]
-                    tmp_y += [fibermap['DESIGN_Y'][fibers]]
-                # Save
-                sv_mags.append(np.concatenate(tmp_mags))
-                sv_s2n.append(np.concatenate(tmp_s2n))
-                x.append(np.concatenate(tmp_x))
-                y.append(np.concatenate(tmp_y))
-        # Concatenate
-        x = np.concatenate(x)
-        y = np.concatenate(y)
-        metrics = np.concatenate(metrics)
+        # Metric
+        if metric == 'resid':
+            rows = (qa_exp.qa_s2n['CHANNEL'] == channel) & (qa_exp.qa_s2n['RESID'] != -999.)
+            metrics = qa_exp.qa_s2n['RESID'][rows]
+        else:
+            log.error("NOT READY FOR THIS QA METRIC")
+        # Unpack for plotting
+        x = qa_exp.qa_s2n['X'][rows]
+        y = qa_exp.qa_s2n['Y'][rows]
+        mags = qa_exp.qa_s2n['MAGS'][rows]
+        s2n = qa_exp.qa_s2n['MEDIAN_SNR'][rows]
 
         # Exposure
-        exposure_map(x,y,metrics, mlbl='S/N '+metric, ax=ax, fig=fig,
+        exposure_map(x,y, metrics, mlbl='S/N '+metric, ax=ax, fig=fig,
                  title=None, outfile=None, psz=1., cmap=cmap, vmnx=[-0.9,0.9])
         # Label
         ax.text(0.05, 0.9, channel, color=cclrs[channel], transform=ax.transAxes, ha='left')
 
         # Scatter + fit
         ax_summ = plt.subplot(gs[-3+ss,0])
-        ax_summ.scatter(np.concatenate(sv_mags), np.concatenate(sv_s2n), color=cclrs[channel], s=1.)
+        ax_summ.scatter(mags, s2n, color=cclrs[channel], s=1.)
         if ss < 2:
             ax_summ.get_xaxis().set_ticks([])
         # Axes

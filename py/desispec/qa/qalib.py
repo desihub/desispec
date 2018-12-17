@@ -562,7 +562,8 @@ def s2n_funcs(exptime=None):
              }
     return funcMap
 
-def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
+def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None,
+           offline=False):
     """
     Signal vs. Noise With fitting
 
@@ -579,7 +580,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
       "NUM_NEGATIVE_SNR" : int
       "SNR_MAG_TGT"
       "FITCOEFF_TGT" : list
-      "SNR_RESID" : list
+      "SNR_RESID" : list, can be trimmed down during the fitting
       "FIDSNR_TGT"
       "RA" : ndarray (nfiber)
       "DEC" : ndarray (nfiber)
@@ -602,6 +603,8 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
         fidboundary : list of slices indicating where to select in fiber
             and wavelength directions for each amp (output of slice_fidboundary function)
+        offline: bool, optional
+          If True, save things differently for offline
 
     Returns:
         qadict : dict
@@ -696,16 +699,17 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             ['QSO', qsofibers],
             ['STAR', stdfibers],
             ):
-        objvar=np.array(var)[fibers]
-        medsnr=mediansnr[fibers]
-        mags=np.zeros(medsnr.shape)
+        objvar = np.array(var)[fibers]
+        medsnr = mediansnr[fibers]
+        all_medsnr = medsnr.copy()  # In case any are cut below
+        mags = np.zeros(medsnr.shape)
         ok = (photflux[fibers] > 0)
         mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
 
         try:
 	    #- Determine invalid SNR and mag values and remove
-            m=mags
-            s=medsnr
+            m=mags.copy()
+            s=medsnr.copy()
             neg_snr=len(np.where(medsnr<=0.0)[0])
             neg_snr_tot.append(neg_snr)
             neg_val=np.where(medsnr<=0.0)[0]
@@ -718,6 +722,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
                 if len(cuts[cc]) > 0:
                     for ci in range(len(cuts[cc])):
                         cut.append(cuts[cc][ci])
+            # Bad fits?
             if len(cut) > 0:
                 m=list(m)
                 s=list(s)
@@ -767,14 +772,26 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             fidsnr_tgt.append(np.nan)
 
         qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
-        snr_mag=[medsnr,mags]
-        snrmag.append(snr_mag)
+        if offline:
+            snr_mag=[medsnr,mags]
+            snrmag.append(snr_mag)
+        else:
+            snr_mag=[all_medsnr,mags]
+            snrmag.append(snr_mag)
 
         #- Calculate residual SNR for focal plane plots
-        fit_snr = fit(x,fita,fitb)
-        fitsnr.append(fit_snr)
-        resid = (med_snr-fit_snr)/fit_snr
-        resid_snr += resid.tolist()
+        if not offline:
+            fit_snr = fit(x,fita,fitb)
+            fitsnr.append(fit_snr)
+            resid = (med_snr-fit_snr)/fit_snr
+            resid_snr += resid.tolist()
+        else:
+            x=10**(-0.4*(mags-22.5))
+            fit_snr = fit(x,fita,fitb)
+            fitsnr.append(fit_snr)
+            resid = (all_medsnr-fit_snr)/fit_snr
+            resid_snr += resid.tolist()
+
 
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
     qadict["SNR_MAG_TGT"]=snrmag

@@ -8,7 +8,7 @@ desispec Change Log
 * DB exposures table loading allows NaN entries for RA,DEC,SEEING,etc.
   for arc and flat calib exposures (PR `#743`_).
 * Use new `desiutil.dust.ext_odonnell` function during flux-calibration
-  (PR `#736`_). 
+  (PR `#736`_).
 * Add support for average flux calibration model in ccd_calibration_data
   repo (PR `#735`_).
 * Support mockobs fibermap format with fewer columns (PR `#733`_).
@@ -18,6 +18,7 @@ desispec Change Log
 * Refactor offline QA (S/N) to work with updated object typing
 * Drop `contam_target` DB truth column; no longer in truth files
   (one-line commit to master, no PR).
+* Bug fix in QA (S/N) + refactor exposure slurping
 
 .. _`#722`: https://github.com/desihub/desispec/pull/722
 .. _`#723`: https://github.com/desihub/desispec/pull/723
@@ -25,6 +26,7 @@ desispec Change Log
 .. _`#733`: https://github.com/desihub/desispec/pull/733
 .. _`#735`: https://github.com/desihub/desispec/pull/735
 .. _`#736`: https://github.com/desihub/desispec/pull/736
+.. _`#737`: https://github.com/desihub/desispec/pull/737
 .. _`#743`: https://github.com/desihub/desispec/pull/743
 
 0.26.0 (2018-11-08)
