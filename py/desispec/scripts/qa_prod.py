@@ -67,8 +67,7 @@ def main(args) :
 
     # Slurp and write?
     if args.slurp:
-        qa_prod.slurp(make=(args.make_frameqa > 0), remove=args.remove)
-        qa_prod.write_qa_nights()
+        qa_prod.slurp_nights(make=(args.make_frameqa > 0), remove=args.remove, write_nights=True)
 
     # Channel histograms
     if args.channel_hist is not None:

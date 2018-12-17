@@ -9,7 +9,6 @@ import warnings
 
 from desispec.io import get_exposures
 from desispec.io import get_files
-from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import get_nights
 from .qa_multiexp import QA_MultiExp
@@ -46,21 +45,31 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         nights = get_nights(specprod_dir=self.specprod_dir)
         for night in nights:
             self.mexp_dict[night] = {}
+            '''
             for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
                 # Object only??
                 frames_dict = get_files(filetype = str('frame'), night = night,
                                         expid = exposure, specprod_dir = self.specprod_dir)
                 self.mexp_dict[night][exposure] = frames_dict
+            '''
         # Output file names
         self.qaexp_outroot = self.qaprod_dir+'/'+self.prod_name+'_qa'
         # Nights list
         self.qa_nights = []
 
+    def load_data(self, inroot=None):
+        """ Load QA data from night objects on disk
+        """
+        self.data = {}
+        # Load
+        for night in self.mexp_dict.keys():
+            qaNight = QA_Night(night, specprod_dir=self.specprod_dir)
+            qaNight.load_data()
+            #
+            self.data[night] = qaNight.data[night]
 
-    def slurp(self, make_frameqa=False, remove=True, **kwargs):
-        """ Slurp all the individual QA files to generate
-        a list of QA_Exposure objects
-
+    def slurp_nights(self, make_frameqa=False, remove=True, write_nights=False, **kwargs):
+        """ Slurp all the individual QA files, night by night
         Loops on nights, generating QANight objects along the way
 
         Args:
@@ -72,21 +81,19 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         Returns:
 
         """
-        from desispec.qa import QA_Exposure
         log = get_logger()
         # Remake?
         if make_frameqa:
             self.make_frameqa(**kwargs)
-        # Loop on nights
         # Reset
-        log.info("Resetting QA_Exposure objects")
-        self.qa_exps = []
-        # Loop
+        log.info("Resetting QA_Night objects")
+        self.qa_nights = []
+        # Loop on nights
         for night in self.mexp_dict.keys():
             qaNight = QA_Night(night)
             qaNight.slurp(remove=remove)
             # Save nights
             self.qa_nights.append(qaNight)
-            # Save exposures
-            for qa_exp in QA_Night.qa_exps:
-                self.qa_exps.append(qa_exp)
+            # Write?
+            if write_nights:
+                qaNight.write_qa_exposures()

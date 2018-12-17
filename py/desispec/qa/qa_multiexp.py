@@ -8,9 +8,6 @@ import numpy as np
 import glob, os
 import warnings
 
-from desispec.io import get_exposures
-from desispec.io import get_files
-from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import write_qa_exposure
 from desispec.io import write_qa_multiexp
