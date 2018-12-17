@@ -187,9 +187,9 @@ class Target(SchemaMixin, Base):
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
     mws_target = Column(BigInteger, nullable=False)
-    priority = Column(BigInteger, nullable=False)
+    priority_init = Column(BigInteger, nullable=False)
     subpriority = Column(Float, nullable=False)
-    numobs = Column(BigInteger, nullable=False)
+    numobs_init = Column(BigInteger, nullable=False)
     hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
