@@ -56,7 +56,6 @@ class Truth(SchemaMixin, Base):
 
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     mockid = Column(BigInteger, nullable=False)
-    contam_target = Column(BigInteger, nullable=False)
     truez = Column(Float, nullable=False)
     truespectype = Column(String, nullable=False)
     templatetype = Column(String, nullable=False)
@@ -188,9 +187,9 @@ class Target(SchemaMixin, Base):
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
     mws_target = Column(BigInteger, nullable=False)
-    priority = Column(BigInteger, nullable=False)
+    priority_init = Column(BigInteger, nullable=False)
     subpriority = Column(Float, nullable=False)
-    numobs = Column(BigInteger, nullable=False)
+    numobs_init = Column(BigInteger, nullable=False)
     hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
@@ -204,18 +203,18 @@ class ObsList(SchemaMixin, Base):
     expid = Column(Integer, primary_key=True, autoincrement=False)
     tileid = Column(Integer, nullable=False)
     passnum = Column(Integer, nullable=False)
-    ra = Column(Float, nullable=False)
-    dec = Column(Float, nullable=False)
-    ebmv = Column(Float, nullable=False)
+    ra = Column(Float, nullable=True)   #- Calib exposures don't have RA, dec
+    dec = Column(Float, nullable=True)
+    ebmv = Column(Float, nullable=True)
     night = Column(String, nullable=False)
     mjd = Column(Float, nullable=False)
     exptime = Column(Float, nullable=False)
-    seeing = Column(Float, nullable=False)
-    transparency = Column(Float, nullable=False)
-    airmass = Column(Float, nullable=False)
-    moonfrac = Column(Float, nullable=False)
-    moonalt = Column(Float, nullable=False)
-    moonsep = Column(Float, nullable=False)
+    seeing = Column(Float, nullable=True)
+    transparency = Column(Float, nullable=True)
+    airmass = Column(Float, nullable=True)
+    moonfrac = Column(Float, nullable=True)
+    moonalt = Column(Float, nullable=True)
+    moonsep = Column(Float, nullable=True)
     program = Column(String, nullable=False)
     flavor = Column(String, nullable=False)
     # dateobs = Column(DateTime(timezone=True), nullable=False)
@@ -362,7 +361,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         return
     if maxrows == 0:
         maxrows = len(data)
-    log.info("Read data from %s.", filepath)
+    log.info("Read data from %s HDU %s", filepath, hdu)
     try:
         colnames = data.names
     except AttributeError:
@@ -470,7 +469,7 @@ def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
     else:
         log.error("Unrecognized data file, %s!", filepath)
         return
-    log.info("Read data from %s.", filepath)
+    log.info("Read data from %s HDU %s", filepath, hdu)
     try:
         colnames = data.names
     except AttributeError:
@@ -538,7 +537,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
         brickname = os.path.basename(os.path.dirname(f))
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
-        log.info("Read data from %s.", f)
+        log.info("Read data from %s HDU %s.", f, hdu)
         good_targetids = ((data['TARGETID'] != 0) & (data['TARGETID'] != -1))
         #
         # If there are too many targetids, the in_ clause will blow up.
@@ -655,7 +654,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
         epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
-        log.info("Read data from %s.", f)
+        log.info("Read data from %s HDU %s", f, hdu)
         for col in data.names[:data_index]:
             if data[col].dtype.kind == 'f':
                 bad = np.isnan(data[col])

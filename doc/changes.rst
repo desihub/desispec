@@ -2,16 +2,30 @@
 desispec Change Log
 ===================
 
-0.26.1 (unreleased)
+0.27.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.27.0 (2018-12-16)
+-------------------
+
+* DB loading targets columns `PRIORITY_INIT` and `NUMOBS_INIT`;
+  requires desitarget/0.27.0 or later for DB loading (PR `#747`_).
+* Fix S/N QA when inputs have NaNs (PR `#746`_).
+* DB exposures table loading allows NaN entries for RA,DEC,SEEING,etc.
+  for arc and flat calib exposures (PR `#743`_).
+* Use new `desiutil.dust.ext_odonnell` function during flux-calibration
+  (PR `#736`_).
 * Add support for average flux calibration model in ccd_calibration_data
   repo (PR `#735`_).
 * Support mockobs fibermap format with fewer columns (PR `#733`_).
 * Upgrade data transfer script and add additional scripts (PR `#732`_).
 * Fix desi_zcatalog RA_TARGET vs. TARGET_RA (PR `#723`_).
 * Update redshift database data model and workaround a minor bad data problem (PR `#722`_).
-* Refactor offline QA (S/N) to work with updated object typing (PR `#737`_)
+* Refactor offline QA (S/N) to work with updated object typing
+* Drop `contam_target` DB truth column; no longer in truth files
+  (one-line commit to master, no PR).
 * Bug fix in QA (S/N) + refactor exposure slurping
 
 .. _`#722`: https://github.com/desihub/desispec/pull/722
@@ -19,7 +33,11 @@ desispec Change Log
 .. _`#732`: https://github.com/desihub/desispec/pull/732
 .. _`#733`: https://github.com/desihub/desispec/pull/733
 .. _`#735`: https://github.com/desihub/desispec/pull/735
+.. _`#736`: https://github.com/desihub/desispec/pull/736
 .. _`#737`: https://github.com/desihub/desispec/pull/737
+.. _`#743`: https://github.com/desihub/desispec/pull/743
+.. _`#746`: https://github.com/desihub/desispec/pull/746
+.. _`#747`: https://github.com/desihub/desispec/pull/747
 
 0.26.0 (2018-11-08)
 -------------------

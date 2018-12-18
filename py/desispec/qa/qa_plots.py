@@ -723,53 +723,6 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
         mags = qa_exp.qa_s2n['MAGS'][rows]
         s2n = qa_exp.qa_s2n['MEDIAN_SNR'][rows]
 
-        '''
-        # Setup
-        s2n_dict = qa_exp.data['frames'][camera]['S2N']
-        med_snr = np.array(s2n_dict['METRICS']['MEDIAN_SNR'])
-        funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
-        fitfunc = funcMap['astro']
-        #
-
-        # Loop on object types -- Include stars?
-        tmp_x, tmp_y, tmp_mags, tmp_s2n = [], [], [], []
-        for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
-            coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
-
-            # Mags
-            mags = np.array(s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1])
-            snr=s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
-
-            # Second mag cut
-            gd_mag2 = (mags > mag_mnx[0]) & (mags < mag_mnx[1])
-
-            # Synthesize
-            gd_resid = gd_mag2
-
-            # S/N
-            fibers = np.array(s2n_dict['METRICS']['{:s}_FIBERID'.format(otype)])
-            tmp_s2n += [med_snr[fibers]]
-
-            # Residuals
-            flux = 10 ** (-0.4 * (mags[gd_resid] - 22.5))
-            fit_snr = fitfunc(flux, *coeff)
-            resid = (med_snr[fibers][gd_resid] - fit_snr) / fit_snr
-
-            all_resid = np.zeros_like(mags)
-            all_resid[gd_resid] = resid
-
-            # Save
-            metrics += [all_resid]
-            tmp_mags += [mags]
-            # X,Y
-            tmp_x += [fibermap['DESIGN_X'][fibers]]
-            tmp_y += [fibermap['DESIGN_Y'][fibers]]
-        # Save
-        sv_mags.append(np.concatenate(tmp_mags))
-        sv_s2n.append(np.concatenate(tmp_s2n))
-        x.append(np.concatenate(tmp_x))
-        y.append(np.concatenate(tmp_y))
-        '''
         # Exposure
         exposure_map(x,y, metrics, mlbl='S/N '+metric, ax=ax, fig=fig,
                  title=None, outfile=None, psz=1., cmap=cmap, vmnx=[-0.9,0.9])

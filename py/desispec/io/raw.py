@@ -49,6 +49,12 @@ def read_raw(filename, camera, **kwargs):
 
     if "fill_header" in kwargs :
         hdus = kwargs["fill_header"]
+
+        if hdus is None :
+            hdus=[0,]
+            if "PLC" in fx :
+                hdus.append("PLC")
+        
         if hdus is not None :
             log.info("will add header keywords from hdus %s"%str(hdus))
             for hdu in hdus :
