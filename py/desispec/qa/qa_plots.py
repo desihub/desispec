@@ -1010,8 +1010,27 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     else:  # Show
         plt.show()
 
+
 def prod_avg_s2n(qa_prod, outfile=None, optypes=['ELG'], xaxis='MJD',
                  fiducials=None):
+    """
+    Generate a plot summarizing average S/N in a production
+    for a few object types in a few cameras
+
+    Args:
+        qa_prod: QA_Prod object
+        outfile: str, optional
+          Output file name
+        optypes: list, optional
+          List of fiducial objects to show
+          Options are:  ELG, LRG, QSO
+        xaxis: str, optional
+          Designate x-axis.  Options are:  MJD, expid, texp
+        fiducials:
+
+    Returns:
+
+    """
 
     markers = {'b': '*', 'r': 's', 'z': 'o'}
     # Hard-code metrics for now
@@ -1097,6 +1116,90 @@ def prod_avg_s2n(qa_prod, outfile=None, optypes=['ELG'], xaxis='MJD',
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        print("Wrote QA file: {:s}".format(outfile))
+        plt.close()
+    else:  # Show
+        plt.show()
+
+
+def prod_ZP(qa_prod, outfile=None, channels=('b','r','z'), xaxis='MJD'):
+    """
+    Generate a plot summarizing the ZP for a production
+
+    Args:
+        qa_prod: QA_Prod object
+        outfile: str, optional
+          Output file name
+        channels: tuple, optional
+          List of channels to show
+        xaxis: str, optional
+          Designate x-axis.  Options are:  MJD, expid, texp
+
+    Returns:
+
+    """
+    markers = {'b': '*', 'r': 's', 'z': 'o'}
+    # Setup
+    nplots = len(channels)
+    ZP_vals = [[] for i in range(nplots)]
+    ZP_sig = [[] for i in range(nplots)]
+    mjds = [[] for i in range(nplots)]
+    expids = [[] for i in range(nplots)]
+    texps = [[] for i in range(nplots)]
+    dates = [[] for i in range(nplots)]
+
+    # Loop on exposure
+    for ic, channel in enumerate(channels):
+        # Generate the table
+        ZP_tbl = qa_prod.get_qa_table('FLUXCALIB', 'ZP', channels=[channel])
+        # Loop on expid
+        uni_expid = np.unique(ZP_tbl['EXPID'])
+        for expid in uni_expid:
+            rows = ZP_tbl['EXPID'] == expid
+            irow = np.where(rows)[0][0]
+            ZP_vals[ic].append(np.median(ZP_tbl["ZP"][rows].data))
+            ZP_sig[ic].append(np.std(ZP_tbl["ZP"][rows].data))
+            # Meta
+            dates[ic].append(ZP_tbl['DATE-OBS'][irow])
+            texps[ic].append(ZP_tbl['EXPTIME'][irow])
+            expids[ic].append(expid)
+
+    # A bit more prep
+    for ic in range(nplots):
+        atime = Time(dates[ic], format='isot', scale='utc')
+        atime.format = 'mjd'
+        mjds[ic] = atime.value
+
+    # Setup
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(1, 1)
+    ax = plt.subplot(gs[0])
+
+    for ic, channel in enumerate(channels):
+        # Empty
+        if len(dates[ic]) == 0:
+            continue
+        # Nope, let's plot
+        if xaxis == 'MJD':
+            xval = mjds[ic]
+        elif xaxis == 'expid':
+            xval = expids[ic]
+        elif xaxis == 'texp':
+            xval = texps[ic]
+        # Plot
+        ax.errorbar(xval, ZP_vals[ic], yerr=ZP_sig[ic], label=channel,
+            ls='none', color=get_channel_clrs()[channel],
+                    marker=markers[channel])
+
+    ax.set_xlabel(xaxis)
+    ax.set_ylabel('ZP')
+    legend = ax.legend(loc='upper right', borderpad=0.3,
+                       handletextpad=0.3, fontsize='small')
+
+    # Finish
+    plt.tight_layout(pad=0.1, h_pad=0.0, w_pad=0.0)
     if outfile is not None:
         plt.savefig(outfile)
         print("Wrote QA file: {:s}".format(outfile))
