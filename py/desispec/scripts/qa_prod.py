@@ -25,7 +25,12 @@ def parse(options=None):
                         help='Restrict to bright/dark (flag: 0=all; 1=bright; 2=dark; only used in time_series)')
     parser.add_argument('--html', default = False, action='store_true',
                         help = 'Generate HTML files?')
-    parser.add_argument('--qaprod_dir', type=str, default=None, help = 'Path to where QA is generated.  Default is qaprod_dir')
+    parser.add_argument('--qaprod_dir', type=str, default=None, help='Path to where QA is generated.  Default is qaprod_dir')
+    parser.add_argument('--S2N_plot', default=False, action='store_true',
+                        help = 'Generate a S/N plot for the production (vs. xaxis)')
+    parser.add_argument('--ZP_plot', default=False, action='store_true',
+                        help = 'Generate a ZP plot for the production (vs. xaxis)')
+    parser.add_argument('--xaxis', type=str, default='MJD', help='Specify x-axis for S/N and ZP plots')
 
     args = None
     if options is None:
@@ -41,6 +46,7 @@ def main(args) :
     from desispec.qa import html
     from desiutil.log import get_logger
     from desispec.io import meta
+    from desispec.qa import qa_plots as dqqp
 
     log=get_logger()
 
@@ -73,7 +79,6 @@ def main(args) :
     if args.channel_hist is not None:
         # imports
         from matplotlib.backends.backend_pdf import PdfPages
-        from desispec.qa import qa_plots as dqqp
         #
         qa_prod.load_data()
         outfile = qa_prod.prod_name+'_chist.pdf'
@@ -90,12 +95,28 @@ def main(args) :
     # Time plots
     if args.time_series is not None:
         # QATYPE-METRIC
-        from desispec.qa import qa_plots as dqqp
         qa_prod.load_data()
         # Run
         qatype, metric = args.time_series.split('-')
         outfile= qaprod_dir+'/QA_time_{:s}.png'.format(args.time_series)
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile, bright_dark=args.bright_dark)
+
+    # <S/N> plot
+    if args.S2N_plot:
+        # Load up
+        qa_prod.load_data()
+        qa_prod.load_exposure_s2n()
+        # Plot
+        outfile= qaprod_dir+'/QA_S2N_{:s}.png'.format(args.xaxis)
+        dqqp.prod_avg_s2n(qa_prod, optypes=['ELG', 'LRG', 'QSO'], xaxis=args.xaxis, outfile=outfile)
+
+    # ZP plot
+    if args.ZP_plot:
+        # Load up
+        qa_prod.load_data()
+        # Plot
+        outfile= qaprod_dir+'/QA_ZP_{:s}.png'.format(args.xaxis)
+        dqqp.prod_ZP(qa_prod, xaxis=args.xaxis, outfile=outfile)
 
     # HTML
     if args.html:
