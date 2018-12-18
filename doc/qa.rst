@@ -277,4 +277,4 @@ calculated in the three channels.  Again, `--xaxis`
 controls the abscissa axis.  An example::
 
     desi_qa_prod --ZP_plot --xaxis texp
-    
+
