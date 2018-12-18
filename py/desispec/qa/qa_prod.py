@@ -20,8 +20,6 @@ from desiutil.log import get_logger
 # log = get_logger()
 
 from . import qa_multiexp
-from importlib import reload
-reload(qa_multiexp)
 
 class QA_Prod(qa_multiexp.QA_MultiExp):
     def __init__(self, specprod_dir=None, **kwargs):

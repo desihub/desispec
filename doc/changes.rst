@@ -27,7 +27,7 @@ desispec Change Log
 * Drop `contam_target` DB truth column; no longer in truth files
   (one-line commit to master, no PR).
 * Bug fix in QA (S/N) + refactor exposure slurping (PR `#746`_)
-* Refactor QA_Prod; Generate new Prod QA (offline)
+* Refactor QA_Exposures, QA_Night, and QA_Prod; Generate new Prod QA (offline)
 
 .. _`#722`: https://github.com/desihub/desispec/pull/722
 .. _`#723`: https://github.com/desihub/desispec/pull/723

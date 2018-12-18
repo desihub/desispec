@@ -14,8 +14,6 @@ from desispec.io import write_qa_multiexp
 from desispec.io import qaprod_root
 
 from desispec.qa import qa_exposure
-from importlib import reload
-reload(qa_exposure)
 
 from desiutil.log import get_logger
 
@@ -71,6 +69,18 @@ class QA_MultiExp(object):
         self.data = odict
 
     def load_exposure_s2n(self, nights='all', redo=False):
+        """
+        Generate a series of QA_Exposure objects from self.data
+        and then load up the S/N tables in the QA_Exposure objects
+
+        Args:
+            nights: str, optional
+            redo: bool, optional
+
+        Returns:
+            self.qa_exps holds QA_Exposure objects
+
+        """
         # Already loaded?  Should check for the table
         if (len(self.qa_exps) > 0) and (not redo):
             return

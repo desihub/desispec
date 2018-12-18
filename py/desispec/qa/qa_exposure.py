@@ -60,7 +60,7 @@ class QA_Exposure(object):
             qaprod_dir = qaprod_root(self.specprod_dir)
         self.qaprod_dir  = qaprod_dir
 
-        # Load meta
+        # Load meta from frame (ideally)
         frames_dict = get_files(filetype = str('frame'), night = night,
                                 expid=expid, specprod_dir=self.specprod_dir)
         if len(frames_dict) > 0:
@@ -141,6 +141,7 @@ class QA_Exposure(object):
 
     def load_qa_data(self, remove=False, multi_root=None):
         """ Load the QA data files for a given exposure (currently yaml)
+
         Args:
             remove: bool, optional
               Remove QA frame files
@@ -176,8 +177,10 @@ class QA_Exposure(object):
 
         Args:
             mdict: dict
+               Contains the QA
 
         Returns:
+            Loads up self.data['frames'] and self.data['meta']
 
         """
         # Parse
@@ -194,10 +197,12 @@ class QA_Exposure(object):
         """
         Build or re-build QA data
 
+
         Args:
             rebuild: bool, optional
 
         :return:
+            Data is loaded in self.data
         """
         frame_files = desiio.get_files(filetype='frame', night=self.night,
                                    expid=self.expid,
@@ -221,6 +226,7 @@ class QA_Exposure(object):
         Args:
 
         Returns:
+            Table is held in self.qa_s2n
 
         """
         from desispec.qa.qalib import s2n_funcs
@@ -277,6 +283,15 @@ class QA_Exposure(object):
         self.qa_s2n.meta = self.data['meta']
 
     def slurp_into_file(self, multi_root):
+        """
+        Write the data of an Exposure object into a JSON file
+
+        Args:
+            multi_root:
+
+        Returns:
+
+        """
         # Load
         mdict_root = os.path.join(self.qaprod_dir, multi_root)
         mdict = load_qa_multiexp(mdict_root)
