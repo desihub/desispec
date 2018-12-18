@@ -103,6 +103,7 @@ class QA_MultiExp(object):
 
         Returns:
             qa_tbl: Table
+               Will be empty if none of the QA matches
         """
         from astropy.table import Table
         out_list = []
@@ -140,6 +141,8 @@ class QA_MultiExp(object):
                         out_expmeta.append(exp_meta)
         # Return Table
         qa_tbl = Table()
+        if len(out_expmeta) == 0:  # Empty?
+            return qa_tbl
         qa_tbl[metric] = out_list
         qa_tbl['EXPID'] = out_expid
         qa_tbl['CAMERA'] = out_cameras

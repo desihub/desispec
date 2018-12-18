@@ -13,6 +13,7 @@ from desispec.io import specprod_root
 from desispec.io import get_nights
 from .qa_multiexp import QA_MultiExp
 from .qa_night import QA_Night
+from desispec.io import write_qa_exposure
 
 from desiutil.log import get_logger
 
@@ -67,6 +68,20 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
             qaNight.load_data()
             #
             self.data[night] = qaNight.data[night]
+
+    def build_data(self):
+        """  Build QA data dict from the nights
+        """
+        from desiutil.io import combine_dicts
+        # Loop on exposures
+        odict = {}
+        for qanight in self.qa_nights:
+            for qaexp in qanight.qa_exps:
+                # Get the exposure dict
+                idict = write_qa_exposure('foo', qaexp, ret_dict=True)
+                odict = combine_dicts(odict, idict)
+        # Finish
+        self.data = odict
 
     def slurp_nights(self, make_frameqa=False, remove=True, write_nights=False, **kwargs):
         """ Slurp all the individual QA files, night by night

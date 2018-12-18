@@ -62,11 +62,14 @@ class QA_Exposure(object):
 
         # Load meta
         frames_dict = get_files(filetype = str('frame'), night = night,
-                                expid=expid, specprod_dir = self.specprod_dir)
-        frame_file = list(frames_dict.items())[0][1]  # Any one will do
-        frame_meta = read_meta_frame(frame_file)
-        self.load_meta(frame_meta)
-        flavor = self.meta['FLAVOR']  # Over-rides any input value
+                                expid=expid, specprod_dir=self.specprod_dir)
+        if len(frames_dict) > 0:
+            frame_file = list(frames_dict.items())[0][1]  # Any one will do
+            frame_meta = read_meta_frame(frame_file)
+            self.load_meta(frame_meta)
+            flavor = self.meta['FLAVOR']  # Over-rides any input value
+        else:
+            flavor = flavor
 
         assert flavor in desi_params['frame_types'], "Unknown flavor {} for night {} expid {}".format(flavor, night, expid)
         if flavor in ['science']:
@@ -157,7 +160,10 @@ class QA_Exposure(object):
                     os.remove(qadata_path)
                 # Test
                 for key in ['expid','night']:
-                    assert getattr(qa_frame,key) == getattr(self, key)
+                    try:
+                        assert getattr(qa_frame,key) == getattr(self, key)
+                    except:
+                        import pdb; pdb.set_trace()
                 # Save
                 self.data['frames'][camera] = qa_frame.qa_data
         else:

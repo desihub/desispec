@@ -324,7 +324,10 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
 
             # Sort and take the first (same as old pipeline)
             fiberflat_files.sort()
-            fiberflat_fil = fiberflat_files[0]
+            try:
+                fiberflat_fil = fiberflat_files[0]
+            except:
+                import pdb; pdb.set_trace()
 
         fiberflat = read_fiberflat(fiberflat_fil)
         apply_fiberflat(frame, fiberflat)
