@@ -60,7 +60,7 @@ def main(args) :
         qa_exp.build_qa_data(rebuild=True)
 
     # Fiber QA
-    if args.qatype == 'fibermap':
+    if args.qatype == 'fiberflat':
         for channel in channels:
             exposure_fiberflat(channel, args.expid, 'meanflux')
 

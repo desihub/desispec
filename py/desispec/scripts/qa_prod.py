@@ -12,7 +12,7 @@ def parse(options=None):
     parser.add_argument('--make_frameqa', type = int, default = 0,
                         help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
     parser.add_argument('--slurp', default = False, action='store_true',
-                        help = 'slurp production QA files into one?')
+                        help = 'slurp production QA files into one per night?')
     parser.add_argument('--remove', default = False, action='store_true',
                         help = 'remove frame QA files?')
     parser.add_argument('--clobber', default=False, action='store_true',
