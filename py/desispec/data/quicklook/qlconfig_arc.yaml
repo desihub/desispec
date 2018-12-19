@@ -7,7 +7,6 @@ WritePreprocfile: True
 #- Generate modified PSF file
 #- Debuglevel 
 Debuglevel: 20
-
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds

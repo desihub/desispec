@@ -13,7 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. 
     expand_config will expand out to full format as needed by quicklook.setup
     """
-    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plots=None,store_res=None):
+    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plotconfig=None,hardplots=False,store_res=None):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
@@ -38,7 +38,6 @@ class Config(object):
         self.rawdata_dir = rawdata_dir 
         self.specprod_dir = specprod_dir
         self.outdir = outdir
-        self.plots = plots
         self.flavor = self.conf["Flavor"]
         
         #- Options to write out frame, fframe, preproc, and sky model files
@@ -48,12 +47,17 @@ class Config(object):
 
         #- Load plotting configuration file
         self.plotconf = None
-        if plots:
-            with open(plots, 'r') as pf:
+        if plotconfig:
+            with open(plotconfig, 'r') as pf:
                 self.plotconf = yaml.load(pf)
                 pf.close()
 
-        # RS: use --resolution to store full resolution informtion
+        #- Use hard coded plotting algorithms
+        self.hardplots = False
+        if hardplots:
+            self.hardplots = True
+
+        # Use --resolution to store full resolution informtion
         if store_res:
             self.usesigma = True
         else:
@@ -267,20 +271,15 @@ class Config(object):
         referencemetrics=[]        
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                if self.plots:
-                    qaplot = self.dump_qa()[1][qa]
-                else:
-                    qaplot = None
-
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
                 qaopts[qa]={'night' : self.night, 'expid' : self.expid,
                             'camera': self.camera, 'paname': PA, 'PSFFile': self.psf_filename,
                             'amps': self.amps, 'qafile': self.dump_qa()[0][qa],
-                            'qafig': qaplot, 'FiberMap': self.fibermap,
+                            'qafig': self.dump_qa()[1][qa], 'FiberMap': self.fibermap,
                             'param': params, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa,
-                            'plots' : self.plots, 'plotconf':self.plotconf
+                            'plotconf':self.plotconf, 'hardplots': self.hardplots
                             }
                 if qa == 'Calc_XWSigma':
                     qaopts[qa]['Peaks']=self.algorithms['Initialize']['PEAKS']
