@@ -259,88 +259,52 @@ def reOrderDict(mergeDict):
 ###################################
 
 def EditDic(Camera):
-            
-             ra  = delKey(Camera, "RA")
-             dec = delKey(Camera, "DEC")
-             airmass = delKey(Camera, "AIRMASS")
-             seeing = delKey(Camera, "SEEING")
-             exptime = delKey(Camera, "EXPTIME")
-             program = delKey(Camera, "PROGRAM")
-             sciprog = ["DARK","GRAY","BRIGHT"]
-             QAlist=["BIAS_AMP","LITFRAC_AMP","NOISE_AMP","XWSIGMA","XYSHIFTS","NGOODFIB","DELTAMAG_TGT","FIDSNR_TGT","SKYRBAND","PEAKCOUNT", "SKYCONT"]    
+    desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
+    desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
+    quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
 
-             if program.upper() in sciprog:
-                sciprog.remove(program.upper())
-                for prog in sciprog:
-                 for qa in QAlist:
-                     delKey(Camera,qa+'_'+prog+"_REF",include=True)
-                 
-             desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
-             desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
-             quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
-             fibermags = delKey(Camera,"FIBER_MAGS")
-             skyfib_id = delKey(Camera,"SKYFIBERID")
-             nskyfib = delKey(Camera,"NSKY_FIB")
-             
-             elg_fiberid = delKey(Camera, "ELG_FIBERID")
-             lrg_fiberid = delKey(Camera, "LRG_FIBERID") 
-             qso_fiberid = delKey(Camera, "QSO_FIBERID") 
-             star_fiberid = delKey(Camera, "STAR_FIBERID", remove=False)
-             
-             std_fiberid = delKey(Camera, "STD_FIBERID", remove=False)
+    delKey(Camera, "SKYSUB_QL")
+    delKey(Camera, "MED_RESID")
+    delKey(Camera, "MED_RESID_FIBER")
+    delKey(Camera, "MED_RESID_WAVE")             
+    delKey(Camera, "MED_RESID")
+    delKey(Camera, "MED_RESID_FIBER")
+    delKey(Camera, "RESID_PER")
+    delKey(Camera, "RESID_STATUS")               
+    delKey(Camera, "BIAS")
+    delKey(Camera, "NOISE")
+    delKey(Camera, "XWSHIFT_AMP")
+    delKey(Camera, "XWSIGMA_SHIFT") 
+    delKey(Camera, "NREJ")
+    delKey(Camera, "MED_SKY")
+    delKey(Camera, "NBAD_PCHI")
 
-             delKey(Camera, "SKYSUB_QL")
-             delKey(Camera, "MED_RESID")
-             delKey(Camera, "MED_RESID_FIBER")
-             delKey(Camera, "MED_RESID_WAVE")             
-             delKey(Camera, "MED_RESID")
-             delKey(Camera, "MED_RESID_FIBER")
-             delKey(Camera, "RESID_PER")
-             delKey(Camera, "RESID_STATUS")               
-             delKey(Camera, "BIAS")
-             delKey(Camera, "NOISE")
-             delKey(Camera, "XWSHIFT_AMP")
-             delKey(Camera, "XWSIGMA_SHIFT") 
-             delKey(Camera, "NREJ")
-             delKey(Camera, "MED_SKY")
-             delKey(Camera, "NBAD_PCHI")
+    all_Steps=delKey(Camera,"PIPELINE_STEPS")   # returns a list of dictionaries, each holding one step
+    step_dict={}
+    for step in all_Steps:
+        if step['PIPELINE_STEP'] == 'INITIALIZE':
+            Camera['GENERAL_INFO']=delKey(step,"METRICS",remove=False,include=True)
+        else:
+            step_Name=delKey(step,"PIPELINE_STEP")
+            step_dict[step_Name]=step
+    Camera["PIPELINE_STEPS"]=step_dict
 
-             
-             if star_fiberid is None:
-                 star_fiberid = std_fiberid
-             
-             b_peaks = delKey(Camera, "B_PEAKS") 
-             r_peaks = delKey(Camera, "R_PEAKS")
-             z_peaks = delKey(Camera, "Z_PEAKS")
-            
-             try: ra = [float("%.5f" % m) for m in ra]
-             except: ra=None
-             
-             try: dec = [float("%.5f" % m) for m in dec]
-             except: dec=None
-            
-             
-             #SE: Date/time of the merger i.e., QL run - time is in UTC = Mayall local time + 7h
-             def utcnow():
-               return datetime.datetime.now(tz=pytz.utc)
-             
-             QLrun_datime = utcnow().isoformat()
+    program=Camera['GENERAL_INFO']['PROGRAM']
+    sciprog = ["DARK","GRAY","BRIGHT"]
+    QAlist=["BIAS_AMP","LITFRAC_AMP","NOISE_AMP","XWSIGMA","XYSHIFTS","NGOODFIB","DELTAMAG_TGT","FIDSNR_TGT","SKYRBAND","PEAKCOUNT", "SKYCONT"]
 
-             datetime.datetime.now(datetime.timezone.utc)
-             datetime.datetime.now(tz=pytz.utc)
-             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime,"PROGRAM":program.upper(),"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver,"RA":ra, "DEC":dec,"SKY_FIBERID":skyfib_id,"ELG_FIBERID":elg_fiberid,"LRG_FIBERID":lrg_fiberid,"QSO_FIBERID":qso_fiberid,"STAR_FIBERID":star_fiberid,"B_PEAKS":b_peaks,"R_PEAKS":r_peaks,"Z_PEAKS":z_peaks,"FIBER_MAGS":fibermags,"NSKY_FIB":nskyfib}
-             
-             
-             all_Steps  = delKey(Camera, "PIPELINE_STEPS")   # returns a list of dictionaries, each holding one step
-             step_dict = {}
-             for step in all_Steps:
-                 
-                 step_Name = delKey(step, "PIPELINE_STEP")
-                 step_dict[step_Name] = step
-             Camera["PIPELINE_STEPS"]=step_dict
-                 
+    if program in sciprog:
+        sciprog.remove(program)
+        for prog in sciprog:
+            for qa in QAlist:
+                delKey(Camera,qa+'_'+prog+"_REF",include=True)
+
+    Camera["GENERAL_INFO"]["FITS_DESISPEC_VERSION"]=desispec_fits_ver
+    Camera["GENERAL_INFO"]["PROC_DESISPEC_VERSION"]=desispec_run_ver
+    Camera["GENERAL_INFO"]["PROC_QuickLook_VERSION"]=quicklook_run_ver
+
 ###################################
-                 
+
 
 class QL_QAMerger:
     def __init__(self,night,expid,flavor,camera,program,convdict):
@@ -359,13 +323,9 @@ class QL_QAMerger:
             if camera[0].lower()=='b':decamfilter='G'
             elif camera[0].lower()=='r': decamfilter='R'
             elif camera[0].lower()=='z': decamfilter='Z'
-            fibloindex=int(camera[1])*500
-            fibhiindex=int(camera[1])*500+500
-            flux=convdict['FiberMap']['FLUX_{}'.format(decamfilter)][fibloindex:fibhiindex]
-            fibermags=22.5-2.5*np.log10(flux) 
-            self.__schema={'NIGHT':night, 'EXPID':expid, 'CAMERA':camera,'FLAVOR':flavor,'PROGRAM':program, 'PIPELINE_STEPS':self.__stepsArr,'FIBER_MAGS':fibermags}
+            self.__schema={'NIGHT':night,'EXPID':expid,'CAMERA':camera,'FLAVOR':flavor,'PIPELINE_STEPS':self.__stepsArr}
         else:
-            self.__schema={'NIGHT':night, 'EXPID':expid, 'CAMERA':camera,'FLAVOR':flavor,'PROGRAM':program, 'PIPELINE_STEPS':self.__stepsArr}
+            self.__schema={'NIGHT':night,'EXPID':expid,'CAMERA':camera,'FLAVOR':flavor,'PIPELINE_STEPS':self.__stepsArr}
         
     class QL_Step:
         def __init__(self,paName,paramsDict,metricsDict):

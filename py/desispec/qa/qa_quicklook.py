@@ -11,6 +11,7 @@ import re
 import astropy.io.fits as fits
 import desispec.qa.qa_plots_ql as plot
 import desispec.quicklook.qlpsf
+import desispec.qa.qa_plots_ql as fig
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
@@ -57,6 +58,7 @@ def get_inputs(*args,**kwargs):
     inputs["fibermap"]=None
     if "FiberMap" in kwargs: inputs["fibermap"]=kwargs["FiberMap"]
 
+    if "Peaks" in kwargs: inputs["Peaks"]=kwargs["Peaks"]
 
     if "qafile" in kwargs: inputs["qafile"] = kwargs["qafile"]
     else: inputs["qafile"]=None
@@ -64,27 +66,13 @@ def get_inputs(*args,**kwargs):
     if "qafig" in kwargs: inputs["qafig"]=kwargs["qafig"]
     else: inputs["qafig"]=None
 
+    if "plotconf" in kwargs: inputs["plotconf"]=kwargs["plotconf"]
+    else: inputs["plotconf"]=None
+
+    if "hardplots" in kwargs: inputs["hardplots"]=kwargs["hardplots"]
+    else: inputs["hardplots"]=False
+
     return inputs
-
-def get_outputs(qafile,qafig,retval,plot_func):
-    """
-    Setup QA file and QA fig
-    """
-    if qafile is not None:
-        outfile = qa.write_qa_ql(qafile,retval)
-        log.debug("Output QA data is in {}".format(outfile))
-    if qafig is not None:
-        import desispec.qa.qa_plots_ql as fig
-        if 'snr' in qafig:
-            plot=getattr(fig,plot_func[0])
-            plot(retval,qafig,plot_func[1],plot_func[2],plot_func[3],plot_func[4],plot_func[5])
-        elif plot_func=='plot_skyRband': pass
-        else:
-            plot=getattr(fig,plot_func)
-            plot(retval,qafig)
-        log.debug("Output QA fig {}".format(qafig))
-
-    return
 
 def get_image(filetype,night,expid,camera,specdir):
     '''
@@ -420,6 +408,8 @@ class Bias_From_Overscan(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
@@ -478,7 +468,19 @@ class Bias_From_Overscan(MonitoringAlg):
             #retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
             retval["METRICS"]={}
 
-        get_outputs(qafile,qafig,retval,'plot_bias_overscan')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_bias_overscan(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):
@@ -534,6 +536,8 @@ class Get_RMS(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
@@ -548,7 +552,6 @@ class Get_RMS(MonitoringAlg):
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
 
         retval["NIGHT"] = image.meta["NIGHT"]
-        
 
         # return rms values in rms/sqrt(exptime)
         #rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
@@ -557,8 +560,6 @@ class Get_RMS(MonitoringAlg):
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")            
-            
-
 
         retval["PARAMS"] = param
 
@@ -684,7 +685,20 @@ class Get_RMS(MonitoringAlg):
         else:
             retval["METRICS"]={"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
-        get_outputs(qafile,qafig,retval,'plot_RMS')
+
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_RMS(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval    
 
     def get_default_config(self):
@@ -739,10 +753,13 @@ class Calc_XWSigma(MonitoringAlg):
         psffile=inputs["psf"]
         psf=desispec.quicklook.qlpsf.PSF(psffile)
         amps=inputs["amps"]
+        allpeaks=inputs["Peaks"]
         qafile=inputs["qafile"]
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         retval={}
         retval["PANAME"] = paname
@@ -754,11 +771,9 @@ class Calc_XWSigma(MonitoringAlg):
         
         if image.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
-            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+            retval["PROGRAM"]=program=fibmap[1].header['PROGRAM']
 
-        
         retval["NIGHT"] = image.meta["NIGHT"]
-
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
@@ -774,7 +789,7 @@ class Calc_XWSigma(MonitoringAlg):
         #- Define number of pixels to be fit
         dp=param['PIXEL_RANGE']/2
         #- Get wavelength ranges around peaks
-        peaks=param['{}_PEAKS'.format(camera[0].upper())]
+        peaks=allpeaks['{}_PEAKS'.format(camera[0].upper())]
         #- Maximum allowed fit sigma value
         maxsigma=param['MAX_SIGMA']
 
@@ -875,10 +890,10 @@ class Calc_XWSigma(MonitoringAlg):
 
         #SE: mention the example here when the next lines are ineffective and when they are effective in removing the NaN from XWSIGMA_AMP--> XWSIGMA itself no longer includes any NaN value. As we both know, this is not the way to properly deal with NaNs -->let's see if switching to non-scipy fuction would bring about a better solution
         if len(xsigma)==0:
-            xsigma = [param['XWSIGMA_REF'][0]]
+            xsigma=[param['XWSIGMA_{}_REF'.format(program.upper())][0]]
 
         if len(wsigma)==0:
-            wsigma=[param['XWSIGMA_REF'][1]]
+            wsigma=[param['XWSIGMA_{}_REF'.format(program.upper())][1]]
 
         #- Combine metrics for x and w
         xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
@@ -908,7 +923,19 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib}#,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
 
-        get_outputs(qafile,qafig,retval,'plot_XWSigma')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_XWSigma(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
  
     def get_default_config(self):
@@ -963,6 +990,8 @@ class Count_Pixels(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         retval={}
         retval["PANAME"] = paname
@@ -1004,7 +1033,19 @@ class Count_Pixels(MonitoringAlg):
 	#        retval["METRICS"]={"NPIX_AMP",npix_amps,'LITFRAC_AMP': litfrac_amps}
         retval["METRICS"]={"LITFRAC_AMP": litfrac_amps}	
 
-        get_outputs(qafile,qafig,retval,'plot_countpix')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_countpix(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):
@@ -1062,6 +1103,8 @@ class CountSpectralBins(MonitoringAlg):
         qafig=None #inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1124,7 +1167,19 @@ class CountSpectralBins(MonitoringAlg):
 
         retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBERS": good_fibers}
 
-        get_outputs(qafile,qafig,retval,'plot_countspectralbins')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_countspectralbins(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):
@@ -1179,6 +1234,8 @@ class Sky_Continuum(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1217,7 +1274,19 @@ class Sky_Continuum(MonitoringAlg):
         retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
              
 
-        get_outputs(qafile,qafig,retval,'plot_sky_continuum')        
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_sky_continuum(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):
@@ -1272,6 +1341,8 @@ class Sky_Rband(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1360,7 +1431,10 @@ class Sky_Rband(MonitoringAlg):
 
         retval["METRICS"]={"SKYRBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
 
-        get_outputs(qafile,qafig,retval,'plot_skyRband')
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+
         return retval
 
     def get_default_config(self):
@@ -1412,11 +1486,14 @@ class Sky_Peaks(MonitoringAlg):
         paname=inputs["paname"]
         fibermap=inputs["fibermap"]
         amps=inputs["amps"]
+        allpeaks=inputs["Peaks"]
         qafile=inputs["qafile"]
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
-        
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
+
         if isinstance(frame,QFrame):
             frame = frame.asframe()
 
@@ -1439,6 +1516,9 @@ class Sky_Peaks(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
+        param['B_PEAKS']=allpeaks['B_PEAKS']
+        param['R_PEAKS']=allpeaks['R_PEAKS']
+        param['Z_PEAKS']=allpeaks['Z_PEAKS']
 
         #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
         nspec_counts, sky_counts, skyfibers, nskyfib= sky_peaks(param, frame)
@@ -1451,7 +1531,19 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
 
-        get_outputs(qafile,qafig,retval,'plot_sky_peaks')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_sky_peaks(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):
@@ -1513,6 +1605,8 @@ class Sky_Residual(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1546,7 +1640,19 @@ class Sky_Residual(MonitoringAlg):
         for key in qadict.keys():
             retval["METRICS"][key] = qadict[key]
 
-        get_outputs(qafile,qafig,retval,'plot_residuals')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_residuals(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):
@@ -1601,6 +1707,9 @@ class Integrate_Spec(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
+
         if isinstance(frame,QFrame):
             frame = frame.asframe()
         ra=frame.fibermap["TARGET_RA"]
@@ -1737,7 +1846,19 @@ class Integrate_Spec(MonitoringAlg):
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
         retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
-        get_outputs(qafile,qafig,retval,'plot_integral')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_integral(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval    
 
     def get_default_config(self):
@@ -1791,6 +1912,8 @@ class Calculate_SNR(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1838,8 +1961,20 @@ class Calculate_SNR(MonitoringAlg):
 
         rescut=param["RESIDUAL_CUT"]
         sigmacut=param["SIGMA_CUT"]
-        
-        get_outputs(qafile,qafig,retval,['plot_SNR',objlist,badfibs,fitsnr,rescut,sigmacut])
+
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,rescut,sigmacut,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):
@@ -1896,6 +2031,8 @@ class Check_Resolution(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
+        plotconf=inputs["plotconf"]
+        hardplots=inputs["hardplots"]
 
         retval={}
         retval['PANAME'] = paname
@@ -1939,7 +2076,19 @@ class Check_Resolution(MonitoringAlg):
             
         retval["PARAMS"] = param
 
-        get_outputs(qafile,qafig,retval,'plot_lpolyhist')
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
+        if qafile is not None:
+            outfile=qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            fig.plot_lpolyhist(retval,qafig,plotconf=plotconf,hardplots=hardplots)
+            log.debug("Output QA fig {}".format(qafig))
+
         return retval
 
     def get_default_config(self):

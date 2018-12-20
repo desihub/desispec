@@ -14,6 +14,7 @@ Timeout: 120.0
 Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ApplyFiberFlat_QP, SkySub_QP, ApplyFluxCalibration]
 Algorithms:
     Initialize:
+        PEAKS: {B_PEAKS: [3914.4,5578.9], R_PEAKS: [6301.9,7342.8], Z_PEAKS: [8432.4,9378.5]}
         QA: {} 
     Preproc:
         QA: 
@@ -24,10 +25,7 @@ Algorithms:
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_BRIGHT_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_DARK_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_GRAY_REF:[0.3,0.3,0.4,0.4]}
             Calc_XWSigma:
-                PARAMS: {B_PEAKS: [3914.4,5578.9],
-                         R_PEAKS: [6301.9,7342.8],
-                         Z_PEAKS: [8432.4,9378.5],
-                         PIXEL_RANGE: 7,
+                PARAMS: {PIXEL_RANGE: 7,
                          MAX_SIGMA: 10,
                          XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
                          XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_BRIGHT_REF:[1.1,1.8],XWSIGMA_DARK_REF:[1.1,1.8],XWSIGMA_GRAY_REF:[1.1,1.8]}
@@ -54,10 +52,7 @@ Algorithms:
                          SKYCONT_NORMAL_RANGE: [-10.0, 10.0],
                          SKYCONT_WARN_RANGE: [-20.0, 20.0],SKYCONT_BRIGHT_REF:[160],SKYCONT_DARK_REF:[160],SKYCONT_GRAY_REF:[160]}
             Sky_Peaks:
-                PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
-                         R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                         PEAKCOUNT_NORMAL_RANGE: [-2.0, 2.0],
+                PARAMS: {PEAKCOUNT_NORMAL_RANGE: [-2.0, 2.0],
                          PEAKCOUNT_WARN_RANGE: [-4.0, 4.0],PEAKCOUNT_BRIGHT_REF:[10.0],PEAKCOUNT_DARK_REF:[10.0],PEAKCOUNT_GRAY_REF:[10.0]}
     SkySub_QP:
         QA:

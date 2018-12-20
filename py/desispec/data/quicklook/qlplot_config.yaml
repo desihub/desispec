@@ -1,0 +1,18 @@
+# Example Configuration to plot desired metrics
+PAGE1:
+    Title: Get RMS metrics after Preprocessing
+    noise_per_amp: {TYPE: PATCH, VALS: NOISE_AMP, PLOT_TITLE: Noise per amp, GRID: [2,2]}
+    overscan_noise_per_amp: {TYPE: PATCH, VALS: NOISE_OVERSCAN_AMP, PLOT_TITLE: Overscan Noise per amp, GRID: [2,2]}
+
+PAGE2:
+    Title: Bias from Overscan metrics after Preprocessing
+    bias_per_amp: {TYPE: PATCH, VALS: BIAS_AMP, PLOT_TITLE: Bias per amp, GRID: [2,2]}
+
+PAGE3:
+    Title: Sky Continuum metrics after Applying Fiberflat
+    skycont: {TYPE: 2DPLOT, XVALS: SKYFIBERID, YVALS: SKYCONT_FIBER, PLOT_TITLE: Sky Continua, XTITLE: Fiber ID, YTITLE: Sky continuum (counts), YRANGE: [100,300]}
+
+PAGE4:
+    Title: Integrate Spectra metrics after Flux Calibration
+    specmag_petal: {TYPE: 3DPLOT, XVALS: RA, YVALS: DEC, ZVALS: SPEC_MAGS, PLOT_TITLE: Spectral Magnitudes on the Focal Plane, XTITLE: RA, YTITLE: DEC, HEAT: Blues}
+

@@ -13,8 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. 
     expand_config will expand out to full format as needed by quicklook.setup
     """
-
-    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plots=None,store_res=None):
+    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plotconfig=None,hardplots=False,store_res=None):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
@@ -39,7 +38,6 @@ class Config(object):
         self.rawdata_dir = rawdata_dir 
         self.specprod_dir = specprod_dir
         self.outdir = outdir
-        self.plots = plots
         self.flavor = self.conf["Flavor"]
         
         #- Options to write out frame, fframe, preproc, and sky model files
@@ -47,7 +45,19 @@ class Config(object):
         self.writepreprocfile = self.conf["WritePreprocfile"]
         self.writeskymodelfile = False
 
-        # RS: use --resolution to store full resolution informtion
+        #- Load plotting configuration file
+        self.plotconf = None
+        if plotconfig:
+            with open(plotconfig, 'r') as pf:
+                self.plotconf = yaml.load(pf)
+                pf.close()
+
+        #- Use hard coded plotting algorithms
+        self.hardplots = False
+        if hardplots:
+            self.hardplots = True
+
+        # Use --resolution to store full resolution informtion
         if store_res:
             self.usesigma = True
         else:
@@ -115,7 +125,12 @@ class Config(object):
                 self.wavelength='7420,9830,0.8'
 
         #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
-        paopt_initialize={'camera': self.camera}
+
+        peaks=None
+        if 'Initialize' in self.algorithms.keys():
+            if 'PEAKS' in self.algorithms['Initialize'].keys():
+                peaks=self.algorithms['Initialize']['PEAKS']
+        paopt_initialize={'FiberMap':self.fibermap,'Camera':self.camera,'Peaks':peaks}
 
         if self.writepreprocfile:
             preprocfile=self.dump_pa("Preproc")
@@ -256,24 +271,22 @@ class Config(object):
         referencemetrics=[]        
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                if self.plots:
-                    qaplot = self.dump_qa()[1][qa]
-                else:
-                    qaplot = None
-
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
                 qaopts[qa]={'night' : self.night, 'expid' : self.expid,
                             'camera': self.camera, 'paname': PA, 'PSFFile': self.psf_filename,
                             'amps': self.amps, 'qafile': self.dump_qa()[0][qa],
-                            'qafig': qaplot, 'FiberMap': self.fibermap,
+                            'qafig': self.dump_qa()[1][qa], 'FiberMap': self.fibermap,
                             'param': params, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa,
-                            'plots' : self.plots
+                            'plotconf':self.plotconf, 'hardplots': self.hardplots
                             }
                 if qa == 'Calc_XWSigma':
+                    qaopts[qa]['Peaks']=self.algorithms['Initialize']['PEAKS']
                     qaopts[qa]['Flavor']=self.flavor
                     qaopts[qa]['PSFFile']=self.calibpsf
+                if qa == 'Sky_Peaks':
+                    qaopts[qa]['Peaks']=self.algorithms['Initialize']['PEAKS']
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir
@@ -433,6 +446,7 @@ class Config(object):
         outconfig['singleqa'] = self.singqa
         outconfig['Timeout'] = self.timeout
         outconfig['FiberFlatFile'] = self.fiberflat
+        outconfig['PlotConfig'] = self.plotconf
 
         #- Check if all the files exist for this QL configuraion
         check_config(outconfig,self.singqa)
