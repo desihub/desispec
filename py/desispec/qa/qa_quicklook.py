@@ -689,17 +689,7 @@ class Get_RMS(MonitoringAlg):
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
         ###############################################################
-        #- Add metrics for patch plot
-        retval['METRICS']['SIGMA_AMP']=[np.sqrt(image.meta['OBSRDN1']),np.sqrt(image.meta['OBSRDN2']),np.sqrt(image.meta['OBSRDN3']),np.sqrt(image.meta['OBSRDN4'])]
 
-        #- Add metrics for 2d plot
-        retval['METRICS']['VALUE']=image.pix[0]
-        retval['METRICS']['PIXEL']=np.arange(len(image.pix[0]))
-
-        #- Add metrics for 3d plot
-        retval['METRICS']['3D_XVALS']=np.arange(10)
-        retval['METRICS']['3D_YVALS']=np.arange(10)
-        retval['METRICS']['3D_ZVALS']=np.arange(10)
         ###############################################################
 
         if qafile is not None:

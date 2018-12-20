@@ -3,9 +3,6 @@ PAGE1:
     Title: Get RMS metrics after Preprocessing
     noise_per_amp: {TYPE: PATCH, VALS: NOISE_AMP, PLOT_TITLE: Noise per amp, GRID: [2,2]}
     overscan_noise_per_amp: {TYPE: PATCH, VALS: NOISE_OVERSCAN_AMP, PLOT_TITLE: Overscan Noise per amp, GRID: [2,2]}
-    sigma_amp: {TYPE: PATCH, VALS: SIGMA_AMP, PLOT_TITLE: Sigma amp, GRID: [2,2]}
-    pixel_value: {TYPE: 2DPLOT, XVALS: PIXEL, YVALS: VALUE, PLOT_TITLE: pixel value, XTITLE: pixel, YTITLE: counts}
-    3d_plot: {TYPE: 3DPLOT, XVALS: 3D_XVALS, YVALS: 3D_YVALS, ZVALS: 3D_ZVALS, PLOT_TITLE: 3d plot, XTITLE: x value, YTITLE: y value}
 
 PAGE2:
     Title: Bias from Overscan metrics after Preprocessing
