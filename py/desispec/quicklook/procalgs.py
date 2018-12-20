@@ -5,12 +5,16 @@ Pipeline Preprocessing algorithms for Quicklook
 import numpy as np
 import os,sys
 import astropy
+import astropy.io.fits as fits 
 from desispec import io
+from desispec.io import read_raw,read_image
+from desispec.io.meta import findfile
+from desispec.io.fluxcalibration import read_average_flux_calibration
+from desispec.preproc import read_ccd_calibration
 from desispec.quicklook import pas
 from desispec.quicklook import qlexceptions,qllogger
 from desispec.image import Image as im
 from desispec.frame import Frame as fr
-
 from desispec.io.xytraceset import read_xytraceset
 from desispec.maskbits import ccdmask
 
@@ -867,79 +871,38 @@ class ApplyFluxCalibration(pas.PipelineAlg):
 
         input_frame=args[0][0]
 
-        if "CalibFile" in kwargs:
-            calibfile=kwargs["CalibFile"]
-        else:
-            log.critical("Must provide a calibration file")
-            sys.exit()
-
         if "outputfile" in kwargs:
             outputfile=kwargs["outputfile"]
         else:
             log.critical("Must provide output file to write cframe")
             sys.exit()
 
-        return self.run_pa(input_frame,calibfile,outputfile=outputfile)
+        return self.run_pa(input_frame,outputfile=outputfile)
 
-    def run_pa(self,frame,calibfile,outputfile=None):
-        from desispec.io.fluxcalibration import read_flux_calibration
-        from desispec.quicklook.palib import apply_flux_calibration
-        from desispec.fluxcalibration import FluxCalib
-        from desispec.qproc.io import write_qframe
+    def run_pa(self,frame,outputfile=None):
+        night=frame.meta['NIGHT']
+        camera=frame.meta['CAMERA']
+        expid=frame.meta['EXPID']
 
-         # This try/except statement is a temporary placeholder to get output, will change once calibration information is available
-        try:
-            #- If a calibration file exists, read in file
-            fluxcalib=read_flux_calibration(calibfile)
-            log.info("Creating FluxCalib object from {}".format(calibfile))
-    
-            #- Calculate average calibration vector
-            nonzerocalib=[]
-            for i in range(fluxcalib.calib.shape[0]):
-                if np.mean(fluxcalib.calib[i]) != 0.0:
-                    nonzerocalib.append(fluxcalib.calib[i])
-            avgcalibvector=np.zeros(fluxcalib.calib.shape[1])
-            for j in range(fluxcalib.calib.shape[1]):
-                vals=[]
-                for k in range(len(nonzerocalib)):
-                    vals.append(nonzerocalib[k][j])
-                avgcalibvector[j]=np.mean(vals)
+        rawfile=findfile('raw',night,expid,rawdata_dir=os.environ['QL_SPEC_DATA'])
+        rawfits=fits.open(rawfile)
+        primary_header=rawfits[0].header
+        image=read_raw(rawfile,camera)
+        calibration_data=read_ccd_calibration(image.meta,primary_header)
 
-            #- Check if frame and fluxcalib are on same wavelength grid
-            samegrid=False
-            if len(frame.wave) == len(fluxcalib.wave):
-                mval=np.max(np.abs(frame.wave-fluxcalib.wave))
-                if mval < 0.001:
-                    samegrid=True
-    
-            #- Convert fluxcalib.calib to average vector
-            if samegrid:
-                for k in range(fluxcalib.calib.shape[0]):
-                    fluxcalib.calib[k]=avgcalibvector
-            #- If frame/calib wavelength ranges are different, resample calib vector
-            else:
-                from desispec.quicklook.palib import resample_spec
-                newcalib=[]
-                newivar=[]
-                for l in range(frame.flux.shape[0]):
-                    cal,iv=resample_spec(fluxcalib.wave,avgcalibvector,frame.wave,ivar=fluxcalib.ivar[0]) #RS: using single ivar array, this can be updated if we need to be more meticulous here
-                    newcalib.append(cal)
-                    newivar.append(iv)
-                newcalib=np.array(newcalib)
-                newivar=np.array(newivar)
-                fluxcalib=FluxCalib(frame.wave,newcalib,newivar,frame.mask)
-        except:
-            # If calibration file doesn't exist, create an artificial FluxCalib object
-            log.warning("Calibration file not found, creating artifical FluxCalib object")
-            calibvector=[]
-            calibivar=[]
-            for i in range(frame.nspec):
-                calibvector.append(np.ones(frame.wave.shape[1]))
-                calibivar.append(np.ones(frame.wave.shape[1]))
-            calibvector=np.array(calibvector)
-            calibivar=np.array(calibivar)
-            fluxcalib=FluxCalib(frame.wave[0],calibvector,calibivar,frame.mask)
-        apply_flux_calibration(frame,fluxcalib)
+        fluxcalib_filename=os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],calibration_data["FLUXCALIB"])
+
+        fluxcalib = read_average_flux_calibration(fluxcalib_filename)
+        log.info("read average calib in {}".format(fluxcalib_filename))
+        seeing  = frame.meta["SEEING"]
+        airmass = frame.meta["AIRMASS"]
+        exptime = frame.meta["EXPTIME"]
+        exposure_calib = fluxcalib.value(seeing=seeing,airmass=airmass)
+        for q in range(frame.nspec) :
+            fiber_calib=np.interp(frame.wave[q],fluxcalib.wave,exposure_calib)*exptime
+            inv_calib = (fiber_calib>0)/(fiber_calib + (fiber_calib==0))
+            frame.flux[q] *= inv_calib
+            frame.ivar[q] *= fiber_calib**2*(fiber_calib>0)
 
         write_qframe(outputfile,frame)
         log.info("Wrote flux calibrated frame file %s after %s"%(outputfile,self.name))
