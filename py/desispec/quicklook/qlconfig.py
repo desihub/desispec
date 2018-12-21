@@ -176,8 +176,7 @@ class Config(object):
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
         cframefile=self.dump_pa("ApplyFluxCalibration")
-        calibfile=findfile('calib',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
-        paopt_fluxcal={'CalibFile': calibfile, 'outputfile': cframefile}
+        paopt_fluxcal={'outputfile': cframefile}
 
         if self.writeskymodelfile:
             outskyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
