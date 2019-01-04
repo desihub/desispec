@@ -1929,13 +1929,20 @@ class Calculate_SNR(MonitoringAlg):
         
         if frame.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
-            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
-        
+            retval["PROGRAM"]=program=fibmap[1].header['PROGRAM']
+
+        objlist=[]
+        if program == 'dark':
+            objlist = ['ELG','LRG','QSO','STAR']
+        elif program == 'gray':
+            objlist = ['ELG','STAR']
+        elif program == 'bright':
+            objlist = ['BGS','MWS','STAR']
+
         retval["NIGHT"] = night = frame.meta["NIGHT"]
 
         ra = fibermap["TARGET_RA"]
         dec = fibermap["TARGET_DEC"]
-        objlist = ['ELG','LRG','QSO','STAR']
 
         #- select band for mag, using DECAM_R if present
         if param is None:
@@ -1945,7 +1952,7 @@ class Calculate_SNR(MonitoringAlg):
 
         fidboundary=None
 
-        qadict,badfibs,fitsnr = qalib.SNRFit(frame,night,camera,expid,objlist,param,fidboundary=fidboundary)
+        qadict,badfibs,fitsnr = qalib.SNRFit(frame,night,camera,expid,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
 

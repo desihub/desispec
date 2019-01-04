@@ -562,7 +562,7 @@ def s2n_funcs(exptime=None):
              }
     return funcMap
 
-def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None,
+def SNRFit(frame,night,camera,expid,params,fidboundary=None,
            offline=False):
     """
     Signal vs. Noise With fitting
@@ -691,106 +691,113 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None,
     elgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.ELG) != 0)[0]
     lrgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.LRG) != 0)[0]
     qsofibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
+    bgsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.BGS_ANY) != 0)[0]
+    mwsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.MWS_ANY) != 0)[0]
     stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
 
     for T, fibers in (
             ['ELG', elgfibers],
             ['LRG', lrgfibers],
             ['QSO', qsofibers],
+            ['BGS', bgsfibers],
+            ['MWS', mwsfibers],
             ['STAR', stdfibers],
             ):
-        objvar = np.array(var)[fibers]
-        medsnr = mediansnr[fibers]
-        all_medsnr = medsnr.copy()  # In case any are cut below
-        mags = np.zeros(medsnr.shape)
-        ok = (photflux[fibers] > 0)
-        mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
-
-        try:
-	    #- Determine invalid SNR and mag values and remove
-            m=mags.copy()
-            s=medsnr.copy()
-            neg_snr=len(np.where(medsnr<=0.0)[0])
-            neg_snr_tot.append(neg_snr)
-            neg_val=np.where(medsnr<=0.0)[0]
-            inf_mag=np.where(m == np.inf)[0]
-            nan_mag=np.where(np.isnan(m))[0]
-            none_mag=np.where(m == np.array(None))[0]
-            cut=[]
-            cuts=[neg_val,inf_mag,nan_mag,none_mag]
-            for cc in range(len(cuts)):
-                if len(cuts[cc]) > 0:
-                    for ci in range(len(cuts[cc])):
-                        cut.append(cuts[cc][ci])
-            # Bad fits?
-            if len(cut) > 0:
-                m=list(m)
-                s=list(s)
-                objvar=list(objvar)
-                makecut=sorted(list(set(cut)))
-                for nn in range(len(makecut)):
-                    m.remove(m[makecut[nn]])
-                    s.remove(s[makecut[nn]])
-                    objvar.remove(objvar[makecut[nn]])
-                    for ni in range(len(makecut)):
-                        makecut[ni]-=1
-                m=np.array(m)
-                s=np.array(s)
-                objvar=np.array(objvar)
-                log.warning("In fit of {}, had to remove NANs from data for fitting!".format(T))
-            badfibs.append(fibers[sorted(list(set(cut)))])
-            xs=m.argsort()
-            #- Convert magnitudes to flux
-            x=10**(-0.4*(m[xs]-22.5))
-            med_snr=s[xs]
-            y=med_snr
-            #- Fit SNR vs. Magnitude using chi squared minimization,
-            #- evaluate at fiducial magnitude, and store results in METRICS
-            #- Set high minimum initally chi2 value to be overwritten when fitting
-            minchi2=1e10
-            for a in range(100):
-                for b in range(100):
-                    guess=[0.01*a,0.1*b]
-                    fitdata=fit(x,guess[0],guess[1])
-                    totchi2=[]
-                    for k in range(len(x)):
-                        singlechi2=((y[k]-fitdata[k])/objvar[k])**2
-                        totchi2.append(singlechi2)
-                    chi2=np.sum(totchi2)
-                    if chi2<=minchi2:
-                        minchi2=chi2
-                        fita=guess[0]
-                        fitb=guess[1]
-            # Save
-            fitcoeff.append([fita,fitb])
-            fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
-            fitT.append(T)
-        except RuntimeError:
-            log.warning("In fit of {}, Fit minimization failed!".format(T))
-            vs=np.array(initialParams)
-            fitcoeff.append(np.nan)
-            fidsnr_tgt.append(np.nan)
-
-        qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
-        if offline:
-            snr_mag=[medsnr,mags]
-            snrmag.append(snr_mag)
+        if len(fibers) == 0:
+            pass
         else:
-            snr_mag=[all_medsnr,mags]
-            snrmag.append(snr_mag)
-
-        #- Calculate residual SNR for focal plane plots
-        if not offline:
-            fit_snr = fit(x,fita,fitb)
-            fitsnr.append(fit_snr)
-            resid = (med_snr-fit_snr)/fit_snr
-            resid_snr += resid.tolist()
-        else:
-            x=10**(-0.4*(mags-22.5))
-            fit_snr = fit(x,fita,fitb)
-            fitsnr.append(fit_snr)
-            resid = (all_medsnr-fit_snr)/fit_snr
-            resid_snr += resid.tolist()
+            objvar = np.array(var)[fibers]
+            medsnr = mediansnr[fibers]
+            all_medsnr = medsnr.copy()  # In case any are cut below
+            mags = np.zeros(medsnr.shape)
+            ok = (photflux[fibers] > 0)
+            mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
+    
+            try:
+    	    #- Determine invalid SNR and mag values and remove
+                m=mags.copy()
+                s=medsnr.copy()
+                neg_snr=len(np.where(medsnr<=0.0)[0])
+                neg_snr_tot.append(neg_snr)
+                neg_val=np.where(medsnr<=0.0)[0]
+                inf_mag=np.where(m == np.inf)[0]
+                nan_mag=np.where(np.isnan(m))[0]
+                none_mag=np.where(m == np.array(None))[0]
+                cut=[]
+                cuts=[neg_val,inf_mag,nan_mag,none_mag]
+                for cc in range(len(cuts)):
+                    if len(cuts[cc]) > 0:
+                        for ci in range(len(cuts[cc])):
+                            cut.append(cuts[cc][ci])
+                # Bad fits?
+                if len(cut) > 0:
+                    m=list(m)
+                    s=list(s)
+                    objvar=list(objvar)
+                    makecut=sorted(list(set(cut)))
+                    for nn in range(len(makecut)):
+                        m.remove(m[makecut[nn]])
+                        s.remove(s[makecut[nn]])
+                        objvar.remove(objvar[makecut[nn]])
+                        for ni in range(len(makecut)):
+                            makecut[ni]-=1
+                    m=np.array(m)
+                    s=np.array(s)
+                    objvar=np.array(objvar)
+                    log.warning("In fit of {}, had to remove NANs from data for fitting!".format(T))
+                badfibs.append(fibers[sorted(list(set(cut)))])
+                xs=m.argsort()
+                #- Convert magnitudes to flux
+                x=10**(-0.4*(m[xs]-22.5))
+                med_snr=s[xs]
+                y=med_snr
+                #- Fit SNR vs. Magnitude using chi squared minimization,
+                #- evaluate at fiducial magnitude, and store results in METRICS
+                #- Set high minimum initally chi2 value to be overwritten when fitting
+                minchi2=1e10
+                for a in range(100):
+                    for b in range(100):
+                        guess=[0.01*a,0.1*b]
+                        fitdata=fit(x,guess[0],guess[1])
+                        totchi2=[]
+                        for k in range(len(x)):
+                            singlechi2=((y[k]-fitdata[k])/objvar[k])**2
+                            totchi2.append(singlechi2)
+                        chi2=np.sum(totchi2)
+                        if chi2<=minchi2:
+                            minchi2=chi2
+                            fita=guess[0]
+                            fitb=guess[1]
+                # Save
+                fitcoeff.append([fita,fitb])
+                fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
+                fitT.append(T)
+            except RuntimeError:
+                log.warning("In fit of {}, Fit minimization failed!".format(T))
+                vs=np.array(initialParams)
+                fitcoeff.append(np.nan)
+                fidsnr_tgt.append(np.nan)
+    
+            qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
+            if offline:
+                snr_mag=[medsnr,mags]
+                snrmag.append(snr_mag)
+            else:
+                snr_mag=[all_medsnr,mags]
+                snrmag.append(snr_mag)
+    
+            #- Calculate residual SNR for focal plane plots
+            if not offline:
+                fit_snr = fit(x,fita,fitb)
+                fitsnr.append(fit_snr)
+                resid = (med_snr-fit_snr)/fit_snr
+                resid_snr += resid.tolist()
+            else:
+                x=10**(-0.4*(mags-22.5))
+                fit_snr = fit(x,fita,fitb)
+                fitsnr.append(fit_snr)
+                resid = (all_medsnr-fit_snr)/fit_snr
+                resid_snr += resid.tolist()
 
 
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)

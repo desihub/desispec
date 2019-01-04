@@ -586,8 +586,6 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.,plotc
         sigmacut: only plot residuals (+/-) less than sigma cut (default 2.0)
         NOTE: rescut taken as default cut parameter
     """
-
-    
     med_snr=np.array(qa_dict["METRICS"]["MEDIAN_SNR"])
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
@@ -608,12 +606,12 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.,plotc
         dec=[]
         mags=[]
         snrs=[]
-        # Loop on object types
+        # Loop over object types
         for oid, otype in enumerate(objlist):
             mag=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
             snr=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
             fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
-    
+
             #  JXP -- The following is not a good way to code this in Python
             badobj = badfibs[oid]
             if len(badobj) > 0:
@@ -706,6 +704,8 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.,plotc
             ax.set_xlabel('{} Mag ({})\na={:.2f}, B={:.2f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
             if otype == 'STAR':
                 ax.set_xlim(16,20)
+            elif otype == 'BGS' or otype == 'MWS':
+                ax.set_xlim(14,24)
             elif otype == 'QSO':
                 ax.set_xlim(17,23)
             else:
