@@ -27,6 +27,7 @@ from desispec.preproc import _parse_sec_keyword
 from desispec.util import runcmd
 from desispec.qproc.qframe import QFrame
 from desispec.fluxcalibration import isStdStar
+from desitarget.targetmask import desi_mask
 import astropy
 from astropy.io import fits
 
@@ -1728,7 +1729,7 @@ class Integrate_Spec(MonitoringAlg):
         kwargs=self.config['kwargs']
         if frame.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
-            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+            retval["PROGRAM"]=program=fibmap[1].header['PROGRAM']
 
         retval["NIGHT"] = frame.meta["NIGHT"]
 
@@ -1738,23 +1739,43 @@ class Integrate_Spec(MonitoringAlg):
         if camera[0].lower() == 'b':
             band = 'G'
             responsefilter='decam2014-g'
-            zeropoint=25.296
         elif camera[0].lower() == 'r':
             band = 'R'
             responsefilter='decam2014-r'
-            zeropoint=25.374
         elif camera[0].lower() == 'z':
             band = 'Z'
             responsefilter='decam2014-z'
-            zeropoint=25.064
         else:
             raise ValueError("Camera {} not in b, r, or z channels...".format(camera))
+
+        #- Find fibers per target type
+        elgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.ELG) != 0)[0]
+        lrgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.LRG) != 0)[0]
+        qsofibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
+        bgsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.BGS_ANY) != 0)[0]
+        mwsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.MWS_ANY) != 0)[0]
+        stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+
+        #- Setup target fibers per program
+        if program == 'dark':
+            objfibers = [elgfibers,lrgfibers,qsofibers,stdfibers]
+        elif program == 'gray':
+            objfibers = [elgfibers,stdfibers]
+        elif program == 'bright':
+            objfibers = [bgsfibers,mwsfibers,stdfibers]
 
         magnitudes=np.zeros(frame.nspec) + 99.0  #- Use 99 for negative flux
         key = 'FLUX_'+band
         ii = frame.fibermap[key] > 0
         magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
-            
+
+        #- Separate magnitudes per target type
+        tgt_mags=[]
+        for obj in objfibers:
+            tgt_mags.append(magnitudes[obj])
+
+        tgt_mags = np.array(tgt_mags)
+
         #- Get filter response information from speclite
         try:
             from pkg_resources import resource_filename
@@ -1784,59 +1805,40 @@ class Integrate_Spec(MonitoringAlg):
                 res[indlo:indhi]=response[w]
         rflux=res*flux
 
+        #- Calculate integrals for each target type
+        tgt_specmags=[]
+        for T in objfibers:
+            obj_integ=[]
+            for ii in range(len(rflux[T])):
+                obj_integ.append(qalib.integrate_spec(frame.wave,rflux[T][ii]))
+            obj_integ = np.array(obj_integ)
+
+            #- Convert calibrated flux to spectral magnitude per terget type
+            obj_specmags = np.zeros(obj_integ.shape)
+            obj_specmags[obj_integ>0] = 22.5-2.5*np.log10(obj_integ[obj_integ>0]/frame.meta["EXPTIME"])
+            tgt_specmags.append(obj_specmags)
+
+        tgt_specmags = np.array(tgt_specmags)
+
         #- Calculate integrals for all fibers
         integrals=[]
         for ii in range(len(rflux)):
             integrals.append(qalib.integrate_spec(frame.wave,rflux[ii]))
         integrals=np.array(integrals)
 
-        #- Convert calibrated flux to fiber magnitude
+        #- Convert calibrated flux to spectral magnitude
         specmags=np.zeros(integrals.shape)
-        specmags[integrals>0]=zeropoint-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        specmags[integrals>0]=22.5-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
 
-        #- Calculate delta_mag (remove sky fibers first)
-        objects=frame.fibermap['OBJTYPE']
-        skyfibers=np.where(objects=="SKY")[0]
-        immags_nosky=list(magnitudes)
-        specmags_nosky=list(specmags)
-        for skyfib in range(len(skyfibers)):
-            immags_nosky.remove(immags_nosky[skyfibers[skyfib]])
-            specmags_nosky.remove(specmags_nosky[skyfibers[skyfib]])
-            for skyfibindex in range(len(skyfibers)):
-                skyfibers[skyfibindex]-=1
-       
-        delta_mag=np.array(specmags_nosky)-np.array(immags_nosky)
-        delm = np.nan_to_num(delta_mag)
-        
-        #- average integrals over fibers of each object type and get imaging magnitudes
-        integ_avg_tgt=[]
-        mag_avg_tgt=[]
-        integ_avg_sky=[]
+        #- Calculate delta mag
+        deltamag = specmags - magnitudes
 
-        objtypes=sorted(list(set(objects)))
-        if "SKY" in objtypes: objtypes.remove("SKY")
-        starfibers=np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
-        for T in objtypes:
-            fibers=np.where(objects==T)[0]
-            objmags=magnitudes[fibers]
-            mag_avg=np.mean(objmags)
-            mag_avg_tgt.append(mag_avg)
-            integ=integrals[fibers]
-            integ= integ[np.where(integ< max(integ))]
-            integ_avg=np.mean(integ)
-            integ_avg_tgt.append(integ_avg)
+        #- Calculate avg delta mag per target type
+        deltamag_tgt = tgt_specmags - tgt_mags
+        deltamag_tgt_avg=[]
+        for tgt in range(len(deltamag_tgt)):
+            deltamag_tgt_avg.append(np.mean(deltamag_tgt[tgt]))
 
-            if T == "STD":
-                int_stars=integ
-                int_average=integ_avg
-
-        # simple, temporary magdiff calculation (to be corrected...)
-        magdiff_avg=[]
-        for i in range(len(mag_avg_tgt)):
-            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+zeropoint
-            magdiff=mag_fib-mag_avg_tgt[i]
-            magdiff_avg.append(magdiff)
-            
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
@@ -1844,7 +1846,7 @@ class Integrate_Spec(MonitoringAlg):
         retval["PARAMS"] = param
 
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg),"WAVELENGTH":frame.wave}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
