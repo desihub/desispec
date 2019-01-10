@@ -23,37 +23,35 @@ class MonitoringAlg:
         self.config=config
         self.__deviation = None
         self.m_log.debug("initializing Monitoring alg {}".format(name))
+
     def __call__(self,*args,**kwargs):
-        
         res=self.run(*args,**kwargs)
         cargs=self.config['kwargs']
         params=cargs['param']
-        
-        
+
         metrics=res["METRICS"] if 'METRICS' in res else None
         if metrics is None:
             metrics={}
             res["METRICS"]=metrics
-        
+
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
         if res['FLAVOR'] == 'science':
            REFNAME = cargs["RESULTKEY"]+'_'+format(res['PROGRAM']).upper()+'_REF' # SE: get the REF name from cargs
         else:
            REFNAME = cargs["RESULTKEY"]+'_REF'
-           
+
         NORM_range = cargs["RESULTKEY"]+'_NORMAL_RANGE'
         WARN_range = cargs["RESULTKEY"]+'_WARN_RANGE'
         norm_range_val = [0,0]
         warn_range_val = [0,0]
-        
+
         if "QASTATUSKEY" in cargs: 
             QARESULTKEY=cargs["QASTATUSKEY"]
         if "RESULTKEY" in cargs:
             reskey=cargs["RESULTKEY"]
-                       
+
         if cargs["RESULTKEY"] == 'CHECKHDUS':
-             
              stats=[]    
              stats.append(metrics['CHECKHDUS_STATUS'])
              stats.append(metrics['EXPNUM_STATUS'])
@@ -61,13 +59,12 @@ class MonitoringAlg:
                     metrics[QARESULTKEY]='NORMAL'
              elif np.isin(stats,'ALARM').any():  
                     metrics[QARESULTKEY] = 'ALARM'
-                    
-             self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
-        
+
+             self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY])) 
+
         if reskey in metrics:
-            
             current = metrics[reskey]
-                
+
  #SE: Replacing this chunk (between the dashed lines) with an alternative that accomodates receiving the REF keys from the configuration  -----------------------------------------------------------------------------------------------------------------            
             #if "REFERENCE" in cargs:
                             
@@ -165,24 +162,22 @@ class MonitoringAlg:
         #Field 2 can be used for QLF to dynamically setup the display"""
         #return None
     #----------------------------------------------------------------------------------------------------------
-            
+
             if REFNAME in params:  #SE: get the REF value/ranges from params
-                
+
                 refval=params[REFNAME]
-                
+
                 if len(refval) ==1:
                     refval = refval[0]
-                
 
                 refval = np.asarray(refval)
                 current = np.asarray(current)
                 norm_range_val=params[NORM_range]
                 warn_range_val=params[WARN_range]
-                
-                
+
                 #SE: just in case any nan value sneaks in the array of the scalar metrics
                 ind = np.argwhere(np.isnan(current))
-                
+
                 if (ind.shape[0] > 0 and refval.shape[0] == current.shape[0]):
                    self.m_log.critical("QL {} : elements({}) of the result are returned as NaN! STATUS is determined for the real values".format(self.name,str(ind)))
                    
@@ -190,20 +185,19 @@ class MonitoringAlg:
                    for index in sorted(ind, reverse=True):
                        del current[index]
                        del refval[index]
-
  
             else: 
                 self.m_log.warning("No reference given. Update the configuration file to include reference value for QA: {}".format(self.name))
-            
+
             currlist=isinstance(current,(np.ndarray,collections.Sequence))
             reflist=isinstance(refval,(np.ndarray,collections.Sequence))
-            
+
             if currlist != reflist:
                 self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different types!".format(self.name,type(refval),type(current)))
             elif currlist: 
-                
+
                 if refval.size == current.size and current.size >1:
-                    
+
                     self.__deviation=[c-r for c,r in zip(np.sort(current),np.sort(refval))]
                 elif refval.size == current.size and current.size and current.size == 1:
                     self.__deviation =  (current- refval)/current
@@ -211,8 +205,7 @@ class MonitoringAlg:
                     self.m_log.warning("No measurement is done or no reference is available for this QA!- check the configuration file for references!")
                     metrics[QARESULTKEY]='UNKNOWN'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY])) 
-                #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else----------- line below should only be  "else:"
-                elif (cargs["RESULTKEY"] != 'FIDSNR_TGT' and cargs["RESULTKEY"] != 'DELTAMAG_TGT'):
+                elif refval.size != current.size:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,refval.size,current.size))
                     metrics[QARESULTKEY]='UNKNOWN'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
@@ -220,12 +213,12 @@ class MonitoringAlg:
             else: 
                 #SE "sorting" eliminate the chance of randomly shuffling items in the list that we observed in the past
                 self.__deviation=(np.sort(current)-np.sort(refval))/np.sort(current)
-                
+
         def findThr(d,t):
             if d != None and len(list(t)) >1:
                val=QASeverity.ALARM
                for l in list(t):
-                 
+
                  if d>=l[0][0] and d<l[0][1]:
                     val=l[1]
             else:
@@ -233,46 +226,28 @@ class MonitoringAlg:
                     val=l
             return val
 
-       
         devlist = self.__deviation
         thr = norm_range_val
         wthr = warn_range_val
-        
-        #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else-----------
-        if (cargs["RESULTKEY"] == 'FIDSNR_TGT' or cargs["RESULTKEY"] == 'DELTAMAG_TGT'):
-             devlist = current
-             stats = []   
-             for val in devlist:
-               if thr[0] <= val <= thr[1]:
-                  stats.append('NORMAL')
-               elif wthr[0] <= val <= wthr[1]:
-                  stats.append('WARNING')
-               else:
-                  stats.append('ALARM')
-                  
-                  
-        #--------------------------------------------------------------------------------------------
-        
-        
+
         if devlist is None:
             pass
         #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else----------- line below should only be "elif len(thr)==2 and len(wthr)==2:"
         elif  (len(thr)==2 and len(wthr)==2):
-                    
+
                     if np.size(devlist)== 1:
                         d=[]
                         d.append(devlist)
                         devlist = d
                     stats = []   
                     for val in devlist:
-                      #print(cargs["RESULTKEY"],current,thr[0],val,thr[1])
                       if thr[0] <= val <= thr[1]:
                         stats.append('NORMAL')
                       elif wthr[0] <= val <= wthr[1]:
                           stats.append('WARNING')
                       else:
                           stats.append('ALARM')
-                              
+
                     if  np.isin(stats,'NORMAL').all():
                         metrics[QARESULTKEY]='NORMAL'
                     elif np.isin(stats,'WARNING').any() and np.isin(stats,'ALARM').any():
@@ -283,10 +258,8 @@ class MonitoringAlg:
                         metrics[QARESULTKEY] = 'WARNING'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
 
-
         return res
-    
-    
+
     def run(self,*argv,**kwargs):
         pass
     def is_compatible(self,Type):
