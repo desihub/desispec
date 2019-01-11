@@ -1814,8 +1814,9 @@ class Integrate_Spec(MonitoringAlg):
             obj_integ = np.array(obj_integ)
 
             #- Convert calibrated flux to spectral magnitude per terget type
+            #- Using ST magnitude system because frame flux is in units ergs/s/cm**2/A
             obj_specmags = np.zeros(obj_integ.shape)
-            obj_specmags[obj_integ>0] = 22.5-2.5*np.log10(obj_integ[obj_integ>0]/frame.meta["EXPTIME"])
+            obj_specmags[obj_integ>0] = 21.1-2.5*np.log10(obj_integ[obj_integ>0]/frame.meta["EXPTIME"])
             tgt_specmags.append(obj_specmags)
 
         tgt_specmags = np.array(tgt_specmags)
@@ -1828,7 +1829,7 @@ class Integrate_Spec(MonitoringAlg):
 
         #- Convert calibrated flux to spectral magnitude
         specmags=np.zeros(integrals.shape)
-        specmags[integrals>0]=22.5-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
 
         #- Calculate delta mag
         deltamag = specmags - magnitudes
