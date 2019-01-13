@@ -1949,7 +1949,7 @@ class Calculate_SNR(MonitoringAlg):
 
         fidboundary=None
 
-        qadict,badfibs,fitsnr = qalib.SNRFit(frame,night,camera,expid,param,fidboundary=fidboundary)
+        qadict,fitsnr = qalib.SNRFit(frame,night,camera,expid,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
 
@@ -1976,7 +1976,7 @@ class Calculate_SNR(MonitoringAlg):
             outfile=qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            fig.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,rescut,sigmacut,plotconf=plotconf,hardplots=hardplots)
+            fig.plot_SNR(retval,qafig,objlist,fitsnr,rescut,sigmacut,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
 
         return retval

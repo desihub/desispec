@@ -685,7 +685,6 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
     fitcoeff=[]
     fitcovar=[]
     snrmag=[]
-    badfibs=[]
     fitsnr=[]
     fitT = []
     elgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.ELG) != 0)[0]
@@ -714,42 +713,13 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
             mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
     
             try:
-    	    #- Determine invalid SNR and mag values and remove
-                m=mags.copy()
-                s=medsnr.copy()
+    	        #- Determine negative SNR and mag values and remove
                 neg_snr=len(np.where(medsnr<=0.0)[0])
                 neg_snr_tot.append(neg_snr)
-                neg_val=np.where(medsnr<=0.0)[0]
-                inf_mag=np.where(m == np.inf)[0]
-                nan_mag=np.where(np.isnan(m))[0]
-                none_mag=np.where(m == np.array(None))[0]
-                cut=[]
-                cuts=[neg_val,inf_mag,nan_mag,none_mag]
-                for cc in range(len(cuts)):
-                    if len(cuts[cc]) > 0:
-                        for ci in range(len(cuts[cc])):
-                            cut.append(cuts[cc][ci])
-                # Bad fits?
-                if len(cut) > 0:
-                    m=list(m)
-                    s=list(s)
-                    objvar=list(objvar)
-                    makecut=sorted(list(set(cut)))
-                    for nn in range(len(makecut)):
-                        m.remove(m[makecut[nn]])
-                        s.remove(s[makecut[nn]])
-                        objvar.remove(objvar[makecut[nn]])
-                        for ni in range(len(makecut)):
-                            makecut[ni]-=1
-                    m=np.array(m)
-                    s=np.array(s)
-                    objvar=np.array(objvar)
-                    log.warning("In fit of {}, had to remove NANs from data for fitting!".format(T))
-                badfibs.append(fibers[sorted(list(set(cut)))])
-                xs=m.argsort()
+                xs=mags.argsort()
                 #- Convert magnitudes to flux
-                x=10**(-0.4*(m[xs]-22.5))
-                med_snr=s[xs]
+                x=10**(-0.4*(mags[xs]-22.5))
+                med_snr=medsnr[xs]
                 y=med_snr
                 #- Fit SNR vs. Magnitude using chi squared minimization,
                 #- evaluate at fiducial magnitude, and store results in METRICS
@@ -809,7 +779,7 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
     qadict["RA"]=frame.fibermap['TARGET_RA']
     qadict["DEC"]=frame.fibermap['TARGET_DEC']
 
-    return qadict,badfibs,fitsnr
+    return qadict,fitsnr
 
 def gauss(x,a,mu,sigma):
     """
