@@ -1747,6 +1747,7 @@ class Integrate_Spec(MonitoringAlg):
         bgsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.BGS_ANY) != 0)[0]
         mwsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.MWS_ANY) != 0)[0]
         stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+        skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
 
         #- Setup target fibers per program
         if program == 'dark':
@@ -1756,10 +1757,10 @@ class Integrate_Spec(MonitoringAlg):
         elif program == 'bright':
             objfibers = [bgsfibers,mwsfibers,stdfibers]
 
-        magnitudes=np.zeros(frame.nspec) + 99.0  #- Use 99 for negative flux
+        magnitudes=np.zeros(frame.nspec)
         key = 'FLUX_'+band
-        ii = frame.fibermap[key] > 0
-        magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
+        magnitudes = 22.5 - 2.5*np.log10(frame.fibermap[key])
+        magnitudes[skyfibers] = 0.
 
         #- Separate magnitudes per target type
         tgt_mags=[]
@@ -1822,9 +1823,10 @@ class Integrate_Spec(MonitoringAlg):
         #- Convert calibrated flux to spectral magnitude
         specmags=np.zeros(integrals.shape)
         specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        specmags[skyfibers] = 0.
 
         #- Calculate delta mag
-        deltamag = specmags - magnitudes
+        deltamag = specmags[specmags>0] - magnitudes[magnitudes>0]
 
         #- Calculate avg delta mag per target type
         deltamag_tgt = tgt_specmags - tgt_mags
