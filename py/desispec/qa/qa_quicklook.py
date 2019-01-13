@@ -1375,54 +1375,56 @@ class Sky_Rband(MonitoringAlg):
         #- Set appropriate filter and zero point
         if camera[0].lower() == 'r':
             responsefilter='decam2014-r'
+
+            #- Find sky fibers
+            objects=frame.fibermap['OBJTYPE']
+            skyfibers=np.where(objects=="SKY")[0]
+
+            #- Get filter response information from speclite
+            try:
+                from pkg_resources import resource_filename
+                responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+                #- Grab wavelength and response information from file
+                rfile=np.genfromtxt(responsefile)
+                rfile=rfile[1:] # remove wavelength/response labels
+                rwave=np.zeros(rfile.shape[0])
+                response=np.zeros(rfile.shape[0])
+                for i in range(rfile.shape[0]):
+                    rwave[i]=10.*rfile[i][0] # convert to angstroms
+                    response[i]=rfile[i][1]
+            except:
+                log.critical("Could not find filter response file, can't compute spectral magnitudes")
+
+            #- Convole flux with response information 
+            res=np.zeros(frame.wave.shape)
+            for w in range(response.shape[0]):
+                if w >= 1 and w<= response.shape[0]-2:
+                    ind=np.abs(frame.wave-rwave[w]).argmin()
+                    lo=(rwave[w]-rwave[w-1])/2
+                    wlo=rwave[w]-lo
+                    indlo=np.abs(frame.wave-wlo).argmin()
+                    hi=(rwave[w+1]-rwave[w])/2
+                    whi=rwave[w]+hi
+                    indhi=np.abs(frame.wave-whi).argmin()
+                    res[indlo:indhi]=response[w]
+            skyrflux=res*flux[skyfibers]
+
+            #- Calculate integrals for sky fibers
+            integrals=[]
+            for ii in range(len(skyrflux)):
+                integrals.append(qalib.integrate_spec(frame.wave,skyrflux[ii]))
+            integrals=np.array(integrals)
+
+            #- Convert calibrated flux to fiber magnitude
+            specmags=np.zeros(integrals.shape)
+            specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+            avg_skyrband=np.mean(specmags[specmags>0])
+
+            retval["METRICS"]={"SKYRBAND_FIB":specmags,"SKYRBAND":avg_skyrband}
+
         else:
-            raise ValueError("Must be in r channel to run this QA")
-
-        #- Find sky fibers
-        objects=frame.fibermap['OBJTYPE']
-        skyfibers=np.where(objects=="SKY")[0]
-
-        #- Get filter response information from speclite
-        try:
-            from pkg_resources import resource_filename
-            responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
-            #- Grab wavelength and response information from file
-            rfile=np.genfromtxt(responsefile)
-            rfile=rfile[1:] # remove wavelength/response labels
-            rwave=np.zeros(rfile.shape[0])
-            response=np.zeros(rfile.shape[0])
-            for i in range(rfile.shape[0]):
-                rwave[i]=10.*rfile[i][0] # convert to angstroms
-                response[i]=rfile[i][1]
-        except:
-            log.critical("Could not find filter response file, can't compute spectral magnitudes")
-
-        #- Convole flux with response information 
-        res=np.zeros(frame.wave.shape)
-        for w in range(response.shape[0]):
-            if w >= 1 and w<= response.shape[0]-2:
-                ind=np.abs(frame.wave-rwave[w]).argmin()
-                lo=(rwave[w]-rwave[w-1])/2
-                wlo=rwave[w]-lo
-                indlo=np.abs(frame.wave-wlo).argmin()
-                hi=(rwave[w+1]-rwave[w])/2
-                whi=rwave[w]+hi
-                indhi=np.abs(frame.wave-whi).argmin()
-                res[indlo:indhi]=response[w]
-        skyrflux=res*flux[skyfibers]
-
-        #- Calculate integrals for sky fibers
-        integrals=[]
-        for ii in range(len(skyrflux)):
-            integrals.append(qalib.integrate_spec(frame.wave,skyrflux[ii]))
-        integrals=np.array(integrals)
-
-        #- Convert calibrated flux to fiber magnitude
-        specmags=np.zeros(integrals.shape)
-        specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
-        avg_skyrband=np.mean(specmags[specmags>0])
-
-        retval["METRICS"]={"SKYRBAND_FIB":specmags,"SKYRBAND":avg_skyrband}
+            retval["METRICS"]={}
+            log.info("Must be in r channel to run this QA")
 
         if qafile is not None:
             outfile=qa.write_qa_ql(qafile,retval)
