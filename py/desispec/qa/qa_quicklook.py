@@ -1356,81 +1356,73 @@ class Sky_Rband(MonitoringAlg):
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         kwargs=self.config['kwargs']
-        
+
         if frame.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
 
-        
-        retval["NIGHT"] = frame.meta["NIGHT"]
-        
+        retval["NIGHT"] = frame.meta["NIGHT"]        
         camera=frame.meta["CAMERA"]
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
 
-            
-            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYRBAND_ALARM_RANGE', 'SKYRBAND_WARN_RANGE']: 
-                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
-
-        wrange1=param["{}_CONT".format(camera[0].upper())][0]
-        wrange2=param["{}_CONT".format(camera[0].upper())][1]
-
         retval["PARAMS"] = param
 
-        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
-            frame, wrange1, wrange2)
- 
-        fibs = skyfiber.tolist()
-        skyfib_Rflux=[]
-        
-        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
-   
-        filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
-
-        if (filt == 'r'):
-            
-            flux=frame.flux
-            wave=frame.wave
-            integrals=np.zeros(flux.shape[0])
-            
-            import desimodel
-            from desimodel.focalplane import fiber_area_arcsec2
-        
-            wsky = np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
-            xsky = frame.fibermap["DESIGN_X"][wsky]
-            ysky = frame.fibermap["DESIGN_Y"][wsky]
-            apsky = desimodel.focalplane.fiber_area_arcsec2(xsky,ysky)
-            expt = frame.meta["EXPTIME"]
-            
-            for i in range(len(fibs)):
-            
-                sky_integ = qalib.integrate_spec(wave,flux[fibs[i]])
-                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor flux from ETC in the same unit 
-                sky_flux = sky_integ/expt/apsky[i]
-            
-                skyfib_Rflux.append(sky_flux)
-            
-        #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
-        #    the units would be counts/sec/arcsec^2  1000 is just a dummy number as a placeholder
-        sky_r=  100.   # SE: to come from ETC in count/sec/arcsec^2 
-        
-        if (sky_r != "" and len(skyfib_Rflux) >0):
-            
-            diff = abs(sky_r-np.mean(skyfib_Rflux)) 
-            
+        flux=frame.flux
+        wave=frame.wave
+        #- Set appropriate filter and zero point
+        if camera[0].lower() == 'r':
+            responsefilter='decam2014-r'
         else:
-             if (sky_r != "" and len(skyfib_Rflux) == 0): 
-                 
-                diff = sky_r
-             
-             else: 
-                diff = sky_fib_flux
-                log.warning("No SKY Monitor R-band Flux was found in the header!")
+            raise ValueError("Must be in r channel to run this QA")
 
+        #- Find sky fibers
+        objects=frame.fibermap['OBJTYPE']
+        skyfibers=np.where(objects=="SKY")[0]
 
-        retval["METRICS"]={"SKYRBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
+        #- Get filter response information from speclite
+        try:
+            from pkg_resources import resource_filename
+            responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+            #- Grab wavelength and response information from file
+            rfile=np.genfromtxt(responsefile)
+            rfile=rfile[1:] # remove wavelength/response labels
+            rwave=np.zeros(rfile.shape[0])
+            response=np.zeros(rfile.shape[0])
+            for i in range(rfile.shape[0]):
+                rwave[i]=10.*rfile[i][0] # convert to angstroms
+                response[i]=rfile[i][1]
+        except:
+            log.critical("Could not find filter response file, can't compute spectral magnitudes")
+
+        #- Convole flux with response information 
+        res=np.zeros(frame.wave.shape)
+        for w in range(response.shape[0]):
+            if w >= 1 and w<= response.shape[0]-2:
+                ind=np.abs(frame.wave-rwave[w]).argmin()
+                lo=(rwave[w]-rwave[w-1])/2
+                wlo=rwave[w]-lo
+                indlo=np.abs(frame.wave-wlo).argmin()
+                hi=(rwave[w+1]-rwave[w])/2
+                whi=rwave[w]+hi
+                indhi=np.abs(frame.wave-whi).argmin()
+                res[indlo:indhi]=response[w]
+        skyrflux=res*flux[skyfibers]
+
+        #- Calculate integrals for sky fibers
+        integrals=[]
+        for ii in range(len(skyrflux)):
+            integrals.append(qalib.integrate_spec(frame.wave,skyrflux[ii]))
+        integrals=np.array(integrals)
+
+        #- Convert calibrated flux to fiber magnitude
+        specmags=np.zeros(integrals.shape)
+        specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        avg_skyrband=np.mean(specmags[specmags>0])
+
+        retval["METRICS"]={"SKYRBAND_FIB":specmags,"SKYRBAND":avg_skyrband}
 
         if qafile is not None:
             outfile=qa.write_qa_ql(qafile,retval)
