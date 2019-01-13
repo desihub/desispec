@@ -90,12 +90,17 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
         log.info("No line list configured. Fitting for lines {}".format(linelist))
     coeffs=np.zeros((nspec,npoly+1)) #- coeffs array
 
-    #- amend line list to only include lines in given wavelength range
     for spec in range(nspec):
-        wave=frame.wave[spec]
+        #- Allow arc processing to use either QL or QP extraction
+        if isinstance(frame.wave[0],float):
+            wave=frame.wave
+        else:
+            wave=frame.wave[spec]
+
         flux=frame.flux[spec]
         ivar=frame.ivar[spec]
 
+        #- amend line list to only include lines in given wavelength range
         if wave[0] >= linelist[0]:
             noline_ind_lo=np.where(np.array(linelist)<=wave[0])
             linelist=linelist[np.max(noline_ind_lo[0])+1:len(linelist)-1]
