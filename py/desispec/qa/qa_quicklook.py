@@ -1705,8 +1705,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
-        ra=frame.fibermap["TARGET_RA"]
-        dec=frame.fibermap["TARGET_DEC"]
+
         flux=frame.flux
         ivar=frame.ivar
         wave=frame.wave
@@ -1760,7 +1759,6 @@ class Integrate_Spec(MonitoringAlg):
         magnitudes=np.zeros(frame.nspec)
         key = 'FLUX_'+band
         magnitudes = 22.5 - 2.5*np.log10(frame.fibermap[key])
-        magnitudes[skyfibers] = 0.
 
         #- Separate magnitudes per target type
         tgt_mags=[]
@@ -1823,10 +1821,11 @@ class Integrate_Spec(MonitoringAlg):
         #- Convert calibrated flux to spectral magnitude
         specmags=np.zeros(integrals.shape)
         specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
-        specmags[skyfibers] = 0.
 
-        #- Calculate delta mag
-        deltamag = specmags[specmags>0] - magnitudes[magnitudes>0]
+        #- Calculate delta mag, remove sky fibers first
+        nosky_specmags = np.delete(specmags,skyfibers)
+        nosky_mags = np.delete(magnitudes,skyfibers)
+        deltamag = nosky_specmags - nosky_mags
 
         #- Calculate avg delta mag per target type
         deltamag_tgt = tgt_specmags - tgt_mags
@@ -1841,7 +1840,7 @@ class Integrate_Spec(MonitoringAlg):
         retval["PARAMS"] = param
 
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg),"WAVELENGTH":frame.wave}
+        retval["METRICS"]={"SPEC_MAGS":nosky_specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg)}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
