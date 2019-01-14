@@ -200,7 +200,7 @@ class MonitoringAlg:
 
                     self.__deviation=[c-r for c,r in zip(np.sort(current),np.sort(refval))]
                 elif refval.size == current.size and current.size and current.size == 1:
-                    self.__deviation =  (current- refval)/current
+                    self.__deviation =  current - refval
                 elif np.size(current) == 0 or np.size(refval) == 0:
                     self.m_log.warning("No measurement is done or no reference is available for this QA!- check the configuration file for references!")
                     metrics[QARESULTKEY]='UNKNOWN'

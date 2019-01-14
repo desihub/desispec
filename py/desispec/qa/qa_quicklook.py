@@ -1350,6 +1350,7 @@ class Sky_Rband(MonitoringAlg):
 
         #- qa dictionary 
         retval={}
+        retval["NIGHT"] = frame.meta["NIGHT"]
         retval["PANAME" ]= paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
@@ -1359,10 +1360,7 @@ class Sky_Rband(MonitoringAlg):
 
         if frame.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
-            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
-
-        retval["NIGHT"] = frame.meta["NIGHT"]        
-        camera=frame.meta["CAMERA"]
+            retval["PROGRAM"]=program=fibmap[1].header['PROGRAM']
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
@@ -1370,15 +1368,15 @@ class Sky_Rband(MonitoringAlg):
 
         retval["PARAMS"] = param
 
+        #- Find sky fibers
+        objects=frame.fibermap['OBJTYPE']
+        skyfibers=np.where(objects=="SKY")[0]
+
         flux=frame.flux
         wave=frame.wave
         #- Set appropriate filter and zero point
         if camera[0].lower() == 'r':
             responsefilter='decam2014-r'
-
-            #- Find sky fibers
-            objects=frame.fibermap['OBJTYPE']
-            skyfibers=np.where(objects=="SKY")[0]
 
             #- Get filter response information from speclite
             try:
@@ -1422,9 +1420,12 @@ class Sky_Rband(MonitoringAlg):
 
             retval["METRICS"]={"SKYRBAND_FIB":specmags,"SKYRBAND":avg_skyrband}
 
+        #- If not in r channel, set reference and metrics to zero
         else:
-            retval["METRICS"]={}
-            log.info("Must be in r channel to run this QA")
+            retval["PARAMS"]["SKYRBAND_{}_REF".format(program.upper())]=[0.]
+            zerospec=np.zeros_like(skyfibers)
+            zerorband=0.
+            retval["METRICS"]={"SKYRBAND_FIB":zerospec,"SKYRBAND":zerorband}
 
         if qafile is not None:
             outfile=qa.write_qa_ql(qafile,retval)
