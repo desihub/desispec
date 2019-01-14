@@ -23,9 +23,9 @@ PAGE5:
     Title: Sky continuum metrics after applying fiberflat
     skycont: {TYPE: 2DPLOT, XVALS: SKYFIBERID, YVALS: SKYCONT_FIBER, PLOT_TITLE: Sky Continua, XTITLE: Fiber, YTITLE: Sky continuum (counts)}
 
-#PAGE6:
-#    Title: Sky peaks metrics after applying fiberflat
-#    skypeaks: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: PEAKCOUNT_FIB, PLOT_TITLE: Sky Peaks, XTITLE: Fiber, YTITLE: Summed counts over sky peaks}
+PAGE6:
+    Title: Sky peaks metrics after applying fiberflat
+    skypeaks: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: PEAKCOUNT_FIB, PLOT_TITLE: Sky Peaks, XTITLE: Fiber, YTITLE: Summed counts over sky peaks}
 
 #PAGE7:
 #    Title: Calculate SNR metrics after sky subtraction
@@ -33,7 +33,7 @@ PAGE5:
 #    snr_resid: {TYPE: 3DPLOT, XVALS: RA, YVALS: DEC, ZVALS: SNR_RESID, PLOT_TITLE: Residual SNR (calculated - fit) / fit, XTITLE: RA, YTITLE: DEC}
 #    obj_snr: {TYPE: 2DPLOT, XVALS: SNR_MAG_TGT[0][1], YVALS: SNR_MAG_TGT[0][0], PLOT_TITLE: Median SNR**2, XTITLE: Magnitude, YTITLE: SNR per object type}
 
-#PAGE8:
-#    Title: Integrate spectra metrics after flux calibration
-#    specmags: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: SPEC_MAGS, PLOT_TITLE: Spectral Magnitudes, XTITLE: Fiber, YTITLE: Spectral Magnitude}
+PAGE8:
+    Title: Integrate spectra metrics after flux calibration
+    specmags: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: SPEC_MAGS, PLOT_TITLE: Spectral Magnitudes, XTITLE: Fiber, YTITLE: Spectral Magnitude}
 

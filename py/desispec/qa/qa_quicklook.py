@@ -1524,7 +1524,9 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
+        fiberid=frame.fibermap['FIBER']
+
+        retval["METRICS"]={"FIBERID":fiberid,"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
@@ -1823,6 +1825,8 @@ class Integrate_Spec(MonitoringAlg):
         #- Convert calibrated flux to spectral magnitude
         specmags=np.zeros(integrals.shape)
         specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        #- Set sky fibers to 30 mag
+        specmags[skyfibers]=30.
 
         #- Calculate delta mag, remove sky fibers first
         nosky_specmags = np.delete(specmags,skyfibers)
@@ -1841,8 +1845,10 @@ class Integrate_Spec(MonitoringAlg):
 
         retval["PARAMS"] = param
 
+        fiberid=frame.fibermap['FIBER']
+
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
-        retval["METRICS"]={"SPEC_MAGS":nosky_specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg)}
+        retval["METRICS"]={"FIBERID":fiberid,"SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg)}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
