@@ -1764,13 +1764,6 @@ class Integrate_Spec(MonitoringAlg):
         key = 'FLUX_'+band
         magnitudes = 22.5 - 2.5*np.log10(frame.fibermap[key])
 
-        #- Separate magnitudes per target type
-        tgt_mags=[]
-        for obj in objfibers:
-            tgt_mags.append(magnitudes[obj])
-
-        tgt_mags = np.array(tgt_mags)
-
         #- Get filter response information from speclite
         try:
             from pkg_resources import resource_filename
@@ -1800,9 +1793,27 @@ class Integrate_Spec(MonitoringAlg):
                 res[indlo:indhi]=response[w]
         rflux=res*flux
 
+        #- Calculate integrals for all fibers
+        integrals=[]
+        for ii in range(len(rflux)):
+            integrals.append(qalib.integrate_spec(frame.wave,rflux[ii]))
+        integrals=np.array(integrals)
+
+        #- Convert calibrated flux to spectral magnitude
+        specmags=np.zeros(integrals.shape)
+        specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        #- Set sky fibers to 30 mag
+        specmags[skyfibers]=30.
+
+        #- Save number of negative flux fibers
+        negflux=np.where(specmags==0.)[0]
+        num_negflux=len(negflux)
+
         #- Calculate integrals for each target type
         tgt_specmags=[]
         for T in objfibers:
+            if num_negflux != 0:
+                T=np.array(list(set(T) - set(negflux)))
             obj_integ=[]
             for ii in range(len(rflux[T])):
                 obj_integ.append(qalib.integrate_spec(frame.wave,rflux[T][ii]))
@@ -1816,25 +1827,23 @@ class Integrate_Spec(MonitoringAlg):
 
         tgt_specmags = np.array(tgt_specmags)
 
-        #- Calculate integrals for all fibers
-        integrals=[]
-        for ii in range(len(rflux)):
-            integrals.append(qalib.integrate_spec(frame.wave,rflux[ii]))
-        integrals=np.array(integrals)
+        #- Fiber magnitudes per target type
+        tgt_mags=[]
+        for obj in objfibers:
+            if num_negflux != 0:
+                obj=np.array(list(set(obj) - set(negflux)))
+            tgt_mags.append(magnitudes[obj])
 
-        #- Convert calibrated flux to spectral magnitude
-        specmags=np.zeros(integrals.shape)
-        specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
-        #- Set sky fibers to 30 mag
-        specmags[skyfibers]=30.
+        tgt_mags = np.array(tgt_mags)
 
-        #- Calculate delta mag, remove sky fibers first
-        nosky_specmags = np.delete(specmags,skyfibers)
-        nosky_mags = np.delete(magnitudes,skyfibers)
+        #- Calculate delta mag, remove sky/negative flux fibers first
+        remove_fib = np.array(list(set(skyfibers) | set(negflux)))
+        nosky_specmags = np.delete(magnitudes,remove_fib)
+        nosky_mags = np.delete(magnitudes,remove_fib)
         deltamag = nosky_specmags - nosky_mags
 
         #- Calculate avg delta mag per target type
-        deltamag_tgt = tgt_specmags - tgt_mags
+        deltamag_tgt = tgt_specmags - tgt_mags        
         deltamag_tgt_avg=[]
         for tgt in range(len(deltamag_tgt)):
             deltamag_tgt_avg.append(np.mean(deltamag_tgt[tgt]))
@@ -1848,7 +1857,7 @@ class Integrate_Spec(MonitoringAlg):
         fiberid=frame.fibermap['FIBER']
 
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
-        retval["METRICS"]={"FIBERID":fiberid,"SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg)}
+        retval["METRICS"]={"FIBERID":fiberid,"NFIBNOTGT":num_negflux,"SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg)}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
