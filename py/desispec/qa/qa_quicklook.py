@@ -1839,7 +1839,7 @@ class Integrate_Spec(MonitoringAlg):
 
         #- Calculate delta mag, remove sky/negative flux fibers first
         remove_fib = np.array(list(set(skyfibers) | set(negflux)))
-        nosky_specmags = np.delete(magnitudes,remove_fib)
+        nosky_specmags = np.delete(specmags,remove_fib)
         nosky_mags = np.delete(magnitudes,remove_fib)
         deltamag = nosky_specmags - nosky_mags
 
