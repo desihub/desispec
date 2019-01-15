@@ -14,17 +14,9 @@ from desispec.image import Image
 from desispec import cosmics
 from desispec.maskbits import ccdmask
 from desiutil.log import get_logger
-# log = get_logger()
+from desispec.calibfinder import CalibFinder
 
-def _parse_date_obs(value):
-    '''
-    converts DATE-OBS keywork to int
-    with for instance DATE-OBS=2016-12-21T18:06:21.268371-05:00
-    '''
-    m = re.search(r'(\d+)-(\d+)-(\d+)T', value)
-    Y,M,D=tuple(map(int, m.groups()))
-    dateobs=int(Y*10000+M*100+D)
-    return dateobs
+# log = get_logger()
 
 def _parse_sec_keyword(value):
     '''
@@ -233,78 +225,7 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     log.info("done")
     return bkg
 
-def read_ccd_calibration(header, primary_header, filename=None) :
-    """Please provide documentation for this function!
-    """
-    log=get_logger()
-
-    if filename is None :
-        if not "DESI_CCD_CALIBRATION_DATA" in os.environ :
-            log.warning("Need environment variable DESI_CCD_CALIBRATION_DATA to access to the CCD calibration data, returning empty dict")
-            return dict()
-            
-        filename = os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],"ccd_calibration.yaml")
-        
-    if not os.path.isfile(filename) :
-        log.error("Cannot find calibration data file '%s'"%filename)
-        raise IOError("Cannot find calibration data file '%s'"%filename)
-
-    log.info("Reading CCD calibration data in {}".format(filename))
-
-    stream = open(filename, 'r')
-    data   = yaml.load(stream)
-    stream.close()
-    cameraid=header["CAMERA"].lower()
-    if not cameraid in data :
-        log.error("Cannot find data for camera %s in filename %s"%(cameraid,filename))
-        raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,filename))
-    data=data[cameraid]
-    log.info("Found %d data for camera %s in filename %s"%(len(data),cameraid,filename))
-    log.info("Finding matching version ...")
-    dateobs=_parse_date_obs(primary_header["DATE-OBS"])
-    dosver=primary_header["DOSVER"].strip()
-    feever=header["FEEVER"].strip()
-    detector=header["DETECTOR"].strip()
-
-    log.info("DATE-OBS=%d"%dateobs)
-    found=False
-    matching_data=None
-    for version in data :
-        log.info("Checking version %s"%version)
-        datebegin=int(data[version]["DATE-OBS-BEGIN"])
-        if dateobs < datebegin :
-            log.info("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
-            continue
-        if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
-            dateend=int(data[version]["DATE-OBS-END"])
-            if dateobs > dateend :
-                log.info("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,datebegin,dateobs))
-                continue
-        if detector != data[version]["DETECTOR"].strip() :
-            log.info("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
-            continue
-        if dosver != data[version]["DOSVER"].strip() :
-            log.info("Skip version %s with DOSVER=%s != %s "%(version,data[version]["DOSVER"],dosver))
-            continue
-        if feever != data[version]["FEEVER"].strip() :
-            log.info("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
-            continue
-
-        log.info("Found data version %s for camera %s in %s"%(version,cameraid,filename))
-        if found :
-            log.error("But we already has a match. Please fix this ambiguity in %s"%filename)
-            raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%filename)
-        found=True
-        matching_data=data[version]
-    data=matching_data
-
-
-    if not found :
-        log.error("Didn't find matching calibration data in %s"%(filename))
-        raise KeyError("Didn't find matching calibration data in %s"%(filename))
-    return data
-
-def get_calibration_image(calibration_data,calibration_data_path,keyword,entry) :
+def get_calibration_image(cfinder,keyword,entry) :
     """Please provide documentation for this function!
     """
     log=get_logger()
@@ -315,17 +236,11 @@ def get_calibration_image(calibration_data,calibration_data_path,keyword,entry) 
     filename = None
     if entry is True :
         # we have to find the filename
-        if calibration_data is None :
+        if cfinder is None :
             log.error("no calibration data was found")
             raise ValueError("no calibration data was found")
-        if keyword in calibration_data :
-            basefilename=calibration_data[keyword]
-            if calibration_data_path is None :
-                error_message = "DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find the calibration file %s"%basefilename
-                log.error(error_message)
-                raise IOError(error_message)
-
-            filename = "%s/%s"%(calibration_data_path,basefilename)
+        if cfinder.haskey(keyword) :
+            filename = cfinder.findfile(keyword)
         else :
             return False # we say in the calibration data we don't need this
     elif isinstance(entry,str) :
@@ -412,19 +327,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     log=get_logger()
 
     header = header.copy()
-
-    calibration_data = None
+    
+    cfinder = None
     
     if ccd_calibration_filename is not False :
-        calibration_data = read_ccd_calibration(header, primary_header, ccd_calibration_filename)
-
-    #- Get path to calibration data
-    if "DESI_CCD_CALIBRATION_DATA" in os.environ :
-        calibration_data_path = os.environ["DESI_CCD_CALIBRATION_DATA"]
-    else :
-        calibration_data_path = None
-
-
+        cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
+    
     #- TODO: Check for required keywords first
 
     #- Subtract bias image
@@ -433,7 +341,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- convert rawimage to float64 : this is the output format of read_image
     rawimage = rawimage.astype(np.float64)
 
-    bias = get_calibration_image(calibration_data,calibration_data_path,"BIAS",bias)
+    bias = get_calibration_image(cfinder,"BIAS",bias)
 
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
@@ -443,8 +351,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
 
-    if calibration_data and "AMPLIFIERS" in calibration_data :
-        amp_ids=list(calibration_data["AMPLIFIERS"])
+    if cfinder and cfinder.haskey("AMPLIFIERS") :
+        amp_ids=list(cfinder.value("AMPLIFIERS"))
     else :
         amp_ids=['A','B','C','D']
 
@@ -478,7 +386,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
 
     #- Load mask
-    mask = get_calibration_image(calibration_data,calibration_data_path,"MASK",mask)
+    mask = get_calibration_image(cfinder,"MASK",mask)
 
     if mask is False :
         mask = np.zeros(image.shape, dtype=np.int32)
@@ -487,7 +395,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
     #- Load dark
-    dark = get_calibration_image(calibration_data,calibration_data_path,"DARK",dark)
+    dark = get_calibration_image(cfinder,"DARK",dark)
 
     if dark is not False :
         if dark.shape != image.shape :
@@ -495,8 +403,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
 
 
-        if calibration_data and "EXPTIMEKEY" in calibration_data :
-            exptime_key=calibration_data["EXPTIMEKEY"]
+        if cfinder and cfinder.haskey("EXPTIMEKEY") :
+            exptime_key=cfinder.value("EXPTIMEKEY")
             log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
         else :
             exptime_key="EXPTIME"
@@ -517,8 +425,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             if 'GAIN'+amp in header:
                 gain = header['GAIN'+amp]          #- gain = electrons / ADU
             else:
-                if calibration_data  and 'GAIN'+amp in calibration_data :
-                    gain = float(calibration_data['GAIN'+amp])
+                if cfinder and cfinder.haskey('GAIN'+amp) :
+                    gain = float(cfinder.value('GAIN'+amp))
                     log.info('Using GAIN{}={} from calibration data'.format(amp,gain))
                 else :
                     gain = 1.0
@@ -529,8 +437,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if 'SATURLEV'+amp in header:
             saturlev = header['SATURLEV'+amp]          # in electrons
         else:
-            if calibration_data and 'SATURLEV'+amp in calibration_data :
-                saturlev = float(calibration_data['SATURLEV'+amp])
+            if cfinder and cfinder.haskey('SATURLEV'+amp) :
+                saturlev = float(cfinder.value('SATURLEV'+amp))
                 log.info('Using SATURLEV{}={} from calibration data'.format(amp,saturlev))
             else :
                 saturlev = 200000
@@ -542,7 +450,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         overscan = np.zeros(nrows)
         rdnoise  = np.zeros(nrows)
         overscan_per_row = True
-        if calibration_data and 'OVERSCAN'+amp in calibration_data and calibration_data["OVERSCAN"+amp].upper()=="PER_ROW" :
+        if cfinder and cfinder.haskey('OVERSCAN'+amp) and cfinder.value("OVERSCAN"+amp).upper()=="PER_ROW" :
             log.info("Subtracting overscan per row for amplifier %s of camera %s"%(amp,camera))
             for j in range(nrows) :
                 if np.isnan(np.sum(overscan_image[j])) :
@@ -652,9 +560,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 if a1==a2 :
                     continue
                 amp2=amp_ids[a2]
-                if calibration_data is None : continue
-                if not "CROSSTALK%s%s"%(amp1,amp2) in calibration_data : continue
-                crosstalk=calibration_data["CROSSTALK%s%s"%(amp1,amp2)]
+                if cfinder is None : continue
+                if not cfinder.haskey("CROSSTALK%s%s"%(amp1,amp2))  : continue
+                crosstalk=cfinder.value("CROSSTALK%s%s"%(amp1,amp2))
                 if crosstalk==0. : continue
                 log.info("Correct for crosstalk=%f from AMP %s into %s"%(crosstalk,amp1,amp2))
                 a12flux=crosstalk*a1flux.copy()
@@ -670,7 +578,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
 
     #- Divide by pixflat image
-    pixflat = get_calibration_image(calibration_data,calibration_data_path,"PIXFLAT",pixflat)
+    pixflat = get_calibration_image(cfinder,"PIXFLAT",pixflat)
     if pixflat is not False :
         if pixflat.shape != image.shape:
             raise ValueError('shape mismatch pixflat {} != image {}'.format(pixflat.shape, image.shape))
