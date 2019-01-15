@@ -2074,21 +2074,29 @@ class Check_Resolution(MonitoringAlg):
         p1 = wsigma_array[0:, 1:2]
         p2 = wsigma_array[0:, 2:3]
 
-        # Medians of Legendre Coeffs to be used as 'Model'
-        medlegpolcoef = np.median(wsigma_array,axis = 0)
+        #- Save array of ones and zeros for good/no fits
+        nfib = len(p0)
+        nofit = np.where(p0 == 0.)[0]
+        allfibs=np.ones(nfib)
+        allfibs[nofit] = 0.
+        #- Total number of fibers fit used as scalar metric
+        ngoodfits = len(np.where(allfibs == 1.)[0])
 
-        wsigma_rms = np.sqrt(np.mean((wsigma_array - medlegpolcoef)**2,axis = 0))
+#        # Medians of Legendre Coeffs to be used as 'Model'
+#        medlegpolcoef = np.median(wsigma_array,axis = 0)
+#
+#        wsigma_rms = np.sqrt(np.mean((wsigma_array - medlegpolcoef)**2,axis = 0))
+#
+#        # Check how many of each parameter are outside of +- 2 RMS of the median.
+#        toperror = np.array([medlegpolcoef[val] + 2*wsigma_rms[val] for val in [0,1,2]])
+#        bottomerror = np.array([medlegpolcoef[val] - 2*wsigma_rms[val] for val in [0,1,2]])
+#
+#        badparamrnum0 = list(np.where(np.logical_or(p0>toperror[0], p0<bottomerror[0]))[0])
+#        badparamrnum1 = list(np.where(np.logical_or(p1>toperror[1], p1<bottomerror[1]))[0])
+#        badparamrnum2 = list(np.where(np.logical_or(p2>toperror[2], p2<bottomerror[2]))[0])
+#        nbadparam = np.array([len(badparamrnum0), len(badparamrnum1), len(badparamrnum2)])
 
-        # Check how many of each parameter are outside of +- 2 RMS of the median.
-        toperror = np.array([medlegpolcoef[val] + 2*wsigma_rms[val] for val in [0,1,2]])
-        bottomerror = np.array([medlegpolcoef[val] - 2*wsigma_rms[val] for val in [0,1,2]])
-
-        badparamrnum0 = list(np.where(np.logical_or(p0>toperror[0], p0<bottomerror[0]))[0])
-        badparamrnum1 = list(np.where(np.logical_or(p1>toperror[1], p1<bottomerror[1]))[0])
-        badparamrnum2 = list(np.where(np.logical_or(p2>toperror[2], p2<bottomerror[2]))[0])
-        nbadparam = np.array([len(badparamrnum0), len(badparamrnum1), len(badparamrnum2)])
-
-        retval["METRICS"]={"Medians":medlegpolcoef, "RMS":wsigma_rms, "CHECKARC":nbadparam}
+        retval["METRICS"]={"CHECKARC":ngoodfits, "GOODPSFS":allfibs}
         retval["DATA"]={"LPolyCoef0":p0, "LPolyCoef1":p1, "LPolyCoef2":p2}
 
         if param is None:
@@ -2193,6 +2201,12 @@ class Check_FiberFlat(MonitoringAlg):
         avg_all = np.mean(avg_fiberflat)
 
         retval['METRICS'] = {"FLATMEAN":avg_fiberflat, "FLATRMS":rms, "CHECKFLAT":avg_all}
+
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
 
         return retval
 
