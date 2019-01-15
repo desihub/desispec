@@ -1803,12 +1803,14 @@ class Integrate_Spec(MonitoringAlg):
         #- Convert calibrated flux to spectral magnitude
         specmags=np.zeros(integrals.shape)
         specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
-        #- Set sky fibers to 30 mag
-        specmags[skyfibers]=30.
 
         #- Save number of negative flux fibers
         negflux=np.where(specmags==0.)[0]
         num_negflux=len(negflux)
+
+        #- Set sky and negative flux fibers to 30 mag
+        specmags[skyfibers]=30.
+        specmags[negflux]=30.
 
         #- Calculate integrals for each target type
         tgt_specmags=[]

@@ -73,6 +73,14 @@ class Initialize(pas.PipelineAlg):
             fibermags=[]
             for flux in ['FLUX_G','FLUX_R','FLUX_Z']:
                 fibermags.append(22.5-2.5*np.log10(fibermap[flux][minfiber:maxfiber+1]))
+
+            #- Set sky/no flux fibers to 30 mag
+            for i in range(3):
+                skyfibs=np.where(fibermags[i]==0.)[0]
+                noflux=np.where(fibermags[i]==np.inf)[0]
+                badmags=np.array(list(set(skyfibs) | set(noflux)))
+                fibermags[i][badmags]=30.
+
             general_info['FIBER_MAGS']=fibermags
     
             #- Limit RA and DEC to 5 decimal places

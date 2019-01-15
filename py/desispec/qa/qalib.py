@@ -744,7 +744,6 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
                 fitT.append(T)
             except RuntimeError:
                 log.warning("In fit of {}, Fit minimization failed!".format(T))
-                vs=np.array(initialParams)
                 fitcoeff.append(np.nan)
                 fidsnr_tgt.append(np.nan)
     
