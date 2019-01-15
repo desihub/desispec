@@ -12,7 +12,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ResolutionFit]
+Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ResolutionFit]
 Algorithms:
     Initialize:
         PEAKS: {B_PEAKS: [4047.7,4078.8,4359.6,4801.2,5087.2,5426.2], R_PEAKS: [6144.7,6404.0,6508.3,6931.4,7034.3,7247.1], Z_PEAKS: [8302.6,8379.9,8497.7,8856.3,9151.1,9668.0]}
@@ -37,7 +37,7 @@ Algorithms:
         QA:
             Trace_Shifts:
                 PARAMS: {XYSHIFTS_NORMAL_RANGE: [-1.0,1.0], XYSHIFTS_WARN_RANGE: [-2.0,2.0],XYSHIFTS_REF:[0.,0.]}
-    BoxcarExtract:
+    Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],
             r: [5630,7740,0.8],
@@ -50,4 +50,4 @@ Algorithms:
         NBINS: 5
         QA:
             Check_Resolution:
-                PARAMS: {CHECKARC_NORMAL_RANGE: [-50,50], CHECKARC_WARN_RANGE: [-100,100],CHECKARC_REF:[5,5,5]}
+                PARAMS: {CHECKARC_NORMAL_RANGE: [-5,5], CHECKARC_WARN_RANGE: [-10,10],CHECKARC_REF:[500]}

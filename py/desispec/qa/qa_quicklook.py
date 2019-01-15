@@ -1350,87 +1350,82 @@ class Sky_Rband(MonitoringAlg):
 
         #- qa dictionary 
         retval={}
+        retval["NIGHT"] = frame.meta["NIGHT"]
         retval["PANAME" ]= paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         kwargs=self.config['kwargs']
-        
+
         if frame.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
-            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
-
-        
-        retval["NIGHT"] = frame.meta["NIGHT"]
-        
-        camera=frame.meta["CAMERA"]
+            retval["PROGRAM"]=program=fibmap[1].header['PROGRAM']
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
 
-            
-            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYRBAND_ALARM_RANGE', 'SKYRBAND_WARN_RANGE']: 
-                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
-
-        wrange1=param["{}_CONT".format(camera[0].upper())][0]
-        wrange2=param["{}_CONT".format(camera[0].upper())][1]
-
         retval["PARAMS"] = param
 
-        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
-            frame, wrange1, wrange2)
- 
-        fibs = skyfiber.tolist()
-        skyfib_Rflux=[]
-        
-        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
-   
-        filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
+        #- Find sky fibers
+        objects=frame.fibermap['OBJTYPE']
+        skyfibers=np.where(objects=="SKY")[0]
 
-        if (filt == 'r'):
-            
-            flux=frame.flux
-            wave=frame.wave
-            integrals=np.zeros(flux.shape[0])
-            
-            import desimodel
-            from desimodel.focalplane import fiber_area_arcsec2
-        
-            wsky = np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
-            xsky = frame.fibermap["DESIGN_X"][wsky]
-            ysky = frame.fibermap["DESIGN_Y"][wsky]
-            apsky = desimodel.focalplane.fiber_area_arcsec2(xsky,ysky)
-            expt = frame.meta["EXPTIME"]
-            
-            for i in range(len(fibs)):
-            
-                sky_integ = qalib.integrate_spec(wave,flux[fibs[i]])
-                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor flux from ETC in the same unit 
-                sky_flux = sky_integ/expt/apsky[i]
-            
-                skyfib_Rflux.append(sky_flux)
-            
-        #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
-        #    the units would be counts/sec/arcsec^2  1000 is just a dummy number as a placeholder
-        sky_r=  100.   # SE: to come from ETC in count/sec/arcsec^2 
-        
-        if (sky_r != "" and len(skyfib_Rflux) >0):
-            
-            diff = abs(sky_r-np.mean(skyfib_Rflux)) 
-            
+        flux=frame.flux
+        wave=frame.wave
+        #- Set appropriate filter and zero point
+        if camera[0].lower() == 'r':
+            responsefilter='decam2014-r'
+
+            #- Get filter response information from speclite
+            try:
+                from pkg_resources import resource_filename
+                responsefile=resource_filename('speclite','data/filters/{}.ecsv'.format(responsefilter))
+                #- Grab wavelength and response information from file
+                rfile=np.genfromtxt(responsefile)
+                rfile=rfile[1:] # remove wavelength/response labels
+                rwave=np.zeros(rfile.shape[0])
+                response=np.zeros(rfile.shape[0])
+                for i in range(rfile.shape[0]):
+                    rwave[i]=10.*rfile[i][0] # convert to angstroms
+                    response[i]=rfile[i][1]
+            except:
+                log.critical("Could not find filter response file, can't compute spectral magnitudes")
+
+            #- Convole flux with response information 
+            res=np.zeros(frame.wave.shape)
+            for w in range(response.shape[0]):
+                if w >= 1 and w<= response.shape[0]-2:
+                    ind=np.abs(frame.wave-rwave[w]).argmin()
+                    lo=(rwave[w]-rwave[w-1])/2
+                    wlo=rwave[w]-lo
+                    indlo=np.abs(frame.wave-wlo).argmin()
+                    hi=(rwave[w+1]-rwave[w])/2
+                    whi=rwave[w]+hi
+                    indhi=np.abs(frame.wave-whi).argmin()
+                    res[indlo:indhi]=response[w]
+            skyrflux=res*flux[skyfibers]
+
+            #- Calculate integrals for sky fibers
+            integrals=[]
+            for ii in range(len(skyrflux)):
+                integrals.append(qalib.integrate_spec(frame.wave,skyrflux[ii]))
+            integrals=np.array(integrals)
+
+            #- Convert calibrated flux to fiber magnitude
+            specmags=np.zeros(integrals.shape)
+            specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+            avg_skyrband=np.mean(specmags[specmags>0])
+
+            retval["METRICS"]={"SKYRBAND_FIB":specmags,"SKYRBAND":avg_skyrband}
+
+        #- If not in r channel, set reference and metrics to zero
         else:
-             if (sky_r != "" and len(skyfib_Rflux) == 0): 
-                 
-                diff = sky_r
-             
-             else: 
-                diff = sky_fib_flux
-                log.warning("No SKY Monitor R-band Flux was found in the header!")
-
-
-        retval["METRICS"]={"SKYRBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
+            retval["PARAMS"]["SKYRBAND_{}_REF".format(program.upper())]=[0.]
+            zerospec=np.zeros_like(skyfibers)
+            zerorband=0.
+            retval["METRICS"]={"SKYRBAND_FIB":zerospec,"SKYRBAND":zerorband}
 
         if qafile is not None:
             outfile=qa.write_qa_ql(qafile,retval)
@@ -1530,7 +1525,9 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
+        fiberid=frame.fibermap['FIBER']
+
+        retval["METRICS"]={"FIBERID":fiberid,"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
@@ -1713,8 +1710,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
-        ra=frame.fibermap["TARGET_RA"]
-        dec=frame.fibermap["TARGET_DEC"]
+
         flux=frame.flux
         ivar=frame.ivar
         wave=frame.wave
@@ -1755,6 +1751,7 @@ class Integrate_Spec(MonitoringAlg):
         bgsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.BGS_ANY) != 0)[0]
         mwsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.MWS_ANY) != 0)[0]
         stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+        skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
 
         #- Setup target fibers per program
         if program == 'dark':
@@ -1764,17 +1761,9 @@ class Integrate_Spec(MonitoringAlg):
         elif program == 'bright':
             objfibers = [bgsfibers,mwsfibers,stdfibers]
 
-        magnitudes=np.zeros(frame.nspec) + 99.0  #- Use 99 for negative flux
+        magnitudes=np.zeros(frame.nspec)
         key = 'FLUX_'+band
-        ii = frame.fibermap[key] > 0
-        magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
-
-        #- Separate magnitudes per target type
-        tgt_mags=[]
-        for obj in objfibers:
-            tgt_mags.append(magnitudes[obj])
-
-        tgt_mags = np.array(tgt_mags)
+        magnitudes = 22.5 - 2.5*np.log10(frame.fibermap[key])
 
         #- Get filter response information from speclite
         try:
@@ -1805,9 +1794,29 @@ class Integrate_Spec(MonitoringAlg):
                 res[indlo:indhi]=response[w]
         rflux=res*flux
 
+        #- Calculate integrals for all fibers
+        integrals=[]
+        for ii in range(len(rflux)):
+            integrals.append(qalib.integrate_spec(frame.wave,rflux[ii]))
+        integrals=np.array(integrals)
+
+        #- Convert calibrated flux to spectral magnitude
+        specmags=np.zeros(integrals.shape)
+        specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+
+        #- Save number of negative flux fibers
+        negflux=np.where(specmags==0.)[0]
+        num_negflux=len(negflux)
+
+        #- Set sky and negative flux fibers to 30 mag
+        specmags[skyfibers]=30.
+        specmags[negflux]=30.
+
         #- Calculate integrals for each target type
         tgt_specmags=[]
         for T in objfibers:
+            if num_negflux != 0:
+                T=np.array(list(set(T) - set(negflux)))
             obj_integ=[]
             for ii in range(len(rflux[T])):
                 obj_integ.append(qalib.integrate_spec(frame.wave,rflux[T][ii]))
@@ -1821,21 +1830,23 @@ class Integrate_Spec(MonitoringAlg):
 
         tgt_specmags = np.array(tgt_specmags)
 
-        #- Calculate integrals for all fibers
-        integrals=[]
-        for ii in range(len(rflux)):
-            integrals.append(qalib.integrate_spec(frame.wave,rflux[ii]))
-        integrals=np.array(integrals)
+        #- Fiber magnitudes per target type
+        tgt_mags=[]
+        for obj in objfibers:
+            if num_negflux != 0:
+                obj=np.array(list(set(obj) - set(negflux)))
+            tgt_mags.append(magnitudes[obj])
 
-        #- Convert calibrated flux to spectral magnitude
-        specmags=np.zeros(integrals.shape)
-        specmags[integrals>0]=21.1-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
+        tgt_mags = np.array(tgt_mags)
 
-        #- Calculate delta mag
-        deltamag = specmags - magnitudes
+        #- Calculate delta mag, remove sky/negative flux fibers first
+        remove_fib = np.array(list(set(skyfibers) | set(negflux)))
+        nosky_specmags = np.delete(specmags,remove_fib)
+        nosky_mags = np.delete(magnitudes,remove_fib)
+        deltamag = nosky_specmags - nosky_mags
 
         #- Calculate avg delta mag per target type
-        deltamag_tgt = tgt_specmags - tgt_mags
+        deltamag_tgt = tgt_specmags - tgt_mags        
         deltamag_tgt_avg=[]
         for tgt in range(len(deltamag_tgt)):
             deltamag_tgt_avg.append(np.mean(deltamag_tgt[tgt]))
@@ -1846,8 +1857,10 @@ class Integrate_Spec(MonitoringAlg):
 
         retval["PARAMS"] = param
 
+        fiberid=frame.fibermap['FIBER']
+
         #SE: should not have any nan or inf at this point but let's keep it for safety measures here 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg),"WAVELENGTH":frame.wave}
+        retval["METRICS"]={"FIBERID":fiberid,"NFIBNOTGT":num_negflux,"SPEC_MAGS":specmags, "DELTAMAG":np.nan_to_num(deltamag), "STD_FIBERID":stdfibers, "DELTAMAG_TGT":np.nan_to_num(deltamag_tgt_avg)}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
@@ -1955,7 +1968,7 @@ class Calculate_SNR(MonitoringAlg):
 
         fidboundary=None
 
-        qadict,badfibs,fitsnr = qalib.SNRFit(frame,night,camera,expid,param,fidboundary=fidboundary)
+        qadict,fitsnr = qalib.SNRFit(frame,night,camera,expid,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
 
@@ -1982,7 +1995,7 @@ class Calculate_SNR(MonitoringAlg):
             outfile=qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            fig.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,rescut,sigmacut,plotconf=plotconf,hardplots=hardplots)
+            fig.plot_SNR(retval,qafig,objlist,fitsnr,rescut,sigmacut,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
 
         return retval
@@ -2063,6 +2076,14 @@ class Check_Resolution(MonitoringAlg):
         p1 = wsigma_array[0:, 1:2]
         p2 = wsigma_array[0:, 2:3]
 
+        #- Save array of ones and zeros for good/no fits
+        nfib = len(p0)
+        nofit = np.where(p0 == 0.)[0]
+        allfibs=np.ones(nfib)
+        allfibs[nofit] = 0.
+        #- Total number of fibers fit used as scalar metric
+        ngoodfits = len(np.where(allfibs == 1.)[0])
+
         # Medians of Legendre Coeffs to be used as 'Model'
         medlegpolcoef = np.median(wsigma_array,axis = 0)
 
@@ -2077,7 +2098,7 @@ class Check_Resolution(MonitoringAlg):
         badparamrnum2 = list(np.where(np.logical_or(p2>toperror[2], p2<bottomerror[2]))[0])
         nbadparam = np.array([len(badparamrnum0), len(badparamrnum1), len(badparamrnum2)])
 
-        retval["METRICS"]={"Medians":medlegpolcoef, "RMS":wsigma_rms, "CHECKARC":nbadparam}
+        retval["METRICS"]={"CHECKARC":ngoodfits, "GOODPSFS":allfibs, "CHECKPSF":nbadparam}
         retval["DATA"]={"LPolyCoef0":p0, "LPolyCoef1":p1, "LPolyCoef2":p2}
 
         if param is None:
@@ -2156,42 +2177,13 @@ class Check_FiberFlat(MonitoringAlg):
         
         kwargs=self.config['kwargs']
         retval={}
-        retval['PANAME'] = paname
+        retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["PROGRAM"] = 'FLAT'
         retval["FLAVOR"] = 'flat'
         retval["NIGHT"] = kwargs['night']
-        retval['CAMERA'] = fibflat.header["CAMERA"]
+        retval["CAMERA"] = fibflat.header['CAMERA']
         retval["EXPID"] = '{:08d}'.format(kwargs['expid'])
-
-        # Mean of wavelength will be test value
-        wavelengths = fibflat.wave
-        CHECKFLATtest = np.mean(wavelengths)
-        
-        #meanscale = fibflat.meanspec/np.mean(fibflat.meanspec)
-        A= fibflat.fiberflat        
-        scaleRMS_fib=[]
-        scale_fib=[]
-        
-        for i in range(fibflat.nspec):
-            
-            scaleRMS_fib.append(np.nanstd(A[i,:]))
-            scale_fib.append(np.nanmean(A[i,:]))
-            
-        
-        diff= scale_fib - np.mean(scale_fib)
-        
-        #SE: scalar metric:       CHECKFLAT: a 2-member list of number of fibers with difference from the average["diff"] outside 1 and 2 RMS 
-        #    Drill down metrics :
-        #              CHECKFLAT_FIB([array(N1),array(N2)]):    list of two arrays of fiber ids with "diff" 
-        #              FLATRMS(1 value):                        mean of the RMS of the scale value (i.e., fiber flux from continuum lamp) of all the 500 fibers    
-        #              FLATRMS_FIB(list of 500 values):         RMS per fiber
-        #              FLAT_FIB (list of 500 values):           list of meean fiber flux value per fiber
-        
-        CHECKFLAT = [np.shape(np.where(diff > np.nanstd(scale_fib)))[1],np.shape(np.where(diff > 2*np.nanstd(scale_fib)))[1]]
-        CHECKFLAT_FIB = [np.where(diff > np.nanstd(scale_fib))[0], np.where(diff > np.nanstd(scale_fib))[0]]
-        
-        retval["METRICS"]={"CHECKFLAT": CHECKFLAT,"CHECKFLAT_FIB": CHECKFLAT_FIB,"FLATRMS":np.mean(scaleRMS_fib),"FLATRMS_FIB":scaleRMS_fib, "FLAT_FIB":scale_fib }
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
@@ -2199,7 +2191,25 @@ class Check_FiberFlat(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-#        get_outputs(qafile,qafig,retval,'plot_fiberflat')
+        #- Calculate mean and rms fiberflat value for each fiber
+        fiberflat = fibflat.fiberflat
+        avg_fiberflat=[]
+        rms=[]
+        for fib in range(len(fiberflat)):
+            avg_fiberflat.append(np.mean(fiberflat[fib]))
+            rms.append(np.std(fiberflat[fib]))
+
+        #- Calculate mean of the fiber means for scalar metric
+        avg_all = np.mean(avg_fiberflat)
+
+        retval['METRICS'] = {"FLATMEAN":avg_fiberflat, "FLATRMS":rms, "CHECKFLAT":avg_all}
+
+        ###############################################################
+        # This section is for adding QA metrics for plotting purposes #
+        ###############################################################
+
+        ###############################################################
+
         return retval
 
     def get_default_config(self):

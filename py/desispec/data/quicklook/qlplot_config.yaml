@@ -1,18 +1,39 @@
 # Example Configuration to plot desired metrics
 PAGE1:
+    Title: Bias from overscan metrics after Preprocessing
+    bias_per_amp: {TYPE: PATCH, VALS: BIAS_AMP, PLOT_TITLE: Bias per amp, GRID: [2,2]}
+
+PAGE2:
     Title: Get RMS metrics after Preprocessing
     noise_per_amp: {TYPE: PATCH, VALS: NOISE_AMP, PLOT_TITLE: Noise per amp, GRID: [2,2]}
     overscan_noise_per_amp: {TYPE: PATCH, VALS: NOISE_OVERSCAN_AMP, PLOT_TITLE: Overscan Noise per amp, GRID: [2,2]}
 
-PAGE2:
-    Title: Bias from Overscan metrics after Preprocessing
-    bias_per_amp: {TYPE: PATCH, VALS: BIAS_AMP, PLOT_TITLE: Bias per amp, GRID: [2,2]}
-
 PAGE3:
-    Title: Sky Continuum metrics after Applying Fiberflat
-    skycont: {TYPE: 2DPLOT, XVALS: SKYFIBERID, YVALS: SKYCONT_FIBER, PLOT_TITLE: Sky Continua, XTITLE: Fiber ID, YTITLE: Sky continuum (counts), YRANGE: [100,300]}
+   Title: Count pixels metrics after preprocessing
+   litfrac_per_amp: {TYPE: PATCH, VALS: LITFRAC_AMP, PLOT_TITLE: Fraction of lit pixels per amp, GRID: [2,2]}
 
-PAGE4:
-    Title: Integrate Spectra metrics after Flux Calibration
-    specmag_petal: {TYPE: 3DPLOT, XVALS: RA, YVALS: DEC, ZVALS: SPEC_MAGS, PLOT_TITLE: Spectral Magnitudes on the Focal Plane, XTITLE: RA, YTITLE: DEC, HEAT: Blues}
+#PAGE4:
+#    Title: Calculate X & W sigmas metrics after preprocessing
+#    xsigma: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: XWSIGMA[0], PLOT_TITLE: X sigmas per fiber, XTITLE: Fiber, YTITLE: X sigma (# of pixels)}
+#    wsigma: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: XWSIGMA[1], PLOT_TITLE: W sigmas per fiber, XTITLE: Fiber, YTITLE: W sigma (# of pixels)}
+#    xsigma_per_amp: {TYPE: PATCH, VALS: XWSIGMA_AMP[0], PLOT_TITLE: Average X sigma per amp, GRID: [2,2]}
+#    wsigma_per_amp: {TYPE: PATCH, VALS: XWSIGMA_AMP[1], PLOT_TITLE: Average W sigma per amp, GRID: [2,2]}
+
+PAGE5:
+    Title: Sky continuum metrics after applying fiberflat
+    skycont: {TYPE: 2DPLOT, XVALS: SKYFIBERID, YVALS: SKYCONT_FIBER, PLOT_TITLE: Sky Continua, XTITLE: Fiber, YTITLE: Sky continuum (counts)}
+
+PAGE6:
+    Title: Sky peaks metrics after applying fiberflat
+    skypeaks: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: PEAKCOUNT_FIB, PLOT_TITLE: Sky Peaks, XTITLE: Fiber, YTITLE: Summed counts over sky peaks}
+
+#PAGE7:
+#    Title: Calculate SNR metrics after sky subtraction
+#    median_snr: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: MEDIAN_SNR, PLOT_TITLE: Median SNR, XTITLE: Fiber, YTITLE: Median SNR per fiber}
+#    snr_resid: {TYPE: 3DPLOT, XVALS: RA, YVALS: DEC, ZVALS: SNR_RESID, PLOT_TITLE: Residual SNR (calculated - fit) / fit, XTITLE: RA, YTITLE: DEC}
+#    obj_snr: {TYPE: 2DPLOT, XVALS: SNR_MAG_TGT[0][1], YVALS: SNR_MAG_TGT[0][0], PLOT_TITLE: Median SNR**2, XTITLE: Magnitude, YTITLE: SNR per object type}
+
+PAGE8:
+    Title: Integrate spectra metrics after flux calibration
+    specmags: {TYPE: 2DPLOT, XVALS: FIBERID, YVALS: SPEC_MAGS, PLOT_TITLE: Spectral Magnitudes, XTITLE: Fiber, YTITLE: Spectral Magnitude}
 

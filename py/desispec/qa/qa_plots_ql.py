@@ -572,7 +572,7 @@ def plot_residuals(frame,qa_dict,outfile,plotconf=None,hardplots=False):
         fig.savefig(outfile)
 
 
-def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None,hardplots=False):
+def plot_SNR(qa_dict,outfile,objlist,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None,hardplots=False):
     """
     Plot SNR
 
@@ -610,34 +610,16 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.,plotc
         for oid, otype in enumerate(objlist):
             mag=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
             snr=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
-            fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
-
-            #  JXP -- The following is not a good way to code this in Python
-            badobj = badfibs[oid]
-            if len(badobj) > 0:
-                fibers = np.array(fibers)
-                badfibs = np.array(badfibs)
-                remove = []
-                for ff in range(len(badobj)):
-                    rm = np.where(fibers==badobj[ff])[0]
-                    if len(rm) == 1:
-                        remove.append(rm[0])
-                badfibs=list(badfibs)
-                fibers=list(fibers)
-                for rr in range(len(remove)):
-                    fibers.remove(fibers[remove[rr]])
-                    mag.remove(mag[remove[rr]])
-                    snr.remove(snr[remove[rr]])
-                    for ri in range(len(remove)):
-                         remove[ri]-=1
             mags.append(mag)
             snrs.append(snr)
+
+            fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
             for c in range(len(fibers)):
                 ras = qa_dict['METRICS']['RA'][fibers[c]]
                 decs = qa_dict['METRICS']['DEC'][fibers[c]]
                 ra.append(ras)
                 dec.append(decs)
-    
+
         if rescut is None and sigmacut is not None:
             range_min = np.mean(resids) - sigmacut * np.std(resids)
             range_max = np.mean(resids) + sigmacut * np.std(resids)
