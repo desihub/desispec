@@ -2167,42 +2167,13 @@ class Check_FiberFlat(MonitoringAlg):
         
         kwargs=self.config['kwargs']
         retval={}
-        retval['PANAME'] = paname
+        retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["PROGRAM"] = 'FLAT'
         retval["FLAVOR"] = 'flat'
         retval["NIGHT"] = kwargs['night']
-        retval['CAMERA'] = fibflat.header["CAMERA"]
+        retval["CAMERA"] = fibflat.header['CAMERA']
         retval["EXPID"] = '{:08d}'.format(kwargs['expid'])
-
-        # Mean of wavelength will be test value
-        wavelengths = fibflat.wave
-        CHECKFLATtest = np.mean(wavelengths)
-        
-        #meanscale = fibflat.meanspec/np.mean(fibflat.meanspec)
-        A= fibflat.fiberflat        
-        scaleRMS_fib=[]
-        scale_fib=[]
-        
-        for i in range(fibflat.nspec):
-            
-            scaleRMS_fib.append(np.nanstd(A[i,:]))
-            scale_fib.append(np.nanmean(A[i,:]))
-            
-        
-        diff= scale_fib - np.mean(scale_fib)
-        
-        #SE: scalar metric:       CHECKFLAT: a 2-member list of number of fibers with difference from the average["diff"] outside 1 and 2 RMS 
-        #    Drill down metrics :
-        #              CHECKFLAT_FIB([array(N1),array(N2)]):    list of two arrays of fiber ids with "diff" 
-        #              FLATRMS(1 value):                        mean of the RMS of the scale value (i.e., fiber flux from continuum lamp) of all the 500 fibers    
-        #              FLATRMS_FIB(list of 500 values):         RMS per fiber
-        #              FLAT_FIB (list of 500 values):           list of meean fiber flux value per fiber
-        
-        CHECKFLAT = [np.shape(np.where(diff > np.nanstd(scale_fib)))[1],np.shape(np.where(diff > 2*np.nanstd(scale_fib)))[1]]
-        CHECKFLAT_FIB = [np.where(diff > np.nanstd(scale_fib))[0], np.where(diff > np.nanstd(scale_fib))[0]]
-        
-        retval["METRICS"]={"CHECKFLAT": CHECKFLAT,"CHECKFLAT_FIB": CHECKFLAT_FIB,"FLATRMS":np.mean(scaleRMS_fib),"FLATRMS_FIB":scaleRMS_fib, "FLAT_FIB":scale_fib }
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
@@ -2210,7 +2181,19 @@ class Check_FiberFlat(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-#        get_outputs(qafile,qafig,retval,'plot_fiberflat')
+        #- Calculate mean and rms fiberflat value for each fiber
+        fiberflat = fibflat.fiberflat
+        avg_fiberflat=[]
+        rms=[]
+        for fib in range(len(fiberflat)):
+            avg_fiberflat.append(np.mean(fiberflat[fib]))
+            rms.append(np.std(fiberflat[fib]))
+
+        #- Calculate mean of the fiber means for scalar metric
+        avg_all = np.mean(avg_fiberflat)
+
+        retval['METRICS'] = {"FLATMEAN":avg_fiberflat, "FLATRMS":rms, "CHECKFLAT":avg_all}
+
         return retval
 
     def get_default_config(self):
