@@ -5,7 +5,8 @@ desispec Change Log
 0.27.1 (unreleased)
 -------------------
 
-* No changes yet.
+* New calibration data access (inc var. DESI_SPECTRO_CALIB
+  replacing DESI_CCD_CALIBRATION_DATA).
 
 0.27.0 (2018-12-16)
 -------------------
