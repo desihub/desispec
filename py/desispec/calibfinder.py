@@ -1,6 +1,9 @@
-'''
+"""
+desispec.calibfinder
+==============
+
 Reading and selecting calibration data from $DESI_SPECTRO_CALIB using content of image headers
-'''
+"""
 
 import re
 import os
@@ -25,7 +28,18 @@ class CalibFinder() :
 
     
     def __init__(self,headers,yaml_file=None) :
+        """
+        Class to read and select calibration data from $DESI_SPECTRO_CALIB using the keywords found in the headers
         
+        Args:
+            headers: list of fits headers, or list of dictionnaries
+        
+        Optional:
+            yaml_file: path to a specific yaml file. By default, the code will
+            automatically find the yaml file from the environment variable
+            DESI_SPECTRO_CALIB and the CAMERA keyword in the headers
+
+        """
         log = get_logger()
                     
         old_version = False
@@ -128,11 +142,29 @@ class CalibFinder() :
         
 
     def haskey(self,key) :
+        """
+        Args:
+            key: keyword, string, like 'GAINA'
+        Returns:
+            yes or no, boolean
+        """
         return ( key in self.data )
 
     def value(self,key) :
+        """
+        Args:
+            key: header keyword, string, like 'GAINA'
+        Returns:
+            data found in yaml file
+        """
         return self.data[key]
     
     def findfile(self,key) :
+        """
+        Args:
+            key: header keyword, string, like 'DARK'
+        Returns:
+            path to calibration file
+        """
         return os.path.join(self.directory,self.data[key]) 
 
