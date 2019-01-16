@@ -4,7 +4,7 @@ import yaml
 import astropy.io.fits as pyfits
 from desiutil.log import get_logger
 from desispec.io import findfile
-from desispec.preproc import read_ccd_calibration
+from desispec.calibfinder import CalibFinder
 import os,sys
 from desispec.quicklook import qlexceptions,qllogger
 
@@ -387,11 +387,6 @@ class Config(object):
         self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-
-        if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
-            log = get_logger()
-            log.error("please set the DESI_CCD_CALIBRATION_DATA environment variable")
-            raise RuntimeError("Please set the DESI_CCD_CALIBRATION_DATA environment variable")
         
         hdulist=pyfits.open(self.rawfile)
         primary_header=hdulist[0].header
@@ -400,8 +395,9 @@ class Config(object):
         self.program=primary_header['PROGRAM']
 
         hdulist.close()
-        calibration_data=read_ccd_calibration(camera_header,primary_header)
-        self.calibpsf=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["PSF"])
+        
+        cfinder = CalibFinder([camera_header,primary_header])
+        self.calibpsf=cfinder.findfile("PSF")
 
         if self.psfid is None:
             self.psf_filename=findfile('psf',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
@@ -409,7 +405,7 @@ class Config(object):
             self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
         if self.flatid is None and self.flavor != 'flat':
-            self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["FIBERFLAT"])
+            self.fiberflat=cfinder.findfile("FIBERFLAT")
         elif self.flavor == 'flat':
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:

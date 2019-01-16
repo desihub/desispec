@@ -10,7 +10,7 @@ from desispec import io
 from desispec.io import read_raw,read_image
 from desispec.io.meta import findfile
 from desispec.io.fluxcalibration import read_average_flux_calibration
-from desispec.preproc import read_ccd_calibration
+from desispec.calibfinder import findcalibfile
 from desispec.quicklook import pas
 from desispec.quicklook import qlexceptions,qllogger
 from desispec.image import Image as im
@@ -935,9 +935,8 @@ class ApplyFluxCalibration(pas.PipelineAlg):
         rawfits=fits.open(rawfile)
         primary_header=rawfits[0].header
         image=read_raw(rawfile,camera)
-        calibration_data=read_ccd_calibration(image.meta,primary_header)
 
-        fluxcalib_filename=os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],calibration_data["FLUXCALIB"])
+        fluxcalib_filename=findcalibfile([image.meta,primary_header],"FLUXCALIB")
 
         fluxcalib = read_average_flux_calibration(fluxcalib_filename)
         log.info("read average calib in {}".format(fluxcalib_filename))
