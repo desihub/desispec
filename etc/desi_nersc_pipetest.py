@@ -101,7 +101,7 @@ def load_setup(path):
     vnames = [
         "DESI_ROOT",
         "DESI_BASIS_TEMPLATES",
-        "DESI_CCD_CALIBRATION_DATA",
+        "DESI_SPECTRO_CALIB",
         "DESI_SPECTRO_DATA",
         "DESI_SPECTRO_REDUX",
         "SPECPROD",
@@ -137,7 +137,7 @@ def main():
         help="Override value for DESI_BASIS_TEMPLATES")
 
     parser.add_argument("--calib", required=False, default=None,
-        help="Override value for DESI_CCD_CALIBRATION_DATA")
+        help="Override value for DESI_SPECTRO_CALIB")
 
     parser.add_argument("--nersc", required=False, default=None,
         help="Run on this NERSC system (edison | cori-haswell "
