@@ -24,6 +24,23 @@ def _parse_date_obs(value):
     return dateobs
 
 
+def findcalibfile(headers,key,yaml_file=None) :
+    """
+    read and select calibration data file from $DESI_SPECTRO_CALIB using the keywords found in the headers
+
+    Args:
+        headers: list of fits headers, or list of dictionnaries
+        
+    Optional:
+            yaml_file: path to a specific yaml file. By default, the code will
+            automatically find the yaml file from the environment variable
+            DESI_SPECTRO_CALIB and the CAMERA keyword in the headers
+    
+    Returns path to calibration file
+    """
+    cfinder = CalibFinder(headers,yaml_file)
+    return cfinder.findfile(key)
+
 class CalibFinder() :
 
     
