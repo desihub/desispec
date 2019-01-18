@@ -63,7 +63,7 @@ class TestQL_PA(unittest.TestCase):
         #- rawimage
 
         hdr = dict()
-        hdr['CAMERA'] = 'b1'
+        hdr['CAMERA'] = 'b0'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
 
         #- Dimensions per amp, not full 4-quad CCD
