@@ -740,7 +740,8 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
                             fitb=guess[1]
                 # Save
                 fitcoeff.append([fita,fitb])
-                fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
+                if fita != 0. and fitb != 0.:
+                    fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
                 fitT.append(T)
             except RuntimeError:
                 log.warning("In fit of {}, Fit minimization failed!".format(T))
