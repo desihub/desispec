@@ -32,7 +32,7 @@ Algorithms:
     Flexure:
         QA:
             Trace_Shifts:
-                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.06,0.06], XYSHIFTS_WARN_RANGE: [-0.08,0.08],XYSHIFTS_BRIGHT_REF:[0.0,0.0],XYSHIFTS_DARK_REF:[0.0,0.0],XYSHIFTS_GRAY_REF:[0.0,0.0]}
+                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.2,0.2], XYSHIFTS_WARN_RANGE: [-0.3,0.3],XYSHIFTS_BRIGHT_REF:[0.0,0.0],XYSHIFTS_DARK_REF:[0.0,0.0],XYSHIFTS_GRAY_REF:[0.0,0.0]}
     Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],
@@ -58,7 +58,7 @@ Algorithms:
         QA:
             Calculate_SNR:
                 #- First two entries set boundaries for SNR residual values via absolute values or sigmas
-                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-0.6, 0.6], FIDSNR_TGT_WARN_RANGE: [-0.8, 0.8], FIDSNR_TGT_BRIGHT_REF:[0.05,0.2,0.25], FIDSNR_TGT_DARK_REF:[0.55,0.35,0.75,0.85], FIDSNR_TGT_GRAY_REF:[0.55,0.85], FIDMAG: 22.}
+                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-0.9, 0.9], FIDSNR_TGT_WARN_RANGE: [-1.2, 1.2], FIDSNR_TGT_BRIGHT_REF:[0.05,0.2,0.25], FIDSNR_TGT_DARK_REF:[0.55,0.35,0.75,0.85], FIDSNR_TGT_GRAY_REF:[0.55,0.85], FIDMAG: 22.}
     ApplyFluxCalibration:
         QA:
             Sky_Rband:
