@@ -36,7 +36,7 @@ Algorithms:
     Flexure:
         QA:
             Trace_Shifts:
-                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.3,0.3], XYSHIFTS_WARN_RANGE: [-0.4,0.4],XYSHIFTS_REF:[0.0,0.0]}
+                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.2,0.2], XYSHIFTS_WARN_RANGE: [-0.3,0.3],XYSHIFTS_REF:[0.0,0.0]}
     Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],

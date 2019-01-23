@@ -233,6 +233,38 @@ class MonitoringAlg:
         if devlist is None:
             pass
         #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else----------- line below should only be "elif len(thr)==2 and len(wthr)==2:"
+
+        # RS: if one fit fails SNR but the rest pass, return normal
+        elif (cargs["RESULTKEY"] == 'FIDSNR_TGT'):
+            devlist = current
+            stats = []
+            nofit = np.where(devlist==0.0)[0]
+            if len(nofit) >= 2:
+                stats.append('ALARM')
+            else:
+                for i,val in enumerate(devlist):
+                    if len(nofit) != 0 and i == nofit[0]:
+                        stats.append('NORMAL')
+                    else:
+                        diff = refval[i] - val
+                        if thr[0]<= diff <= thr[1]:
+                            stats.append('NORMAL')
+                        elif wthr[0] <= diff <= wthr[1]:
+                            stats.append('WARNING')
+                        else:
+                            stats.append('ALARM')
+
+            if  np.isin(stats,'NORMAL').all():
+                metrics[QARESULTKEY]='NORMAL'
+            elif np.isin(stats,'WARNING').any() and np.isin(stats,'ALARM').any():
+                metrics[QARESULTKEY] = 'ALARM'
+            elif np.isin(stats,'ALARM').any():
+                metrics[QARESULTKEY] = 'ALARM'
+            elif np.isin(stats,'WARNING').any():
+                metrics[QARESULTKEY] = 'WARNING'
+
+            self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))
+
         elif  (len(thr)==2 and len(wthr)==2):
 
                     if np.size(devlist)== 1:

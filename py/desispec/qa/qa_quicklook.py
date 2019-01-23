@@ -1764,6 +1764,9 @@ class Integrate_Spec(MonitoringAlg):
         magnitudes=np.zeros(frame.nspec)
         key = 'FLUX_'+band
         magnitudes = 22.5 - 2.5*np.log10(frame.fibermap[key])
+        #- Set objects with zero flux to 30 mag
+        zeroflux = np.where(frame.fibermap[key]==0.)[0]
+        magnitudes[zeroflux] = 30.
 
         #- Get filter response information from speclite
         try:
