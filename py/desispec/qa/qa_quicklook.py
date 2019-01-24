@@ -1147,8 +1147,9 @@ class CountSpectralBins(MonitoringAlg):
         threshold=[param['CUTBINS']*ii for ii in rdnoise_fib]
         #- compare the flux sum to threshold
         
-        passfibers=np.where(frame.flux.sum(axis=1)>threshold)[0] 
-        ngoodfibers=passfibers.shape[0] - param["N_KNOWN_BROKEN_FIBERS"]
+        totcounts=frame.flux.sum(axis=1)
+        passfibers=np.where(totcounts>threshold)[0] 
+        ngoodfibers=passfibers.shape[0]
         good_fibers=np.array([0]*frame.nspec)
         good_fibers[passfibers]=1 #- assign 1 for good fiber
 
@@ -1166,7 +1167,7 @@ class CountSpectralBins(MonitoringAlg):
             retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
             retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
 
-        retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBERS": good_fibers}
+        retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBERS": good_fibers, "TOTCOUNT_FIB": totcounts}
 
         ###############################################################
         # This section is for adding QA metrics for plotting purposes #
