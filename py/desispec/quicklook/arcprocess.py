@@ -32,18 +32,19 @@ def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
         thisflux=flux[index-n:index+n+1]
         thisivar=ivar[index-n:index+n+1]
 
-        spots=thisflux/thisflux.sum()
-        errors=1./np.sqrt(thisivar)
-        errors/=thisflux.sum()
-
-        try:
-            popt,pcov=scipy.optimize.curve_fit(_gauss_pix,thiswave,spots)
-            meanwaves[jj]=popt[0]+linelist[jj]
-            emeanwaves[jj]=pcov[0,0]**0.5
-            sigmas[jj]=popt[1]
-            esigmas[jj]=(pcov[1,1]**0.5)
-        except:
-            pass
+        #RS: skip lines with zero flux
+        if 0. not in thisflux:
+            spots=thisflux/thisflux.sum()
+            try:
+                popt,pcov=scipy.optimize.curve_fit(_gauss_pix,thiswave,spots)
+                meanwaves[jj]=popt[0]+linelist[jj]
+                if pcov[0,0] >= 0.:
+                    emeanwaves[jj]=pcov[0,0]**0.5
+                sigmas[jj]=popt[1]
+                if pcov[1,1] >= 0.:
+                    esigmas[jj]=(pcov[1,1]**0.5)
+            except:
+                pass
 
     k=np.logical_and(~np.isnan(esigmas),esigmas!=np.inf)
     sigmas=sigmas[k]
@@ -114,11 +115,15 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
         if domain is None:
             domain=(np.min(wave),np.max(wave))
 
-        try:
-            thislegfit=fit_wsigmas(meanwaves,sigmas,esigmas,domain=domain,npoly=npoly)
-            coeffs[spec]=thislegfit.coef
-        except:
+        # RS: if Gaussian couldn't be fit to a line, don't do legendre fit for fiber
+        if 0. in sigmas or 0. in esigmas:
             pass
+        else:
+            try:
+                thislegfit=fit_wsigmas(meanwaves,sigmas,esigmas,domain=domain,npoly=npoly)
+                coeffs[spec]=thislegfit.coef
+            except:
+                pass
 
     # need to return the wavemin and wavemax of the fit
     return coeffs,domain[0],domain[1]
