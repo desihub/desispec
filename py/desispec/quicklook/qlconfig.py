@@ -248,19 +248,19 @@ class Config(object):
         Name and default locations of files are handled by desispec.io.meta.findfile
         """
         #- QA level outputs
-        qa_outfile = {}
+        #qa_outfile = {}
         qa_outfig = {}
         for PA in self.palist:
             for QA in self.qalist[PA]:
-                qa_outfile[QA] = self.io_qa(QA)[0]
+                #qa_outfile[QA] = self.io_qa(QA)[0]
                 qa_outfig[QA] = self.io_qa(QA)[1]
                 
                 #- make path if needed
-                path = os.path.normpath(os.path.dirname(qa_outfile[QA]))
+                path = os.path.normpath(os.path.dirname(qa_outfig[QA]))
                 if not os.path.exists(path):
                     os.makedirs(path)
 
-        return (qa_outfile,qa_outfig)
+        return (qa_outfig)
 #        return ((qa_outfile,qa_outfig),(qa_pa_outfile,qa_pa_outfig))
 
     @property
@@ -273,8 +273,8 @@ class Config(object):
                 params=self._qaparams(qa)
                 qaopts[qa]={'night' : self.night, 'expid' : self.expid,
                             'camera': self.camera, 'paname': PA, 'PSFFile': self.psf_filename,
-                            'amps': self.amps, 'qafile': self.dump_qa()[0][qa],
-                            'qafig': self.dump_qa()[1][qa], 'FiberMap': self.fibermap,
+                            'amps': self.amps, #'qafile': self.dump_qa()[0][qa],
+                            'qafig': self.dump_qa()[qa], 'FiberMap': self.fibermap,
                             'param': params, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa,
                             'plotconf':self.plotconf, 'hardplots': self.hardplots

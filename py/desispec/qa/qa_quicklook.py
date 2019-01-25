@@ -350,8 +350,8 @@ class Trace_Shifts(MonitoringAlg):
         retval["PARAMS"]=param
 
         #get_outputs(qafile,qafig,retval,'plot_traceshifts')
-        outfile = qa.write_qa_ql(qafile,retval)
-        log.debug("Output QA data is in {}".format(outfile))
+#        outfile = qa.write_qa_ql(qafile,retval)
+#        log.debug("Output QA data is in {}".format(outfile))
         return retval
 
     def get_default_config(self):
@@ -475,9 +475,9 @@ class Bias_From_Overscan(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_bias_overscan(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -693,9 +693,9 @@ class Get_RMS(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_RMS(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -930,9 +930,9 @@ class Calc_XWSigma(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_XWSigma(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -1040,9 +1040,9 @@ class Count_Pixels(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_countpix(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -1175,9 +1175,9 @@ class CountSpectralBins(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_countspectralbins(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -1282,9 +1282,9 @@ class Sky_Continuum(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_sky_continuum(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -1428,9 +1428,9 @@ class Sky_Rband(MonitoringAlg):
             zerorband=0.
             retval["METRICS"]={"SKYRBAND_FIB":zerospec,"SKYRBAND":zerorband}
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
 
         return retval
 
@@ -1536,9 +1536,9 @@ class Sky_Peaks(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_sky_peaks(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -1645,9 +1645,9 @@ class Sky_Residual(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_residuals(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -1872,9 +1872,9 @@ class Integrate_Spec(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_integral(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -1995,9 +1995,9 @@ class Calculate_SNR(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_SNR(retval,qafig,objlist,fitsnr,rescut,sigmacut,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
@@ -2117,9 +2117,9 @@ class Check_Resolution(MonitoringAlg):
 
         ###############################################################
 
-        if qafile is not None:
-            outfile=qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
+#        if qafile is not None:
+#            outfile=qa.write_qa_ql(qafile,retval)
+#            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             fig.plot_lpolyhist(retval,qafig,plotconf=plotconf,hardplots=hardplots)
             log.debug("Output QA fig {}".format(qafig))
