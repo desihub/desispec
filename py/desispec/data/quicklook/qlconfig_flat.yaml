@@ -23,11 +23,11 @@ Algorithms:
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.5, 1.5], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[2.6,2.6,2.6,2.6]}
             Count_Pixels:
-                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-0.15, 0.15], LITFRAC_AMP_WARN_RANGE: [-0.2, 0.2],LITFRAC_AMP_REF:[0.8,0.8,0.8,0.8]}
+                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-0.3, 0.3], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_REF:[0.78,0.78,0.78,0.78]}
     Flexure:
         QA:
             Trace_Shifts:
-                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.2,0.2], XYSHIFTS_WARN_RANGE: [-0.3,0.3],XYSHIFTS_REF:[0.0,0.0]}
+                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.6,0.6], XYSHIFTS_WARN_RANGE: [-0.8,0.8],XYSHIFTS_REF:[0.0,0.0]}
     Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],
@@ -40,4 +40,4 @@ Algorithms:
     ComputeFiberflat_QP:
         QA:
             Check_FiberFlat:
-                PARAMS: {CHECKFLAT_NORMAL_RANGE:[-0.3,0.3], CHECKFLAT_WARN_RANGE:[-0.4,0.4],CHECKFLAT_REF:[1.0]}
+                PARAMS: {CHECKFLAT_NORMAL_RANGE:[-0.01,0.01], CHECKFLAT_WARN_RANGE:[-0.02,0.02],CHECKFLAT_REF:[1.0]}

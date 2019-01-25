@@ -24,19 +24,19 @@ Algorithms:
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.5, 1.5], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[2.6,2.6,2.6,2.6]}
             Count_Pixels:
-                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-0.15, 0.15], LITFRAC_AMP_WARN_RANGE: [-0.2, 0.2],LITFRAC_AMP_REF:[0.01,0.01,0.01,0.01]}
+                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-0.12, 0.12], LITFRAC_AMP_WARN_RANGE: [-0.16, 0.16],LITFRAC_AMP_REF:[0.05,0.05,0.05,0.05]}
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [4047.7,4078.8,4359.6,4801.2,5087.2,5426.2],
                          R_PEAKS: [6144.7,6404.0,6508.3,6931.4,7034.3,7247.1],
                          Z_PEAKS: [8302.6,8379.9,8497.7,8856.3,9151.1,9668.0],
                          PIXEL_RANGE: 7,
                          MAX_SIGMA: 10,
-                         XWSIGMA_NORMAL_RANGE: [-0.9, 0.9],
-                         XWSIGMA_WARN_RANGE: [-1.2, 1.2],XWSIGMA_REF:[1.2,1.2]}
+                         XWSIGMA_NORMAL_RANGE: [-0.45, 0.45],
+                         XWSIGMA_WARN_RANGE: [-0.6, 0.6],XWSIGMA_REF:[1.1,1.2]}
     Flexure:
         QA:
             Trace_Shifts:
-                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.2,0.2], XYSHIFTS_WARN_RANGE: [-0.3,0.3],XYSHIFTS_REF:[0.0,0.0]}
+                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.21,0.21], XYSHIFTS_WARN_RANGE: [-0.28,0.28],XYSHIFTS_REF:[-0.07,-0.07]}
     Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],
@@ -50,4 +50,4 @@ Algorithms:
         NBINS: 5
         QA:
             Check_Resolution:
-                PARAMS: {CHECKARC_NORMAL_RANGE: [-30.0,30.0], CHECKARC_WARN_RANGE: [-40.0,40.0],CHECKARC_REF:[500]}
+                PARAMS: {CHECKARC_NORMAL_RANGE: [-30.0,30.0], CHECKARC_WARN_RANGE: [-40.0,40.0],CHECKARC_REF:[480]}
