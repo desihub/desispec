@@ -25,12 +25,24 @@ from desispec.maskbits import specmask
 import desispec.scripts.mergebundles as mergebundles
 from desispec.specscore import compute_and_append_frame_scores
 
+from distributed import Client
+
 from dask import delayed, compute
 
-from distributed import Client
-client = Client(scheduler_file="/global/cscratch1/sd/stephey/scheduler.json")
+from distributed.security import Security
 
-print(client)
+sec = Security(tls_ca_file='./tmp/foo/foo.pem',
+               tls_client_cert='./tmp/bar/bar.pem',
+               tls_client_key='./tmp/bar/bar.pem',
+               require_encryption=True)
+
+#client = Client(..., security=sec)
+client = Client(scheduler_file="/global/cscratch1/sd/stephey/scheduler.json", security=sec)
+
+
+#from distributed import Client, get_client
+#client = get_client()
+#client = Client(scheduler_file="/global/cscratch1/sd/stephey/scheduler.json")
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
@@ -94,6 +106,7 @@ def main(args, timing=None):
     # to be divided among processes.
     specmin = args.specmin
     nspec = args.nspec
+    #nspec = 50 #for testing!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     #- Load input files and broadcast
 
@@ -247,35 +260,54 @@ def main(args, timing=None):
     print("bundles")
     print(bundles)
 
+    ###this is the non mpi version, hopefully dask can make sense of this
+    #results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
+    #             regularize=args.regularize, ndecorr=args.decorrelate_fibers,
+    #             bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
+    #               full_output=True, nsubbundles=args.nsubbundles,psferr=args.psferr).compute()
+
+    ###this is the non mpi version, hopefully dask can make sense of this
+    #futures = client.map(ex2d, [(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], bnspec[b], wave) for b in bundles])
+
+    #results_tup = client.gather(futures)
+
+    #futures = client.map(ex2d, [(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
+    #    bnspec[b], wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
+    #    bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
+    #    full_output=True, nsubbundles=args.nsubbundles) for b in bundles])
+
+    #results_tup = client.gather(futures)
+
     ###DASKIFY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     #this should become a delayed function
     #just distribute the number of bundles nbundle (usually 20) to tasks
+    #starting dask delayed
+    print("starting dask delayed for bundles")
     delayed_ex2d = [delayed(ex2d)(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
         bnspec[b], wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
         bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
         full_output=True, nsubbundles=args.nsubbundles) for b in bundles]
-
-    #results = compute(delayed_ex2d, scheduler='distributed')
+    #
     results_tup = compute(*delayed_ex2d, scheduler='distributed')
 
     print("type(results_tup)")
     print(type(results_tup))
-    #<class 'tuple'>
-    #print("len(results_tup)")   
-    #print(len(results_tup))
+    print("len(results_tup)")   
+    print(len(results_tup))
     #tuple is len 20 (one for each bundle)
-   
+    #print("results_tup")
+    #print(results_tup)
     #make the results dict we'll eventually fill
     results = dict()
         
-    #preallocate numpy arrays of the correct size
+    ##preallocate numpy arrays of the correct size
     flux_array = np.zeros([nspec, nwave])
     ivar_array = np.zeros([nspec, nwave])
     resolution_array= np.zeros([nspec, 11, nwave]) #why 11?
     chi2pix_array = np.zeros([nspec, nwave])
     pixmask_array = np.zeros([nspec, nwave])
 
-    #need to convert tuple of dicts back into single dict i think
+    ##need to convert tuple of dicts back into single dict i think
     for i, d in enumerate(results_tup):
         istart = i*25
         iend = istart + 25
@@ -293,8 +325,8 @@ def main(args, timing=None):
     results['chi2pix'] = chi2pix_array
     results['pixmask_fraction'] = pixmask_array
             
-    print("type(results)")
-    print(type(results))
+    #print("type(results)")
+    #print(type(results))
 
     flux = results['flux']
     ivar = results['ivar']
@@ -350,12 +382,12 @@ def main(args, timing=None):
 
     # Resolve difference timer data
 
-    if type(timing) is dict:
-        timing["read_input"] = mark_read_input - mark_start
-        timing["preparation"] = mark_preparation - mark_read_input
-        timing["total_extraction"] = time_total_extraction
-        timing["total_write_output"] = time_total_write_output
-        timing["merge"] = time_merge
+    #if type(timing) is dict:
+    #    timing["read_input"] = mark_read_input - mark_start
+    #    timing["preparation"] = mark_preparation - mark_read_input
+    #    timing["total_extraction"] = time_total_extraction
+    #    timing["total_write_output"] = time_total_write_output
+    #    timing["merge"] = time_merge
 
 
 
