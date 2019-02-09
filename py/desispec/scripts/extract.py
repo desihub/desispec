@@ -31,10 +31,13 @@ from dask import delayed, compute
 
 from distributed.security import Security
 
-sec = Security(tls_ca_file='./tmp/foo/foo.pem',
-               tls_client_cert='./tmp/bar/bar.pem',
-               tls_client_key='./tmp/bar/bar.pem',
+sec = Security(tls_ca_file='./tmp/foo1/foo1.pem',
+               tls_client_cert='./tmp/bar1/bar_cert.pem',
+               tls_client_key='./tmp/bar1/bar_key.pem',
                require_encryption=True)
+
+
+#sec=None
 
 #client = Client(..., security=sec)
 client = Client(scheduler_file="/global/cscratch1/sd/stephey/scheduler.json", security=sec)
