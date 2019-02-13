@@ -32,18 +32,19 @@ def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
         thisflux=flux[index-n:index+n+1]
         thisivar=ivar[index-n:index+n+1]
 
-        spots=thisflux/thisflux.sum()
-        errors=1./np.sqrt(thisivar)
-        errors/=thisflux.sum()
-
-        try:
-            popt,pcov=scipy.optimize.curve_fit(_gauss_pix,thiswave,spots)
-            meanwaves[jj]=popt[0]+linelist[jj]
-            emeanwaves[jj]=pcov[0,0]**0.5
-            sigmas[jj]=popt[1]
-            esigmas[jj]=(pcov[1,1]**0.5)
-        except:
-            pass
+        #RS: skip lines with zero flux
+        if 0. not in thisflux:
+            spots=thisflux/thisflux.sum()
+            try:
+                popt,pcov=scipy.optimize.curve_fit(_gauss_pix,thiswave,spots)
+                meanwaves[jj]=popt[0]+linelist[jj]
+                if pcov[0,0] >= 0.:
+                    emeanwaves[jj]=pcov[0,0]**0.5
+                sigmas[jj]=popt[1]
+                if pcov[1,1] >= 0.:
+                    esigmas[jj]=(pcov[1,1]**0.5)
+            except:
+                pass
 
     k=np.logical_and(~np.isnan(esigmas),esigmas!=np.inf)
     sigmas=sigmas[k]
@@ -90,29 +91,39 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
         log.info("No line list configured. Fitting for lines {}".format(linelist))
     coeffs=np.zeros((nspec,npoly+1)) #- coeffs array
 
-    #- amend line list to only include lines in given wavelength range
-    wave=frame.wave
-    if wave[0] >= linelist[0]:
-        noline_ind_lo=np.where(np.array(linelist)<=wave[0])
-        linelist=linelist[np.max(noline_ind_lo[0])+1:len(linelist)-1]
-        log.info("First {} line(s) outside wavelength range, skipping these".format(len(noline_ind_lo[0])))
-    if wave[len(wave)-1] <= linelist[len(linelist)-1]:
-        noline_ind_hi=np.where(np.array(linelist)>=wave[len(wave)-1])
-        linelist=linelist[0:np.min(noline_ind_hi[0])-1]
-        log.info("Last {} line(s) outside wavelength range, skipping these".format(len(noline_ind_hi[0])))
-
     for spec in range(nspec):
+        #- Allow arc processing to use either QL or QP extraction
+        if isinstance(frame.wave[0],float):
+            wave=frame.wave
+        else:
+            wave=frame.wave[spec]
+
         flux=frame.flux[spec]
         ivar=frame.ivar[spec]
+
+        #- amend line list to only include lines in given wavelength range
+        if wave[0] >= linelist[0]:
+            noline_ind_lo=np.where(np.array(linelist)<=wave[0])
+            linelist=linelist[np.max(noline_ind_lo[0])+1:len(linelist)-1]
+            log.info("First {} line(s) outside wavelength range, skipping these".format(len(noline_ind_lo[0])))
+        if wave[len(wave)-1] <= linelist[len(linelist)-1]:
+            noline_ind_hi=np.where(np.array(linelist)>=wave[len(wave)-1])
+            linelist=linelist[0:np.min(noline_ind_hi[0])-1]
+            log.info("Last {} line(s) outside wavelength range, skipping these".format(len(noline_ind_hi[0])))
+
         meanwaves,emeanwaves,sigmas,esigmas=sigmas_from_arc(wave,flux,ivar,linelist,n=nbins)
         if domain is None:
             domain=(np.min(wave),np.max(wave))
 
-        try:
-            thislegfit=fit_wsigmas(meanwaves,sigmas,esigmas,domain=domain,npoly=npoly)
-            coeffs[spec]=thislegfit.coef
-        except:
+        # RS: if Gaussian couldn't be fit to a line, don't do legendre fit for fiber
+        if 0. in sigmas or 0. in esigmas:
             pass
+        else:
+            try:
+                thislegfit=fit_wsigmas(meanwaves,sigmas,esigmas,domain=domain,npoly=npoly)
+                coeffs[spec]=thislegfit.coef
+            except:
+                pass
 
     # need to return the wavemin and wavemax of the fit
     return coeffs,domain[0],domain[1]

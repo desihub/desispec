@@ -7,6 +7,32 @@ QuickLook team @Southern Methodist University (SMU)
 First version Spring 2016
 Latest revision July 2018
 
+Running QuickLook:
+
+    desi_quicklook -i qlconfig_science.yaml -n 20191001 -c r0 -e 3577
+
+This requires having necessary input files and setting the following environment variables:
+
+    QL_SPEC_DATA: directory containing raw/fibermap files (full path: $QL_SPEC_DATA/night/expid)
+    QL_SPEC_REDUX: directory for QL output (full path: $QL_SPEC_REDUX/exposures/night/expid)
+    DESI_CALIBRATION_DATA: directory containing calibration files
+
+Necessary Quicklook command line arguments:
+
+    -i,--config_file : path to QL configuration file
+    -n,--night : night to be processed
+    -c,--camera : camera to be processed
+    -e,--expid : exposure ID to be processed
+
+Optional QuickLook arguments:
+
+    --rawdata_dir : directory containing raw/fibermap files (overrides $QL_SPEC_DATA)
+    --specprod_dir : directory for QL output (overrides $QL_SPEC_REDUX)
+    
+  Plotting options:
+
+    -p (including path to plotting configuration file) : generate configured plots
+    -p (only using -p with no configuration file) : generate QL hardcoded plots
 """
 
 from __future__ import absolute_import, division, print_function
@@ -47,8 +73,7 @@ def parse():
     parser.add_argument("--specprod_dir",type=str, required=False, help="specprod directory, overrides $QL_SPEC_REDUX in config")
     parser.add_argument("--singleQA",type=str,required=False,help="choose one QA to run",default=None,dest="singqa")
     parser.add_argument("--loglvl",default=20,type=int,help="log level for quicklook (0=verbose, 50=Critical)")
-    parser.add_argument("--plotconfig",type=str,help="use plotting configuration file for generating static plots")
-    parser.add_argument("-p",action='store_true',help="use hard coded static plots",dest="hardplots")
+    parser.add_argument("-p",dest='qlplots',nargs='?',default='noplots',help="generate QL static plots")
     parser.add_argument("--resolution",action='store_true', help="store full resolution information")
     args=parser.parse_args()
     return args
@@ -102,7 +127,7 @@ def ql_main(args=None):
         log.debug("Running Quicklook using configuration file {}".format(args.config))
         if os.path.exists(args.config):
             if "yaml" in args.config:
-                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,psfid=psfid,flatid=flatid,templateid=templateid,templatenight=templatenight,plotconfig=args.plotconfig,hardplots=args.hardplots,store_res=args.resolution)
+                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,psfid=psfid,flatid=flatid,templateid=templateid,templatenight=templatenight,qlplots=args.qlplots,store_res=args.resolution)
                 configdict=config.expand_config()
             else:
                 log.critical("Can't open config file {}".format(args.config))

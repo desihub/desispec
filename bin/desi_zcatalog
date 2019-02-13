@@ -62,6 +62,7 @@ parser.add_argument("-o", "--outfile", type=str,  help="output file")
 parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
 parser.add_argument("--match", type=str, nargs="*", help="match other tables (targets,truth...)")
 parser.add_argument("--fibermap", action = "store_true", help="add some columns from fibermap stored in zbest files")
+parser.add_argument("--spectra-scores", action = "store_true", help="add some columns from scores stored in spectra files (found in same directory as zbest file)")
 
 args = parser.parse_args()
 
@@ -119,6 +120,23 @@ for zbestfile in zbestfiles:
             nzbest["FLUX_Z"] = 10**(0.4*(22.5 - fibermap["MAG"][:,2][tmp2]))
 
         zbest=nzbest
+
+
+    if args.spectra_scores :
+        specfile=os.path.join(os.path.dirname(zbestfile),os.path.basename(zbestfile).replace("zbest","spectra"))
+        scores = fitsio.read(specfile, 'SCORES')
+        newtypes=[]
+        for k in scores.dtype.names :
+             newtypes.append((k,"f4"))
+        ndtype=np.dtype( zbest.dtype.descr + newtypes )
+        nzbest=np.zeros(zbest.shape,dtype=ndtype)
+        for k in zbest.dtype.names : nzbest[k]=zbest[k]
+        tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
+        tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
+        for k in scores.dtype.names :
+            nzbest[k] = scores[k][tmp2]
+        zbest=nzbest
+
     data.append(zbest)
    
 
