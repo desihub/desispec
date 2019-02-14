@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+
+
+import sys,string
+import astropy.io.fits as pyfits
+import argparse
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('ifile2', metavar='ifile', type=str, nargs='*',
+                    help='input fits file(s)')
+parser.add_argument('-i','--ifile', type = str, default = None, required = False, nargs="*",
+                    help = 'input fits file(s)')
+parser.add_argument('-k','--key', type = str, default = None, required = False, nargs="*",
+                    help = 'header keys to display (show full header if none)')
+parser.add_argument('--info', action='store_true',
+                    help = 'show list of image hdus')
+parser.add_argument('--hdu',type = str, default = 0, required = False, 
+                    help = 'header HDU (int or string)')
+parser.add_argument('--cols', action='store_true', help ="show columns in Table")
+parser.add_argument('--no-filename', action='store_true', help ="do not list the filenames")
+
+
+args        = parser.parse_args()
+
+try :
+    hdu = int(args.hdu)
+except ValueError:
+    hdu = args.hdu
+
+filenames = args.ifile2
+if args.ifile is not None :
+   filenames += args.ifile 
+
+if args.key is None or len(args.key)==0 :
+    print("no key, will dump header")
+    for filename in filenames :
+        print(filename)
+        print("======================")
+        h=pyfits.open(filename)
+        if args.info :
+            h.info()
+            print("")
+        header=h[hdu].header
+        print(header.tostring)
+        print("")
+
+        if args.cols :
+            print("Table columns:")
+            print(h[hdu].data.dtype.names)
+        
+        h.close()
+
+
+    
+
+
+    sys.exit(0)
+
+line="#"
+for k in args.key :
+    line+=" "+k
+if not args.no_filename :
+    line+=" filename"
+
+print(line)
+
+
+for filename in filenames :
+    h=pyfits.open(filename)
+    if not hdu in h :
+        print("no HDU %s in %s"%(str(hdu),filename))
+        continue
+    header=h[hdu].header
+    line=""    
+    for k in args.key :
+        try :
+            val=header[k]
+        except KeyError :
+            val="None"
+        line+=" "+str(val)
+    if not args.no_filename :
+        line+=" "+filename
+    print(line)
+
+    if args.cols :
+        print("Table columns:")
+        print(h[hdu].data.dtype.names)
+
+    h.close()
+
+    
+        
+    
