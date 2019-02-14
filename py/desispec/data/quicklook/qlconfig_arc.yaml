@@ -12,7 +12,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ResolutionFit]
+Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ResolutionFit]
 Algorithms:
     Initialize:
         PEAKS: {B_PEAKS: [4047.7,4078.8,4359.6,4801.2,5087.2,5426.2], R_PEAKS: [6144.7,6404.0,6508.3,6931.4,7034.3,7247.1], Z_PEAKS: [8302.6,8379.9,8497.7,8856.3,9151.1,9668.0]}
@@ -20,24 +20,24 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-80.0, 80.0], BIAS_AMP_WARN_RANGE: [-100.0, 100.0], BIAS_AMP_REF:[120.0,100.0,170.0,110.0]}
+                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-40.0, 40.0], BIAS_AMP_WARN_RANGE: [-60.0, 60.0], BIAS_AMP_REF:[150.0,150.0,150.0,150.0]}
             Get_RMS:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[2.1,2.2,2.1,2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.5, 1.5], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[2.6,2.6,2.6,2.6]}
             Count_Pixels:
-                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_REF:[0.3,0.3,0.4,0.4]}
+                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-0.12, 0.12], LITFRAC_AMP_WARN_RANGE: [-0.16, 0.16],LITFRAC_AMP_REF:[0.05,0.05,0.05,0.05]}
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [4047.7,4078.8,4359.6,4801.2,5087.2,5426.2],
                          R_PEAKS: [6144.7,6404.0,6508.3,6931.4,7034.3,7247.1],
                          Z_PEAKS: [8302.6,8379.9,8497.7,8856.3,9151.1,9668.0],
                          PIXEL_RANGE: 7,
                          MAX_SIGMA: 10,
-                         XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
-                         XWSIGMA_WARN_RANGE: [-4.0, 4.0],XWSIGMA_REF:[1.5,2.0]}
+                         XWSIGMA_NORMAL_RANGE: [-0.45, 0.45],
+                         XWSIGMA_WARN_RANGE: [-0.6, 0.6],XWSIGMA_REF:[1.1,1.2]}
     Flexure:
         QA:
             Trace_Shifts:
-                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-1.0,1.0], XYSHIFTS_WARN_RANGE: [-2.0,2.0],XYSHIFTS_REF:[0.,0.]}
-    BoxcarExtract:
+                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-0.21,0.21], XYSHIFTS_WARN_RANGE: [-0.28,0.28],XYSHIFTS_REF:[-0.07,-0.07]}
+    Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],
             r: [5630,7740,0.8],
@@ -45,9 +45,9 @@ Algorithms:
             }
         QA:
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2],NGOODFIB_REF:[500]}
+                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-3.0, 3.0], NGOODFIB_WARN_RANGE: [-4.0, 4.0],NGOODFIB_REF:[500]}
     ResolutionFit:
         NBINS: 5
         QA:
             Check_Resolution:
-                PARAMS: {CHECKARC_NORMAL_RANGE: [-50,50], CHECKARC_WARN_RANGE: [-100,100],CHECKARC_REF:[5,5,5]}
+                PARAMS: {CHECKARC_NORMAL_RANGE: [-30.0,30.0], CHECKARC_WARN_RANGE: [-40.0,40.0],CHECKARC_REF:[480]}

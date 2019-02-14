@@ -13,7 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. 
     expand_config will expand out to full format as needed by quicklook.setup
     """
-    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plotconfig=None,hardplots=False,store_res=None):
+    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,qlplots=False,store_res=None):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
@@ -39,22 +39,21 @@ class Config(object):
         self.specprod_dir = specprod_dir
         self.outdir = outdir
         self.flavor = self.conf["Flavor"]
-        
+
         #- Options to write out frame, fframe, preproc, and sky model files
         self.dumpintermediates = False
         self.writepreprocfile = self.conf["WritePreprocfile"]
         self.writeskymodelfile = False
 
-        #- Load plotting configuration file
         self.plotconf = None
-        if plotconfig:
-            with open(plotconfig, 'r') as pf:
+        self.hardplots = False
+        #- Load plotting configuration file
+        if qlplots != 'noplots' and qlplots is not None:
+            with open(qlplots, 'r') as pf:
                 self.plotconf = yaml.load(pf)
                 pf.close()
-
         #- Use hard coded plotting algorithms
-        self.hardplots = False
-        if hardplots:
+        elif qlplots is None:
             self.hardplots = True
 
         # Use --resolution to store full resolution informtion
@@ -249,19 +248,19 @@ class Config(object):
         Name and default locations of files are handled by desispec.io.meta.findfile
         """
         #- QA level outputs
-        qa_outfile = {}
+        #qa_outfile = {}
         qa_outfig = {}
         for PA in self.palist:
             for QA in self.qalist[PA]:
-                qa_outfile[QA] = self.io_qa(QA)[0]
+                #qa_outfile[QA] = self.io_qa(QA)[0]
                 qa_outfig[QA] = self.io_qa(QA)[1]
                 
                 #- make path if needed
-                path = os.path.normpath(os.path.dirname(qa_outfile[QA]))
+                path = os.path.normpath(os.path.dirname(qa_outfig[QA]))
                 if not os.path.exists(path):
                     os.makedirs(path)
 
-        return (qa_outfile,qa_outfig)
+        return (qa_outfig)
 #        return ((qa_outfile,qa_outfig),(qa_pa_outfile,qa_pa_outfig))
 
     @property
@@ -274,8 +273,8 @@ class Config(object):
                 params=self._qaparams(qa)
                 qaopts[qa]={'night' : self.night, 'expid' : self.expid,
                             'camera': self.camera, 'paname': PA, 'PSFFile': self.psf_filename,
-                            'amps': self.amps, 'qafile': self.dump_qa()[0][qa],
-                            'qafig': self.dump_qa()[1][qa], 'FiberMap': self.fibermap,
+                            'amps': self.amps, #'qafile': self.dump_qa()[0][qa],
+                            'qafig': self.dump_qa()[qa], 'FiberMap': self.fibermap,
                             'param': params, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa,
                             'plotconf':self.plotconf, 'hardplots': self.hardplots

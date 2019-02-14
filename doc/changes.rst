@@ -2,11 +2,25 @@
 desispec Change Log
 ===================
 
-0.27.1 (unreleased)
+0.27.2 (unreleased)
 -------------------
 
 * New calibration data access (inc var. DESI_SPECTRO_CALIB
   replacing DESI_CCD_CALIBRATION_DATA).
+
+0.27.1 (unreleased)
+-------------------
+
+* QL updates for January 2019 readiness review (PRs `#750`_, `#751`_, `#752`_,
+  `#754`_, `#755`_, `#756`_, `#757`_).
+
+.. _`#750`: https://github.com/desihub/desispec/pull/750
+.. _`#751`: https://github.com/desihub/desispec/pull/751
+.. _`#752`: https://github.com/desihub/desispec/pull/752
+.. _`#754`: https://github.com/desihub/desispec/pull/754
+.. _`#755`: https://github.com/desihub/desispec/pull/755
+.. _`#756`: https://github.com/desihub/desispec/pull/756
+.. _`#757`: https://github.com/desihub/desispec/pull/757
 
 0.27.0 (2018-12-16)
 -------------------
