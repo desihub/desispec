@@ -30,14 +30,14 @@ from astropy.io import fits
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Bootstrap DESI PSF.")
 
-    parser.add_argument('--fiberflat', type = str, default = None, required=False,
-                        help = 'path of DESI fiberflat fits file')
-    parser.add_argument('--psffile', type = str, default = None, required=False,
-                        help = 'path of DESI PSF fits file')
+    parser.add_argument('--contfile', type = str, default = None, required=False,
+                        help = 'path of DESI continuum fits file')
     parser.add_argument('--arcfile', type = str, default = None, required=False,
                         help = 'path of DESI fiberflat fits file')
-    parser.add_argument('--outfile', type = str, default = None, required=True,
+    parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
+    parser.add_argument('--psffile', type = str, default = None, required=False,
+                        help = 'path of DESI PSF fits file')
     parser.add_argument('--qafile', type = str, default = None, required=False,
                         help = 'path of QA figure file')
     parser.add_argument('--lamps', type = str, default = None, required=False,
@@ -54,7 +54,8 @@ def parse(options=None):
     parser.add_argument("--toler", type = float, default=0.5, required=False, help="Allowed fractional variation of d wave / dy around prior")
     parser.add_argument("--nmax", type = int, default=100, required=False, help="Max number of measured emission lines kept in triplet-matching algorithm")
     parser.add_argument("--out-line-list", type = str, default=False, required=False, help="Write to the list of lines found (can be used as input to specex)")
-
+    parser.add_argument('--fiberflat', type = str, default = None, required=False, help = 'deprecated, same as --contfile')
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -80,8 +81,13 @@ def main(args):
     else :
         log.info("Using default set of lamps")
 
-    if (args.psffile is None) and (args.fiberflat is None):
-        raise IOError("Must provide either a PSF file or a fiberflat")
+    if args.fiberflat is not None and args.contfile is None :
+        args.contfile=args.fiberflat
+        log.warning("Please use --contfile instead of --fiberflat")
+    
+
+    if (args.psffile is None) and (args.contfile is None):
+        raise IOError("Must provide either a PSF file or a contfile")
 
     # Start QA
     try:
@@ -91,25 +97,25 @@ def main(args):
     else:
         QA = True
 
-    fiberflat_header = None
+    contfile_header = None
 
     if args.psffile is None:
         ###########
-        # Read flat
-        flat_hdu = fits.open(args.fiberflat)
-        fiberflat_header = flat_hdu[0].header
-        header = flat_hdu[0].header
-        if len(flat_hdu)>=3 :
-            flat = flat_hdu[0].data*(flat_hdu[1].data>0)*(flat_hdu[2].data==0)
+        # Read continuum
+        cont_hdu = fits.open(args.contfile)
+        contfile_header = cont_hdu[0].header
+        header = cont_hdu[0].header
+        if len(cont_hdu)>=3 :
+            cont = cont_hdu[0].data*(cont_hdu[1].data>0)*(cont_hdu[2].data==0)
         else :
-            flat = flat_hdu[0].data
-            log.warning("found only %d HDU in flat, do not use ivar"%len(flat_hdu))
-        ny = flat.shape[0]
+            cont = cont_hdu[0].data
+            log.warning("found only %d HDU in cont, do not use ivar"%len(cont_hdu))
+        ny = cont.shape[0]
 
         ###########
         # Find fibers
         log.info("Finding the fibers")
-        xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
+        xpk, ypos, cut = desiboot.find_fiber_peaks(cont)
         if QA:
             desiboot.qa_fiber_peaks(xpk, cut, pp)
 
@@ -121,11 +127,11 @@ def main(args):
             #xpk = xpk[0:5]
 
         ###########
-        # Trace the fiber flat spectra
-        log.info("Tracing the fiber flat spectra")
+        # Trace the fiber cont spectra
+        log.info("Tracing the continuum spectra")
         # Crude first
         log.info("Crudely..")
-        xset, xerr = desiboot.trace_crude_init(flat,xpk,ypos)
+        xset, xerr = desiboot.trace_crude_init(cont,xpk,ypos)
         # Polynomial fits
         log.info("Fitting the traces")
         xfit, fdicts = desiboot.fit_traces(xset,xerr)
@@ -136,12 +142,12 @@ def main(args):
         ###########
         # Model the PSF with Gaussian
         log.info("Modeling the PSF with a Gaussian, be patient..")
-        gauss = desiboot.fiber_gauss(flat,xfit,xerr)
+        gauss = desiboot.fiber_gauss(cont,xfit,xerr)
         if QA:
             desiboot.qa_fiber_gauss(gauss, pp)
         XCOEFF = None
     else: # Load PSF file and generate trace info
-        log.warning("Not tracing the flat.  Using the PSF file.")
+        log.warning("Not tracing the continuum.  Using the PSF file.")
         psf_hdu = fits.open(args.psffile)
         psf_head = psf_hdu[0].header
         # Gaussians
@@ -344,7 +350,7 @@ def main(args):
     # Write PSF file
     log.info("Writing PSF file")
     desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, legendre_deg=args.legendre_degree , without_arc=args.trace_only,
-                       XCOEFF=XCOEFF,fiberflat_header=fiberflat_header,arc_header=arc_header)
+                       XCOEFF=XCOEFF,fiberflat_header=contfile_header,arc_header=arc_header)
     log.info("Successfully wrote {:s}".format(args.outfile))
 
     if ( not args.trace_only ) and args.out_line_list :
