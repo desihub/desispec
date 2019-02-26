@@ -14,8 +14,6 @@ destination_directories=($(/bin/realpath ${DESI_ROOT}/engineering/spectrograph/s
 n_source=${#source_directories[@]}
 # The existence of this file will shut down data transfers.
 kill_switch=${HOME}/stop_dts
-# Wait this long before checking for new data.
-sleep=24h
 #
 # Functions
 #
@@ -24,6 +22,37 @@ function sprun {
     "$@" >> ${log} 2>&1
     return $?
 }
+#
+#
+#
+function usage {
+    local execName=$(basename $0)
+    (
+    echo "${execName} [-d] [-h] [-s TIME]"
+    echo ""
+    echo "Transfer non-critical DESI data from KPNO to NERSC."
+    echo ""
+    echo "    -d      = Run in daemon mode.  If not specificed, the script will run once and exit."
+    echo "    -h      = Print this message and exit."
+    echo "    -s TIME = Sleep for TIME between transfers. Only relevant in daemon mode."
+    ) >&2
+}
+#
+# Options
+#
+# Run once and exit.
+daemon=/bin/false
+# Wait this long before checking for new data.
+sleep=24h
+while getopts dhs: argname; do
+    case ${argname} in
+        d) daemon=/bin/true ;;
+        h) usage; exit 0 ;;
+        s) sleep=${OPTARG} ;;
+        *) usage; exit 1 ;;
+    esac
+done
+shift $((OPTIND-1))
 #
 # Endless loop!
 #
@@ -73,5 +102,9 @@ while /bin/true; do
             echo "ERROR: rsync problem detected!" >> ${log}
         fi
     done
-    /bin/sleep ${sleep}
+    if ${daemon}; then
+        /bin/sleep ${sleep}
+    else
+        exit 0
+    fi
 done
