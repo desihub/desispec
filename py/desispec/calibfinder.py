@@ -86,11 +86,11 @@ class CalibFinder() :
         dateobs=_parse_date_obs(header["DATE-OBS"])
         detector=header["DETECTOR"].strip()
         if "DOSVER" in header :
-            dosver = header["DOSVER"].strip()
+            dosver = str(header["DOSVER"]).strip()
         else :
             dosver = None
         if "FEEVER" in header :
-            feever = header["FEEVER"].strip()
+            feever = str(header["FEEVER"]).strip()
         else :
             feever = None
         
@@ -136,10 +136,10 @@ class CalibFinder() :
             if detector != data[version]["DETECTOR"].strip() :
                 log.debug("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
                 continue
-            if dosver is not None and "DOSVER" in data[version] and dosver != data[version]["DOSVER"].strip() :
+            if dosver is not None and "DOSVER" in data[version] and dosver != str(data[version]["DOSVER"]).strip() :
                 log.debug("Skip version %s with DOSVER=%s != %s "%(version,data[version]["DOSVER"],dosver))
                 continue
-            if feever is not None and  "FEEVER" in data[version] and feever != data[version]["FEEVER"].strip() :
+            if feever is not None and  "FEEVER" in data[version] and feever != str(data[version]["FEEVER"]).strip() :
                 log.debug("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
                 continue
 
