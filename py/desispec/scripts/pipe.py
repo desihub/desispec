@@ -120,7 +120,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
             help="value to use for DESI_BASIS_TEMPLATES")
 
         parser.add_argument("--calib", required=False, default=None,
-            help="value to use for DESI_CCD_CALIBRATION_DATA")
+            help="value to use for DESI_SPECTRO_CALIB")
 
         parser.add_argument("--db-sqlite", required=False, default=False,
             action="store_true", help="Use SQLite database backend.")

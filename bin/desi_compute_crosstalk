@@ -143,20 +143,23 @@ for filename in args.image :
             ef2=ef2[i]
 
             w=1./ef2**2
-            A = np.zeros((2,2))
-            B = np.zeros(2)
-            A[0,0] = np.sum(w)
-            A[0,1] = A[1,0] = np.sum(w*mf1)
-            A[1,1] = np.sum(w*mf1**2)
-            B[0]   = np.sum(w*mf2)
-            B[1]   = np.sum(w*mf1*mf2)
-
-            Ai = np.linalg.inv(A)
-            X  = Ai.dot(B)
-            cross_talk = X[1]
-            cross_err  = np.sqrt(Ai[1,1])
-            offset     = X[0]
-
+            
+            #A = np.zeros((2,2))
+            #B = np.zeros(2)
+            #A[0,0] = np.sum(w)
+            #A[0,1] = A[1,0] = np.sum(w*mf1)
+            #A[1,1] = np.sum(w*mf1**2)
+            #B[0]   = np.sum(w*mf2)
+            #B[1]   = np.sum(w*mf1*mf2)
+            #Ai = np.linalg.inv(A)
+            #X  = Ai.dot(B)
+             
+            # with gradients, do not expect cst term
+            A = np.sum(w*mf1**2)
+            B = np.sum(w*mf1*mf2)
+            cross_talk = B/A
+            cross_err  = 1./np.sqrt(A)
+            
             pair = "%s%s"%(amp1,amp2)
             log.info("%s = %f +- %f sig=%f"%(pair,cross_talk,cross_err,np.abs(cross_talk/cross_err)))
 
@@ -167,7 +170,7 @@ for filename in args.image :
             if args.plot :
                 plt.figure("c%s%s"%(amp1,amp2))
                 plt.errorbar(mf1,mf2,ef2,color="b",fmt="o")
-                plt.plot(mf1,offset+mf1*cross_talk,"-",color="r")
+                plt.plot(mf1,mf1*cross_talk,"-",color="r")
                 plt.xlabel("flux in amp %s"%amp1)
                 plt.ylabel("flux in amp %s"%amp2)
 

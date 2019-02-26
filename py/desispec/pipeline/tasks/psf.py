@@ -91,13 +91,13 @@ class TaskPSF(BaseTask):
         opts["trace-deg-x"] = 7
         opts["trace-prior-deg"] = 4
 
-        envname="DESI_CCD_CALIBRATION_DATA"
+        envname="DESI_SPECTRO_CALIB"
         if not envname in os.environ :
-            raise KeyError("need to set DESI_CCD_CALIBRATION_DATA env. variable")
+            raise KeyError("need to set DESI_SPECTRO_CALIB env. variable")
 
         # default for now is the simulation directory
         # think in the future to use another directory
-        opts["input-psf-dir"]   = "{}/SIM".format(os.environ[envname])
+        opts["input-psf-dir"]   = "{}/spec/sp0".format(os.environ[envname])
 
         # to get the lampline location, look in our path for specex
         # and use that install prefix to find the data directory.
