@@ -93,7 +93,18 @@ class CalibFinder() :
             feever = str(header["FEEVER"]).strip()
         else :
             feever = None
-        
+
+        # Support simulated data even if $DESI_SPECTRO_CALIB points to
+        # real data calibrations
+        self.directory = os.path.normpath(self.directory)  # strip trailing /
+        if detector == "SIM" and (not self.directory.endswith("sim")) :
+            newdir = os.path.join(self.directory, "sim")
+            if os.path.isdir(newdir) :
+                self.directory = newdir
+
+        if not os.path.isdir(self.directory):
+            raise IOError("Calibration directory {} not found".format(self.directory))
+
         spectro=int(cameraid[-1])
         if yaml_file is None :
             if old_version :
