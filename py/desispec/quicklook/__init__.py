@@ -6,7 +6,7 @@ desispec.quicklook
 from __future__ import absolute_import, division, print_function
 
 #SE: needed to maintain quicklook-specific version 
-__qlversion__ = "10.18.0"
+__qlversion__ = "02.19.0"
 #from . import rawimage
 #import MAs
 #from desispec.qa import MonAlgs

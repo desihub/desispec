@@ -103,7 +103,7 @@ def get_frame(filetype,night,expid,camera,specdir):
 
     #- Create necessary input for desispec.frame
     frame = fits.open(framefile)
-    wave = frame[3].data
+    wave = frame[4].data
     flux = frame[0].data
     ivar = frame[1].data
     fibermap = frame[5].data
@@ -111,7 +111,7 @@ def get_frame(filetype,night,expid,camera,specdir):
     meta = frame[0].header
 
     #- Create frame object
-    frameobj = fr(wave,flux,ivar,fibers=fibers,fibermap=fibermap,meta=meta)
+    frameobj = QFrame(wave,flux,ivar,fibers=fibers,fibermap=fibermap,meta=meta)
 
     return frameobj
 

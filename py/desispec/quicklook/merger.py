@@ -207,7 +207,7 @@ def reOrderDict(mergeDict):
              exptime = delKey(Camera, "EXPTIME")
              desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
              desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
-             quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
+             quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quicklook development state
              fibermags = delKey(Camera,"FIBER_MAGS")
              skyfib_id = delKey(Camera,"SKYFIBERID")
              nskyfib = delKey(Camera,"NSKY_FIB")

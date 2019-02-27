@@ -159,7 +159,7 @@ def runpipeline(pl,convdict,conf):
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],[],['Sky_Rband','Integrate_Spec','Calculate_SNR']]
+        qas=[[],['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Calculate_SNR'],['Sky_Rband','Integrate_Spec']]
 
         singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
