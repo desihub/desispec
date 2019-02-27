@@ -738,8 +738,36 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
                             minchi2=chi2
                             fita=guess[0]
                             fitb=guess[1]
+                #- Increase granualarity of 'a' by a factor of 10
+                for c in range(100):
+                    for d in range(100):
+                        guess=[fita-0.05+0.001*c,0.1*d]
+                        fitdata=fit(x,guess[0],guess[1])
+                        totchi2=[]
+                        for k in range(len(x)):
+                            singlechi2=((y[k]-fitdata[k])/objvar[k])**2
+                            totchi2.append(singlechi2)
+                        chi2=np.sum(totchi2)
+                        if chi2<=minchi2:
+                            minchi2=chi2
+                            fitc=guess[0]
+                            fitd=guess[1]
+                #- Increase granualarity of 'a' by another factor of 10
+                for e in range(100):
+                    for f in range(100):
+                        guess=[fitc-0.005+0.0001*e,0.1*f]
+                        fitdata=fit(x,guess[0],guess[1])
+                        totchi2=[]
+                        for k in range(len(x)):
+                            singlechi2=((y[k]-fitdata[k])/objvar[k])**2
+                            totchi2.append(singlechi2)
+                        chi2=np.sum(totchi2)
+                        if chi2<=minchi2:
+                            minchi2=chi2
+                            fite=guess[0]
+                            fitf=guess[1]
                 # Save
-                fitcoeff.append([fita,fitb])
+                fitcoeff.append([fite,fitf])
                 fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
                 fitT.append(T)
             except RuntimeError:
@@ -757,13 +785,13 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
     
             #- Calculate residual SNR for focal plane plots
             if not offline:
-                fit_snr = fit(x,fita,fitb)
+                fit_snr = fit(x,fite,fitf)
                 fitsnr.append(fit_snr)
                 resid = (med_snr-fit_snr)/fit_snr
                 resid_snr += resid.tolist()
             else:
                 x=10**(-0.4*(mags-22.5))
-                fit_snr = fit(x,fita,fitb)
+                fit_snr = fit(x,fite,fitf)
                 fitsnr.append(fit_snr)
                 resid = (all_medsnr-fit_snr)/fit_snr
                 resid_snr += resid.tolist()

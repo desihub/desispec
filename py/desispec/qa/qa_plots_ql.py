@@ -683,7 +683,7 @@ def plot_SNR(qa_dict,outfile,objlist,fitsnr,rescut=0.2,sigmacut=2.,plotconf=None
             # Plot
             if i == 0:
                 ax.set_ylabel('Median S/N**2',fontsize=8)
-            ax.set_xlabel('{} Mag ({})\na={:.2f}, B={:.2f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
+            ax.set_xlabel('{} Mag ({})\na={:.4f}, B={:.2f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
             if otype == 'STAR':
                 ax.set_xlim(16,20)
             elif otype == 'BGS' or otype == 'MWS':
