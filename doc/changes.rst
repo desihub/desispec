@@ -5,9 +5,12 @@ desispec Change Log
 0.27.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Update (non-essential) transfer script for spectrograph functional
+  verification tests (PR `#758`_).
 
-0.27.1 (unreleased)
+.. _`#758`: https://github.com/desihub/desispec/pull/758
+
+0.27.1 (2019-01-28)
 -------------------
 
 * QL updates for January 2019 readiness review (PRs `#750`_, `#751`_, `#752`_,
