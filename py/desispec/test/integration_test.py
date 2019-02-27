@@ -39,12 +39,12 @@ def check_env():
         log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v2.2')
         missing_env = True
 
-    if 'DESI_CCD_CALIBRATION_DATA' not in os.environ:
-        log.warning('missing $DESI_CCD_CALIBRATION_DATA needed for preprocessing images and PSF starting point')
+    if 'DESI_SPECTRO_CALIB' not in os.environ:
+        log.warning('missing $DESI_SPECTRO_CALIB needed for preprocessing images and PSF starting point')
         missing_env = True
-    elif not os.path.isdir(os.getenv('DESI_CCD_CALIBRATION_DATA')):
-        log.warning('missing $DESI_CCD_CALIBRATION_DATA directory')
-        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/ccd_calibration_data/trunk')
+    elif not os.path.isdir(os.getenv('DESI_SPECTRO_CALIB')):
+        log.warning('missing $DESI_SPECTRO_CALIB directory')
+        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/desi_spectro_calib/trunk')
         missing_env = True
 
     for name in (

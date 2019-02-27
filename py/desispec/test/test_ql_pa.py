@@ -47,14 +47,15 @@ class TestQL_PA(unittest.TestCase):
             shutil.copy(example_psf, psffile)
             
         #- Copy test calibration-data.yaml file 
-        input_yaml_file = resource_filename('desispec', 'test/data/ql/ccd_calibration.yaml')
-        output_yaml_file = os.path.join(calibDir,'ccd_calibration.yaml')
-        shutil.copy(input_yaml_file,output_yaml_file)
+        specdir=calibDir+"spec/sp0"
+        if not os.path.isdir(specdir) :
+            os.makedirs(specdir)
+        for c in "brz" :
+            shutil.copy(resource_filename('desispec', 'test/data/ql/{}0.yaml'.format(c)),os.path.join(specdir,"{}0.yaml".format(c)))
         
         #- Set calibration environment variable
-        os.environ['DESI_CCD_CALIBRATION_DATA'] = calibDir
-
-        
+        os.environ['DESI_SPECTRO_CALIB'] = calibDir
+                
         self.rawfile =  os.path.join(self.testDir,'test-raw-abcd.fits')
         self.pixfile =  os.path.join(self.testDir,'test-pix-abcd.fits')
         self.config={}
@@ -62,7 +63,7 @@ class TestQL_PA(unittest.TestCase):
         #- rawimage
 
         hdr = dict()
-        hdr['CAMERA'] = 'b1'
+        hdr['CAMERA'] = 'b0'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
 
         #- Dimensions per amp, not full 4-quad CCD

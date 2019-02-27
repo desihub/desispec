@@ -1,0 +1,14 @@
+# CCD calibration file
+# A dummy one to test quicklook
+
+
+r0:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+      PSF: psf-r0.fits
+      FIBERFLAT: fiberflat-r0.fits
