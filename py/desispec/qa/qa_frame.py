@@ -210,14 +210,14 @@ class QA_Frame(object):
             # Run
             qadict = qa_fluxcalib(self.qa_data[qatype]['PARAMS'], inputs[0], inputs[1])
         elif qatype == 'S2N':
-            # Expecting frame, objlist
-            assert len(inputs) == 2
+            # Expecting only a frame
+            assert len(inputs) == 1
             # Init parameters (as necessary)
             self.init_s2n()
             # Run
-            qadict,badfibs,fitsnr = SNRFit(inputs[0], self.night, self.camera, self.expid,
-                                           inputs[1], self.qa_data[qatype]['PARAMS'], fidboundary=None,
-                                           offline=True)
+            qadict,fitsnr = SNRFit(inputs[0], self.night, self.camera, self.expid,
+                                   self.qa_data[qatype]['PARAMS'], fidboundary=None,
+                                   offline=True)
             # Remove undesired
             for key in ['RA', 'DEC']:
                 qadict.pop(key)
@@ -350,7 +350,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         # cframe
         cframe_file = frame_file.replace('frame-', 'cframe-')
         cframe = read_frame(cframe_file)
-        if qaframe.run_qa('S2N', (cframe, None), clobber=clobber):
+        if qaframe.run_qa('S2N', (cframe,), clobber=clobber):
             write=True
         # Figure?
         if make_plots:
