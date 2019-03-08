@@ -186,7 +186,8 @@ while /bin/true; do
             #
             if [[ $(/usr/bin/grep ${yesterday} ${ls_file} | /usr/bin/wc -l) != 2 ]]; then
                 (cd ${dest} && \
-                    /usr/common/mss/bin/htar -cvhf ${hpss_file}_${yesterday}.tar \
+                    /usr/common/mss/bin/htar -cvhf \
+                        ${hpss_directories[$k]}/${hpss_file}_${yesterday}.tar \
                         -H crc:verify=all ${yesterday}) &>> ${log}
             fi
         fi
