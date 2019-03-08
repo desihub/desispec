@@ -5,7 +5,7 @@
 log=${HOME}/desi_dts.log
 [[ -f ${log} ]] && /bin/touch ${log}
 #
-# Source, staging and destination should be in 1-1-1 correspondence.
+# Source, staging, destination and hpss should be in 1-1-1-1 correspondence.
 #
 source_directories=(/data/dts/exposures/raw)
 # source_directories=(/data/dts/exposures/test)
@@ -13,6 +13,7 @@ staging_directories=($(/bin/realpath ${DESI_ROOT}/spectro/staging/raw))
 # staging_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/staging/raw))
 destination_directories=($(/bin/realpath ${DESI_SPECTRO_DATA}))
 # destination_directories=($(/bin/realpath ${CSCRATCH}/desi/spectro/data))
+hpss_directories=(desi/spectro/data)
 n_source=${#source_directories[@]}
 # Enable activation of the DESI pipeline.  If this is /bin/false, only
 # transfer files.
@@ -51,7 +52,7 @@ while /bin/true; do
         staging=${staging_directories[$k]}
         dest=${destination_directories[$k]}
         status_dir=$(/bin/dirname ${staging})/status
-        links=$(ssh -q dts /bin/find ${src} -type l 2>/dev/null | sort)
+        links=$(/bin/ssh -q dts /bin/find ${src} -type l 2>/dev/null | sort)
         if [[ -n "${links}" ]]; then
             for l in ${links}; do
                 exposure=$(/bin/basename ${l})
@@ -168,6 +169,26 @@ while /bin/true; do
             done
         else
             echo "WARNING: No links found, check connection." >> ${log}
+        fi
+        #
+        # Are any nights eligible for backup?
+        # now >= 12:00 MST = 19:00 UTC.
+        #
+        yesterday=$(/bin/date --date="@$(($(/bin/date +%s) - 86400))" +'%Y%m%d')
+        now=$(/bin/date -u +'%H')
+        hpss_file=$(echo ${hpss_directories[$k]} | tr '/' '_')
+        ls_file=${CSCRATCH}/${hpss_file}.txt
+        if (( now >= 19 )); then
+            sprun /bin/rm -f ${ls_file}
+            sprun /usr/common/mss/bin/hsi -O ${ls_file} ls -l ${hpss_directories[$k]}
+            #
+            # Both a .tar and a .tar.idx file should be present.
+            #
+            if [[ $(/usr/bin/grep ${yesterday} ${ls_file} | /usr/bin/wc -l) != 2 ]]; then
+                (cd ${dest} && \
+                    /usr/common/mss/bin/htar -cvhf ${hpss_file}_${yesterday}.tar \
+                        -H crc:verify=all ${yesterday}) &>> ${log}
+            fi
         fi
     done
     /bin/sleep ${sleep}
