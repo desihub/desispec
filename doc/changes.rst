@@ -5,7 +5,9 @@ desispec Change Log
 0.28.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Add HPSS backup to the raw data transfer script (PR `#765`_).
+
+.. _`#765`: https://github.com/desihub/desispec/pull/765
 
 0.28.0 (2019-02-28)
 -------------------
