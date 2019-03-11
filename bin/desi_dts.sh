@@ -27,11 +27,13 @@ ssh="/bin/ssh -q ${pipeline_host}"
 # Wait this long before checking for new data.
 sleep=10m
 # sleep=1m
+# UTC time in hours to trigger HPSS backups.
+backup_time=20
 #
 # Functions
 #
 function sprun {
-    echo "$@" >> ${log}
+    echo "DEBUG: $@" >> ${log}
     "$@" >> ${log} 2>&1
     return $?
 }
@@ -39,9 +41,9 @@ function sprun {
 # Endless loop!
 #
 while /bin/true; do
-    /bin/date +'%Y-%m-%dT%H:%M:%S%z' >> ${log}
+    echo "INFO:" $(/bin/date +'%Y-%m-%dT%H:%M:%S%z') >> ${log}
     if [[ -f ${kill_switch} ]]; then
-        echo "${kill_switch} detected, shutting down transfer daemon." >> ${log}
+        echo "INFO: ${kill_switch} detected, shutting down transfer daemon." >> ${log}
         exit 0
     fi
     #
@@ -172,23 +174,28 @@ while /bin/true; do
         fi
         #
         # Are any nights eligible for backup?
-        # now >= 12:00 MST = 19:00 UTC.
+        # 12:00 MST = 19:00 UTC.
+        # Plus one hour just to be safe, so after 20:00 UTC.
         #
         yesterday=$(/bin/date --date="@$(($(/bin/date +%s) - 86400))" +'%Y%m%d')
         now=$(/bin/date -u +'%H')
         hpss_file=$(echo ${hpss_directories[$k]} | tr '/' '_')
         ls_file=${CSCRATCH}/${hpss_file}.txt
-        if (( now >= 19 )); then
-            sprun /bin/rm -f ${ls_file}
-            sprun /usr/common/mss/bin/hsi -O ${ls_file} ls -l ${hpss_directories[$k]}
-            #
-            # Both a .tar and a .tar.idx file should be present.
-            #
-            if [[ $(/usr/bin/grep ${yesterday} ${ls_file} | /usr/bin/wc -l) != 2 ]]; then
-                (cd ${dest} && \
-                    /usr/common/mss/bin/htar -cvhf \
-                        ${hpss_directories[$k]}/${hpss_file}_${yesterday}.tar \
-                        -H crc:verify=all ${yesterday}) &>> ${log}
+        if (( now >= backup_time )); then
+            if [[ -d ${dest}/${yesterday} ]]; then
+                sprun /bin/rm -f ${ls_file}
+                sprun /usr/common/mss/bin/hsi -O ${ls_file} ls -l ${hpss_directories[$k]}
+                #
+                # Both a .tar and a .tar.idx file should be present.
+                #
+                if [[ $(/usr/bin/grep ${yesterday} ${ls_file} | /usr/bin/wc -l) != 2 ]]; then
+                    (cd ${dest} && \
+                        /usr/common/mss/bin/htar -cvhf \
+                            ${hpss_directories[$k]}/${hpss_file}_${yesterday}.tar \
+                            -H crc:verify=all ${yesterday}) &>> ${log}
+                fi
+            else
+                echo "WARNING: No data from ${yesterday} detected, skipping HPSS backup." >> ${log}
             fi
         fi
     done
