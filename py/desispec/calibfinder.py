@@ -85,14 +85,23 @@ class CalibFinder() :
         cameraid=header["CAMERA"].strip().lower()
         dateobs=_parse_date_obs(header["DATE-OBS"])
         detector=header["DETECTOR"].strip()
-        if "DOSVER" in header :
-            dosver = header["DOSVER"].strip()
+        if "CCDCFG" in header :
+            ccdcfg = header["CCDCFG"].strip()
         else :
-            dosver = None
-        if "FEEVER" in header :
-            feever = header["FEEVER"].strip()
+            ccdcfg = None
+        if "CCDTMING" in header :
+            ccdtming = header["CCDTMING"].strip()
         else :
-            feever = None
+            ccdtming = None
+
+        #if "DOSVER" in header :
+        #    dosver = str(header["DOSVER"]).strip()
+        #else :
+        #    dosver = None
+        #if "FEEVER" in header :
+        #    feever = str(header["FEEVER"]).strip()
+        #else :
+        #    feever = None
 
         # Support simulated data even if $DESI_SPECTRO_CALIB points to
         # real data calibrations
@@ -147,12 +156,25 @@ class CalibFinder() :
             if detector != data[version]["DETECTOR"].strip() :
                 log.debug("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
                 continue
-            if dosver is not None and "DOSVER" in data[version] and dosver != data[version]["DOSVER"].strip() :
-                log.debug("Skip version %s with DOSVER=%s != %s "%(version,data[version]["DOSVER"],dosver))
-                continue
-            if feever is not None and  "FEEVER" in data[version] and feever != data[version]["FEEVER"].strip() :
-                log.debug("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
-                continue
+
+            if "CCDCFG" in data[version] :
+                if ccdcfg is None or ccdcfg != data[version]["CCDCFG"].strip() :
+                    log.debug("Skip version %s with CCDCFG=%s != %s "%(version,data[version]["CCDCFG"],ccdcfg))
+                    continue
+
+            if "CCDTMING" in data[version] :
+                if ccdtming is None or ccdtming != data[version]["CCDTMING"].strip() :
+                    log.debug("Skip version %s with CCDTMING=%s != %s "%(version,data[version]["CCDTMING"],ccdtming))
+                    continue
+
+            
+            
+            #if dosver is not None and "DOSVER" in data[version] and dosver != str(data[version]["DOSVER"]).strip() :
+            #     log.debug("Skip version %s with DOSVER=%s != %s "%(version,data[version]["DOSVER"],dosver))
+            #    continue
+            #if feever is not None and  "FEEVER" in data[version] and feever != str(data[version]["FEEVER"]).strip() :
+            #    log.debug("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
+            #   continue
 
             log.info("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
             if found :
