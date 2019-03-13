@@ -29,7 +29,7 @@ Two methods are implemented.
 2) forward model : dy,dy shifts are determined simultaneously by a forward modeling of the image around a given external list of lines (--lines option).
    This method is in principle statistically optimal, but it is slow and cannot be applied to blended and broad sky lines. It is useful to shift traces from arc lamp images (though specex does the same thing in C++).""")
     
-    parser.add_argument('--image', type = str, default = None, required=True,
+    parser.add_argument('-i','--image', type = str, default = None, required=True,
                         help = 'path of DESI preprocessed fits image')
     parser.add_argument('--psf', type = str, default = None, required=True,
                         help = 'path of DESI psf fits file')
@@ -40,7 +40,7 @@ Two methods are implemented.
     parser.add_argument('--sky', action = 'store_true',
                         help = 'use sky spectrum desispec/data/spec-sky.dat for external wavelength calibration')
     
-    parser.add_argument('--outpsf', type = str, default = None, required=True,
+    parser.add_argument('-o','--outpsf', type = str, default = None, required=True,
                         help = 'path of output PSF with shifted traces')
     parser.add_argument('--outoffsets', type = str, default = None, required=False,
                         help = 'path of output ASCII file with measured offsets for QA')
