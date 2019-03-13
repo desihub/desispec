@@ -2,13 +2,25 @@
 desispec Change Log
 ===================
 
-0.27.2 (unreleased)
+0.28.1 (unreleased)
 -------------------
 
-* New calibration data access (inc var. DESI_SPECTRO_CALIB
-  replacing DESI_CCD_CALIBRATION_DATA).
+* No changes yet.
 
-0.27.1 (unreleased)
+0.28.0 (2019-02-28)
+-------------------
+
+* Update (non-essential) transfer script for spectrograph functional
+  verification tests (PR `#758`_).
+* New calibration data access (inc var. DESI_SPECTRO_CALIB
+  replacing DESI_CCD_CALIBRATION_DATA) (PR `#753`_).
+* Fix offline QA S/N vs. mag fits (PR `#763`_).
+
+.. _`#753`: https://github.com/desihub/desispec/pull/753
+.. _`#758`: https://github.com/desihub/desispec/pull/758
+.. _`#763`: https://github.com/desihub/desispec/pull/763
+
+0.27.1 (2019-01-28)
 -------------------
 
 * QL updates for January 2019 readiness review (PRs `#750`_, `#751`_, `#752`_,
