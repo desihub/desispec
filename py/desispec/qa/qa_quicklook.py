@@ -84,11 +84,11 @@ def get_image(filetype,night,expid,camera,specdir):
 
     #- Create necessary input for desispec.image
     image = fits.open(imagefile)
-    pix = image[0].data
-    ivar = image[1].data
-    mask = image[2].data
-    readnoise = image[3].data
-    meta = image[0].header
+    pix = image['IMAGE'].data
+    ivar = image['IVAR'].data
+    mask = image['MASK'].data
+    readnoise = image['READNOISE'].data
+    meta = image['IMAGE'].header
 
     #- Create image object
     imageobj = im(pix,ivar,mask=mask,readnoise=readnoise,camera=camera,meta=meta)
@@ -103,15 +103,15 @@ def get_frame(filetype,night,expid,camera,specdir):
 
     #- Create necessary input for desispec.frame
     frame = fits.open(framefile)
-    wave = frame[3].data
-    flux = frame[0].data
-    ivar = frame[1].data
-    fibermap = frame[5].data
+    wave = frame['WAVE'].data
+    flux = frame['FLUX'].data
+    ivar = frame['IVAR'].data
+    fibermap = frame['FIBERMAP'].data
     fibers = fibermap['FIBER']
-    meta = frame[0].header
+    meta = frame['FLUX'].header
 
     #- Create frame object
-    frameobj = fr(wave,flux,ivar,fibers=fibers,fibermap=fibermap,meta=meta)
+    frameobj = QFrame(wave,flux,ivar,fibers=fibers,fibermap=fibermap,meta=meta)
 
     return frameobj
 
