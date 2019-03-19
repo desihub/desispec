@@ -8,13 +8,12 @@ import numpy as np
 import glob, os
 import warnings
 
-from desispec.io import get_exposures
-from desispec.io import get_files
-from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import write_qa_exposure
 from desispec.io import write_qa_multiexp
 from desispec.io import qaprod_root
+
+from desispec.qa import qa_exposure
 
 from desiutil.log import get_logger
 
@@ -46,7 +45,7 @@ class QA_MultiExp(object):
         self.qaprod_dir = qaprod_dir
         tmp = specprod_dir.split('/')
         self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
-        # Exposure dict
+        # Exposure dict stored as [night][exposure]
         self.mexp_dict = {}
         # QA Exposure objects
         self.qa_exps = []
@@ -69,8 +68,41 @@ class QA_MultiExp(object):
         # Finish
         self.data = odict
 
+    def load_exposure_s2n(self, nights='all', redo=False):
+        """
+        Generate a series of QA_Exposure objects from self.data
+        and then load up the S/N tables in the QA_Exposure objects
+
+        Args:
+            nights: str, optional
+            redo: bool, optional
+
+        Returns:
+            self.qa_exps holds QA_Exposure objects
+
+        """
+        # Already loaded?  Should check for the table
+        if (len(self.qa_exps) > 0) and (not redo):
+            return
+        # Nights
+        for night in self.data:
+            if (night not in nights) and (nights != 'all'):
+                continue
+            # Exposures
+            for expid in self.data[night]:
+                # Cameras
+                if self.data[night][expid]['flavor'] != 'science':
+                    continue
+                # Instantiate
+                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True)
+                qaexp.parse_multi_qa_dict(self.data)
+                qaexp.s2n_table()
+                # Append
+                self.qa_exps.append(qaexp)
+
     def get_qa_table(self, qatype, metric, nights='all', channels='all'):
-        """ Generate a table of QA values from .data
+        """ Generate a table of QA values for a specific QA METRIC
+
         Args:
             qatype: str
               FIBERFLAT, SKYSUB
@@ -81,6 +113,7 @@ class QA_MultiExp(object):
 
         Returns:
             qa_tbl: Table
+               Will be empty if none of the QA matches
         """
         from astropy.table import Table
         out_list = []
@@ -118,10 +151,12 @@ class QA_MultiExp(object):
                         out_expmeta.append(exp_meta)
         # Return Table
         qa_tbl = Table()
+        if len(out_expmeta) == 0:  # Empty?
+            return qa_tbl
         qa_tbl[metric] = out_list
         qa_tbl['EXPID'] = out_expid
         qa_tbl['CAMERA'] = out_cameras
-        # Add expmeta
+        # Add expmeta (includes DATE-OBS)
         for key in out_expmeta[0].keys():
             tmp_list = []
             for exp_meta in out_expmeta:
@@ -194,20 +229,18 @@ class QA_MultiExp(object):
                 frames_dict = self.mexp_dict[night][exposure]
                 if len(frames_dict) == 0:
                     continue
-                # Load any frame (for the type and meta info)
-                key = list(frames_dict.keys())[0]
-                frame_fil = frames_dict[key]
-                frame_meta = read_meta_frame(frame_fil)
-                qa_exp = QA_Exposure(exposure, night, frame_meta['FLAVOR'],
+                # Load any frame (for the type)
+                qa_exp = QA_Exposure(exposure, night,
                                      specprod_dir=self.specprod_dir, remove=remove)
-                qa_exp.load_meta(frame_meta)
                 # Append
                 self.qa_exps.append(qa_exp)
 
-    def write_qa_exposures(self, outroot=None, **kwargs):
+    def write_qa_exposures(self, outroot=None, skip_rebuild=False, **kwargs):
         """  Write the slurp of QA Exposures to the hard drive
         Args:
             outroot: str
+            skip_rebuild : bool, optional
+              Do not rebuild the data dict
             **kwargs:
 
         Returns:
@@ -216,7 +249,11 @@ class QA_MultiExp(object):
         """
         if outroot is None:
             outroot = self.qaexp_outroot
-        return write_qa_multiexp(outroot, self, **kwargs)
+        # Rebuild?
+        if not skip_rebuild:
+            self.build_data()
+        # Do it
+        return write_qa_multiexp(outroot, self.data, **kwargs)
 
     def __repr__(self):
         """ Print formatting

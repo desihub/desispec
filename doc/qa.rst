@@ -72,18 +72,25 @@ usage
 
 Here is the usage::
 
-    usage: desi_qa_exposure [-h] --expid EXPID --qatype QATYPE
-                            [--channels CHANNELS] [--reduxdir PATH]
+    usage: desi_qa_exposure [-h] --expid EXPID [--qatype QATYPE]
+                            [--channels CHANNELS] [--reduxdir PATH] [--rebuild]
+                            [--qamulti_root QAMULTI_ROOT] [--slurp SLURP]
 
-    Generate Exposure Level QA [v0.4.3]
+    Generate Exposure Level QA [v0.5.0]
 
     optional arguments:
-      -h, --help           show this help message and exit
-      --expid EXPID        Exposure ID
-      --qatype QATYPE      Type of QA to generate [fiberflat]
-      --channels CHANNELS  List of channels to include. Default = b,r,z]
-      --reduxdir PATH      Override default path ($DESI_SPECTRO_REDUX/$SPECPROD)
-                           to processed data.
+      -h, --help            show this help message and exit
+      --expid EXPID         Exposure ID
+      --qatype QATYPE       Type of QA to generate [fiberflat, s2n]
+      --channels CHANNELS   List of channels to include. Default = b,r,z]
+      --reduxdir PATH       Override default path ($DESI_SPECTRO_REDUX/$SPECPROD)
+                            to processed data.
+      --rebuild             Regenerate the QA files for this exposure?
+      --qamulti_root QAMULTI_ROOT
+                            Root name for a set of slurped QA files (e.g.
+                            mini_qa). Uses $SPECPROD/QA for path
+      --slurp SLURP         Root name for slurp QA file to add to (e.g. mini_qa).
+                            Uses $SPECPROD/QA for path
 
 fiberflat
 ---------
@@ -162,17 +169,16 @@ usage
 
 Here is the usage::
 
-    usage: desi_qa_prod [-h] [--reduxdir REDUXDIR] [--make_frameqa MAKE_FRAMEQA]
-                        [--slurp] [--remove] [--clobber]
-                        [--channel_hist CHANNEL_HIST] [--time_series TIME_SERIES]
-                        [--bright_dark BRIGHT_DARK] [--html HTML]
+    usage: desi_qa_prod [-h] [--make_frameqa MAKE_FRAMEQA] [--slurp] [--remove]
+                        [--clobber] [--channel_hist CHANNEL_HIST]
+                        [--time_series TIME_SERIES] [--bright_dark BRIGHT_DARK]
+                        [--html] [--qaprod_dir QAPROD_DIR] [--S2N_plot]
+                        [--ZP_plot] [--xaxis XAXIS]
 
-    Generate/Analyze Production Level QA [v0.4.2]
+    Generate/Analyze Production Level QA [v0.5.0]
 
     optional arguments:
       -h, --help            show this help message and exit
-      --reduxdir REDUXDIR   Override default path ($DESI_SPECTRO_REDUX/$SPECPROD)
-                            to processed data.
       --make_frameqa MAKE_FRAMEQA
                             Bitwise flag to control remaking the QA files (1) and
                             figures (2) for each frame in the production
@@ -187,8 +193,12 @@ Here is the usage::
       --bright_dark BRIGHT_DARK
                             Restrict to bright/dark (flag: 0=all; 1=bright;
                             2=dark; only used in time_series)
-      --html HTML           Generate HTML files
-
+      --html                Generate HTML files?
+      --qaprod_dir QAPROD_DIR
+                            Path to where QA is generated. Default is qaprod_dir
+      --S2N_plot            Generate a S/N plot for the production (vs. xaxis)
+      --ZP_plot             Generate a ZP plot for the production (vs. xaxis)
+      --xaxis XAXIS         Specify x-axis for S/N and ZP plots
 
 
 frameqa
@@ -212,7 +222,7 @@ slurp
 By using the --slurp flag, one generates a full
 YAML file of all the QA outputs::
 
-    desi_qa_prod --slurp   # Collate all the QA YAML files
+    desi_qa_prod --slurp   # Collate all the QA YAML files into a series of JSON files, one per night
     desi_qa_prod --slurp --remove  # Collate and remove the individual files
 
 html
@@ -247,3 +257,24 @@ in the production, by channel, e.g.::
 
 By default, these files are placed in the QA/ folder in
 the $DESI_SPECTRO_REDUX/$SPECPROD folder.
+
+<S/N> Plot
+----------
+
+Generate a plot of <S/N> for a standard set of fiducials --
+object type at a given magnitude in a given channel
+(e.g. ELG, 23 mag in channel r).  The x-axis is controlled
+by the `--xaxis` option and may be MJD, texp (exposure time),
+or expid.  Here is a sample call::
+
+    desi_qa_prod --S2N_plot --xaxis texp
+
+ZP Plot
+-------
+
+Similar to the <S/N> plot above but for the Zero Point
+calculated in the three channels.  Again, `--xaxis`
+controls the abscissa axis.  An example::
+
+    desi_qa_prod --ZP_plot --xaxis texp
+

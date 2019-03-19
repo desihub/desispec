@@ -6,4 +6,4 @@ from .qa_brick import QA_Brick
 from .qa_prod import QA_Prod
 from .qa_night import QA_Night
 
-__offline_qa_version__ = '0.4.4'
+__offline_qa_version__ = '0.5.0'
