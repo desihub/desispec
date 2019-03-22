@@ -617,7 +617,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     last_column : :class:`str`, optional
         Do not load columns past this name (default 'BRICKNAME').
     """
-    fiberpath = os.path.join(datapath, 'tile_*.fits')
+    fiberpath = os.path.join(datapath, 'tile*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob.glob(fiberpath)
     if len(tile_files) == 0:
@@ -643,7 +643,9 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
                 latest_tiles[tileid] = (epoch, f)
     else:
         for f in tile_files:
-            tileid = int((os.path.basename(f).split('.')[0]).split('_')[1])
+            # tile_TILEID.fits or tile-TILEID.fits
+            tileid = int(re.match('tile[\-_](\d+)\.fits',
+                         os.path.basename(f))[1])
             latest_tiles[tileid] = (0, f)
     log.info("Identified %d tile files for loading.", len(latest_tiles))
     #
