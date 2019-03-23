@@ -6,7 +6,10 @@ desispec Change Log
 -------------------
 
 * Add HPSS backup to the raw data transfer script (PR `#765`_).
+* Update :mod:`desispec.database.redshift` for latest
+  changes in fiberassign tile file data model (PR `#770`_).
 
+.. _`#770`: https://github.com/desihub/desispec/pull/770
 .. _`#765`: https://github.com/desihub/desispec/pull/765
 
 0.28.0 (2019-02-28)
