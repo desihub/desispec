@@ -297,7 +297,6 @@ class FiberAssign(SchemaMixin, Base):
     fiber = Column(Integer, primary_key=True)
     location = Column(Integer, nullable=False)
     numtarget = Column(Integer, nullable=False)
-    priority = Column(Integer, nullable=False)
     targetid = Column(BigInteger, index=True, nullable=False)
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
@@ -314,6 +313,8 @@ class FiberAssign(SchemaMixin, Base):
     objtype = Column(String, nullable=False)
     petal_loc = Column(Integer, nullable=False)
     device_loc = Column(Integer, nullable=False)
+    priority = Column(Integer, nullable=False)
+    subpriority = Column(Float, nullable=False)
 
     def __repr__(self):
         return "<FiberAssign(tileid={0.tileid:d}, fiber={0.fiber:d})>".format(self)
@@ -593,7 +594,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
 
 
 def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
-                     latest_epoch=False, last_column='DEVICE_LOC'):
+                     latest_epoch=False, last_column='SUBPRIORITY'):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -629,7 +630,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     #
     latest_tiles = dict()
     if latest_epoch:
-        tileidre = re.compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+        tileidre = re.compile(r'/(\d+)/fiberassign/tile-(\d+)\.fits$')
         for f in tile_files:
             m = tileidre.search(f)
             if m is None:
