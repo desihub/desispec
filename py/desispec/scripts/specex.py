@@ -57,7 +57,7 @@ def parse(options=None):
         "one frame with specex")
     parser.add_argument("--input-image", type=str, required=True,
                         help="input image")
-    parser.add_argument("--input-psf", type=str, required=True,
+    parser.add_argument("--input-psf", type=str, required=False,
                         help="input psf file")
     parser.add_argument("-o", "--output-psf", type=str, required=True,
                         help="output psf file")
@@ -87,7 +87,13 @@ def main(args, comm=None):
 
     imgfile = args.input_image
     outfile = args.output_psf
-    inpsffile = args.input_psf
+
+    if args.input_psf is not None:
+        inpsffile = args.input_psf
+    else:
+        from desispec.calibfinder import findcalibfile
+        hdr = fits.getheader(imgfile)
+        inpsffile = findcalibfile([hdr,], 'PSF')
 
     optarray = []
     if args.extra is not None:

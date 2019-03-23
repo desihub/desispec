@@ -30,6 +30,7 @@ def findcalibfile(headers,key,yaml_file=None) :
 
     Args:
         headers: list of fits headers, or list of dictionnaries
+        key: type of calib file, e.g. 'PSF' or 'FIBERFLAT'
         
     Optional:
             yaml_file: path to a specific yaml file. By default, the code will
@@ -83,7 +84,15 @@ class CalibFinder() :
                     header[k]=other_header[k]
         
         cameraid=header["CAMERA"].strip().lower()
-        dateobs=_parse_date_obs(header["DATE-OBS"])
+        if "NIGHT" in header:
+            dateobs = int(header["NIGHT"])
+        elif "DATE-OBS" in header:
+            dateobs=_parse_date_obs(header["DATE-OBS"])
+        else:
+            msg = "Need either NIGHT or DATE-OBS in header"
+            log.error(msg)
+            raise KeyError(msg)
+
         detector=header["DETECTOR"].strip()
         if "CCDCFG" in header :
             ccdcfg = header["CCDCFG"].strip()

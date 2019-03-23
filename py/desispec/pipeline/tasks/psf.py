@@ -95,10 +95,6 @@ class TaskPSF(BaseTask):
         if not envname in os.environ :
             raise KeyError("need to set DESI_SPECTRO_CALIB env. variable")
 
-        # default for now is the simulation directory
-        # think in the future to use another directory
-        opts["input-psf-dir"]   = "{}/spec/sp0".format(os.environ[envname])
-
         # to get the lampline location, look in our path for specex
         # and use that install prefix to find the data directory.
         # if that directory does not exist, use a default NERSC
@@ -129,16 +125,9 @@ class TaskPSF(BaseTask):
         deps  = self.deps(name)
         props = self.name_split(name)
 
-        inputpsf = "psf-{}{}.fits".format(props["band"],props["spec"])
-
         # make a copy, so we can remove some entries
         opts_copy = opts.copy()
 
-        if "input-psf-dir" in opts_copy :
-            inputpsf = os.path.join(opts_copy["input-psf-dir"], inputpsf)
-            del opts_copy["input-psf-dir"]
-
-        options["input-psf"]   = inputpsf
         options["input-image"] = task_classes["preproc"].paths(deps["input-image"])[0]
         options["output-psf"]  = self.paths(name)
 
