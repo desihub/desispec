@@ -19,6 +19,12 @@ from astropy import units
 import multiprocessing
 from pkg_resources import resource_exists, resource_filename
 
+try:
+    from scipy import constants
+    C_LIGHT = constants.c/1000.0
+except TypeError: # This can happen during documentation builds.
+    C_LIGHT = 299792458.0/1000.0
+
 def isStdStar(desi_target, bright=None):
     """
     Determines if target(s) are standard stars
