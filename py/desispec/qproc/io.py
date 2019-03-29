@@ -124,7 +124,7 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
     if 'SIGMA' in fx:
         sigma = native_endian(fx['SIGMA'].data.astype('f8'))
     else:
-        sgma = None
+        sigma = None
 
 
     if 'FIBERMAP' in fx:
