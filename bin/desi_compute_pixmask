@@ -26,6 +26,8 @@ parser.add_argument('--debug', action = 'store_true',
                     help = 'write extra images for debugging')
 parser.add_argument('--frac-downstream-mask', type = float, default = 0.3, required = False,
                     help = 'threshold fraction to flag pixels read after a masked pixel in the same column')
+parser.add_argument('--nsig', type = float, default = 3, required = False,
+                    help = 'threshold for masking a pixel in units of the median number of sigma for this pixel over input images')
 
 args = parser.parse_args()
 log  = get_logger()
@@ -40,7 +42,7 @@ for filename in args.infile :
     if header is None : header = img.meta # save one header
     nsigs.append(img.pix*np.sqrt(img.ivar))
 nsigs = np.median(np.array(nsigs),axis=0)
-bad = ((nsigs==0)|(np.abs(nsigs)>5)).astype(int) # nsigs=0 means systematically masked in images, this must be bad. nsig>5 is also bad
+bad = ((nsigs==0)|(np.abs(nsigs)>args.nsig)).astype(int) # nsigs=0 means systematically masked in images, this must be bad. nsig>5 is also bad
 
 meanbad=None
 orbad=None
@@ -81,11 +83,15 @@ if args.debug :
 pixmask=np.zeros(bad.shape,dtype=np.int16)
 pixmask[bad>0]=ccdmask.DEAD
 
-log.info("write result in %s ..."%args.outfile)
 hdulist=pyfits.HDUList([pyfits.PrimaryHDU(pixmask)])
 i=0
 for filename in args.infile :
     hdulist[0].header["INPUT%03d"%i]=filename
     i+=1
+
+ndead=np.sum(pixmask&ccdmask.DEAD>0)
+hdulist[0].header["NDEAD"]=ndead
+log.info("number of DEAD pixels =  {}".format(ndead))
+
 hdulist.writeto(args.outfile, overwrite=True)
-log.info("done")
+log.info("wrote {}".format(args.outfile))
