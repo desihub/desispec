@@ -1,6 +1,6 @@
 """
 desispec.io.xytraceset
-=================
+======================
 
 I/O routines for XYTraceSet objects
 """

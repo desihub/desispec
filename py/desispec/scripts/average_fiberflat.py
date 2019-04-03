@@ -1,6 +1,6 @@
 """
 desispec.scripts.average_fiberflat
-==========================
+==================================
 
 """
 from __future__ import absolute_import, division

@@ -1,6 +1,6 @@
 """
 desispec.qproc.qframe
-==============
+=====================
 
 Lightweight wrapper class for spectra extract with qextract, row-by-row extraction (boxcar or profile)
 """
