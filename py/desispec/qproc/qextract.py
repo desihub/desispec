@@ -1,3 +1,7 @@
+"""
+desispec.qproc.qextract
+=======================
+"""
 import time
 import numpy as np
 from numpy.polynomial.legendre import legval
@@ -44,6 +48,7 @@ def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=No
         fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
         width  : extraction boxcar width, default is 7
         fibermap : table
+
     Returns:
         QFrame object
     """

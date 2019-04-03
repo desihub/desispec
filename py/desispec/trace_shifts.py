@@ -1,3 +1,7 @@
+"""
+desispec.trace_shifts
+=====================
+"""
 
 from __future__ import absolute_import, division
 
@@ -114,6 +118,7 @@ def legx(wave,wavemin,wavemax) :
         wave : ND np.array
         wavemin : float, min. val
         wavemax : float, max. val
+
     Returns:
         array of same shape as wave
     """
@@ -158,6 +163,7 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
         frame_flux :  2D np.array of shape (nfibers,nwave), sum of pixel values per row of length=width per fiber
         frame_ivar :  2D np.array of shape (nfibers,nwave), ivar[f,j] = 1/( sum_[j,b:e] (1/image.ivar) ), ivar=0 if at least 1 pixel in the row has image.ivar=0 or image.mask!=0
         frame_wave :  2D np.array of shape (nfibers,nwave), determined from the traces
+
     Optional:
         oversampling : int , oversampling factor , default is 2
 
@@ -202,6 +208,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
         flux    : 1D array of spectral flux as a function of wavelenght
         wave    : 1D array of wavelength (in Angstrom)
         refflux : 1D array of reference spectral flux
+
     Optional:
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI
@@ -305,6 +312,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
         ivar    : 2D np.array of shape (nfibers,nwave) , inverse variance of flux
         wave    : 1D array of wavelength (in Angstrom) of size nwave
         refflux : 1D array of reference spectral flux of size nwave
+
     Optional:
         n_wavelength_bins : number of bins along wavelength
 
@@ -373,15 +381,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     Uses boxcar_extraction , resample_boxcar_frame , compute_dy_from_spectral_cross_correlations_of_frame
 
     Args:
-<<<<<<< HEAD
         xytraceset : XYTraceset object
-=======
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
-        wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
->>>>>>> master
         image : DESI preprocessed image object
 
     Optional:
@@ -461,6 +461,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         width  : extraction boxcar width, default is 5
         deg    : degree of polynomial fit as a function of y, only used to find and mask outliers
         image_rebin : rebinning of CCD rows to run faster (with rebin=4 loss of precision <0.01 pixel)
+
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
         y  : 1D array of y coordinates on CCD (axis=0 in numpy image array, AXIS=1 in FITS, wavelength dispersion axis)
@@ -616,18 +617,11 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
 
     Args:
         psf : specter PSF
-<<<<<<< HEAD
         xytraceset : XYTraceset object
-=======
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
-        wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
->>>>>>> master
         image : DESI preprocessed image object
         fibers : 1D np.array of fiber indices
         spectrum_filename : path to input spectral file ( read with np.loadtxt , first column is wavelength (in vacuum and Angstrom) , second column in flux (arb. units)
+
     Optional:
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
@@ -791,6 +785,7 @@ def compute_fiber_bundle_trace_shifts_using_psf(fibers,line,psf,image,maxshift=2
         line : float, wavelength of an emission line (in Angstrom)
         psf  : specter psf object
         image : DESI preprocessed image object
+
     Optional:
         maxshift : float maximum shift in pixels for 2D chi2 scan
 

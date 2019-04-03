@@ -1,8 +1,8 @@
 """
 desispec.xytraceset
-==============
+===================
 
-Lightweight wrapper class for trace coordinates and wavelength solution, to be returned by io.read_xytraceset
+Lightweight wrapper class for trace coordinates and wavelength solution, to be returned by :func:`~desispec.io.xytraceset.read_xytraceset`.
 """
 
 from specter.util.traceset import TraceSet 
