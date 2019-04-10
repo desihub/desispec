@@ -202,6 +202,57 @@ regularize: {regularize}
 #- recent addition of mask and chi2pix code required nearly identical edits
 #- in two places.  Could main(args) just call main_mpi(args, comm=None) ?
 
+#this should happen for each frame!!!! at the frame level!!!!
+def get_subbundles(numfibers, fibers_per_bundle, subbundles_per_bundle):
+    #should return specmin_n and keepmin_n
+    #where specmin_n is a tuple (specmin, nspec)
+    #where keepmin_n is a tuple (keepmin, nkeep)
+
+    #divide fibers_per_bundle by subbundles_per_bundle
+    #if we have a remainder add it to the first bundle
+    nfloor = np.floor(fibers_per_bundle / subbundles_per_bundle)
+    nremainder = fibers_per_bundle % subbundles_per_bundle  
+    nbundles = numfibers//fibers_per_bundle    
+ 
+    specmin_array = np.zeros([subbundles_per_bundle,1])
+    nspec_array = np.zeros([subbundles_per_bundle,1])
+    keepmin_array = np.zeros([subbundles_per_bundle,1])
+    nkeep_array = np.zeros([subbundles_per_bundle, 1])
+    
+    for i in range(subbundles_per_bundle):
+        #left end of bundle
+        if i == 0:
+            specmin_array[i] = 0
+            nspec_array[i] = nfloor + nremainder + 1
+            keepmin_array[i] = 0
+            nkeep_array[i] = nfloor + nremainder
+            
+        #right end of bundle    
+        elif i == (subbundles_per_bundle-1):    
+            specmin_array[i] = specmin_array[i-1] + nspec_array[i-1] - 2
+            nspec_array[i] = nfloor + 1
+            keepmin_array[i] = keepmin_array[i-1] + nkeep_array[i-1]
+            nkeep_array[i] = nfloor
+            
+        #everything else    
+        else:
+            specmin_array[i] = specmin_array[i-1] + nspec_array[i-1] - 2
+            nspec_array[i] = nfloor + 2
+            keepmin_array[i] = keepmin_array[i-1] + nkeep_array[i-1]
+            nkeep_array[i] = nfloor 
+                 
+    #combine back into specmin_n (specmin, nspec)
+    #combine back into keepmin_n (keepmin, nkeep)
+    specmin_n = list()
+    keepmin_n = list()
+    for j in range(nbundles):
+        bundle_offset = fibers_per_bundle*j
+        for i in range(subbundles_per_bundle):
+            specmin_n.append((int(specmin_array[i])+bundle_offset, int(nspec_array[i]))) 
+            keepmin_n.append((int(keepmin_array[i])+bundle_offset, int(nkeep_array[i])))      
+        
+    return specmin_n, keepmin_n 
+
 def main_mpi(args, comm=None, timing=None):
 
     mark_start = time.time()
@@ -276,53 +327,6 @@ def main_mpi(args, comm=None, timing=None):
     if psf_wavemax < wstop:
         raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
-    # Now we divide our spectra into bundles
-
-    bundlesize = args.bundlesize
-    checkbundles = set()
-    checkbundles.update(np.floor_divide(np.arange(specmin, specmax), bundlesize*np.ones(nspec)).astype(int))
-    bundles = sorted(checkbundles)
-    nbundle = len(bundles)
-
-    bspecmin = {}
-    bnspec = {}
-    for b in bundles:
-        if specmin > b * bundlesize:
-            bspecmin[b] = specmin
-        else:
-            bspecmin[b] = b * bundlesize
-        if (b+1) * bundlesize > specmax:
-            bnspec[b] = specmax - bspecmin[b]
-        else:
-            bnspec[b] = bundlesize
-
-    # Now we assign bundles to processes
-
-    nproc = 1
-    rank = 0
-    if comm is not None:
-        nproc = comm.size
-        rank = comm.rank
-
-    mynbundle = int(nbundle // nproc)
-    myfirstbundle = 0
-    leftover = nbundle % nproc
-    if rank < leftover:
-        mynbundle += 1
-        myfirstbundle = rank * mynbundle
-    else:
-        myfirstbundle = ((mynbundle + 1) * leftover) + (mynbundle * (rank - leftover))
-
-    if rank == 0:
-        #- Print parameters
-        log.info("extract:  input = {}".format(input_file))
-        log.info("extract:  psf = {}".format(psf_file))
-        log.info("extract:  specmin = {}".format(specmin))
-        log.info("extract:  nspec = {}".format(nspec))
-        log.info("extract:  wavelength = {},{},{}".format(wstart, wstop, dw))
-        log.info("extract:  nwavestep = {}".format(args.nwavestep))
-        log.info("extract:  regularize = {}".format(args.regularize))
-
     # get the root output file
 
     outpat = re.compile(r'(.*)\.fits')
@@ -332,7 +336,7 @@ def main_mpi(args, comm=None, timing=None):
     outroot = outmat.group(1)
 
     outdir = os.path.normpath(os.path.dirname(outroot))
-    if rank == 0:
+    if comm.rank == 0:
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -345,24 +349,72 @@ def main_mpi(args, comm=None, timing=None):
     time_total_write_output = 0.0
 
     failcount = 0
+    
+    #probably these are args or could be determined from args
+    numfibers = 500 #this is the global nspec which i think is 500?
+    fibers_per_bundle = args.bundlesize
+    subbundles_per_bundle = args.nsubbundles
+    nbundles = numfibers // fibers_per_bundle
+    
+    #instead of bundles lets divide into subbundles  
+    #if comm.rank == 0:      
+    specmin_n, keepmin_n = get_subbundles(numfibers, fibers_per_bundle, subbundles_per_bundle)  
+    list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
 
-    for b in range(myfirstbundle, myfirstbundle+mynbundle):
+    #based on this info we can create lists of subbundles for each rank to process
+    #get size of frame communicator (32 for haswell, 68 for knl)
+    #now distribute the subbundles among the ranks
+    #here comm is the frame communicator
+
+    print("comm.size is %s" %(comm.size))
+
+    list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
+    my_subbundles = np.array_split(list_of_subbundles, comm.size)[comm.rank]
+    
+    print("mysubbundles assigned to rank %s" %(comm.rank))
+    print(my_subbundles)
+    
+    #mynbundle = int(nbundle // nproc)
+    #myfirstbundle = 0
+    #leftover = nbundle % nproc
+    #if rank < leftover:
+    #    mynbundle += 1
+    #    myfirstbundle = rank * mynbundle
+    #else:
+    #    myfirstbundle = ((mynbundle + 1) * leftover) + (mynbundle * (rank - leftover))
+
+    #start extract for each subbundle
+    #should be a different list for each rank
+    for j,b in enumerate(my_subbundles):
         mark_iteration_start = time.time()
-        outbundle = "{}_{:02d}.fits".format(outroot, b)
-        outmodel = "{}_model_{:02d}.fits".format(outroot, b)
+        outbundle = "{}_{:02d}.fits".format(outroot, j)
+        outmodel = "{}_model_{:02d}.fits".format(outroot, j)
+        
+        #the four items stored for each subbundle are:
+        #specmin, nspec, keepmin, nkeep
+        sbspecmin = b[0] #subbundle specmin
+        sbnspec = b[1] #subbundle nspec
+        sbkeepmin = b[2] #subbundle keepmin
+        sbnkeep = b[3] #subbundle nkeep
+                
 
         log.info('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
-            rank, os.path.basename(input_file),
-            bspecmin[b], bspecmin[b]+bnspec[b], time.asctime(),
+            comm.rank, os.path.basename(input_file),
+            sbspecmin, sbspecmin+sbnspec, time.asctime(),
             ) )
         sys.stdout.flush()
 
-        #- The actual extraction
+        #- The actual extraction, now over subbundles!
+        #bundlesize should now be the subbundlesize i think, which is sbnkeep?
+        #be careful with nsubbundles here... this is nsubbundles for specter
+        #as a confusing workaround to avoid changing code in specter set nsubbundles=1
         try:
-            results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
-                bnspec[b], wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
-                bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                full_output=True, nsubbundles=args.nsubbundles)
+            results = ex2d(img.pix, img.ivar*(img.mask==0), psf, sbspecmin,
+                sbnspec, wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
+                bundlesize=sbnkeep, wavesize=args.nwavestep, verbose=args.verbose,
+                full_output=True, nsubbundles=1)
+            
+            print("results extraced for rank %s now what" %(comm.rank) )
 
             flux = results['flux']
             ivar = results['ivar']
@@ -383,15 +435,18 @@ def main_mpi(args, comm=None, timing=None):
             img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
             img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
 
-            if fibermap is not None:
-                bfibermap = fibermap[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
-            else:
-                bfibermap = None
+            #before re-assembling the frame we need to keep and merge the appropriate subbundles
 
-            bfibers = fibers[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
+            #changed the variables here to sb... did i do this right?
+            if fibermap is not None:
+                sbfibermap = fibermap[sbspecmin-specmin:sbspecmin+sbnspec-specmin]
+            else:
+                sbfibermap = None
+
+            sbfibers = fibers[sbspecmin-specmin:sbspecmin+sbnspec-specmin]
 
             frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdata,
-                        fibers=bfibers, meta=img.meta, fibermap=bfibermap,
+                        fibers=sbfibers, meta=img.meta, fibermap=sbfibermap,
                         chi2pix=chi2pix)
 
             #- Add unit
