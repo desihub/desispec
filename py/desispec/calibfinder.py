@@ -81,7 +81,18 @@ class CalibFinder() :
         for other_header in headers :
             for k in other_header :
                 if k not in header :
-                    header[k]=other_header[k]
+                    try :
+                        header[k]=other_header[k]
+                    except KeyError :
+                        # it happens with the current version of fitsio
+                        # if the value = 'None'.
+                        pass
+        if "CAMERA" not in header :
+            log.error("no 'CAMERA' keyword in header, cannot find calib")
+            log.error("header is:")
+            for k in header :
+                log.error("{} : {}".format(k,header[k]))
+            raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
         
         cameraid=header["CAMERA"].strip().lower()
         if "NIGHT" in header:
