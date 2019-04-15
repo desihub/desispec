@@ -75,6 +75,7 @@ class TestExtract(unittest.TestCase):
         frame2 = desispec.io.read_frame(self.outfile)
         model2 = fits.getdata(self.outmodel)
 
+        #these tests are broken for subbundles
         self.assertTrue(np.all(frame1.flux[0:3] == frame2.flux[0:3]))
         self.assertTrue(np.all(frame1.ivar[0:3] == frame2.ivar[0:3]))
         self.assertTrue(np.all(frame1.mask[0:3] == frame2.mask[0:3]))
@@ -112,7 +113,32 @@ class TestExtract(unittest.TestCase):
         # resolution.shape[1] is number of diagonals; picked by algorithm
         self.assertEqual(resolution.shape[2], nwave)
 
-    def _test_bundles(self, template, specmin, nspec):
+#    def _test_bundles(self, template, specmin, nspec):
+#        #- should also work with bundles and not starting at spectrum 0
+#        cmd = template.format(self.imgfile, self.psffile, self.fibermapfile, self.outfile, self.outmodel, specmin, nspec)
+#        opts = cmd.split(" ")[1:]
+#        args = desispec.scripts.extract.parse(opts)
+#        desispec.scripts.extract.main(args)
+#
+#        self.assertTrue(os.path.exists(self.outfile))
+#        frame1 = desispec.io.read_frame(self.outfile)
+#        model1 = fits.getdata(self.outmodel)
+#        os.remove(self.outfile)
+#        os.remove(self.outmodel)
+#
+#        desispec.scripts.extract.main_mpi(args, comm=None)
+#        self.assertTrue(os.path.exists(self.outfile))
+#        frame2 = desispec.io.read_frame(self.outfile)
+#        model2 = fits.getdata(self.outmodel)
+#
+#        self.assertTrue(np.all(frame1.flux[0:nspec] == frame2.flux[specmin:specmin+nspec]))
+#        self.assertTrue(np.all(frame1.ivar[0:nspec] == frame2.ivar[specmin:specmin+nspec]))
+#        self.assertTrue(np.all(frame1.mask[0:nspec] == frame2.mask[specmin:specmin+nspec]))
+#        self.assertTrue(np.all(frame1.chi2pix[0:nspec] == frame2.chi2pix[specmin:specmin+nspec]))
+#        self.assertTrue(np.all(frame1.resolution_data[0:nspec] == frame2.resolution_data[specmin:specmin+nspec]))
+
+
+    def _test_subbundles(self, template, specmin, nspec):
         #- should also work with bundles and not starting at spectrum 0
         cmd = template.format(self.imgfile, self.psffile, self.fibermapfile, self.outfile, self.outmodel, specmin, nspec)
         opts = cmd.split(" ")[1:]
@@ -140,18 +166,20 @@ class TestExtract(unittest.TestCase):
         # self.assertTrue(np.allclose(model1, model2, rtol=1e-15, atol=1e-15))
 
     #- traditional and MPI versions agree when starting at spectrum 0
-    def test_bundles1(self):
-        self._test_bundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} --bundlesize 3 -o {} -m {} -s {} -n {}", 0, 5)
+    def test_subbundles1(self):
+        self._test_subbundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} -o {} -m {} -s {} -n {}", 0, 5)
 
     #- BUG: they don't agree when starting at spectrum 2
+    #still a problem for subbundles?
     @unittest.expectedFailure
-    def test_bundles2(self):
-        self._test_bundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} --bundlesize 3 -o {} -m {} -s {} -n {}", 2, 5)
+    def test_subbundles2(self):
+        self._test_subbundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} -o {} -m {} -s {} -n {}", 2, 5)
 
     #- BUG: MPI version raises KeyError
+    #still a problem for subbundles?
     @unittest.expectedFailure
-    def test_bundles3(self):
-        self._test_bundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} --bundlesize 3 -o {} -m {} -s {} -n {}", 22, 5)
+    def test_subbundles3(self):
+        self._test_subbundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} -o {} -m {} -s {} -n {}", 22, 5)
 
 if __name__ == '__main__':
     unittest.main()
