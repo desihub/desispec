@@ -273,6 +273,13 @@ def main_mpi(args, comm=None, timing=None):
     # of the PSF, read and broadcast here, to reduce
     # disk contention.
 
+    #adopt the usual mpi syntax
+    nproc = 1
+    rank = 0
+    if comm is not None:
+        nproc = comm.size
+        rank = comm.rank
+
     img = None
     if comm is None:
         img = io.read_image(input_file)
@@ -358,7 +365,6 @@ def main_mpi(args, comm=None, timing=None):
     nbundles = numfibers // fibers_per_bundle
     
     #instead of bundles lets divide into subbundles  
-    #if comm.rank == 0:      
     specmin_n, keepmin_n = get_subbundles(numfibers, fibers_per_bundle, subbundles_per_bundle)  
     list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
 
@@ -367,10 +373,7 @@ def main_mpi(args, comm=None, timing=None):
     #now distribute the subbundles among the ranks
     #here comm is the frame communicator
     list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
-    my_subbundles = np.array_split(list_of_subbundles, comm.size)[comm.rank]
-
-    #print("mysubbundles assigned to rank %s" %(comm.rank))
-    #print(my_subbundles)
+    my_subbundles = np.array_split(list_of_subbundles, nproc)[rank]
 
     #a little more bookkeeping for later
     each_nkeep = []
@@ -388,8 +391,8 @@ def main_mpi(args, comm=None, timing=None):
     pixmask_fraction = np.zeros((my_subbundles_nkeep, nwave))
 
     #we want this only once per rank
-    outmysubbundles = "{}_{:02d}.fits".format(outroot, comm.rank)
-    outmodel = "{}_model_{:02d}.fits".format(outroot, comm.rank)
+    outmysubbundles = "{}_{:02d}.fits".format(outroot, rank)
+    outmodel = "{}_model_{:02d}.fits".format(outroot, rank)
 
     for b in my_subbundles:
         mark_iteration_start = time.time()
@@ -402,7 +405,7 @@ def main_mpi(args, comm=None, timing=None):
         sbnkeep = b[3] #subbundle nkeep
 
         log.info('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
-            comm.rank, os.path.basename(input_file),
+            rank, os.path.basename(input_file),
             sbspecmin, sbspecmin+sbnspec, time.asctime(),
             ) )
         sys.stdout.flush()
@@ -519,7 +522,7 @@ def main_mpi(args, comm=None, timing=None):
 
 
     time_merge = None
-    if comm.rank == 0:
+    if rank == 0:
         mark_merge_start = time.time()
         mergeopts = [
             '--output', args.output,
@@ -529,7 +532,7 @@ def main_mpi(args, comm=None, timing=None):
 
         #make a list of ranks
         rank_list = []
-        for i in range(comm.size):
+        for i in range(nproc):
             rank_list.append(i)
         #instead of bundles we now have work assigned to ranks
         mergeopts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in rank_list])
