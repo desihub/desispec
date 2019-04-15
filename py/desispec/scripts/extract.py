@@ -351,7 +351,8 @@ def main_mpi(args, comm=None, timing=None):
     failcount = 0
     
     #probably these are args or could be determined from args
-    numfibers = 500 #this is the global nspec which i think is 500?
+    #numfibers = 500 #this is the global nspec which i think is 500?
+    numfibers = nspec
     fibers_per_bundle = args.bundlesize
     subbundles_per_bundle = args.nsubbundles
     nbundles = numfibers // fibers_per_bundle
@@ -365,9 +366,6 @@ def main_mpi(args, comm=None, timing=None):
     #get size of frame communicator (32 for haswell, 68 for knl)
     #now distribute the subbundles among the ranks
     #here comm is the frame communicator
-
-    print("comm.size is %s" %(comm.size))
-
     list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
     my_subbundles = np.array_split(list_of_subbundles, comm.size)[comm.rank]
 
@@ -383,25 +381,13 @@ def main_mpi(args, comm=None, timing=None):
 
     #i think we do want to preallocate so we write only once per rank
     #not once per subbundle
-    #this means that each rank will only fill in its portion, there will be a lot of zeros
-    #maybe that is ok
     flux = np.zeros((my_subbundles_nkeep, nwave))
     ivar = np.zeros((my_subbundles_nkeep, nwave))
     chi2pix = np.zeros((my_subbundles_nkeep, nwave))
     Rdata = np.zeros((my_subbundles_nkeep, 11, nwave)) #why 11?
     pixmask_fraction = np.zeros((my_subbundles_nkeep, nwave))
 
-    #i think we do want to preallocate so we write only once per rank
-    #not once per subbundle
-    #this means that each rank will only fill in its portion, there will be a lot of zeros
-    #maybe that is ok
-    #flux = np.zeros((nspec, nwave))
-    #ivar = np.zeros((nspec, nwave))
-    #chi2pix = np.zeros((nspec, nwave))
-    #Rdata = np.zeros((nspec, 11, nwave)) #why 11?
-    #pixmask_fraction = np.zeros((nspec, nwave))
-
-    #pretty sure we want this only once per rank
+    #we want this only once per rank
     outmysubbundles = "{}_{:02d}.fits".format(outroot, comm.rank)
     outmodel = "{}_model_{:02d}.fits".format(outroot, comm.rank)
 
@@ -411,13 +397,9 @@ def main_mpi(args, comm=None, timing=None):
         #the four items stored for each subbundle are:
         #specmin, nspec, keepmin, nkeep
         sbspecmin = b[0] #subbundle specmin
-        #print("sbspecmin is %s" %(sbspecmin))
         sbnspec = b[1] #subbundle nspec
-        #print("sbnspec is %s" %(sbnspec))
         sbkeepmin = b[2] #subbundle keepmin
-        #print("sbkeepmin is %s" %(sbkeepmin))
         sbnkeep = b[3] #subbundle nkeep
-        #print("sbnkeep is %s" %(sbnkeep))
 
         log.info('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
             comm.rank, os.path.basename(input_file),
@@ -426,7 +408,6 @@ def main_mpi(args, comm=None, timing=None):
         sys.stdout.flush()
 
         #- The actual extraction, now over subbundles!
-        #bundlesize should now be the subbundlesize i think, which is sbnkeep?
         #be careful with nsubbundles here... this is nsubbundles for specter
         #as a confusing workaround to avoid changing code in specter set nsubbundles=1
         try:
@@ -435,8 +416,6 @@ def main_mpi(args, comm=None, timing=None):
                 bundlesize=sbnkeep, wavesize=args.nwavestep, verbose=args.verbose,
                 full_output=True, nsubbundles=1)
             
-            print("results extracted for rank %s" %(comm.rank) )
-
             #flux.shape(6, 3022) so it's sbnspec by len(wave)         
             sbflux = results['flux']
             sbivar = results['ivar']
@@ -444,40 +423,26 @@ def main_mpi(args, comm=None, timing=None):
             sbchi2pix = results['chi2pix']
             sbpixmask_fraction = results['pixmask_fraction']
 
-            print("sbflux.shape")
-            print(sbflux.shape)
-            print("sbivar.shape")
-            print(sbivar.shape)
-            print("sbRdata.shape")
-            print(sbRdata.shape)
-            print("sbchi2pix shape")
-            print(sbchi2pix.shape)
-
-            ##borrow from specter
-            #iispec = np.arange(speclo-specmin, spechi-specmin)
-            #flux[iispec[keep], iwave:iwave+wavesize+1] = specflux[keep, nlo:-nhi]
-            #ivar[iispec[keep], iwave:iwave+wavesize+1] = specivar[keep, nlo:-nhi]
+            #print("sbflux.shape")
+            #print(sbflux.shape)
+            #print("sbivar.shape")
+            #print(sbivar.shape)
+            #print("sbRdata.shape")
+            #print(sbRdata.shape)
+            #print("sbchi2pix shape")
+            #print(sbchi2pix.shape)
 
             #now trim down the results using sbkeepmin and sbnkeep
             #insert trimmed results into the right place in larger mysubbundle arrays
             trim = sbkeepmin - sbspecmin
-            print("trim")
-            print(trim)
-            print("sbkeepmin")
-            print(sbkeepmin)
-            print("sbnkeep")
-            print(sbnkeep)
-            #sbsoffset
             sboffset = sbkeepmin - my_subbundles_keepmin
-            print("sboffset")
-            print(sboffset)
+
             flux[sboffset:sboffset+sbnkeep, :] = sbflux[trim:trim + sbnkeep,:]
             ivar[sboffset:sboffset+sbnkeep, :] = sbivar[trim:trim + sbnkeep,:]
             #Rdata has an extra dimension, for example(6,11,3022)
             Rdata[sboffset:sboffset+sbnkeep] = sbRdata[trim:trim + sbnkeep, :, :]
             chi2pix[sboffset:sboffset+sbnkeep, :] = sbchi2pix[trim:trim + sbnkeep, :]
             pixmask_fraction[sboffset:sboffset+sbnkeep, :] = sbpixmask_fraction[trim:trim + sbnkeep, :]
-            print("subbundle data appended")
         except:
             # Log the error and increment the number of failures
             log.error("extract:  FAILED bundle {}, spectrum range {}:{}".format(b, sbkeepmin, sbkeepmin+sbnkeep))
@@ -531,16 +496,11 @@ def main_mpi(args, comm=None, timing=None):
     #writes for each subbundle?-- changed this, be careful
     io.write_frame(outmysubbundles, frame)
 
-    print("frame written for rank %s" %(comm.rank))
-
-    #this will write a fits file for each rank, eventually merge them?
-    #changed this, be careful
     if args.model is not None:
         from astropy.io import fits
         #outmodel now inclues the rank number instead of the bundle number
         fits.writeto(outmodel, results['modelimage'], header=frame.meta)
 
-    #keepmin or specmin here?
     log.info('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         my_subbundles_keepmin, my_subbundles_keepmin + my_subbundles_nkeep, time.asctime()))
     sys.stdout.flush()
@@ -566,9 +526,15 @@ def main_mpi(args, comm=None, timing=None):
             '--force',
             '--delete'
         ]
-        #mergeopts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in bundles ])
-        #mergeargs = mergebundles.parse(mergeopts)
-        #mergebundles.main(mergeargs)
+
+        #make a list of ranks
+        rank_list = []
+        for i in range(comm.size):
+            rank_list.append(i)
+        #instead of bundles we now have work assigned to ranks
+        mergeopts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in rank_list])
+        mergeargs = mergebundles.parse(mergeopts)
+        mergebundles.main(mergeargs)
 
         if args.model is not None:
             model = None
