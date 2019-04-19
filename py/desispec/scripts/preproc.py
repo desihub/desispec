@@ -62,7 +62,7 @@ to use, but also only if a single camera is specified.
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
                         help = 'for cosmic ray rejection : number of sigma inconsistent with PSF required')
-    parser.add_argument('--cosmics-c2fudge', type = float, default = 0.8, required=False,
+    parser.add_argument('--cosmics-c2fudge', type = float, default = 0.5, required=False,
                         help = 'for cosmic ray rejection : fudge factor applied to PSF')
 
     parser.add_argument('--bkgsub', action='store_true',
