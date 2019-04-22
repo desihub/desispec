@@ -9,7 +9,7 @@ This script is opening a PSF file and dumping the psf values at +-1,0 0,+-1 and 
 """
 
 from specter.psf import GaussHermitePSF,SpotGridPSF
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import astropy.io.fits as pyfits
 import argparse
 import numpy as np
@@ -22,6 +22,8 @@ def main() :
 
     parser.add_argument('-i', '--inpsf', type = str, nargs="*", default = None, required=True,
                         help = 'path of DESI PSF fits file')
+    parser.add_argument('--sharpest', action = "store_true",
+                        help = 'chose the wavelength and fiber for which the PSF is the sharpest, otherwise use average')
 
 
     args = parser.parse_args()
@@ -43,13 +45,16 @@ def main() :
             sys.exit(12)
         
         # 4 axis and 2 pixels per axis
-        psfparams=np.ones((4))
+        psfparams=np.zeros((4))
+        counts = np.zeros((4))
         
         offset=np.zeros((4,2)).astype(int)
         offset[0]=[0,1]
         offset[1]=[1,0]
         offset[2]=[1,1]
         offset[3]=[1,-1]
+        
+
 
         n=0.
         fstep=10
@@ -70,8 +75,16 @@ def main() :
                         i0=int(i0max+s*offset[a,0])
                         i1=int(i1max+s*offset[a,1])
                         if i0<0 or i0>=n0 or i1<0 or i1>=n1 : continue                    
-                        if pix[i0,i1]>0 : psfparams[a] = min(psfparams[a],pix[i0,i1])
-                
+                        if pix[i0,i1]>0 : 
+                            if args.sharpest :
+                                psfparams[a] = min(psfparams[a],pix[i0,i1])
+                            else :
+                                psfparams[a] += pix[i0,i1]
+                                counts[a] += 1.
+        if not args.sharpest :
+            for a in range(4) :
+                psfparams[a] /= counts[a]
+        
         print(filename)
         print("psfparams=[%f,%f,%f,%f]"%(psfparams[0],psfparams[1],psfparams[2],psfparams[3]))
         all_psfparams.append(psfparams)
