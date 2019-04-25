@@ -15,7 +15,7 @@ from desiutil.log import get_logger
 from desispec.util import option_list
 from desispec.io import read_raw,read_image,read_fibermap,write_image,write_fiberflat,read_fiberflat
 from desispec.io.fluxcalibration import read_average_flux_calibration
-from desispec.io.xytraceset import read_xytraceset
+from desispec.io.xytraceset import read_xytraceset,write_xytraceset
 import desispec.scripts.trace_shifts as trace_shifts_script
 from desispec.trace_shifts import write_traces_in_psf
 from desispec.calibfinder import CalibFinder
@@ -25,6 +25,7 @@ from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat,qproc_compute_fiberflat
 from desispec.qproc.qsky import qproc_sky_subtraction
 from desispec.qproc.util import parse_fibers
+from desispec.qproc.qarc import process_arc
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -56,6 +57,8 @@ def parse(options=None):
                         help = 'extraction line width (in pixels)')
     parser.add_argument('--plot', action='store_true',
                         help = 'plot result')
+    parser.add_argument('--compute-lsf-sigma', action="store_true",
+                        help = 'estimate lsf sigma (for arc lamp exposures)')
     parser.add_argument('--shift-psf', action="store_true",
                         help = 'estimate spectral trace shifts')
     parser.add_argument('--compute-fiberflat', type = str, default = None, required = False,
@@ -117,9 +120,6 @@ def main(args=None):
         options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy"})
         tmp_args = trace_shifts_script.parse(options=options)
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
-        
-        if args.output_psf is not None :
-            write_traces_in_psf(args.psf,args.output_psf,tset)
 
     # add fibermap
     if args.fibermap :
@@ -139,6 +139,14 @@ def main(args=None):
     if args.output_rawframe is not None :
         write_qframe(args.output_rawframe,qframe)
         log.info("wrote raw extracted frame in {}".format(args.output_rawframe))
+
+
+    if args.compute_lsf_sigma :
+        tset = process_arc(qframe,tset,linelist=None,npoly=2,nbins=2)
+    
+    if args.output_psf is not None :
+        #write_traces_in_psf(args.psf,args.output_psf,tset)
+        write_xytraceset(args.output_psf,tset)
 
     if args.compute_fiberflat is not None :
         fiberflat = qproc_compute_fiberflat(qframe)
