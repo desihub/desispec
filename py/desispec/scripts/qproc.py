@@ -41,6 +41,8 @@ def parse(options=None):
                         help = 'path to psf fits file to get the trace coordinates (default is psf in $DESI_CCD_CALIBRATION_DATA)')
     parser.add_argument('--output-preproc', type = str, default = None, required = False,
                         help = 'save the preprocessed image in this file.')
+    parser.add_argument('--output-rawframe', type = str, default = None, required = False,
+                        help = 'save the raw (before flatfield,sky sub,calibration) extracted qframe to this file.')
     parser.add_argument('--shifted-psf', type = str, default = None, required = False,
                         help = 'estimate spectral trace shifts and save them in this file prior to extraction.')
     parser.add_argument('--fibers', type=str, default = None, required = False,
@@ -130,6 +132,9 @@ def main(args=None):
 
     qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
 
+    if args.output_rawframe is not None :
+        write_qframe(args.output_rawframe,qframe)
+        log.info("wrote {}".format(args.output_rawframe))
 
     if args.compute_fiberflat is not None :
         fiberflat = qproc_compute_fiberflat(qframe)
