@@ -17,6 +17,7 @@ from desispec.io import read_raw,read_image,read_fibermap,write_image,write_fibe
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.io.xytraceset import read_xytraceset
 from desispec.calibfinder import CalibFinder
+from desispec.qproc.qframe import QFrame
 from desispec.qproc.io import read_qframe,write_qframe
 from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat,qproc_compute_fiberflat
@@ -43,6 +44,8 @@ def parse(options=None):
                         help = 'save the preprocessed image in this file.')
     parser.add_argument('--output-rawframe', type = str, default = None, required = False,
                         help = 'save the raw (before flatfield,sky sub,calibration) extracted qframe to this file.')
+    parser.add_argument('--output-skyframe', type = str, default = None, required = False,
+                        help = 'save the sky model in a qframe file (need --skysub)')
     parser.add_argument('--shifted-psf', type = str, default = None, required = False,
                         help = 'estimate spectral trace shifts and save them in this file prior to extraction.')
     parser.add_argument('--fibers', type=str, default = None, required = False,
@@ -134,13 +137,13 @@ def main(args=None):
 
     if args.output_rawframe is not None :
         write_qframe(args.output_rawframe,qframe)
-        log.info("wrote {}".format(args.output_rawframe))
+        log.info("wrote raw extracted frame in {}".format(args.output_rawframe))
 
     if args.compute_fiberflat is not None :
         fiberflat = qproc_compute_fiberflat(qframe)
         #write_qframe(args.compute_fiberflat,qflat)
         write_fiberflat(args.compute_fiberflat,fiberflat,header=qframe.meta)
-        log.info("wrote {}".format(args.compute_fiberflat))
+        log.info("wrote fiberflat in {}".format(args.compute_fiberflat))
 
     if args.apply_fiberflat or args.input_fiberflat :
 
@@ -155,7 +158,13 @@ def main(args=None):
 
     if args.skysub :
         log.info("sky subtraction")
-        qproc_sky_subtraction(qframe)
+        if args.output_skyframe is not None :
+            skyflux=qproc_sky_subtraction(qframe,return_skymodel=True)
+            sqframe=QFrame(qframe.wave,skyflux,np.ones(skyflux.shape))
+            write_qframe(args.output_skyframe,sqframe)
+            log.info("wrote sky model in {}".format(args.output_skyframe))
+        else :
+            qproc_sky_subtraction(qframe)
 
     if args.fluxcalib :
         if cfinder is None :
