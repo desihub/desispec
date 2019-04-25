@@ -23,22 +23,20 @@ from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
 from desispec.qproc.qextract import qproc_boxcar_extraction
 
-def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax,header_keywords=None) :
+def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset) :
     """
     Writes traces in a PSF.
 
     Args:
         input_psf_filename : Path to input fits file which has to contain XTRACE and YTRACE HDUs
         output_psf_filename : Path to output fits file which has to contain XTRACE and YTRACE HDUs
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
-        wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
-
-    Optional:
-        header_keywords : dictionnary of data to add to the psf header
+        xytraceset : xytraceset
     """
+
+    xcoef=xytraceset.x_vs_wave_traceset._coeff
+    ycoef=xytraceset.y_vs_wave_traceset._coeff
+    wavemin=xytraceset.wavemin
+    wavemax=xytraceset.wavemax
 
     log = get_logger()
 
@@ -101,9 +99,9 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
         raise IOError("didn't change the Y coefs in the psf")
 
 
-    if (header_keywords is not None) and ("PSF" in psf_fits):
-        for k in header_keywords :
-            psf_fits["PSF"].header[k] = header_keywords[k]
+    if (xytraceset.meta is not None) and ("PSF" in psf_fits):
+        for k in xytraceset.meta.keys() :
+            psf_fits["PSF"].header[k] = xytraceset.meta[k]
 
 
     psf_fits.writeto(output_psf_filename,overwrite=True)

@@ -12,10 +12,12 @@ import time
 import numpy as np
 import astropy.io.fits as fits
 from desiutil.log import get_logger
-from desispec.util import runcmd
+from desispec.util import option_list
 from desispec.io import read_raw,read_image,read_fibermap,write_image,write_fiberflat,read_fiberflat
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.io.xytraceset import read_xytraceset
+import desispec.scripts.trace_shifts as trace_shifts_script
+from desispec.trace_shifts import write_traces_in_psf
 from desispec.calibfinder import CalibFinder
 from desispec.qproc.qframe import QFrame
 from desispec.qproc.io import read_qframe,write_qframe
@@ -39,21 +41,23 @@ def parse(options=None):
     parser.add_argument('-o','--outframe', type = str, default = None, required = False,
                         help = 'path to output qframe file')
     parser.add_argument('-p','--psf', type = str, default = None, required = False,
-                        help = 'path to psf fits file to get the trace coordinates (default is psf in $DESI_CCD_CALIBRATION_DATA)')
+                        help = 'path to input psf fits file to get the trace coordinates (default is psf in $DESI_CCD_CALIBRATION_DATA)')
     parser.add_argument('--output-preproc', type = str, default = None, required = False,
                         help = 'save the preprocessed image in this file.')
     parser.add_argument('--output-rawframe', type = str, default = None, required = False,
                         help = 'save the raw (before flatfield,sky sub,calibration) extracted qframe to this file.')
     parser.add_argument('--output-skyframe', type = str, default = None, required = False,
                         help = 'save the sky model in a qframe file (need --skysub)')
-    parser.add_argument('--shifted-psf', type = str, default = None, required = False,
-                        help = 'estimate spectral trace shifts and save them in this file prior to extraction.')
+    parser.add_argument('--output-psf', type = str, default = None, required = False,
+                        help = 'save psf (after shifts of gaussian sigma adjustment) to this file.')
     parser.add_argument('--fibers', type=str, default = None, required = False,
                         help = 'defines from_to which fiber to work on. (ex: --fibers=50:60,4 means that only fibers 4, and fibers from 50 to 60 (excluded) will be extracted)')
     parser.add_argument('--width', type=int, default=7, required=False,
                         help = 'extraction line width (in pixels)')
     parser.add_argument('--plot', action='store_true',
                         help = 'plot result')
+    parser.add_argument('--shift-psf', action="store_true",
+                        help = 'estimate spectral trace shifts')
     parser.add_argument('--compute-fiberflat', type = str, default = None, required = False,
                         help = 'compute flat and save it to this file')
     parser.add_argument('--apply-fiberflat', action='store_true',
@@ -105,27 +109,17 @@ def main(args=None):
         args.psf = cfinder.findfile("PSF")
         log.info(" Using PSF {}".format(args.psf))
 
-
-    if args.shifted_psf :
-        if ( not is_input_preprocessed ) and ( args.output_preproc is None ) :
-            print("ERROR: The PSF shifting requires as an input a preprocessed image on disk. So, please rerun with the option --output-preproc xxx.fits")
-            print("Type 'desi_qproc --help' for more options")
-            sys.exit(12)
-        if is_input_preprocessed :
-            image_filename = args.image
-        else :
-            image_filename = args.output_preproc
-
-        cmd = "desi_compute_trace_shifts --image {} --psf {} --outpsf {} --auto".format(image_filename,args.psf,args.shifted_psf)
-        if runcmd(cmd) !=0:
-            log.error('desi_compute_trace_shifts failed')
-            sys.exit(12)
-        # now use the shifted psf for extractions
-        args.psf = args.shifted_psf
-
     tset    = read_xytraceset(args.psf)
 
+    if args.shift_psf :
 
+        # using the trace shift script
+        options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy"})
+        tmp_args = trace_shifts_script.parse(options=options)
+        tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
+        
+        if args.output_psf is not None :
+            write_traces_in_psf(args.psf,args.output_psf,tset)
 
     # add fibermap
     if args.fibermap :
@@ -135,6 +129,13 @@ def main(args=None):
 
     qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
 
+    if tset.meta is not None :
+        # add traceshift info in the qframe, this will be saved in the qframe header
+        if qframe.meta is None :
+            qframe.meta = dict()
+        for k in tset.meta.keys() :
+            qframe.meta[k] = tset.meta[k]
+    
     if args.output_rawframe is not None :
         write_qframe(args.output_rawframe,qframe)
         log.info("wrote raw extracted frame in {}".format(args.output_rawframe))
