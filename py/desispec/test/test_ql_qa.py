@@ -38,6 +38,21 @@ def gaussian2D(x,y,amp,xmu,ymu,xsigma,ysigma):
 
 class TestQL_QA(unittest.TestCase):
 
+    rawfile = 'test-raw-abcde.fits'
+    pixfile = 'test-pix-abcde.fits'
+    xwfile = 'test-xw-abcde.fits'
+    framefile = 'test-frame-abcde.fits'
+    fibermapfile = 'test-fibermap-abcde.fits'
+    skyfile = 'test-sky-abcde.fits'
+    qafile = 'test_qa.yaml'
+
+    qajson = 'test_qa.json'
+    qafig = 'test_qa.png'
+
+    for filename in [framefile, rawfile, pixfile, xwfile, fibermapfile, skyfile, qafile, qajson, qafig]:
+        if os.path.exists(filename):
+            os.remove(filename)
+
     def tearDown(self):
         self.rawimage.close()
         for filename in [self.framefile, self.rawfile, self.pixfile, self.xwfile, self.fibermapfile, self.skyfile, self.qafile, self.qajson, self.qafig]:
