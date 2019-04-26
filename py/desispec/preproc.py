@@ -263,7 +263,7 @@ def get_calibration_image(cfinder,keyword,entry) :
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
-def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None, nocrosstalk=False, nogain=False):
+def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,ccd_calibration_filename=None, nocrosstalk=False, nogain=False):
 
     '''
     preprocess image using metadata in header
