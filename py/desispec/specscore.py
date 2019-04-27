@@ -32,8 +32,8 @@ def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     
     Parameters
     ----------
-    frame : :class:`~desispec.frame.Frame`
-        A Frame object.
+    frame : :class:`~desispec.frame.Frame` or :class:`~desispec.frame.QFrame`
+        A Frame or a QFrame object.
     band : :class:`str`, optional
         Spectrograph band, ``b``, ``r``, ``z``, autodetected by default.
     suffix : :class:`str`, optional
@@ -62,8 +62,11 @@ def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     else :
         band = _auto_detect_camera(frame)
             
-    ii=(frame.wave>=tophat_wave[band][0])&(frame.wave<tophat_wave[band][1])
-    if np.sum(ii)==0 :
+    is_a_frame = (len(frame.wave.shape)==1)
+    
+    mask=(frame.wave>=tophat_wave[band][0])*(frame.wave<tophat_wave[band][1])
+    
+    if np.sum(mask)==0 :
         message="no intersection of frame wavelenght and tophat range {}".format(tophat_wave[band])
         log.error(message)
         raise ValueError(message)
@@ -71,8 +74,11 @@ def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     scores = dict()
     comments = dict()
     ivar = frame.ivar
-    ivar[ivar<0] *= 0. # make sure it's not negative    
-    dwave = np.gradient(frame.wave)
+    ivar[ivar<0] *= 0. # make sure it's not negative  
+    if is_a_frame : 
+        dwave = np.gradient(frame.wave)
+    else : # a qframe
+        dwave = np.gradient(frame.wave,axis=1)
 
     if suffix is None :
         suffix="_"
@@ -104,30 +110,46 @@ def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
             comments=dict()
             return scores,comments
         
-        
+    nspec=frame.flux.shape[0]
     if flux_per_angstrom :
         # we need to integrate the flux accounting for the wavelength bin
         k="INTEG%sFLUX_%s"%(suffix,band.upper())
-        scores[k]       = np.sum(frame.flux[:,ii]*dwave[ii],axis=1)
+        if is_a_frame :
+            scores[k] = np.sum(frame.flux[:,mask]*dwave[mask],axis=1)
+        else :
+            scores[k] = np.array([np.sum(frame.flux[i,mask[i]]*dwave[i,mask[i]]) for i in range(nspec)])
         comments[k]     = "integ. flux in wave. range {},{}A".format(tophat_wave[band][0],tophat_wave[band][1])
         # simple median
         k="MEDIAN%sFLUX_%s"%(suffix,band.upper())
-        scores[k]       = np.median(frame.flux[:,ii],axis=1) # already per angstrom
+        if is_a_frame :
+            scores[k] = np.median(frame.flux[:,mask],axis=1) # already per angstrom
+        else :
+            scores[k] = np.array([np.median(frame.flux[i,mask[i]]) for i in range(nspec)])
         comments[k]     = "median flux in wave. range {},{}A".format(tophat_wave[band][0],tophat_wave[band][1])        
     else :
         # simple sum of counts
         k="SUM%sCOUNT_%s"%(suffix,band.upper())
-        scores[k]       = np.sum(frame.flux[:,ii],axis=1)
+        if is_a_frame :
+            scores[k]       = np.sum(frame.flux[:,mask],axis=1)
+        else :
+            scores[k] = np.array([np.sum(frame.flux[i,mask[i]]) for i in range(nspec)])
         comments[k]     = "sum counts in wave. range {},{}A".format(tophat_wave[band][0],tophat_wave[band][1])
         # median count per A
         k="MEDIAN%sCOUNT_%s"%(suffix,band.upper())
-        scores[k]       = np.median(frame.flux[:,ii]/dwave[ii],axis=1) # per angstrom
+        if is_a_frame :
+            scores[k] = np.median(frame.flux[:,mask]/dwave[mask],axis=1) # per angstrom
+        else :
+            scores[k] = np.array([np.median(frame.flux[i,mask[i]]/dwave[i,mask[i]]) for i in range(nspec)])
         comments[k]     = "median counts/A in wave. range {},{}A".format(tophat_wave[band][0],tophat_wave[band][1])
-        
+
     # the signal to noise scales with sqrt(integration wavelength range) (same for uncalibrated or calibrated data)
     k="MEDIAN%sSNR_%s"%(suffix,band.upper())
-    scores[k]    = np.median(np.sqrt(ivar[:,ii])*frame.flux[:,ii]/np.sqrt(dwave[ii]),axis=1)
+    if is_a_frame :
+        scores[k]    = np.median((np.sqrt(ivar[:,mask])*frame.flux[:,mask]/np.sqrt(dwave[mask])),axis=1)
+    else :
+        scores[k] = np.array([np.median(np.sqrt(ivar[i,mask[i]])*frame.flux[i,mask[i]]/np.sqrt(dwave[i,mask[i]])) for i in range(nspec)])
     comments[k]  = "median SNR/sqrt(A) in wave. range {},{}A".format(tophat_wave[band][0],tophat_wave[band][1])
+
     return scores,comments
 
 def append_frame_scores(frame,new_scores,new_comments,overwrite) :
