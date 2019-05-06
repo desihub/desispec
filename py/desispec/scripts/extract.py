@@ -343,7 +343,7 @@ def main_mpi(args, comm=None, timing=None):
     outroot = outmat.group(1)
 
     outdir = os.path.normpath(os.path.dirname(outroot))
-    if comm.rank == 0:
+    if rank == 0:
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -387,7 +387,24 @@ def main_mpi(args, comm=None, timing=None):
     flux = np.zeros((my_subbundles_nkeep, nwave))
     ivar = np.zeros((my_subbundles_nkeep, nwave))
     chi2pix = np.zeros((my_subbundles_nkeep, nwave))
-    Rdata = np.zeros((my_subbundles_nkeep, 11, nwave)) #why 11?
+    
+    #steal from specter to get size of rdata
+    #- Diagonal elements of resolution matrix
+    #- Keep resolution matrix terms equivalent to 9-sigma of largest spot
+    #- ndiag is in units of number of wavelength steps of size dw
+    ndiag = 0
+    for ispec in [specmin, specmin+nspec//2, specmin+nspec-1]:
+        for w in [psf.wmin, 0.5*(psf.wmin+psf.wmax), psf.wmax]:
+            ndiag = max(ndiag, int(round(9.0*psf.wdisp(ispec, w) / dw )))
+
+    #- make sure that ndiag isn't too large for actual PSF spot size
+    wmid = (psf.wmin_all + psf.wmax_all) / 2.0
+    spotsize = psf.pix(0, wmid).shape
+    ndiag = min(ndiag, spotsize[0]//2, spotsize[1]//2)
+
+    #- Orig was ndiag = 10, which fails when dw gets too large compared to PSF size
+    #Rd = np.zeros( (nspec, 2*ndiag+1, nwave) )
+    Rdata = np.zeros((my_subbundles_nkeep, 2*ndiag+1, nwave))
     pixmask_fraction = np.zeros((my_subbundles_nkeep, nwave))
 
     #we want this only once per rank
@@ -541,7 +558,7 @@ def main_mpi(args, comm=None, timing=None):
 
         if args.model is not None:
             model = None
-            for b in outmysubbundles:
+            for b in rank_list:
                 outmodel = "{}_model_{:02d}.fits".format(outroot, b)
                 if model is None:
                     model = fits.getdata(outmodel)
