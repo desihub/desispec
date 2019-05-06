@@ -369,9 +369,6 @@ def main_mpi(args, comm=None, timing=None):
     list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
 
     #based on this info we can create lists of subbundles for each rank to process
-    #get size of frame communicator (32 for haswell, 68 for knl)
-    #now distribute the subbundles among the ranks
-    #here comm is the frame communicator
     list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
     my_subbundles = np.array_split(list_of_subbundles, nproc)[rank]
 
@@ -382,7 +379,7 @@ def main_mpi(args, comm=None, timing=None):
         each_nkeep.append(b[3])
     my_subbundles_nkeep = np.sum(each_nkeep)
 
-    #i think we do want to preallocate so we write only once per rank
+    #preallocate so we write only once per rank
     #not once per subbundle
     flux = np.zeros((my_subbundles_nkeep, nwave))
     ivar = np.zeros((my_subbundles_nkeep, nwave))
@@ -406,11 +403,13 @@ def main_mpi(args, comm=None, timing=None):
     #Rd = np.zeros( (nspec, 2*ndiag+1, nwave) )
     Rdata = np.zeros((my_subbundles_nkeep, 2*ndiag+1, nwave))
     pixmask_fraction = np.zeros((my_subbundles_nkeep, nwave))
+    #allocate this the same way specter does    
+    modelimage = np.zeros_like(img.pix) #is this right
 
     #we want this only once per rank
     outmysubbundles = "{}_{:02d}.fits".format(outroot, rank)
     outmodel = "{}_model_{:02d}.fits".format(outroot, rank)
-
+    
     for b in my_subbundles:
         mark_iteration_start = time.time()
         
@@ -442,15 +441,7 @@ def main_mpi(args, comm=None, timing=None):
             sbRdata = results['resolution_data']
             sbchi2pix = results['chi2pix']
             sbpixmask_fraction = results['pixmask_fraction']
-
-            #print("sbflux.shape")
-            #print(sbflux.shape)
-            #print("sbivar.shape")
-            #print(sbivar.shape)
-            #print("sbRdata.shape")
-            #print(sbRdata.shape)
-            #print("sbchi2pix shape")
-            #print(sbchi2pix.shape)
+            sbmodelimage = results['modelimage']
 
             #now trim down the results using sbkeepmin and sbnkeep
             #insert trimmed results into the right place in larger mysubbundle arrays
@@ -459,10 +450,13 @@ def main_mpi(args, comm=None, timing=None):
 
             flux[sboffset:sboffset+sbnkeep, :] = sbflux[trim:trim + sbnkeep,:]
             ivar[sboffset:sboffset+sbnkeep, :] = sbivar[trim:trim + sbnkeep,:]
-            #Rdata has an extra dimension, for example(6,11,3022)
             Rdata[sboffset:sboffset+sbnkeep] = sbRdata[trim:trim + sbnkeep, :, :]
             chi2pix[sboffset:sboffset+sbnkeep, :] = sbchi2pix[trim:trim + sbnkeep, :]
             pixmask_fraction[sboffset:sboffset+sbnkeep, :] = sbpixmask_fraction[trim:trim + sbnkeep, :]
+            #is this correct?
+            #modelimage[sboffset:sboffset+sbnkeep, :] += sbmodelimage[trim:trim + sbnkeep, :]
+            modelimage += sbmodelimage
+
         except:
             # Log the error and increment the number of failures
             log.error("extract:  FAILED bundle {}, spectrum range {}:{}".format(b, sbkeepmin, sbkeepmin+sbnkeep))
@@ -516,10 +510,11 @@ def main_mpi(args, comm=None, timing=None):
     #writes for each subbundle?-- changed this, be careful
     io.write_frame(outmysubbundles, frame)
 
+    #i think this part is just for the header
     if args.model is not None:
         from astropy.io import fits
         #outmodel now inclues the rank number instead of the bundle number
-        fits.writeto(outmodel, results['modelimage'], header=frame.meta)
+        fits.writeto(outmodel, modelimage, header=frame.meta, overwrite=True)
 
     log.info('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         my_subbundles_keepmin, my_subbundles_keepmin + my_subbundles_nkeep, time.asctime()))
