@@ -343,7 +343,7 @@ def main_mpi(args, comm=None, timing=None):
     outroot = outmat.group(1)
 
     outdir = os.path.normpath(os.path.dirname(outroot))
-    if rank == 0:
+    if comm.rank == 0:
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -365,17 +365,14 @@ def main_mpi(args, comm=None, timing=None):
     nbundles = numfibers // fibers_per_bundle
     
     #instead of bundles lets divide into subbundles  
-    specmin_n, keepmin_n = get_subbundles(numfibers, fibers_per_bundle, subbundles_per_bundle) 
-
-    if comm is not None: 
-        list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
-    else:
-        list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=0)
+    specmin_n, keepmin_n = get_subbundles(numfibers, fibers_per_bundle, subbundles_per_bundle)  
+    list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
 
     #based on this info we can create lists of subbundles for each rank to process
     #get size of frame communicator (32 for haswell, 68 for knl)
     #now distribute the subbundles among the ranks
     #here comm is the frame communicator
+    list_of_subbundles = np.concatenate((specmin_n, keepmin_n), axis=1)
     my_subbundles = np.array_split(list_of_subbundles, nproc)[rank]
 
     #a little more bookkeeping for later
