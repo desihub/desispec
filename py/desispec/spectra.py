@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.spectra
-=====================
+================
 
 Class for dealing with a group of spectra from multiple bands
 and the associated fibermap information.
@@ -24,33 +24,41 @@ from .maskbits import specmask
 from .resolution import Resolution
 
 class Spectra(object):
-    """
-    Represents a grouping of spectra.
+    """Represents a grouping of spectra.
 
     This class contains an "extended" fibermap that has information about
     the night and exposure of each spectrum.  For each band, this class has 
     the wavelength grid, flux, ivar, mask, and resolution arrays.
 
-    Args:
-        bands: list of strings used to identify the bands.
-        wave: dictionary of arrays specifying the wavelength grid.
-        flux: dictionary of arrays specifying the flux for each spectrum.
-        ivar: dictionary of arrays specifying the inverse variance.
-        mask: (optional) dictionary of arrays specifying the bitmask.
-        resolution_data: (optional) dictionary of arrays specifying the block 
-            diagonal resolution matrix.  The object for each band must be in
-            one of the formats supported by the Resolution class constructor.
-    Options:
-        fibermap: extended fibermap to use.  If not specified, a fake one is
-            created.
-        meta (dict): Optional dictionary of arbitrary properties.
-        extra (dict): Optional dictionary of dictionaries containing extra
-            floating point arrays.  The top-level is a dictionary over bands
-            and each value is a dictionary containing string keys and values
-            which are arrays of the same size as the flux array.
-        single (bool): if True, store data in memory as single precision.
-        scores : QA scores table
-
+    Parameters
+    ----------
+    bands : :class:`list`
+        List of strings used to identify the bands.
+    wave : :class:`dict`
+        Dictionary of arrays specifying the wavelength grid.
+    flux : :class:`dict`
+        Dictionary of arrays specifying the flux for each spectrum.
+    ivar : :class:`dict`
+        Dictionary of arrays specifying the inverse variance.
+    mask : :class:`dict`, optional
+        Dictionary of arrays specifying the bitmask.
+    resolution_data : :class:`dict`, optional
+        Dictionary of arrays specifying the block diagonal resolution matrix.
+        The object for each band must be in one of the formats supported
+        by the Resolution class constructor.
+    fibermap
+        Extended fibermap to use. If not specified, a fake one is created.
+    meta : :class:`dict`, optional
+        Dictionary of arbitrary properties.
+    extra : :class:`dict`, optional
+        Optional dictionary of dictionaries containing extra
+        floating point arrays.  The top-level is a dictionary over bands
+        and each value is a dictionary containing string keys and values
+        which are arrays of the same size as the flux array.
+    single : :class:`bool`, optional
+        If ``True``, store data in memory as single precision.
+    scores
+        QA scores table.
     """
     def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None, resolution_data=None,
         fibermap=None, meta=None, extra=None, single=False, scores=None):

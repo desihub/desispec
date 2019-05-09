@@ -1,6 +1,6 @@
 """
 desispec.calibfinder
-==============
+====================
 
 Reading and selecting calibration data from $DESI_SPECTRO_CALIB using content of image headers
 """
