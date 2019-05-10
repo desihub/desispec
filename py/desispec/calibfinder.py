@@ -77,6 +77,7 @@ class CalibFinder() :
         if len(headers)==0 :
             log.error("Need at least a header")
             raise RuntimeError("Need at least a header")
+
         header=dict() 
         for other_header in headers :
             for k in other_header :
@@ -94,7 +95,9 @@ class CalibFinder() :
                 log.error("{} : {}".format(k,header[k]))
             raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
         
+        log.debug("header['CAMERA']=",header['CAMERA'])
         cameraid=header["CAMERA"].strip().lower()
+
         if "NIGHT" in header:
             dateobs = int(header["NIGHT"])
         elif "DATE-OBS" in header:
