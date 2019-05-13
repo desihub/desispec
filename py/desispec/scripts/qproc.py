@@ -26,6 +26,7 @@ from desispec.qproc.qfiberflat import qproc_apply_fiberflat,qproc_compute_fiberf
 from desispec.qproc.qsky import qproc_sky_subtraction
 from desispec.qproc.util import parse_fibers
 from desispec.qproc.qarc import process_arc
+from desispec.qproc.flavor import check_qframe_flavor
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -71,7 +72,10 @@ def parse(options=None):
                         help = 'perform as simple sky subtraction')
     parser.add_argument('--fluxcalib', action='store_true',
                         help = 'flux calibration')
-   
+    parser.add_argument('--auto-output-dir', type = str, default = '.', required = False,
+                        help = 'Output directory when running the script in auto mode')
+    parser.add_argument('--auto', action = 'store_true', help = 'auto-decide the list of processes to run based on the input. Output files are saved in an output directory which is by default the current working directory but can be modified with the option --auto-output-dir')
+    
     args = parser.parse_args(options)
 
     return args
@@ -93,6 +97,7 @@ def main(args=None):
     primary_header  = hdulist[0].header
     hdulist.close()
 
+    
     if is_input_preprocessed :
         image   = read_image(args.image)
     else :
@@ -101,8 +106,43 @@ def main(args=None):
             print("Try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_qproc --help' for more options")
             sys.exit(12)
         image = read_raw(args.image, args.camera)
-        if args.output_preproc is not None :
-            write_image(args.output_preproc, image)
+
+    
+    if args.auto :
+        log.debug("AUTOMATIC MODE")
+        try :
+            flavor = image.meta['FLAVOR'].rstrip().upper()
+            night = image.meta['NIGHT']
+            if not 'EXPID' in image.meta :
+                if 'EXPNUM' in image.meta :
+                    log.warning('using EXPNUM {} for EXPID'.format(image.meta['EXPNUM']))
+                    image.meta['EXPID'] = image.meta['EXPNUM']
+            expid = image.meta['EXPID']
+        except KeyError as e : 
+            log.error("Need at least FLAVOR NIGHT and EXPID (or EXPNUM) to run in auto mode. Retry without the --auto option.")
+            log.error(str(e))
+            sys.exit(12)
+            
+        indir = os.path.dirname(args.image)
+        if args.fibermap is None :
+            filename = '{}/fibermap-{:08d}.fits'.format(indir, expid)
+            if os.path.isfile(filename) :
+                log.debug("auto-mode: found a fibermap, {}, using it!".format(filename))
+                args.fibermap =filename
+        if args.output_preproc is None :
+            if not is_input_preprocessed : 
+                args.output_preproc = '{}/preproc-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera.lower(), expid)
+                log.debug("auto-mode: will write preproc in "+args.output_preproc)
+            else :
+                log.debug("auto-mode: will not write preproc because input is a preprocessed image")
+
+        if args.auto_output_dir != '.' :
+            if not os.path.isdir(args.auto_output_dir) :
+                log.debug("auto-mode: creating directory "+args.auto_output_dir)
+                os.makedirs(args.auto_output_dir)
+
+    if args.output_preproc is not None :
+        write_image(args.output_preproc, image)
 
     cfinder = None
 
@@ -114,6 +154,55 @@ def main(args=None):
 
     tset    = read_xytraceset(args.psf)
 
+
+
+    
+    # add fibermap
+    if args.fibermap :
+        if os.path.isfile(args.fibermap) :
+            fibermap = read_fibermap(args.fibermap)
+        else :
+            log.error("no fibermap file {}".format(fibermap))
+            fibermap = None
+    else :
+        fibermap = None
+
+
+    if args.auto  :
+        
+        log.debug("auto-mode: Need a first extraction to check the flavor of the image")
+        
+        qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
+        flavor = check_qframe_flavor(qframe,input_flavor=flavor)
+        
+        log.debug("auto-mode: flavor={} setting lists of things to run".format(flavor))
+        
+        # now set the things to do
+        if flavor == "SCIENCE":
+            
+            args.shift_psf       = True
+            args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            args.apply_fiberflat = True
+            args.skysub          = True
+            args.output_skyframe = '{}/qsky-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            args.fluxcalib       = True
+            args.outframe        = '{}/qcframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            
+        elif flavor == "ARC":
+
+            args.shift_psf       = True
+            args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            args.compute_lsf_sigma = True
+            
+        elif flavor == "FLAT":
+            args.shift_psf       = True
+            args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+            args.compute_fiberflat = '{}/qfiberflat-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
+
+
     if args.shift_psf :
 
         # using the trace shift script
@@ -121,12 +210,7 @@ def main(args=None):
         tmp_args = trace_shifts_script.parse(options=options)
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 
-    # add fibermap
-    if args.fibermap :
-        fibermap = read_fibermap(args.fibermap)
-    else :
-        fibermap = None
-
+    
     qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
 
     if tset.meta is not None :
