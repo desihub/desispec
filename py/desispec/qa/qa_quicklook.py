@@ -417,7 +417,7 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["CAMERA"] = camera
         retval["NIGHT"] = image.meta["NIGHT"]
-        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["FLAVOR"] = flavor = image.meta["FLAVOR"]
         kwargs=self.config['kwargs']
         
         if image.meta["FLAVOR"] == 'science':
@@ -435,11 +435,13 @@ class Bias_From_Overscan(MonitoringAlg):
         kwargs=self.config['kwargs']
         
         #SE: this would give the desispec version stored in DEPVER07 key of the raw simulated fits file :0.16.0.dev1830
-        param['FITS_DESISPEC_VERSION'] = image.meta['DEPVER07'] 
-        import desispec
-        from desispec import quicklook
-        param['PROC_DESISPEC_VERSION']= desispec.__version__
-        param['PROC_QuickLook_VERSION']= quicklook.__qlversion__
+        #RS: don't look for this if not using simulated files, differences in simulated headers vs. data headers cause this to crash
+        if flavor != 'zero':
+            param['FITS_DESISPEC_VERSION'] = image.meta['DEPVER07'] 
+            import desispec
+            from desispec import quicklook
+            param['PROC_DESISPEC_VERSION']= desispec.__version__
+            param['PROC_QuickLook_VERSION']= quicklook.__qlversion__
                   
         
         if 'INHERIT' in image.meta and image.meta['INHERIT']:
@@ -450,8 +452,12 @@ class Bias_From_Overscan(MonitoringAlg):
                 if key not in image.meta:
                     image.meta[key] = h0[key]
 
-        bias_overscan = [image.meta['OVERSCN1'],image.meta['OVERSCN2'],image.meta['OVERSCN3'],image.meta['OVERSCN4']]
-        
+        #RS: look for values in simulated data, if not found try finding data values
+        try:
+            bias_overscan = [image.meta['OVERSCN1'],image.meta['OVERSCN2'],image.meta['OVERSCN3'],image.meta['OVERSCN4']]
+        except:
+            bias_overscan = [image.meta['OVERSCNA'],image.meta['OVERSCNB'],image.meta['OVERSCNC'],image.meta['OVERSCND']]
+
         bias = np.mean(bias_overscan)
 
         if param is None:
@@ -544,10 +550,10 @@ class Get_RMS(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["CAMERA"] = camera
-        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["FLAVOR"] = flavor = image.meta["FLAVOR"]
         kwargs=self.config['kwargs']
         
-        if image.meta["FLAVOR"] == 'science':
+        if flavor == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
 
@@ -573,7 +579,13 @@ class Get_RMS(MonitoringAlg):
         row_data_amp4=[]
         bias_patnoise=[]
         #bias_overscan=[]        
-        for kk in ['1','2','3','4']:
+        #RS: loop through amps based on header info
+        try:
+            header_test=_parse_sec_keyword(image.meta['BIASSEC'+kk])
+            loop_amps=['1','2','3','4']
+        except:
+            loop_amps=['A','B','C','D']
+        for kk in loop_amps:
             sel=_parse_sec_keyword(image.meta['BIASSEC'+kk])
             #- Obtain counts/second in bias region
 #            pixdata=image[sel]/header["EXPTIME"]
@@ -624,7 +636,10 @@ class Get_RMS(MonitoringAlg):
             median_row_amp1.append(median)
         
         rms_median_row_amp1= np.std(median_row_amp1)
-        noise1 = image.meta['RDNOISE1']
+        try:
+            noise1 = image.meta['RDNOISE1']
+        except:
+            noise1 = image.meta['OBSRDNA']
         bias_patnoise.append(rms_median_row_amp1/noise1)
         
         median_row_amp2=[]
@@ -633,7 +648,10 @@ class Get_RMS(MonitoringAlg):
             median_row_amp2.append(median)
         
         rms_median_row_amp2= np.std(median_row_amp2)
-        noise2 = image.meta['RDNOISE2']
+        try:
+            noise2 = image.meta['RDNOISE2']
+        except:
+            noise2 = image.meta['OBSRDNB']
         bias_patnoise.append(rms_median_row_amp2/noise2)
         
         
@@ -643,7 +661,10 @@ class Get_RMS(MonitoringAlg):
             median_row_amp3.append(median)
         
         rms_median_row_amp3= np.std(median_row_amp3)
-        noise3 = image.meta['RDNOISE3']
+        try:
+            noise3 = image.meta['RDNOISE3']
+        except:
+            noise3 = image.meta['OBSRDNC']
         bias_patnoise.append(rms_median_row_amp3/noise3)
         
         median_row_amp4=[]
@@ -652,7 +673,10 @@ class Get_RMS(MonitoringAlg):
             median_row_amp4.append(median)
         
         rms_median_row_amp4= np.std(median_row_amp4)
-        noise4 = image.meta['RDNOISE4']
+        try:
+            noise4 = image.meta['RDNOISE4']
+        except:
+            noise4 = image.meta['OBSRDND']
         bias_patnoise.append(rms_median_row_amp4/noise4)
 
 
@@ -678,10 +702,12 @@ class Get_RMS(MonitoringAlg):
         #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
         if amps:
-            rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
-            rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
+            rms_over_amps = [noise1,noise2,noise3,noise4]
+            try:
+                rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
+            except:
+                rms_amps = rms_over_amps
             retval["METRICS"]={"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
-
         else:
             retval["METRICS"]={"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
@@ -1020,11 +1046,20 @@ class Count_Pixels(MonitoringAlg):
         npix_amps=[]
         litfrac_amps=[]
 
-        #- get amp boundary in pixels
         from desispec.preproc import _parse_sec_keyword
-        for kk in ['1','2','3','4']:
+        #RS: loop through amps based on header info
+        try:
+            header_test=_parse_sec_keyword(image.meta['CCDSEC'+kk])
+            loop_amps=['1','2','3','4']
+        except:
+            loop_amps=['A','B','C','D']
+        #- get amp boundary in pixels
+        for kk in loop_amps:
             ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-            rdnoise_thisamp=image.meta["RDNOISE"+kk]
+            try:
+                rdnoise_thisamp=image.meta["RDNOISE"+kk]
+            except:
+                rdnoise_thisamp=image.meta["OBSRDN"+kk]
             npix_thisamp= image.pix[ampboundary][image.pix[ampboundary] > param['CUTPIX'] * rdnoise_thisamp].size #- no of pixels above threshold
             npix_amps.append(npix_thisamp)
             size_thisamp=image.pix[ampboundary].size
