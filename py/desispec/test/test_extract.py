@@ -139,6 +139,51 @@ class TestExtract(unittest.TestCase):
         #- pixel model isn't valid for small bundles that actually overlap; don't test
         # self.assertTrue(np.allclose(model1, model2, rtol=1e-15, atol=1e-15))
 
+    def test_subbundles(self):
+        from desispec.scripts.extract import get_subbundles
+
+        #define the info we need for get_subbundles
+        numfibers = 500
+        fibers_per_bundle = 25
+        subbundles_per_bundle = 6
+        nbundles = numfibers // fibers_per_bundle
+
+        specmin_n, keepmin_n = get_subbundles(numfibers, fibers_per_bundle, subbundles_per_bundle)
+
+        #^^ this was the easy case, probably we should test corner cases
+ 
+        #for the first bundle only
+        #start right
+        self.assertTrue(specmin_n[0][0] == 0)
+        self.assertTrue(keepmin_n[0][0] == 0)
+        #keep right number
+        #left
+        self.assertTrue(specmin_n[0][1] == keepmin_n[0][1] + 1)
+        #right
+        self.assertTrue(specmin_n[-1][1] == keepmin_n[-1][1] + 1)
+        ##middle-- works for the first bundle, does not work accross boundaries
+        for i in range(1,subbundles_per_bundle-1):
+            self.assertTrue(specmin_n[i][1] == keepmin_n[i][1] + 2)
+        #start vs keep phase
+        for i in range(1,subbundles_per_bundle): 
+            self.assertTrue(specmin_n[i][0] == keepmin_n[i][0] - 1) 
+        #overlap right
+        for i in range(subbundles_per_bundle-1):     
+            self.assertTrue(specmin_n[i+1][0] == keepmin_n[i][0] + keepmin_n[i][1] - 1)
+    
+        self.assertTrue(len(specmin_n) == len(keepmin_n)) 
+
+        self.assertTrue(len(specmin_n) == (numfibers//fibers_per_bundle) * subbundles_per_bundle)
+
+        for i in range(nbundles-1):
+            for j in range(subbundles_per_bundle):
+                #check for correct offset
+                bundle_1 = specmin_n[i*subbundles_per_bundle +j][0]
+                bundle_2 = specmin_n[(i+1)*subbundles_per_bundle +j][0]
+                self.assertTrue((bundle_2 - bundle_1) == fibers_per_bundle)
+
+
+
     #- traditional and MPI versions agree when starting at spectrum 0
     def test_bundles1(self):
         self._test_bundles("desi_extract_spectra -i {} -p {} -w 7500,7530,0.75 --nwavestep 10 -f {} --bundlesize 3 -o {} -m {} -s {} -n {}", 0, 5)
