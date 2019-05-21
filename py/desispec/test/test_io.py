@@ -658,6 +658,11 @@ class TestIO(unittest.TestCase):
             x = findfile('spectra', groupname=123)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
+        #- Variations on specifying camera
+        a = findfile('cframe', night=20200317, expid=18, camera='r7')
+        b = findfile('cframe', night=20200317, expid=18, camera='r', spectrograph=7)
+        self.assertEqual(a, b)
+
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
         """

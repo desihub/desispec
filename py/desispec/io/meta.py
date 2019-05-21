@@ -118,6 +118,11 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     else:
         specprod = None
 
+    #- Normally camera is b0, r1, .. z9, but also support b,r,z + spectrograph
+    #- Combine camera + spectrograph if needed
+    if camera is not None and spectrograph is not None and len(camera) == 1:
+        camera = camera + str(spectrograph)
+
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
