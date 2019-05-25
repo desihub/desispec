@@ -110,7 +110,7 @@ def nersc_machine(name, queue):
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
     else:
-        raise RuntimeError("Unknown machine '{}'".format(name))
+        raise RuntimeError("Unknown machine '{}' choice is 'edison' , 'cori-haswell' or 'cori-knl'".format(name))
 
     return props
 
