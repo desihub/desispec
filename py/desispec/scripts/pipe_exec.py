@@ -28,13 +28,17 @@ import desispec.pipeline as pipe
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Run pipeline tasks of a "
         "single type")
-    parser.add_argument("--tasktype", required=True, default=None,
+    parser.add_argument("--tasktype", required=False, default=None,
         help="The type of the input tasks.")
+    parser.add_argument("--force", required=False, default=False,
+        action="store_true", help="Run tasks regardless of DB or file state.")
     parser.add_argument("--nodb", required=False, default=False,
         action="store_true", help="Do not use the production database.")
     parser.add_argument("--taskfile", required=False, default=None,
         help="Use a file containing the list of tasks.  If not specified, "
-        "read list of tasks from STDIN")
+        "use --task or read list of tasks from STDIN")
+    parser.add_argument("--task", required=False, default=None,
+        help="Single task to run")
 
     args = None
     if options is None:
@@ -90,6 +94,8 @@ def main(args, comm=None):
             tasklist = pipe.prod.task_read(args.taskfile)
         if comm is not None:
             tasklist = comm.bcast(tasklist, root=0)
+    elif args.task is not None:
+        tasklist = [args.task,]
     else:
         # Every process has the same STDIN contents.
         tasklist = list()
@@ -98,7 +104,22 @@ def main(args, comm=None):
 
     # Do we actually have any tasks?
     if len(tasklist) == 0:
-        warnings.warn("Task list is empty", RuntimeWarning)
+        # warnings.warn("Task list is empty", RuntimeWarning)
+        log.error("Task list is empty")
+        return 1
+
+    # Derive tasktype from tasklist if needed; otherwise filter by tasktype
+    tasktypes = [tmp.split('_')[0] for tmp in tasklist]
+    if args.tasktype is None:
+        if len(set(tasktypes)) == 1:
+            args.tasktype = tasktypes[0]
+        else:
+            log.error("Multiple task types found in input list: {}".format(
+                set(tasktypes)))
+            return 1
+
+    elif len(set(tasktypes)) > 0:
+        tasklist = [t for t in tasklist if t.startswith(args.tasktype+'_')]
 
     # run it!
 
@@ -108,12 +129,13 @@ def main(args, comm=None):
     ready = None
     done = None
     failed = None
+
     if args.nodb:
         ready, done, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
-                                           comm=comm, db=None)
+                                           comm=comm, db=None, force=args.force)
     else:
         ready, done, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
-                                           comm=comm, db=db)
+                                           comm=comm, db=db, force=args.force)
 
     t2 = datetime.datetime.now()
 

@@ -164,3 +164,4 @@ def main(args=None):
             outfile = args.outfile
 
         io.write_image(outfile, img)
+        log.info("Wrote {}".format(outfile))

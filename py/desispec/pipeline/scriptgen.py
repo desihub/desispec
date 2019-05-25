@@ -309,6 +309,14 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     from .tasks.base import task_classes, task_type
     log = get_logger()
 
+    log.debug('Input parameters:')
+    log.debug('    tasktype = {}'.format(tasktype))
+    log.debug('    len(tasklist) = {}'.format(len(tasklist)))
+    log.debug('    machine = {}'.format(machine))
+    log.debug('    queue = {}'.format(queue))
+    log.debug('    maxtime = {}'.format(maxtime))
+    log.debug('    nodeprocs = {}'.format(nodeprocs))
+
     if len(tasklist) == 0:
         raise RuntimeError("List of tasks is empty")
 
@@ -317,6 +325,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
     # Get the machine properties
     hostprops = nersc_machine(machine, queue)
+    log.debug('hostprops={}'.format(hostprops))
 
     if maxtime <= 0:
         maxtime = hostprops["maxtime"]
@@ -382,6 +391,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     log.debug("nworker = {}".format(nworker))
 
     totalnodes = (nworker * taskproc) // nodeprocs
+
     if totalnodes * nodeprocs < nworker * taskproc:
         totalnodes += 1
 
@@ -439,7 +449,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             outtasks.extend(w)
 
         ret.append( (totalnodes, nodeprocs, runtime, outtasks) )
-        log.debug("job will run on {} nodes for {} minutes on {} tasks".format(totalnodes, runtime, len(outtasks)))
+        log.debug("{} job will run on {} nodes for {} minutes on {} tasks".format(tasktype, totalnodes, runtime, len(outtasks)))
 
         if len(tasktimes) == 0:
             alldone = True
