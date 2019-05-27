@@ -342,7 +342,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
 
     # Standard stars
     exptime = frame.meta['EXPTIME']
-    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+    stdfibers = np.where(isStdStar(frame.fibermap))[0]
     stdstars = frame[stdfibers]
     #nstds = np.sum(stdfibers)
     nstds = len(stdfibers)

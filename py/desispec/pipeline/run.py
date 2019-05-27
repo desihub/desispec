@@ -295,6 +295,8 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
             if failedprocs > 1:
                 group_failcount += 1
+                log.debug('{} failed; group_failcount now {}'.format(
+                    runtasks[t], group_failcount))
 
     failcount = group_failcount
 
@@ -323,7 +325,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                     task_classes[tasktype].postprocessing(db,name,cur)
 
 
-    log.debug("rank #{} done".format(rank))
+    log.debug("rank #{} done; {} failed".format(rank, failcount))
 
     return ntask, ndone, failcount
 

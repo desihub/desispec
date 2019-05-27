@@ -262,7 +262,7 @@ class BaseTask(object):
 
         stop = time.time()
         log  = get_logger()
-        log.debug("took {} sec for {}".format(stop-start,name))
+        log.debug("took {:.3f} sec for {} {}".format(stop-start,name, state))
         return
 
 

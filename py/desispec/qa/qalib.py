@@ -502,7 +502,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
     qso_snr_mag=np.array((qso_medsnr,qso_mag))
 
     #- Calculate median SNR, associate with Mag. for STD stars
-    stdfibers=np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+    stdfibers=np.where(isStdStar(frame.fibermap))[0]
     std_medsnr=medsnr[stdfibers]
     std_mag=mags[stdfibers]
     std_snr_mag=np.array((std_medsnr,std_mag))
@@ -692,7 +692,7 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
     qsofibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
     bgsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.BGS_ANY) != 0)[0]
     mwsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.MWS_ANY) != 0)[0]
-    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+    stdfibers = np.where(isStdStar(frame.fibermap))[0]
 
     for T, fibers in (
             ['ELG', elgfibers],

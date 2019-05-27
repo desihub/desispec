@@ -131,11 +131,16 @@ def main(args) :
 
     ## check whether star fibers from args.models are consistent with fibers from fibermap
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
-    fibermap_std_indices = np.where(isStdStar(fibermap['DESI_TARGET']))[0]
+    fibermap_std_indices = np.where(isStdStar(fibermap))[0]
     if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
+        if 'DESI_TARGET' in fibermap:
+            colname = 'DESI_TARGET'
+        else:
+            colname = 'SV1_DESI_TARGET'  #- TODO: could become SV2_DESI_TARGET
+
         for i in model_fibers%500:
-            log.error("inconsistency with spectrum {}, OBJTYPE='{}', DESI_TARGET={} in fibermap".format(
-                (i, fibermap["OBJTYPE"][i], fibermap["DESI_TARGET"][i])))
+            log.error("inconsistency with spectrum {}, OBJTYPE='{}', {}={} in fibermap".format(
+                (i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i])))
         sys.exit(12)
 
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500)

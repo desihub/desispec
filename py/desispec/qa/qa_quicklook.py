@@ -1750,7 +1750,7 @@ class Integrate_Spec(MonitoringAlg):
         qsofibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
         bgsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.BGS_ANY) != 0)[0]
         mwsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.MWS_ANY) != 0)[0]
-        stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+        stdfibers = np.where(isStdStar(frame.fibermap))[0]
         skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
 
         #- Setup target fibers per program
