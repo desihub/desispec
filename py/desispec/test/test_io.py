@@ -601,35 +601,23 @@ class TestIO(unittest.TestCase):
         """
         from ..io.meta import findfile
         from ..io.download import filepath2url
-        filenames1 = list()
-        filenames2 = list()
-        kwargs = {
-            'night':'20150510',
-            'expid':2,
-            'spectrograph':3
-        }
-        for i in ('sky', 'stdstars'):
-            # kwargs['i'] = i
-            for j in ('b','r','z'):
-                kwargs['band'] = j
-                if i == 'sky':
-                    kwargs['camera'] = '{band}{spectrograph:d}'.format(**kwargs)
-                else:
-                    kwargs['camera'] = '{spectrograph:d}'.format(**kwargs)
-                filenames1.append(findfile(i,**kwargs))
-                filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                    os.environ['SPECPROD'],'exposures',kwargs['night'],
+
+        kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
+        file1 = findfile('sky', **kwargs)
+        file2 = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                    os.environ['SPECPROD'],'exposures',str(kwargs['night']),
                     '{expid:08d}'.format(**kwargs),
-                    '{i}-{camera}-{expid:08d}.fits'.format(i=i,camera=kwargs['camera'],expid=kwargs['expid'])))
-        for k,f in enumerate(filenames1):
-            self.assertEqual(os.path.basename(filenames1[k]),
-                             os.path.basename(filenames2[k]))
-            self.assertEqual(filenames1[k],filenames2[k])
-            self.assertEqual(filepath2url(filenames1[k]),
-                os.path.join('https://portal.nersc.gov/project/desi',
-                'collab','spectro','redux',os.environ['SPECPROD'],'exposures',
-                kwargs['night'],'{expid:08d}'.format(**kwargs),
-                os.path.basename(filenames2[k])))
+                    'sky-{camera}-{expid:08d}.fits'.format(**kwargs))
+
+        self.assertEqual(file1, file2)
+
+        url1 = filepath2url(file1)
+        url2 = os.path.join('https://portal.nersc.gov/project/desi',
+            'collab','spectro','redux',os.environ['SPECPROD'],'exposures',
+            str(kwargs['night']),'{expid:08d}'.format(**kwargs),
+            os.path.basename(file1))
+        self.assertEqual(url1, url2)
+
         #
         # Make sure that all required inputs are set.
         #
@@ -658,10 +646,30 @@ class TestIO(unittest.TestCase):
             x = findfile('spectra', groupname=123)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
-        #- Variations on specifying camera
-        a = findfile('cframe', night=20200317, expid=18, camera='r7')
-        b = findfile('cframe', night=20200317, expid=18, camera='r', spectrograph=7)
+        #- Camera is case insensitive
+        a = findfile('cframe', night=20200317, expid=18, camera='R7')
+        b = findfile('cframe', night=20200317, expid=18, camera='r7')
         self.assertEqual(a, b)
+
+        #- night can be int or str
+        a = findfile('cframe', night=20200317, expid=18, camera='b2')
+        b = findfile('cframe', night='20200317', expid=18, camera='b2')
+        self.assertEqual(a, b)
+
+        #- Wildcards are ok for creating glob patterns
+        a = findfile('cframe', night=20200317, expid=18, camera='r*')
+        b = findfile('cframe', night=20200317, expid=18, camera='r?')
+        c = findfile('cframe', night=20200317, expid=18, camera='*')
+        d = findfile('cframe', night=20200317, expid=18, camera='*5')
+        e = findfile('cframe', night=20200317, expid=18, camera='?5')
+
+        #- But these patterns aren't allowed
+        with self.assertRaises(ValueError):
+            a = findfile('cframe', night=20200317, expid=18, camera='r', spectrograph=7)
+        with self.assertRaises(ValueError):
+            a = findfile('cframe', night=20200317, expid=18, camera='X7')
+        with self.assertRaises(ValueError):
+            a = findfile('cframe', night=20200317, expid=18, camera='Hasselblad')
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.

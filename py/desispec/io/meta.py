@@ -118,10 +118,16 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     else:
         specprod = None
 
-    #- Check camera b0, r1, .. z9
-    if camera is not None and \
-        (len(camera) != 2 or re.match('[brz][0-9]', camera) is None):
-            raise ValueError('Camera {} should be [brz][0-9], e.g. b0, r1, z9'.format(camera))
+    if camera is not None:
+        camera = camera.lower()
+
+        #- Check camera b0, r1, .. z9
+        if spectrograph is not None and len(camera) == 1 \
+           and camera in ['b', 'r', 'z']:
+            raise ValueError('Specify camera=b0,r1..z9, not camera=b/r/z + spectrograph')
+
+        if camera != '*' and re.match('[brz\*\?][0-9\*\?]', camera) is None:
+            raise ValueError('Camera {} should be b0,r1..z9, or with ?* wildcards'.format(camera))
 
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
