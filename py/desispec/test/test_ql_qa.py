@@ -3,6 +3,8 @@ tests for Quicklook QA class and functions. It also indludes tests on low level 
 """
 
 import unittest
+import shutil
+import tempfile
 import numpy as np
 import os
 from desispec.qa import qalib
@@ -38,20 +40,26 @@ def gaussian2D(x,y,amp,xmu,ymu,xsigma,ysigma):
 
 class TestQL_QA(unittest.TestCase):
 
-    rawfile = 'test-raw-abcde.fits'
-    pixfile = 'test-pix-abcde.fits'
-    xwfile = 'test-xw-abcde.fits'
-    framefile = 'test-frame-abcde.fits'
-    fibermapfile = 'test-fibermap-abcde.fits'
-    skyfile = 'test-sky-abcde.fits'
-    qafile = 'test_qa.yaml'
+    @classmethod
+    def setUpClass(cls):
+        """Create test filenames in a unique temporary directory
+        """
+        cls.testDir = tempfile.mkdtemp()
+        cls.rawfile = os.path.join(cls.testDir, 'test-raw-abcde.fits')
+        cls.pixfile = os.path.join(cls.testDir, 'test-pix-abcde.fits')
+        cls.xwfile = os.path.join(cls.testDir, 'test-xw-abcde.fits')
+        cls.framefile = os.path.join(cls.testDir, 'test-frame-abcde.fits')
+        cls.fibermapfile = os.path.join(cls.testDir, 'test-fibermap-abcde.fits')
+        cls.skyfile = os.path.join(cls.testDir, 'test-sky-abcde.fits')
+        cls.qafile = os.path.join(cls.testDir, 'test_qa.yaml')
+        cls.qajson = os.path.join(cls.testDir, 'test_qa.json')
+        cls.qafig = os.path.join(cls.testDir, 'test_qa.png')
 
-    qajson = 'test_qa.json'
-    qafig = 'test_qa.png'
-
-    for filename in [framefile, rawfile, pixfile, xwfile, fibermapfile, skyfile, qafile, qajson, qafig]:
-        if os.path.exists(filename):
-            os.remove(filename)
+    @classmethod
+    def tearDownClass(cls):
+        """Cleanup temporary directory
+        """
+        shutil.rmtree(cls.testDir)
 
     def tearDown(self):
         self.rawimage.close()
@@ -61,17 +69,6 @@ class TestQL_QA(unittest.TestCase):
 
     #- Create some test data
     def setUp(self):
-
-        self.rawfile = 'test-raw-abcde.fits'
-        self.pixfile = 'test-pix-abcde.fits'
-        self.xwfile = 'test-xw-abcde.fits'
-        self.framefile = 'test-frame-abcde.fits'
-        self.fibermapfile = 'test-fibermap-abcde.fits'
-        self.skyfile = 'test-sky-abcde.fits'
-        self.qafile = 'test_qa.yaml'
-        self.qajson = 'test_qa.json'
-        self.qafig = 'test_qa.png'
-
         #- use specter psf for this test
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
