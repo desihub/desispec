@@ -153,7 +153,7 @@ class TaskPSF(BaseTask):
         entry = "desi_compute_psf"
         if procs > 1:
             entry = "desi_compute_psf_mpi"
-        return "{} {}".format(entry, self._option_list(name, opts))
+        return "{} {}".format(entry, " ".join(self._option_list(name, opts)))
 
 
     def _run(self, name, opts, comm, db):

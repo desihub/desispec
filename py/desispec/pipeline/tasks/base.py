@@ -262,7 +262,7 @@ class BaseTask(object):
 
         stop = time.time()
         log  = get_logger()
-        log.debug("took {} sec for {}".format(stop-start,name))
+        log.debug("took {:.3f} sec for {} {}".format(stop-start,name, state))
         return
 
 
@@ -482,11 +482,14 @@ class BaseTask(object):
             nproc = comm.size
             rank = comm.rank
 
-        # at debug level, write out the equivalent commandline that was used
+        # at info level, write out the equivalent commandline that was used
         if rank == 0:
+            start_time = time.time()
             lstr = "(run by pipeline with {} procs)".format(nproc)
             com = self.run_cli(name, opts, nproc, db=db)
-            log.debug("{}: {}".format(lstr, com))
+            log.info("{}: {}".format(lstr, com))
+
+            log.info("Starting {} at {}".format(name, time.asctime()))
 
         failed = 0
         try:
@@ -510,6 +513,11 @@ class BaseTask(object):
             if rank == 0:
                 log.error("{} of {} processes raised an exception"\
                     .format(failcount, nproc))
+
+        if rank == 0:
+            runtime = (time.time() - start_time) / 60
+            log.info("Finished {} at {} ({:.1f} min)".format(
+                name, time.asctime(), runtime))
 
         return failcount
 

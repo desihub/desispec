@@ -95,7 +95,7 @@ def main(args) :
         frame=io.read_frame(filename)
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
-        frame_starindices = np.where(isStdStar(frame_fibermap['DESI_TARGET']))[0]
+        frame_starindices = np.where(isStdStar(frame_fibermap))[0]
         
         #- Confirm that all fluxes have entries but trust targeting bits
         #- to get basic magnitude range correct

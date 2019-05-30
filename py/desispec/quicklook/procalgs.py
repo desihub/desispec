@@ -99,7 +99,7 @@ class Initialize(pas.PipelineAlg):
             skyfibers=np.where((fibermap['DESI_TARGET']&desi_mask.SKY)!=0)[0]
             general_info['SKY_FIBERID']=[skyfib for skyfib in skyfibers if minfiber <= skyfib <= maxfiber]
             general_info['NSKY_FIB']=len(general_info['SKY_FIBERID'])
-            stdfibers=np.where(isStdStar(fibermap['DESI_TARGET']))[0]
+            stdfibers=np.where(isStdStar(fibermap))[0]
             general_info['STAR_FIBERID']=[stdfib for stdfib in stdfibers if minfiber <= stdfib <= maxfiber]
 
         general_info['EXPTIME']=raw[0].header['EXPTIME']
