@@ -2,13 +2,32 @@
 desispec Change Log
 ===================
 
-0.28.1 (unreleased)
+0.29.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.29.0 (unreleased)
 -------------------
 
 * Add HPSS backup to the raw data transfer script (PR `#765`_).
 * Update :mod:`desispec.database.redshift` for latest
   changes in fiberassign tile file data model (PR `#770`_).
+* Constants, docs, and test cleanup (PR `#771`_, `#773`_, `#776`_).
+* Tune cosmics masking parameters (PR `#775`_).
+* Add desi_compute_pixmask (PR `#777`_).
+* qproc updates for more flexibility and exposure flavors (PR `#778`_).
+* Better io.findfile camera checks (PR `#780`_).
+* Support SV1_DESI_TARGET (PR `#786`_).
 
+.. _`#786`: https://github.com/desihub/desispec/pull/786
+.. _`#780`: https://github.com/desihub/desispec/pull/780
+.. _`#778`: https://github.com/desihub/desispec/pull/778
+.. _`#777`: https://github.com/desihub/desispec/pull/777
+.. _`#776`: https://github.com/desihub/desispec/pull/776
+.. _`#775`: https://github.com/desihub/desispec/pull/775
+.. _`#773`: https://github.com/desihub/desispec/pull/773
+.. _`#771`: https://github.com/desihub/desispec/pull/771
 .. _`#770`: https://github.com/desihub/desispec/pull/770
 .. _`#765`: https://github.com/desihub/desispec/pull/765
 
