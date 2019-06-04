@@ -95,7 +95,7 @@ class CalibFinder() :
                 log.error("{} : {}".format(k,header[k]))
             raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
         
-        log.debug("header['CAMERA']=",header['CAMERA'])
+        log.debug("header['CAMERA']={}".format(header['CAMERA']))
         cameraid=header["CAMERA"].strip().lower()
 
         if "NIGHT" in header:
