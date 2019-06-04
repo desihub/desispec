@@ -40,11 +40,18 @@ def check_qframe_flavor(qframe,input_flavor=None):
 
     # a very crude guess
     if median_of_median_spec > 1000 :
+        #- Very bright median = FLAT
         guessed_flavor = "FLAT"
     elif median_of_median_spec < 100 and max_of_median_spec > 1000 :
+        #- Peaks are much bigger than continuum = ARC
         guessed_flavor = "ARC"
     elif max_of_median_spec < 100 :
-        guessed_flavor = "ZERO"
+        if qframe.meta['EXPTIME'] > 0:
+            #- non-zero exposure time but no detected signal = DARK
+            guessed_flavor = "DARK"
+        else:
+            #- EXPTIME=0 sure sounds like a ZERO...
+            guessed_flavor = "ZERO"
     else :
         guessed_flavor = "SCIENCE"
 
