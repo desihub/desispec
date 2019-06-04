@@ -239,7 +239,9 @@ def main(args=None):
         tset = process_arc(qframe,tset,linelist=None,npoly=2,nbins=2)
     
     if args.output_psf is not None :
-        #write_traces_in_psf(args.psf,args.output_psf,tset)
+        for k in qframe.meta :
+            if k not in tset.meta :
+                tset.meta[k] = qframe.meta[k]
         write_xytraceset(args.output_psf,tset)
 
     if args.compute_fiberflat is not None :
