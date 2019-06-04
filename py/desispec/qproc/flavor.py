@@ -39,7 +39,7 @@ def check_qframe_flavor(qframe,input_flavor=None):
     log.info("Max    of median spectrum = {}".format(max_of_median_spec))
 
     # a very crude guess
-    if median_of_median_spec > 5000 :
+    if median_of_median_spec > 1000 :
         guessed_flavor = "FLAT"
     elif median_of_median_spec < 100 and max_of_median_spec > 1000 :
         guessed_flavor = "ARC"
@@ -47,6 +47,11 @@ def check_qframe_flavor(qframe,input_flavor=None):
         guessed_flavor = "ZERO"
     else :
         guessed_flavor = "SCIENCE"
+
+    if input_flavor.upper() == "ZERO" or input_flavor.upper() == "DARK" :
+        if guessed_flavor != "ZERO" :
+            log.warning("Keep original flavor '{}' despite guess = '{}'".format(input_flavor.upper(),guessed_flavor))
+        guessed_flavor = input_flavor.upper()
 
     log.info("FLAVOR INPUT='{}' GUESSED='{}'".format(input_flavor.upper(),guessed_flavor))
 
