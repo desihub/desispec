@@ -109,6 +109,8 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     if specprod_dir is None and 'specprod_dir' in required_inputs and outdir is None :
         specprod_dir = specprod_root()
     elif outdir is not None :
+        # if outdir is set, we will replace specprod_dir anyway
+        # but we may need the variable to be set in the meantime
         specprod_dir = "dummy"
 
     if qaprod_dir is None and 'qaprod_dir' in required_inputs:
