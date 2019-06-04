@@ -106,13 +106,17 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     if rawdata_dir is None and 'rawdata_dir' in required_inputs:
         rawdata_dir = rawdata_root()
 
-    if specprod_dir is None and 'specprod_dir' in required_inputs:
+    if specprod_dir is None and 'specprod_dir' in required_inputs and outdir is None :
         specprod_dir = specprod_root()
+    elif outdir is not None :
+        # if outdir is set, we will replace specprod_dir anyway
+        # but we may need the variable to be set in the meantime
+        specprod_dir = "dummy"
 
     if qaprod_dir is None and 'qaprod_dir' in required_inputs:
         qaprod_dir = qaprod_root(specprod_dir=specprod_dir)
 
-    if 'specprod' in required_inputs:
+    if 'specprod' in required_inputs and outdir is None :
         #- Replace / with _ in $SPECPROD so we can use it in a filename
         specprod = os.getenv('SPECPROD').replace('/', '_')
     else:

@@ -143,7 +143,7 @@ def main(args=None):
 
     if args.output_preproc is not None :
         write_image(args.output_preproc, image)
-
+    
     cfinder = None
 
     if args.psf is None :
@@ -162,7 +162,7 @@ def main(args=None):
         if os.path.isfile(args.fibermap) :
             fibermap = read_fibermap(args.fibermap)
         else :
-            log.error("no fibermap file {}".format(fibermap))
+            log.error("no fibermap file {}".format(args.fibermap))
             fibermap = None
     else :
         fibermap = None
@@ -173,8 +173,16 @@ def main(args=None):
         log.debug("auto-mode: Need a first extraction to check the flavor of the image")
         
         qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
+        
+        qframe.meta["IFLAVOR"] = flavor
+        
         flavor = check_qframe_flavor(qframe,input_flavor=flavor)
         
+        qframe.meta["FLAVOR"] = flavor
+        
+        if qframe.meta["FLAVOR"] != qframe.meta["IFLAVOR"] :
+            log.warning("auto-mode: change of flavor '{}' -> '{}'".format(qframe.meta["IFLAVOR"],qframe.meta["FLAVOR"]))
+
         log.debug("auto-mode: flavor={} setting lists of things to run".format(flavor))
         
         # now set the things to do
@@ -201,7 +209,9 @@ def main(args=None):
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.compute_fiberflat = '{}/qfiberflat-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
-
+            
+        
+        
 
     if args.shift_psf :
 
@@ -229,7 +239,9 @@ def main(args=None):
         tset = process_arc(qframe,tset,linelist=None,npoly=2,nbins=2)
     
     if args.output_psf is not None :
-        #write_traces_in_psf(args.psf,args.output_psf,tset)
+        for k in qframe.meta :
+            if k not in tset.meta :
+                tset.meta[k] = qframe.meta[k]
         write_xytraceset(args.output_psf,tset)
 
     if args.compute_fiberflat is not None :
