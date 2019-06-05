@@ -192,7 +192,8 @@ def write_xytraceset(outfile,xytraceset) :
     x.header['EXTNAME'] = "XTRACE"
     if xytraceset.meta is not None :
         for k in xytraceset.meta :
-            x.header[k]=xytraceset.meta[k]
+            if not k in x.header :
+                x.header[k]=xytraceset.meta[k]
     hdus.append(x)
     hdus.append( fits.ImageHDU(xytraceset.y_vs_wave_traceset._coeff.astype('f4'), name="YTRACE") )
     if xytraceset.xsig_vs_wave_traceset is not None : hdus.append( fits.ImageHDU(xytraceset.xsig_vs_wave_traceset._coeff.astype('f4'), name='XSIG') )
