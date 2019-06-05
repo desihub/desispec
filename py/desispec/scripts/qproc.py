@@ -255,8 +255,11 @@ def main(args=None):
         if args.input_fiberflat is None :
             if cfinder is None :
                 cfinder = CalibFinder([image.meta,primary_header])
-            args.input_fiberflat = cfinder.findfile("FIBERFLAT")
-
+            try :
+                args.input_fiberflat = cfinder.findfile("FIBERFLAT")
+            except KeyError as e :
+                log.error("no FIBERFLAT for this spectro config")
+                sys.exit(12)
         log.info("applying fiber flat {}".format(args.input_fiberflat))
         flat = read_fiberflat(args.input_fiberflat)
         qproc_apply_fiberflat(qframe,flat)
