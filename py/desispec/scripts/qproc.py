@@ -218,7 +218,10 @@ def main(args=None):
     if args.shift_psf :
 
         # using the trace shift script
-        options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","continuum":(flavor.upper()=="FLAT"),"sky":(flavor.upper()=="SCIENCE")})
+        if args.auto  :
+            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","continuum":(flavor.upper()=="FLAT"),"sky":(flavor.upper()=="SCIENCE")})
+        else :
+            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy"})
         tmp_args = trace_shifts_script.parse(options=options)
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 
