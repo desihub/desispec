@@ -175,10 +175,12 @@ def main(args=None):
         qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
         
         qframe.meta["IFLAVOR"] = flavor
+        image.meta["IFLAVOR"]  = flavor
         
         flavor = check_qframe_flavor(qframe,input_flavor=flavor)
         
         qframe.meta["FLAVOR"] = flavor
+        image.meta["FLAVOR"]  = flavor
         
         if qframe.meta["FLAVOR"] != qframe.meta["IFLAVOR"] :
             log.warning("auto-mode: change of flavor '{}' -> '{}'".format(qframe.meta["IFLAVOR"],qframe.meta["FLAVOR"]))
@@ -216,7 +218,7 @@ def main(args=None):
     if args.shift_psf :
 
         # using the trace shift script
-        options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy"})
+        options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","continuum":(flavor.upper()=="FLAT"),"sky":(flavor.upper()=="SCIENCE")})
         tmp_args = trace_shifts_script.parse(options=options)
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 
