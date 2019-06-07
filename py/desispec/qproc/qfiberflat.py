@@ -43,20 +43,37 @@ def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_
         tflux[i]=np.interp(twave,qframe.wave[i,jj],qframe.flux[i,jj])
         tivar[i]=np.interp(twave,qframe.wave[i,jj],qframe.ivar[i,jj],left=0,right=0)
    
-    # iterative loop to a absorb constant term in fiber (should have more parameters)
-    a=np.ones(tflux.shape[0])
-    for iter in range(niter_meanspec) :
-        mflux=np.median(a[:,np.newaxis]*tflux,axis=0)
-        for i in range(qframe.flux.shape[0]) :
-            a[i] = np.median(tflux[i,mflux>0]/mflux[mflux>0])
+    # iterative loop to a absorb constant term in fiber 
+    if 1 : # simple scaling per fiber 
+        a=np.ones(tflux.shape[0])
+        for iter in range(niter_meanspec) :
+            mflux=np.median(a[:,np.newaxis]*tflux,axis=0)
+            for i in range(qframe.flux.shape[0]) :
+                a[i] = np.median(tflux[i,mflux>0]/mflux[mflux>0])
 
+    else : # polynomial fit does not improve much and s more fragile
+        x=np.linspace(-1,1,tflux.shape[1])
+        pol=np.ones(tflux.shape)
+        for iteration in range(niter_meanspec) :
+            if iteration>0 :
+                for i in range(tflux.shape[0]) :
+                    jj=(mflux>0)&(tivar[i]>0)
+                    c = np.polyfit(x[jj],tflux[i,jj]/mflux[jj],1,w=mflux[jj]**2*tivar[i,jj])
+                    pol[i] = np.poly1d(c)(x)
+            mflux=np.median(pol*tflux,axis=0)
+    
     # trivial fiberflat
     fflat=tflux/(mflux+(mflux==0))
     fivar=tivar*mflux**2
     
     mask=np.zeros((fflat.shape), dtype='uint32')
     chi2=0
-    
+    # special case with test slit
+    mask_lines = ( qframe.flux.shape[0]<50 ) 
+    if mask_lines :
+        log.warning("Will interpolate over absorption lines in input continuum spectrum from illumination bench")
+        
+
     # spline fit to reject outliers and smooth the flat
     for fiber in range(fflat.shape[0]) :
         # iterative spline fit
@@ -95,7 +112,7 @@ def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_
             fflat[fiber] = 1
             fivar[fiber] = 0
         
-        # set flat in unkown edges to median value of fiber (and ivar to 0)
+        # set flat in unknown edges to median value of fiber (and ivar to 0)
         b=ii[0]
         e=ii[-1]+1
         fflat[fiber,:b]=med_flat # default
@@ -109,8 +126,19 @@ def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_
         bad=(fivar[fiber][b:e]<=min_ivar)
         good=(fivar[fiber][b:e]>min_ivar)
         fflat[fiber][b:e][bad]=np.interp(twave[b:e][bad],twave[b:e][good],fflat[fiber][b:e][good])
-        
-    
+
+        # special case with test slit
+        if mask_lines : 
+            if qframe.meta["camera"].upper()[0] == "B" :
+                jj=((twave>3900)&(twave<3960))|((twave>4350)&(twave<4440))|(twave>5800)
+            elif qframe.meta["camera"].upper()[0] == "R" :
+                jj=(twave<5750)
+            else :
+                jj=(twave<7550)|(twave>9800) 
+            if np.sum(jj)>0 :
+                njj=np.logical_not(jj)
+                fflat[fiber,jj] = np.interp(twave[jj],twave[njj],fflat[fiber,njj])
+            
     ndata=np.sum(fivar>0)
     if ndata>0 :
         chi2pdf = chi2/ndata
