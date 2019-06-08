@@ -295,6 +295,18 @@ def main(args=None):
             qframe.flux[q] *= inv_calib
             qframe.ivar[q] *= fiber_calib**2*(fiber_calib>0)
 
+        # add keyword in header giving the calibration factor applied at a reference wavelength
+        band = qframe.meta["CAMERA"].upper()[0]
+        if band == "B" :
+            refwave=4500
+        elif band == "R" :
+            refwave=6500
+        else :
+            refwave=8500
+        calvalue = np.interp(refwave,fluxcalib.wave,exposure_calib)*exptime
+        qframe.meta["CALWAVE"]=refwave
+        qframe.meta["CALVALUE"]=calvalue
+
     fibers  = parse_fibers(args.fibers)
     if fibers is None : 
         fibers = qframe.flux.shape[0]
