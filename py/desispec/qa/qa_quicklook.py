@@ -436,7 +436,7 @@ class Bias_From_Overscan(MonitoringAlg):
         
         #SE: this would give the desispec version stored in DEPVER07 key of the raw simulated fits file :0.16.0.dev1830
         #RS: don't look for this if not using simulated files, differences in simulated headers vs. data headers cause this to crash
-        if flavor != 'zero':
+        if flavor == 'science':
             param['FITS_DESISPEC_VERSION'] = image.meta['DEPVER07'] 
             import desispec
             from desispec import quicklook
@@ -581,7 +581,7 @@ class Get_RMS(MonitoringAlg):
         #bias_overscan=[]        
         #RS: loop through amps based on header info
         try:
-            header_test=_parse_sec_keyword(image.meta['BIASSEC'+kk])
+            header_test=_parse_sec_keyword(image.meta['BIASSEC1'])
             loop_amps=['1','2','3','4']
         except:
             loop_amps=['A','B','C','D']
@@ -1049,7 +1049,7 @@ class Count_Pixels(MonitoringAlg):
         from desispec.preproc import _parse_sec_keyword
         #RS: loop through amps based on header info
         try:
-            header_test=_parse_sec_keyword(image.meta['CCDSEC'+kk])
+            header_test=_parse_sec_keyword(image.meta['CCDSEC1'])
             loop_amps=['1','2','3','4']
         except:
             loop_amps=['A','B','C','D']
