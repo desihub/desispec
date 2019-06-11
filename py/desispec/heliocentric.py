@@ -157,7 +157,7 @@ ra,dec,mjd,vkms=      342.000      20       58800       23.073262
 ra,dec,mjd,vkms=      360.000      20       58800       19.006564
 
 """
-    
+    maxdiff=0.
     #read the above
     file=open(os.path.abspath(__file__))
     for line in file.readlines() :
@@ -167,10 +167,11 @@ ra,dec,mjd,vkms=      360.000      20       58800       19.006564
             dec=float(vals[2])
             mjd=float(vals[3])
             vkms_idl=float(vals[4])
-            vkms_py = heliocentric_velocity_corr(ra, dec, mjd)
-            print("RA={:d} Dec={:d} MJD={:d} vcorr -IDL={:4.2f} this={:4.2f} diff={:4.2f} km/s".format(int(ra),int(dec),int(mjd),-vkms_idl,vkms_py,vkms_idl+vkms_py))
+            vkms_py = heliocentric_velocity_corr_kms(ra, dec, mjd)
+            print("RA={:d} Dec={:d} MJD={:d} vcorr -IDL={:4.3f} this={:4.3f} diff={:4.3f} km/s".format(int(ra),int(dec),int(mjd),-vkms_idl,vkms_py,vkms_idl+vkms_py))
+            maxdiff=max(maxdiff,np.abs(vkms_idl+vkms_py))
     file.close()
-
+    print("maximum difference = ",maxdiff,"km/s")
 
 if __name__ == "__main__" :
     main()
