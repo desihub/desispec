@@ -32,9 +32,8 @@ def load_legacy_survey_filter(band,photsys) :
     Returns speclite.filters.FilterResponse object
 
     Args:
-        given_filter: given filter for which the qe is to be loaded. Desi templates/
-        files have them in uppercase, so it should be in upper case like SDSS, DECAM or
-        WISE. Speclite has lower case so are mapped here.
+        band: filter pass-band in "G","R","Z","W1","W2"
+        photsys: "N" or "S" for North (BASS+MzLS) or South (CTIO/DECam)
     """
     filternamemap=None
     if band[0].upper()=="W" : # it's WISE
