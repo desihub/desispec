@@ -320,7 +320,11 @@ def main(args) :
         model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
         model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
         fitted_model_colors[star] = model_mag1 - model_mag2
-        
+        if bands[0]=="R" :
+            model_magr = model_mag1 
+        elif bands[1]=="R" :
+            model_magr = model_mag2
+
         #- TODO: move this back into normalize_templates, at the cost of
         #- recalculating a model magnitude?
 
