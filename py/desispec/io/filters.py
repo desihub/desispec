@@ -25,3 +25,32 @@ def load_filter(given_filter):
 
     filter_response=speclite.filters.load_filter(filternamemap)
     return filter_response
+
+def load_legacy_survey_filter(band,photsys) :
+    """
+    Uses speclite.filters to load the filter transmission
+    Returns speclite.filters.FilterResponse object
+
+    Args:
+        given_filter: given filter for which the qe is to be loaded. Desi templates/
+        files have them in uppercase, so it should be in upper case like SDSS, DECAM or
+        WISE. Speclite has lower case so are mapped here.
+    """
+    filternamemap=None
+    if band[0].upper()=="W" : # it's WISE
+        filternamemap = "wise2010-{}".format(band.upper())
+    elif band.upper() in ["G","R","Z"] :
+        if photsys=="N" :
+            if band.upper() in ["G","R"] :
+                filternamemap="BASS-{}".format(band.lower())
+            else :
+                filternamemap="MzLS-z"
+        elif photsys=="S" :
+            filternamemap="decam2014-{}".format(band.lower())
+        else :
+            raise ValueError("unknown photsys '{}', known ones are 'N' and 'S'".format(photsys))
+    else :
+        raise ValueError("unknown band '{}', known ones are 'G','R','Z','W1' and 'W2'".format(photsys))
+    
+    filter_response=speclite.filters.load_filter(filternamemap)
+    return filter_response
