@@ -10,7 +10,7 @@ from .resolution import Resolution
 from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
 from .interpolation import resample_flux
 from desiutil.log import get_logger
-from .io.filters import load_filter
+from .io.filters import load_legacy_survey_filter
 from desispec import util
 from desitarget.targets import main_cmx_or_sv
 import scipy, scipy.sparse, scipy.ndimage
@@ -777,14 +777,15 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     return coef,z,chi2/ndata
 
 
-def normalize_templates(stdwave, stdflux, mag, filter_name):
+def normalize_templates(stdwave, stdflux, mag, band, photsys):
     """Returns spectra normalized to input magnitudes.
 
     Args:
         stdwave : 1D array of standard star wavelengths [Angstroms]
         stdflux : 1D observed flux
         mag : float desired magnitude
-        filter_name : filter_name, e.g. DECAM_G, DECAM_R
+        band : G,R,Z,W1 or W2
+        photsys : N or S (for Legacy Survey North or South)
 
     Returns:
         stdwave : same as input
@@ -794,7 +795,7 @@ def normalize_templates(stdwave, stdflux, mag, filter_name):
     """
     log = get_logger()
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
-    filter_response=load_filter(filter_name)
+    filter_response=load_legacy_survey_filter(band,photsys)
     apMag=filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave)
     scalefac=10**((apMag-mag)/2.5)
     log.debug('scaling mag {:.3f} to {:.3f} using scalefac {:.3f}'.format(apMag,mag, scalefac))

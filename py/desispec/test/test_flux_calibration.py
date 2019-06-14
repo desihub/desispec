@@ -17,6 +17,7 @@ from desispec.fluxcalibration import FluxCalib
 from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibration
 from desiutil.log import get_logger
 import desispec.io
+from desispec.io.filters import load_legacy_survey_filter
 from desispec.test.util import get_frame_data, get_models
 from desitarget.targetmask import desi_mask
 
@@ -75,10 +76,10 @@ class TestFluxCalibration(unittest.TestCase):
         stdwave=np.linspace(3000,11000,10000)
         stdflux=np.cos(stdwave)+100.
         mag = 20.0
-        normflux=normalize_templates(stdwave,stdflux,mag,'DECAM_R')
+        normflux=normalize_templates(stdwave,stdflux,mag,'R','S')
         self.assertEqual(stdflux.shape, normflux.shape)
 
-        r = speclite.filters.load_filter('decam2014-r')
+        r = load_legacy_survey_filter('R','S')
         rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
         self.assertAlmostEqual(rmag, mag)
 
