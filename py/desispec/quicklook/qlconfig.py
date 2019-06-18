@@ -401,14 +401,19 @@ class Config(object):
         hdulist.close()
         
         cfinder = CalibFinder([camera_header,primary_header])
-        self.calibpsf=cfinder.findfile("PSF")
+        if self.flavor == 'dark' or self.flavor == 'bias' or self.flavor == 'zero':
+            self.calibpsf=None
+        else:
+            self.calibpsf=cfinder.findfile("PSF")
 
         if self.psfid is None:
             self.psf_filename=findfile('psf',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
             self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
-        if self.flatid is None and self.flavor != 'flat':
+        if self.flavor == 'dark' or self.flavor == 'bias' or self.flavor == 'zero':
+            self.fiberflat=None
+        elif self.flatid is None and self.flavor != 'flat':
             self.fiberflat=cfinder.findfile("FIBERFLAT")
         elif self.flavor == 'flat':
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
