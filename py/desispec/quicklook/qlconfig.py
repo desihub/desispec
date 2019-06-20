@@ -129,7 +129,10 @@ class Config(object):
         if 'Initialize' in self.algorithms.keys():
             if 'PEAKS' in self.algorithms['Initialize'].keys():
                 peaks=self.algorithms['Initialize']['PEAKS']
-        paopt_initialize={'FiberMap':self.fibermap,'Camera':self.camera,'Peaks':peaks}
+        if self.flavor == 'bias' or self.flavor == 'dark':
+            paopt_initialize={'Flavor':self.flavor,'Camera':self.camera}
+        else:
+            paopt_initialize={'Flavor':self.flavor,'FiberMap':self.fibermap,'Camera':self.camera,'Peaks':peaks}
 
         if self.writepreprocfile:
             preprocfile=self.dump_pa("Preproc")
@@ -385,7 +388,9 @@ class Config(object):
         #- some global variables:
         self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
-        self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        self.fibermap=None
+        if self.flavor != 'bias' and self.flavor != 'dark':
+            self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
         hdulist=pyfits.open(self.rawfile)
         primary_header=hdulist[0].header
@@ -396,14 +401,19 @@ class Config(object):
         hdulist.close()
         
         cfinder = CalibFinder([camera_header,primary_header])
-        self.calibpsf=cfinder.findfile("PSF")
+        if self.flavor == 'dark' or self.flavor == 'bias' or self.flavor == 'zero':
+            self.calibpsf=None
+        else:
+            self.calibpsf=cfinder.findfile("PSF")
 
         if self.psfid is None:
             self.psf_filename=findfile('psf',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
             self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
-        if self.flatid is None and self.flavor != 'flat':
+        if self.flavor == 'dark' or self.flavor == 'bias' or self.flavor == 'zero':
+            self.fiberflat=None
+        elif self.flatid is None and self.flavor != 'flat':
             self.fiberflat=cfinder.findfile("FIBERFLAT")
         elif self.flavor == 'flat':
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)

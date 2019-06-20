@@ -164,6 +164,8 @@ def plot_bias_overscan(qa_dict,outfile,plotconf=None,hardplots=False):
     paname = qa_dict["PANAME"]
     params = qa_dict["PARAMS"]
     exptime = qa_dict["EXPTIME"]
+    if exptime == 0.:
+        exptime = 1.
 
     fig=plt.figure()
 

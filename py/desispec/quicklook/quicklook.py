@@ -235,13 +235,15 @@ def setup_pipeline(config):
     if config is None:
         return None
     log.debug("Reading Configuration")
+    flavor=config["Flavor"]
     if "RawImage" not in config:
         log.critical("Config is missing \"RawImage\" key.")
         sys.exit("Missing \"RawImage\" key.")
     inpname=config["RawImage"]
-    if "FiberMap" not in config:
-        log.critical("Config is missing \"FiberMap\" key.")
-        sys.exit("Missing \"FiberMap\" key.")
+    if flavor != 'bias' and flavor != 'dark':
+        if "FiberMap" not in config:
+            log.critical("Config is missing \"FiberMap\" key.")
+            sys.exit("Missing \"FiberMap\" key.")
     fibname=config["FiberMap"]
     proctype="Exposure"
     if "Camera" in config:
@@ -307,10 +309,13 @@ def setup_pipeline(config):
     hbeat.start("Reading input file {}".format(inpname))
     inp=fits.open(inpname) #- reading raw image directly from astropy.io.fits
     hbeat.start("Reading fiberMap file {}".format(fibname))
-    fibfile=fibIO.read_fibermap(fibname)
-    fibhdr=fibfile.meta
 
-    convdict={"FiberMap":fibfile}
+    convdict={}
+
+    if flavor != 'bias' and flavor != 'dark':
+        fibfile=fibIO.read_fibermap(fibname)
+        fibhdr=fibfile.meta
+        convdict["FiberMap"]=fibfile
 
     if psf_filename is not None:
         convdict["PSFFile"]=psf_filename

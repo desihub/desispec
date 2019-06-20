@@ -42,13 +42,17 @@ class Initialize(pas.PipelineAlg):
             sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         raw=args[0]
-        fibermap=kwargs['FiberMap']
+        flavor=kwargs['Flavor']
+        peaks=None
+        fibermap=None
+        if flavor != 'bias' and flavor != 'dark':
+            fibermap=kwargs['FiberMap']
+            peaks=kwargs['Peaks']
         camera=kwargs['Camera']
-        peaks=kwargs['Peaks']
 
-        return self.run_pa(raw,fibermap,camera,peaks)
+        return self.run_pa(raw,fibermap,camera,peaks,flavor)
 
-    def run_pa(self,raw,fibermap,camera,peaks):
+    def run_pa(self,raw,fibermap,camera,peaks,flavor):
         import pytz
         import datetime
         from desitarget.targetmask import desi_mask
@@ -59,9 +63,9 @@ class Initialize(pas.PipelineAlg):
 
         #- Get information from raw header
         general_info['PROGRAM']=program=raw[0].header['PROGRAM'].upper()
-        calibs=['ARC','FLAT']
+        calibs=['arcs','flat','bias','dark']
 
-        if not program in calibs:
+        if not flavor in calibs:
             general_info['AIRMASS']=raw[0].header['AIRMASS']
             general_info['SEEING']=raw[0].header['SEEING']
 
@@ -108,7 +112,7 @@ class Initialize(pas.PipelineAlg):
 #        general_info['PROC_QuickLook_VERION']=raw[0].header['PROC_QuickLook_VERSION']
 
         #- Get peaks from configuration file
-        if program != 'FLAT':
+        if not flavor != 'arcs' and flavor in calibs:
             general_info['B_PEAKS']=peaks['B_PEAKS']
             general_info['R_PEAKS']=peaks['R_PEAKS']
             general_info['Z_PEAKS']=peaks['Z_PEAKS']
