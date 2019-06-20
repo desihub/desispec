@@ -585,26 +585,29 @@ class Get_RMS(MonitoringAlg):
             loop_amps=['1','2','3','4']
         except:
             loop_amps=['A','B','C','D']
+        exptime=image.meta["EXPTIME"]
+        if exptime == 0.:
+            exptime = 1.
         for kk in loop_amps:
             sel=_parse_sec_keyword(image.meta['BIASSEC'+kk])
             #- Obtain counts/second in bias region
 #            pixdata=image[sel]/header["EXPTIME"]
-            pixdata=image.pix[sel]/image.meta["EXPTIME"]
-            if kk == '1':
+            pixdata=image.pix[sel]/exptime
+            if kk == '1' or kk == 'A':
                 for i in range(pixdata.shape[0]):
                     row_amp1=pixdata[i]
                     row_data_amp1.append(row_amp1)
-            if kk == '2':
+            if kk == '2' or kk == 'B':
                 
                 for i in range(pixdata.shape[0]):
                     row_amp2=pixdata[i]
                     row_data_amp2.append(row_amp2)
-            if kk == '3':
+            if kk == '3' or kk == 'C':
                 
                 for i in range(pixdata.shape[0]):
                     row_amp3=pixdata[i]
                     row_data_amp3.append(row_amp3)
-            if kk == '4':
+            if kk == '4' or kk == 'D':
                 
                 for i in range(pixdata.shape[0]):
                     row_amp4=pixdata[i]
@@ -617,18 +620,7 @@ class Get_RMS(MonitoringAlg):
             #bias_overscan.append(bias)
             data.append(isort)
 
-        #- Combine data from each row and take average
-        row_data_bottom=[]
-        row_data_top=[]
-        for i in range(len(row_data_amp1)):
-            row_data_lower=np.concatenate((row_data_amp1[i],row_data_amp2[i]))
-            row_data_upper=np.concatenate((row_data_amp3[i],row_data_amp4[i]))
-            row_data_bottom.append(row_data_lower)
-            row_data_top.append(row_data_upper)
-        row_data=np.concatenate((row_data_bottom,row_data_top))
-        full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
-
-
+        #- Combine data from each row per amp and take average
         # BIAS_ROW = mean_row  
         median_row_amp1=[]
         for i in range(len(row_data_amp1)):
@@ -681,6 +673,7 @@ class Get_RMS(MonitoringAlg):
 
 
         #- Calculate upper and lower bounds of 1, 2, and 3 sigma  
+        full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
         sig1_lo = np.percentile(full_data,50.-(param['PERCENTILES'][0]/2.))
         sig1_hi = np.percentile(full_data,50.+(param['PERCENTILES'][0]/2.))
         sig2_lo = np.percentile(full_data,50.-(param['PERCENTILES'][1]/2.))
@@ -706,7 +699,7 @@ class Get_RMS(MonitoringAlg):
             try:
                 rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
             except:
-                rms_amps = rms_over_amps
+                rms_amps = [image.meta['OBSRDNA'],image.meta['OBSRDNB'],image.meta['OBSRDNC'],image.meta['OBSRDND']]
             retval["METRICS"]={"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
         else:
             retval["METRICS"]={"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
