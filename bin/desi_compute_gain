@@ -118,7 +118,7 @@ if args.outfile is not None :
 
 # Generate a table to save the gain values
 gain_tbl = Table()
-gain_tbl['AMP'] = args.amplifiers
+gain_tbl['AMP'] = [amp for amp in args.amplifiers]
 gain_tbl['GAIN'] = np.zeros(len(gain_tbl))
 gain_tbl['ERRGAIN'] = np.zeros(len(gain_tbl))
 
@@ -316,11 +316,9 @@ for a,amp in enumerate(args.amplifiers) :
         plt.legend(fontsize="small")
     # end of loop on amplifiers
 
-    # Fill the gain table
-
 
 if args.outgain is not None:
-    import pdb;  pdb.set_trace()
+    gain_tbl.write(args.outgain, format='ascii.fixed_width', overwrite=True)
 
 
 if ofile is not None :
