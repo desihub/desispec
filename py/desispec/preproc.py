@@ -417,6 +417,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     for amp in amp_ids :
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
+        # JXP
+        ii = _parse_sec_keyword(header['ORSEC'+amp])
 
         if nogain :
             gain = 1.
@@ -509,9 +511,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         jj = _parse_sec_keyword(header['DATASEC'+amp])
 
         data = rawimage[jj].copy()
-        import pdb; pdb.set_trace()
+        # JXP
+        '''
         for k in range(nrows) :
             data[k] -= overscan[k]
+        '''
+        import pdb; pdb.set_trace()
+        oscanimg = np.outer(np.median(overscan, axis=0), np.ones(data.shape[0]))
+        data -= oscanimg
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
