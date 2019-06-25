@@ -448,13 +448,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
-        overscan_row = rawimage[ov_row].copy()
+        raw_overscan_row = rawimage[ov_row].copy()
+        overscan_row = np.zeros_like(raw_overscan_row)
 
         # Remove overscan_col from overscan_row
-        overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
-        for row in range(overscan_row.shape[0]):
-            o,r = _overscan(overscan_squared[row])
-            overscan_row[row] -= o
+        raw_overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
+        for row in range(raw_overscan_row.shape[0]):
+            o,r = _overscan(raw_overscan_squared[row])
+            overscan_row[row] = raw_overscan_row[row] - o
 
         # Now remove the overscan_col
         nrows=raw_overscan_col.shape[0]
