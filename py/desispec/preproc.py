@@ -509,6 +509,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         jj = _parse_sec_keyword(header['DATASEC'+amp])
 
         data = rawimage[jj].copy()
+        import pdb; pdb.set_trace()
         for k in range(nrows) :
             data[k] -= overscan[k]
 
