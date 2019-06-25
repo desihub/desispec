@@ -266,7 +266,7 @@ def get_calibration_image(cfinder,keyword,entry) :
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            orig_over=False, overscan_per_row=False):
+            orig_over=False, overscan_per_row=False, debug=False):
 
     '''
     preprocess image using metadata in header
@@ -539,6 +539,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data -= dark[kk]
 
         image[kk] = data*gain
+        # Debug?
+        if debug:
+            import pdb; pdb.set_trace()
 
 
     if not nocrosstalk :
