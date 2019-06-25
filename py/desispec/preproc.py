@@ -263,7 +263,10 @@ def get_calibration_image(cfinder,keyword,entry) :
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
-def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,ccd_calibration_filename=None, nocrosstalk=False, nogain=False):
+def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
+            bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
+            ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
+            orig_over=False):
 
     '''
     preprocess image using metadata in header
@@ -416,9 +419,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
 
     for amp in amp_ids :
-        ii = _parse_sec_keyword(header['BIASSEC'+amp])
-        # JXP
-        ii = _parse_sec_keyword(header['ORSEC'+amp])
+        if orig_over:
+            ii = _parse_sec_keyword(header['BIASSEC'+amp])
+        else:
+            ii = _parse_sec_keyword(header['ORSEC'+amp])
 
         if nogain :
             gain = 1.
@@ -512,13 +516,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         data = rawimage[jj].copy()
         # JXP
-        '''
-        for k in range(nrows) :
-            data[k] -= overscan[k]
-        '''
-        #import pdb; pdb.set_trace()
-        oscanimg = np.outer(np.ones(data.shape[0]), np.median(overscan_image, axis=0))
-        data -= oscanimg
+        if orig_over:
+            for k in range(nrows) :
+                data[k] -= overscan[k]
+        else:
+            oscanimg = np.outer(np.ones(data.shape[0]), np.median(overscan_image, axis=0))
+            data -= oscanimg
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
