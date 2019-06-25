@@ -516,7 +516,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         for k in range(nrows) :
             data[k] -= overscan[k]
         '''
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
         oscanimg = np.outer(np.ones(data.shape[0]), np.median(overscan_image, axis=0))
         data -= oscanimg
 
