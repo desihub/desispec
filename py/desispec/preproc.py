@@ -517,7 +517,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data[k] -= overscan[k]
         '''
         import pdb; pdb.set_trace()
-        oscanimg = np.outer(np.median(overscan, axis=0), np.ones(data.shape[0]))
+        oscanimg = np.outer(np.ones(data.shape[0]), np.median(overscan_image, axis=0))
         data -= oscanimg
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
