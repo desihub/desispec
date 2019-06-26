@@ -5,7 +5,8 @@ desispec Change Log
 0.29.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Add gain output option to desi_compute_gain
+* Modify overscan subtraction algorithm in desi.preproc.preproc
 
 0.29.0 (unreleased)
 -------------------

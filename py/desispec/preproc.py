@@ -263,7 +263,10 @@ def get_calibration_image(cfinder,keyword,entry) :
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
-def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,ccd_calibration_filename=None, nocrosstalk=False, nogain=False):
+def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
+            bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
+            ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
+            overscan_per_row=False, use_overscan_row=True):
 
     '''
     preprocess image using metadata in header
@@ -284,6 +287,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         True: use default calibration data for that night
         ndarray: use that array
         filename (str or unicode): read HDU 0 and use that
+
+    Optional overscan features:
+        overscan_per_row : bool,  Subtract the overscan_col values
+            row by row from the data.
+        use_overscan_row : bool,  Subtract off the overscan_row
+            from the data (default: True).  Requires ORSEC in
+            the Header
 
     Optional background subtraction with median filtering if bkgsub=True
 
@@ -383,8 +393,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     readnoise = np.zeros_like(image)
 
-
-
     #- Load mask
     mask = get_calibration_image(cfinder,"MASK",mask)
 
@@ -413,10 +421,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
 
-
-
     for amp in amp_ids :
-        ii = _parse_sec_keyword(header['BIASSEC'+amp])
+        # Grab the sections
+        ov_col = _parse_sec_keyword(header['BIASSEC'+amp])
+        if 'ORSEC'+amp in header.keys():
+            ov_row = _parse_sec_keyword(header['ORSEC'+amp])
+        else:
+            use_overscan_row = False
+
 
         if nogain :
             gain = 1.
@@ -444,31 +456,43 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 saturlev = 200000
                 log.warning('Missing keyword SATURLEV{} in header and nothing in calib data; using 200000'.format(amp,saturlev))
 
-        overscan_image = rawimage[ii].copy()
-        nrows=overscan_image.shape[0]
+        # Generate the overscan images
+        raw_overscan_col = rawimage[ov_col].copy()
+
+        if use_overscan_row:
+            raw_overscan_row = rawimage[ov_row].copy()
+            overscan_row = np.zeros_like(raw_overscan_row)
+
+            # Remove overscan_col from overscan_row
+            raw_overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
+            for row in range(raw_overscan_row.shape[0]):
+                o,r = _overscan(raw_overscan_squared[row])
+                overscan_row[row] = raw_overscan_row[row] - o
+
+        # Now remove the overscan_col
+        nrows=raw_overscan_col.shape[0]
         log.info("nrows in overscan=%d"%nrows)
-        overscan = np.zeros(nrows)
+        overscan_col = np.zeros(nrows)
         rdnoise  = np.zeros(nrows)
-        overscan_per_row = True
-        if cfinder and cfinder.haskey('OVERSCAN'+amp) and cfinder.value("OVERSCAN"+amp).upper()=="PER_ROW" :
+        if (cfinder and cfinder.haskey('OVERSCAN'+amp) and cfinder.value("OVERSCAN"+amp).upper()=="PER_ROW") or overscan_per_row:
             log.info("Subtracting overscan per row for amplifier %s of camera %s"%(amp,camera))
             for j in range(nrows) :
-                if np.isnan(np.sum(overscan_image[j])) :
+                if np.isnan(np.sum(overscan_col[j])) :
                     log.warning("NaN values in row %d of overscan of amplifier %s of camera %s"%(j,amp,camera))
                     continue
-                o,r =  _overscan(overscan_image[j])
+                o,r =  _overscan(raw_overscan_col[j])
                 #log.info("%d %f %f"%(j,o,r))
-                overscan[j]=o
+                overscan_col[j]=o
                 rdnoise[j]=r
         else :
             log.info("Subtracting average overscan for amplifier %s of camera %s"%(amp,camera))
-            o,r =  _overscan(overscan_image)
-            overscan += o
+            o,r =  _overscan(raw_overscan_col)
+            overscan_col += o
             rdnoise  += r
 
         rdnoise *= gain
         median_rdnoise  = np.median(rdnoise)
-        median_overscan = np.median(overscan)
+        median_overscan = np.median(overscan_col)
         log.info("Median rdnoise and overscan= %f %f"%(median_rdnoise,median_overscan))
 
         kk = _parse_sec_keyword(header['CCDSEC'+amp])
@@ -509,8 +533,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         jj = _parse_sec_keyword(header['DATASEC'+amp])
 
         data = rawimage[jj].copy()
-        for k in range(nrows) :
-            data[k] -= overscan[k]
+        # Subtract columns
+        for k in range(nrows):
+            data[k] -= overscan_col[k]
+        # And now the rows
+        if use_overscan_row:
+            oimg_row = np.outer(np.ones(data.shape[0]), np.median(overscan_row, axis=0))
+            data -= oimg_row
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
@@ -522,7 +551,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data -= dark[kk]
 
         image[kk] = data*gain
-
 
     if not nocrosstalk :
         #- apply cross-talk
