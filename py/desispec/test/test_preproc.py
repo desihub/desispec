@@ -147,7 +147,27 @@ class TestPreProc(unittest.TestCase):
 
         #- Confirm that all regions were correctly offset
         assert not np.any(self.rawimage == 0.0)
-            
+
+    def test_preproc_no_orsec(self):
+        # Strip out ORSEC
+        old_header = self.header.copy()
+        old_image = self.rawimage.copy()
+        for amp in ('1', '2', '3', '4'):
+            old_header.pop('ORSEC{}'.format(amp))
+            xy = _parse_sec_keyword(self.header['DATASEC'+amp])
+            old_image[xy] -= np.int32(self.offset_row[amp])
+        #
+        image = preproc(old_image, old_header, primary_header = self.primary_header)
+        self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
+        self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
+        for amp in ('1', '2', '3', '4'):
+            pix = image.pix[self.quad[amp]]
+            rdnoise = np.median(image.readnoise[self.quad[amp]])
+            npixover = self.ny * self.noverscan
+            self.assertAlmostEqual(np.mean(pix), 0.0, delta=1)  # Using np.int32 pushed this to 1
+            self.assertAlmostEqual(np.std(pix), self.rdnoise[amp], delta=0.2)
+            self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
+
     def test_preproc(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))

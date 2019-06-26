@@ -266,7 +266,7 @@ def get_calibration_image(cfinder,keyword,entry) :
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            orig_over=False, overscan_per_row=False, debug=False):
+            overscan_per_row=False, use_overscan_row=True):
 
     '''
     preprocess image using metadata in header
@@ -287,7 +287,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         True: use default calibration data for that night
         ndarray: use that array
         filename (str or unicode): read HDU 0 and use that
-        overscan_per_row : bool,  mainly for running outside of script
+
+    Optional overscan features:
+        overscan_per_row : bool,  Subtract the overscan_col values
+            row by row from the data.
+        use_overscan_row : bool,  Subtract off the overscan_row
+            from the data (default: True).  Requires ORSEC in
+            the Header
 
     Optional background subtraction with median filtering if bkgsub=True
 
@@ -415,10 +421,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
 
-
     for amp in amp_ids :
+        # Grab the sections
         ov_col = _parse_sec_keyword(header['BIASSEC'+amp])
-        ov_row = _parse_sec_keyword(header['ORSEC'+amp])
+        if 'ORSEC'+amp in header.keys():
+            ov_row = _parse_sec_keyword(header['ORSEC'+amp])
+        else:
+            use_overscan_row = False
+
 
         if nogain :
             gain = 1.
@@ -448,14 +458,16 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
-        raw_overscan_row = rawimage[ov_row].copy()
-        overscan_row = np.zeros_like(raw_overscan_row)
 
-        # Remove overscan_col from overscan_row
-        raw_overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
-        for row in range(raw_overscan_row.shape[0]):
-            o,r = _overscan(raw_overscan_squared[row])
-            overscan_row[row] = raw_overscan_row[row] - o
+        if use_overscan_row:
+            raw_overscan_row = rawimage[ov_row].copy()
+            overscan_row = np.zeros_like(raw_overscan_row)
+
+            # Remove overscan_col from overscan_row
+            raw_overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
+            for row in range(raw_overscan_row.shape[0]):
+                o,r = _overscan(raw_overscan_squared[row])
+                overscan_row[row] = raw_overscan_row[row] - o
 
         # Now remove the overscan_col
         nrows=raw_overscan_col.shape[0]
@@ -522,10 +534,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         data = rawimage[jj].copy()
         # Subtract columns
-        for k in range(nrows) :
+        for k in range(nrows):
             data[k] -= overscan_col[k]
         # And now the rows
-        if not orig_over:
+        if use_overscan_row:
             oimg_row = np.outer(np.ones(data.shape[0]), np.median(overscan_row, axis=0))
             data -= oimg_row
 
@@ -539,10 +551,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data -= dark[kk]
 
         image[kk] = data*gain
-        # Debug?
-        if debug:
-            import pdb; pdb.set_trace()
-
 
     if not nocrosstalk :
         #- apply cross-talk
