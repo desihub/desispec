@@ -283,7 +283,7 @@ Where supported commands are:
         """Internal function to parse options passed to desi_night.
         """
         parser.add_argument("--nersc", required=False, default=None,
-            help="write a script for this NERSC system (edison | cori-haswell "
+            help="write a script for this NERSC system (cori-haswell "
             "| cori-knl).  Default uses $NERSC_HOST")
 
         parser.add_argument("--shell", required=False, default=False,

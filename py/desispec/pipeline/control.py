@@ -463,7 +463,7 @@ def dryrun(tasks, nersc=None, nersc_queue="regular", nersc_maxtime=0,
     Args:
         tasks (list): list of tasks to run.
         nersc (str): if not None, the name of the nersc machine to use
-            (edison | cori-haswell | cori-knl).
+            (cori-haswell | cori-knl).
         nersc_queue (str): the name of the queue to use
             (regular | debug | realtime).
         nersc_maxtime (int): if specified, restrict the runtime to this
@@ -531,7 +531,7 @@ def gen_scripts(tasks_by_type, nersc=None, nersc_queue="regular",
         tasks_by_type (dict): each key is the task type and the value is
             a list of tasks.
         nersc (str): if not None, the name of the nersc machine to use
-            (edison | cori-haswell | cori-knl).
+            (cori-haswell | cori-knl).
         nersc_queue (str): the name of the queue to use
             (regular | debug | realtime).
         nersc_maxtime (int): if specified, restrict the runtime to this
@@ -632,7 +632,7 @@ def script(taskfile, nersc=None, nersc_queue="regular",
         taskfile (str): read tasks from this file (if not specified,
             read from STDIN).
         nersc (str): if not None, the name of the nersc machine to use
-            (edison | cori-haswell | cori-knl).
+            (cori-haswell | cori-knl).
         nersc_queue (str): the name of the queue to use
             (regular | debug | realtime).
         nersc_maxtime (int): if specified, restrict the runtime to this
@@ -751,7 +751,7 @@ def run(taskfile, nosubmitted=False, depjobs=None, nersc=None,
             been submitted.
         depjobs (list): list of job ID dependencies.
         nersc (str): if not None, the name of the nersc machine to use
-            (edison | cori-haswell | cori-knl).
+            (cori-haswell | cori-knl).
         nersc_queue (str): the name of the queue to use
             (regular | debug | realtime).
         nersc_maxtime (int): if specified, restrict the runtime to this
@@ -800,7 +800,7 @@ def run(taskfile, nosubmitted=False, depjobs=None, nersc=None,
             debug=debug)
 
         log.info("wrote scripts {}".format(scripts))
-        
+
         deps = None
         slurm = False
         if nersc is not None:
@@ -850,7 +850,7 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
             been submitted.
         depjobs (list): list of job ID dependencies.
         nersc (str): if not None, the name of the nersc machine to use
-            (edison | cori-haswell | cori-knl).
+            (cori-haswell | cori-knl).
         nersc_queue (str): the name of the queue to use
             (regular | debug | realtime).
         nersc_maxtime (int): if specified, restrict the runtime to this
@@ -876,7 +876,7 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
         list: the job IDs from the final step in the chain.
 
     """
-    
+
     log = get_logger()
 
     machprops = None
@@ -954,7 +954,7 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
             nodb=nodb,
             out=out,
             debug=debug)
-        if scripts is not None and len(scripts)>0 : 
+        if scripts is not None and len(scripts)>0 :
             log.info("wrote scripts {}".format(scripts))
     else:
         # Generate individual scripts

@@ -368,7 +368,7 @@ class BaseTask(object):
     def _run_max_mem(self):
         """Return the default value for fully packed edison use.
         """
-        return 2.5
+        return 0.0
 
 
     def run_max_mem(self):

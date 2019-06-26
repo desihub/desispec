@@ -331,7 +331,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
             "matching these patterns will be examined.")
         parser.add_argument("--force-spec-done", action="store_true",
             help="force setting spectra file to state done if file exists independently of state of parent cframes.")
-        
+
         args = parser.parse_args(sys.argv[2:])
 
         dbpath = io.get_pipe_database()
@@ -408,7 +408,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
 
         """
         parser.add_argument("--nersc", required=False, default=None,
-            help="write a script for this NERSC system (edison | cori-haswell "
+            help="write a script for this NERSC system (cori-haswell "
             "| cori-knl).  Default uses $NERSC_HOST")
 
         parser.add_argument("--shell", required=False, default=False,
@@ -695,7 +695,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be generated.")
-        
+
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states. This argument is "
             "passed to chain (see desi_pipe chain --help for more info).")
@@ -715,7 +715,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
                 return
             else :
                 args.states="waiting,ready"
-        
+
         self._check_nersc_host(args)
 
         allnights = io.get_nights(strip_path=True)
@@ -735,7 +735,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
         states = args.states
         if states is not None :
             states = states.split(",")
-        
+
         for nt in nights:
             previous = None
             log.info("Submitting processing chains for night {}".format(nt))
@@ -791,12 +791,16 @@ Where supported commands are (use desi_pipe <command> --help for details):
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
 
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
         args = parser.parse_args(sys.argv[2:])
 
         db = None
         if not args.nodb:
             dbpath = io.get_pipe_database()
-            db = pipe.db.DataBase(dbpath, "r")
+            db = pipe.load_db(dbpath, mode="r", user=args.db_postgres_user)
 
         tasktypes = pipe.db.all_task_types()
 

@@ -40,7 +40,7 @@ class TaskSpectra(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["nside","pixel"]
         self._name_formats = ["d","d"]
-    
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -48,7 +48,7 @@ class TaskSpectra(BaseTask):
         return [ findfile("spectra", night=None, expid=None,
                           camera=None, groupname=props["pixel"], nside=props["nside"], band=None,
                           spectrograph=None) ]
-    
+
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
@@ -60,7 +60,7 @@ class TaskSpectra(BaseTask):
     def run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 15 # in general faster but convergence slower for some realizations
+        return 15
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.
@@ -68,13 +68,13 @@ class TaskSpectra(BaseTask):
         return {}
 
     def _option_list(self, name, opts, db):
-        
+
         # we do need db access for spectra
         if db is None :
             log = get_logger()
             log.error("we do need db access for spectra")
             raise RuntimeError("we do need db access for spectra")
-        
+
         from .base import task_classes, task_type
         # get pixel
         props = self.name_split(name)
@@ -88,25 +88,25 @@ class TaskSpectra(BaseTask):
                 entry_and_band = entry.copy()
                 entry_and_band["band"] = band
                 # this will match cframes with same expid and spectro
-                taskname = task_classes["cframe"].name_join(entry_and_band) 
+                taskname = task_classes["cframe"].name_join(entry_and_band)
                 filename = task_classes["cframe"].paths(taskname)[0]
                 cframes.append(filename)
-                
+
         options = {}
         options["infiles"] = cframes
         options["outfile"] = self.paths(name)[0]
         options["healpix"] = props["pixel"]
         options["nside"]   = props["nside"]
-                
+
         return option_list(options)
-    
+
     def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         entry = "desi_update_spectra"
         optlist = self._option_list(name, opts, db)
         return "{} {}".format(entry, " ".join(optlist))
-        
+
     def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
@@ -115,7 +115,7 @@ class TaskSpectra(BaseTask):
         args = update_spectra.parse(optlist)
         update_spectra.main(args)
         return
-    
+
     def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         props=self.name_split(name)
