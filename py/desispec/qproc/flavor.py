@@ -26,7 +26,7 @@ def check_qframe_flavor(qframe,input_flavor=None):
     rflux=np.zeros(qframe.flux.shape)
     for i in range(rflux.shape[0]) :
         jj=(qframe.ivar[i]>0)
-        if jj.size>0 :
+        if np.sum(jj)>0 :
             rflux[i]=np.interp(mwave,qframe.wave[i,jj],qframe.flux[i,jj],left=0,right=0)
 
     # median of resampled spectra
