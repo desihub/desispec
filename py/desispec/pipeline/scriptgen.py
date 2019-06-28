@@ -385,8 +385,11 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     ret = list()
 
     # Create jobs until we run out of tasks.  We assume that every job will
-    # have some startup cost that impacts all workers.
-    startup_time = hostprops["startup"]
+    # have some startup cost that impacts all workers.  We further scale the
+    # machine startup time by the job size, since larger jobs will take longer
+    # to start python.
+    startup_scale = maxnodes // 200
+    startup_time = (1.0 + startup_scale) * hostprops["startup"]
 
     alldone = False
     while not alldone:

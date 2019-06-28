@@ -84,7 +84,7 @@ class TaskStarFit(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 15 # less than 4 min on edison but can vary quite a bit
+        return 10
 
 
     def _run_defaults(self):

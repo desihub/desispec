@@ -80,7 +80,7 @@ class TaskPSF(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 15 # convergence slower for some realizations
+        return 12 # convergence slower for some realizations
 
 
     def _run_defaults(self):
@@ -100,7 +100,7 @@ class TaskPSF(BaseTask):
         # if that directory does not exist, use a default NERSC
         # location.
         opts["lamplines"] = \
-            "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_desi.txt"
+            "/global/common/software/desi/cori/desiconda/current/code/specex/master/data/specex_linelist_desi.txt"
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
             exefile = os.path.join(path, "desi_psf_fit")

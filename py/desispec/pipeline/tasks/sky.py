@@ -76,7 +76,7 @@ class TaskSky(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 2 # less than a minute (for the simple sky fit)
+        return 2
 
 
     def _run_defaults(self):

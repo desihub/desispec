@@ -453,7 +453,7 @@ def cleanup(db, tasktypes, failed=False, submitted=False, expid=None):
 
 def dryrun(tasks, nersc=None, nersc_queue="regular", nersc_maxtime=0,
     nersc_maxnodes=0, nersc_shifter=None, mpi_procs=1, mpi_run="",
-    procs_per_node=0, nodb=False, db_postgres_user="desidev_ro"):
+    procs_per_node=0, nodb=False, db_postgres_user="desidev_ro", force=False):
     """Print equivalent command line jobs.
 
     For the specified tasks, print the equivalent stand-alone commands
@@ -481,6 +481,8 @@ def dryrun(tasks, nersc=None, nersc_queue="regular", nersc_maxtime=0,
         nodb (bool): if True, do not use the production DB.
         db_postgres_user (str): If using postgres, connect as this
             user for read-only access"
+        force (bool): if True, print commands for all tasks, not just the ones
+            in a ready state.
 
     """
     tasks_by_type = pipedb.task_sort(tasks)
@@ -499,7 +501,7 @@ def dryrun(tasks, nersc=None, nersc_queue="regular", nersc_maxtime=0,
             ppn = mpi_procs
         for tt, tlist in tasks_by_type.items():
             piperun.dry_run(tt, tlist, opts, mpi_procs,
-                ppn, db=db, launch="mpirun -n", force=False)
+                ppn, db=db, launch="mpirun -n", force=force)
     else:
         # Running at NERSC
         hostprops = scriptgen.nersc_machine(nersc,
@@ -514,7 +516,7 @@ def dryrun(tasks, nersc=None, nersc_queue="regular", nersc_maxtime=0,
             for (jobnodes, jobppn, jobtime, jobtasks) in joblist:
                 jobprocs = jobnodes * jobppn
                 piperun.dry_run(tt, jobtasks, opts, jobprocs,
-                    jobppn, db=db, launch=launch, force=False)
+                    jobppn, db=db, launch=launch, force=force)
     return
 
 

@@ -76,7 +76,7 @@ class TaskTraceShift(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 1 # 30 sec per camera per process on edison, set it to 1min for margins, no multiprocessing for this task
+        return 1
 
 
     def _run_defaults(self):

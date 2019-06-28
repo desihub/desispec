@@ -35,7 +35,7 @@ class TaskRedshift(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["nside","pixel"]
         self._name_formats = ["d","d"]
-    
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -45,7 +45,7 @@ class TaskRedshift(BaseTask):
         zbest = findfile("zbest", groupname=hpix, nside=nside)
         redrock = findfile("redrock", groupname=hpix, nside=nside)
         return [zbest, redrock]
-    
+
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
@@ -61,7 +61,7 @@ class TaskRedshift(BaseTask):
     def run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 15 # in general faster but convergence slower for some realizations
+        return 15
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.
@@ -74,24 +74,24 @@ class TaskRedshift(BaseTask):
         This includes appending the filenames and incorporating runtime
         options.
         """
-        
+
         zbestfile, redrockfile = self.paths(name)
         outdir  = os.path.dirname(zbestfile)
-        
+
         options = {}
         options["output"] = redrockfile
         options["zbest"] = zbestfile
         options.update(opts)
-        
+
         optarray = option_list(options)
-        
+
         deps = self.deps(name)
         specfile = task_classes["spectra"].paths(deps["infile"])[0]
         optarray.append(specfile)
-        
+
         return optarray
 
-    
+
     def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
@@ -101,7 +101,7 @@ class TaskRedshift(BaseTask):
 
     def _run(self, name, opts, comm, db):
         """See BaseTask.run.
-        """        
+        """
         optlist = self._option_list(name, opts)
         rrdesi(options=optlist, comm=comm)
         return

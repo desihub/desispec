@@ -475,6 +475,10 @@ Where supported commands are (use desi_pipe <command> --help for details):
             default="desidev_ro", help="If using postgres, connect as this "
             "user for read-only access")
 
+        parser.add_argument("--force", required=False, default=False,
+            action="store_true", help="print commands for all tasks, not"
+            " only the ready ones")
+
         args = parser.parse_args(sys.argv[2:])
 
         self._check_nersc_host(args)
@@ -491,7 +495,8 @@ Where supported commands are (use desi_pipe <command> --help for details):
             mpi_procs=args.mpi_procs,
             mpi_run=args.mpi_run,
             nodb=args.nodb,
-            user=args.db_postgres_user)
+            db_postgres_user=args.db_postgres_user,
+            force=args.force)
 
         return
 

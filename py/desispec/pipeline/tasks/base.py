@@ -366,13 +366,16 @@ class BaseTask(object):
 
 
     def _run_max_mem(self):
-        """Return the default value for fully packed edison use.
+        """Return zero (i.e. not a limit)
         """
         return 0.0
 
 
     def run_max_mem(self):
         """Maximum memory in GB per process required.
+
+        If zero is returned, it indicates that the memory requirement is so
+        small that the code can run fully-packed on any system.
 
         Returns:
             float: the required RAM in GB per process.

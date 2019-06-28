@@ -77,7 +77,7 @@ class TaskExtract(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 10 # 8 minute per bundle of 25 fibers on edison, but can be slower
+        return 6
 
 
     def _run_defaults(self):
