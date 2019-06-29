@@ -538,8 +538,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data[k] -= overscan_col[k]
         # And now the rows
         if use_overscan_row:
-            oimg_row = np.outer(np.ones(data.shape[0]), np.median(overscan_row, axis=0))
-            data -= oimg_row
+            #oimg_row = np.outer(np.ones(data.shape[0]), np.median(overscan_row, axis=0))
+            o,r = _overscan(overscan_row)
+            data -= o
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
