@@ -38,8 +38,18 @@ def read_raw(filename, camera, **kwargs):
 
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
-    primary_header= fx[0].header
+    hdu=0
+    while True :
+        primary_header= fx[hdu].header
+        if "EXPTIME" in primary_header : break
 
+        if len(fx)>hdu+1 :
+            log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
+            hdu +=1 
+        else :
+            log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
+            raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
+    
     blacklist = ["EXTEND","SIMPLE","NAXIS1","NAXIS2","CHECKSUM","DATASUM","XTENSION","EXTNAME","COMMENT"]
     if 'INHERIT' in header and header['INHERIT']:
         h0 = fx[0].header
