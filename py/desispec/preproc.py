@@ -10,6 +10,8 @@ import yaml
 import os.path
 from pkg_resources import resource_exists, resource_filename
 
+from scipy import signal
+
 from desispec.image import Image
 from desispec import cosmics
 from desispec.maskbits import ccdmask
@@ -266,7 +268,7 @@ def get_calibration_image(cfinder,keyword,entry) :
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            overscan_per_row=False, use_overscan_row=True):
+            overscan_per_row=False, use_overscan_row=True, use_savgol=True):
 
     '''
     preprocess image using metadata in header
@@ -538,9 +540,19 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data[k] -= overscan_col[k]
         # And now the rows
         if use_overscan_row:
-            #oimg_row = np.outer(np.ones(data.shape[0]), np.median(overscan_row, axis=0))
-            o,r = _overscan(overscan_row)
-            data -= o
+            collapse_oscan_row = np.zeros(overscan_row.shape[1])
+            for col in range(overscan_row.shape[1]):
+                o, _ = _overscan(overscan_row[:,col])
+                collapse_oscan_row[col] = o
+            # Savgol?
+            if use_savgol:
+                oscan_row = signal.savgol_filter(collapse_oscan_row, 65, 5)
+            else:
+                oscan_row = collapse_oscan_row
+            oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
+            #o,r = _overscan(overscan_row)
+            #data -= o
+            data -= oimg_row
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
