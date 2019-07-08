@@ -95,12 +95,13 @@ class TaskPSF(BaseTask):
         if not envname in os.environ :
             raise KeyError("need to set DESI_SPECTRO_CALIB env. variable")
 
-        # to get the lampline location, look in our path for specex
-        # and use that install prefix to find the data directory.
-        # if that directory does not exist, use a default NERSC
-        # location.
+        # For the default lampline location, look in the specex installation
+        # location
+        from ...scripts import specex
+        if specex.specexdata is None:
+            raise RuntimeError("Cannot find specex data directory for the default lamp lines")
         opts["lamplines"] = \
-            "/global/common/software/desi/cori/desiconda/current/code/specex/master/data/specex_linelist_desi.txt"
+            os.path.join(specex.specexdata, "specex_linelist_desi.txt")
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
             exefile = os.path.join(path, "desi_psf_fit")
