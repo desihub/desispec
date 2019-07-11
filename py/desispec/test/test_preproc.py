@@ -66,8 +66,6 @@ class TestPreProc(unittest.TestCase):
         self.noverscan = nover = 50
         self.noverscan_row = nover_row = 50
 
-
-
         #- ORSEC = overscan region in raw image (rows)
         #- BIASSEC = overscan region in raw image (columns)
         #- DATASEC = data region in raw image
@@ -95,6 +93,7 @@ class TestPreProc(unittest.TestCase):
         
         hdr['NIGHT'] = '20150102'
         hdr['EXPID'] = 1
+        hdr['EXPTIME'] = 10.0
 
         # add to header the minimal set of keywords needed to
         # identify the config in the ccd_calibration.yaml file
