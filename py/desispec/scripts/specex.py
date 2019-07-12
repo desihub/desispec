@@ -21,10 +21,15 @@ modext = "so"
 if sys.platform == "darwin":
     modext = "bundle"
 
+specexdata = None
+
 libspecexname = "libspecex.{}".format(modext)
 if "LIBSPECEX_DIR" in os.environ:
     libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"],
         "libspecex.{}".format(modext))
+    specexdata = os.path.join(
+        os.path.dirname(os.environ["LIBSPECEX_DIR"]), "data"
+    )
 
 libspecex = None
 try:
@@ -33,6 +38,9 @@ except:
     path = find_library("specex")
     if path is not None:
         libspecex = ct.CDLL(path)
+        specexdata = os.path.join(
+            os.path.dirname(os.path.dirname(path)), "data"
+        )
 
 if libspecex is not None:
     libspecex.cspecex_desi_psf_fit.restype = ct.c_int

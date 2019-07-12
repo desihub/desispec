@@ -32,8 +32,8 @@ def nersc_machine(name, queue):
     """Return the properties of the specified NERSC host.
 
     Args:
-        name (str): the name of the host.  Allowed values are:  edison,
-            cori-haswell, and cori-knl.
+        name (str): the name of the host.  Allowed values are:  cori-haswell
+            and cori-knl.
         queue (str): the queue on the machine (regular, debug, etc)
 
     Returns:
@@ -41,36 +41,15 @@ def nersc_machine(name, queue):
 
     """
     props = dict()
-    if name == "edison":
-        props["sbatch"] = list()
-        props["nodecores"] = 24
-        props["corecpus"] = 2
-        props["nodemem"] = 61.0
-        if queue == "debug":
-            props["maxnodes"] = 512
-            props["maxtime"] = 30
-            props["submitlimit"] = 5
-            props["sbatch"].append("#SBATCH --partition=debug")
-        elif queue == "regular":
-            props["maxnodes"] = 2048
-            props["maxtime"] = 12 * 60
-            props["submitlimit"] = 5000
-            props["sbatch"].append("#SBATCH --partition=regular")
-        elif queue == "realtime":
-            props["maxnodes"] = 25
-            props["maxtime"] = 240
-            props["submitlimit"] = 5000
-            props["sbatch"].append("#SBATCH --exclusive")
-            props["sbatch"].append("#SBATCH --partition=realtime")
-        else:
-            raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
-    elif name == "cori-haswell":
+    if name == "cori-haswell":
         props["sbatch"] = [
             "#SBATCH --constraint=haswell"
         ]
         props["nodecores"] = 32
         props["corecpus"] = 2
         props["nodemem"] = 125.0
+        props["timefactor"] = 1.0
+        props["startup"] = 2.0
         if queue == "debug":
             props["maxnodes"] = 64
             props["maxtime"] = 30
@@ -97,6 +76,8 @@ def nersc_machine(name, queue):
         props["nodecores"] = 64
         props["corecpus"] = 4
         props["nodemem"] = 93.0
+        props["timefactor"] = 3.0
+        props["startup"] = 2.0
         if queue == "debug":
             props["maxnodes"] = 512
             props["maxtime"] = 30
@@ -110,7 +91,7 @@ def nersc_machine(name, queue):
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
     else:
-        raise RuntimeError("Unknown machine '{}' choice is 'edison' , 'cori-haswell' or 'cori-knl'".format(name))
+        raise RuntimeError("Unknown machine '{}' choice is 'cori-haswell' or 'cori-knl'".format(name))
 
     return props
 
@@ -291,7 +272,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         tasktype (str): the type of these tasks.
         tasklist (list): the list of tasks.
         machine (str): the nersc machine name,
-            e.g. edison, cori-haswell, cori-knl
+            e.g. cori-haswell, cori-knl
         queue (str): the nersc queue name, e.g. regular or debug
         maxtime (int): the maximum run time in minutes.
         maxnodes (int): the maximum number of nodes.
@@ -347,12 +328,14 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     if nodeprocs is None:
         # Estimate the required processes per node based on memory use.
         coremem = hostprops["nodemem"] / hostprops["nodecores"]
-        coreprocs = taskprocmem / coremem
-        nearest = int(0.5 + coreprocs)
-        if np.absolute(coreprocs - nearest) < 0.01:
-            coreprocs = nearest
-        else:
-            coreprocs = int(coreprocs) + 1
+        coreprocs = 1
+        if taskprocmem > coremem:
+            coreprocs = taskprocmem / coremem
+            nearest = int(0.5 + coreprocs)
+            if np.absolute(coreprocs - nearest) < 0.01:
+                coreprocs = nearest
+            else:
+                coreprocs = int(coreprocs) + 1
         nodeprocs = hostprops["nodecores"] // coreprocs
 
     if nodeprocs > hostprops["nodecores"]:
@@ -365,7 +348,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     taskproc = task_classes[tasktype].run_max_procs(nodeprocs)
 
     # Run times for each task at this concurrency
-    tasktimes = [ (x, task_classes[tasktype].run_time(x, nodeprocs,
+    tfactor = hostprops["timefactor"]
+    tasktimes = [ (x, tfactor * task_classes[tasktype].run_time(x, nodeprocs,
         db=db)) for x in tasklist ]
 
     # We want to sort the times so that we can use a simple algorithm.
@@ -400,13 +384,19 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     # The returned list of jobs
     ret = list()
 
-    # Create jobs until we run out of tasks
+    # Create jobs until we run out of tasks.  We assume that every job will
+    # have some startup cost that impacts all workers.  We further scale the
+    # machine startup time by the job size, since larger jobs will take longer
+    # to start python.
+    startup_scale = maxnodes // 200
+    startup_time = (1.0 + startup_scale) * hostprops["startup"]
+
     alldone = False
     while not alldone:
         jobdone = False
         reverse = False
         workertasks = [ list() for w in range(nworker) ]
-        workersum = [ 0 for w in range(nworker) ]
+        workersum = [ startup_time for w in range(nworker) ]
         # Distribute tasks until the job gets too big or we run out of
         # tasks.
         while not jobdone:

@@ -60,7 +60,7 @@ class TaskStarFit(BaseTask):
         """
         from .base import task_classes
         props = self.name_split(name)
-        
+
         # we need all the cameras for the fit of standard stars
         deptasks = dict()
         for band in ["b","r","z"] :
@@ -76,11 +76,15 @@ class TaskStarFit(BaseTask):
         """
         return 1
 
+    def _run_max_mem(self):
+        """Running with the default on KNL (1.4GB) runs out of memory.
+        """
+        return 5.0
 
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 15 # less than 4 min on edison but can vary quite a bit
+        return 10
 
 
     def _run_defaults(self):
