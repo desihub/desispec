@@ -10,7 +10,7 @@ import desispec
 from desispec.quicklook import procalgs as PA
 from pkg_resources import resource_filename
 from desispec.test.test_ql_qa import xy2hdr
-from desispec.preproc import _parse_sec_keyword
+from desispec.preproc import parse_sec_keyword
 import astropy.io.fits as fits
 from desispec.quicklook import qllogger
 
@@ -107,11 +107,11 @@ class TestQL_PA(unittest.TestCase):
             hdr['GAIN'+amp] = gain[amp]
             hdr['RDNOISE'+amp] = rdnoise[amp]
             
-            xy = _parse_sec_keyword(hdr['BIASSEC'+amp])
+            xy = parse_sec_keyword(hdr['BIASSEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             rawimage[xy] += offset[amp]
             rawimage[xy] += np.random.normal(scale=rdnoise[amp], size=shape)/gain[amp]
-            xy = _parse_sec_keyword(hdr['DATASEC'+amp])
+            xy = parse_sec_keyword(hdr['DATASEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             rawimage[xy] += offset[amp]
             rawimage[xy] += np.random.normal(scale=rdnoise[amp], size=shape)/gain[amp]
