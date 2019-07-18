@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+
+import numpy as np
+import sys
+import argparse
+import matplotlib.pyplot as plt
+
+from desiutil.log import get_logger
+from desispec.io import read_image
+from desispec.io.xytraceset import read_xytraceset
+from desispec.preproc import _parse_sec_keyword
+from desispec.calibfinder import CalibFinder
+from desispec.darktrail import compute_fiber_cross_profile,compute_dark_trail,fit_dark_trail
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+description="Measure the readout negative  'dark' trails found in some CCD images and fit it with a model of the form a*(x/width)*exp(-x/width). The required inputs are a preprocessed continuum image (obtained by running desi_preproc with the option --nodarktrail) and a PSF file where the coordinates of the spectral traces are stored. The output are simply the amplitude and width of the fitted dark trails.")
+parser.add_argument('-i','--infile', type = str, default = None, required = True,
+                    help = 'path to a preprocessed continuum fits image')
+parser.add_argument('-p','--psf', type = str, default = None, required = False,
+                    help = 'path to input psf fits file to get the trace coordinates (default is psf in $DESI_CCD_CALIBRATION_DATA)')
+parser.add_argument('--plot', action = 'store_true',
+                    help = 'plot figures')
+parser.add_argument('-a','--amplifier', type = str, required = True,
+                    help = 'A B C or D')
+
+args = parser.parse_args()
+log  = get_logger()
+
+
+image = read_image(args.infile)
+
+cfinder = None
+if args.psf is None :
+    if cfinder is None :
+        cfinder = CalibFinder([image.meta])
+    args.psf = cfinder.findfile("PSF")
+
+log.info(" Using PSF {}".format(args.psf))
+tset    = read_xytraceset(args.psf)
+xyslice = _parse_sec_keyword(image.meta["CCDSEC"+args.amplifier.upper()])
+
+x,prof  = compute_fiber_cross_profile(image,tset,xyslice)
+
+left = ( args.amplifier == "B" or args.amplifier == "D" ) # tail is to the left
+
+amplitude,width = fit_dark_trail(x,prof,left)
+
+log.info("Fitted tail amplitude={:6.5f} width={:3.2f} pix".format(amplitude,width))
+
+if args.plot :
+    plt.figure("cross-profile")
+    plt.plot(x,prof)
+    plt.xlabel("pixels from trace center")
+    plt.ylabel("cross-profile")
+    plt.grid()
+    plt.show()
+
+
+    
