@@ -615,12 +615,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- Correct for dark trails if any
     if not nodarktrail and cfinder is not None :
         for amp in amp_ids :
-            if cfinder.haskey("DARKTRAILSCALE%s"%amp) :
-                scale = cfinder.value("DARKTRAILSCALE%s"%amp)
+            if cfinder.haskey("DARKTRAILAMP%s"%amp) :
+                amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
                 ii    = _parse_sec_keyword(header["CCDSEC"+amp])
-                log.info("Removing dark trails for amplifier %s with width=%3.1f and scale=%5.4f"%(amp,width,scale))
-                correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,scale=scale)
+                log.info("Removing dark trails for amplifier %s with width=%3.1f and amplitude=%5.4f"%(amp,width,amplitude))
+                correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
 
     #- Divide by pixflat image
     pixflat = get_calibration_image(cfinder,"PIXFLAT",pixflat)
