@@ -57,7 +57,8 @@ to use, but also only if a single camera is specified.
                         help = 'do not try and reject cosmic rays')
     parser.add_argument('--nogain', action='store_true',
                         help = 'do not apply gain correction') 
-    
+    parser.add_argument('--nodarktrail', action='store_true',
+                        help = 'do not correct for dark trails if any') 
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
@@ -146,6 +147,7 @@ def main(args=None):
                               ccd_calibration_filename=ccd_calibration_filename,
                               nocrosstalk=args.nocrosstalk,
                               nogain=args.nogain,
+                              nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
             )
         except IOError:

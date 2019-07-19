@@ -15,6 +15,7 @@ from desispec import cosmics
 from desispec.maskbits import ccdmask
 from desiutil.log import get_logger
 from desispec.calibfinder import CalibFinder
+from desispec.darktrail import correct_dark_trail
 
 # log = get_logger()
 
@@ -38,6 +39,9 @@ def _parse_sec_keyword(value):
     xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
 
     return np.s_[ymin-1:ymax, xmin-1:xmax]
+
+def hello() :
+    print("hello")
 
 def _clipped_std_bias(nsigma):
     '''
@@ -266,7 +270,8 @@ def get_calibration_image(cfinder,keyword,entry) :
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            overscan_per_row=False, use_overscan_row=True):
+            overscan_per_row=False, use_overscan_row=True,
+            nodarktrail=False):
 
     '''
     preprocess image using metadata in header
@@ -298,6 +303,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional background subtraction with median filtering if bkgsub=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
+    Optional disabling of dark trail correction if nodarktrail=True
 
     Optional tuning of cosmic ray rejection parameters:
         cosmics_nsig: number of sigma above background required
@@ -605,6 +611,16 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 ii2 = _parse_sec_keyword(header['CCDSEC'+amp2])
                 image[ii2] -= a12flux
                 # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
+
+    #- Correct for dark trails if any
+    if not nodarktrail and cfinder is not None :
+        for amp in amp_ids :
+            if cfinder.haskey("DARKTRAILAMP%s"%amp) :
+                amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
+                width = cfinder.value("DARKTRAILWIDTH%s"%amp)
+                ii    = _parse_sec_keyword(header["CCDSEC"+amp])
+                log.info("Removing dark trails for amplifier %s with width=%3.1f and amplitude=%5.4f"%(amp,width,amplitude))
+                correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
 
     #- Divide by pixflat image
     pixflat = get_calibration_image(cfinder,"PIXFLAT",pixflat)
