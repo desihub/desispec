@@ -24,7 +24,7 @@ from desispec.maskbits import specmask
 
 import desispec.scripts.mergebundles as mergebundles
 from desispec.specscore import compute_and_append_frame_scores
-
+from desispec.heliocentric import heliocentric_velocity_multiplicative_corr
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
@@ -60,7 +60,8 @@ def parse(options=None):
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
     parser.add_argument("--fibermap-index", type=int, default=None, required=False,
                         help="start at this index in the fibermap table instead of using the spectro id from the camera")
-
+    parser.add_argument("--heliocentric-correction", action="store_true", help="apply heliocentric correction to wavelength")
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -74,6 +75,50 @@ def _trim(filepath, maxchar=40):
     if len(filepath) > maxchar:
         return '...{}'.format(filepath[-maxchar:])
 
+def heliocentric_correction_multiplicative_factor(header) :
+    """
+    Returns mult. heliocentric correction factor using coords in `header`
+
+    `header` must contrain MJD or MJD-OBS; and
+    TARGTRA,TARGTDEC or SKYRA,SKYDEC or TELRA,TELDEC or RA,DEC
+    """
+
+    if "TARGTRA" in header :
+        ra  = header["TARGTRA"]
+    elif "SKYRA" in header :
+        ra = header["SKYRA"]
+    elif "TELRA" in header :
+        ra = header["TELRA"]
+    elif "RA" in header :
+        ra  = header["RA"]
+    else :
+        raise KeyError("no TARGTRA nor RA in header")
+
+    if "TARGTDEC" in header :
+        dec = header["TARGTDEC"]
+    elif "SKYDEC" in header :
+        dec = header["SKYDEC"]
+    elif "TELDEC" in header :
+        dec = header["TELDEC"]
+    elif "DEC" in header :
+        dec = header["DEC"]
+    else :
+        raise KeyError("no TARGTDEC nor DEC in header")
+
+    if "MJD-OBS" in header :
+        mjd = header["MJD-OBS"]
+    elif "MJD" in header :
+        mjd = header["MJD"]
+    else :
+        raise KeyError("no MJD-OBS nor MJD in header")
+
+    val = heliocentric_velocity_multiplicative_corr(ra, dec, mjd)
+
+    log = get_logger()
+    log.debug("Heliocentric correction factor = {}".format(val))
+
+    return val
+    
 
 def main(args):
 
@@ -120,8 +165,19 @@ def main(args):
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
+        
+    
 
+    if args.heliocentric_correction :
+        heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)
+        wstart /= heliocentric_correction_factor
+        wstop  /= heliocentric_correction_factor
+        dw     /= heliocentric_correction_factor
+    else :
+        heliocentric_correction_factor = 1.
+    
     wave = np.arange(wstart, wstop+dw/2.0, dw)
+        
     nwave = len(wave)
     bundlesize = args.bundlesize
 
@@ -164,6 +220,15 @@ regularize: {regularize}
     mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
     mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
+    if heliocentric_correction_factor != 1 :
+        #- Apply heliocentric correction factor to the wavelength
+        #- without touching the spectra, that is the whole point
+        wave   *= heliocentric_correction_factor
+        wstart *= heliocentric_correction_factor
+        wstop  *= heliocentric_correction_factor
+        dw     *= heliocentric_correction_factor
+        img.meta['HELIOCOR']   = heliocentric_correction_factor
+    
     #- Augment input image header for output
     img.meta['NSPEC']   = (nspec, 'Number of spectra')
     img.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
@@ -263,6 +328,14 @@ def main_mpi(args, comm=None, timing=None):
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
+
+    if args.heliocentric_correction :
+        heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)        
+        wstart /= heliocentric_correction_factor
+        wstop  /= heliocentric_correction_factor
+        dw     /= heliocentric_correction_factor
+    else :
+        heliocentric_correction_factor = 1.
 
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
@@ -373,6 +446,15 @@ def main_mpi(args, comm=None, timing=None):
             mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
             mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
             mask[chi2pix>100.0] |= specmask.BAD2DFIT
+
+            if heliocentric_correction_factor != 1 :
+                #- Apply heliocentric correction factor to the wavelength
+                #- without touching the spectra, that is the whole point
+                wave   *= heliocentric_correction_factor
+                wstart *= heliocentric_correction_factor
+                wstop  *= heliocentric_correction_factor
+                dw     *= heliocentric_correction_factor
+                img.meta['HELIOCOR']   = heliocentric_correction_factor
 
             #- Augment input image header for output
             img.meta['NSPEC']   = (nspec, 'Number of spectra')
