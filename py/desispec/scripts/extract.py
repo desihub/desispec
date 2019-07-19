@@ -76,18 +76,35 @@ def _trim(filepath, maxchar=40):
         return '...{}'.format(filepath[-maxchar:])
 
 def heliocentric_correction_multiplicative_factor(header) :
+    """
+    Returns mult. heliocentric correction factor using coords in `header`
+
+    `header` must contrain MJD or MJD-OBS; and
+    TARGTRA,TARGTDEC or SKYRA,SKYDEC or TELRA,TELDEC or RA,DEC
+    """
+
     if "TARGTRA" in header :
         ra  = header["TARGTRA"]
+    elif "SKYRA" in header :
+        ra = header["SKYRA"]
+    elif "TELRA" in header :
+        ra = header["TELRA"]
     elif "RA" in header :
         ra  = header["RA"]
     else :
         raise KeyError("no TARGTRA nor RA in header")
+
     if "TARGTDEC" in header :
         dec = header["TARGTDEC"]
+    elif "SKYDEC" in header :
+        dec = header["SKYDEC"]
+    elif "TELDEC" in header :
+        dec = header["TELDEC"]
     elif "DEC" in header :
         dec = header["DEC"]
     else :
         raise KeyError("no TARGTDEC nor DEC in header")
+
     if "MJD-OBS" in header :
         mjd = header["MJD-OBS"]
     elif "MJD" in header :
