@@ -1,6 +1,7 @@
 .. code-block:: console
 
     $> desi_pipe update --help
+
     usage: desi_pipe update [options] (use --help for details)
 
     Update a production

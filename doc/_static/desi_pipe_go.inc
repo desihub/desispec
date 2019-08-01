@@ -1,6 +1,8 @@
 .. code-block:: console
 
-    $> usage: desi_pipe go [options] (use --help for details)
+    $> desi_pipe go --help
+
+    usage: desi_pipe go [options] (use --help for details)
 
     Run a full production from start to finish. This will pack steps into 3 jobs
     per night and then run redshift fitting after all nights are done. Note that
