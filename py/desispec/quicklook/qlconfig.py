@@ -24,7 +24,7 @@ class Config(object):
         rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
         """
         with open(configfile, 'r') as f:
-            self.conf = yaml.load(f)
+            self.conf = yaml.safe_load(f)
             f.close()
         self.night = night
         self.expid = expid
@@ -50,7 +50,7 @@ class Config(object):
         #- Load plotting configuration file
         if qlplots != 'noplots' and qlplots is not None:
             with open(qlplots, 'r') as pf:
-                self.plotconf = yaml.load(pf)
+                self.plotconf = yaml.safe_load(pf)
                 pf.close()
         #- Use hard coded plotting algorithms
         elif qlplots is None:
