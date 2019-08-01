@@ -656,7 +656,7 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
 #        #- Get read noise from Get_RMS TODO: use header information for this
 #        rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
 #        with open(rfile) as rf:
-#            rmsfile=yaml.load(rf)
+#            rmsfile=yaml.safe_load(rf)
 #        rmsval=rmsfile["METRICS"]["NOISE"]
 #        #- The factor of 1e-3 is a very basic (and temporary!!) flux calibration
 #        #- used to convert read noise to proper flux units

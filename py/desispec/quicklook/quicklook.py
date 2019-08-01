@@ -98,7 +98,7 @@ def runpipeline(pl,convdict,conf):
             but convdict["IMAGE"] is like desispec.image.Image object and so on.
             details in setup_pipeline method below for examples.
         conf: a configured dictionary, read from the configuration yaml file.
-            e.g: conf=configdict=yaml.load(open('configfile.yaml','rb'))
+            e.g: conf=configdict=yaml.safe_load(open('configfile.yaml','rb'))
     """
 
     qlog=qllogger.QLLogger()

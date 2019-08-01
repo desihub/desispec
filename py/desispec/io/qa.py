@@ -45,7 +45,7 @@ def read_qa_data(filename):
     """
     # Read yaml
     with open(filename, 'r') as infile:
-        qa_data = yaml.load(infile)
+        qa_data = yaml.safe_load(infile)
     # Return
     return qa_data
 
