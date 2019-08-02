@@ -1,41 +1,33 @@
 .. code-block:: console
 
-    usage: desi_pipe [-h] [--raw RAW] [--redux REDUX] [--prod PROD]
-                     [--nights NIGHTS]
-                     [--nersc_host NERSC_HOST] 
-                     [--nersc_max_nodes NERSC_MAX_NODES]                    
-                     [--shell_mpi_run SHELL_MPI_RUN]                        
-                     [--shell_max_cores SHELL_MAX_CORES] [--fakeboot]
-                     [--fakepsf] [--spectrographs SPECTROGRAPHS] 
-                     [--debug]                   
+    $> desi_pipe --help
 
-    Set up pipeline runs for a production.
+    usage: desi_pipe <command> [options]
+
+    Where supported commands are (use desi_pipe <command> --help for details):
+       (------- High-Level -------)
+       create   Create a new production.
+       go       Run a full production.
+       update   Update an existing production.
+       top      Live display of production database.
+       status   Overview of production.
+       (------- Mid-Level --------)
+       chain    Run all ready tasks for multiple pipeline steps.
+       cleanup  Reset "running" (or optionally "failed") tasks back to "ready".
+       (------- Low-Level --------)
+       tasks    Get all possible tasks for a given type and states.
+       check    Check the status of tasks.
+       dryrun   Return the equivalent command line entrypoint for tasks.
+       script   Generate a shell or slurm script.
+       run      Generate a script and run it.
+       getready Auto-Update of prod DB.
+       sync     Synchronize DB state based on the filesystem.
+       env      Print current production location.
+
+    DESI pipeline control
+
+    positional arguments:
+      command     Subcommand to run
 
     optional arguments:
-      -h, --help            show this help message and exit
-      --data DATA           override DESI_SPECTRO_DATA
-      --redux REDUX         override DESI_SPECTRO_REDUX
-      --prod PROD           override SPECPROD
-      --model MODEL         override DESIMODEL
-      --nights NIGHTS       comma separated (YYYYMMDD) or regex 
-                            pattern
-      --nersc_host NERSC_HOST
-                            NERSC slurm scripts host name 
-                            (edison|cori)
-      --nersc_max_nodes NERSC_MAX_NODES
-                            NERSC slurm scripts max nodes to use. 
-                            Default is size of debug queue max.
-      --shell_mpi_run SHELL_MPI_RUN
-                            bash scripts command to launch MPI 
-                            pipeline steps. If --shell_max_cores is 
-                            1, this is ignored.
-      --shell_max_cores SHELL_MAX_CORES
-                            bash scripts max cores to use.
-      --fakeboot            bypass bootcalib
-      --fakepsf             bypass specex
-      --spectrographs SPECTROGRAPHS
-                            process only this comma-separated list of
-                            spectrographs
-      --debug               in setup script, set log level to DEBUG
-      --shifter             shifter image to use in alternate slurm 
-                            scripts
+      -h, --help  show this help message and exit
