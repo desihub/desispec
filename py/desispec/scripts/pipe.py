@@ -73,6 +73,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
    getready Auto-Update of prod DB.
    sync     Synchronize DB state based on the filesystem.
    env      Print current production location.
+   query    Direct sql query to the database.
 
 """)
         parser.add_argument("command", help="Subcommand to run")
@@ -95,6 +96,26 @@ Where supported commands are (use desi_pipe <command> --help for details):
         print("{}{:<22} = {}{}{}".format(self.pref, "Production directory", clr.OKBLUE, proddir, clr.ENDC))
         return
 
+    def query(self):
+        parser = argparse.ArgumentParser(\
+            description="Query the SB",
+                                         usage="desi_pipe query 'sql_command' [--rw] (use --help for details)")
+        parser.add_argument('cmd', metavar='cmd', type=str,
+                            help="SQL command in quotes, like 'select * from preproc'")
+        parser.add_argument("--rw", action = "store_true",
+                            help="read/write mode (use with care, experts only). Default is read only")
+        args = parser.parse_args(sys.argv[2:])
+        dbpath = io.get_pipe_database()
+        if args.rw :
+            mode="w"
+        else :
+            mode="r"
+        db = pipe.load_db(dbpath, mode=mode)
+        with db.cursor() as cur:
+            cur.execute(args.cmd)
+            st = cur.fetchall()
+            for entry in st :
+                print(entry)
 
     def create(self):
         parser = argparse.ArgumentParser(\
