@@ -13,6 +13,9 @@ from ..io import read_spectra,write_spectra
 
 from astropy.table import Column
 
+from desispec.interpolation import resample_flux
+from desispec.spectra import Spectra
+
 def parse(options=None):
     import argparse
 
@@ -20,6 +23,10 @@ def parse(options=None):
     parser.add_argument("-i","--infile", type=str,  help="input spectra file")
     parser.add_argument("-o","--outfile", type=str,  help="output spectra file")
     parser.add_argument("--nsig", type=float, default=None, help="nsigma rejection threshold for cosmic rays")
+    parser.add_argument("--resample-linear-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
+    parser.add_argument("--resample-log10-step", type=float, default=None, help="resampling to single log10 wave array of given step in units of log10")
+    parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra)")
+    
     if options is None:
         args = parser.parse_args()
     else:
@@ -44,7 +51,7 @@ def coadd(spectra, cosmics_nsig=0.) :
             jj=np.where(spectra.fibermap["TARGETID"]==tid)[0]
 
 
-            if cosmics_nsig > 0 :
+            if cosmics_nsig is not None and cosmics_nsig > 0 :
                 # interpolate over bad measurements
                 # to be able to compute gradient next
                 # to a bad pixel and identify oulier
@@ -70,7 +77,7 @@ def coadd(spectra, cosmics_nsig=0.) :
 
             tivar_unmasked= np.sum(spectra.ivar[b][jj],axis=0)
             ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
-            if len(grad)>0 and cosmics_nsig > 0 :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>0  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
                 nspec=grad.shape[0]
@@ -141,6 +148,63 @@ def coadd(spectra, cosmics_nsig=0.) :
     spectra.fibermap=tfmap
     spectra.scores=None
 
+def resample_spectra(spectra, wave, spectro_perf=False) :
+
+    log = get_logger()
+    log.debug("Resampling to wave grid: {}".format(wave))
+    
+    if spectro_perf :
+        raise RuntimeError("spectroperf resampling not implemented yet")
+
+    nwave=wave.size
+    b=spectra._bands[0]
+    ntarget=spectra.flux[b].shape[0]
+    nres=spectra.resolution_data[b].shape[1]
+    ivar=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
+    flux=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+    mask=np.zeros(flux.shape,dtype=spectra.mask[b].dtype)
+    rdata=np.ones((ntarget,1,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
+    bands=""
+    for b in spectra._bands :
+        tivar=spectra.ivar[b]*(spectra.mask[b]==0)
+        for i in range(ntarget) :
+            ivar[i]  += resample_flux(wave,spectra.wave[b],tivar[i])
+            flux[i]  += resample_flux(wave,spectra.wave[b],tivar[i]*spectra.flux[b][i])
+        bands += b
+    for i in range(ntarget) :
+        ok=(ivar[i]>0)
+        flux[i,ok]/=ivar[i,ok]    
+    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask={bands:mask,},resolution_data={bands:rdata,},
+                fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
+    return res
+    
+def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, spectro_perf=False, wave_min=None) :
+
+    wmin=None
+    wmax=None
+    for b in spectra._bands :
+        if wmin is None :
+            wmin=spectra.wave[b][0]
+            wmax=spectra.wave[b][-1]
+        else :
+            wmin=min(wmin,spectra.wave[b][0])
+            wmax=max(wmax,spectra.wave[b][-1])
+
+    if wave_min is not None :
+        wmin = wave_min
+    
+    if linear_step>0 :
+        nsteps=int((wmax-wmin)/linear_step) + 1
+        wave=wmin+np.arange(nsteps)*linear_step
+    elif log10_step>0 :
+        lwmin=np.log10(wmin)
+        lwmax=np.log10(wmax)
+        nsteps=int((lwmax-lwmin)/log10_step) + 1
+        wave=10**(lwmin+np.arange(nsteps)*log10_step)
+        
+    return resample_spectra(spectra,wave,spectro_perf)
+    
+    
 def main(args=None):
 
     log = get_logger()
@@ -148,9 +212,18 @@ def main(args=None):
     if args is None:
         args = parse()
 
+    if args.resample_linear_step is not None and args.resample_log10_step is not None :
+        print("cannot have both linear and logarthmic bins :-), choose either --resample-linear-step or --resample-log10-step")
+        return 12
+    
     spectra = read_spectra(args.infile)
 
     coadd(spectra,cosmics_nsig=args.nsig)
 
+    if args.resample_linear_step is not None :
+        spectra = resample_spectra_lin_or_log(spectra, linear_step=args.resample_linear_step, wave_min =args.wave_min)
+    if args.resample_log10_step is not None :
+        spectra = resample_spectra_lin_or_log(spectra, log10_step=args.resample_log10_step, wave_min =args.wave_min)
+    
     log.debug("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)
