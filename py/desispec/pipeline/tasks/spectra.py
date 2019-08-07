@@ -115,11 +115,55 @@ class TaskSpectra(BaseTask):
         args = update_spectra.parse(optlist)
         update_spectra.main(args)
         return
+    
+    def run_and_update(self, db, name, opts, comm=None):
+        """Run the task and update DB state.
 
-    def postprocessing(self, db, name, cur):
-        """For successful runs, postprocessing on DB"""
-        props=self.name_split(name)
-        props["state"]=1 # selection, only those for which we had a cframe
-        db.update_healpix_frame_state(props,state=2,cur=cur) # 2=spectra has been updated
-        # directly set the corresponding redshift to ready
-        cur.execute('update redshift set state={} where nside = {} and pixel = {}'.format(task_state_to_int["ready"],props["nside"],props["pixel"]))
+        The state of the task is marked as "done" if the command completes
+        without raising an exception and if the output files exist.
+
+        It is specific for spectra because the healpix_frame table has to be updated
+
+        Args:
+            db (pipeline.db.DB): The database.
+            name (str): the name of this task.
+            opts (dict): options to use for this task.
+            comm (mpi4py.MPI.Comm): optional MPI communicator.
+
+        Returns:
+            int: the number of processes that failed.
+
+        """
+        nproc = 1
+        rank = 0
+        if comm is not None:
+            nproc = comm.size
+            rank = comm.rank
+
+        failed = self.run(name, opts, comm=comm, db=db)
+
+        if rank == 0:
+            if failed > 0:
+                self.state_set(db, name, "failed")
+            else:
+                outputs = self.paths(name)
+                done = True
+                for out in outputs:
+                    if not os.path.isfile(out):
+                        done = False
+                        failed = nproc
+                        break
+                if done:
+                    props=self.name_split(name)
+                    props["state"]=1 # selection, only those for which we had a cframe
+                    with db.cursor() as cur :
+                        self.state_set(db, name, "done",cur=cur)
+                        db.update_healpix_frame_state(props,state=2,cur=cur) # 2=spectra has been updated
+                        # directly set the corresponding redshift to ready
+                        cur.execute('update redshift set state={} where nside = {} and pixel = {}'.format(task_state_to_int["ready"],props["nside"],props["pixel"]))# post processing is now done by a single rank in run.run_task_list
+                else:
+                    self.state_set(db, name, "failed")
+        return failed
+
+
+        
