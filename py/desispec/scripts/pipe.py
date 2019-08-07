@@ -115,8 +115,11 @@ Where supported commands are (use desi_pipe <command> --help for details):
             cur.execute(args.cmd)
             st = cur.fetchall()
             for entry in st :
-                print(entry)
-
+                line=""
+                for prop in entry :
+                    line += " {}".format(prop)
+                print(line)
+        
     def create(self):
         parser = argparse.ArgumentParser(\
             description="Create a new production",
