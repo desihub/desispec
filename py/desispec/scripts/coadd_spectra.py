@@ -11,6 +11,8 @@ from desiutil.log import get_logger
 
 from ..io import read_spectra,write_spectra
 
+from astropy.table import Column
+
 def parse(options=None):
     import argparse
 
@@ -64,18 +66,42 @@ def main(args=None):
         spectra.ivar[b] = tivar
         spectra.mask[b] = tmask
         spectra.resolution_data[b] = trdata
+
+
+    log.debug("merging fibermap")
     jj=np.zeros(ntarget,dtype=int)
     for i,tid in enumerate(targets) :
         jj[i]=np.where(spectra.fibermap["TARGETID"]==tid)[0][0]
-    spectra.fibermap=spectra.fibermap[jj]
-    
-    ## now deal with the fibermap
-    #tfmap = spectra.fibermap[:ntarget][:]
-    #for i,tid in enumerate(targets) :
-    #    jj=spectra.fibermap["TARGETID"]==tid
-    #    for k in spectra.fibermap.colnames :
-    #        tfmap[i][k]=spectra.fibermap[jj[0]][k] # take first entry
-    #spectra.fibermap=tfmap
+    tfmap=spectra.fibermap[jj]
+    # smarter values for some columns
+    for k in ['DELTA_X','DELTA_Y'] :
+        tfmap.rename_column(k,'MEAN_'+k)
+        xx = Column(np.arange(ntarget))
+        tfmap.add_column(xx,name='RMS_'+k)
+    for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
+        tfmap.rename_column(k,'FIRST_'+k)
+        xx = Column(np.arange(ntarget))
+        tfmap.add_column(xx,name='LAST_'+k)
+        xx = Column(np.arange(ntarget))
+        tfmap.add_column(xx,name='NUM_'+k)
+
+    for i,tid in enumerate(targets) :
+        jj = spectra.fibermap["TARGETID"]==tid
+        for k in ['DELTA_X','DELTA_Y'] :
+            vals=spectra.fibermap[k][jj]
+            tfmap['MEAN_'+k][i] = np.mean(vals)
+            tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)) # inc. mean offset, not same as std
+        for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
+            vals=spectra.fibermap[k][jj]
+            tfmap['FIRST_'+k][i] = np.min(vals)
+            tfmap['LAST_'+k][i] = np.max(vals)
+            tfmap['NUM_'+k][i] = np.unique(vals).size
+        for k in ['DESIGN_X', 'DESIGN_Y','FIBER_RA', 'FIBER_DEC'] :
+            tfmap[k][i]=np.mean(spectra.fibermap[k][jj])
+        for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR','DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
+            tfmap[k][i]=np.sum(spectra.fibermap[k][jj])
+
+    spectra.fibermap=tfmap
     spectra.scores=None
     log.debug("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)
