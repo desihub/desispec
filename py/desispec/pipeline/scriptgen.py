@@ -566,28 +566,32 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
 
     scriptfiles = list()
 
+    log = get_logger()
+ 
     if npacked == 1:
         # We have a single pipeline step which might be split into multiple
         # job scripts.
         jindx = 0
-        suffix = True
-        if len(joblist) == 1:
-            suffix = False
         tasktype = list(tasks_by_type.keys())[0]
         for (nodes, ppn, runtime, tasks) in joblist[tasktype]:
             joblogroot = None
             joboutroot = None
-            if suffix:
+            if jindx>0:
                 joblogroot = "{}_{}".format(logroot, jindx)
                 joboutroot = "{}_{}".format(outroot, jindx)
             else:
                 joblogroot = logroot
                 joboutroot = outroot
+
+            
             taskfile = "{}.tasks".format(joboutroot)
             task_write(taskfile, tasks)
             coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
                 .format(tasktype, taskfile, dbstr) ]
             outfile = "{}.slurm".format(joboutroot)
+
+            log.debug("writing job {}".format(outfile))
+            
             nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine,
                       queue, nodes, [ nodes ], [ ppn ], runtime, openmp=openmp,
                       multiproc=multiproc, shifterimg=shifterimg, debug=debug)
