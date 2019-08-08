@@ -174,7 +174,9 @@ def get_resampling_matrix(global_grid,local_grid,sparse=False):
     # turn into a sparse matrix
     return scipy.sparse.csc_matrix(matrix)
 
-def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin) :
+
+    
+def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
     """Decorrelate an inverse covariance using the matrix square root.
 
     Implements the decorrelation part of the spectroperfectionism algorithm described in
@@ -196,17 +198,12 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin) :
             wavelength bin. Note that R is returned as a regular (dense) numpy array but
             will normally have non-zero values concentrated near the diagonal.
     """
-    #Cinv = 0.5*(Cinv + Cinv.T)
-    #if scipy.sparse.issparse(Cinv): Cinv = Cinv.todense()
+
+    
     chw=max(10,int(50/wavebin)) #core is 2*50+1 A
     skin=max(2,int(10/wavebin)) #skin is 10A
     nn=Cinv.shape[0]
-    flux=np.zeros(Cinv.shape[0])
-    ivar=np.zeros(Cinv.shape[0])
-    R=np.zeros_like(Cinv)
     nstep=nn//(2*chw+1)+1
-    log = get_logger()
-    t0=time.time()
     Lmin=1e-15/np.mean(np.diag(Cinv)) # Lmin is scaled with Cinv values
     for c in range(chw,nn+(2*chw+1),(2*chw+1)) :
         b=max(0,c-chw-skin)
@@ -219,7 +216,7 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin) :
         L,X = scipy.linalg.eigh(Cinv[b:e,b:e],overwrite_a=False,turbo=True)
         nbad = np.count_nonzero(L < Lmin)
         if nbad > 0:
-            log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
+            #log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
             L[L < Lmin] = Lmin
         Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
         s = np.sum(Q,axis=1)
@@ -234,10 +231,8 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin) :
         flux[b1:e1] = (tR_it.dot(Cinvf[b:e])/tivar)[bb:ee]
         ivar[b1:e1] = (s[bb:ee])**2
         R[b:e,b1:e1] = tR[:,bb:ee]
-        
-    t1=time.time()
-    log.debug("Time for decorrelate_divide_and_conquer (block={},skin={}) = {} sec".format(2*chw+1,skin,t1-t0))
-    return flux,ivar,R
+    
+    
     
 
 
@@ -257,20 +252,25 @@ def spectroperf_resample_spectra(spectra, wave) :
     dw=np.gradient(wave)
     wavebin=np.min(dw[dw>0.]) # min wavelength bin size
     log.debug("Min wavelength bin= {:2.1f} A".format(wavebin))
-    log.debug("Compute resampling matrices ...")
+    log.debug("compute resampling matrices ...")
     RS=dict()
     for b in spectra._bands :
         twave=spectra.wave[b]
         jj=np.where((twave>=wave[0])&(twave<=wave[-1]))[0]
         twave=spectra.wave[b][jj]
         RS[b] = get_resampling_matrix(wave,twave)
-    
+
+    R = np.zeros((nwave,nwave))
     for i in range(ntarget) :
+        
         log.debug("resampling {}/{}".format(i+1,ntarget))
+
+        t0=time.time()
+        
         cinv = None
         for b in spectra._bands :
             twave=spectra.wave[b]
-            jj=np.where((twave>=wave[0])&(twave<=wave[-1]))[0]
+            jj=(twave>=wave[0])&(twave<=wave[-1])
             twave=twave[jj]
             tivar=spectra.ivar[b][i][jj]
             diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
@@ -283,18 +283,28 @@ def spectroperf_resample_spectra(spectra, wave) :
             else :
                 cinv  += tcinv
                 cinvf += tcinvf
-        if scipy.sparse.issparse(cinv): cinv = cinv.todense()
-        ii=np.arange(cinv.shape[0],dtype=int)
-        keep = np.where(np.diag(cinv) > 0)[0]
-        keep_t = keep[:,np.newaxis]
-        R    = np.zeros_like(cinv)
-        flux[i,keep],ivar[i,keep],R[keep_t,keep] = decorrelate_divide_and_conquer(cinv[keep_t,keep],cinvf[keep],wavebin=wavebin)
+
+        #t1=time.time()
+        #log.debug("done filling matrix in {} sec".format(t1-t0))
         
+        cinv = cinv.todense()
+
+        #t2=time.time()
+        #log.debug("done densify matrix in {} sec".format(t2-t1))
+
+        decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[i],ivar[i],R)
+
+        #t3=time.time()
+        #log.debug("done decorrelate in {} sec".format(t3-t2))
+       
         dd=np.arange(ndiag,dtype=int)-ndiag//2
-        for j in keep :
+        for j in range(nwave) :
             k=(dd>=-j)&(dd<nwave-j)
             rdata[i,k,j] = R[j+dd[k],j].ravel()
-            
+
+        t4=time.time()
+        #log.debug("done resolution data in {} sec".format(t4-t3))
+        log.debug("done one spectrum in {} sec".format(t4-t0))
 
     bands=""
     for b in spectra._bands : bands += b
