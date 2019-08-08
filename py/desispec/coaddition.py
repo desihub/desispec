@@ -34,7 +34,10 @@ def coadd(spectra, cosmics_nsig=0.) :
         nwave=spectra.wave[b].size
         tflux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
         tivar=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
-        tmask=np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+        if spectra.mask is not None :
+            tmask=np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+        else :
+            tmask=None
         trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
         
         for i,tid in enumerate(targets) :
@@ -51,7 +54,10 @@ def coadd(spectra, cosmics_nsig=0.) :
                 grad=[]
                 gradvar=[]
                 for j in jj :
-                    ttivar = spectra.ivar[b][j]*(spectra.mask[b][j]==0)
+                    if spectra.mask is not None :
+                        ttivar = spectra.ivar[b][j]*(spectra.mask[b][j]==0)
+                    else :
+                        ttivar = spectra.ivar[b][j]
                     good = (ttivar>0)
                     bad  = (ttivar<=0)
                     ttflux = spectra.flux[b][j]
@@ -66,7 +72,10 @@ def coadd(spectra, cosmics_nsig=0.) :
                     gradvar.append(ttvar)
 
             tivar_unmasked= np.sum(spectra.ivar[b][jj],axis=0)
-            ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
+            if spectra.mask is not None :
+                ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
+            else :
+                ivarjj=spectra.ivar[b][jj]
             if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>0  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
@@ -95,10 +104,12 @@ def coadd(spectra, cosmics_nsig=0.) :
             ok=(tivar_unmasked>0)
             if np.sum(ok)>0 :
                 trdata[i][:,ok] /= tivar_unmasked[ok]
-            tmask[i]      = np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
+            if spectra.mask is not None :
+                tmask[i]      = np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
         spectra.flux[b] = tflux
         spectra.ivar[b] = tivar
-        spectra.mask[b] = tmask
+        if spectra.mask is not None :
+            spectra.mask[b] = tmask
         spectra.resolution_data[b] = trdata
 
 
@@ -109,32 +120,38 @@ def coadd(spectra, cosmics_nsig=0.) :
     tfmap=spectra.fibermap[jj]
     # smarter values for some columns
     for k in ['DELTA_X','DELTA_Y'] :
-        tfmap.rename_column(k,'MEAN_'+k)
-        xx = Column(np.arange(ntarget))
-        tfmap.add_column(xx,name='RMS_'+k)
+        if k in spectra.fibermap.colnames :
+            tfmap.rename_column(k,'MEAN_'+k)
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='RMS_'+k)
     for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
-        xx = Column(np.arange(ntarget))
-        tfmap.add_column(xx,name='FIRST_'+k)
-        xx = Column(np.arange(ntarget))
-        tfmap.add_column(xx,name='LAST_'+k)
-        xx = Column(np.arange(ntarget))
-        tfmap.add_column(xx,name='NUM_'+k)
+        if k in spectra.fibermap.colnames :
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='FIRST_'+k)
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='LAST_'+k)
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='NUM_'+k)
 
     for i,tid in enumerate(targets) :
         jj = spectra.fibermap["TARGETID"]==tid
         for k in ['DELTA_X','DELTA_Y'] :
-            vals=spectra.fibermap[k][jj]
-            tfmap['MEAN_'+k][i] = np.mean(vals)
-            tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)) # inc. mean offset, not same as std
+            if k in spectra.fibermap.colnames :
+                vals=spectra.fibermap[k][jj]
+                tfmap['MEAN_'+k][i] = np.mean(vals)
+                tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)) # inc. mean offset, not same as std
         for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
-            vals=spectra.fibermap[k][jj]
-            tfmap['FIRST_'+k][i] = np.min(vals)
-            tfmap['LAST_'+k][i] = np.max(vals)
-            tfmap['NUM_'+k][i] = np.unique(vals).size
+            if k in spectra.fibermap.colnames :
+                vals=spectra.fibermap[k][jj]
+                tfmap['FIRST_'+k][i] = np.min(vals)
+                tfmap['LAST_'+k][i] = np.max(vals)
+                tfmap['NUM_'+k][i] = np.unique(vals).size
         for k in ['DESIGN_X', 'DESIGN_Y','FIBER_RA', 'FIBER_DEC'] :
-            tfmap[k][i]=np.mean(spectra.fibermap[k][jj])
+            if k in spectra.fibermap.colnames :
+                tfmap[k][i]=np.mean(spectra.fibermap[k][jj])
         for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR','DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
-            tfmap[k][i]=np.sum(spectra.fibermap[k][jj])
+            if k in spectra.fibermap.colnames :
+                tfmap[k][i]=np.sum(spectra.fibermap[k][jj])
 
     spectra.fibermap=tfmap
     spectra.scores=None
@@ -180,25 +197,16 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
     """Decorrelate an inverse covariance using the matrix square root.
 
     Implements the decorrelation part of the spectroperfectionism algorithm described in
-    Bolton & Schlegel 2009 (BS) http://arxiv.org/abs/0911.2689, w uses the matrix square root of
-    Cinv to form a diagonal basis. This is generally a better choice than the eigenvector or
-    Cholesky bases since it leads to more localized basis vectors, as described in
-    Hamilton & Tegmark 2000 http://arxiv.org/abs/astro-ph/9905192.
+    Bolton & Schlegel 2009 (BS) http://arxiv.org/abs/0911.2689.
 
     Args:
-        Cinv(numpy.ndarray): Square array of inverse covariance matrix elements. The input can
-            either be a scipy.sparse format or else a regular (dense) numpy array, but a
-            sparse format will be internally converted to a dense matrix so there is no
-            performance advantage.
-
-    Returns:
-        tuple: Tuple ivar,R of uncorrelated flux inverse variances and the corresponding
-            resolution matrix. These have shapes (nflux,) and (nflux,nflux) respectively.
-            The rows of R give the resolution-convolved responses to unit flux for each
-            wavelength bin. Note that R is returned as a regular (dense) numpy array but
-            will normally have non-zero values concentrated near the diagonal.
+        Cinv: Square 2D array: input inverse covariance matrix
+        Cinvf: 1D array: input
+        wavebin: minimal size of wavelength bin in A
+        flux: 1D array: output flux (has to be allocated)
+        ivar: 1D array: output flux inverse variance (has to be allocated)
+        R: Square 2D array: output resolution matrix (has to be allocated)
     """
-
     
     chw=max(10,int(50/wavebin)) #core is 2*50+1 A
     skin=max(2,int(10/wavebin)) #skin is 10A
@@ -237,6 +245,9 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
 
 
 def spectroperf_resample_spectra(spectra, wave) :
+    """
+    docstring
+    """
 
     log = get_logger()
     log.debug("Resampling to wave grid if size {}: {}".format(wave.size,wave))
@@ -246,7 +257,10 @@ def spectroperf_resample_spectra(spectra, wave) :
     nwave=wave.size
     flux = np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
     ivar = np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
-    mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+    if spectra.mask is not None :
+        mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+    else :
+        mask = None
     ndiag = 5
     rdata = np.ones((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
     dw=np.gradient(wave)
@@ -308,13 +322,20 @@ def spectroperf_resample_spectra(spectra, wave) :
 
     bands=""
     for b in spectra._bands : bands += b
-    
-    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask={bands:mask,},resolution_data={bands:rdata,},
+
+    if spectra.mask is not None :
+        dmask={bands:mask,}
+    else :
+        dmask=None
+    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
                 fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
     return res
 
 
 def fast_resample_spectra(spectra, wave) :
+    """
+    docstring
+    """
 
     log = get_logger()
     log.debug("Resampling to wave grid: {}".format(wave))
@@ -326,11 +347,17 @@ def fast_resample_spectra(spectra, wave) :
     nres=spectra.resolution_data[b].shape[1]
     ivar=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
     flux=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
-    mask=np.zeros(flux.shape,dtype=spectra.mask[b].dtype)
+    if spectra.mask is not None :
+        mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+    else :
+        mask = None
     rdata=np.ones((ntarget,1,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
     bands=""
     for b in spectra._bands :
-        tivar=spectra.ivar[b]*(spectra.mask[b]==0)
+        if spectra.mask is not None :
+            tivar=spectra.ivar[b]*(spectra.mask[b]==0)
+        else :
+            tivar=spectra.ivar[b]
         for i in range(ntarget) :
             ivar[i]  += resample_flux(wave,spectra.wave[b],tivar[i])
             flux[i]  += resample_flux(wave,spectra.wave[b],tivar[i]*spectra.flux[b][i])
@@ -338,11 +365,18 @@ def fast_resample_spectra(spectra, wave) :
     for i in range(ntarget) :
         ok=(ivar[i]>0)
         flux[i,ok]/=ivar[i,ok]    
-    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask={bands:mask,},resolution_data={bands:rdata,},
+    if spectra.mask is not None :
+        dmask={bands:mask,}
+    else :
+        dmask=None
+    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
                 fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
     return res
     
 def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False, wave_min=None, wave_max=None) :
+    """
+    docstring
+    """
 
     wmin=None
     wmax=None
@@ -371,26 +405,3 @@ def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False
         return fast_resample_spectra(spectra=spectra,wave=wave)
     else :
         return spectroperf_resample_spectra(spectra=spectra,wave=wave)
-    
-def main(args=None):
-
-    log = get_logger()
-
-    if args is None:
-        args = parse()
-
-    if args.resample_linear_step is not None and args.resample_log10_step is not None :
-        print("cannot have both linear and logarthmic bins :-), choose either --resample-linear-step or --resample-log10-step")
-        return 12
-    
-    spectra = read_spectra(args.infile)
-
-    coadd(spectra,cosmics_nsig=args.nsig)
-
-    if args.resample_linear_step is not None :
-        spectra = resample_spectra_lin_or_log(spectra, linear_step=args.resample_linear_step, wave_min =args.wave_min, spectro_perf = args.spectro_perf)
-    if args.resample_log10_step is not None :
-        spectra = resample_spectra_lin_or_log(spectra, log10_step=args.resample_log10_step, wave_min =args.wave_min, spectro_perf = args.spectro_perf)
-    
-    log.debug("writing {} ...".format(args.outfile))
-    write_spectra(args.outfile,spectra)
