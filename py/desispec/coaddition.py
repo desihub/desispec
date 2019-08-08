@@ -332,7 +332,7 @@ def fast_resample_spectra(spectra, wave) :
                 fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
     return res
     
-def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, spectro_perf=False, wave_min=None) :
+def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, spectro_perf=False, wave_min=None, wave_max=None) :
 
     wmin=None
     wmax=None
@@ -346,7 +346,9 @@ def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, spectro_pe
 
     if wave_min is not None :
         wmin = wave_min
-    
+    if wave_max is not None :
+        wmax = wave_max
+
     if linear_step>0 :
         nsteps=int((wmax-wmin)/linear_step) + 1
         wave=wmin+np.arange(nsteps)*linear_step

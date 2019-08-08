@@ -17,7 +17,8 @@ def parse(options=None):
     parser.add_argument("--nsig", type=float, default=None, help="nsigma rejection threshold for cosmic rays")
     parser.add_argument("--lin-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
     parser.add_argument("--log10-step", type=float, default=None, help="resampling to single log10 wave array of given step in units of log10")
-    parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra)")
+    parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra), used only with option --lin-step or --log10-step")
+    parser.add_argument("--wave-max", type=float, default=None, help="specify the max wavelength in A (default is the max wavelength in the input spectra, approximate), use only with option --lin-step or --log10-step)")
     parser.add_argument("--spectro-perf", action="store_true", help="spectro-perf in 1D, i.e. output is uncorrelated and resolution matrix is meaningful, but it's horribly slow (need to implement divide and conquer...)")
     
     if options is None:
@@ -43,9 +44,9 @@ def main(args=None):
     coadd(spectra,cosmics_nsig=args.nsig)
 
     if args.lin_step is not None :
-        spectra = resample_spectra_lin_or_log(spectra, linear_step=args.lin_step, wave_min =args.wave_min, spectro_perf = args.spectro_perf)
+        spectra = resample_spectra_lin_or_log(spectra, linear_step=args.lin_step, wave_min =args.wave_min, wave_max =args.wave_max, spectro_perf = args.spectro_perf)
     if args.log10_step is not None :
-        spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, spectro_perf = args.spectro_perf)
+        spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, spectro_perf = args.spectro_perf)
     
     log.debug("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)
