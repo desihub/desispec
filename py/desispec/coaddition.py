@@ -113,7 +113,8 @@ def coadd(spectra, cosmics_nsig=0.) :
         xx = Column(np.arange(ntarget))
         tfmap.add_column(xx,name='RMS_'+k)
     for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
-        tfmap.rename_column(k,'FIRST_'+k)
+        xx = Column(np.arange(ntarget))
+        tfmap.add_column(xx,name='FIRST_'+k)
         xx = Column(np.arange(ntarget))
         tfmap.add_column(xx,name='LAST_'+k)
         xx = Column(np.arange(ntarget))
@@ -242,8 +243,6 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin) :
 
 def spectroperf_resample_spectra(spectra, wave) :
 
-    # largely inspired by the coaddition developped by N. Busca
-    
     log = get_logger()
     log.debug("Resampling to wave grid if size {}: {}".format(wave.size,wave))
 
