@@ -24,7 +24,6 @@ import matplotlib.pyplot as plt
 import astropy.table
 
 import desispec.io
-import desispec.coaddition
 from desiutil.log import get_logger, DEBUG
 
 def main():
