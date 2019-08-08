@@ -11,15 +11,15 @@ from desispec.coaddition import coadd,resample_spectra_lin_or_log
 def parse(options=None):
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser("Coadd all spectra per target, and optionally resample on linear or logarithmic wavelength grid")
     parser.add_argument("-i","--infile", type=str,  help="input spectra file")
     parser.add_argument("-o","--outfile", type=str,  help="output spectra file")
     parser.add_argument("--nsig", type=float, default=None, help="nsigma rejection threshold for cosmic rays")
     parser.add_argument("--lin-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
     parser.add_argument("--log10-step", type=float, default=None, help="resampling to single log10 wave array of given step in units of log10")
     parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra), used only with option --lin-step or --log10-step")
-    parser.add_argument("--wave-max", type=float, default=None, help="specify the max wavelength in A (default is the max wavelength in the input spectra, approximate), use only with option --lin-step or --log10-step)")
-    parser.add_argument("--fast", action="store_true", help="fast resampling, at the cost of correlated pixels and no resolution matrix")
+    parser.add_argument("--wave-max", type=float, default=None, help="specify the max wavelength in A (default is the max wavelength in the input spectra, approximate), used only with option --lin-step or --log10-step)")
+    parser.add_argument("--fast", action="store_true", help="fast resampling, at the cost of correlated pixels and no resolution matrix (used only with option --lin-step or --log10-step)")
     
     if options is None:
         args = parser.parse_args()
