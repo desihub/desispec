@@ -198,7 +198,7 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin) :
     #Cinv = 0.5*(Cinv + Cinv.T)
     #if scipy.sparse.issparse(Cinv): Cinv = Cinv.todense()
     chw=int(50/wavebin) #core is 2*50+1 A
-    skin=int(10/wavebin) #skin is 10A
+    skin=max(2,int(10/wavebin)) #skin is 10A
     nn=Cinv.shape[0]
     flux=np.zeros(Cinv.shape[0])
     ivar=np.zeros(Cinv.shape[0])
