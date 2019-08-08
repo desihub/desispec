@@ -170,12 +170,10 @@ def get_resampling_matrix(global_grid,local_grid,sparse=False):
     matrix[local_index,global_index] = alpha
     matrix[local_index,global_index-1] = 1-alpha
 
-    ## turn into a sparse matrix
-    #matrix = scipy.sparse.dia_matrix(matrix)
-    matrix = scipy.sparse.csc_matrix(matrix)
-    return matrix
+    # turn into a sparse matrix
+    return scipy.sparse.csc_matrix(matrix)
 
-def decorrelate(Cinv):
+def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin) :
     """Decorrelate an inverse covariance using the matrix square root.
 
     Implements the decorrelation part of the spectroperfectionism algorithm described in
@@ -197,45 +195,50 @@ def decorrelate(Cinv):
             wavelength bin. Note that R is returned as a regular (dense) numpy array but
             will normally have non-zero values concentrated near the diagonal.
     """
+    #Cinv = 0.5*(Cinv + Cinv.T)
+    #if scipy.sparse.issparse(Cinv): Cinv = Cinv.todense()
+    chw=int(50/wavebin) #core is 2*50+1 A
+    skin=int(10/wavebin) #skin is 10A
+    nn=Cinv.shape[0]
+    flux=np.zeros(Cinv.shape[0])
+    ivar=np.zeros(Cinv.shape[0])
+    R=np.zeros_like(Cinv)
+    nstep=nn//(2*chw+1)+1
     log = get_logger()
-    # Clean up any roundoff errors by forcing Cinv to be symmetric.
-    Cinv = 0.5*(Cinv + Cinv.T)
-    # Convert to a dense matrix if necessary."
-    if scipy.sparse.issparse(Cinv): Cinv = Cinv.todense()
-    #ii=np.arange(Cinv.shape[0],dtype=int)
-    #for i in ii : Cinv[i,np.abs(ii-i)>5]=0. # zeroing outside band, does not help at all
-    
-    pyfits.writeto("cinv.fits",Cinv,overwrite=True)
-    log.debug(" Eigen decomposition... (extremely slow)")
-    
-    # Note that we do not use scipy.linalg.sqrtm since
-    # the method below is about 2x faster for a positive definite matrix.
-    # L,X = scipy.linalg.eigh(Cinv) # 70s if Cinv is sparse .. aie aie aie
-
-    # this is slower than pure scipy.linalg.eigh
-    #ndiag=3
-    #nn=Cinv.shape[0]
-    #diags=np.zeros((ndiag,nn))
-    #for d in range(ndiag) :
-    #    diags[d,:nn-d] = Cinv[np.arange(nn-d),np.arange(d,nn)] # lower form
-    #L,X = scipy.linalg.eig_banded(diags,lower=True,overwrite_a_band=True,check_finite=False) # 1 s for 5A bin , 4.3 s for 3A bin, 14.47 s for 2A and ndiag=3
-
     t0=time.time()
-    L,X = scipy.linalg.eigh(Cinv,overwrite_a=True,turbo=True) # 0.8s for 5A bin, 3.36s for 3A bin, 10s for 2A, 70s for a binning of 1A ...
+    Lmin=1e-15/np.mean(np.diag(Cinv)) # Lmin is scaled with Cinv values
+    for c in range(chw,nn+(2*chw+1),(2*chw+1)) :
+        b=max(0,c-chw-skin)
+        e=min(nn,c+chw+skin+1)
+        b1=max(0,c-chw)
+        e1=min(nn,c+chw+1)
+        bb=max(0,b1-b)
+        ee=min(e-b,e1-b)
+        if e<=b : continue
+        L,X = scipy.linalg.eigh(Cinv[b:e,b:e],overwrite_a=False,turbo=True)
+        nbad = np.count_nonzero(L < Lmin)
+        if nbad > 0:
+            log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
+            L[L < Lmin] = Lmin
+        Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
+        s = np.sum(Q,axis=1)
+
+        b1x=max(0,c-chw-3)
+        e1x=min(nn,c+chw+1+3)
+
+        tR = (Q/s[:,np.newaxis])
+        tR_it = scipy.linalg.inv(tR.T)
+        tivar = s**2
+        
+        flux[b1:e1] = (tR_it.dot(Cinvf[b:e])/tivar)[bb:ee]
+        ivar[b1:e1] = (s[bb:ee])**2
+        R[b:e,b1:e1] = tR[:,bb:ee]
+        
     t1=time.time()
-    log.debug(" Time for eigen decomposition= {} sec".format(t1-t0))
-    # Check for negative eigenvalues.
-    nbad = np.count_nonzero(L < 0)
-    if nbad > 0:
-        log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
-        L[L < 0] = 0.
-    log.debug("Calculate the matrix square root Q such that Cinv = Q.Q")
-    Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
-    log.debug("Calculate and return the corresponding resolution matrix and diagonal flux errors.")
-    s = np.sum(Q,axis=1)
-    R = Q/s[:,np.newaxis]
-    ivar = s**2
-    return ivar,R
+    log.debug("Time for decorrelate_divide_and_conquer (block={},skin={}) = {} sec".format(2*chw+1,skin,t1-t0))
+    return flux,ivar,R
+    
+
 
 def spectroperf_resample_spectra(spectra, wave) :
 
@@ -252,22 +255,21 @@ def spectroperf_resample_spectra(spectra, wave) :
     mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
     ndiag = 5
     rdata = np.ones((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
-
+    dw=np.gradient(wave)
+    wavebin=np.min(dw[dw>0.]) # min wavelength bin size
+    log.debug("Min wavelength bin= {:2.1f} A".format(wavebin))
     log.debug("Compute resampling matrices ...")
     RS=dict()
     for b in spectra._bands :
-        log.debug("  resampling matrix band {}".format(b))
         twave=spectra.wave[b]
         jj=np.where((twave>=wave[0])&(twave<=wave[-1]))[0]
         twave=spectra.wave[b][jj]
         RS[b] = get_resampling_matrix(wave,twave)
-        #pyfits.writeto("rs-{}.fits".format(b),RS[b],overwrite=True)
     
     for i in range(ntarget) :
-        log.debug("Resampling {}/{}".format(i+1,ntarget))
+        log.debug("resampling {}/{}".format(i+1,ntarget))
         cinv = None
         for b in spectra._bands :
-            log.debug("  {} ...".format(b))
             twave=spectra.wave[b]
             jj=np.where((twave>=wave[0])&(twave<=wave[-1]))[0]
             twave=twave[jj]
@@ -283,18 +285,17 @@ def spectroperf_resample_spectra(spectra, wave) :
                 cinv  += tcinv
                 cinvf += tcinvf
         if scipy.sparse.issparse(cinv): cinv = cinv.todense()
+        ii=np.arange(cinv.shape[0],dtype=int)
         keep = np.where(np.diag(cinv) > 0)[0]
         keep_t = keep[:,np.newaxis]
-        R = np.zeros_like(cinv)
-        log.debug("  decorrelate ...")
-        #try :
-        ivar[i,keep],R[keep_t,keep] = decorrelate(cinv[keep_t,keep])
-        R_it = scipy.linalg.inv(R[keep_t,keep].T)
-        flux[i,keep] = R_it.dot(cinvf[keep])/ivar[i,keep]
-        #except :
-        #    print(sys.exc_info())
-        log.debug("  done")
-        rdata[i]=0.# need to do better
+        R    = np.zeros_like(cinv)
+        flux[i,keep],ivar[i,keep],R[keep_t,keep] = decorrelate_divide_and_conquer(cinv[keep_t,keep],cinvf[keep],wavebin=wavebin)
+        
+        dd=np.arange(ndiag,dtype=int)-ndiag//2
+        for j in keep :
+            k=(dd>=-j)&(dd<nwave-j)
+            rdata[i,k,j] = R[j+dd[k],j].ravel()
+            
 
     bands=""
     for b in spectra._bands : bands += b
@@ -332,7 +333,7 @@ def fast_resample_spectra(spectra, wave) :
                 fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
     return res
     
-def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, spectro_perf=False, wave_min=None, wave_max=None) :
+def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False, wave_min=None, wave_max=None) :
 
     wmin=None
     wmax=None
@@ -357,7 +358,7 @@ def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, spectro_pe
         lwmax=np.log10(wmax)
         nsteps=int((lwmax-lwmin)/log10_step) + 1
         wave=10**(lwmin+np.arange(nsteps)*log10_step)
-    if not spectro_perf :
+    if fast :
         return fast_resample_spectra(spectra=spectra,wave=wave)
     else :
         return spectroperf_resample_spectra(spectra=spectra,wave=wave)
