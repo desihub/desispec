@@ -4,9 +4,10 @@ Coadd spectra
 
 from __future__ import absolute_import, division, print_function
 
+
 from desiutil.log import get_logger
 from desispec.io import read_spectra,write_spectra
-from desispec.coaddition import coadd,resample_spectra_lin_or_log
+from desispec.coaddition import coadd,coadd_cameras,resample_spectra_lin_or_log
 
 def parse(options=None):
     import argparse
@@ -21,6 +22,8 @@ def parse(options=None):
     parser.add_argument("--wave-max", type=float, default=None, help="specify the max wavelength in A (default is the max wavelength in the input spectra, approximate), used only with option --lin-step or --log10-step)")
     parser.add_argument("--fast", action="store_true", help="fast resampling, at the cost of correlated pixels and no resolution matrix (used only with option --lin-step or --log10-step)")
     parser.add_argument("--nproc", type=int, default=1, help="multiprocessing")
+    parser.add_argument("--coadd-cameras", action="store_true", help="coadd spectra of different cameras. works only if wavelength grids are aligned")
+    
     
     if options is None:
         args = parser.parse_args()
@@ -39,11 +42,20 @@ def main(args=None):
     if args.lin_step is not None and args.log10_step is not None :
         print("cannot have both linear and logarthmic bins :-), choose either --lin-step or --log10-step")
         return 12
+    if args.coadd_cameras and ( args.lin_step is not None or args.log10_step is not None ) :
+        print("cannot specify a new wavelength binning along with --coadd-cameras option")
+        return 12
 
     log.info("reading spectra ...")
     spectra = read_spectra(args.infile)
-    log.info("coadding ...")
-    coadd(spectra,cosmics_nsig=args.nsig)
+
+
+    if args.coadd_cameras :
+        log.info("coadding cameras ...")
+        spectra = coadd_cameras(spectra,cosmics_nsig=args.nsig)
+    else :
+        log.info("coadding ...")
+        coadd(spectra,cosmics_nsig=args.nsig)
 
     if args.lin_step is not None :
         log.info("resampling ...")
