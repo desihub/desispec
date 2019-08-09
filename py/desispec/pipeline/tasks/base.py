@@ -365,23 +365,27 @@ class BaseTask(object):
         return self._run_max_procs(procs_per_node)
 
 
-    def _run_max_mem(self):
+    def _run_max_mem(self, name, db):
         """Return zero (i.e. not a limit)
         """
         return 0.0
 
 
-    def run_max_mem(self):
+    def run_max_mem(self, name, db=None):
         """Maximum memory in GB per process required.
 
         If zero is returned, it indicates that the memory requirement is so
         small that the code can run fully-packed on any system.
 
+        Args:
+            name (str): the name of the task.
+            db (pipeline.DB): the optional database instance.
+
         Returns:
             float: the required RAM in GB per process.
 
         """
-        return self._run_max_mem()
+        return self._run_max_mem(name, db)
 
 
     def _run_time(self, name, procs_per_node, db):

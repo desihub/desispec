@@ -74,7 +74,7 @@ class TaskExtract(BaseTask):
         return 20 # 20 bundles per camera
 
 
-    def _run_time(self, name, procs_per_node, db=None):
+    def _run_time(self, name, procs_per_node, db):
         """See BaseTask.run_time.
         """
         return 6

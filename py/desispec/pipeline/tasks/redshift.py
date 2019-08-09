@@ -4,6 +4,9 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import, division, print_function
+
+import numpy as np
+
 from .base import BaseTask, task_classes, task_type
 from ...io import findfile
 from ...util import option_list
@@ -55,13 +58,33 @@ class TaskRedshift(BaseTask):
         }
         return deptasks
 
-    def run_max_procs(self, procs_per_node):
+    def _run_max_mem(self, name, db):
+        mem = 0.0
+        return mem
+
+    def _run_max_procs(self, procs_per_node):
         return procs_per_node
 
-    def run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 15
+    def _run_time(self, name, procs_per_node, db):
+        # One minute of overhead, plus about 1 second per target.
+        tm = 1
+        if db is not None:
+            props = self.name_split(name)
+            # FIXME:  the healpix_frame table has the number of targets
+            # for each spectrograph in the given pixel.  What we need here
+            # is the total number of unique targets per pixel.  Once the
+            # "coadd" task is implemented, get the total unique targets from the
+            # coadd table.  As a temporary proxy, we base this number on the
+            # max number of targets from a single frame.
+            entries = db.select_healpix_frame(
+                {"pixel":props["pixel"],
+                 "nside":props["nside"]}
+            )
+            maxtarg = np.max([x["ntargets"] for x in entries])
+            # 2.5 seconds per max targets in a single cframe (change this
+            # to be based on number of targets in coadd)
+            tm += 2.5 * 0.0167 * maxtarg
+        return tm
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.

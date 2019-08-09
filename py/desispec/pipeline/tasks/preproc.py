@@ -82,11 +82,11 @@ class TaskPreproc(BaseTask):
         return 1
 
 
-    def _run_max_mem(self):
+    def _run_max_mem(self, name, db):
         return 7.0
 
 
-    def _run_time(self, name, procs_per_node, db=None):
+    def _run_time(self, name, procs_per_node, db):
         """See BaseTask.run_time.
         """
         return 2

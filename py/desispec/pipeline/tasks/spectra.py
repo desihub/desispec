@@ -54,13 +54,33 @@ class TaskSpectra(BaseTask):
         """
         return dict()
 
-    def run_max_procs(self, procs_per_node):
+    def _run_max_mem(self, name, db):
+        mem = 0.0
+        if db is not None:
+            # Get the list of updated frames and use the size of this list as
+            # a proxy for determining the memory requirements of the job.
+            props = self.name_split(name)
+            entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
+            nentry = len(entries)
+            # 1GB base plus ~10MB per cframe file.  DB entry is for one exposure
+            # and spectrograph.
+            mem = 0.5 + 0.01 * 3 * nentry
+        return mem
+
+    def _run_max_procs(self, procs_per_node):
+        # This is a serial task.
         return 1
 
-    def run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 15
+    def _run_time(self, name, procs_per_node, db):
+        # Get the list of updated frames and use the size of this list as
+        # a proxy for determining the runtime.
+        tm = 1.0
+        if db is not None:
+            props = self.name_split(name)
+            entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
+            nentry = len(entries)
+            tm += 1.0 * (nentry / 50.0)
+        return tm
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.
@@ -78,8 +98,9 @@ class TaskSpectra(BaseTask):
         from .base import task_classes, task_type
         # get pixel
         props = self.name_split(name)
-        # get list of exposures and spectrographs by selecting entries in the healpix_frame table with state = 1
-        # which means that there is a new cframe intersecting the pixel
+        # get list of exposures and spectrographs by selecting entries in the
+        # healpix_frame table with state = 1, which means that there is a new
+        # cframe intersecting the pixel
         entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"],"state":1})
         # now select cframe with same props
         cframes = []
@@ -115,7 +136,7 @@ class TaskSpectra(BaseTask):
         args = update_spectra.parse(optlist)
         update_spectra.main(args)
         return
-    
+
     def run_and_update(self, db, name, opts, comm=None):
         """Run the task and update DB state.
 
@@ -164,6 +185,3 @@ class TaskSpectra(BaseTask):
                 else:
                     self.state_set(db, name, "failed")
         return failed
-
-
-        

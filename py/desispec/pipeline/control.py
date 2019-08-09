@@ -573,7 +573,7 @@ def gen_scripts(tasks_by_type, nersc=None, nersc_queue="regular",
 
     import datetime
     now = datetime.datetime.now()
-    outtaskdir = "{}_{:%Y%m%d-%H%M%S}".format(jobname, now)
+    outtaskdir = "{}_{:%Y%m%d-%H%M%S-%f}".format(jobname, now)
 
     if out is None:
         outdir = os.path.join(proddir, io.get_pipe_rundir(),

@@ -98,7 +98,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
 
     def query(self):
         parser = argparse.ArgumentParser(\
-            description="Query the SB",
+            description="Query the DB",
                                          usage="desi_pipe query 'sql_command' [--rw] (use --help for details)")
         parser.add_argument('cmd', metavar='cmd', type=str,
                             help="SQL command in quotes, like 'select * from preproc'")
@@ -119,7 +119,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
                 for prop in entry :
                     line += " {}".format(prop)
                 print(line)
-        
+
     def create(self):
         parser = argparse.ArgumentParser(\
             description="Create a new production",
@@ -791,11 +791,33 @@ Where supported commands are (use desi_pipe <command> --help for details):
             if previous is not None and len(previous)>0 :
                 nightlast.append(previous[-1])
 
-        # Submit redshifts
+        # Submit spectal grouping
         jobids = control.chain(
-            ["spectra", "redshift"],
+            ["spectra"],
             pack=True,
             depjobs=nightlast,
+            nersc=args.nersc,
+            nersc_queue=args.nersc_queue,
+            nersc_maxtime=args.nersc_maxtime,
+            nersc_maxnodes=args.nersc_maxnodes,
+            nersc_shifter=args.nersc_shifter,
+            mpi_procs=args.mpi_procs,
+            mpi_run=args.mpi_run,
+            procs_per_node=args.procs_per_node,
+            out=args.outdir,
+            states=states,
+            debug=args.debug,
+            dryrun=args.dryrun)
+
+        previous = None
+        if jobids is not None and len(jobids)>0 :
+            previous = [ jobids[-1] ]
+
+        # Submit redshifts (and coadds)
+        jobids = control.chain(
+            ["redshift"],
+            pack=True,
+            depjobs=previous,
             nersc=args.nersc,
             nersc_queue=args.nersc_queue,
             nersc_maxtime=args.nersc_maxtime,

@@ -77,7 +77,7 @@ class TaskPSF(BaseTask):
         return 20
 
 
-    def _run_time(self, name, procs_per_node, db=None):
+    def _run_time(self, name, procs_per_node, db):
         """See BaseTask.run_time.
         """
         return 12 # convergence slower for some realizations

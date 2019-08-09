@@ -68,7 +68,7 @@ class TaskFibermap(BaseTask):
         return 1
 
 
-    def _run_time(self, name, procs_per_node, db=None):
+    def _run_time(self, name, procs_per_node, db):
         """See BaseTask.run_time.
         """
         return 1
