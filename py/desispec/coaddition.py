@@ -25,6 +25,15 @@ from desispec.resolution import Resolution
 
 
 def coadd(spectra, cosmics_nsig=0.) :
+    """
+    Coaddition the spectra for each target and each camera. The input spectra is modified.
+    
+    Args:
+       spectra: desispec.spectra.Spectra object
+         
+    Options:
+       cosmics_nsig: float, nsigma clipping threshold for cosmics rays
+    """
     log = get_logger()
     targets = np.unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
@@ -246,11 +255,18 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
 
 def spectroperf_resample_spectra(spectra, wave) :
     """
-    docstring
+    Resampling of spectra file using the spectrophotometic approach
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+       wave: 1D numy array with new wavelenght grid
+
+    Returns:
+       desispec.spectra.Spectra object
     """
 
     log = get_logger()
-    log.debug("Resampling to wave grid if size {}: {}".format(wave.size,wave))
+    log.debug("Resampling to wave grid of size {}: {}".format(wave.size,wave))
 
     b=spectra._bands[0]
     ntarget=spectra.flux[b].shape[0]
@@ -262,7 +278,7 @@ def spectroperf_resample_spectra(spectra, wave) :
     else :
         mask = None
     ndiag = 5
-    rdata = np.ones((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
+    rdata = np.ones((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
     dw=np.gradient(wave)
     wavebin=np.min(dw[dw>0.]) # min wavelength bin size
     log.debug("Min wavelength bin= {:2.1f} A".format(wavebin))
@@ -334,7 +350,16 @@ def spectroperf_resample_spectra(spectra, wave) :
 
 def fast_resample_spectra(spectra, wave) :
     """
-    docstring
+    Fast resampling of spectra file.
+    The output resolution = Id. The neighboring 
+    flux bins are correlated.
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+       wave: 1D numy array with new wavelenght grid
+
+    Returns:
+       desispec.spectra.Spectra object, resolution data=Id
     """
 
     log = get_logger()
@@ -375,7 +400,21 @@ def fast_resample_spectra(spectra, wave) :
     
 def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False, wave_min=None, wave_max=None) :
     """
-    docstring
+    Resampling of spectra file.
+    
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+       linear_step: if not null the ouput wavelenght grid will be linear with this step
+       log10_step: if not null the ouput wavelenght grid will be logarthmic with this step
+       
+    Options:
+       fast: simple resampling. fast but at the price of correlated output flux bins and no information on resolution
+       wave_min: if set, use this min wavelength
+       wave_max: if set, use this max wavelength
+
+    Returns:
+       desispec.spectra.Spectra object
     """
 
     wmin=None
