@@ -204,19 +204,22 @@ def get_resampling_matrix(global_grid,local_grid,sparse=False):
 
 
     
-def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
+def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
     """Decorrelate an inverse covariance using the matrix square root.
 
     Implements the decorrelation part of the spectroperfectionism algorithm described in
     Bolton & Schlegel 2009 (BS) http://arxiv.org/abs/0911.2689.
 
+    with the divide and conquer approach, i.e. per diagonal block of the matrix, with an
+    overlapping 'skin' from one block to another. 
+    
     Args:
         Cinv: Square 2D array: input inverse covariance matrix
         Cinvf: 1D array: input
-        wavebin: minimal size of wavelength bin in A
+        wavebin: minimal size of wavelength bin in A, used to define the core and skin size
         flux: 1D array: output flux (has to be allocated)
         ivar: 1D array: output flux inverse variance (has to be allocated)
-        R: Square 2D array: output resolution matrix (has to be allocated)
+        rdata: 2D array: output resolution matrix per diagonal (has to be allocated)
     """
     
     chw=max(10,int(50/wavebin)) #core is 2*50+1 A
@@ -224,6 +227,9 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
     nn=Cinv.shape[0]
     nstep=nn//(2*chw+1)+1
     Lmin=1e-15/np.mean(np.diag(Cinv)) # Lmin is scaled with Cinv values
+    ndiag=rdata.shape[0]
+    dd=np.arange(ndiag,dtype=int)-ndiag//2
+
     for c in range(chw,nn+(2*chw+1),(2*chw+1)) :
         b=max(0,c-chw-skin)
         e=min(nn,c+chw+skin+1)
@@ -249,9 +255,14 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
         
         flux[b1:e1] = (tR_it.dot(Cinvf[b:e])/tivar)[bb:ee]
         ivar[b1:e1] = (s[bb:ee])**2
-        R[b:e,b1:e1] = tR[:,bb:ee]
+        for j in range(b1,e1) :
+            k=(dd>=-j)&(dd<nn-j)
+            # k is the diagonal index
+            # j is the wavelength index
+            # it could be the transposed, I am following what it is specter.ex2d, L209
+            rdata[k,j] = tR[j-b+dd[k],j-b]
     
-def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,R,flux,ivar,rdata) :
+def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,flux,ivar,rdata) :
     cinv = None
     for b in spectra._bands :
         twave=spectra.wave[b]
@@ -269,15 +280,10 @@ def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,r
             cinv  += tcinv
             cinvf += tcinvf
     cinv = cinv.todense()
-    nwave=wave.size
-    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[target_index],ivar[target_index],R)
-    dd=np.arange(ndiag,dtype=int)-ndiag//2
-    for j in range(nwave) :
-        k=(dd>=-j)&(dd<nwave-j)
-        rdata[target_index,k,j] = R[j+dd[k],j].ravel()
+    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[target_index],ivar[target_index],rdata[target_index])
 
 # this version allocates memory so it is slower, but that's what we need for multiprocessing
-def spectroperf_resample_spectrum_multiproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag):#,R) :
+def spectroperf_resample_spectrum_multiproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag) :
 
     proc = multiprocessing.current_process()._identity[0]-1
     print("proc={} tid={}".format(proc,target_index))
@@ -305,14 +311,7 @@ def spectroperf_resample_spectrum_multiproc(spectra,target_index,wave,wavebin,re
     flux_i=np.zeros(nwave)
     ivar_i=np.zeros(nwave)
     rdata_i=np.zeros((ndiag,nwave))
-    R=np.zeros((nwave,nwave))
-    #R_i=R[proc]
-    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux_i,ivar_i,R)
-    dd=np.arange(ndiag,dtype=int)-ndiag//2
-    for j in range(nwave) :
-        k=(dd>=-j)&(dd<nwave-j)
-        #rdata_i[k,j] = R_i[j+dd[k],j].ravel()
-        rdata_i[k,j] = R[j+dd[k],j].ravel()
+    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux_i,ivar_i,rdata_i)
     return target_index,flux_i,ivar_i,rdata_i
 
 def _func(arg) :
@@ -358,19 +357,17 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
 
 
     if nproc==1 :
-        R = np.zeros((nwave,nwave))
         for target_index in range(ntarget) :
             log.debug("resampling {}/{}".format(target_index+1,ntarget))
             t0=time.time()
-            spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,R,flux,ivar,rdata)
+            spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,flux,ivar,rdata)
             t1=time.time()
             log.debug("done one spectrum in {} sec".format(t1-t0))
     else :
-        #R = np.zeros((nproc,nwave,nwave))
         func_args = []
         for target_index in range(ntarget) :
             arguments={"spectra":spectra,"target_index":target_index,"wave":wave,"wavebin":wavebin,
-                       "resampling_matrix":resampling_matrix,"ndiag":ndiag}#,"R":R}
+                       "resampling_matrix":resampling_matrix,"ndiag":ndiag}
             func_args.append(arguments)
 
         log.debug("creating multiprocessing pool with %d nproc"%nproc); sys.stdout.flush()
