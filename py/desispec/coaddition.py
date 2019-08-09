@@ -344,7 +344,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     """
 
     log = get_logger()
-    log.debug("Resampling to wave grid of size {}: {}".format(wave.size,wave))
+    log.debug("resampling to wave grid of size {}: {}".format(wave.size,wave))
 
     b=spectra._bands[0]
     ntarget=spectra.flux[b].shape[0]
@@ -363,8 +363,8 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     
     dw=np.gradient(wave)
     wavebin=np.min(dw[dw>0.]) # min wavelength bin size
-    log.debug("Min wavelength bin= {:2.1f} A; ndiag= {:d}".format(wavebin,ndiag))
-    log.debug("compute resampling matrices ...")
+    log.debug("min wavelength bin= {:2.1f} A; ndiag= {:d}".format(wavebin,ndiag))
+    log.debug("compute resampling matrices")
     resampling_matrix=dict()
     for b in spectra._bands :
         twave=spectra.wave[b]
@@ -389,7 +389,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
             log.debug("done one spectrum in {} sec".format(t1-t0))
     else :
 
-        # allocate shared memory
+        log.debug("allocate shared memory")
 
         # input
         shm_in_wave = list()
@@ -422,6 +422,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
         # loop on processes
         procs=list()
         for proc_index in range(nproc) :
+            log.debug("starting process #{}".format(proc_index+1))
             proc = multiprocessing.Process(target=spectroperf_resample_spectrum_multiproc,
                                            args=(shm_in_wave,shm_in_flux,shm_in_ivar,shm_in_rdata,
                                                  in_nwave,in_ndiag,spectra._bands,

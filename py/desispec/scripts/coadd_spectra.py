@@ -39,15 +39,20 @@ def main(args=None):
     if args.lin_step is not None and args.log10_step is not None :
         print("cannot have both linear and logarthmic bins :-), choose either --lin-step or --log10-step")
         return 12
-    
-    spectra = read_spectra(args.infile)
 
+    log.info("reading spectra ...")
+    spectra = read_spectra(args.infile)
+    log.info("coadding ...")
     coadd(spectra,cosmics_nsig=args.nsig)
 
     if args.lin_step is not None :
+        log.info("resampling ...")
         spectra = resample_spectra_lin_or_log(spectra, linear_step=args.lin_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
     if args.log10_step is not None :
+        log.info("resampling ...")
         spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
 
-    log.debug("writing {} ...".format(args.outfile))
+    log.info("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)
+
+    log.info("done")
