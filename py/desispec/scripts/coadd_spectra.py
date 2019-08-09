@@ -20,6 +20,7 @@ def parse(options=None):
     parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra), used only with option --lin-step or --log10-step")
     parser.add_argument("--wave-max", type=float, default=None, help="specify the max wavelength in A (default is the max wavelength in the input spectra, approximate), used only with option --lin-step or --log10-step)")
     parser.add_argument("--fast", action="store_true", help="fast resampling, at the cost of correlated pixels and no resolution matrix (used only with option --lin-step or --log10-step)")
+    parser.add_argument("--nproc", type=int, default=1, help="multiprocessing")
     
     if options is None:
         args = parser.parse_args()
@@ -44,9 +45,9 @@ def main(args=None):
     coadd(spectra,cosmics_nsig=args.nsig)
 
     if args.lin_step is not None :
-        spectra = resample_spectra_lin_or_log(spectra, linear_step=args.lin_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast)
+        spectra = resample_spectra_lin_or_log(spectra, linear_step=args.lin_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
     if args.log10_step is not None :
-        spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast)
+        spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
 
     log.debug("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)

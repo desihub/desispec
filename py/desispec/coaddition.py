@@ -16,6 +16,8 @@ from astropy.table import Column
 # for debugging
 import astropy.io.fits as pyfits
 
+import multiprocessing
+
 from desiutil.log import get_logger
 
 from desispec.interpolation import resample_flux
@@ -240,17 +242,81 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,R) :
         ivar[b1:e1] = (s[bb:ee])**2
         R[b:e,b1:e1] = tR[:,bb:ee]
     
-    
-    
+def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,R,flux,ivar,rdata) :
+    cinv = None
+    for b in spectra._bands :
+        twave=spectra.wave[b]
+        jj=(twave>=wave[0])&(twave<=wave[-1])
+        twave=twave[jj]
+        tivar=spectra.ivar[b][target_index][jj]
+        diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
+        RR = Resolution(spectra.resolution_data[b][target_index][:,jj]).dot(resampling_matrix[b])
+        tcinv  = RR.T.dot(diag_ivar.dot(RR))
+        tcinvf = RR.T.dot(tivar*spectra.flux[b][target_index][jj])
+        if cinv is None :
+            cinv  = tcinv
+            cinvf = tcinvf
+        else :
+            cinv  += tcinv
+            cinvf += tcinvf
+    cinv = cinv.todense()
+    nwave=wave.size
+    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[target_index],ivar[target_index],R)
+    dd=np.arange(ndiag,dtype=int)-ndiag//2
+    for j in range(nwave) :
+        k=(dd>=-j)&(dd<nwave-j)
+        rdata[target_index,k,j] = R[j+dd[k],j].ravel()
 
+# this version allocates memory so it is slower, but that's what we need for multiprocessing
+def spectroperf_resample_spectrum_multiproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag):#,R) :
 
-def spectroperf_resample_spectra(spectra, wave) :
+    proc = multiprocessing.current_process()._identity[0]-1
+    print("proc={} tid={}".format(proc,target_index))
+    sys.stdout.flush()
+    
+    cinv = None
+    for b in spectra._bands :
+        twave=spectra.wave[b]
+        jj=(twave>=wave[0])&(twave<=wave[-1])
+        twave=twave[jj]
+        tivar=spectra.ivar[b][target_index][jj]
+        diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
+        RR = Resolution(spectra.resolution_data[b][target_index][:,jj]).dot(resampling_matrix[b])
+        tcinv  = RR.T.dot(diag_ivar.dot(RR))
+        tcinvf = RR.T.dot(tivar*spectra.flux[b][target_index][jj])
+        if cinv is None :
+            cinv  = tcinv
+            cinvf = tcinvf
+        else :
+            cinv  += tcinv
+            cinvf += tcinvf
+    cinv = cinv.todense()
+    nwave=wave.size
+    
+    flux_i=np.zeros(nwave)
+    ivar_i=np.zeros(nwave)
+    rdata_i=np.zeros((ndiag,nwave))
+    R=np.zeros((nwave,nwave))
+    #R_i=R[proc]
+    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux_i,ivar_i,R)
+    dd=np.arange(ndiag,dtype=int)-ndiag//2
+    for j in range(nwave) :
+        k=(dd>=-j)&(dd<nwave-j)
+        #rdata_i[k,j] = R_i[j+dd[k],j].ravel()
+        rdata_i[k,j] = R[j+dd[k],j].ravel()
+    return target_index,flux_i,ivar_i,rdata_i
+
+def _func(arg) :
+    """ Used for multiprocessing.Pool """
+    return spectroperf_resample_spectrum_multiproc(**arg)
+
+def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     """
     docstring
     """
 
     log = get_logger()
-    log.debug("Resampling to wave grid if size {}: {}".format(wave.size,wave))
+    log.debug("Resampling to wave grid of size {}: {}".format(wave.size,wave))
 
     b=spectra._bands[0]
     ntarget=spectra.flux[b].shape[0]
@@ -262,64 +328,50 @@ def spectroperf_resample_spectra(spectra, wave) :
     else :
         mask = None
     ndiag = 5
-    rdata = np.ones((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
+    rdata = np.ones((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
     dw=np.gradient(wave)
     wavebin=np.min(dw[dw>0.]) # min wavelength bin size
     log.debug("Min wavelength bin= {:2.1f} A".format(wavebin))
     log.debug("compute resampling matrices ...")
-    RS=dict()
+    resampling_matrix=dict()
     for b in spectra._bands :
         twave=spectra.wave[b]
         jj=np.where((twave>=wave[0])&(twave<=wave[-1]))[0]
         twave=spectra.wave[b][jj]
-        RS[b] = get_resampling_matrix(wave,twave)
+        resampling_matrix[b] = get_resampling_matrix(wave,twave)
 
-    R = np.zeros((nwave,nwave))
-    for i in range(ntarget) :
+
+    if nproc==1 :
+        R = np.zeros((nwave,nwave))
+        for target_index in range(ntarget) :
+            log.debug("resampling {}/{}".format(target_index+1,ntarget))
+            t0=time.time()
+            spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,R,flux,ivar,rdata)
+            t1=time.time()
+            log.debug("done one spectrum in {} sec".format(t1-t0))
+    else :
+        #R = np.zeros((nproc,nwave,nwave))
+        func_args = []
+        for target_index in range(ntarget) :
+            arguments={"spectra":spectra,"target_index":target_index,"wave":wave,"wavebin":wavebin,
+                       "resampling_matrix":resampling_matrix,"ndiag":ndiag}#,"R":R}
+            func_args.append(arguments)
+
+        log.debug("creating multiprocessing pool with %d nproc"%nproc); sys.stdout.flush()
+        pool = multiprocessing.Pool(nproc)
+        log.debug("Running pool.map() for {} items".format(len(func_args))); sys.stdout.flush()
+        results=pool.map(_func, func_args)
+        log.debug("Finished pool.map()"); sys.stdout.flush()
+        pool.close()
+        pool.join()
+        log.debug("Finished pool.join()"); sys.stdout.flush()
+        for result in results :
+            i        = result[0]
+            flux[i]  = result[1]
+            ivar[i]  = result[2]
+            rdata[i] = result[3]
+    
         
-        log.debug("resampling {}/{}".format(i+1,ntarget))
-
-        t0=time.time()
-        
-        cinv = None
-        for b in spectra._bands :
-            twave=spectra.wave[b]
-            jj=(twave>=wave[0])&(twave<=wave[-1])
-            twave=twave[jj]
-            tivar=spectra.ivar[b][i][jj]
-            diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
-            RR = Resolution(spectra.resolution_data[b][i][:,jj]).dot(RS[b])
-            tcinv  = RR.T.dot(diag_ivar.dot(RR))
-            tcinvf = RR.T.dot(tivar*spectra.flux[b][i][jj])
-            if cinv is None :
-                cinv  = tcinv
-                cinvf = tcinvf
-            else :
-                cinv  += tcinv
-                cinvf += tcinvf
-
-        #t1=time.time()
-        #log.debug("done filling matrix in {} sec".format(t1-t0))
-        
-        cinv = cinv.todense()
-
-        #t2=time.time()
-        #log.debug("done densify matrix in {} sec".format(t2-t1))
-
-        decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[i],ivar[i],R)
-
-        #t3=time.time()
-        #log.debug("done decorrelate in {} sec".format(t3-t2))
-       
-        dd=np.arange(ndiag,dtype=int)-ndiag//2
-        for j in range(nwave) :
-            k=(dd>=-j)&(dd<nwave-j)
-            rdata[i,k,j] = R[j+dd[k],j].ravel()
-
-        t4=time.time()
-        #log.debug("done resolution data in {} sec".format(t4-t3))
-        log.debug("done one spectrum in {} sec".format(t4-t0))
-
     bands=""
     for b in spectra._bands : bands += b
 
@@ -373,7 +425,7 @@ def fast_resample_spectra(spectra, wave) :
                 fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
     return res
     
-def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False, wave_min=None, wave_max=None) :
+def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False, wave_min=None, wave_max=None, nproc=1) :
     """
     docstring
     """
@@ -404,4 +456,4 @@ def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False
     if fast :
         return fast_resample_spectra(spectra=spectra,wave=wave)
     else :
-        return spectroperf_resample_spectra(spectra=spectra,wave=wave)
+        return spectroperf_resample_spectra(spectra=spectra,wave=wave,nproc=nproc)
