@@ -19,7 +19,30 @@ from desispec.darktrail import correct_dark_trail
 
 # log = get_logger()
 
+def get_amp_ids(header):
+    '''
+    Return list of amp names ['A','B','C','D'] or ['1','2','3','4']
+    based upon header keywords
+    '''
+    if 'CCDSECA' in header:
+        amp_ids = ['A', 'B', 'C', 'D']
+    elif 'CCDSEC1' in header:
+        amp_ids = ['1', '2', '3', '4']
+    else:
+        log = get_logger()
+        message = "No CCDSECA or CCDSEC1; Can't derive amp names from header"
+        log.fatal(message)
+        raise KeyError(message)
+
+    return amp_ids
+
+
 def _parse_sec_keyword(value):
+    log = get_logger()
+    log.warning('please use parse_sec_keyword (no underscore)')
+    return parse_sec_keyword(value)
+
+def parse_sec_keyword(value):
     '''
     parse keywords like BIASSECB='[7:56,51:4146]' into python slices
 
@@ -183,8 +206,8 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
             axis=edge[2]
 
 
-            ii0=_parse_sec_keyword(header['CCDSEC%d'%amp0])
-            ii1=_parse_sec_keyword(header['CCDSEC%d'%amp1])
+            ii0=parse_sec_keyword(header['CCDSEC%d'%amp0])
+            ii1=parse_sec_keyword(header['CCDSEC%d'%amp1])
             pos=ii0[axis].stop
             bins=np.linspace(ii0[axis-1].start,ii0[axis-1].stop,float(ii0[axis-1].stop-ii0[axis-1].start)/patch_width).astype(int)
             delta=np.zeros((bins.size-1))
@@ -366,33 +389,26 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
+    #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
+    amp_ids = get_amp_ids(header)
 
-    if cfinder and cfinder.haskey("AMPLIFIERS") :
-        amp_ids=list(cfinder.value("AMPLIFIERS"))
-    else :
-        amp_ids=['A','B','C','D']
+    #- Double check that we have the necessary keywords
+    missing_keywords = list()
+    for prefix in ['CCDSEC', 'BIASSEC']:
+        for amp in amp_ids :
+            key = prefix+amp
+            if not key in header :
+                log.error('No {} keyword in header'.format(key))
+                missing_keywords.append(key)
 
-    #- check whether it's indeed CCDSECx with x in ['A','B','C','D']
-    #  or older version with x in ['1','2','3','4']
-    #  we can remove this piece of code at later times
-    has_valid_keywords = True
-    for amp in amp_ids :
-        if not 'CCDSEC%s'%amp in header :
-            log.warning("No CCDSEC%s keyword in header , will look for alternative naming CCDSEC{1,2,3,4} ..."%amp)
-            has_valid_keywords = False
-            break
-    if not has_valid_keywords :
-        amp_ids=['1','2','3','4']
-        for amp in ['1','2','3','4'] :
-            if not 'CCDSEC%s'%amp in header :
-                log.error("No CCDSEC%s keyword, exit"%amp)
-                raise KeyError("No CCDSEC%s keyword"%amp)
+    if len(missing_keywords) > 0:
+        raise KeyError("Missing keywords {}".format(' '.join(missing_keywords)))
 
     #- Output arrays
     ny=0
     nx=0
     for amp in amp_ids :
-        yy, xx = _parse_sec_keyword(header['CCDSEC%s'%amp])
+        yy, xx = parse_sec_keyword(header['CCDSEC%s'%amp])
         ny=max(ny,yy.stop)
         nx=max(nx,xx.stop)
     image = np.zeros( (ny,nx) )
@@ -429,12 +445,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     for amp in amp_ids :
         # Grab the sections
-        ov_col = _parse_sec_keyword(header['BIASSEC'+amp])
+        ov_col = parse_sec_keyword(header['BIASSEC'+amp])
         if 'ORSEC'+amp in header.keys():
-            ov_row = _parse_sec_keyword(header['ORSEC'+amp])
-        else:
+            ov_row = parse_sec_keyword(header['ORSEC'+amp])
+        elif use_overscan_row:
+            log.error('No ORSEC{} keyword; not using overscan_row'.format(amp))
             use_overscan_row = False
-
 
         if nogain :
             gain = 1.
@@ -501,7 +517,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         median_overscan = np.median(overscan_col)
         log.info("Median rdnoise and overscan= %f %f"%(median_rdnoise,median_overscan))
 
-        kk = _parse_sec_keyword(header['CCDSEC'+amp])
+        kk = parse_sec_keyword(header['CCDSEC'+amp])
         for j in range(nrows) :
             readnoise[kk][j] = rdnoise[j]
 
@@ -536,7 +552,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("Measured readnoise for AMP %s = %f"%(amp,median_rdnoise))
 
         #- subtract overscan from data region and apply gain
-        jj = _parse_sec_keyword(header['DATASEC'+amp])
+        jj = parse_sec_keyword(header['DATASEC'+amp])
 
         data = rawimage[jj].copy()
         # Subtract columns
@@ -587,7 +603,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         for a1 in range(len(amp_ids)) :
             amp1=amp_ids[a1]
-            ii1 = _parse_sec_keyword(header['CCDSEC'+amp1])
+            ii1 = parse_sec_keyword(header['CCDSEC'+amp1])
             a1flux=image[ii1]
             #a1mask=mask[ii1]
 
@@ -608,7 +624,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 if fip_axis_1[a1,a2]==-1 :
                     a12flux=a12flux[:,::-1]
                     #a12mask=a12mask[:,::-1]
-                ii2 = _parse_sec_keyword(header['CCDSEC'+amp2])
+                ii2 = parse_sec_keyword(header['CCDSEC'+amp2])
                 image[ii2] -= a12flux
                 # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
 

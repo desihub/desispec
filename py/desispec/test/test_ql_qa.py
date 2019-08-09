@@ -11,7 +11,7 @@ from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
 from pkg_resources import resource_filename
 import desispec.sky
-from desispec.preproc import _parse_sec_keyword
+from desispec.preproc import parse_sec_keyword
 from specter.psf import load_psf
 import astropy.io.fits as fits
 from desispec.quicklook import qllogger
@@ -91,21 +91,21 @@ class TestQL_QA(unittest.TestCase):
         nx = self.nx = 400
         noverscan = nover = 50
 
-        hdr['BIASSEC1'] = xy2hdr(np.s_[0:ny, nx:nx+nover])
-        hdr['DATASEC1'] = xy2hdr(np.s_[0:ny, 0:nx])
-        hdr['CCDSEC1'] = xy2hdr(np.s_[0:ny, 0:nx])
+        hdr['BIASSECA'] = xy2hdr(np.s_[0:ny, nx:nx+nover])
+        hdr['DATASECA'] = xy2hdr(np.s_[0:ny, 0:nx])
+        hdr['CCDSECA'] = xy2hdr(np.s_[0:ny, 0:nx])
         
-        hdr['BIASSEC2'] = xy2hdr(np.s_[0:ny, nx+nover:nx+2*nover])
-        hdr['DATASEC2'] = xy2hdr(np.s_[0:ny, nx+2*nover:nx+2*nover+nx])
-        hdr['CCDSEC2'] =  xy2hdr(np.s_[0:ny, nx:nx+nx])
+        hdr['BIASSECB'] = xy2hdr(np.s_[0:ny, nx+nover:nx+2*nover])
+        hdr['DATASECB'] = xy2hdr(np.s_[0:ny, nx+2*nover:nx+2*nover+nx])
+        hdr['CCDSECB'] =  xy2hdr(np.s_[0:ny, nx:nx+nx])
 
-        hdr['BIASSEC3'] = xy2hdr(np.s_[ny:ny+ny, nx:nx+nover])
-        hdr['DATASEC3'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
-        hdr['CCDSEC3'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
+        hdr['BIASSECC'] = xy2hdr(np.s_[ny:ny+ny, nx:nx+nover])
+        hdr['DATASECC'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
+        hdr['CCDSECC'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
 
-        hdr['BIASSEC4'] = xy2hdr(np.s_[ny:ny+ny, nx+nover:nx+2*nover])
-        hdr['DATASEC4'] = xy2hdr(np.s_[ny:ny+ny, nx+2*nover:nx+2*nover+nx])
-        hdr['CCDSEC4'] =  xy2hdr(np.s_[ny:ny+ny, nx:nx+nx])
+        hdr['BIASSECD'] = xy2hdr(np.s_[ny:ny+ny, nx+nover:nx+2*nover])
+        hdr['DATASECD'] = xy2hdr(np.s_[ny:ny+ny, nx+2*nover:nx+2*nover+nx])
+        hdr['CCDSECD'] =  xy2hdr(np.s_[ny:ny+ny, nx:nx+nx])
         
         hdr['NIGHT'] = '20180923'
         hdr['EXPID'] = 1
@@ -114,36 +114,36 @@ class TestQL_QA(unittest.TestCase):
         hdr['EXPTIME'] = 100.0
         
         rawimage = np.zeros((2*ny, 2*nx+2*noverscan))
-        offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
-        gain = {'1':1.0, '2':1.5, '3':0.8, '4':1.2}
-        rdnoise = {'1':2.0, '2':2.2, '3':2.4, '4':2.6}
-        obsrdn = {'1':3.4, '2':3.3, '3':3.6, '4':3.3}
+        offset = {'A':100.0, 'B':100.5, 'C':50.3, 'D':200.4}
+        gain = {'A':1.0, 'B':1.5, 'C':0.8, 'D':1.2}
+        rdnoise = {'A':2.0, 'B':2.2, 'C':2.4, 'D':2.6}
+        obsrdn = {'A':3.4, 'B':3.3, 'C':3.6, 'D':3.3}
 
         quad = {
-            '1': np.s_[0:ny, 0:nx], '2': np.s_[0:ny, nx:nx+nx],
-            '3': np.s_[ny:ny+ny, 0:nx], '4': np.s_[ny:ny+ny, nx:nx+nx],
+            'A': np.s_[0:ny, 0:nx], 'B': np.s_[0:ny, nx:nx+nx],
+            'C': np.s_[ny:ny+ny, 0:nx], 'D': np.s_[ny:ny+ny, nx:nx+nx],
         }
         
-        for amp in ('1', '2', '3', '4'):
+        for amp in ('A', 'B', 'C', 'D'):
 
             hdr['GAIN'+amp] = gain[amp]
             hdr['RDNOISE'+amp] = rdnoise[amp]
             hdr['OBSRDN'+amp] = obsrdn[amp]
 
-            xy = _parse_sec_keyword(hdr['BIASSEC'+amp])
+            xy = parse_sec_keyword(hdr['BIASSEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             rawimage[xy] += offset[amp]
             rawimage[xy] += np.random.normal(scale=rdnoise[amp], size=shape)/gain[amp]
-            xy = _parse_sec_keyword(hdr['DATASEC'+amp])
+            xy = parse_sec_keyword(hdr['DATASEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             rawimage[xy] += offset[amp]
             rawimage[xy] += np.random.normal(scale=rdnoise[amp], size=shape)/gain[amp]
 
         #- set CCD parameters
-        self.ccdsec1=hdr["CCDSEC1"]
-        self.ccdsec2=hdr["CCDSEC2"]
-        self.ccdsec3=hdr["CCDSEC3"]
-        self.ccdsec4=hdr["CCDSEC4"]
+        self.ccdsec1=hdr["CCDSECA"]
+        self.ccdsec2=hdr["CCDSECB"]
+        self.ccdsec3=hdr["CCDSECC"]
+        self.ccdsec4=hdr["CCDSECD"]
 
         #- raw data are integers, not floats
         rawimg = rawimage.astype(np.int32)

@@ -30,6 +30,8 @@ if "LIBSPECEX_DIR" in os.environ:
     specexdata = os.path.join(
         os.path.dirname(os.environ["LIBSPECEX_DIR"]), "data"
     )
+elif "SPECEX" in os.environ:
+    specexdata = os.path.join(os.environ["SPECEX"], "data")
 
 libspecex = None
 try:
