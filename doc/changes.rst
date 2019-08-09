@@ -7,8 +7,12 @@ desispec Change Log
 
 * Add gain output option to desi_compute_gain
 * Modify overscan subtraction algorithm in desi.preproc.preproc
+* Move raw data transfer scripts to desitransfer_ (PR `#804`_).
 
-0.29.0 (unreleased)
+.. _desitransfer: https://github.com/desihub/desitransfer
+.. _`#804`: https://github.com/desihub/desispec/pull/804
+
+0.29.0 (2019-05-30)
 -------------------
 
 * Add HPSS backup to the raw data transfer script (PR `#765`_).
