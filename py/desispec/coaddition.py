@@ -282,41 +282,54 @@ def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,r
     cinv = cinv.todense()
     decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[target_index],ivar[target_index],rdata[target_index])
 
-# this version allocates memory so it is slower, but that's what we need for multiprocessing
-def spectroperf_resample_spectrum_multiproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag) :
+# for multiprocessing, with shared memory buffers
+def spectroperf_resample_spectrum_multiproc(shm_in_wave,shm_in_flux,shm_in_ivar,shm_in_rdata,in_nwave,in_ndiag,in_bands,target_indices,wave,wavebin,resampling_matrix,ndiag,ntarget,shm_flux,shm_ivar,shm_rdata) :
 
-    proc = multiprocessing.current_process()._identity[0]-1
-    print("proc={} tid={}".format(proc,target_index))
-    sys.stdout.flush()
-    
-    cinv = None
-    for b in spectra._bands :
-        twave=spectra.wave[b]
-        jj=(twave>=wave[0])&(twave<=wave[-1])
-        twave=twave[jj]
-        tivar=spectra.ivar[b][target_index][jj]
-        diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
-        RR = Resolution(spectra.resolution_data[b][target_index][:,jj]).dot(resampling_matrix[b])
-        tcinv  = RR.T.dot(diag_ivar.dot(RR))
-        tcinvf = RR.T.dot(tivar*spectra.flux[b][target_index][jj])
-        if cinv is None :
-            cinv  = tcinv
-            cinvf = tcinvf
-        else :
-            cinv  += tcinv
-            cinvf += tcinvf
-    cinv = cinv.todense()
-    nwave=wave.size
-    
-    flux_i=np.zeros(nwave)
-    ivar_i=np.zeros(nwave)
-    rdata_i=np.zeros((ndiag,nwave))
-    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux_i,ivar_i,rdata_i)
-    return target_index,flux_i,ivar_i,rdata_i
+    nwave = wave.size
 
-def _func(arg) :
-    """ Used for multiprocessing.Pool """
-    return spectroperf_resample_spectrum_multiproc(**arg)
+    # manipulate shared memory as np arrays
+
+    # input shared memory
+    in_wave = list()
+    in_flux = list()
+    in_ivar  = list()
+    in_rdata  = list()
+
+    nbands = len(shm_in_wave)
+    for b in range(nbands) :
+        in_wave.append( np.array(shm_in_wave[b],copy=False).reshape(in_nwave[b]) )
+        in_flux.append( np.array(shm_in_flux[b],copy=False).reshape((ntarget,in_nwave[b])) )
+        in_ivar.append( np.array(shm_in_ivar[b],copy=False).reshape((ntarget,in_nwave[b])) )
+        in_rdata.append( np.array(shm_in_rdata[b],copy=False).reshape((ntarget,in_ndiag[b],in_nwave[b])) )
+        
+
+    # output shared memory
+    
+    flux  = np.array(shm_flux,copy=False).reshape(ntarget,nwave)
+    ivar  = np.array(shm_ivar,copy=False).reshape(ntarget,nwave)
+    rdata = np.array(shm_rdata,copy=False).reshape(ntarget,ndiag,nwave)
+    
+    for target_index in target_indices :
+    
+        cinv = None
+        for b in range(nbands) :
+            twave=in_wave[b]
+            jj=(twave>=wave[0])&(twave<=wave[-1])
+            twave=twave[jj]
+            tivar=in_ivar[b][target_index][jj]
+            diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
+            RR = Resolution(in_rdata[b][target_index][:,jj]).dot(resampling_matrix[in_bands[b]])
+            tcinv  = RR.T.dot(diag_ivar.dot(RR))
+            tcinvf = RR.T.dot(tivar*in_flux[b][target_index][jj])
+            if cinv is None :
+                cinv  = tcinv
+                cinvf = tcinvf
+            else :
+                cinv  += tcinv
+                cinvf += tcinvf
+        cinv = cinv.todense()
+        decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[target_index],ivar[target_index],rdata[target_index])
+
 
 def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     """
@@ -336,8 +349,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     b=spectra._bands[0]
     ntarget=spectra.flux[b].shape[0]
     nwave=wave.size
-    flux = np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
-    ivar = np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+    
     if spectra.mask is not None :
         mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
     else :
@@ -348,7 +360,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     for b in spectra._bands :
         ndiag = max(ndiag,spectra.resolution_data[b].shape[1])
         
-    rdata = np.zeros((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
+    
     dw=np.gradient(wave)
     wavebin=np.min(dw[dw>0.]) # min wavelength bin size
     log.debug("Min wavelength bin= {:2.1f} A; ndiag= {:d}".format(wavebin,ndiag))
@@ -362,6 +374,13 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
 
 
     if nproc==1 :
+
+        # allocate array
+        flux  = np.zeros((ntarget,nwave),dtype=float)
+        ivar  = np.zeros((ntarget,nwave),dtype=float)
+        rdata = np.zeros((ntarget,ndiag,nwave),dtype=float)
+
+        # simply loop on targets
         for target_index in range(ntarget) :
             log.debug("resampling {}/{}".format(target_index+1,ntarget))
             t0=time.time()
@@ -369,27 +388,55 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
             t1=time.time()
             log.debug("done one spectrum in {} sec".format(t1-t0))
     else :
-        func_args = []
-        for target_index in range(ntarget) :
-            arguments={"spectra":spectra,"target_index":target_index,"wave":wave,"wavebin":wavebin,
-                       "resampling_matrix":resampling_matrix,"ndiag":ndiag}
-            func_args.append(arguments)
 
-        log.debug("creating multiprocessing pool with %d nproc"%nproc); sys.stdout.flush()
-        pool = multiprocessing.Pool(nproc)
-        log.debug("Running pool.map() for {} items".format(len(func_args))); sys.stdout.flush()
-        results=pool.map(_func, func_args)
-        log.debug("Finished pool.map()"); sys.stdout.flush()
-        pool.close()
-        pool.join()
-        log.debug("Finished pool.join()"); sys.stdout.flush()
-        for result in results :
-            i        = result[0]
-            flux[i]  = result[1]
-            ivar[i]  = result[2]
-            rdata[i] = result[3]
-    
+        # allocate shared memory
+
+        # input
+        shm_in_wave = list()
+        shm_in_flux = list()
+        shm_in_ivar  = list()
+        shm_in_rdata  = list()
+        in_nwave = list()
+        in_ndiag = list()
+        for b in spectra._bands :
+            shm_in_wave.append( multiprocessing.Array('d',spectra.wave[b],lock=False) )
+            shm_in_flux.append( multiprocessing.Array('d',spectra.flux[b].ravel(),lock=False) )
+            shm_in_ivar.append( multiprocessing.Array('d',spectra.ivar[b].ravel(),lock=False) )
+            shm_in_rdata.append( multiprocessing.Array('d',spectra.resolution_data[b].ravel(),lock=False) )
+            in_nwave.append(spectra.wave[b].size)
+            in_ndiag.append(spectra.resolution_data[b].shape[1])
         
+        # output
+        shm_flux=multiprocessing.Array('d',ntarget*nwave,lock=False)
+        shm_ivar=multiprocessing.Array('d',ntarget*nwave,lock=False)
+        shm_rdata=multiprocessing.Array('d',ntarget*ndiag*nwave,lock=False)
+        
+        # manipulate shared memory as np arrays
+        flux  = np.array(shm_flux,copy=False).reshape(ntarget,nwave)
+        ivar  = np.array(shm_ivar,copy=False).reshape(ntarget,nwave)
+        rdata = np.array(shm_rdata,copy=False).reshape(ntarget,ndiag,nwave)
+        
+        # split targets per process
+        target_indices = np.array_split(np.arange(ntarget),nproc)
+
+        # loop on processes
+        procs=list()
+        for proc_index in range(nproc) :
+            proc = multiprocessing.Process(target=spectroperf_resample_spectrum_multiproc,
+                                           args=(shm_in_wave,shm_in_flux,shm_in_ivar,shm_in_rdata,
+                                                 in_nwave,in_ndiag,spectra._bands,
+                                                 target_indices[proc_index],wave,wavebin,
+                                                 resampling_matrix,ndiag,ntarget,
+                                                 shm_flux,shm_ivar,shm_rdata))
+            proc.start()
+            procs.append(proc)
+
+        # wait for the processes to finish
+        log.info("waiting for the {} processes to finish ...".format(nproc))
+        for proc in procs :
+            proc.join()
+        log.info("all done!")
+    
     bands=""
     for b in spectra._bands : bands += b
 
