@@ -1,147 +1,173 @@
 """
-desispec.coaddition
-===================
-
-Algorithms for co-addition of independent observations of the same object.
-
-See :doc:`coadd` and `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_
-for general information about the coaddition dataflow and algorithms.
+Coadd spectra
 """
 
 from __future__ import absolute_import, division, print_function
+import os, sys, time
 
 import numpy as np
+
 import scipy.sparse
 import scipy.linalg
 import scipy.sparse.linalg
 
-import desispec.resolution
-from desispec import util
+from astropy.table import Column
+
+# for debugging
+import astropy.io.fits as pyfits
+
+import multiprocessing
 
 from desiutil.log import get_logger
 
-class Spectrum(object):
-    """A reduced flux spectrum with an associated diagonal inverse covariance and resolution matrix.
+from desispec.interpolation import resample_flux
+from desispec.spectra import Spectra
+from desispec.resolution import Resolution
 
-    Objects of this type provide the inputs and outputs of co-addition. When only a wavelength grid
-    is passed to the constructor, the new object will represent a zero-flux spectrum. Use the +=
-    operator to co-add spectra.
 
-    Args:
-        wave(numpy.ndarray): Array of shape (n,) wavelengths in Angstroms where the flux is tabulated.
-        flux(numpy.ndarray): Array of shape (n,) flux densities in 1e-17 erg/s/cm**2 at each wavelength.
-        ivar(numpy.ndarray): Array of shape (n,) inverse variances of flux at each wavelength.
-        resolution(desimodel.resolution.Resolution): Sparse matrix of wavelength resolutions.
+
+def coadd(spectra, cosmics_nsig=0.) :
     """
-    def __init__(self,wave,flux=None,ivar=None,mask=None,resolution=None):
-        assert wave.ndim == 1, "Input wavelength should be 1D"
-        assert (flux is None) or (flux.shape == wave.shape), "wave and flux should have same shape"
-        assert (ivar is None) or (ivar.shape == wave.shape), "wave and ivar should have same shape"
-        assert (mask is None) or (mask.shape == wave.shape), "wave and mask should have same shape"
-        assert (resolution is None) or (isinstance(resolution, desispec.resolution.Resolution))
-        assert (resolution is None) or (resolution.shape[0] == len(wave)), "resolution size mismatch to wave"
+    Coaddition the spectra for each target and each camera. The input spectra is modified.
+    
+    Args:
+       spectra: desispec.spectra.Spectra object
+         
+    Options:
+       cosmics_nsig: float, nsigma clipping threshold for cosmics rays
+    """
+    log = get_logger()
+    targets = np.unique(spectra.fibermap["TARGETID"])
+    ntarget=targets.size
+    log.debug("number of targets= {}".format(ntarget))
+    for b in spectra._bands :
+        log.debug("coadding band '{}'".format(b))
+        nwave=spectra.wave[b].size
+        tflux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
+        tivar=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+        if spectra.mask is not None :
+            tmask=np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+        else :
+            tmask=None
+        trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
+        
+        for i,tid in enumerate(targets) :
+            jj=np.where(spectra.fibermap["TARGETID"]==tid)[0]
 
-        self.wave = wave
-        self.flux = flux
-        self.ivar = ivar
-        self.mask = mask
-        # if mask is None:
-        #     self.mask = np.zeros(self.flux.shape, dtype=np.uint32)
-        # else:
-        #     self.mask = util.mask32(mask)
-        self.resolution = resolution
-        self.R = resolution #- shorthand
-        self.log = get_logger()
-        # Initialize the quantities we will accumulate during co-addition. Note that our
-        # internal Cinv is a dense matrix.
-        if ivar is None:
-            n = len(wave)
-            self.Cinv = np.zeros((n,n))
-            self.Cinv_f = np.zeros((n,))
-        else:
-            assert flux is not None and resolution is not None,'Missing flux and/or resolution.'
-            diag_ivar = scipy.sparse.dia_matrix((ivar[np.newaxis,:],[0]),resolution.shape)
-            self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
-            self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
 
-    def finalize(self):
-        """Calculates the flux, inverse variance and resolution for this spectrum.
+            if cosmics_nsig is not None and cosmics_nsig > 0 :
+                # interpolate over bad measurements
+                # to be able to compute gradient next
+                # to a bad pixel and identify oulier
+                # many cosmics residuals are on edge
+                # of cosmic ray trace, and so can be
+                # next to a masked flux bin
+                grad=[]
+                gradvar=[]
+                for j in jj :
+                    if spectra.mask is not None :
+                        ttivar = spectra.ivar[b][j]*(spectra.mask[b][j]==0)
+                    else :
+                        ttivar = spectra.ivar[b][j]
+                    good = (ttivar>0)
+                    bad  = (ttivar<=0)
+                    ttflux = spectra.flux[b][j]
+                    ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
+                    ttivar = spectra.ivar[b][j]
+                    ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
+                    ttvar = 1./ttivar
+                    ttflux[1:] = ttflux[1:]-ttflux[:-1]
+                    ttvar[1:]  = ttvar[1:]+ttvar[:-1]
+                    ttflux[0]  = 0
+                    grad.append(ttflux)
+                    gradvar.append(ttvar)
 
-        Uses the accumulated data from all += operations so far but does not prevent
-        further accumulation.  This is the expensive step in coaddition so we make
-        it something that you have to call explicitly.  If you forget to do this,
-        the flux,ivar,resolution attributes will be None.
+            tivar_unmasked= np.sum(spectra.ivar[b][jj],axis=0)
+            if spectra.mask is not None :
+                ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
+            else :
+                ivarjj=spectra.ivar[b][jj]
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>0  :
+                grad=np.array(grad)
+                gradivar=1/np.array(gradvar)
+                nspec=grad.shape[0]
+                meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
+                deltagrad=grad-meangrad
+                chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
+                
+                for l in np.where(chi2>cosmics_nsig**2)[0]  :
+                    k=np.argmax(gradivar[:,l]*deltagrad[:,l]**2)
+                    #k=np.argmax(flux[:,j])
+                    log.debug("masking spec {} wave={}".format(k,spectra.wave[b][l]))
+                    ivarjj[k][l]=0.
+            
+            tivar[i]=np.sum(ivarjj,axis=0)
+            tflux[i]=np.sum(ivarjj*spectra.flux[b][jj],axis=0)
+            for r in range(spectra.resolution_data[b].shape[1]) :
+                trdata[i,r]=np.sum((spectra.ivar[b][jj]*spectra.resolution_data[b][jj,r]),axis=0) # not sure applying mask is wise here
+            bad=(tivar[i]==0)
+            if np.sum(bad)>0 :
+                tivar[i][bad] = np.sum(spectra.ivar[b][jj][:,bad],axis=0) # if all masked, keep original ivar
+                tflux[i][bad] = np.sum(spectra.ivar[b][jj][:,bad]*spectra.flux[b][jj][:,bad],axis=0)
+            ok=(tivar[i]>0)
+            if np.sum(ok)>0 :
+                tflux[i][ok] /= tivar[i][ok]
+            ok=(tivar_unmasked>0)
+            if np.sum(ok)>0 :
+                trdata[i][:,ok] /= tivar_unmasked[ok]
+            if spectra.mask is not None :
+                tmask[i]      = np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
+        spectra.flux[b] = tflux
+        spectra.ivar[b] = tivar
+        if spectra.mask is not None :
+            spectra.mask[b] = tmask
+        spectra.resolution_data[b] = trdata
 
-        If the coadded resolution matrix is not invertible, a warning message is
-        printed and the returned flux vector is zero (but ivar and resolution are
-        still valid).
-        """
-        # Convert to a dense matrix if necessary.
-        if scipy.sparse.issparse(self.Cinv):
-            self.Cinv = self.Cinv.todense()
-        # What pixels are we using?
-        mask = (np.diag(self.Cinv) > 0)
-        keep = np.arange(len(self.Cinv_f))[mask]
-        keep_t = keep[:,np.newaxis]
-        # Initialize the results to zero.
-        self.flux = np.zeros_like(self.Cinv_f)
-        self.ivar = np.zeros_like(self.Cinv_f)
-        R = np.zeros_like(self.Cinv)
-        # Calculate the deconvolved flux,ivar and resolution for ivar > 0 pixels.
-        self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
-        try:
-            R_it = scipy.linalg.inv(R[keep_t,keep].T)
-            self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
-        except np.linalg.linalg.LinAlgError:
-            self.log.warning('resolution matrix is singular so no coadded fluxes available.')
-        # Convert R from a dense matrix to a sparse one.
-        self.resolution = desispec.resolution.Resolution(R)
 
-    def __iadd__(self,other):
-        """Coadd this spectrum with another spectrum.
+    log.debug("merging fibermap")
+    jj=np.zeros(ntarget,dtype=int)
+    for i,tid in enumerate(targets) :
+        jj[i]=np.where(spectra.fibermap["TARGETID"]==tid)[0][0]
+    tfmap=spectra.fibermap[jj]
+    # smarter values for some columns
+    for k in ['DELTA_X','DELTA_Y'] :
+        if k in spectra.fibermap.colnames :
+            tfmap.rename_column(k,'MEAN_'+k)
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='RMS_'+k)
+    for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
+        if k in spectra.fibermap.colnames :
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='FIRST_'+k)
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='LAST_'+k)
+            xx = Column(np.arange(ntarget))
+            tfmap.add_column(xx,name='NUM_'+k)
 
-        The calling object is updated to the combined result. Linear interpolation will be
-        used if the other spectrum uses a different wavelength grid.
+    for i,tid in enumerate(targets) :
+        jj = spectra.fibermap["TARGETID"]==tid
+        for k in ['DELTA_X','DELTA_Y'] :
+            if k in spectra.fibermap.colnames :
+                vals=spectra.fibermap[k][jj]
+                tfmap['MEAN_'+k][i] = np.mean(vals)
+                tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)) # inc. mean offset, not same as std
+        for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
+            if k in spectra.fibermap.colnames :
+                vals=spectra.fibermap[k][jj]
+                tfmap['FIRST_'+k][i] = np.min(vals)
+                tfmap['LAST_'+k][i] = np.max(vals)
+                tfmap['NUM_'+k][i] = np.unique(vals).size
+        for k in ['DESIGN_X', 'DESIGN_Y','FIBER_RA', 'FIBER_DEC'] :
+            if k in spectra.fibermap.colnames :
+                tfmap[k][i]=np.mean(spectra.fibermap[k][jj])
+        for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR','DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
+            if k in spectra.fibermap.colnames :
+                tfmap[k][i]=np.sum(spectra.fibermap[k][jj])
 
-        Raises:
-            AssertionError: The other spectrum's wavelength grid is not compatible with ours.
-        """
-        # Create self.mask if needed to merge with other.mask
-        if self.mask is None and other.mask is not None:
-            self.mask = np.zeros(len(self.wave), dtype=np.uint32)
+    spectra.fibermap=tfmap
+    spectra.scores=None
 
-        # Accumulate weighted deconvolved fluxes.
-        if np.array_equal(self.wave,other.wave):
-            self.Cinv = self.Cinv + other.Cinv
-            self.Cinv_f += other.Cinv_f
-            if (self.mask is not None) and (other.mask is not None):
-                self.mask |= other.mask
-        else:
-            resampler = get_resampling_matrix(self.wave,other.wave)
-            self.Cinv = self.Cinv + resampler.T.dot(other.Cinv.dot(resampler))
-            self.Cinv_f += resampler.T.dot(other.Cinv_f)
-            if (self.mask is not None) and (other.mask is not None):
-                mask_resampler = (resampler != 0).T
-                self.mask |= mask_resampler.T.dot(other.mask)
-
-        # Make sure we don't forget to call finalize.
-        self.flux = None
-        self.ivar = None
-        self.resolution = None
-
-        return self
-
-"""
-Nominal global wavelength grid for spectra that are coadded across camera bands.
-
-The nominal brz grids cover 3579.0 - 9824.0 A but the FITs grids have some roundoff error
-so we add an extra bin to the end of the global wavelength grid to fully contain the bands.
-Note that we use a linear grid (rather than a log-lambda grid, for example) so that
-co-added spectra have a roughly constant FWHM/BINSIZE.
-"""
-global_wavelength_grid = np.arange(3579.0,9826.0,1.0)
-
-def get_resampling_matrix(global_grid,local_grid):
+def get_resampling_matrix(global_grid,local_grid,sparse=False):
     """Build the rectangular matrix that linearly resamples from the global grid to a local grid.
 
     The local grid range must be contained within the global grid range.
@@ -157,8 +183,10 @@ def get_resampling_matrix(global_grid,local_grid):
     assert np.all(np.diff(local_grid) > 0),'Local grid is not strictly increasing.'
     # Locate each local wavelength in the global grid.
     global_index = np.searchsorted(global_grid,local_grid)
+
     assert local_grid[0] >= global_grid[0],'Local grid extends below global grid.'
     assert local_grid[-1] <= global_grid[-1],'Local grid extends above global grid.'
+    
     # Lookup the global-grid bracketing interval (xlo,xhi) for each local grid point.
     # Note that this gives xlo = global_grid[-1] if local_grid[0] == global_grid[0]
     # but this is fine since the coefficient of xlo will be zero.
@@ -169,49 +197,352 @@ def get_resampling_matrix(global_grid,local_grid):
     local_index = np.arange(len(local_grid),dtype=int)
     matrix = np.zeros((len(local_grid),len(global_grid)))
     matrix[local_index,global_index] = alpha
-    matrix[local_index,global_index-1] = 1 - alpha
-    return matrix
+    matrix[local_index,global_index-1] = 1-alpha
 
-def decorrelate(Cinv):
+    # turn into a sparse matrix
+    return scipy.sparse.csc_matrix(matrix)
+
+
+    
+def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
     """Decorrelate an inverse covariance using the matrix square root.
 
     Implements the decorrelation part of the spectroperfectionism algorithm described in
-    Bolton & Schlegel 2009 (BS) http://arxiv.org/abs/0911.2689, w uses the matrix square root of
-    Cinv to form a diagonal basis. This is generally a better choice than the eigenvector or
-    Cholesky bases since it leads to more localized basis vectors, as described in
-    Hamilton & Tegmark 2000 http://arxiv.org/abs/astro-ph/9905192.
+    Bolton & Schlegel 2009 (BS) http://arxiv.org/abs/0911.2689.
+
+    with the divide and conquer approach, i.e. per diagonal block of the matrix, with an
+    overlapping 'skin' from one block to another. 
+    
+    Args:
+        Cinv: Square 2D array: input inverse covariance matrix
+        Cinvf: 1D array: input
+        wavebin: minimal size of wavelength bin in A, used to define the core and skin size
+        flux: 1D array: output flux (has to be allocated)
+        ivar: 1D array: output flux inverse variance (has to be allocated)
+        rdata: 2D array: output resolution matrix per diagonal (has to be allocated)
+    """
+    
+    chw=max(10,int(50/wavebin)) #core is 2*50+1 A
+    skin=max(2,int(10/wavebin)) #skin is 10A
+    nn=Cinv.shape[0]
+    nstep=nn//(2*chw+1)+1
+    Lmin=1e-15/np.mean(np.diag(Cinv)) # Lmin is scaled with Cinv values
+    ndiag=rdata.shape[0]
+    dd=np.arange(ndiag,dtype=int)-ndiag//2
+
+    for c in range(chw,nn+(2*chw+1),(2*chw+1)) :
+        b=max(0,c-chw-skin)
+        e=min(nn,c+chw+skin+1)
+        b1=max(0,c-chw)
+        e1=min(nn,c+chw+1)
+        bb=max(0,b1-b)
+        ee=min(e-b,e1-b)
+        if e<=b : continue
+        L,X = scipy.linalg.eigh(Cinv[b:e,b:e],overwrite_a=False,turbo=True)
+        nbad = np.count_nonzero(L < Lmin)
+        if nbad > 0:
+            #log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
+            L[L < Lmin] = Lmin
+        Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
+        s = np.sum(Q,axis=1)
+
+        b1x=max(0,c-chw-3)
+        e1x=min(nn,c+chw+1+3)
+
+        tR = (Q/s[:,np.newaxis])
+        tR_it = scipy.linalg.inv(tR.T)
+        tivar = s**2
+        
+        flux[b1:e1] = (tR_it.dot(Cinvf[b:e])/tivar)[bb:ee]
+        ivar[b1:e1] = (s[bb:ee])**2
+        for j in range(b1,e1) :
+            k=(dd>=-j)&(dd<nn-j)
+            # k is the diagonal index
+            # j is the wavelength index
+            # it could be the transposed, I am following what it is specter.ex2d, L209
+            rdata[k,j] = tR[j-b+dd[k],j-b]
+    
+def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,flux,ivar,rdata) :
+    cinv = None
+    for b in spectra._bands :
+        twave=spectra.wave[b]
+        jj=(twave>=wave[0])&(twave<=wave[-1])
+        twave=twave[jj]
+        tivar=spectra.ivar[b][target_index][jj]
+        diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
+        RR = Resolution(spectra.resolution_data[b][target_index][:,jj]).dot(resampling_matrix[b])
+        tcinv  = RR.T.dot(diag_ivar.dot(RR))
+        tcinvf = RR.T.dot(tivar*spectra.flux[b][target_index][jj])
+        if cinv is None :
+            cinv  = tcinv
+            cinvf = tcinvf
+        else :
+            cinv  += tcinv
+            cinvf += tcinvf
+    cinv = cinv.todense()
+    decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[target_index],ivar[target_index],rdata[target_index])
+
+# for multiprocessing, with shared memory buffers
+def spectroperf_resample_spectrum_multiproc(shm_in_wave,shm_in_flux,shm_in_ivar,shm_in_rdata,in_nwave,in_ndiag,in_bands,target_indices,wave,wavebin,resampling_matrix,ndiag,ntarget,shm_flux,shm_ivar,shm_rdata) :
+
+    nwave = wave.size
+
+    # manipulate shared memory as np arrays
+
+    # input shared memory
+    in_wave = list()
+    in_flux = list()
+    in_ivar  = list()
+    in_rdata  = list()
+
+    nbands = len(shm_in_wave)
+    for b in range(nbands) :
+        in_wave.append( np.array(shm_in_wave[b],copy=False).reshape(in_nwave[b]) )
+        in_flux.append( np.array(shm_in_flux[b],copy=False).reshape((ntarget,in_nwave[b])) )
+        in_ivar.append( np.array(shm_in_ivar[b],copy=False).reshape((ntarget,in_nwave[b])) )
+        in_rdata.append( np.array(shm_in_rdata[b],copy=False).reshape((ntarget,in_ndiag[b],in_nwave[b])) )
+        
+
+    # output shared memory
+    
+    flux  = np.array(shm_flux,copy=False).reshape(ntarget,nwave)
+    ivar  = np.array(shm_ivar,copy=False).reshape(ntarget,nwave)
+    rdata = np.array(shm_rdata,copy=False).reshape(ntarget,ndiag,nwave)
+    
+    for target_index in target_indices :
+    
+        cinv = None
+        for b in range(nbands) :
+            twave=in_wave[b]
+            jj=(twave>=wave[0])&(twave<=wave[-1])
+            twave=twave[jj]
+            tivar=in_ivar[b][target_index][jj]
+            diag_ivar = scipy.sparse.dia_matrix((tivar,[0]),(twave.size,twave.size))
+            RR = Resolution(in_rdata[b][target_index][:,jj]).dot(resampling_matrix[in_bands[b]])
+            tcinv  = RR.T.dot(diag_ivar.dot(RR))
+            tcinvf = RR.T.dot(tivar*in_flux[b][target_index][jj])
+            if cinv is None :
+                cinv  = tcinv
+                cinvf = tcinvf
+            else :
+                cinv  += tcinv
+                cinvf += tcinvf
+        cinv = cinv.todense()
+        decorrelate_divide_and_conquer(cinv,cinvf,wavebin,flux[target_index],ivar[target_index],rdata[target_index])
+
+
+def spectroperf_resample_spectra(spectra, wave, nproc=1) :
+    """
+    Resampling of spectra file using the spectrophotometic approach
 
     Args:
-        Cinv(numpy.ndarray): Square array of inverse covariance matrix elements. The input can
-            either be a scipy.sparse format or else a regular (dense) numpy array, but a
-            sparse format will be internally converted to a dense matrix so there is no
-            performance advantage.
+       spectra: desispec.spectra.Spectra object
+       wave: 1D numy array with new wavelenght grid
 
     Returns:
-        tuple: Tuple ivar,R of uncorrelated flux inverse variances and the corresponding
-            resolution matrix. These have shapes (nflux,) and (nflux,nflux) respectively.
-            The rows of R give the resolution-convolved responses to unit flux for each
-            wavelength bin. Note that R is returned as a regular (dense) numpy array but
-            will normally have non-zero values concentrated near the diagonal.
+       desispec.spectra.Spectra object
     """
+
     log = get_logger()
-    # Clean up any roundoff errors by forcing Cinv to be symmetric.
-    Cinv = 0.5*(Cinv + Cinv.T)
-    # Convert to a dense matrix if necessary.
-    if scipy.sparse.issparse(Cinv):
-        Cinv = Cinv.todense()
-    # Calculate the matrix square root. Note that we do not use scipy.linalg.sqrtm since
-    # the method below is about 2x faster for a positive definite matrix.
-    L,X = scipy.linalg.eigh(Cinv)
-    # Check for negative eigenvalues.
-    nbad = np.count_nonzero(L < 0)
-    if nbad > 0:
-        log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
-        L[L < 0] = 0.
-    # Calculate the matrix square root Q such that Cinv = Q.Q
-    Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
-    # Calculate and return the corresponding resolution matrix and diagonal flux errors.
-    s = np.sum(Q,axis=1)
-    R = Q/s[:,np.newaxis]
-    ivar = s**2
-    return ivar,R
+    log.debug("resampling to wave grid of size {}: {}".format(wave.size,wave))
+
+    b=spectra._bands[0]
+    ntarget=spectra.flux[b].shape[0]
+    nwave=wave.size
+    
+    if spectra.mask is not None :
+        mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+    else :
+        mask = None
+    # number of diagonals is the max of the number of diagonals in the
+    # input spectra cameras
+    ndiag = 0
+    for b in spectra._bands :
+        ndiag = max(ndiag,spectra.resolution_data[b].shape[1])
+        
+    
+    dw=np.gradient(wave)
+    wavebin=np.min(dw[dw>0.]) # min wavelength bin size
+    log.debug("min wavelength bin= {:2.1f} A; ndiag= {:d}".format(wavebin,ndiag))
+    log.debug("compute resampling matrices")
+    resampling_matrix=dict()
+    for b in spectra._bands :
+        twave=spectra.wave[b]
+        jj=np.where((twave>=wave[0])&(twave<=wave[-1]))[0]
+        twave=spectra.wave[b][jj]
+        resampling_matrix[b] = get_resampling_matrix(wave,twave)
+
+
+    if nproc==1 :
+
+        # allocate array
+        flux  = np.zeros((ntarget,nwave),dtype=float)
+        ivar  = np.zeros((ntarget,nwave),dtype=float)
+        rdata = np.zeros((ntarget,ndiag,nwave),dtype=float)
+
+        # simply loop on targets
+        for target_index in range(ntarget) :
+            log.debug("resampling {}/{}".format(target_index+1,ntarget))
+            t0=time.time()
+            spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,flux,ivar,rdata)
+            t1=time.time()
+            log.debug("done one spectrum in {} sec".format(t1-t0))
+    else :
+
+        log.debug("allocate shared memory")
+
+        # input
+        shm_in_wave = list()
+        shm_in_flux = list()
+        shm_in_ivar  = list()
+        shm_in_rdata  = list()
+        in_nwave = list()
+        in_ndiag = list()
+        for b in spectra._bands :
+            shm_in_wave.append( multiprocessing.Array('d',spectra.wave[b],lock=False) )
+            shm_in_flux.append( multiprocessing.Array('d',spectra.flux[b].ravel(),lock=False) )
+            shm_in_ivar.append( multiprocessing.Array('d',spectra.ivar[b].ravel(),lock=False) )
+            shm_in_rdata.append( multiprocessing.Array('d',spectra.resolution_data[b].ravel(),lock=False) )
+            in_nwave.append(spectra.wave[b].size)
+            in_ndiag.append(spectra.resolution_data[b].shape[1])
+        
+        # output
+        shm_flux=multiprocessing.Array('d',ntarget*nwave,lock=False)
+        shm_ivar=multiprocessing.Array('d',ntarget*nwave,lock=False)
+        shm_rdata=multiprocessing.Array('d',ntarget*ndiag*nwave,lock=False)
+        
+        # manipulate shared memory as np arrays
+        flux  = np.array(shm_flux,copy=False).reshape(ntarget,nwave)
+        ivar  = np.array(shm_ivar,copy=False).reshape(ntarget,nwave)
+        rdata = np.array(shm_rdata,copy=False).reshape(ntarget,ndiag,nwave)
+        
+        # split targets per process
+        target_indices = np.array_split(np.arange(ntarget),nproc)
+
+        # loop on processes
+        procs=list()
+        for proc_index in range(nproc) :
+            log.debug("starting process #{}".format(proc_index+1))
+            proc = multiprocessing.Process(target=spectroperf_resample_spectrum_multiproc,
+                                           args=(shm_in_wave,shm_in_flux,shm_in_ivar,shm_in_rdata,
+                                                 in_nwave,in_ndiag,spectra._bands,
+                                                 target_indices[proc_index],wave,wavebin,
+                                                 resampling_matrix,ndiag,ntarget,
+                                                 shm_flux,shm_ivar,shm_rdata))
+            proc.start()
+            procs.append(proc)
+
+        # wait for the processes to finish
+        log.info("waiting for the {} processes to finish ...".format(nproc))
+        for proc in procs :
+            proc.join()
+        log.info("all done!")
+    
+    bands=""
+    for b in spectra._bands : bands += b
+
+    if spectra.mask is not None :
+        dmask={bands:mask,}
+    else :
+        dmask=None
+    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
+                fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
+    return res
+
+
+def fast_resample_spectra(spectra, wave) :
+    """
+    Fast resampling of spectra file.
+    The output resolution = Id. The neighboring 
+    flux bins are correlated.
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+       wave: 1D numy array with new wavelenght grid
+
+    Returns:
+       desispec.spectra.Spectra object, resolution data=Id
+    """
+
+    log = get_logger()
+    log.debug("Resampling to wave grid: {}".format(wave))
+    
+    
+    nwave=wave.size
+    b=spectra._bands[0]
+    ntarget=spectra.flux[b].shape[0]
+    nres=spectra.resolution_data[b].shape[1]
+    ivar=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
+    flux=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+    if spectra.mask is not None :
+        mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
+    else :
+        mask = None
+    rdata=np.ones((ntarget,1,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
+    bands=""
+    for b in spectra._bands :
+        if spectra.mask is not None :
+            tivar=spectra.ivar[b]*(spectra.mask[b]==0)
+        else :
+            tivar=spectra.ivar[b]
+        for i in range(ntarget) :
+            ivar[i]  += resample_flux(wave,spectra.wave[b],tivar[i])
+            flux[i]  += resample_flux(wave,spectra.wave[b],tivar[i]*spectra.flux[b][i])
+        bands += b
+    for i in range(ntarget) :
+        ok=(ivar[i]>0)
+        flux[i,ok]/=ivar[i,ok]    
+    if spectra.mask is not None :
+        dmask={bands:mask,}
+    else :
+        dmask=None
+    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
+                fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
+    return res
+    
+def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False, wave_min=None, wave_max=None, nproc=1) :
+    """
+    Resampling of spectra file.
+    
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+       linear_step: if not null the ouput wavelenght grid will be linear with this step
+       log10_step: if not null the ouput wavelenght grid will be logarthmic with this step
+       
+    Options:
+       fast: simple resampling. fast but at the price of correlated output flux bins and no information on resolution
+       wave_min: if set, use this min wavelength
+       wave_max: if set, use this max wavelength
+
+    Returns:
+       desispec.spectra.Spectra object
+    """
+
+    wmin=None
+    wmax=None
+    for b in spectra._bands :
+        if wmin is None :
+            wmin=spectra.wave[b][0]
+            wmax=spectra.wave[b][-1]
+        else :
+            wmin=min(wmin,spectra.wave[b][0])
+            wmax=max(wmax,spectra.wave[b][-1])
+
+    if wave_min is not None :
+        wmin = wave_min
+    if wave_max is not None :
+        wmax = wave_max
+
+    if linear_step>0 :
+        nsteps=int((wmax-wmin)/linear_step) + 1
+        wave=wmin+np.arange(nsteps)*linear_step
+    elif log10_step>0 :
+        lwmin=np.log10(wmin)
+        lwmax=np.log10(wmax)
+        nsteps=int((lwmax-lwmin)/log10_step) + 1
+        wave=10**(lwmin+np.arange(nsteps)*log10_step)
+    if fast :
+        return fast_resample_spectra(spectra=spectra,wave=wave)
+    else :
+        return spectroperf_resample_spectra(spectra=spectra,wave=wave,nproc=nproc)
