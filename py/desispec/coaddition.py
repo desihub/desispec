@@ -342,11 +342,16 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
         mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
     else :
         mask = None
-    ndiag = 5
-    rdata = np.ones((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
+    # number of diagonals is the max of the number of diagonals in the
+    # input spectra cameras
+    ndiag = 0
+    for b in spectra._bands :
+        ndiag = max(ndiag,spectra.resolution_data[b].shape[1])
+        
+    rdata = np.zeros((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
     dw=np.gradient(wave)
     wavebin=np.min(dw[dw>0.]) # min wavelength bin size
-    log.debug("Min wavelength bin= {:2.1f} A".format(wavebin))
+    log.debug("Min wavelength bin= {:2.1f} A; ndiag= {:d}".format(wavebin,ndiag))
     log.debug("compute resampling matrices ...")
     resampling_matrix=dict()
     for b in spectra._bands :
