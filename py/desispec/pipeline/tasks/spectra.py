@@ -5,6 +5,8 @@
 
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
+
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
 
 from ...util import option_list
@@ -54,26 +56,15 @@ class TaskSpectra(BaseTask):
         """
         return dict()
 
-    def _run_max_mem(self, name, db):
-        mem = 0.0
-        if db is not None:
-            # Get the list of updated frames and use the size of this list as
-            # a proxy for determining the memory requirements of the job.
-            props = self.name_split(name)
-            entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
-            nentry = len(entries)
-            # 1GB base plus ~10MB per cframe file.  DB entry is for one exposure
-            # and spectrograph.
-            mem = 0.5 + 0.01 * 3 * nentry
-        return mem
-
-    def _run_max_procs(self, procs_per_node):
+    def _run_max_procs(self):
         # This is a serial task.
         return 1
 
-    def _run_time(self, name, procs_per_node, db):
-        # Get the list of updated frames and use the size of this list as
-        # a proxy for determining the runtime.
+    def _run_time(self, name, procs, db):
+        # Run time on one proc on machine with scale factor == 1.0.
+        # Get the list of frames and use the size of this list as
+        # a proxy for determining the runtime.  The run time is dominated by
+        # I/O.
         tm = 1.0
         if db is not None:
             props = self.name_split(name)
@@ -81,6 +72,20 @@ class TaskSpectra(BaseTask):
             nentry = len(entries)
             tm += 1.0 * (nentry / 50.0)
         return tm
+
+    def _run_max_mem_proc(self, name, db):
+        # Per-process memory requirements
+        mem = 0.0
+        if db is not None:
+            # Get the list of frames and use the total targets from all frames
+            # that fall in our pixel as a measure of the memory requirements.
+            props = self.name_split(name)
+            entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
+            ntarget = np.sum([x["ntargets"] for x in entries])
+            # DB entry is for one exposure and spectrograph.
+            mem = 0.2 + 0.0002 * 3 * ntarget
+        return mem
+
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.
@@ -179,9 +184,19 @@ class TaskSpectra(BaseTask):
                     props["state"]=1 # selection, only those for which we had a cframe
                     with db.cursor() as cur :
                         self.state_set(db, name, "done",cur=cur)
-                        db.update_healpix_frame_state(props,state=2,cur=cur) # 2=spectra has been updated
+                        # 2=spectra has been updated
+                        db.update_healpix_frame_state(props,state=2,cur=cur)
                         # directly set the corresponding redshift to ready
-                        cur.execute('update redshift set state={} where nside = {} and pixel = {}'.format(task_state_to_int["ready"],props["nside"],props["pixel"]))# post processing is now done by a single rank in run.run_task_list
+                        cur.execute(
+                            'update redshift set state={} where nside = {} and pixel = {}'
+                            .format(
+                                task_state_to_int["ready"],
+                                props["nside"],
+                                props["pixel"]
+                            )
+                        )
+                        # post processing is now done by a single rank in
+                        # run.run_task_list
                 else:
                     self.state_set(db, name, "failed")
         return failed

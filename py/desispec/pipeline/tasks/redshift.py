@@ -58,33 +58,56 @@ class TaskRedshift(BaseTask):
         }
         return deptasks
 
-    def _run_max_mem(self, name, db):
-        mem = 0.0
-        return mem
+    def _run_max_procs(self):
+        # Redshifts can run on any number of procs.
+        return 0
 
-    def _run_max_procs(self, procs_per_node):
-        return procs_per_node
-
-    def _run_time(self, name, procs_per_node, db):
-        # One minute of overhead, plus about 1 second per target.
+    def _run_time(self, name, procs, db):
+        # Run time on one task on machine with scale factor == 1.0.
+        # This should depend on the total number of unique targets, which is
+        # not known a priori.  Instead, we compute the total targets and reduce
+        # this by some factor.
         tm = 1
         if db is not None:
             props = self.name_split(name)
-            # FIXME:  the healpix_frame table has the number of targets
-            # for each spectrograph in the given pixel.  What we need here
-            # is the total number of unique targets per pixel.  Once the
-            # "coadd" task is implemented, get the total unique targets from the
-            # coadd table.  As a temporary proxy, we base this number on the
-            # max number of targets from a single frame.
             entries = db.select_healpix_frame(
                 {"pixel":props["pixel"],
                  "nside":props["nside"]}
             )
-            maxtarg = np.max([x["ntargets"] for x in entries])
-            # 2.5 seconds per max targets in a single cframe (change this
-            # to be based on number of targets in coadd)
-            tm += 2.5 * 0.0167 * maxtarg
+            ntarget = np.sum([x["ntargets"] for x in entries])
+            neff = 0.3 * ntarget
+            # 2.5 seconds per targets
+            tm += 2.5 * 0.0167 * neff
         return tm
+
+    def _run_max_mem_proc(self, name, db):
+        # Per-process memory requirements.  This is determined by the largest
+        # Spectra file that must be read and broadcast.  We compute that size
+        # assuming no coadd and using the total number of targets falling in
+        # our pixel.
+        mem = 0.0
+        if db is not None:
+            props = self.name_split(name)
+            entries = db.select_healpix_frame(
+                {"pixel":props["pixel"],
+                 "nside":props["nside"]}
+            )
+            ntarget = np.sum([x["ntargets"] for x in entries])
+            # DB entry is for one exposure and spectrograph.
+            mem = 0.2 + 0.0002 * 3 * ntarget
+        return mem
+
+    def _run_max_mem_task(self, name, db):
+        # This returns the total aggregate memory needed for the task,
+        # which should be based on the larger of:
+        #  1) the total number of unique (coadded) targets.
+        #  2) the largest spectra file times the number of processes
+        # Since it is not easy to calculate (1), and the constraint for (2)
+        # is already encapsulated in the per-process memory requirements,
+        # we return zero here.  This effectively selects one node.
+        mem = 0.0
+        return mem
+
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.

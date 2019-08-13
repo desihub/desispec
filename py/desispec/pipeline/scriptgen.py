@@ -250,9 +250,17 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
 
     return
 
+def _compute_nodes(nworker, taskproc, nodeprocs):
+    """Compute number of nodes for the number of workers.
+    """
+    nds = (nworker * taskproc) // nodeprocs
+    if nds * nodeprocs < nworker * taskproc:
+        nds += 1
+    return nds
+
 
 def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
-    nodeprocs=None, db=None):
+    nodeprocs=None, db=None, balance=False):
     """Compute the NERSC job parameters based on constraints.
 
     Given the list of tasks, query their estimated runtimes and determine
@@ -281,6 +289,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             machine properties.
         db (DataBase): the database to pass to the task runtime
             calculation.
+        balance (bool): if True, change the number of workers to load
+            balance the job.
 
     Returns:
         list:  List of tuples (nodes, runtime, tasks) containing one entry
@@ -317,6 +327,9 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         maxnodes = hostprops["maxnodes"]
         log.debug('Using default {} {} maxnodes={}'.format(
             machine, queue, maxnodes))
+    else:
+        log.debug('Using user-specified {} {} maxnodes={}'.format(
+            machine, queue, maxnodes))
     if maxnodes > hostprops["maxnodes"]:
         raise RuntimeError("requested max nodes '{}' is larger than {} "
             "queue '{}' with {} nodes".format(
@@ -325,44 +338,68 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     coremem = hostprops["nodemem"] / hostprops["nodecores"]
 
     # Required memory for each task
-    taskmems = [ (x, task_classes[tasktype].run_max_mem(x, db=db))
+    taskfullmems = [ (x, task_classes[tasktype].run_max_mem_task(x, db=db))
                 for x in tasklist ]
 
-    # If not specified, then the starting point for procs per node is the
-    # fully packed case.
+    # The max memory required by any task
+    maxtaskmem = np.max([x[1] for x in taskfullmems])
+    log.debug("Maximum memory per task = {}".format(maxtaskmem))
+
+    # Required memory for a single process of the task.
+    taskprocmems = [ (x, task_classes[tasktype].run_max_mem_proc(x, db=db))
+                    for x in tasklist ]
+    maxprocmem = np.max([x[1] for x in taskprocmems])
+    log.debug("Maximum memory per process = {}".format(maxprocmem))
+
+    maxnodeprocs = hostprops["nodecores"]
+    if maxprocmem > 0.0:
+        procmem = coremem
+        while procmem < maxprocmem:
+            maxnodeprocs = maxnodeprocs // 2
+            procmem *= 2
+        log.debug("Maximum processes per node based on memory requirements = {}"
+                  .format(maxnodeprocs))
+    else:
+        log.debug("Using default max procs per node ({})".format(maxnodeprocs))
+
     if nodeprocs is None:
-        nodeprocs = hostprops["nodecores"]
-
-    procmem = hostprops["nodemem"] / nodeprocs
-
-    # Ensure we go through the loop at least once...
-    taskprocmem = 2.0 * procmem
-
-    while taskprocmem > procmem:
-        # Update procmem based on updated nodeprocs
-        procmem = hostprops["nodemem"] / nodeprocs
-
-        # Max number of procs to use per task.  This may depend on nodeprocs.
-        taskproc = task_classes[tasktype].run_max_procs(nodeprocs)
-
-        # Get the maximum mem per process
-        taskprocmem = np.max([x[1] for x in taskmems]) / taskproc
-
-        # If the memory per process exceeds the machine limit, adjust the procs
-        # per node.
-        if taskprocmem > procmem:
-            if nodeprocs == 1:
-                raise RuntimeError(
-                    "Task requires more memory per process than exists on a node"
-                )
-            else:
-                nodeprocs = nodeprocs // 2
+        nodeprocs = maxnodeprocs
+    else:
+        if nodeprocs > maxnodeprocs:
+            log.warning(
+                "Cannot use {} procs per node (insufficient memory).  Using {} instead.".format(nodeprocs, maxnodeprocs)
+            )
+            nodeprocs = maxnodeprocs
 
     if nodeprocs > hostprops["nodecores"]:
         raise RuntimeError("requested procs per node '{}' is more than the "
             "the number of cores per node on {}".format(nodeprocs, machine))
 
-    log.debug("maxtime = {}, maxnodes = {}, nodeprocs = {}".format(maxtime, maxnodes, nodeprocs))
+    log.debug("Using {} processes per node".format(nodeprocs))
+
+    # How many nodes are required to achieve the maximum memory of the largest
+    # task?
+    mintasknodes = 1
+    if maxtaskmem > 0.0:
+        mintasknodes += int(maxtaskmem / hostprops["nodemem"])
+
+    # Max number of procs to use per task.
+    taskproc = task_classes[tasktype].run_max_procs()
+    if taskproc == 0:
+        # This means that the task is flexible and can use an arbitrary
+        # number of processes.  We assign it the number of processes
+        # corresponding to the number of nodes and procs per node dictated
+        # by the memory requirements.
+        taskproc = mintasknodes * nodeprocs
+
+    log.debug("Using {} processes per task".format(nodeprocs))
+
+    # Number of workers (as large as possible)
+    availproc = maxnodes * nodeprocs
+    maxworkers = availproc // taskproc
+    nworker = maxworkers
+    if nworker > len(tasklist):
+        nworker = len(tasklist)
 
     # Run times for each task at this concurrency
     tfactor = hostprops["timefactor"]
@@ -374,43 +411,33 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
     mintasktime = tasktimes[-1][1]
     maxtasktime = tasktimes[0][1]
-    log.debug("taskproc = {}".format(taskproc))
-    log.debug("tasktimes range = {} ... {}".format(mintasktime, maxtasktime))
+    log.debug("task times range = {} ... {}".format(mintasktime, maxtasktime))
 
     if maxtasktime > maxtime:
         raise RuntimeError("The longest task ({} minutes) exceeds the "
             " requested max runtime ({} minutes)".format(maxtasktime,
             maxtime))
 
-    # Number of workers (as large as possible)
-    availproc = maxnodes * nodeprocs
-    maxworkers = availproc // taskproc
-    nworker = maxworkers
-    if nworker > len(tasklist):
-        nworker = len(tasklist)
-
-    log.debug("maxworkers = {}".format(maxworkers))
-
-    def nodes_from_workers(nw):
-        nds = (nw * taskproc) // nodeprocs
-        if nds * nodeprocs < nw * taskproc:
-            nds += 1
-        return nds
-
     # Create jobs until we run out of tasks.  We assume that every job will
     # have some startup cost that impacts all workers.  We further scale the
     # machine startup time by the job size, since larger jobs will take longer
     # to start python.
 
+    nodes = None
     ret = None
-    balanced = False
-    while not balanced:
+    is_balanced = False
+    while not is_balanced:
         # The returned list of jobs
         ret = list()
 
-        log.debug("trying nworker = {}".format(nworker))
-        totalnodes = nodes_from_workers(nworker)
-        startup_scale = totalnodes // 200
+        # Number of nodes
+        nodes = _compute_nodes(nworker, taskproc, nodeprocs)
+        log.debug(
+            "Testing {} nodes and {} workers, each with {} processes"
+            .format(nodes, nworker, taskproc)
+        )
+
+        startup_scale = nodes // 200
         startup_time = (1.0 + startup_scale) * hostprops["startup"]
 
         jobmintask = list()
@@ -462,17 +489,20 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
                 # have no tasks.  Shrink the job size.
                 nempty = np.sum([ 1 for w in workersum if w == 0 ])
                 nworker = nworker - nempty
-                totalnodes = nodes_from_workers(nworker)
-                startup_scale = totalnodes // 200
+                nodes = _compute_nodes(nworker, taskproc, nodeprocs)
+                startup_scale = nodes // 200
                 startup_time = (1.0 + startup_scale) * hostprops["startup"]
-                log.debug("shrinking final job size to {} nodes".format(totalnodes))
+                log.debug("shrinking job size to {} nodes".format(nodes))
 
             outtasks = list()
             for w in workertasks:
                 outtasks.extend(w)
 
-            ret.append( (totalnodes, nodeprocs, runtime, outtasks) )
-            log.debug("{} job will run on {} nodes for {} minutes on {} tasks".format(tasktype, totalnodes, runtime, len(outtasks)))
+            ret.append( (nodes, nodeprocs, runtime, outtasks) )
+            log.debug(
+                "{} job will run on {} nodes for {} minutes on {} tasks"
+                .format(tasktype, nodes, runtime, len(outtasks))
+            )
 
             if len(temptimes) == 0:
                 alldone = True
@@ -480,19 +510,25 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         # Check our load imbalance.  If it is too great, reduce the number of
         # workers.
         checkbalance = True
-        for jmin, jmax, jtmin, jtmax in zip(
-                jobmintime, jobmaxtime, jobmintask, jobmaxtask):
-            log.debug(
-                "load balance: min time = {}, max time = {}, min ntask = {}, max ntask = {}".format(jmin, jmax, jtmin, jtmax))
-            if jmax > 1.5 * jmin:
-                # pretty bad imbalance...
-                if nworker > 2:
-                    # We don't want to go lower than 2 workers, since that
-                    # allows one worker to do the "big" task and the other
-                    # worker to do everything else.
-                    nworker = nworker // 2
-                    checkbalance = False
-        balanced = checkbalance
+        if balance:
+            for jmin, jmax, jtmin, jtmax in zip(
+                    jobmintime, jobmaxtime, jobmintask, jobmaxtask):
+                log.debug(
+                    "load balance: min time = {}, max time = {}, min ntask = {}, max ntask = {}"
+                    .format(jmin, jmax, jtmin, jtmax)
+                )
+                if jmax > 1.5 * jmin:
+                    # pretty bad imbalance...
+                    if nworker > 2:
+                        # We don't want to go lower than 2 workers, since that
+                        # allows one worker to do the "big" task and the other
+                        # worker to do everything else.
+                        nworker = nworker // 2
+                        log.debug(
+                            "load_balance:  imbalanced, reducing job size"
+                        )
+                        checkbalance = False
+        is_balanced = checkbalance
 
     log.debug("final nworker = {}".format(nworker))
 
@@ -620,6 +656,10 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
 
     log = get_logger()
 
+    # Add an extra 5 minutes to the overall job runtime as a buffer
+    # against system issues.
+    runtimebuffer = 5.0
+
     if npacked == 1:
         # We have a single pipeline step which might be split into multiple
         # job scripts.
@@ -642,6 +682,8 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
             outfile = "{}.slurm".format(joboutroot)
 
             log.debug("writing job {}".format(outfile))
+
+            runtime += runtimebuffer
 
             nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine,
                       queue, nodes, [ nodes ], [ ppn ], runtime, openmp=openmp,
@@ -679,6 +721,9 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
             cnodes.append(nodes)
 
         outfile = "{}.slurm".format(outroot)
+
+        fullruntime += runtimebuffer
+
         nersc_job(jobname, outfile, logroot, desisetup, coms, machine,
                   queue, fullnodes, cnodes, ppns, fullruntime, openmp=openmp,
                   multiproc=multiproc, shifterimg=shifterimg, debug=debug)
