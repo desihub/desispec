@@ -199,7 +199,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     # Now every process has the full list of tasks.  Get the max
     # number of processes for this task type
 
-    taskproc = task_classes[tasktype].run_max_procs(procs_per_node)
+    taskproc = task_classes[tasktype].run_max_procs()
     if taskproc > nproc:
         taskproc = nproc
 
