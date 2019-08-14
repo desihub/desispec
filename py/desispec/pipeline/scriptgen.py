@@ -656,9 +656,9 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
 
     log = get_logger()
 
-    # Add an extra 5 minutes to the overall job runtime as a buffer
+    # Add an extra 20 minutes (!) to the overall job runtime as a buffer
     # against system issues.
-    runtimebuffer = 5.0
+    runtimebuffer = 20.0
 
     if npacked == 1:
         # We have a single pipeline step which might be split into multiple

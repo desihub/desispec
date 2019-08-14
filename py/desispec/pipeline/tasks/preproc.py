@@ -82,11 +82,11 @@ class TaskPreproc(BaseTask):
 
     def _run_time(self, name, procs, db):
         # Run time on one proc on machine with scale factor == 1.0
-        return 2.5
+        return 3.0
 
     def _run_max_mem_proc(self, name, db):
         # Per-process memory requirements
-        return 7.0
+        return 0
 
 
     def _run_defaults(self):
