@@ -403,7 +403,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
     # Run times for each task at this concurrency
     tfactor = hostprops["timefactor"]
-    tasktimes = [ (x, tfactor * task_classes[tasktype].run_time(x, nodeprocs,
+    tasktimes = [ (x, tfactor * task_classes[tasktype].run_time(x, taskproc,
         db=db)) for x in tasklist ]
 
     # We want to sort the times so that we can use a simple algorithm.
