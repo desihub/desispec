@@ -67,7 +67,6 @@ class TaskRedshift(BaseTask):
         # This should depend on the total number of unique targets, which is
         # not known a priori.  Instead, we compute the total targets and reduce
         # this by some factor.
-        tm = 1
         if db is not None:
             props = self.name_split(name)
             entries = db.select_healpix_frame(
@@ -77,7 +76,10 @@ class TaskRedshift(BaseTask):
             ntarget = np.sum([x["ntargets"] for x in entries])
             neff = 0.3 * ntarget
             # 2.5 seconds per targets
-            tm += 2.5 * 0.0167 * neff
+            tm = 1 + 2.5 * 0.0167 * neff
+        else:
+            tm = 60
+
         return tm
 
     def _run_max_mem_proc(self, name, db):

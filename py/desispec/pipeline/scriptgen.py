@@ -177,6 +177,14 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))
 
+        f.write("# Compute node properties assumed for this script\n")
+        for key in ["nodecores", "corecpus", "nodemem", "timefactor",
+                "startup", "maxtime"]:
+            if key in hostprops:
+                f.write("export DESI_PIPE_RUN_{}={}\n".format(
+                    key.upper(), hostprops[key]))
+        f.write("\n")
+
         f.write("# Force the script to exit on errors from commands\n")
         f.write("set -e\n\n")
 

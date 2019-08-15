@@ -65,12 +65,14 @@ class TaskSpectra(BaseTask):
         # Get the list of frames and use the size of this list as
         # a proxy for determining the runtime.  The run time is dominated by
         # I/O.
-        tm = 1.0
         if db is not None:
             props = self.name_split(name)
             entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
             nentry = len(entries)
-            tm += 1.0 * (nentry / 50.0)
+            tm = 1.0 + 1.0 * (nentry / 50.0)
+        else:
+            tm = 60.0
+
         return tm
 
     def _run_max_mem_proc(self, name, db):

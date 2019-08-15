@@ -13,6 +13,9 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import sys
+import time
+import random
+import signal
 
 import numpy as np
 
@@ -27,6 +30,12 @@ from .prod import load_prod
 
 from .db import check_tasks
 
+#- TimeoutError and timeout handler to prevent runaway tasks
+class TimeoutError(Exception):
+    pass
+
+def _timeout_handler(signum, frame):
+    raise TimeoutError
 
 def run_task(name, opts, comm=None, logfile=None, db=None):
     """Run a single task.
@@ -70,20 +79,51 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
             task_classes[ttype].state_set(db=db,name=name,state="running")
 
     failcount = 0
-    if logfile is None:
-        # No redirection
-        if db is None:
-            failcount = task_classes[ttype].run(name, opts, comm=comm)
-        else:
-            failcount = task_classes[ttype].run_and_update(db, name, opts,
-                comm=comm)
-    else:
-        with stdouterr_redirected(to=logfile, comm=comm):
+
+    #- Set timeout alarm to avoid runaway tasks
+    old_sighandler = signal.signal(signal.SIGALRM, _timeout_handler)
+    expected_run_time = task_classes[ttype].run_time(name, procs=nproc, db=db)
+
+    # Are we running on a slower/faster node than default timing?
+    timefactor = float(os.getenv("DESI_PIPE_RUN_TIMEFACTOR", default=1.0))
+    expected_run_time *= timefactor
+
+    signal.alarm(int(expected_run_time*60))
+    if rank == 0:
+        log.info('Running {} with timeout {:.1f} min'.format(
+            name, expected_run_time))
+
+    task_start_time = time.time()
+    try:
+        if logfile is None:
+            # No redirection
             if db is None:
                 failcount = task_classes[ttype].run(name, opts, comm=comm)
             else:
                 failcount = task_classes[ttype].run_and_update(db, name, opts,
                     comm=comm)
+        else:
+            #- time jitter so that we don't open all log files simultaneously
+            time.sleep(2*random.random())
+            with stdouterr_redirected(to=logfile, comm=comm):
+                if db is None:
+                    failcount = task_classes[ttype].run(name, opts, comm=comm)
+                else:
+                    failcount = task_classes[ttype].run_and_update(db, name,
+                        opts, comm=comm)
+    except TimeoutError:
+        dt = time.time() - task_start_time
+        log.error('Task {} timed out after {:.1f} sec'.format(name, dt))
+        if db is not None:
+            task_classes[ttype].state_set(db, name, "failed")
+
+        failcount = nproc
+    finally:
+        #- Reset timeout alarm whether we finished cleanly or not
+        signal.alarm(0)
+
+    #- Restore previous signal handler
+    signal.signal(signal.SIGALRM, old_sighandler)
 
     return failcount
 
