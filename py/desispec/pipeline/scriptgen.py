@@ -455,6 +455,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
         temptimes = list(tasktimes)
         alldone = False
+        jindx = 0
         while not alldone:
             jobdone = False
             reverse = False
@@ -508,17 +509,18 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
             ret.append( (nodes, nodeprocs, runtime, outtasks) )
             log.debug(
-                "{} job will run on {} nodes for {} minutes on {} tasks"
-                .format(tasktype, nodes, runtime, len(outtasks))
+                "{} job {} will run on {} nodes for {} minutes on {} tasks"
+                .format(tasktype, jindx, nodes, runtime, len(outtasks))
             )
 
             if len(temptimes) == 0:
                 alldone = True
+            jindx += 1
 
         # Check our load imbalance.  If it is too great, reduce the number of
         # workers.
         checkbalance = True
-        if balance:
+        if (len(ret) == 1) and balance:
             for jmin, jmax, jtmin, jtmax in zip(
                     jobmintime, jobmaxtime, jobmintask, jobmaxtask):
                 log.debug(
@@ -642,8 +644,17 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         if len(tasklist) == 0:
             raise RuntimeError("{} task list is empty".format(t))
         # Compute job size for this task type
-        joblist[t] = nersc_job_size(t, tasklist, machine, queue, maxtime,
-            maxnodes, nodeprocs=nodeprocs, db=db)
+        if npacked > 1:
+            joblist[t] = nersc_job_size(
+                t, tasklist, machine, queue, maxtime, maxnodes,
+                nodeprocs=nodeprocs, db=db
+            )
+        else:
+            # Safe to load balance
+            joblist[t] = nersc_job_size(
+                t, tasklist, machine, queue, maxtime, maxnodes,
+                nodeprocs=nodeprocs, db=db, balance=True
+            )
         # If we are packing multiple pipeline steps, but one of those steps
         # is already too large to fit within queue constraints, then this
         # makes no sense.
