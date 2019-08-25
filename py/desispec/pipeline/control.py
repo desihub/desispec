@@ -513,7 +513,7 @@ def dryrun(tasks, nersc=None, nersc_queue="regular", nersc_maxtime=0,
                 nersc_maxnodes, nodeprocs=ppn, db=db)
 
             launch="srun -n"
-            for (jobnodes, jobppn, jobtime, jobtasks) in joblist:
+            for (jobnodes, jobppn, jobtime, jobworkers, jobtasks) in joblist:
                 jobprocs = jobnodes * jobppn
                 piperun.dry_run(tt, jobtasks, opts, jobprocs,
                     jobppn, db=db, launch=launch, force=force)
