@@ -332,13 +332,13 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     comm_group = comm
     comm_rank = None
+    ngroup = nworker
+
     group = rank
-    ngroup = nproc
-    group_rank = 0
+    group_rank = rank
 
     if comm is not None:
         if taskproc > 1:
-            ngroup = nworker
             group = rank // taskproc
             group_rank = rank % taskproc
             comm_group = comm.Split(color=group, key=group_rank)
