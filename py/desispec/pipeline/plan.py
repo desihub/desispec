@@ -172,7 +172,12 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
     workweights = [x[1] for x in tasktimes]
 
     # Distribute tasks
-    workdist = dist_discrete_all(workweights, nworker)
+    workdist = None
+    if len(workweights) == nworker:
+        # One task per worker
+        workdist = [(x, 1) for x in range(nworker)]
+    else:
+        workdist = dist_discrete_all(workweights, nworker)
 
     # Find the runtime for each worker
     workertimes, workermin, workermax = worker_times(
@@ -187,9 +192,9 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
         log.debug("      ...")
         log.debug("  {}: {} minutes".format(nworker-1, workertimes[-1]))
         log.debug("      first task {}".format(
-            worktasks[workdist[-1][0]]))
+            worktasks[workdist[nworker-1][0]]))
         log.debug("      last task {}".format(
-                worktasks[workdist[-1][0] + workdist[-1][1] - 1]
+                worktasks[workdist[nworker-1][0] + workdist[nworker-1][1] - 1]
             )
         )
     log.debug("range of worker times = {} ... {}".format(workermin, workermax))
@@ -428,10 +433,11 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         # We are load balancing a single job
         while workermax > 1.5 * workermin:
             # pretty bad imbalance...
-            if nworker > 2:
+            if (nworker > 2) and (workermax < 0.5 * maxtime):
                 # We don't want to go lower than 2 workers, since that
                 # allows one worker to do the "big" task and the other
-                # worker to do everything else.
+                # worker to do everything else.  We also can double the
+                # runtime if it will exceed our maximum.
                 nworker = nworker // 2
                 log.debug(
                     "Job is imbalanced, reducing workers to {}"
@@ -449,7 +455,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
                           .format(workermin, workermax))
             else:
                 log.debug(
-                    "Job is imbalanced, but there are only 2 workers.  Leaving"
+                    "Job is imbalanced, but there are too few workers or the runtime is already too long."
                 )
                 break
         log.debug(
