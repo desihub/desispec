@@ -294,7 +294,8 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 .format(nproc)
             )
             nworker = nproc
-        taskproc = nproc // nworker
+
+        taskproc = min(nproc // nworker, task_classes[tasktype].run_max_procs())
 
         # Compute the task distribution
 
