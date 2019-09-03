@@ -37,6 +37,22 @@ from . import tasks as pipetasks
 from . import scriptgen as scriptgen
 
 
+class clr:
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    def disable(self):
+        self.HEADER = ""
+        self.OKBLUE = ""
+        self.OKGREEN = ""
+        self.WARNING = ""
+        self.FAIL = ""
+        self.ENDC = ""
+
+
 def create(root=None, data=None, redux=None, prod=None, force=False,
     basis=None, calib=None, db_sqlite=False, db_sqlite_path=None,
     db_postgres=False, db_postgres_host="nerscdb03.nersc.gov",
@@ -1008,3 +1024,228 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
                 indeps = None
 
     return outdeps
+
+
+def status_color(state):
+    col = clr.ENDC
+    if state == "done":
+        col = clr.OKGREEN
+    elif state == "running":
+        col = clr.WARNING
+    elif state == "failed":
+        col = clr.FAIL
+    elif state == "ready":
+        col = clr.OKBLUE
+    return col
+
+
+def status_task(task, ttype, state, logdir):
+    fields = pipetasks.base.task_classes[ttype].name_split(task)
+    tasklog = None
+    if "night" in fields:
+        tasklogdir = os.path.join(
+            logdir, io.get_pipe_nightdir(),
+            "{:08d}".format(fields["night"])
+        )
+        tasklog = os.path.join(
+            tasklogdir,
+            "{}.log".format(task)
+        )
+    elif "pixel" in fields:
+        tasklogdir = os.path.join(
+            logdir, "healpix",
+            io.healpix_subdirectory(fields["nside"],fields["pixel"])
+        )
+        tasklog = os.path.join(
+            tasklogdir,
+            "{}.log".format(task)
+        )
+    col = status_color(state)
+    print("Task {}".format(task))
+    print(
+        "State = {}{}{}".format(
+            col,
+            state,
+            clr.ENDC
+        )
+    )
+    if os.path.isfile(tasklog):
+        print("Dumping task log {}".format(tasklog))
+        print("=========== Begin Log =============")
+        print("")
+        with open(tasklog, "r") as f:
+            logdata = f.read()
+            print(logdata)
+        print("")
+        print("============ End Log ==============")
+        print("", flush=True)
+    else:
+        print("Task log {} does not exist".format(tasklog), flush=True)
+    return
+
+
+def status_taskname(task, ttype, state):
+    fields = pipetasks.base.task_classes[ttype].name_split(task)
+    if "night" in fields:
+        tasklogdir = os.path.join(
+            logdir, io.get_pipe_nightdir(),
+            "{:08d}".format(fields["night"])
+        )
+        tasklog = os.path.join(
+            tasklogdir,
+            "{}.log".format(task)
+        )
+    elif "pixel" in fields:
+        tasklogdir = os.path.join(
+            logdir, "healpix",
+            io.healpix_subdirectory(fields["nside"],fields["pixel"])
+        )
+        tasklog = os.path.join(
+            tasklogdir,
+            "{}.log".format(task)
+        )
+    col = status_color(state)
+    print("Task {}".format(task))
+    print(
+        "State = {}{}{}".format(
+            col,
+            state,
+            clr.ENDC
+        )
+    )
+
+
+def status(task=None, tasktypes=None, nightstr=None, states=None,
+           expid=None, spec=None, db_postgres_user="desidev_ro"):
+    """Check the status of pipeline tasks.
+
+
+    Args:
+
+    Returns:
+        None
+
+    """
+    dbpath = io.get_pipe_database()
+    db = pipedb.load_db(dbpath, mode="r", user=db_postgres_user)
+
+    rundir = io.get_pipe_rundir()
+    logdir = os.path.join(rundir, io.get_pipe_logdir())
+
+    tasks = OrderedDict()
+
+    if task is None:
+        ttypes = None
+        if tasktypes is not None:
+            ttypes = list()
+            for tt in pipetasks.base.default_task_chain:
+                if tt in tasktypes:
+                    ttypes.append(tt)
+        else:
+            ttypes = list(pipetasks.base.default_task_chain)
+
+        if states is None:
+            states = task_states
+        else:
+            for s in states:
+                if s not in task_states:
+                    raise RuntimeError("Task state '{}' is not valid".format(s))
+
+        allnights = io.get_nights(strip_path=True)
+        nights = pipeprod.select_nights(allnights, nightstr)
+
+        for tt in ttypes:
+            tasks[tt] = get_tasks(
+                db, [tt], nights, states=states, expid=expid, spec=spec
+            )
+    else:
+        ttypes = [pipetasks.base.task_type(task)]
+        tasks[ttypes[0]] = [task]
+
+    tstates = OrderedDict()
+    for typ, tsks in tasks.items():
+        tstates[typ] = pipedb.check_tasks(tsks, db=db)
+
+    sep = "----------------+---------+---------+---------+---------+---------+"
+    hline = "-----------------------------------------------"
+
+    if len(ttypes) == 1 and len(tasks[ttypes[0]]) == 1:
+        # Print status of this specific task
+        thistype = ttypes[0]
+        thistask = tasks[thistype][0]
+        status_task(thistask, thistype, tstates[thistype][thistask], logdir)
+    else:
+        if len(ttypes) > 1 and len(nights) > 1:
+            # We have multiple nights and multiple task types.
+            # Just print totals.
+            print(sep)
+            header_state = "{:16s}|".format("   Task Type")
+            for s in task_states:
+                header_state = "{} {:8s}|".format(header_state, s)
+            print(header_state)
+            print(sep)
+            for tt in ttypes:
+                line = "{:16s}|".format(tt)
+                for s in task_states:
+                    tsum = np.sum(
+                        np.array(
+                            [1 for x, y in tstates[tt].items() if y == s],
+                            dtype=np.int32
+                        )
+                    )
+                    line = "{}{:9d}|".format(line, tsum)
+                print(line, flush=True)
+        elif len(ttypes) > 1:
+            # We have multiple task types.  Print the state totals for the
+            # night or the overall totals for spectra and redshifts.
+            pass
+        elif len(nights) > 1:
+            # We have just one task type, print the state totals for each night
+            # OR the full task list for redshift or spectra tasks.
+            thistype = ttypes[0]
+            print("Task type {}".format(thistype))
+            print(hline)
+            for s in task_states:
+                col = status_color(s)
+                line = "{}{:8s}{}:  ".format(col, s, clr.ENDC)
+                tsum = np.sum(
+                    np.array(
+                        [1 for x, y in tstates[thistype].items() if y == s],
+                        dtype=np.int32
+                    )
+                )
+                line = "{}{:9d}".format(line, tsum)
+                print(line, flush=True)
+            print(hline)
+            nighttasks = OrderedDict()
+            pixtasks = list()
+            for tsk in tasks[thistype]:
+                fields = pipetasks.base.task_classes[thistype].name_split(tsk)
+                if "night" in fields:
+                    nt = fields["night"]
+                    if nt not in nighttasks:
+                        nighttasks[nt] = list()
+                    nighttasks[nt].append((tsk, tstates[thistype][tsk]))
+                elif "pixel" in fields:
+                    pixtasks.append((tsk, tstates[thistype][tsk]))
+            for nt, tsklist in nighttasks.items():
+                print(nt)
+                for tsk in tsklist:
+                    st = tsk[1]
+                    col = status_color(st)
+                    print(
+                        "  {:20s}:  {}{}{}".format(tsk[0], col, st, clr.ENDC),
+                        flush=True
+                    )
+            for tsk, st in pixtasks:
+                col = status_color(st)
+                print(
+                    "  {:20s}:  {}{}{}".format(tsk, col, st, clr.ENDC),
+                    flush=True
+                )
+        else:
+            # We have one type and one night, print the full state of every
+            # task.
+            pass
+
+    return
