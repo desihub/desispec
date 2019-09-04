@@ -153,6 +153,153 @@ def run_task_simple(name, opts, comm=None):
     return run_task(name, opts, comm=comm, logfile=None, db=None)
 
 
+def run_dist(tasktype, tasklist, db, nproc, procs_per_node, force=False):
+    """Compute the runtime distribution of tasks.
+
+    For a given number of processes, parse job environment variables and
+    compute the number of workers to use and the remaining tasks to process.
+    Divide the processes into groups, and associate some (or all) of those
+    groups to workers.  Assign tasks to these groups of processes.  Some groups
+    may have zero tasks if there are more groups than workers needed.
+
+    Returns:
+        tuple:  The (groupsize, groups, tasks, dist) information.  Groupsize
+            is the processes per group.  Groups is a list of
+            tuples (one per process) giving the group number and rank within
+            the group.  The tasks are a sorted list of tasks containing the
+            subset of the inputs that needs to be run.  The dist is a list of
+            tuples (one per group) containing the first task and number of tasks
+            assigned to each group.
+    """
+    from .tasks.base import task_classes, task_type
+    log = get_logger()
+
+    runtasks = None
+    ntask = None
+    ndone = None
+    if force:
+        # Run everything
+        runtasks = tasklist
+        ntask = len(runtasks)
+        ndone = 0
+    else:
+        # Actually check which things need to be run.
+        states = check_tasks(tasklist, db=db)
+        runtasks = [ x for x in tasklist if states[x] == "ready" ]
+        ntask = len(runtasks)
+        ndone = len([ x for x in tasklist if states[x] == "done" ])
+
+    log.info(
+        "Number of {} tasks ready to run is {} (total is {})".
+        format(tasktype, len(runtasks), len(tasklist))
+    )
+
+    # Query the environment for DESI runtime variables set in
+    # pipeline-generated slurm scripts and use default values if
+    # they are not found.  Then compute the number of workers and the
+    # distribution of tasks in a way that is identical to what was
+    # done during job planning.
+
+    job_env = parse_job_env()
+    tfactor = 1.0
+    if "timefactor" in job_env:
+        tfactor = job_env["timefactor"]
+        log.info("Using timefactor {}".format(tfactor))
+    else:
+        log.warning(
+            "DESI_PIPE_RUN_TIMEFACTOR not found in environment, using 1.0."
+        )
+    startup = 0.0
+    if "startup" in job_env:
+        startup = job_env["startup"]
+        log.info("Using worker startup of {} minutes".format(startup))
+    else:
+        log.warning(
+            "DESI_PIPE_RUN_STARTUP not found in environment, using 0.0."
+        )
+    nworker = 0
+    if "workers" in job_env:
+        nworker = job_env["workers"]
+        log.info("Found {} workers from environment".format(nworker))
+    else:
+        # We have no information from the planning, so fall back to using the
+        # default for this task type or else one node as the worker size.
+        taskproc = task_classes[tasktype].run_max_procs()
+        if taskproc == 0:
+            taskproc = procs_per_node
+        nworker = nproc // taskproc
+        if nworker == 0:
+            nworker = 1
+        log.warning(
+            "DESI_PIPE_RUN_WORKERS not found in environment, using {}."
+            .format(nworker)
+        )
+    if nworker > nproc:
+        msg = "Number of workers ({}) larger than number of procs ({}). This should never happen and means that the job script may have been changed by hand.".format(nworker, nproc)
+        raise RuntimeError(msg)
+
+    # Now we have the number of workers to use.  Get the size of each worker
+    # from the total number of processes.
+    worker_size = nproc // nworker
+
+    # A "group" of processes is identical in size to the worker_size above.
+    # However, there may be more process groups than workers.  This can happen
+    # if we reduced the number of workers due to some tasks being completed,
+    # or if there is a "partial" process group remaining when the worker size
+    # does not evenly divide into the total number of processes.  We compute
+    # the process group information here so that the calling code can use it
+    # directly if splitting the communicator.
+
+    ngroup = nproc // worker_size
+    if ngroup * worker_size < nproc:
+        # We have a leftover partial process group
+        ngroup += 1
+
+    groups = [(x // worker_size, x % worker_size) for x in range(nproc)]
+
+    # Compute the task distribution
+
+    if ntask == 0:
+        # All tasks are done!
+        return worker_size, groups, list(), [(-1, 0) for x in range(ngroup)]
+
+    if nworker > len(runtasks):
+        # The number of workers set at job planning time is larger
+        # than the number of tasks that remain to be done.  Reduce
+        # the number of workers.
+        log.info(
+            "Job has {} workers but only {} tasks to run. Reducing number of workers to match."
+            .format(nworker, len(runtasks))
+        )
+        nworker = len(runtasks)
+
+    (worktasks, worktimes, workdist) = compute_worker_tasks(
+        tasktype, runtasks, tfactor, nworker, worker_size,
+        startup=startup, db=db)
+
+    # Compute the times for each worker- just for information
+    workertimes, workermin, workermax = worker_times(
+        worktimes, workdist, startup=startup)
+    log.info(
+        "{} workers have times ranging from {} to {} minutes"
+        .format(nworker, workermin, workermax)
+    )
+
+    dist = list()
+
+    for g in range(ngroup):
+        if g < nworker:
+            # This process group is a being used as a worker.  Assign it the
+            # tasks.
+            dist.append(workdist[g])
+        else:
+            # This process group is idle (not acting as a worker) or contains
+            # the leftover processes to make a whole number of nodes.
+            dist.append((-1, 0))
+
+    return worker_size, groups, worktasks, dist
+
+
 def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     """Run a collection of tasks of the same type.
 
@@ -210,166 +357,49 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     # Get the tasks that still need to be done.
 
-    nworker = None
+    groups = None
     worktasks = None
-    worktimes = None
-    workdist = None
-    ntask = None
-    ndone = None
-    taskproc = None
-
+    dist = None
     if rank == 0:
-        runtasks = None
-        if force:
-            # Run everything
-            runtasks = tasklist
-            ntask = len(runtasks)
-            ndone = 0
-        else:
-            # Actually check which things need to be run.
-            states = check_tasks(tasklist, db=db)
-            runtasks = [ x for x in tasklist if states[x] == "ready" ]
-            ntask = len(runtasks)
-            ndone = len([ x for x in tasklist if states[x] == "done" ])
-
-        log.info(
-            "Number of {} tasks ready to run is {} (total is {})".
-            format(tasktype, len(runtasks), len(tasklist))
+        groupsize, groups, worktasks, dist = run_dist(
+            tasktype, tasklist, db, nproc, procs_per_node, force=force
         )
 
+    comm_group = None
+    comm_rank = comm
     if comm is not None:
-        ntask = comm.bcast(ntask, root=0)
-        ndone = comm.bcast(ndone, root=0)
-
-    if ntask == 0:
-        # All tasks are done- return
-        return (ntask, ndone, 0)
-
-    if rank == 0:
-        # The root process queries the environment for DESI runtime variables
-        # set in pipeline-generated slurm scripts and uses default values if
-        # they are not found.  Then it computes the number of workers and the
-        # distribution of tasks in a way that is identical to what was done
-        # during job planning.
-
-        job_env = parse_job_env()
-        tfactor = 1.0
-        if "timefactor" in job_env:
-            tfactor = job_env["timefactor"]
-            log.info("Using timefactor {}".format(tfactor))
-        else:
-            log.warning(
-                "DESI_PIPE_RUN_TIMEFACTOR not found in environment, using 1.0."
-            )
-        startup = 0.0
-        if "startup" in job_env:
-            startup = job_env["startup"]
-            log.info("Using worker startup of {} minutes".format(startup))
-        else:
-            log.warning(
-                "DESI_PIPE_RUN_STARTUP not found in environment, using 0.0."
-            )
-        nworker = 0
-        if "workers" in job_env:
-            nworker = job_env["workers"]
-            log.info("Found {} workers from environment".format(nworker))
-        else:
-            taskproc = task_classes[tasktype].run_max_procs()
-            if taskproc == 0:
-                taskproc = procs_per_node
-            nworker = nproc // taskproc
-            if nworker == 0:
-                nworker = 1
-            log.warning(
-                "DESI_PIPE_RUN_WORKERS not found in environment, using {}."
-                .format(nworker)
-            )
-        if nworker > nproc:
-            log.warning(
-                "Number of workers ({}) larger than number of procs ({})"
-                .format(nworker, nproc)
-            )
-            log.warning(
-                "This should never happen!  Reducing workers to {}"
-                .format(nproc)
-            )
-            nworker = nproc
-
-        taskproc = min(nproc // nworker, task_classes[tasktype].run_max_procs())
-
-        # Compute the task distribution
-
-        if nworker > len(runtasks):
-            # The number of workers set at job planning time is larger
-            # than the number of tasks that remain to be done.  Reduce
-            # the number of workers.
-            log.info(
-                "Job has {} workers but only {} tasks to run. \
-                Reducing number of workers to match."
-                .format(nworker, len(runtasks))
-            )
-            nworker = len(runtasks)
-
-        (worktasks, worktimes, workdist) = compute_worker_tasks(
-            tasktype, runtasks, tfactor, nworker, taskproc,
-            startup=startup, db=db)
-
-        # Compute the times for each worker- just for information
-        workertimes, workermin, workermax = worker_times(
-            worktimes, workdist, startup=startup)
-        log.info(
-            "{} workers have times ranging from {} to {} minutes"
-            .format(nworker, workermin, workermax)
-        )
-
-    if comm is not None:
-        taskproc = comm.bcast(taskproc, root=0)
-        nworker = comm.bcast(nworker, root=0)
+        groups = comm.bcast(groups, root=0)
         worktasks = comm.bcast(worktasks, root=0)
-        worktimes = comm.bcast(worktimes, root=0)
-        workdist = comm.bcast(workdist, root=0)
-
-    # If we have multiple processes for each task, split the communicator.
-
-    comm_group = comm
-    comm_rank = None
-    ngroup = nworker
-
-    group = rank
-    group_rank = rank
-
-    if comm is not None:
-        if taskproc > 1:
-            group = rank // taskproc
-            group_rank = rank % taskproc
-            comm_group = comm.Split(color=group, key=group_rank)
-            comm_rank = comm.Split(color=group_rank, key=group)
-        else:
-            comm_group = None
-            comm_rank = comm
-
-    group_ntask = 0
-    group_firsttask = 0
-
-    if group < ngroup:
-        # only assign tasks to whole groups
-        group_firsttask = workdist[group][0]
-        group_ntask = workdist[group][1]
+        dist = comm.bcast(dist, root=0)
+        # Determine if we need to split the communicator.  Are any processes
+        # in a group larger than one?
+        largest_rank = np.max([x[1] for x in groups])
+        if largest_rank > 0:
+            comm_group = comm.Split(color=groups[rank][0], key=groups[rank][1])
+            comm_rank = comm.Split(color=groups[rank][1], key=groups[rank][0])
 
     # every group goes and does its tasks...
 
     rundir = io.get_pipe_rundir()
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
+    group = groups[rank][0]
+    group_rank = groups[rank][1]
+    group_firsttask = dist[group][0]
+    group_ntask = dist[group][1]
+
     failcount = 0
     group_failcount = 0
 
     if group_ntask > 0:
-
-        log.debug(
-            "rank #{} Group number of task {}, first task {}"
-            .format(rank, group_ntask, group_firsttask)
-        )
+        if group_rank == 0:
+            log.debug(
+                "Group {}, running tasks {} to {}".format(
+                    group,
+                    group_firsttask,
+                    (group_firsttask + group_ntask)
+                )
+            )
 
         for t in range(group_firsttask, group_firsttask + group_ntask):
             # For this task, determine the output log file.  If the task has
@@ -422,6 +452,9 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     if comm_rank is not None:
         failcount = comm_rank.allreduce(failcount)
 
+    if rank == 0:
+        log.debug("Tasks done; {} failed".format(failcount))
+
     if db is not None and rank == 0 :
         # postprocess the successful tasks
 
@@ -437,8 +470,6 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 if states[name] == "done" :
                     log.debug("postprocessing {}".format(name))
                     task_classes[tasktype].postprocessing(db,name,cur)
-
-    log.debug("rank #{} done; {} failed".format(rank, failcount))
 
     return ntask, ndone, failcount
 
@@ -516,99 +547,8 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
 
     # Get the tasks that still need to be done.
 
-    nworker = None
-    worktasks = None
-    worktimes = None
-    workdist = None
-    ntask = None
-    ndone = None
-    taskproc = None
-    runtasks = None
-
-    if force:
-        # Run everything
-        runtasks = tasklist
-        ntask = len(runtasks)
-        ndone = 0
-    else:
-        # Actually check which things need to be run.
-        states = check_tasks(tasklist, db=db)
-        runtasks = [ x for x in tasklist if states[x] == "ready" ]
-        ntask = len(runtasks)
-        ndone = len([ x for x in tasklist if states[x] == "done" ])
-
-    log.info(
-        "Number of {} tasks ready to run is {} (total is {})".
-        format(tasktype, len(runtasks), len(tasklist))
-    )
-
-    job_env = parse_job_env()
-    tfactor = 1.0
-    if "timefactor" in job_env:
-        tfactor = job_env["timefactor"]
-        log.info("Using timefactor {}".format(tfactor))
-    else:
-        log.warning(
-            "DESI_PIPE_RUN_TIMEFACTOR not found in environment, using 1.0."
-        )
-    startup = 0.0
-    if "startup" in job_env:
-        startup = job_env["startup"]
-        log.info("Using worker startup of {} minutes".format(startup))
-    else:
-        log.warning(
-            "DESI_PIPE_RUN_STARTUP not found in environment, using 0.0."
-        )
-    nworker = 0
-    if "workers" in job_env:
-        nworker = job_env["workers"]
-        log.info("Found {} workers from environment".format(nworker))
-    else:
-        taskproc = task_classes[tasktype].run_max_procs()
-        if taskproc == 0:
-            taskproc = procs_per_node
-        nworker = procs // taskproc
-        if nworker == 0:
-            nworker = 1
-        log.warning(
-            "DESI_PIPE_RUN_WORKERS not found in environment, using {}."
-            .format(nworker)
-        )
-    if nworker > procs:
-        log.warning(
-            "Number of workers ({}) larger than number of procs ({})"
-            .format(nworker, procs)
-        )
-        log.warning(
-            "This should never happen!  Reducing workers to {}"
-            .format(procs)
-        )
-        nworker = procs
-    taskproc = procs // nworker
-
-    # Compute the task distribution
-
-    if nworker > len(runtasks):
-        # The number of workers set at job planning time is larger
-        # than the number of tasks that remain to be done.  Reduce
-        # the number of workers.
-        log.info(
-            "Job has {} workers but only {} tasks to run. \
-            Reducing number of workers to match."
-            .format(nworker, len(runtasks))
-        )
-        nworker = len(runtasks)
-
-    (worktasks, worktimes, workdist) = compute_worker_tasks(
-        tasktype, runtasks, tfactor, nworker, taskproc,
-        startup=startup, db=db)
-
-    # Compute the times for each worker- just for information
-    workertimes, workermin, workermax = worker_times(
-        worktimes, workdist, startup=startup)
-    log.info(
-        "{} workers have times range from {} to {} minutes"
-        .format(nworker, workermin, workermax)
+    groupsize, groups, worktasks, dist = run_dist(
+        tasktype, tasklist, db, procs, procs_per_node, force=force
     )
 
     # Go through the tasks
@@ -616,11 +556,9 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
     rundir = io.get_pipe_rundir()
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
-    ngroup = nworker
-
-    for group in range(ngroup):
-        group_firsttask = workdist[group][0]
-        group_ntask = workdist[group][1]
+    for group, group_rank in groups:
+        group_firsttask = dist[group][0]
+        group_ntask = dist[group][1]
         if group_ntask == 0:
             continue
 
@@ -645,15 +583,12 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(worktasks[t]))
 
-            com = task_classes[tt].run_cli(worktasks[t], options, taskproc,
+            com = task_classes[tt].run_cli(worktasks[t], options, groupsize,
                                            launch=launch, log=tasklog, db=db)
             print("{}  {}".format(prefix, com))
             sys.stdout.flush()
 
         print("{}".format(prefix))
         sys.stdout.flush()
-
-    print("{}Total estimated runtime is {} minutes".format(prefix, workermax))
-    sys.stdout.flush()
 
     return
