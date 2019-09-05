@@ -118,9 +118,10 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
                         opts, comm=comm)
     except TimeoutError:
         dt = time.time() - task_start_time
-        log.error("Task {} timed out after {:.1f} sec".format(name, dt))
-        if db is not None:
-            task_classes[ttype].state_set(db, name, "failed")
+        if rank == 0:
+            log.error("Task {} timed out after {:.1f} sec".format(name, dt))
+            if db is not None:
+                task_classes[ttype].state_set(db, name, "failed")
 
         failcount = nproc
     finally:
@@ -129,9 +130,9 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
 
     #- Restore previous signal handler
     signal.signal(signal.SIGALRM, old_sighandler)
-    log.debug("Finished with task {} sigalarm reset".format(name))
-
-    log.debug("Task {} returning failcount {}".format(name, failcount))
+    if rank == 0:
+        log.debug("Finished with task {} sigalarm reset".format(name))
+        log.debug("Task {} returning failcount {}".format(name, failcount))
     return failcount
 
 
@@ -177,22 +178,23 @@ def run_dist(tasktype, tasklist, db, nproc, procs_per_node, force=False):
     runtasks = None
     ntask = None
     ndone = None
+    log.info("Distributing {} {} tasks".format(len(tasklist), tasktype))
     if force:
         # Run everything
         runtasks = tasklist
         ntask = len(runtasks)
         ndone = 0
+        log.info("Forcibly running {} tasks regardless of state".format(ntask))
     else:
         # Actually check which things need to be run.
         states = check_tasks(tasklist, db=db)
         runtasks = [ x for x in tasklist if states[x] == "ready" ]
         ntask = len(runtasks)
         ndone = len([ x for x in tasklist if states[x] == "done" ])
-
-    log.info(
-        "Number of {} tasks ready to run is {} (total is {})".
-        format(tasktype, len(runtasks), len(tasklist))
-    )
+        log.info(
+            "Found {} tasks ready to run and {} tasks done"
+            .format(ntask, ndone)
+        )
 
     # Query the environment for DESI runtime variables set in
     # pipeline-generated slurm scripts and use default values if
@@ -351,6 +353,9 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
         nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
         procs_per_node = nodecomm.size
 
+    # Total number of input tasks
+    ntask = len(tasklist)
+
     # Get the options for this task type.
 
     options = opts[tasktype]
@@ -378,6 +383,10 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
             comm_group = comm.Split(color=groups[rank][0], key=groups[rank][1])
             comm_rank = comm.Split(color=groups[rank][1], key=groups[rank][0])
 
+    # How many original tasks did we have and how many were done?
+    ntask = len(tasklist)
+    ndone = ntask - len(worktasks)
+
     # every group goes and does its tasks...
 
     rundir = io.get_pipe_rundir()
@@ -397,7 +406,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 "Group {}, running tasks {} to {}".format(
                     group,
                     group_firsttask,
-                    (group_firsttask + group_ntask)
+                    (group_firsttask + group_ntask - 1)
                 )
             )
 
