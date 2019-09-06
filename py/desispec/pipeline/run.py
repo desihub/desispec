@@ -219,17 +219,27 @@ def run_dist(tasktype, tasklist, db, nproc, procs_per_node, force=False):
         log.warning(
             "DESI_PIPE_RUN_STARTUP not found in environment, using 0.0."
         )
+    worker_size = 0
+    if "workersize" in job_env:
+        worker_size = job_env["workersize"]
+        log.info("Found worker size of {} from environment".format(worker_size))
+    else:
+        # We have no information from the planning, so fall back to using the
+        # default for this task type or else one node as the worker size.
+        worker_size = task_classes[tasktype].run_max_procs()
+        if worker_size == 0:
+            worker_size = procs_per_node
+        log.warning(
+            "DESI_PIPE_RUN_WORKER_SIZE not found in environment, using {}."
+            .format(worker_size)
+        )
     nworker = 0
     if "workers" in job_env:
         nworker = job_env["workers"]
         log.info("Found {} workers from environment".format(nworker))
     else:
-        # We have no information from the planning, so fall back to using the
-        # default for this task type or else one node as the worker size.
-        taskproc = task_classes[tasktype].run_max_procs()
-        if taskproc == 0:
-            taskproc = procs_per_node
-        nworker = nproc // taskproc
+        # We have no information from the planning
+        nworker = nproc // worker_size
         if nworker == 0:
             nworker = 1
         log.warning(
@@ -239,10 +249,6 @@ def run_dist(tasktype, tasklist, db, nproc, procs_per_node, force=False):
     if nworker > nproc:
         msg = "Number of workers ({}) larger than number of procs ({}). This should never happen and means that the job script may have been changed by hand.".format(nworker, nproc)
         raise RuntimeError(msg)
-
-    # Now we have the number of workers to use.  Get the size of each worker
-    # from the total number of processes.
-    worker_size = nproc // nworker
 
     # A "group" of processes is identical in size to the worker_size above.
     # However, there may be more process groups than workers.  This can happen
@@ -362,6 +368,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     # Get the tasks that still need to be done.
 
+    groupsize = None
     groups = None
     worktasks = None
     dist = None
@@ -373,6 +380,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     comm_group = None
     comm_rank = comm
     if comm is not None:
+        groupsize = comm.bcast(groupsize, root=0)
         groups = comm.bcast(groups, root=0)
         worktasks = comm.bcast(worktasks, root=0)
         dist = comm.bcast(dist, root=0)
@@ -447,7 +455,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
             failedprocs = run_task(worktasks[t], options, comm=comm_group,
                 logfile=tasklog, db=db)
 
-            if failedprocs > 1:
+            if failedprocs > 0:
                 group_failcount += 1
                 log.debug("{} failed; group_failcount now {}".format(
                     worktasks[t], group_failcount))
