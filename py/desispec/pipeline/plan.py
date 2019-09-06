@@ -62,10 +62,10 @@ def nersc_machine(name, queue):
             props["sbatch"].append("#SBATCH --partition=regular")
         elif queue == "realtime":
             props["maxnodes"] = 10
-            props["maxtime"] = 120
+            props["maxtime"] = 720
             props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --exclusive")
-            props["sbatch"].append("#SBATCH --partition=realtime")
+            props["sbatch"].append("#SBATCH --qos=realtime")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
     elif name == "cori-knl":
@@ -236,10 +236,10 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             balance the job.
 
     Returns:
-        list:  List of tuples (nodes, nodeprocs, runtime, nworker, tasks)
-            containing one entry per job.  Each entry specifies the number of
-            nodes to use, the expected total runtime, number of workers, and
-            the list of tasks for that job.
+        list:  List of tuples (nodes, nodeprocs, runtime, nworker, workersize,
+            tasks) containing one entry per job.  Each entry specifies the
+            number of nodes to use, the expected total runtime, number of
+            workers, and the list of tasks for that job.
 
     """
     from .tasks.base import task_classes, task_type
@@ -406,7 +406,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
                     .format(jindx, len(jobworktasks), jobworkermax)
                 )
                 final.append(
-                    (nodes, nodeprocs, jobworkermax, nworker, jobworktasks)
+                    (nodes, nodeprocs, jobworkermax, nworker, taskproc,
+                     jobworktasks)
                 )
                 jindx += 1
             else:
@@ -426,7 +427,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
                 .format(jindx, len(jobworktasks), jobworkermax)
             )
             final.append(
-                (nodes, nodeprocs, jobworkermax, nworker, jobworktasks)
+                (nodes, nodeprocs, jobworkermax, nworker, taskproc,
+                 jobworktasks)
             )
     elif balance:
         log.debug("Checking for load imbalance as requested")
@@ -462,13 +464,15 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             "Adding job with {} tasks, {} workers, and max time {} on {} nodes"
             .format(len(worktasks), nworker, workermax, nodes)
         )
-        final.append((nodes, nodeprocs, workermax, nworker, worktasks))
+        final.append((nodes, nodeprocs, workermax, nworker, taskproc,
+                      worktasks))
     else:
         # We just have one job
         log.debug(
             "Adding job with {} tasks, {} workers, and max time {} on {} nodes"
             .format(len(worktasks), nworker, workermax, nodes)
         )
-        final.append((nodes, nodeprocs, workermax, nworker, worktasks))
+        final.append((nodes, nodeprocs, workermax, nworker, taskproc,
+                      worktasks))
 
     return final

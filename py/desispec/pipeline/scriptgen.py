@@ -30,12 +30,13 @@ from .prod import task_read, task_write
 from .plan import nersc_machine, nersc_job_size
 
 
-def dump_job_env(fh, tfactor, startup, nworker):
+def dump_job_env(fh, tfactor, startup, nworker, workersize):
     """Write parameters needed at runtime to an open filehandle.
     """
     fh.write("export DESI_PIPE_RUN_TIMEFACTOR={}\n".format(tfactor))
     fh.write("export DESI_PIPE_RUN_STARTUP={}\n".format(startup))
     fh.write("export DESI_PIPE_RUN_WORKERS={}\n\n".format(nworker))
+    fh.write("export DESI_PIPE_RUN_WORKER_SIZE={}\n\n".format(workersize))
     return
 
 
@@ -49,6 +50,8 @@ def parse_job_env():
         par["startup"] = float(os.environ["DESI_PIPE_RUN_STARTUP"])
     if "DESI_PIPE_RUN_WORKERS" in os.environ:
         par["workers"] = int(os.environ["DESI_PIPE_RUN_WORKERS"])
+    if "DESI_PIPE_RUN_WORKER_SIZE" in os.environ:
+        par["workersize"] = int(os.environ["DESI_PIPE_RUN_WORKER_SIZE"])
     return par
 
 
@@ -84,8 +87,8 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
 
 
 def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
-    nodes, cnodes, ppns, minutes, nworker, multisrun=False, openmp=False,
-    multiproc=False, shifterimg=None, debug=False):
+    nodes, cnodes, ppns, minutes, nworker, workersize, multisrun=False,
+    openmp=False, multiproc=False, shifterimg=None, debug=False):
     """Create a SLURM script for use at NERSC.
 
     Args:
@@ -150,7 +153,8 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("envlog={}_${{now}}.env\n".format(logroot))
         f.write("env > ${envlog}\n\n")
-        for com, cn, ppn, nwrk in zip(commands, cnodes, ppns, nworker):
+        for com, cn, ppn, nwrk, wrksz in zip(
+            commands, cnodes, ppns, nworker, workersize):
             if ppn > hostprops["nodecores"]:
                 raise RuntimeError("requested procs per node '{}' is more than"
                     " the number of cores per node on {}".format(ppn, machine))
@@ -160,7 +164,7 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
             f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
             f.write("procs=$(( nodes * node_proc ))\n\n")
             dump_job_env(f, hostprops["timefactor"], hostprops["startup"],
-                         nwrk)
+                         nwrk, wrksz)
             if openmp:
                 f.write("export OMP_NUM_THREADS=${node_thread}\n")
                 f.write("export OMP_PLACES=threads\n")
@@ -348,7 +352,8 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         # job scripts.
         jindx = 0
         tasktype = list(tasks_by_type.keys())[0]
-        for (nodes, ppn, runtime, nworker, tasks) in joblist[tasktype]:
+        for (nodes, ppn, runtime, nworker, workersize, tasks) \
+            in joblist[tasktype]:
             joblogroot = None
             joboutroot = None
             if jindx>0:
@@ -370,7 +375,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
 
             nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine,
                       queue, nodes, [ nodes ], [ ppn ], runtime, [ nworker ],
-                      openmp=openmp, multiproc=multiproc,
+                      [ workersize ], openmp=openmp, multiproc=multiproc,
                       shifterimg=shifterimg, debug=debug)
             scriptfiles.append(outfile)
             jindx += 1
@@ -382,7 +387,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         fullnodes = 0
         fullruntime = 0
         for t in tasks_by_type.keys():
-            for (nodes, ppn, runtime, nworker, tasks) in joblist[t]:
+            for (nodes, ppn, runtime, nworker, workersize, tasks) in joblist[t]:
                 if nodes > fullnodes:
                     fullnodes = nodes
                 fullruntime += runtime
@@ -396,8 +401,9 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         ppns = list()
         cnodes = list()
         nwk = list()
+        wrksz = list()
         for t, tasklist in tasks_by_type.items():
-            (nodes, ppn, runtime, nworker, tasks) = joblist[t][0]
+            (nodes, ppn, runtime, nworker, workersize, tasks) = joblist[t][0]
             taskfile = "{}_{}.tasks".format(outroot, t)
             task_write(taskfile, tasks)
             coms.append("desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
@@ -405,13 +411,14 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
             ppns.append(ppn)
             cnodes.append(nodes)
             nwk.append(nworker)
+            wrksz.append(workersize)
 
         outfile = "{}.slurm".format(outroot)
 
         fullruntime += runtimebuffer
 
         nersc_job(jobname, outfile, logroot, desisetup, coms, machine,
-                  queue, fullnodes, cnodes, ppns, fullruntime, nwk,
+                  queue, fullnodes, cnodes, ppns, fullruntime, nwk, wrksz,
                   openmp=openmp, multiproc=multiproc, shifterimg=shifterimg,
                   debug=debug)
         scriptfiles.append(outfile)
