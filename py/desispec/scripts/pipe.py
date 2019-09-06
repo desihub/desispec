@@ -834,7 +834,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
         parser.add_argument("--task", required=False, default=None,
             help="get log information about this specific task")
 
-        parser.add_argument("--tasktypes", required=False, default=availtypes,
+        parser.add_argument("--tasktypes", required=False, default=None,
             help="comma separated list of task types ({})".format(availtypes))
 
         parser.add_argument("--nights", required=False, default=None,

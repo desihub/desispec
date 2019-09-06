@@ -1084,35 +1084,156 @@ def status_task(task, ttype, state, logdir):
     return
 
 
-def status_taskname(task, ttype, state):
-    fields = pipetasks.base.task_classes[ttype].name_split(task)
-    if "night" in fields:
-        tasklogdir = os.path.join(
-            logdir, io.get_pipe_nightdir(),
-            "{:08d}".format(fields["night"])
+def status_taskname(tsklist):
+    for tsk in tsklist:
+        st = tsk[1]
+        col = status_color(st)
+        print(
+            "  {:20s}:  {}{}{}".format(tsk[0], col, st, clr.ENDC),
+            flush=True
         )
-        tasklog = os.path.join(
-            tasklogdir,
-            "{}.log".format(task)
+
+
+def status_night_totals(tasktypes, nights, tasks, tskstates):
+    # Accumulate totals for each night and type
+    sep = "------------------+---------+---------+---------+---------+---------+"
+    ntlist = list()
+    nighttot = OrderedDict()
+    for tt in tasktypes:
+        if tt == "spectra" or tt == "redshift":
+            # This function only prints nightly tasks
+            continue
+        for tsk in tasks[tt]:
+            fields = pipetasks.base.task_classes[tt].name_split(tsk)
+            nt = fields["night"]
+            if nt not in nighttot:
+                nighttot[nt] = OrderedDict()
+            if tt not in nighttot[nt]:
+                nighttot[nt][tt] = OrderedDict()
+                for s in task_states:
+                    nighttot[nt][tt][s] = 0
+            st = tskstates[tt][tsk]
+            nighttot[nt][tt][st] += 1
+    for nt, ttstates in nighttot.items():
+        ntstr = "{:08d}".format(nt)
+        if ntstr in nights:
+            ntlist.append(nt)
+    ntlist = list(sorted(ntlist))
+    for nt in ntlist:
+        ttstates = nighttot[nt]
+        ntstr = "{:08d}".format(nt)
+        if ntstr in nights:
+            header = "{:18s}|".format(ntstr)
+            for s in task_states:
+                col = status_color(s)
+                header = "{} {}{:8s}{}|".format(
+                    header, col, s, clr.ENDC
+                )
+            print(sep)
+            print(header)
+            print(sep)
+            for tt, totst in ttstates.items():
+                line = "  {:16s}|".format(tt)
+                for s in task_states:
+                    line = "{}{:9d}|".format(line, totst[s])
+                print(line)
+            print("", flush=True)
+
+
+def status_pixel_totals(tasktypes, tasks, tskstates):
+    # Accumulate totals for each type
+    sep = "------------------+---------+---------+---------+---------+---------+"
+    pixtot = OrderedDict()
+    for tt in tasktypes:
+        if (tt != "spectra") and (tt != "redshift"):
+            # This function only prints pixel tasks
+            continue
+        for tsk in tasks[tt]:
+            if tt not in pixtot:
+                pixtot[tt] = OrderedDict()
+                for s in task_states:
+                    pixtot[tt][s] = 0
+            st = tskstates[tt][tsk]
+            pixtot[tt][st] += 1
+    header = "{:18s}|".format("Pixel Tasks")
+    for s in task_states:
+        col = status_color(s)
+        header = "{} {}{:8s}{}|".format(
+            header, col, s, clr.ENDC
         )
-    elif "pixel" in fields:
-        tasklogdir = os.path.join(
-            logdir, "healpix",
-            io.healpix_subdirectory(fields["nside"],fields["pixel"])
+    print(sep)
+    print(header)
+    print(sep)
+    for tt, totst in pixtot.items():
+        line = "  {:16s}|".format(tt)
+        for s in task_states:
+            line = "{}{:9d}|".format(line, totst[s])
+        print(line)
+    print("", flush=True)
+
+
+def status_night_tasks(tasktypes, nights, tasks, tskstates):
+    # Sort the tasks into nights
+    nighttasks = OrderedDict()
+    ntlist = list()
+    for tt in tasktypes:
+        if tt == "spectra" or tt == "redshift":
+            # This function only prints nightly tasks
+            continue
+        for tsk in tasks[tt]:
+            fields = pipetasks.base.task_classes[tt].name_split(tsk)
+            nt = fields["night"]
+            if nt not in nighttasks:
+                nighttasks[nt] = list()
+            nighttasks[nt].append((tsk, tskstates[tt][tsk]))
+    for nt, tsklist in nighttasks.items():
+        ntstr = "{:08d}".format(nt)
+        if ntstr in nights:
+            ntlist.append(nt)
+    ntlist = list(sorted(ntlist))
+    for nt in ntlist:
+        tsklist = nighttasks[nt]
+        ntstr = "{:08d}".format(nt)
+        if ntstr in nights:
+            print(nt)
+            status_taskname(tsklist)
+
+
+def status_pixel_tasks(tasktypes, tasks, tskstates):
+    for tt in tasktypes:
+        tsklist = list()
+        if (tt != "spectra") and (tt != "redshift"):
+            # This function only prints pixel tasks
+            continue
+        for tsk in tasks[tt]:
+            tsklist.append((tsk, tskstates[tt][tsk]))
+        print(tt)
+        status_taskname(tsklist)
+
+
+def status_summary(tasktypes, nights, tasks, tskstates):
+    sep = "----------------+---------+---------+---------+---------+---------+"
+    hline = "-----------------------------------------------"
+    print(sep)
+    header_state = "{:16s}|".format("   Task Type")
+    for s in task_states:
+        col = status_color(s)
+        header_state = "{} {}{:8s}{}|".format(
+            header_state, col, s, clr.ENDC
         )
-        tasklog = os.path.join(
-            tasklogdir,
-            "{}.log".format(task)
-        )
-    col = status_color(state)
-    print("Task {}".format(task))
-    print(
-        "State = {}{}{}".format(
-            col,
-            state,
-            clr.ENDC
-        )
-    )
+    print(header_state)
+    print(sep)
+    for tt in tasktypes:
+        line = "{:16s}|".format(tt)
+        for s in task_states:
+            tsum = np.sum(
+                np.array(
+                    [1 for x, y in tskstates[tt].items() if y == s],
+                    dtype=np.int32
+                )
+            )
+            line = "{}{:9d}|".format(line, tsum)
+        print(line, flush=True)
 
 
 def status(task=None, tasktypes=None, nightstr=None, states=None,
@@ -1133,6 +1254,10 @@ def status(task=None, tasktypes=None, nightstr=None, states=None,
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
     tasks = OrderedDict()
+
+    summary = False
+    if (tasktypes is None) and (nightstr is None):
+        summary = True
 
     if task is None:
         ttypes = None
@@ -1166,9 +1291,6 @@ def status(task=None, tasktypes=None, nightstr=None, states=None,
     for typ, tsks in tasks.items():
         tstates[typ] = pipedb.check_tasks(tsks, db=db)
 
-    sep = "----------------+---------+---------+---------+---------+---------+"
-    hline = "-----------------------------------------------"
-
     if len(ttypes) == 1 and len(tasks[ttypes[0]]) == 1:
         # Print status of this specific task
         thistype = ttypes[0]
@@ -1178,74 +1300,32 @@ def status(task=None, tasktypes=None, nightstr=None, states=None,
         if len(ttypes) > 1 and len(nights) > 1:
             # We have multiple nights and multiple task types.
             # Just print totals.
-            print(sep)
-            header_state = "{:16s}|".format("   Task Type")
-            for s in task_states:
-                header_state = "{} {:8s}|".format(header_state, s)
-            print(header_state)
-            print(sep)
-            for tt in ttypes:
-                line = "{:16s}|".format(tt)
-                for s in task_states:
-                    tsum = np.sum(
-                        np.array(
-                            [1 for x, y in tstates[tt].items() if y == s],
-                            dtype=np.int32
-                        )
-                    )
-                    line = "{}{:9d}|".format(line, tsum)
-                print(line, flush=True)
+            if summary:
+                status_summary(ttypes, nights, tasks, tstates)
+            else:
+                status_night_totals(ttypes, nights, tasks, tstates)
+                status_pixel_totals(ttypes, tasks, tstates)
         elif len(ttypes) > 1:
-            # We have multiple task types.  Print the state totals for the
-            # night or the overall totals for spectra and redshifts.
-            pass
+            # Multiple task types for one night. Print the totals for each
+            # task type.
+            thisnight = nights[0]
+            status_night_totals(ttypes, nights, tasks, tstates)
         elif len(nights) > 1:
             # We have just one task type, print the state totals for each night
             # OR the full task list for redshift or spectra tasks.
             thistype = ttypes[0]
             print("Task type {}".format(thistype))
-            print(hline)
-            for s in task_states:
-                col = status_color(s)
-                line = "{}{:8s}{}:  ".format(col, s, clr.ENDC)
-                tsum = np.sum(
-                    np.array(
-                        [1 for x, y in tstates[thistype].items() if y == s],
-                        dtype=np.int32
-                    )
-                )
-                line = "{}{:9d}".format(line, tsum)
-                print(line, flush=True)
-            print(hline)
-            nighttasks = OrderedDict()
-            pixtasks = list()
-            for tsk in tasks[thistype]:
-                fields = pipetasks.base.task_classes[thistype].name_split(tsk)
-                if "night" in fields:
-                    nt = fields["night"]
-                    if nt not in nighttasks:
-                        nighttasks[nt] = list()
-                    nighttasks[nt].append((tsk, tstates[thistype][tsk]))
-                elif "pixel" in fields:
-                    pixtasks.append((tsk, tstates[thistype][tsk]))
-            for nt, tsklist in nighttasks.items():
-                print(nt)
-                for tsk in tsklist:
-                    st = tsk[1]
-                    col = status_color(st)
-                    print(
-                        "  {:20s}:  {}{}{}".format(tsk[0], col, st, clr.ENDC),
-                        flush=True
-                    )
-            for tsk, st in pixtasks:
-                col = status_color(st)
-                print(
-                    "  {:20s}:  {}{}{}".format(tsk, col, st, clr.ENDC),
-                    flush=True
-                )
+            if thistype == "spectra" or thistype == "redshift":
+                status_pixel_tasks(ttypes, tasks, tstates)
+            else:
+                status_night_totals(ttypes, nights, tasks, tstates)
         else:
             # We have one type and one night, print the full state of every
             # task.
-            pass
+            thistype = ttypes[0]
+            thisnight = nights[0]
+            print("Task type {}".format(thistype))
+            status_night_tasks(ttypes, nights, tasks, tstates)
+            status_pixel_tasks(ttypes, tasks, tstates)
 
     return
