@@ -79,13 +79,13 @@ class TaskSpectra(BaseTask):
         # Per-process memory requirements
         mem = 0.0
         if db is not None:
-            # Get the list of frames and use the total targets from all frames
-            # that fall in our pixel as a measure of the memory requirements.
+            # Get the list of frames.  The frame files touching this pixel will
+            # be cached in RAM.
             props = self.name_split(name)
             entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
-            ntarget = np.sum([x["ntargets"] for x in entries])
-            # DB entry is for one exposure and spectrograph.
-            mem = 0.2 + 0.0002 * 3 * ntarget
+            nframe = len(entries)
+            # Each frame is about 90MB
+            mem = 0.090 * nframe
         return mem
 
 
