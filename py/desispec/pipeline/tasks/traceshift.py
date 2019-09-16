@@ -85,8 +85,8 @@ class TaskTraceShift(BaseTask):
         opts = {}
         opts["degxx"] = 2
         opts["degxy"] = 2
-        opts["degyx"] = 2
-        opts["degyy"] = 2
+        opts["degyx"] = 0
+        opts["degyy"] = 0
         opts["auto"]  = True
         return opts
 
