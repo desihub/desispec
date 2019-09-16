@@ -77,7 +77,7 @@ class TaskStarFit(BaseTask):
 
     def _run_time(self, name, procs, db):
         # Run time on one proc on machine with scale factor == 1.0
-        return 25.0
+        return 40.0
 
     def _run_max_mem_proc(self, name, db):
         # Per-process memory requirements
@@ -133,15 +133,15 @@ class TaskStarFit(BaseTask):
 
         deps = self.deps(name)
         options = {}
-        options["outfile"]=self.paths(name)[0]
-        options["frames"]=[]
-        options["skymodels"]=[]
-        options["fiberflats"]=[]
-
+        options["ncpu"] = 1
+        options["outfile"] = self.paths(name)[0]
+        options["frames"] = []
+        options["skymodels"] = []
+        options["fiberflats"] = []
 
         # frames skymodels fiberflats
         props = self.name_split(name)
-        for band in ["b","r","z"] :
+        for band in ["b", "r", "z"] :
             props_and_band = props.copy()
             props_and_band["band"] = band
 
