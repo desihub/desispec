@@ -557,16 +557,91 @@ def autocalib_fiberflat(fiberflats):
             raise ValueError(message) 
     wave = fiberflats[0].wave
 
-    # investigate number of spectrographs and number of exposures with different lamps
-    log.error("not implemented yet")
-    raise RuntimeError("not implemented yet")
+    # investigate number of spectrographs and number of exposures
+    spectro=[]
+    expid=[]
+    for fflat in fiberflats :
+        expid.append(fflat.header["EXPID"])
+        s=int(fflat.header["CAMERA"].strip()[1])
+        spectro.append(s)
+    expid=np.array(expid)
+    spectro=np.array(spectro)
+    log.info("EXPID: {}".format(np.unique(expid)))
+    log.info("SPECTRO: {}".format(np.unique(spectro)))
 
-    #return FiberFlat(wave,fiberflat,ivar,mask,
-    #                 header=fiberflats[0].header, 
-    #                 fibers=fiberflats[0].fibers,
-    #                 fibermap=fiberflats[0].fibermap,
-    #                 spectrograph=fiberflats[0].spectrograph)
+    
+    cfflat=dict()
+    for ee in np.unique(expid) :
+        log.info("Fit fiberflats of exposure #{}".format(ee))
+        ii = np.where(expid==ee)[0]
+        nwave = fiberflats[ii[0]].meanspec.size
 
+        # same mean spectrum for all petals of same exposure
+        mmspec=np.zeros(nwave)
+        for i in ii :
+            fflat=fiberflats[i]
+            mmspec += fflat.meanspec
+        mmspec /= ii.size
+        for i in ii :
+            fflat=fiberflats[i]
+            scale = fflat.meanspec/(mmspec+(mmspec==0))
+            fflat.fiberflat *= scale
+
+        # fit a 2D polynomial per wavelenght to get the fiberflat at the center of the focal plane
+        cfflat[ee] = np.zeros(nwave)
+        X = []
+        Y = []
+        Z = []
+        for i in ii :
+            fflat=fiberflats[i]
+            X.append(fflat.fibermap["DESIGN_X"])
+            Y.append(fflat.fibermap["DESIGN_Y"])
+            Z.append(fflat.fiberflat)
+        X = np.hstack(X)
+        Y = np.hstack(Y)
+        Z = np.vstack(Z)
+        A = np.array([X*0+1, X, Y, X**2+Y**2]).T
+        for j in range(nwave) :
+            coeff, r, rank, s = np.linalg.lstsq(A, Z[:,j],rcond=-1)
+            cfflat[ee][j] = coeff[0] # value at center of field of view
+
+    # combine the fiber flat of each exposure, per spectrum
+    output_fiberflats = dict()
+    mflat = list()
+    for spec in np.unique(spectro) :
+        log.info("Combine fiberflats for spectro #{}".format(spec))
+        ii = np.where(spectro==spec)[0]
+        fflat0=fiberflats[ii[0]]
+        fiberflat = np.zeros_like(fflat0.fiberflat)
+        var       = np.zeros_like(fflat0.ivar)
+        mask      = np.zeros_like(fflat0.mask)
+        meanspec  = np.zeros_like(fflat0.meanspec)
+        
+        for i in ii :
+            ee = expid[i]
+            corr = 1./(cfflat[ee]+(cfflat[ee]==0))
+            fiberflat += fiberflats[i].fiberflat*corr
+            var       += corr**2/(fiberflats[i].ivar+(fiberflats[i].ivar==0))+1e12*(fiberflats[i].ivar==0)
+            mask      |=  fiberflats[i].mask
+            meanspec  +=  fiberflats[i].meanspec*corr # this is quite artificial now
+            
+        ivar      = (var>0)/(var+(var==0))  
+        fiberflat /= ii.size
+        meanspec /= ii.size
+        fflat = FiberFlat(fflat0.wave,fiberflat,ivar,mask,
+                          meanspec=meanspec,
+                          header=fflat0.header, 
+                          fibers=fflat0.fibers,
+                          fibermap=fflat0.fibermap,
+                          spectrograph=fflat0.spectrograph)
+        output_fiberflats[spec] = fflat
+        mflat.append(np.median(fiberflat,axis=0))
+    mflat=np.median(np.array(mflat),axis=0)
+    corr=1./(mflat+(mflat==0))
+    for spec in np.unique(spectro) :
+        output_fiberflats[spec].fiberflat *= corr
+    log.info("done")
+    return output_fiberflats
     
 
 def apply_fiberflat(frame, fiberflat):

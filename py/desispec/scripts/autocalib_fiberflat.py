@@ -16,7 +16,7 @@ import argparse
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Merge fiber flats from different calibration lamps")
     parser.add_argument('-i','--infile', type = str, default = None, required=True, nargs="*")
-    parser.add_argument('-o','--outfile', type = str, default = None, required=True)
+    parser.add_argument('--prefix', type = str, required=False, default="./fiberflat-", help = "output filename prefix, including directory (one file per spectrograph)")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -31,7 +31,9 @@ def main(args) :
     inputs=[]
     for filename in args.infile :
         inputs.append(read_fiberflat(filename))
-    fiberflat = autocalib_fiberflat(inputs)
-    write_fiberflat(args.outfile,fiberflat)
-    log.info("successfully wrote %s"%args.outfile)
+    fiberflats = autocalib_fiberflat(inputs)
+    for spectro in fiberflats.keys() :
+        ofilename="{}{}-autocal.fits".format(args.prefix,spectro)
+        write_fiberflat(ofilename,fiberflats[spectro])
+        log.info("successfully wrote %s"%ofilename)
     

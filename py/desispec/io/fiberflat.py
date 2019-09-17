@@ -91,7 +91,7 @@ def read_fiberflat(filename):
     header    = fx[0].header
     fiberflat = native_endian(fx[0].data.astype('f8'))
     ivar      = native_endian(fx["IVAR"].data.astype('f8'))
-    mask      = native_endian(fx["MASK"].data, uint=True)
+    mask      = native_endian(fx["MASK"].data)
     meanspec  = native_endian(fx["MEANSPEC"].data.astype('f8'))
     wave      = native_endian(fx["WAVELENGTH"].data.astype('f8'))
     if 'FIBERMAP' in fx:
