@@ -77,7 +77,7 @@ class TaskStarFit(BaseTask):
 
     def _run_time(self, name, procs, db):
         # Run time on one proc on machine with scale factor == 1.0
-        return 40.0
+        return 90.0
 
     def _run_max_mem_proc(self, name, db):
         # Per-process memory requirements
