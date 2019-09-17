@@ -535,7 +535,7 @@ def autocalib_fiberflat(fiberflats):
     Args:
         fiberflats : list of `desispec.FiberFlat` object
 
-    returns a desispec.FiberFlat object
+    returns a dictionary of desispec.FiberFlat objects , one per spectrograph
     """
     
     log=get_logger()
