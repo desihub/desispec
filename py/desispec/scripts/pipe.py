@@ -861,9 +861,12 @@ Where supported commands are (use desi_pipe <command> --help for details):
         if args.tasktypes is not None:
             ttypes = args.tasktypes.split(",")
 
+        if args.states is not None:
+            states = args.states.split(",")
+
         control.status(
             task=args.task, tasktypes=ttypes, nightstr=args.nights,
-            states=args.states, expid=args.expid, spec=args.spec,
+            states=states, expid=args.expid, spec=args.spec,
             db_postgres_user=args.db_postgres_user
         )
 
