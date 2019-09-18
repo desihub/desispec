@@ -36,7 +36,7 @@ class QA_Frame(object):
             assert len(inp) == 1
             self.night = list(inp.keys())[0]  # Requires night in first key
             assert len(inp[self.night]) == 1
-            self.expid = list(inp[self.night].keys())[0]
+            self.expid = int(list(inp[self.night].keys())[0])
             assert len(inp[self.night][self.expid]) == 2
             self.flavor = inp[self.night][self.expid].pop('flavor')
             self.camera = list(inp[self.night][self.expid].keys())[0]

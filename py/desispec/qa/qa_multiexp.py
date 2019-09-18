@@ -138,8 +138,6 @@ class QA_MultiExp(object):
                         val = self.data[night][expid][camera][qatype]['METRICS'][metric]
                     except KeyError:  # Each exposure has limited qatype
                         pass
-                    except TypeError:
-                        import pdb; pdb.set_trace()
                     else:
                         if isinstance(val, (list,tuple)):
                             out_list.append(val[0])
