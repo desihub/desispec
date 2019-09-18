@@ -861,6 +861,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
         if args.tasktypes is not None:
             ttypes = args.tasktypes.split(",")
 
+        states = None
         if args.states is not None:
             states = args.states.split(",")
 
