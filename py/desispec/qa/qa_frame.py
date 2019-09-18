@@ -33,9 +33,9 @@ class QA_Frame(object):
 
         """
         if isinstance(inp,dict):
-            assert len(inp) == 1
-            self.night = list(inp.keys())[0]  # Requires night in first key
-            assert len(inp[self.night]) == 1
+            assert len(inp) == 1  # There must be only one night
+            self.night = list(inp.keys())[0]
+            assert len(inp[self.night]) == 1  # There must be only one exposure
             self.expid = int(list(inp[self.night].keys())[0])
             assert len(inp[self.night][self.expid]) == 2
             self.flavor = inp[self.night][self.expid].pop('flavor')
