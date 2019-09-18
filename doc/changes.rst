@@ -8,6 +8,8 @@ desispec Change Log
 * Add gain output option to desi_compute_gain
 * Modify overscan subtraction algorithm in desi.preproc.preproc
 * Move raw data transfer scripts to desitransfer_ (PR `#804`_).
+* Convert any expid input into an int in QA
+* Remove stray pdb lines from QA
 
 .. _desitransfer: https://github.com/desihub/desitransfer
 .. _`#804`: https://github.com/desihub/desispec/pull/804
