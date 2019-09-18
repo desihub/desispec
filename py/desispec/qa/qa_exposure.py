@@ -51,6 +51,8 @@ class QA_Exposure(object):
             All input args become object attributes.
         """
         # Init
+        if not isinstance(expid, int):
+            raise IOError("expid must be an int at instantiation")
         self.expid = expid
         self.night = night
         self.meta = {}
@@ -157,14 +159,10 @@ class QA_Exposure(object):
                 qa_frame = desiio.load_qa_frame(qadata_path)
                 # Remove?
                 if remove:
-                    #import pdb; pdb.set_trace()
                     os.remove(qadata_path)
                 # Test
                 for key in ['expid','night']:
-                    try:
-                        assert getattr(qa_frame,key) == getattr(self, key)
-                    except:
-                        import pdb; pdb.set_trace()
+                    assert getattr(qa_frame,key) == getattr(self, key)
                 # Save
                 self.data['frames'][camera] = qa_frame.qa_data
         else:
