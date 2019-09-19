@@ -61,15 +61,13 @@ class TaskPSFNight(BaseTask):
         """
         return dict()
 
-    def _run_max_procs(self, procs_per_node):
-        """See BaseTask.run_max_procs.
-        """
+    def _run_max_procs(self):
+        # This is a serial task.
         return 1
 
-    def _run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 1
+    def _run_time(self, name, procs, db):
+        # Run time on one proc on machine with scale factor == 1.0
+        return 2.0
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.

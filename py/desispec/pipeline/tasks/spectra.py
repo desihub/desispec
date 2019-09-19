@@ -5,6 +5,8 @@
 
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
+
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
 
 from ...util import option_list
@@ -54,13 +56,38 @@ class TaskSpectra(BaseTask):
         """
         return dict()
 
-    def run_max_procs(self, procs_per_node):
+    def _run_max_procs(self):
+        # This is a serial task.
         return 1
 
-    def run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 15
+    def _run_time(self, name, procs, db):
+        # Run time on one proc on machine with scale factor == 1.0.
+        # Get the list of frames and use the size of this list as
+        # a proxy for determining the runtime.  The run time is dominated by
+        # I/O.
+        if db is not None:
+            props = self.name_split(name)
+            entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
+            nentry = len(entries)
+            tm = 1.0 + 1.0 * (nentry / 50.0)
+        else:
+            tm = 60.0
+
+        return tm
+
+    def _run_max_mem_proc(self, name, db):
+        # Per-process memory requirements
+        mem = 0.0
+        if db is not None:
+            # Get the list of frames.  The frame files touching this pixel will
+            # be cached in RAM.
+            props = self.name_split(name)
+            entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
+            nframe = len(entries)
+            # Each frame is about 90MB
+            mem = 0.090 * nframe
+        return mem
+
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.
@@ -78,8 +105,9 @@ class TaskSpectra(BaseTask):
         from .base import task_classes, task_type
         # get pixel
         props = self.name_split(name)
-        # get list of exposures and spectrographs by selecting entries in the healpix_frame table with state = 1
-        # which means that there is a new cframe intersecting the pixel
+        # get list of exposures and spectrographs by selecting entries in the
+        # healpix_frame table with state = 1, which means that there is a new
+        # cframe intersecting the pixel
         entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"],"state":1})
         # now select cframe with same props
         cframes = []
@@ -115,7 +143,7 @@ class TaskSpectra(BaseTask):
         args = update_spectra.parse(optlist)
         update_spectra.main(args)
         return
-    
+
     def run_and_update(self, db, name, opts, comm=None):
         """Run the task and update DB state.
 
@@ -158,12 +186,19 @@ class TaskSpectra(BaseTask):
                     props["state"]=1 # selection, only those for which we had a cframe
                     with db.cursor() as cur :
                         self.state_set(db, name, "done",cur=cur)
-                        db.update_healpix_frame_state(props,state=2,cur=cur) # 2=spectra has been updated
+                        # 2=spectra has been updated
+                        db.update_healpix_frame_state(props,state=2,cur=cur)
                         # directly set the corresponding redshift to ready
-                        cur.execute('update redshift set state={} where nside = {} and pixel = {}'.format(task_state_to_int["ready"],props["nside"],props["pixel"]))# post processing is now done by a single rank in run.run_task_list
+                        cur.execute(
+                            'update redshift set state={} where nside = {} and pixel = {}'
+                            .format(
+                                task_state_to_int["ready"],
+                                props["nside"],
+                                props["pixel"]
+                            )
+                        )
+                        # post processing is now done by a single rank in
+                        # run.run_task_list
                 else:
                     self.state_set(db, name, "failed")
         return failed
-
-
-        

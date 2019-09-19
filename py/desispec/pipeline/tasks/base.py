@@ -346,63 +346,88 @@ class BaseTask(object):
         return self._deps(name, db, inputs)
 
 
-    def _run_max_procs(self, procs_per_node):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
-        return None
+    def _run_max_procs(self):
+        return 0
 
 
-    def run_max_procs(self, procs_per_node):
+    def run_max_procs(self):
         """Maximum number of processes supported by this task type.
 
         Args:
             procs_per_node (int): the number of processes running per node.
 
         Returns:
-            int: the maximum number of processes.
+            int: the maximum number of processes.  Zero indicates no limit.
 
         """
-        return self._run_max_procs(procs_per_node)
+        return self._run_max_procs()
 
 
-    def _run_max_mem(self):
+    def _run_max_mem_proc(self, name, db):
         """Return zero (i.e. not a limit)
         """
         return 0.0
 
 
-    def run_max_mem(self):
+    def run_max_mem_proc(self, name, db=None):
         """Maximum memory in GB per process required.
 
         If zero is returned, it indicates that the memory requirement is so
         small that the code can run fully-packed on any system.
 
+        Args:
+            name (str): the name of the task.
+            db (pipeline.DB): the optional database instance.
+
         Returns:
             float: the required RAM in GB per process.
 
         """
-        return self._run_max_mem()
+        return self._run_max_mem_proc(name, db)
 
 
-    def _run_time(self, name, procs_per_node, db):
+    def _run_max_mem_task(self, name, db):
+        """Return zero (i.e. no memory requirement)
+        """
+        return 0.0
+
+
+    def run_max_mem_task(self, name, db=None):
+        """Maximum memory in GB per task required.
+
+        If zero is returned, it indicates that the memory requirement is so
+        small that the code can run on a single node.
+
+        Args:
+            name (str): the name of the task.
+            db (pipeline.DB): the optional database instance.
+
+        Returns:
+            float: the required RAM in GB per process.
+
+        """
+        return self._run_max_mem_task(name, db)
+
+
+    def _run_time(self, name, procs, db):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")
         return None
 
 
-    def run_time(self, name, procs_per_node, db=None):
+    def run_time(self, name, procs, db=None):
         """Estimated runtime for a task at maximum concurrency.
 
         Args:
             name (str): the name of the task.
-            procs_per_node (int): the number of processes running per node.
+            procs (int): the total number of processes used for this task.
             db (pipeline.DB): the optional database instance.
 
         Returns:
             int: estimated minutes of run time.
 
         """
-        return self._run_time(name, procs_per_node, db)
+        return self._run_time(name, procs, db)
 
 
     def _run_defaults(self):

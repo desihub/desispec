@@ -235,12 +235,22 @@ def dist_discrete_all(worksizes, workers, power=1.0):
         else:
             curweight += weights[cur]
 
-    # Now distribute the remaining items uniformly among the remaining
-    # workers.  In the case of good load balance, there should only be
-    # one worker left, but that does not always happen...
-    remain = dist_uniform(weights.shape[0]-off, workers-len(dist))
-    for i in range(workers-len(dist)):
-        dist.append( (off + remain[i][0], remain[i][1]) )
+    if (workers - len(dist) > 0):
+        # There are still workers remaining.
+        if (workers - len(dist) == 1):
+            # There is exactly one worker remaining.  Assign it the rest of
+            # the work
+            if weights.shape[0] > off:
+                dist.append((off, weights.shape[0] - off))
+            else:
+                dist.append((off, 0))
+        else:
+            # We have multiple remaining workers.  This can happen in cases
+            # of extreme load imbalance.  Distribute the remaining work
+            # uniformly.
+            remain = dist_uniform(weights.shape[0]-off, workers-len(dist))
+            for i in range(workers - len(dist)):
+                dist.append( (off + remain[i][0], remain[i][1]) )
 
     if len(dist) < workers:
         # The load imbalance was really bad.  Just warn and assign the
