@@ -23,7 +23,7 @@ from desiutil.log import get_logger
 from .. import io
 
 from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
-    stdouterr_redirected, use_mpi)
+    weighted_partition, stdouterr_redirected, use_mpi)
 
 from .prod import task_read, task_write
 
@@ -182,7 +182,7 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
     workdist = None
     if len(workweights) == nworker:
         # One task per worker
-        workdist = np.arange(nworker)
+        workdist = [[i,] for i in range(nworker)]
     else:
         # workdist = dist_discrete_all(workweights, nworker)
         workdist = weighted_partition(workweights, nworker)
@@ -192,12 +192,12 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
         workweights, workdist, startup=startup)
 
     log.debug("worker task assignment:")
-    log.debug("  0: {} minutes".format(workertimes[0]))
+    log.debug("  0: {:.2f} minutes".format(workertimes[0]))
     log.debug("      first task {}".format(worktasks[workdist[0][0]]))
     log.debug("      last task {}".format(worktasks[workdist[0][-1]]))
     if nworker > 1:
         log.debug("      ...")
-        log.debug("  {}: {} minutes".format(nworker-1, workertimes[-1]))
+        log.debug("  {}: {:.2f} minutes".format(nworker-1, workertimes[-1]))
         log.debug("      first task {}".format(
             worktasks[workdist[nworker-1][0]]))
         log.debug("      last task {}".format(
