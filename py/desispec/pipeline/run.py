@@ -23,8 +23,7 @@ from desiutil.log import get_logger
 
 from .. import io
 
-from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
-    stdouterr_redirected, use_mpi)
+from ..parallel import stdouterr_redirected
 
 from .prod import load_prod
 

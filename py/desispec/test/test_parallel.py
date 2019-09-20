@@ -50,7 +50,7 @@ class TestParallel(unittest.TestCase):
 
             disc = dist_discrete(self.blocks, self.nworker, id)
             assert(disc[0] == 2 * id)
-            assert(disc[1] == 2)
+            assert(len(disc) == 2)
 
         # In this case, we have more tasks per worker than workers,
         # so the result should be the same.

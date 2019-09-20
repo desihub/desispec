@@ -118,16 +118,21 @@ def worker_times(tasktimes, workerdist, startup=0.0):
     """Compute the time needed for each worker.
 
     Args:
-        tasktimes (list):  List of individual task times.
-        workerdist (list):  List of tuples of start task, ntask.
+        tasktimes (array):  array of individual task times.
+        workerdist (list):  List of tuples of indices in taskstimes.
         startup (float):  Startup overhead in minutes for each worker.
 
     Returns:
         (tuple):  The (worker times, min, max).
 
+    Notes / Examples:
+        len(tasktimes) = number of tasks
+        len(workerdist) = number of workers
+        workerdist[i] = tuple of tasktime indices assigned to worker i
+        sum(tasktimes[workerdist[i]]) = expected total time for worker i
     """
-    workertimes = [startup + np.sum(tasktimes[x[0]:x[0]+x[1]])
-                   for x in workerdist]
+    tasktimes = np.asarray(tasktimes)
+    workertimes = np.array([startup + np.sum(tasktimes[ii]) for ii in workerdist])
     workermax = np.max(workertimes)
     workermin = np.min(workertimes)
     return workertimes, workermin, workermax
@@ -150,7 +155,7 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
     Returns:
         (tuple):  The (sorted tasks, sorted runtime weights, dist) results
             where dist is the a list of tuples (one per worker) indicating
-            the first task and number of tasks for that worker in the
+            the indices of tasks for that worker in the
             returned sorted list of tasks.
 
     """
@@ -162,10 +167,12 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
                     x, workersize, db=db)) for x in tasklist]
 
     # Sort the tasks by runtime to improve the partitioning
+    # NOTE: sorting is unnecessary when using weighted_partition instead of
+    #       dist_discrete_all, but leaving for now while comparing/debugging
     tasktimes = list(sorted(tasktimes, key=lambda x: x[1]))[::-1]
     mintasktime = tasktimes[-1][1]
     maxtasktime = tasktimes[0][1]
-    log.debug("task runtime range = {} ... {}".format(mintasktime, maxtasktime))
+    log.debug("task runtime range = {:.2f} ... {:.2f}".format(mintasktime, maxtasktime))
 
     # Split the task names and times
     worktasks = [x[0] for x in tasktimes]
@@ -175,9 +182,10 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
     workdist = None
     if len(workweights) == nworker:
         # One task per worker
-        workdist = [(x, 1) for x in range(nworker)]
+        workdist = np.arange(nworker)
     else:
-        workdist = dist_discrete_all(workweights, nworker)
+        # workdist = dist_discrete_all(workweights, nworker)
+        workdist = weighted_partition(workweights, nworker)
 
     # Find the runtime for each worker
     workertimes, workermin, workermax = worker_times(
@@ -186,18 +194,17 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
     log.debug("worker task assignment:")
     log.debug("  0: {} minutes".format(workertimes[0]))
     log.debug("      first task {}".format(worktasks[workdist[0][0]]))
-    log.debug("      last task {}".format(
-        worktasks[workdist[0][0] + workdist[0][1] - 1]))
+    log.debug("      last task {}".format(worktasks[workdist[0][-1]]))
     if nworker > 1:
         log.debug("      ...")
         log.debug("  {}: {} minutes".format(nworker-1, workertimes[-1]))
         log.debug("      first task {}".format(
             worktasks[workdist[nworker-1][0]]))
         log.debug("      last task {}".format(
-                worktasks[workdist[nworker-1][0] + workdist[nworker-1][1] - 1]
+                worktasks[workdist[nworker-1][-1]]
             )
         )
-    log.debug("range of worker times = {} ... {}".format(workermin, workermax))
+    log.debug("range of worker times = {:.2f} ... {:.2f}".format(workermin, workermax))
 
     return (worktasks, workweights, workdist)
 
