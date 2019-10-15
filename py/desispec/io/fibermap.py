@@ -71,10 +71,10 @@ fiberassign_columns.extend([
     ('FIBERSTATUS', 'i4', '', 'Fiber status; 0=good'),
     ('OBJTYPE', (str, 3), '', 'SKY, TGT, NON'),
     ('LAMBDA_REF',  'f4', 'Angstrom', 'Wavelength at which fiber was centered'),
-    ('DESIGN_X',    'f4', 'mm', 'Expected CS5 X on focal plane'),
-    ('DESIGN_Y',    'f4', 'mm', 'Expected CS5 Y on focal plane'),
-    ('DESIGN_Q',    'f4', 'deg', 'Expected CS5 Q azimuthal coordinate'),
-    ('DESIGN_S',    'f4', 'mm', 'Expected CS5 S radial distance along curved focal surface'),
+    ('FIBERASSIGN_X',    'f4', 'mm', 'Expected CS5 X on focal plane'),
+    ('FIBERASSIGN_Y',    'f4', 'mm', 'Expected CS5 Y on focal plane'),
+    # ('DESIGN_Q',    'f4', 'deg', 'Expected CS5 Q azimuthal coordinate'),
+    # ('DESIGN_S',    'f4', 'mm', 'Expected CS5 S radial distance along curved focal surface'),
     ('NUMTARGET',   'i2', '', 'Number of targets covered by positioner'),
 ])
 
@@ -121,8 +121,8 @@ def empty_fibermap(nspec, specmin=0):
 
     fiberpos = desimodel.io.load_fiberpos()
     ii = slice(specmin, specmin+nspec)
-    fibermap['DESIGN_X'][:]   = fiberpos['X'][ii]
-    fibermap['DESIGN_Y'][:]   = fiberpos['Y'][ii]
+    fibermap['FIBERASSIGN_X'][:]   = fiberpos['X'][ii]
+    fibermap['FIBERASSIGN_Y'][:]   = fiberpos['Y'][ii]
     fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
     fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
     fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
@@ -260,8 +260,15 @@ def fibermap_new2old(fibermap):
     fm.rename_column('FIBER_RA', 'RA_OBS')
     fm.rename_column('FIBER_DEC', 'DEC_OBS')
 
-    fm.rename_column('DESIGN_X', 'X_TARGET')
-    fm.rename_column('DESIGN_Y', 'Y_TARGET')
+    if 'DESIGN_X' in fm.colnames:
+        fm.rename_column('DESIGN_X', 'X_TARGET')
+    if 'DESIGN_Y' in fm.colnames:
+        fm.rename_column('DESIGN_Y', 'Y_TARGET')
+    if 'FIBERASSIGN_X' in fm.colnames:
+        fm.rename_column('FIBERASSIGN_X', 'X_TARGET')
+    if 'FIBERASSIGN_Y' in fm.colnames:
+        fm.rename_column('FIBERASSIGN_Y', 'Y_TARGET')
+
     fm['X_FVCOBS'] = fm['X_TARGET']
     fm['Y_FVCOBS'] = fm['Y_TARGET']
     fm['X_FVCERR'] = np.full(n, 1e-3, dtype='f4')

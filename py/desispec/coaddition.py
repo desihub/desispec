@@ -65,7 +65,7 @@ def coadd_fibermap(fibermap) :
                 tfmap['FIRST_'+k][i] = np.min(vals)
                 tfmap['LAST_'+k][i] = np.max(vals)
                 tfmap['NUM_'+k][i] = np.unique(vals).size
-        for k in ['DESIGN_X', 'DESIGN_Y','FIBER_RA', 'FIBER_DEC'] :
+        for k in ['FIBERASSIGN_X', 'FIBERASSIGN_Y','FIBER_RA', 'FIBER_DEC'] :
             if k in fibermap.colnames :
                 tfmap[k][i]=np.mean(fibermap[k][jj])
         for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR','DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
