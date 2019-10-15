@@ -12,7 +12,7 @@ from astropy.table import Table, Column
 from desiutil.depend import add_dependencies
 from desispec.io.util import fitsheader, write_bintable, makepath
 
-#- Subset of columns that come from original target catalog
+#- Subset of columns that come from original target/MTL catalog
 target_columns = [
     ('TARGETID',    'i8', '', 'Unique target ID'),
     ('DESI_TARGET', 'i8', '', 'Dark survey + calibration targeting bits'),
@@ -32,8 +32,10 @@ target_columns = [
     ('REF_ID',      'i8', '', 'Astrometric catalog reference ID (SOURCE_ID from Gaia)'),
     ('PMRA',        'f4', 'marcsec/year', 'Proper motion in +RA direction (already including cos(dec))'),
     ('PMDEC',       'f4', 'marcsec/year', 'Proper motion in +dec direction'),
+    ('REF_EPOCH',   'f4', '', 'proper motion reference epoch'),
     ('PMRA_IVAR',   'f4', 'year**2/marcsec**2', 'Inverse variance of PMRA'),
     ('PMDEC_IVAR',  'f4', 'year**2/marcsec**2', 'Inverse variance of PMDEC'),
+    ('RELEASE',     'i2', '', 'imaging surveys release ID'),
     ('FLUX_G',      'f4', 'nanomaggies', 'g-band flux'),
     ('FLUX_R',      'f4', 'nanomaggies', 'r-band flux'),
     ('FLUX_Z',      'f4', 'nanomaggies', 'z-band flux'),
@@ -58,8 +60,101 @@ target_columns = [
     ('MW_TRANSMISSION_R', 'f4', '', 'Milky Way dust transmission in r [0-1]'),
     ('MW_TRANSMISSION_Z', 'f4', '', 'Milky Way dust transmission in z [0-1]'),
     ('EBV', 'f4', '', 'Galactic extinction E(B-V) reddening from SFD98'),
-    ('PHOTSYS', (str, 1), '', 'N for BASS/MzLS, S for DECam')
+    ('PHOTSYS', (str, 1), '', 'N for BASS/MzLS, S for DECam'),
+    ('OBSCONDITIONS', 'i4', '', 'bitmask of allowable observing conditions'),
+    ('NUMOBS_INIT', 'i8', '', 'initial number of requested observations'),
+    ('PRIORITY_INIT', 'i8', '', 'initial priority'),
+    ('NUMOBS_MORE', 'i4', '', 'current number of additional observations requested'),
+    ('HPXPIXEL', 'i8', '', 'Healpix pixel number (NESTED)')
 ]
+
+#- Some additional columns from targeting that I'm not including here yet
+#- because we don't use them in the pipeline and they may continue to evolve
+'''
+    DCHISQ              f4  array[5]
+    FRACFLUX_G          f4  
+    FRACFLUX_R          f4  
+    FRACFLUX_Z          f4  
+    FRACMASKED_G        f4  
+    FRACMASKED_R        f4  
+    FRACMASKED_Z        f4  
+    FRACIN_G            f4  
+    FRACIN_R            f4  
+    FRACIN_Z            f4  
+    NOBS_G              i2  
+    NOBS_R              i2  
+    NOBS_Z              i2  
+    PSFDEPTH_G          f4  
+    PSFDEPTH_R          f4  
+    PSFDEPTH_Z          f4  
+    GALDEPTH_G          f4  
+    GALDEPTH_R          f4  
+    GALDEPTH_Z          f4  
+    FLUX_W3             f4  
+    FLUX_W4             f4  
+    FLUX_IVAR_W3        f4  
+    FLUX_IVAR_W4        f4  
+    MW_TRANSMISSION_W1
+                        f4  
+    MW_TRANSMISSION_W2
+                        f4  
+    MW_TRANSMISSION_W3
+                        f4  
+    MW_TRANSMISSION_W4
+                        f4  
+    ALLMASK_G           i2  
+    ALLMASK_R           i2  
+    ALLMASK_Z           i2  
+    FRACDEV             f4  
+    FRACDEV_IVAR        f4  
+    SHAPEDEV_R          f4  
+    SHAPEDEV_E1         f4  
+    SHAPEDEV_E2         f4  
+    SHAPEDEV_R_IVAR     f4  
+    SHAPEDEV_E1_IVAR
+                        f4  
+    SHAPEDEV_E2_IVAR
+                        f4  
+    SHAPEEXP_R          f4  
+    SHAPEEXP_E1         f4  
+    SHAPEEXP_E2         f4  
+    SHAPEEXP_R_IVAR     f4  
+    SHAPEEXP_E1_IVAR
+                        f4  
+    SHAPEEXP_E2_IVAR
+                        f4  
+    WISEMASK_W1         u1  
+    WISEMASK_W2         u1  
+    MASKBITS            i2  
+    REF_ID              i8  
+    REF_CAT             S2  
+    GAIA_PHOT_G_MEAN_MAG
+                        f4  
+    GAIA_PHOT_G_MEAN_FLUX_OVER_ERROR
+                        f4  
+    GAIA_PHOT_BP_MEAN_MAG
+                        f4  
+    GAIA_PHOT_BP_MEAN_FLUX_OVER_ERROR
+                        f4  
+    GAIA_PHOT_RP_MEAN_MAG
+                        f4  
+    GAIA_PHOT_RP_MEAN_FLUX_OVER_ERROR
+                        f4  
+    GAIA_PHOT_BP_RP_EXCESS_FACTOR
+                        f4  
+    GAIA_ASTROMETRIC_EXCESS_NOISE
+                        f4  
+    GAIA_DUPLICATED_SOURCE
+                        b1  
+    GAIA_ASTROMETRIC_SIGMA5D_MAX
+                        f4  
+    GAIA_ASTROMETRIC_PARAMS_SOLVED
+                        b1  
+    PARALLAX            f4  
+    PARALLAX_IVAR       f4  
+    BLOBDIST            f4  
+'''
+
 
 #- Columns added by fiberassign
 fiberassign_columns = target_columns.copy()
@@ -73,6 +168,8 @@ fiberassign_columns.extend([
     ('LAMBDA_REF',  'f4', 'Angstrom', 'Wavelength at which fiber was centered'),
     ('FIBERASSIGN_X',    'f4', 'mm', 'Expected CS5 X on focal plane'),
     ('FIBERASSIGN_Y',    'f4', 'mm', 'Expected CS5 Y on focal plane'),
+    ('FA_TARGET',   'i8', '', ''),
+    ('FA_TYPE',     'u1', '', 'Internal fiberassign target type'),
     # ('DESIGN_Q',    'f4', 'deg', 'Expected CS5 Q azimuthal coordinate'),
     # ('DESIGN_S',    'f4', 'mm', 'Expected CS5 S radial distance along curved focal surface'),
     ('NUMTARGET',   'i2', '', 'Number of targets covered by positioner'),
@@ -85,10 +182,14 @@ fibermap_columns.extend([
     ('FIBER_DEC',       'f8', 'degree', 'DEC of actual fiber position'),
     ('FIBER_RA_IVAR',   'f4', '1/degree**2', 'Inverse variance of FIBER_RA [not set yet]'),
     ('FIBER_DEC_IVAR',  'f4', '1/degree**2', 'Inverse variance of FIBER_DEC [not set yet]'),
-    ('DELTA_X',         'f4', 'mm', 'CS5 X difference between requested and actual position'),
-    ('DELTA_Y',         'f4', 'mm', 'CS5 Y difference between requested and actual position'),
-    ('DELTA_X_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_X [not set yet]'),
-    ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
+    ('PLATEMAKER_X',    'f4', 'mm', 'CS5 X location requested by PlateMaker'),
+    ('PLATEMAKER_Y',    'f4', 'mm', 'CS5 Y location requested by PlateMaker'),
+    ('PLATEMAKER_RA',   'f4', 'deg', 'ICRS RA requested by PlateMaker'),
+    ('PLATEMAKER_DEC',  'f4', 'deg', 'ICRS dec requested by PlateMaker'),
+    # ('DELTA_X',         'f4', 'mm', 'CS5 X difference between requested and actual position'),
+    # ('DELTA_Y',         'f4', 'mm', 'CS5 Y difference between requested and actual position'),
+    # ('DELTA_X_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_X [not set yet]'),
+    # ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
     ('NUM_ITER',        'i4', '', 'Number of positioner iterations'),
     ('SPECTROID',       'i4', '', 'Hardware ID of spectrograph'),
 ])
