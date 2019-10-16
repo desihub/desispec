@@ -39,6 +39,9 @@ from .plan import compute_worker_tasks, worker_times
 class TimeoutError(Exception):
     pass
 
+def _timeout_handler(signum, frame):
+    raise TimeoutError('Timeout at {}'.format(time.asctime()))
+
 def run_task(name, opts, comm=None, logfile=None, db=None):
     """Run a single task.
 
@@ -81,9 +84,6 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
             task_classes[ttype].state_set(db=db, name=name, state="running")
 
     failcount = 0
-
-    def _timeout_handler(signum, frame):
-        raise TimeoutError('Rank {} timeout at {}'.format(rank, time.asctime()))
 
     #- Set timeout alarm to avoid runaway tasks
     old_sighandler = signal.signal(signal.SIGALRM, _timeout_handler)
@@ -133,6 +133,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
     if rank == 0:
         log.debug("Finished with task {} sigalarm reset".format(name))
         log.debug("Task {} returning failcount {}".format(name, failcount))
+
     return failcount
 
 
