@@ -515,7 +515,7 @@ Where supported commands are:
             if ntflatdeps is None:
                 self.log.info("fiberflatnight for {} already done".format(args.night))
             else:
-                self.log.info("fiberflatnight for {} already submitted to queue (job = {})".format(args.night, ntpsfdeps))
+                self.log.info("fiberflatnight for {} already submitted to queue (job = {})".format(args.night, ntflatdeps))
         else:
             # Safe to run.  Get the job IDs of any previous fiberflat tasks.
             flatjobs = self._read_jobids("fiberflat", args.night)
