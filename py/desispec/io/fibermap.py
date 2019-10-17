@@ -68,92 +68,90 @@ target_columns = [
     ('HPXPIXEL', 'i8', '', 'Healpix pixel number (NESTED)')
 ]
 
-#- Some additional columns from targeting that I'm not including here yet
-#- because we don't use them in the pipeline and they may continue to evolve
-'''
-    DCHISQ              f4  array[5]
-    FRACFLUX_G          f4  
-    FRACFLUX_R          f4  
-    FRACFLUX_Z          f4  
-    FRACMASKED_G        f4  
-    FRACMASKED_R        f4  
-    FRACMASKED_Z        f4  
-    FRACIN_G            f4  
-    FRACIN_R            f4  
-    FRACIN_Z            f4  
-    NOBS_G              i2  
-    NOBS_R              i2  
-    NOBS_Z              i2  
-    PSFDEPTH_G          f4  
-    PSFDEPTH_R          f4  
-    PSFDEPTH_Z          f4  
-    GALDEPTH_G          f4  
-    GALDEPTH_R          f4  
-    GALDEPTH_Z          f4  
-    FLUX_W3             f4  
-    FLUX_W4             f4  
-    FLUX_IVAR_W3        f4  
-    FLUX_IVAR_W4        f4  
-    MW_TRANSMISSION_W1
-                        f4  
-    MW_TRANSMISSION_W2
-                        f4  
-    MW_TRANSMISSION_W3
-                        f4  
-    MW_TRANSMISSION_W4
-                        f4  
-    ALLMASK_G           i2  
-    ALLMASK_R           i2  
-    ALLMASK_Z           i2  
-    FRACDEV             f4  
-    FRACDEV_IVAR        f4  
-    SHAPEDEV_R          f4  
-    SHAPEDEV_E1         f4  
-    SHAPEDEV_E2         f4  
-    SHAPEDEV_R_IVAR     f4  
-    SHAPEDEV_E1_IVAR
-                        f4  
-    SHAPEDEV_E2_IVAR
-                        f4  
-    SHAPEEXP_R          f4  
-    SHAPEEXP_E1         f4  
-    SHAPEEXP_E2         f4  
-    SHAPEEXP_R_IVAR     f4  
-    SHAPEEXP_E1_IVAR
-                        f4  
-    SHAPEEXP_E2_IVAR
-                        f4  
-    WISEMASK_W1         u1  
-    WISEMASK_W2         u1  
-    MASKBITS            i2  
-    REF_ID              i8  
-    REF_CAT             S2  
-    GAIA_PHOT_G_MEAN_MAG
-                        f4  
-    GAIA_PHOT_G_MEAN_FLUX_OVER_ERROR
-                        f4  
-    GAIA_PHOT_BP_MEAN_MAG
-                        f4  
-    GAIA_PHOT_BP_MEAN_FLUX_OVER_ERROR
-                        f4  
-    GAIA_PHOT_RP_MEAN_MAG
-                        f4  
-    GAIA_PHOT_RP_MEAN_FLUX_OVER_ERROR
-                        f4  
-    GAIA_PHOT_BP_RP_EXCESS_FACTOR
-                        f4  
-    GAIA_ASTROMETRIC_EXCESS_NOISE
-                        f4  
-    GAIA_DUPLICATED_SOURCE
-                        b1  
-    GAIA_ASTROMETRIC_SIGMA5D_MAX
-                        f4  
-    GAIA_ASTROMETRIC_PARAMS_SOLVED
-                        b1  
-    PARALLAX            f4  
-    PARALLAX_IVAR       f4  
-    BLOBDIST            f4  
-'''
+### Some additional columns from targeting that I'm not including here yet
+### because we don't use them in the pipeline and they may continue to evolve
+# DCHISQ              f4  array[5]
+# FRACFLUX_G          f4
+# FRACFLUX_R          f4
+# FRACFLUX_Z          f4
+# FRACMASKED_G        f4
+# FRACMASKED_R        f4
+# FRACMASKED_Z        f4
+# FRACIN_G            f4
+# FRACIN_R            f4
+# FRACIN_Z            f4
+# NOBS_G              i2
+# NOBS_R              i2
+# NOBS_Z              i2
+# PSFDEPTH_G          f4
+# PSFDEPTH_R          f4
+# PSFDEPTH_Z          f4
+# GALDEPTH_G          f4
+# GALDEPTH_R          f4
+# GALDEPTH_Z          f4
+# FLUX_W3             f4
+# FLUX_W4             f4
+# FLUX_IVAR_W3        f4
+# FLUX_IVAR_W4        f4
+# MW_TRANSMISSION_W1
+#                     f4
+# MW_TRANSMISSION_W2
+#                     f4
+# MW_TRANSMISSION_W3
+#                     f4
+# MW_TRANSMISSION_W4
+#                     f4
+# ALLMASK_G           i2
+# ALLMASK_R           i2
+# ALLMASK_Z           i2
+# FRACDEV             f4
+# FRACDEV_IVAR        f4
+# SHAPEDEV_R          f4
+# SHAPEDEV_E1         f4
+# SHAPEDEV_E2         f4
+# SHAPEDEV_R_IVAR     f4
+# SHAPEDEV_E1_IVAR
+#                     f4
+# SHAPEDEV_E2_IVAR
+#                     f4
+# SHAPEEXP_R          f4
+# SHAPEEXP_E1         f4
+# SHAPEEXP_E2         f4
+# SHAPEEXP_R_IVAR     f4
+# SHAPEEXP_E1_IVAR
+#                     f4
+# SHAPEEXP_E2_IVAR
+#                     f4
+# WISEMASK_W1         u1
+# WISEMASK_W2         u1
+# MASKBITS            i2
+# REF_ID              i8
+# REF_CAT             S2
+# GAIA_PHOT_G_MEAN_MAG
+#                     f4
+# GAIA_PHOT_G_MEAN_FLUX_OVER_ERROR
+#                     f4
+# GAIA_PHOT_BP_MEAN_MAG
+#                     f4
+# GAIA_PHOT_BP_MEAN_FLUX_OVER_ERROR
+#                     f4
+# GAIA_PHOT_RP_MEAN_MAG
+#                     f4
+# GAIA_PHOT_RP_MEAN_FLUX_OVER_ERROR
+#                     f4
+# GAIA_PHOT_BP_RP_EXCESS_FACTOR
+#                     f4
+# GAIA_ASTROMETRIC_EXCESS_NOISE
+#                     f4
+# GAIA_DUPLICATED_SOURCE
+#                     b1
+# GAIA_ASTROMETRIC_SIGMA5D_MAX
+#                     f4
+# GAIA_ASTROMETRIC_PARAMS_SOLVED
+#                     b1
+# PARALLAX            f4
+# PARALLAX_IVAR       f4
+# BLOBDIST            f4
 
 
 #- Columns added by fiberassign
