@@ -668,7 +668,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
                     #
                     # This replacement may be deprecated in the future.
                     #
-                    if col in ('TARGET_RA', 'TARGET_DEC', 'DESIGN_X', 'DESIGN_Y'):
+                    if col in ('TARGET_RA', 'TARGET_DEC', 'FIBERASSIGN_X', 'FIBERASSIGN_Y'):
                         data[col][bad] = -9999.0
                 assert not np.any(np.isnan(data[col]))
                 assert np.all(np.isfinite(data[col]))
