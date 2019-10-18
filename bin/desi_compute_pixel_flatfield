@@ -245,10 +245,6 @@ def filtering(flat,model,width,edge_width,gradmask,reverse_order=False) :
         flat  =  (ivar>0)*(model>minflat)*image/(model*(model>minflat)+(model<=minflat))
         flat  += (model<=minflat)|(ivar<=0)
     return flat,model
-    
-    
-def edge_medfilt2d(image,shape) :
-    return scipy.signal.medfilt2d(image,shape)
 
 def amplifier_matching(image) :
 
@@ -301,6 +297,7 @@ parser.add_argument('--out-mean', type = str, default = None, required = False,
 parser.add_argument('-d','--debug', action = 'store_true', help="write a lot of debugging images")
 parser.add_argument('--minflux',type = float, default=0.05,help="minimum flux fraction of median")
 parser.add_argument('--maxerr',type = float, default=0.02,help="maximum error")
+parser.add_argument('--nsig',type = float, default=3,help="S/N threshold for mask")
 
 
 
@@ -326,18 +323,12 @@ minflat=0.0001
 nstep=12
 step=0
 width=201
+edge_width=21
 
-if args.debug :
-    pyfits.writeto("debug-image-before-amp-match.fits",image,overwrite=True)
-    log.info("wrote debug-image-before-amp-match.fits")
 
 step+=1; log.info("step {}/{} match amps".format(step,nstep))
 amplifier_matching(image)
 # amplifier_matching(image) # redo for debugging
-
-if args.debug :
-    pyfits.writeto("debug-image-amp-match.fits",image,overwrite=True)
-    log.info("wrote debug-image-amp-match.fits")
 
 minflux=0.1*np.median(image)
 maxerr=0.015
@@ -380,7 +371,7 @@ xmin=np.array(xmin)
 xmax=np.array(xmax)
 
 
-margin = 5 # add a margin
+margin = 5 # add a minimal margin
 xmin += margin
 xmax -= margin
 ymin += margin
@@ -394,60 +385,6 @@ for i in range(mask0.shape[1]) :
     mask0[:ymin[i]+1,i]=1
     mask0[ymax[i]:,i]=1
 
-if False :
-    log.info("mask out corners")
-    ############################################
-    n0=mask0.shape[0]
-    n1=mask0.shape[1]
-
-    for c in [0,1,2,3] :
-        # find first pixel with mask0=0
-        nn=500
-        if c == 0 :
-            ii0=np.arange(nn,dtype=int)
-            ii1=np.arange(nn,dtype=int)
-        elif c == 1 :
-            ii0=np.arange(nn,dtype=int)
-            ii1=np.arange(n1-1,n1-nn-1,-1,dtype=int)
-        elif c == 2 :
-            ii0=np.arange(n0-1,n0-nn-1,-1,dtype=int)
-            ii1=np.arange(n1-1,n1-nn-1,-1,dtype=int)
-        else :
-            ii0=np.arange(n0-1,n0-nn-1,-1,dtype=int)
-            ii1=np.arange(nn,dtype=int)
-
-        u=np.where(mask0[ii0,ii1]>0)[0][-1]
-        i0=ii0[u]
-        i1=ii1[u]
-        m=width # we have to add a margin equal to the filtering width
-        min_corner_size=0 # 201 # I need this anyway ... 
-        if i0 < 500 :
-            i0 += m
-            i0 = max(i0,min_corner_size)
-        else :
-            i0 -= m
-            i0 = min(i0,n0-min_corner_size)
-        if i1 < 500 :
-            i1 += m
-            i1 = max(i1,min_corner_size)
-        else :
-            i1 -= m
-            i1 = min(i1,n1-min_corner_size)
-
-        if c == 0 :
-            mask0[:i0,:i1] += 1
-            #image[:i0,:i1] = image[i0,i1]
-        elif c == 1 :
-            mask0[:i0,i1:] += 1
-            #image[:i0,i1:] = image[i0,i1]
-        elif c == 2 :
-            mask0[i0:,i1:] += 1
-            #image[i0:,i1:] = image[i0,i1]
-        else  :
-            mask0[i0:,:i1] += 1
-            #image[i0:,:i1] = image[i0,i1]
-    ############################################
-
 if args.debug :
     pyfits.writeto("debug-mask-0.fits",mask0,overwrite=True)
     log.info("wrote debug-mask-0.fits")
@@ -458,7 +395,6 @@ if args.debug :
 
 original_image = image.copy()
 mask=(original_image<=10.)
-
 
 step+=1; log.info("step {}/{} first model".format(step,nstep))
 
@@ -480,207 +416,111 @@ k=np.exp(-(y-n0/2.)**2/2./sigma**2)
 k/=np.sum(k)
 medspec=scipy.signal.fftconvolve(medspec,k,'same')
 
-if False : # simple
-    norm0 = np.sum(medspec*medspec)
-    for i in range(n1):
-        a = np.sum(image[:,i]*medspec)/norm0
-        if a > 0.1 :
-            image[:,i] /= (a*medspec)
-            ivar[:,i] *= (a*medspec)**2
-        else :
-            image[:,i] = 1.
-            ivar[:,i]  = 0.
+# fit including coordinate transformation
 
-if False : # does not work either ....
-    model = np.zeros(image.shape)
-    
-    dy=(y-n0//2)/float(n0//2)
-    dspecdy=np.interp(y,y+1.,medspec)-medspec
-    
-    #import matplotlib.pyplot as plt
-    #plt.plot(medspec)
-    #plt.plot(dspecdy)
-    #plt.show()
-    
-    npar=7 # max deg = npar-2
+model = np.zeros(image.shape)
+
+nc = 80
+norm = np.mean(medspec[nc:-nc]**2)
+
+offsets=np.zeros(n1)
+corrvals=np.zeros(n1)
+for i in range(n1):
+    nc=90
+    corr=np.zeros(nc)
+    dy=np.arange(-2,nc-2).astype(int)
+    for c in range(nc) :
+        corr[c]=np.mean(medspec[nc:-nc]*image[nc+dy[c]:n0-nc+dy[c],i])/norm
+    c=np.argmax(corr)
+    offsets[i]  = dy[c]
+    corrvals[i] = corr[c]
+    if i%100 == 0 :
+        log.debug(i,offsets[i],corrvals[i])
+
+
+margin=200
+x=np.arange(n1)
+ok=(corrvals>0.1)
+pol=np.poly1d(np.polyfit(x[ok],offsets[ok],4))
+
+y=np.arange(n0)
+dy=(y-n0//2)/float(n0//2)
+
+
+for loop in range(1) :
+
+    if loop==0 :
+        npar=4
+    else :
+        npar=4
     A=np.zeros((npar,npar))
     B=np.zeros(npar)
     H=np.zeros((npar,n0))
-    
-    w = np.median(ivar,axis=1)/np.median(image,axis=1)**2
-    sqrtw = np.sqrt(w)
-    H[0] = medspec
-    for p in range(0,npar-1) :
-        H[p+1] = dy**p*dspecdy
-    sqwH = sqrtw*H
-    A = sqwH.dot(sqwH.T)
-    Ai = np.linalg.inv(A)
     param=np.zeros((n1,npar))
+
+
     for i in range(n1):
-        B = sqwH.dot(sqrtw*image[:,i])
-        param[i] = Ai.dot(B)
-        if i%100 == 0 : log.debug(i,param[i])
-    # now smooth params with polynomial
-    x=(np.arange(n1)-n1//2)/(n1/2.)
-    ii=np.where(param[:,0]>0.2)[0]
+
+        if not ok[i] :
+            image[:,i] = 1    
+            ivar[:,i]  = 0
+            continue
 
 
-    #import matplotlib.pyplot as plt
-    for p in range(npar) :
-        #plt.plot(x[:],param[:,p],".",label="P{}".format(p))
-        #plt.plot(x[ii],param[ii,p],".")
-        param_pol=np.poly1d(np.polyfit(x[ii],param[ii,p],6))
-        param[:,p]=param_pol(x)
-        #plt.plot(x[ii],param[ii,p],".")
-    #plt.legend()
-    #plt.show()    
-
-    # apply model
-    for i in range(n1):
-        if param[i,0]<0.1 :    
-            image[:,i] = 1.
-            ivar[:,i] = 0.
-        else :
-            spec = H.T.dot(param[i])
-            model[:,i] = spec
-            image[:,i] /= spec
-            ivar[:,i] *= spec**2
-    
-if True : # complex fit is not working at all    
-    # for each col, find max correlation
-
-    model = np.zeros(image.shape)
-    
-    nc = 80
-    norm = np.mean(medspec[nc:-nc]**2)
-    
-    offsets=np.zeros(n1)
-    corrvals=np.zeros(n1)
-    for i in range(n1):
-        nc=90
-        corr=np.zeros(nc)
-        dy=np.arange(-2,nc-2).astype(int)
-        for c in range(nc) :
-            corr[c]=np.mean(medspec[nc:-nc]*image[nc+dy[c]:n0-nc+dy[c],i])/norm
-        c=np.argmax(corr)
-        offsets[i]  = dy[c]
-        corrvals[i] = corr[c]
-        if i%100 == 0 :
-            log.debug(i,offsets[i],corrvals[i])
-
-
-    margin=200
-    x=np.arange(n1)
-    ok=(corrvals>0.1)
-    pol=np.poly1d(np.polyfit(x[ok],offsets[ok],4))
-    
-    #import matplotlib.pyplot as plt
-    #plt.plot(x,offsets)
-    #plt.plot(x[ok],offsets[ok])
-    #plt.plot(x[ok],pol(x[ok]))
-    #plt.show()
-
-    #import matplotlib.pyplot as plt
-
-    
-    y=np.arange(n0)
-    dy=(y-n0//2)/float(n0//2)
-    
-
-    for loop in range(1) :
-        
         if loop==0 :
-            npar=4
+            spec=np.interp(y,y+pol(x[i]),medspec)
         else :
-            npar=4
-        A=np.zeros((npar,npar))
-        B=np.zeros(npar)
-        H=np.zeros((npar,n0))
-        param=np.zeros((n1,npar))
+            spec=model[:,i]
+        dspecdy=np.interp(y,y+1,spec)-spec
+        # refit offset and scale.
+        # model = a * spec + b * dspecdy + c * dy * dspecdy + ...
+        H[0] = spec
+        H[1] = spec*dy
+        H[2] = spec*dy**2
+        for p in range(npar-3) :
+            H[p+3] = dy**p*dspecdy
+        sqrtw = np.sqrt(ivar[:,i]) ### high weight for faint values
+        sqwH = sqrtw*H
+        A = sqwH.dot(sqwH.T)
+        B = sqwH.dot(sqrtw*image[:,i])
+        Ai = np.linalg.inv(A)
+        param[i] = Ai.dot(B)
+        if i%100 == 0 : log.debug(i,loop,param[i])
 
-        
-        for i in range(n1):
+    # fit smooth params
+    dx=(np.arange(n1)-n1//2)/(n1/2.)
+    ii=np.where(ok)[0]
+    for p in range(npar) :        
+        param_pol=np.poly1d(np.polyfit(dx[ii],param[ii,p],6))
+        param[:,p]=param_pol(dx)
 
-            if not ok[i] :
-                image[:,i] = 1    
-                ivar[:,i]  = 0
-                continue
-
-
-            if loop==0 :
-                spec=np.interp(y,y+pol(x[i]),medspec)
-            else :
-                spec=model[:,i]
-            dspecdy=np.interp(y,y+1,spec)-spec
-            # refit offset and scale.
-            # model = a * spec + b * dspecdy + c * dy * dspecdy + ...
-            H[0] = spec
-            H[1] = spec*dy
-            H[2] = spec*dy**2
-            for p in range(npar-3) :
-                H[p+3] = dy**p*dspecdy
-            sqrtw = np.sqrt(ivar[:,i]) ### high weight for faint values
-            sqwH = sqrtw*H
-            A = sqwH.dot(sqwH.T)
-            B = sqwH.dot(sqrtw*image[:,i])
-            Ai = np.linalg.inv(A)
-            param[i] = Ai.dot(B)
-            if i%100 == 0 : log.debug(i,loop,param[i])
-
-        # fit smooth params
-        dx=(np.arange(n1)-n1//2)/(n1/2.)
-        ii=np.where(ok)[0]
-        for p in range(npar) :        
-            param_pol=np.poly1d(np.polyfit(dx[ii],param[ii,p],6))
-            param[:,p]=param_pol(dx)
-
-        for i in range(n1):
-            if not ok[i] :
-                continue
-
-            
-            if loop==0 :
-                spec=np.interp(y,y+pol(x[i]),medspec)
-            else :
-                spec=model[:,i]
-            if True :
-                # use exact transfo instead of derivatives
-                # spec' = a*spec + pol(y)*dspecdy
-                #       = a*spec(y')
-                # y' = y + pol(dy)/a
-                a  = param[i,0]
-                yp = y.astype(float)
-                for p in range(npar-1) :
-                    yp += param[i,p-1]/a
-                specp = a*np.interp(yp,y,spec)
-            if 1 :
-                # use the linear approximation
-                dspecdy=np.interp(y,y+1,spec)-spec
-                H[0] = spec
-                for p in range(npar-1) :
-                    H[p+1] = dy**p*dspecdy
-                specpp = H.T.dot(param[i])
-
-                if False and i==540 :
-                    import matplotlib.pyplot as plt
-                    plt.figure()
-                    plt.subplot(1,2,1)
-                    plt.plot(y,yp)
-                    plt.subplot(1,2,2)
-                    plt.plot(spec,":")
-                    plt.plot(specpp)
-                    plt.plot(specp,"--")
-                    print("loop #{}".format(loop))
-                    plt.show()
-            
-            model[:,i] = specp
-    
     for i in range(n1):
-        if not ok[i] : continue
-        spec = model[:,i]
-        image[:,i] /= spec
-        ivar[:,i] *= spec**2
-    
+        if not ok[i] :
+            continue
+
+
+        if loop==0 :
+            spec=np.interp(y,y+pol(x[i]),medspec)
+        else :
+            spec=model[:,i]
+
+        # use exact transfo instead of derivatives
+        # spec' = a*spec + pol(y)*dspecdy
+        #       = a*spec(y')
+        # y' = y + pol(dy)/a
+        a  = param[i,0]
+        yp = y.astype(float)
+        for p in range(npar-1) :
+            yp += param[i,p-1]/a
+        specp = a*np.interp(yp,y,spec)
+        model[:,i] = specp
+
+for i in range(n1):
+    if not ok[i] : continue
+    spec = model[:,i]
+    image[:,i] /= spec
+    ivar[:,i] *= spec**2
+
 if args.debug :
     pyfits.writeto("debug-flat-{}.fits".format(step),image,overwrite=True)
     log.info("wrote debug-flat-{}.fits".format(step))
@@ -701,12 +541,10 @@ if args.debug :
     pyfits.writeto("debug-gradmask.fits",gradmask.astype(int),overwrite=True)
     log.info("wrote debug-gradmask.fits")
 
-#sys.exit(12)
-
 flat=image.copy()
 model=np.ones(flat.shape)
 
-edge_width = 21
+
 
 step+=1; log.info("step {}/{} filtering".format(step,nstep))
 flat,model = filtering(flat,model,width,edge_width,gradmask,False)
@@ -732,9 +570,8 @@ nloop=3
 for loop in range(nloop) :
 
     step+=1; log.info("step {}/{} masking pixels".format(step,nstep))
-    #mask = (np.abs(flat-1)>(0.01+3*err))|(original_image<=10.)
-    mask = (flat<1-(0.01+4*err))|(flat>1+(0.05+4*err))|(original_image<=10.)
-    mask = dilate_mask(mask,1,1)
+    mask = (flat<1-(0.01+args.nsig*err))|(flat>1+(0.03+args.nsig*err))|(original_image<=10.)
+    mask = dilate_mask(mask,3,3)
     
     if args.debug :
         pyfits.writeto("debug-mask-{}.fits".format(step),mask.astype(int),overwrite=True)
@@ -748,11 +585,6 @@ for loop in range(nloop) :
             pyfits.writeto("debug-reset-flat.fits",flat,overwrite=True)
             log.info("wrote debug-reset-flat.fits")
     
-    #else :
-    #    flat = image*(mask==0)+model*(mask!=0)    
-    #model=np.ones(flat.shape)
-
-
     if loop > 0 :
         step+=1; log.info("step {}/{} gaussian smoothing".format(step,nstep))
         w = (mask==0).astype(float)
