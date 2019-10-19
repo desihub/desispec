@@ -218,10 +218,10 @@ def empty_fibermap(nspec, specmin=0):
     fibers_per_spectrograph = 500
     fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
-    fiberpos = desimodel.io.load_fiberpos()
+    fiberpos = desimodel.io.load_focalplane()[0]
     ii = slice(specmin, specmin+nspec)
-    fibermap['FIBERASSIGN_X'][:]   = fiberpos['X'][ii]
-    fibermap['FIBERASSIGN_Y'][:]   = fiberpos['Y'][ii]
+    fibermap['FIBERASSIGN_X'][:]   = fiberpos['OFFSET_X'][ii]
+    fibermap['FIBERASSIGN_Y'][:]   = fiberpos['OFFSET_Y'][ii]
     fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
     fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
     fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]

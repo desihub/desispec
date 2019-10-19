@@ -50,6 +50,9 @@ def write_image(outfile, image, meta=None):
     if not np.isscalar(image.readnoise):
         hx.append(fits.ImageHDU(image.readnoise.astype(np.float32), name='READNOISE'))
 
+    if hasattr(image, 'fibermap'):
+        hx.append(fits.BinTableHDU(image.fibermap, name='FIBERMAP'))
+
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
