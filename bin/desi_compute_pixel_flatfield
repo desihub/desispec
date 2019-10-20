@@ -625,8 +625,10 @@ for loop in range(nloop) :
         pyfits.writeto("debug-model-{}.fits".format(step),model,overwrite=True)
         log.info("wrote debug-model-{}.fits".format(step))
 
+
 fivar=ivar*model**2
 flat[flat>1.2]=1.2
+flat[flat<0]=0.
 flat=flat*(mask0==0)+(mask0!=0)
 fivar*=(mask0==0)
 
