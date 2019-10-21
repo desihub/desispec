@@ -155,8 +155,12 @@ def main(args):
         fibermap = fibermap[fibermin:fibermin+nspec]
         fibers = fibermap['FIBER']
     else:
-        fibermap = None
-        fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        try:
+            fibermap = io.read_fibermap(args.input)
+            fibers = fibermap['FIBER']
+        except (AttributeError, IOError, KeyError):
+            fibermap = None
+            fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
 
     #- Get wavelength grid from options
     if args.wavelength is not None:
@@ -165,8 +169,6 @@ def main(args):
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
-        
-    
 
     if args.heliocentric_correction :
         heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)

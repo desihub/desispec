@@ -283,6 +283,11 @@ def read_fibermap(filename):
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
     fibermap = Table.read(filename, 'FIBERMAP')
+    if 'DESIGN_X' in fibermap.colnames:
+        fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
+    if 'DESIGN_Y' in fibermap.colnames:
+        fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
+
     return fibermap
 
 def fibermap_new2old(fibermap):
