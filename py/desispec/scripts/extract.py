@@ -152,15 +152,19 @@ def main(args):
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
-        fibermap = fibermap[fibermin:fibermin+nspec]
-        fibers = fibermap['FIBER']
     else:
         try:
             fibermap = io.read_fibermap(args.input)
-            fibers = fibermap['FIBER']
         except (AttributeError, IOError, KeyError):
             fibermap = None
-            fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+
+    #- Trim fibermap to matching fiber range and create fibers array
+    if fibermap:
+        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
+        fibermap = fibermap[ii]
+        fibers = fibermap['FIBER']
+    else:
+        fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
 
     #- Get wavelength grid from options
     if args.wavelength is not None:

@@ -172,9 +172,8 @@ def main(args=None):
             outfile = args.outfile
 
         if fibermap:
-            #- Hardcoding 500 fibers per spectrograph
-            sp = int(img.camera[1])
-            ii = slice(sp*500, (sp+1)*500)
+            petal_loc = int(img.camera[1])
+            ii = (fibermap['PETAL_LOC'] == petal_loc)
             img.fibermap = fibermap[ii]
 
         io.write_image(outfile, img)
