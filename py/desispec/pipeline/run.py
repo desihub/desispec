@@ -40,7 +40,7 @@ class TimeoutError(Exception):
     pass
 
 def _timeout_handler(signum, frame):
-    raise TimeoutError
+    raise TimeoutError('Timeout at {}'.format(time.asctime()))
 
 def run_task(name, opts, comm=None, logfile=None, db=None):
     """Run a single task.
@@ -133,6 +133,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
     if rank == 0:
         log.debug("Finished with task {} sigalarm reset".format(name))
         log.debug("Task {} returning failcount {}".format(name, failcount))
+
     return failcount
 
 

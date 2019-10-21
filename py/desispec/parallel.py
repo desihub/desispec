@@ -398,6 +398,10 @@ def stdouterr_redirected(to=None, comm=None):
         file.close()
 
     finally:
+        # flush python handles for good measure
+        sys.stdout.flush()
+        sys.stderr.flush()
+
         # restore old stdout and stderr
         _redirect(out_to=saved_fd_out, err_to=saved_fd_err)
 
