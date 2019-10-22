@@ -133,18 +133,32 @@ class TestParallel(unittest.TestCase):
         num_groups = 12
         num_nodes = 3
         groups_per_node = num_groups // num_nodes
-        groups = weighted_partition(weights, num_groups, groups_per_node=groups_per_node)
 
-        #- Each of the 3 nodes should have exactly 1 of the big tasks
-        for i in range(num_nodes):
-            nbig = 0
-            for j in range(i*groups_per_node, (i+1)*groups_per_node):
-                largest_weight = np.max(weights[groups[j]])
-                if largest_weight == 3:
-                    nbig += 1
+        def check_weight_distribution(weights, groups, num_nodes, groups_per_node):
+            bigweight = np.max(weights)
+            for i in range(num_nodes):
+                nbig = 0
+                for j in range(i*groups_per_node, (i+1)*groups_per_node):
+                    if j < len(groups):
+                        largest_weight = np.max(weights[groups[j]])
+                        if largest_weight == bigweight:
+                            nbig += 1
             
             #- Node i should only have one weight==3
             self.assertEqual(nbig, 1, 'Node {} had {} groups with big tasks'.format(i, nbig))
+
+        groups = weighted_partition(weights, num_groups, groups_per_node=groups_per_node)
+        check_weight_distribution(weights, groups, num_nodes, groups_per_node)
+
+        #- Should also work if the groups don't fill the nodes
+        groups = weighted_partition(weights, num_groups-1, groups_per_node=groups_per_node)
+        check_weight_distribution(weights, groups, num_nodes, groups_per_node)
+
+        groups = weighted_partition(weights, num_groups-2, groups_per_node=groups_per_node)
+        check_weight_distribution(weights, groups, num_nodes, groups_per_node)
+
+        groups = weighted_partition(weights, num_groups-3, groups_per_node=groups_per_node)
+        check_weight_distribution(weights, groups, num_nodes, groups_per_node)
 
 def test_suite():
     """Allows testing of only this module with the command::

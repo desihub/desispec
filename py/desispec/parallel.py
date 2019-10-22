@@ -307,32 +307,14 @@ def weighted_partition(weights, n, groups_per_node=None):
         compared to `dist_discrete_all`, this function allows non-contiguous
         items to be grouped together which allows better balancing.
     '''
-    if groups_per_node is not None:
-        if n % groups_per_node != 0:
-            raise ValueError('groups n={} must be evenly divisible by groups_per_node={}'.format(
-                n, groups_per_node))
-    
     #- sumweights will track the sum of the weights that have been assigned
     #- to each group so far
     sumweights = np.zeros(n, dtype=float)
-    maxweight = np.max(weights)
-    
+
     #- Initialize list of lists of indices for each group
     groups = list()
     for i in range(n):
         groups.append(list())
-
-    # #- Assign items from heightest weight to lowest weight, initially
-    # #- spreading out across nodes
-    # weights = np.asarray(weights)
-    # iiweights = np.argsort(-weights)
-    # num_nodes = n // groups_per_node
-    # i = 0
-    # for noderank in range(groups_per_node):
-    #     for inode in range(num_nodes):
-    #         j = inode*groups_per_node + noderank
-    #         groups[j].append(iiweights[i])
-    #         sumweights[j] += iiweights[i]
 
     #- Assign items from highest weight to lowest weight, always assigning
     #- to whichever group currently has the fewest weights
@@ -342,20 +324,29 @@ def weighted_partition(weights, n, groups_per_node=None):
         groups[j].append(i)
         sumweights[j] += weights[i]
 
-    return groups
+    assert len(groups) == n
 
-    # #- Reorder groups to spread out large items across different nodes
-    # if groups_per_node is None:
-    #     return groups
-    # else:
-    #     distributed_groups = list()
-    #     num_nodes = n // groups_per_node
-    #     for noderank in range(groups_per_node):
-    #         for inode in range(num_nodes):
-    #             i = inode*groups_per_node + noderank
-    #             distributed_groups.append(groups[i])
-    #
-    #     return distributed_groups
+    #- Reorder groups to spread out large items across different nodes
+    #- NOTE: this isn't perfect, e.g. study
+    #-   weighted_partition(np.arange(12), 6, groups_per_node=2)
+    #- even better would be to zigzag back and forth across the nodes instead
+    #- of loop across the nodes.
+    if groups_per_node is None:
+        return groups
+    else:
+        distributed_groups = [None,] * len(groups)
+        num_nodes = (n + groups_per_node - 1) // groups_per_node
+        i = 0
+        for noderank in range(groups_per_node):
+            for inode in range(num_nodes):
+                j = inode*groups_per_node + noderank
+                if i < n and j < n:
+                    distributed_groups[j] = groups[i]
+                    i += 1
+
+        assert distributed_groups[-1] is not None
+
+        return distributed_groups
 
 @contextmanager
 def stdouterr_redirected(to=None, comm=None):
