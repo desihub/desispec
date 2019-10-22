@@ -5,7 +5,12 @@ desispec Change Log
 0.30.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Use rrdesi --no-mpi-abort feature (PR `#823`_).
+* Support extractions of data without fibermaps (PR `#825`_).
+* Propagate FIBERMAP into preproc files (not just frames) (PR `#825`_).
+
+.. _`#823`: https://github.com/desihub/desispec/pull/823
+.. _`#825`: https://github.com/desihub/desispec/pull/825
 
 0.30.0 (2019-10-17)
 -------------------
