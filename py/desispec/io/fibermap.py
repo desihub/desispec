@@ -219,6 +219,8 @@ def empty_fibermap(nspec, specmin=0):
     fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
     fiberpos = desimodel.io.load_focalplane()[0]
+    fiberpos = fiberpos[fiberpos['DEVICE_TYPE'] == 'POS']
+
     ii = slice(specmin, specmin+nspec)
     fibermap['FIBERASSIGN_X'][:]   = fiberpos['OFFSET_X'][ii]
     fibermap['FIBERASSIGN_Y'][:]   = fiberpos['OFFSET_Y'][ii]
