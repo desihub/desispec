@@ -145,7 +145,7 @@ def main(args):
     else :
         camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
         spectrograph = int(camera[1])
-        fibermin = spectrograph * psf.nspec + specmin
+        fibermin = spectrograph * 500 + specmin
 
     print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
