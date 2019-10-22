@@ -344,7 +344,9 @@ def weighted_partition(weights, n, groups_per_node=None):
                     distributed_groups[j] = groups[i]
                     i += 1
 
-        assert distributed_groups[-1] is not None
+        #- do a final check that all groups were assigned
+        for i in range(len(distributed_groups)):
+            assert distributed_groups[i] is not None, 'group {} not set'.format(i)
 
         return distributed_groups
 
