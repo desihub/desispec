@@ -293,7 +293,7 @@ def dist_discrete(worksizes, nworkers, workerid, power=1.0):
     allworkers = dist_discrete_all(worksizes, nworkers, power=power)
     return allworkers[workerid]
 
-def weighted_partition(weights, n):
+def weighted_partition(weights, n, groups_per_node=None):
     '''
     Partition `weights` into `n` groups with approximately same sum(weights)
 
@@ -307,14 +307,32 @@ def weighted_partition(weights, n):
         compared to `dist_discrete_all`, this function allows non-contiguous
         items to be grouped together which allows better balancing.
     '''
+    if groups_per_node is not None:
+        if n % groups_per_node != 0:
+            raise ValueError('groups n={} must be evenly divisible by groups_per_node={}'.format(
+                n, groups_per_node))
+    
     #- sumweights will track the sum of the weights that have been assigned
     #- to each group so far
     sumweights = np.zeros(n, dtype=float)
-
+    maxweight = np.max(weights)
+    
     #- Initialize list of lists of indices for each group
     groups = list()
     for i in range(n):
         groups.append(list())
+
+    # #- Assign items from heightest weight to lowest weight, initially
+    # #- spreading out across nodes
+    # weights = np.asarray(weights)
+    # iiweights = np.argsort(-weights)
+    # num_nodes = n // groups_per_node
+    # i = 0
+    # for noderank in range(groups_per_node):
+    #     for inode in range(num_nodes):
+    #         j = inode*groups_per_node + noderank
+    #         groups[j].append(iiweights[i])
+    #         sumweights[j] += iiweights[i]
 
     #- Assign items from highest weight to lowest weight, always assigning
     #- to whichever group currently has the fewest weights
@@ -324,7 +342,20 @@ def weighted_partition(weights, n):
         groups[j].append(i)
         sumweights[j] += weights[i]
 
-    return groups  #, np.array([np.sum(x) for x in sumweights])
+    return groups
+
+    # #- Reorder groups to spread out large items across different nodes
+    # if groups_per_node is None:
+    #     return groups
+    # else:
+    #     distributed_groups = list()
+    #     num_nodes = n // groups_per_node
+    #     for noderank in range(groups_per_node):
+    #         for inode in range(num_nodes):
+    #             i = inode*groups_per_node + noderank
+    #             distributed_groups.append(groups[i])
+    #
+    #     return distributed_groups
 
 @contextmanager
 def stdouterr_redirected(to=None, comm=None):
