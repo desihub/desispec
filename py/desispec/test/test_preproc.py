@@ -45,7 +45,7 @@ class TestPreProc(unittest.TestCase):
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
         
         self.calibfile = os.path.join(self.calibdir,'test-calib-askjapqwhezcpasehadfaqp.fits')
-        self.rawfile   = os.path.join(self.calibdir,'test-raw-askjapqwhezcpasehadfaqp.fits')
+        self.rawfile   = os.path.join(self.calibdir,'desi-raw-askjapqwhezcpasehadfaqp.fits')
         self.pixfile   = os.path.join(self.calibdir,'test-pix-askjapqwhezcpasehadfaqp.fits')
 
         primary_hdr = dict()
@@ -382,7 +382,7 @@ class TestPreProc(unittest.TestCase):
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b1')
         args = ['--infile', self.rawfile, '--cameras', 'b0',
-                '--pixfile', self.pixfile]
+                '--outfile', self.pixfile]
         if os.path.exists(self.pixfile):
             os.remove(self.pixfile)            
         desispec.scripts.preproc.main(args)
@@ -409,7 +409,14 @@ class TestPreProc(unittest.TestCase):
 
     def test_default_mask(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=True)
-        
-                
+
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
 if __name__ == '__main__':
     unittest.main()

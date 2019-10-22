@@ -218,10 +218,13 @@ def empty_fibermap(nspec, specmin=0):
     fibers_per_spectrograph = 500
     fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
-    fiberpos = desimodel.io.load_fiberpos()
+    fiberpos = desimodel.io.load_focalplane()[0]
+    fiberpos = fiberpos[fiberpos['DEVICE_TYPE'] == 'POS']
+    fiberpos.sort('FIBER')
+
     ii = slice(specmin, specmin+nspec)
-    fibermap['FIBERASSIGN_X'][:]   = fiberpos['X'][ii]
-    fibermap['FIBERASSIGN_Y'][:]   = fiberpos['Y'][ii]
+    fibermap['FIBERASSIGN_X'][:]   = fiberpos['OFFSET_X'][ii]
+    fibermap['FIBERASSIGN_Y'][:]   = fiberpos['OFFSET_Y'][ii]
     fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
     fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
     fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
@@ -283,6 +286,11 @@ def read_fibermap(filename):
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
     fibermap = Table.read(filename, 'FIBERMAP')
+    if 'DESIGN_X' in fibermap.colnames:
+        fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
+    if 'DESIGN_Y' in fibermap.colnames:
+        fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
+
     return fibermap
 
 def fibermap_new2old(fibermap):

@@ -145,17 +145,25 @@ def main(args):
     else :
         camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
         spectrograph = int(camera[1])
-        fibermin = spectrograph * psf.nspec + specmin
+        fibermin = spectrograph * 500 + specmin
 
     print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
-        fibermap = fibermap[fibermin:fibermin+nspec]
+    else:
+        try:
+            fibermap = io.read_fibermap(args.input)
+        except (AttributeError, IOError, KeyError):
+            fibermap = None
+
+    #- Trim fibermap to matching fiber range and create fibers array
+    if fibermap:
+        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
+        fibermap = fibermap[ii]
         fibers = fibermap['FIBER']
     else:
-        fibermap = None
         fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
 
     #- Get wavelength grid from options
@@ -165,8 +173,6 @@ def main(args):
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
-        
-    
 
     if args.heliocentric_correction :
         heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)
