@@ -912,7 +912,7 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepath': os.path.join(options.datapath, 'targets', 'truth.fits'),
+    loader = [{'filepath': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
                'tcls': Truth,
                'hdu': 'TRUTH',
                'expand': None,
@@ -921,7 +921,7 @@ def main():
                'q3c': False,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},
-              {'filepath': os.path.join(options.datapath, 'targets', 'targets.fits'),
+              {'filepath': os.path.join(options.datapath, 'targets', 'targets-dark.fits'),
                'tcls': Target,
                'hdu': 'TARGETS',
                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_comp',)},
@@ -973,7 +973,7 @@ def main():
     # Update truth table.
     #
     for h in ('BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'WD'):
-        update_truth(os.path.join(options.datapath, 'targets', 'truth.fits'),
+        update_truth(os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
                      'TRUTH_' + h)
     #
     # Load fiber assignment files.
