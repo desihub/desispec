@@ -26,8 +26,18 @@ def maskedmed(values_ptr, len_values, result, data):
         result[0] = 0.
     return 1
 
-def maskedmedian(image,size) :
-    return ndi.generic_filter(image, LowLevelCallable(maskedmed.ctypes), size=size)
+def maskedmedian(image,shape) :
+    """ Returns a masked sliding median filtering of the input image. 
+        Zero values in the input image are ignored in the median.
+
+    Args:
+        image : 2D np.array
+        shape : tuple of length 2 giving the shape of the filtering window.
+
+    Returns:
+        2D np.array of same shape as input image
+    """
+    return ndi.generic_filter(image, LowLevelCallable(maskedmed.ctypes), size=shape)
 
 
 
@@ -79,6 +89,8 @@ def clipped_mean_image(image_filenames) :
 
 @numba.jit
 def dilate_mask(mask,d0=1,d1=1) :
+    """ Increases the size of a masked area
+    """
     omask=mask.copy()
     n0=mask.shape[0]
     n1=mask.shape[1]
@@ -316,30 +328,97 @@ if args.out_mean is not None :
     h=pyfits.HDUList([pyfits.PrimaryHDU(image),pyfits.ImageHDU(ivar,name="IVAR")])
     h.writeto(args.out_mean,overwrite=True)
 
+# hardcoded values for the pixel flat field
+#############################################################
+# minimal normalized model flux value to be used for flat fielding
+# (this is just to avoid numerical issues)
 minflat=0.0001
-nstep=12
-step=0
-width=201
-edge_width=21
 
+# maximum flat value (saturating the flat at this value)
+maxflat=1.2
+
+# width of the median filtering window along both axis
+# in the CCD image area where the illumination gradient is not too large.
+# it has to be large in order to avoid filtering out genuine CCD
+# features, but it cannot be too large in order to filter out
+# the variations of the illumination
+median_filter_width=201 # CCD pixels (has to be an odd number)
+
+# width of the median filtering window along both axis
+# in the CCD image area where the illumination gradient is large
+median_filter_width_in_mask=21 # CCD pixels (has to be an odd number)
+
+# parameters defining the initial mask
+maxerr_for_initial_mask=0.015 # fractional error
+minfluxfrac_for_initial_mask=0.1 # fraction of median flux
+ccd_edge_margin_for_initial_mask=20 # CCD pixels, on edges of CCD
+illuminated_region_margin_for_initial_mask=5 # CCDpixels, masked area increase 
+
+
+minimum_flux_for_second_mask=10. # (in unit of input image values)
+
+# parameters used for the first model that tries to describe
+# the illumination pattern as a single spectrum,
+# with a fitted transform from wavelength to CCD row coordinate
+# as a function of CCD column coordinate, and with varying
+# amplitude as a function of CCD column coordinate
+#
+# this model is not good enough for flat fielding
+# but it's a starting point for the iterative median filtering
+#
+# vertical band width used to estimate the spectrum
+# (fiber spectral traces are quasi vertical at the center of the CCD)
+pixel_band_width_for_initial_spectral_model=1000 # pixels
+
+# the spectrum has to be smoothed to remove most of the Poisson noise
+# we use a fast fft convolution with a Gaussian for this
+sigma_of_gaussian_smoothing_for_initial_spectral_model=4 # pixels
+
+# a first stage consist in doing a cross-correlation of the spectral
+# model with each column of the CCD to get a first estimate of the
+# coordinate transformation to apply
+max_pixel_row_offset_for_initial_spectral_model_correlation=90 # pixels
+
+# CCD columns with low correlation coeff (=low flux in fact) are
+# discarded from the polynomial fit of the transfo.
+minimum_correlation_for_initial_spectral_model=0.1
+# Degrees of polynomial of Y_central(X_ccd,Y_ccd) 
+x_degree_of_coordinate_transform_for_initial_spectral_model=4
+y_degree_of_coordinate_transform_for_initial_spectral_model=0
+
+# The ratio of the initial model image to a smoothed version of the
+# same image is used to identify is smoothed further and 
+sigma_of_gaussian_smoothing_for_large_gradient_regions=100. # pixels
+flat_error_threshold_for_large_gradient_regions=0.1
+mask_margin_for_large_gradient_regions=30 # pixels
+#############################################################
+nstep=12 # this is for log messages
+step=0 # this is for log messages
 
 step+=1; log.info("step {}/{} match amps".format(step,nstep))
-amplifier_matching(image)
-# amplifier_matching(image) # redo for debugging
+amplifier_matching(image) # routine to match amplifier to avoid residual feature at the center of CCD
 
-minflux=0.1*np.median(image)
-maxerr=0.015
+minflux_for_initial_mask=minfluxfrac_for_initial_mask*np.median(image)
 err   = np.sqrt(1./(ivar+(ivar==0)))/(image*(image>0)+(image<=0)) 
 
 # define mask0
-############################################
+# this is the primary mask, flat in the masked
+# pixel will be set to 1.
+# it is based on the illumination pattern of
+# the flat slit that does not cover the whole CCD
+# parameters that matter for this are
+#   maxerr_for_initial_mask
+#   minfluxfrac_for_initial_mask
+#   ccd_edge_margin_for_initial_mask
+#   illuminated_region_margin_for_initial_mask
+###################################################
 y=[]
 xmin=[]
 xmax=[]
 
-margin = 20 # don't change this one.
+
 for j in range(err.shape[0]) :
-    ii=np.where((err[j,margin:-margin]<args.maxerr)&(image[j,margin:-margin]>args.minflux))[0]+margin
+    ii=np.where((err[j,ccd_edge_margin_for_initial_mask:-ccd_edge_margin_for_initial_mask]<maxerr_for_initial_mask)&(image[j,ccd_edge_margin_for_initial_mask:-ccd_edge_margin_for_initial_mask]>minflux_for_initial_mask))[0]+ccd_edge_margin_for_initial_mask
     y.append(j)
     if len(ii)<3 :
         xmin.append(4000)
@@ -367,12 +446,10 @@ y=np.array(y)
 xmin=np.array(xmin)
 xmax=np.array(xmax)
 
-
-margin = 5 # add a minimal margin
-xmin += margin
-xmax -= margin
-ymin += margin
-ymax -= margin
+xmin += illuminated_region_margin_for_initial_mask
+xmax -= illuminated_region_margin_for_initial_mask
+ymin += illuminated_region_margin_for_initial_mask
+ymax -= illuminated_region_margin_for_initial_mask
 
 mask0=np.zeros(err.shape,dtype=int)
 for j in range(mask0.shape[0]) :
@@ -391,39 +468,44 @@ if args.debug :
     log.info("wrote debug-err.fits")
 
 original_image = image.copy()
-mask=(original_image<=10.)
+mask=(original_image<=minimum_flux_for_second_mask)
 
+# here we compute a first model of the image
+# the illumination pattern is modeled as a single spectrum,
+# with a fitted transform from wavelength to CCD row coordinate
+# as a function of CCD column coordinate, and with varying
+# amplitude as a function of CCD column coordinate
 step+=1; log.info("step {}/{} first model".format(step,nstep))
 
+# compute the median spectrum in a band
 medspec=np.zeros(image.shape[0])
 n0=image.shape[0]
 n1=image.shape[1]
-b1=n1//2-500
-e1=n1//2+500
+b1=n1//2-pixel_band_width_for_initial_spectral_model//2
+e1=n1//2+pixel_band_width_for_initial_spectral_model//2
 band=image[:,b1:e1].copy()
 for loop in range(3) :
     medspec=np.median(band,axis=1)
     for i in range(band.shape[1]) :
         band[:,i] *= np.median(band[:,i]/medspec)
     medspec=np.median(band,axis=1)
-# need to smooth
+    
+# smooth the spectrum with a gaussian kernel
 y=np.arange(n0)
-sigma=4.
-k=np.exp(-(y-n0/2.)**2/2./sigma**2)
+k=np.exp(-(y-n0/2.)**2/2./sigma_of_gaussian_smoothing_for_initial_spectral_model**2)
 k/=np.sum(k)
 medspec=scipy.signal.fftconvolve(medspec,k,'same')
 
-# fit including coordinate transformation
+
 
 model = np.zeros(image.shape)
 
-nc = 80
+# first estimate of the coordinate tranform with cross-correlation for each CCD column
+nc = max_pixel_row_offset_for_initial_spectral_model_correlation
 norm = np.mean(medspec[nc:-nc]**2)
-
 offsets=np.zeros(n1)
 corrvals=np.zeros(n1)
 for i in range(n1):
-    nc=90
     corr=np.zeros(nc)
     dy=np.arange(-2,nc-2).astype(int)
     for c in range(nc) :
@@ -434,22 +516,21 @@ for i in range(n1):
     if i%100 == 0 :
         log.debug(i,offsets[i],corrvals[i])
 
-
-margin=200
+# refit the best offset as a polynomial of X to remove statistical jitter
 x=np.arange(n1)
-ok=(corrvals>0.1)
-pol=np.poly1d(np.polyfit(x[ok],offsets[ok],4))
+ok=(corrvals>minimum_correlation_for_initial_spectral_model)
+pol=np.poly1d(np.polyfit(x[ok],offsets[ok],x_degree_of_coordinate_transform_for_initial_spectral_model))
 
+# refine this first guess with a linear fit for each CCD column
+# potentially including a dilation term or higher order terms as a function of Y (CCD row number)
 y=np.arange(n0)
 dy=(y-n0//2)/float(n0//2)
-
-
 for loop in range(1) :
 
     if loop==0 :
         npar=4
     else :
-        npar=4
+        npar=4+y_degree_of_coordinate_transform_for_initial_spectral_model
     A=np.zeros((npar,npar))
     B=np.zeros(npar)
     H=np.zeros((npar,n0))
@@ -471,6 +552,7 @@ for loop in range(1) :
         dspecdy=np.interp(y,y+1,spec)-spec
         # refit offset and scale.
         # model = a * spec + b * dspecdy + c * dy * dspecdy + ...
+        # the model absorbs some chromatic variation of the spectrum
         H[0] = spec
         H[1] = spec*dy
         H[2] = spec*dy**2
@@ -524,16 +606,19 @@ if args.debug :
     pyfits.writeto("debug-model-{}.fits".format(step),model,overwrite=True)
     log.info("wrote debug-model-{}.fits".format(step))
 
+# we use the above model to identify regions of the image
+# with large gradient to adapt the median filtering width.
+# this is done by comparing the model with a smoothed version
 step+=1; log.info("step {}/{} compute a gradient mask".format(step,nstep))
-sig=100.
+sig=sigma_of_gaussian_smoothing_for_large_gradient_regions
 hw=int(3*sig)
 x=np.tile(np.linspace(-hw,hw,2*hw+1),((2*hw+1),1))
 k=np.exp(-(x**2+x.T**2)/2/sig**2)
 k/=np.sum(k)                      
 smodel=convolve2d(model,k)
 flat=model/smodel
-gradmask=(np.abs(flat-1)>0.1)
-gradmask = dilate_mask(gradmask,30,30)
+gradmask=(np.abs(flat-1)>flat_error_threshold_for_large_gradient_regions)
+gradmask = dilate_mask(gradmask,mask_margin_for_large_gradient_regions,mask_margin_for_large_gradient_regions)
 if args.debug :
     pyfits.writeto("debug-gradmask.fits",gradmask.astype(int),overwrite=True)
     log.info("wrote debug-gradmask.fits")
@@ -542,9 +627,12 @@ flat=image.copy()
 model=np.ones(flat.shape)
 
 
-
+# starting the filtering loop
+# 1D smoothing along vertical axis
+# then 1D smoothing along horizontal axis
+# (this is not the same thing as a 2D filtering!)
 step+=1; log.info("step {}/{} filtering".format(step,nstep))
-flat,model = filtering(flat,model,width,edge_width,gradmask,False)
+flat,model = filtering(flat,model,median_filter_width,median_filter_width_in_mask,gradmask,False)
 
 if args.debug :
     tmp=flat.copy()
@@ -554,21 +642,26 @@ if args.debug :
     pyfits.writeto("debug-flat-nomask-{}.fits".format(step),flat,overwrite=True)
     log.info("wrote debug-flat-nomask-{}.fits".format(step))
 
+# we need to also do the filtering in the reversed order of axis
+# to cure a bias trail arising when a dark spot is located
+# in a region with an illumination gradient
 flat2=image.copy()
 model2=np.ones(flat.shape)
 
 step+=1; log.info("step {}/{} reverse order filtering".format(step,nstep))
-flat2,model2 = filtering(flat2,model2,width,0,gradmask,reverse_order=True)
+flat2,model2 = filtering(flat2,model2,median_filter_width,0,gradmask,reverse_order=True)
 if args.debug :
     pyfits.writeto("debug-flat2-reversed.fits",flat2,overwrite=True)
     log.info("wrote debug-flat2-reversed.fits")
 
+# iterative mask of pixels and filtering
+# also includes a gaussian filtering along with the median filtering
 nloop=3
 for loop in range(nloop) :
 
     step+=1; log.info("step {}/{} masking pixels".format(step,nstep))
 
-    # auto-adjust the threshold
+    # auto-adjust the mask threshold
     for nsig in [3.,5.,10.,20.] :    
         mask = (flat<1-(0.01+nsig*err))|(flat>1+(0.03+nsig*err))|(original_image<=10.)
         mask = dilate_mask(mask,3,3)
@@ -606,12 +699,12 @@ for loop in range(nloop) :
     if loop < nloop-1 :
         step+=1; log.info("step {}/{} filtering".format(step,nstep))
         if loop == 0 :
-            flat,model=filtering(flat,model,width,edge_width,gradmask,False)
+            flat,model=filtering(flat,model,median_filter_width,median_filter_width_in_mask,gradmask,False)
         else :
-            model *= maskedmedian(flat*(mask==0),[width,1])
+            model *= maskedmedian(flat*(mask==0),[median_filter_width,1])
             flat  =  (ivar>0)*(model>minflat)*image/(model*(model>minflat)+(model<=minflat))
             flat  += ((model<=minflat)|(ivar<=0))
-            model *= maskedmedian(flat*(mask==0),[1,width])
+            model *= maskedmedian(flat*(mask==0),[1,median_filter_width])
             flat  =  (ivar>0)*(model>minflat)*image/(model*(model>minflat)+(model<=minflat))
             flat  += ((model<=minflat)|(ivar<=0))
     
@@ -627,7 +720,7 @@ for loop in range(nloop) :
 
 
 fivar=ivar*model**2
-flat[flat>1.2]=1.2
+flat[flat>maxflat]=maxflat
 flat[flat<0]=0.
 flat=flat*(mask0==0)+(mask0!=0)
 fivar*=(mask0==0)
