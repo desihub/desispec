@@ -328,6 +328,7 @@ class FiberAssign(SchemaMixin, Base):
     objtype = Column(String, nullable=False)
     fiberassign_x = Column(Float, nullable=False)
     fiberassign_y = Column(Float, nullable=False)
+    numtarget = Column(Integer, nullable=False)
     priority = Column(Integer, nullable=False)
     subpriority = Column(Float, nullable=False)
     obsconditions = Column(BigInteger, nullable=False)
