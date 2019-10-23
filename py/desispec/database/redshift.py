@@ -612,7 +612,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
 
 
 def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
-                     latest_epoch=False, last_column='SUBPRIORITY'):
+                     latest_epoch=False, last_column='NUMOBS_MORE'):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -634,7 +634,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     latest_epoch : :class:`bool`, optional
         If set, search for the latest tile file among several epochs.
     last_column : :class:`str`, optional
-        Do not load columns past this name (default 'BRICKNAME').
+        Do not load columns past this name (default 'NUMOBS_MORE').
     """
     fiberpath = os.path.join(datapath, 'tile*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
