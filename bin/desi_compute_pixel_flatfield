@@ -307,8 +307,8 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 parser.add_argument('--out-mean', type = str, default = None, required = False,
                     help = 'save median image')
 parser.add_argument('-d','--debug', action = 'store_true', help="write a lot of debugging images")
-parser.add_argument('--minflux',type = float, default=0.05,help="minimum flux fraction of median")
-parser.add_argument('--maxerr',type = float, default=0.02,help="maximum error")
+#parser.add_argument('--minflux',type = float, default=0.05,help="minimum flux fraction of median")
+#parser.add_argument('--maxerr',type = float, default=0.02,help="maximum error")
 
 
 args = parser.parse_args()
@@ -391,6 +391,12 @@ y_degree_of_coordinate_transform_for_initial_spectral_model=0
 sigma_of_gaussian_smoothing_for_large_gradient_regions=100. # pixels
 flat_error_threshold_for_large_gradient_regions=0.1
 mask_margin_for_large_gradient_regions=30 # pixels
+
+# Parameters for mask during fit (to avoid haloes around CCD defects)
+min_flat_for_fit_mask = 0.99
+max_flat_for_fit_mask = 1.03
+margin_for_fit_mask = 3 # increase mask by 3 pix in each direction
+max_fraction_of_masked_pixels = 0.05
 #############################################################
 nstep=12 # this is for log messages
 step=0 # this is for log messages
@@ -431,7 +437,7 @@ x=[]
 ymin=[]
 ymax=[]
 for i in range(err.shape[1]) :
-    jj=np.where((err[:,i]<args.maxerr)&(image[:,i]>args.minflux))[0]
+    jj=np.where((err[:,i]<maxerr_for_initial_mask)&(image[:,i]>minfluxfrac_for_initial_mask))[0]
     x.append(i)
     if len(jj)<3 :
         ymin.append(4000)
@@ -663,10 +669,10 @@ for loop in range(nloop) :
 
     # auto-adjust the mask threshold
     for nsig in [3.,5.,10.,20.] :    
-        mask = (flat<1-(0.01+nsig*err))|(flat>1+(0.03+nsig*err))|(original_image<=10.)
-        mask = dilate_mask(mask,3,3)
+        mask = (flat<(min_flat_for_fit_mask-nsig*err))|(flat>(max_flat_for_fit_mask+nsig*err))|(original_image<=minimum_flux_for_second_mask)
+        mask = dilate_mask(mask,margin_for_fit_mask,margin_for_fit_mask)
         frac = np.sum(mask>0)/float(mask.size)
-        if frac<0.05 :
+        if frac<max_fraction_of_masked_pixels :
             break
     log.info("Used nsig = {}, frac = {:4.3f}".format(nsig,frac))
     
