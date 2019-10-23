@@ -293,7 +293,7 @@ def dist_discrete(worksizes, nworkers, workerid, power=1.0):
     allworkers = dist_discrete_all(worksizes, nworkers, power=power)
     return allworkers[workerid]
 
-def weighted_partition(weights, n):
+def weighted_partition(weights, n, groups_per_node=None):
     '''
     Partition `weights` into `n` groups with approximately same sum(weights)
 
@@ -324,7 +324,31 @@ def weighted_partition(weights, n):
         groups[j].append(i)
         sumweights[j] += weights[i]
 
-    return groups  #, np.array([np.sum(x) for x in sumweights])
+    assert len(groups) == n
+
+    #- Reorder groups to spread out large items across different nodes
+    #- NOTE: this isn't perfect, e.g. study
+    #-   weighted_partition(np.arange(12), 6, groups_per_node=2)
+    #- even better would be to zigzag back and forth across the nodes instead
+    #- of loop across the nodes.
+    if groups_per_node is None:
+        return groups
+    else:
+        distributed_groups = [None,] * len(groups)
+        num_nodes = (n + groups_per_node - 1) // groups_per_node
+        i = 0
+        for noderank in range(groups_per_node):
+            for inode in range(num_nodes):
+                j = inode*groups_per_node + noderank
+                if i < n and j < n:
+                    distributed_groups[j] = groups[i]
+                    i += 1
+
+        #- do a final check that all groups were assigned
+        for i in range(len(distributed_groups)):
+            assert distributed_groups[i] is not None, 'group {} not set'.format(i)
+
+        return distributed_groups
 
 @contextmanager
 def stdouterr_redirected(to=None, comm=None):

@@ -139,7 +139,7 @@ def worker_times(tasktimes, workerdist, startup=0.0):
 
 
 def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
-                         workersize, startup=0.0, db=None):
+                         workersize, startup=0.0, db=None, num_nodes=None):
     """Compute the distribution of tasks for specified workers.
 
     Args:
@@ -148,9 +148,12 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
         tfactor (float):  Additional runtime scaling factor.
         nworker (int):  The number of workers.
         workersize (int):  The number of processes in each worker.
+
+    Options:
         startup (float):  Startup overhead in minutes for each worker.
         db (DataBase): the database to pass to the task runtime
             calculation.
+        num_nodes (int): number of nodes over which the workers are distributed
 
     Returns:
         (tuple):  The (sorted tasks, sorted runtime weights, dist) results
@@ -185,7 +188,13 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
         workdist = [[i,] for i in range(nworker)]
     else:
         # workdist = dist_discrete_all(workweights, nworker)
-        workdist = weighted_partition(workweights, nworker)
+        if num_nodes is not None:
+            workers_per_node = (nworker + num_nodes - 1 ) // num_nodes
+        else:
+            workers_per_node = None
+
+        workdist = weighted_partition(workweights, nworker,
+            groups_per_node=workers_per_node)
 
     # Find the runtime for each worker
     workertimes, workermin, workermax = worker_times(
