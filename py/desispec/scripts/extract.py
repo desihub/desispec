@@ -320,10 +320,18 @@ def main_mpi(args, comm=None, timing=None):
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
-        fibermap = fibermap[fibermin:fibermin+nspec]
+    else:
+        try:
+            fibermap = io.read_fibermap(args.input)
+        except (AttributeError, IOError, KeyError):
+            fibermap = None
+
+    #- Trim fibermap to matching fiber range and create fibers array
+    if fibermap:
+        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
+        fibermap = fibermap[ii]
         fibers = fibermap['FIBER']
     else:
-        fibermap = None
         fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
 
     #- Get wavelength grid from options
