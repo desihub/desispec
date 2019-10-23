@@ -69,6 +69,8 @@ class Truth(SchemaMixin, Base):
     flux_z = Column(Float, nullable=False)
     flux_w1 = Column(Float, nullable=False)
     flux_w2 = Column(Float, nullable=False)
+    flux_w3 = Column(Float, nullable=False)
+    flux_w4 = Column(Float, nullable=False)
     oiiflux = Column(Float, nullable=False, default=-9999.0)
     hbetaflux = Column(Float, nullable=False, default=-9999.0)
     ewoii = Column(Float, nullable=False, default=-9999.0)
