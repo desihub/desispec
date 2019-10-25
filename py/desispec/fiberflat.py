@@ -227,7 +227,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
         # loop on fiber to handle resolution (this is long)
         for fiber in range(nfibers) :
-            if fiber%10==0 :
+            if fiber%100==0 :
                 log.info("2nd pass, filling matrix, iter %d fiber %d"%(iteration,fiber))
 
             ### R = Resolution(resolution_data[fiber])
