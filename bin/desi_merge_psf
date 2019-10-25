@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+
+import argparse
+from desispec.scripts.specex import merge_psf
+
+parser = argparse.ArgumentParser(description="merge psf")
+
+parser.add_argument('-i','--infiles', type = str, default = None, required=True, nargs="*",
+                    help = 'input psf fits files')
+parser.add_argument('-o','--outfile', type = str, default = None, required=True,
+                    help = 'output psf fits file')
+
+args = parser.parse_args()
+
+merge_psf(args.infiles,args.outfile)
+
+
