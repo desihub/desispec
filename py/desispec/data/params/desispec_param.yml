@@ -1,4 +1,4 @@
-frame_types: ['none','flat','arc','bias','science']
+frame_types: ['none','flat','arc','zero','bias','science']
 frame_meta: ['DATE-OBS', 'CAMERA', 'NIGHT', 'EXPTIME', 'AIRMASS', 'FLAVOR']
 qa:
   skysub:

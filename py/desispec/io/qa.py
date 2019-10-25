@@ -29,7 +29,7 @@ def qafile_from_framefile(frame_file, qaprod_dir=None, output_dir=None):
     frame_meta = read_meta_frame(frame_file)
     night = frame_meta['NIGHT'].strip()
     camera = frame_meta['CAMERA'].strip()
-    expid = frame_meta['EXPID']
+    expid = int(frame_meta['EXPID'])
     if frame_meta['FLAVOR'] in ['flat', 'arc']:
         qatype = 'qa_calib'
     else:
@@ -45,7 +45,13 @@ def read_qa_data(filename):
     """
     # Read yaml
     with open(filename, 'r') as infile:
-        qa_data = yaml.load(infile)
+        qa_data = yaml.safe_load(infile)
+    # Convert expid to int
+    for night in qa_data.keys():
+        for expid in qa_data[night].keys():
+            if isinstance(expid,str):
+                qa_data[night][int(expid)] = qa_data[night][expid].copy()
+                qa_data[night].pop(expid)
     # Return
     return qa_data
 
@@ -167,7 +173,7 @@ def write_qa_frame(outfile, qaframe, verbose=False):
     ydict = yamlify(odict)
     # Simple yaml
     with open(outfile, 'w') as yamlf:
-        yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+        yamlf.write(yaml.dump(ydict))
     if verbose:
         log.info("Wrote QA frame file: {:s}".format(outfile))
 

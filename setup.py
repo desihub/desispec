@@ -67,7 +67,6 @@ setup_keywords['test_suite']='{name}.test.{name}_test_suite.{name}_test_suite'.f
 #
 setup_keywords['package_data'] = {'desispec': ['data/arc_lines/*',
                                                'data/db/*',
-                                               'data/dts/*',
                                                'data/params/*',
                                                'data/quicklook/*',
                                                'data/spec-sky.dat',],

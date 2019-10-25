@@ -99,7 +99,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         filename : file name to write data; if this exists, append a new HDU
         rawdata : 2D ndarray of raw pixel data including overscans
         header : dict-like object or fits.Header with keywords
-            CCDSECx, BIASSECx, DATASECx where x=1,2,3, or 4
+            CCDSECx, BIASSECx, DATASECx where x=A,B,C,D
 
     Options:
         camera : b0, r1 .. z9 - override value in header
@@ -107,13 +107,15 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
 
     The primary utility of this function over raw fits calls is to ensure
     that all necessary keywords are present before writing the file.
-    CCDSECx, BIASSECx, DATASECx where x=1,2,3, or 4
-    DATE-OBS, GAINx and RDNOISEx will generate a non-fatal warning if missing
+    CCDSECx, BIASSECx, DATASECx where x=A,B,C,D
+    DATE-OBS will generate a non-fatal warning if missing
     '''
     log = get_logger()
 
     header = desispec.io.util.fitsheader(header)
     primary_header = desispec.io.util.fitsheader(primary_header)
+
+    header['FILENAME'] = filename
 
     if rawdata.dtype not in (np.int16, np.int32, np.int64):
         message = 'dtype {} not supported for raw data'.format(rawdata.dtype)
@@ -137,7 +139,8 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         log.error("Must provide camera keyword or header['CAMERA']")
         missing_keywords.append('CAMERA')
 
-    for amp in ['1', '2', '3', '4']:
+    ampnames = ['A', 'B', 'C', 'D']  #- previously 1,2,3,4
+    for amp in ampnames:
         for prefix in ['CCDSEC', 'BIASSEC', 'DATASEC']:
             keyword = prefix+amp
             if keyword not in header:
@@ -150,19 +153,6 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
             primary_header['DATE-OBS'] = header['DATE-OBS']
         else:
             log.warning('missing keyword DATE-OBS')
-
-    #- Missing GAINx is warning but not error
-    for amp in ['1', '2', '3', '4']:
-        keyword = 'GAIN'+amp
-        if keyword not in header:
-            log.warning('Gain keyword {} missing; using 1.0'.format(keyword))
-            header[keyword] = 1.0
-
-    #- Missing RDNOISEx is warning but not error
-    for amp in ['1', '2', '3', '4']:
-        keyword = 'RDNOISE'+amp
-        if keyword not in header:
-            log.warning('Readnoise keyword {} missing'.format(keyword))
 
     #- Stop if any keywords are missing
     if len(missing_keywords) > 0:

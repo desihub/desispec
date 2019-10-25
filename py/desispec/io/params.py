@@ -24,7 +24,7 @@ def read_params(filename=None, reload=False):
     if (filename not in _params_cache) or (reload is True):
         # Read yaml
         with open(filename, 'r') as infile:
-            _params_cache[filename] = yaml.load(infile)
+            _params_cache[filename] = yaml.safe_load(infile)
     # Return
     return _params_cache[filename]
 

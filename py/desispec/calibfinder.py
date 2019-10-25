@@ -152,7 +152,7 @@ class CalibFinder() :
         log.debug("reading calib data in {}".format(yaml_file))
         
         stream = open(yaml_file, 'r')
-        data   = yaml.load(stream)
+        data   = yaml.safe_load(stream)
         stream.close()
         
         if not cameraid in data :

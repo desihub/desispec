@@ -10,7 +10,7 @@ from scipy import optimize
 from desiutil import stats as dustat
 from desiutil.log import get_logger
 from desispec.io.meta import findfile
-from desispec.preproc import _parse_sec_keyword
+from desispec.preproc import parse_sec_keyword, get_amp_ids
 from desispec.fluxcalibration import isStdStar
 from desitarget.targetmask import desi_mask
 
@@ -24,9 +24,9 @@ def ampregion(image):
         image: desispec.image.Image object
     """
     pixboundary=[]
-    for kk in ['1','2','3','4']: #- 4 amps
+    for kk in get_amp_ids(image.meta): # A-D or 1-4
         #- get the amp region in pix
-        ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
+        ampboundary=parse_sec_keyword(image.meta["CCDSEC"+kk])
         pixboundary.append(ampboundary)
     return pixboundary
 
@@ -54,9 +54,9 @@ def fiducialregion(frame,psf):
     topmin=0 #- for amp 3 and 4
 
     #- Loop over each amp
-    for kk in ['1','2','3','4']: #- 4 amps
+    for kk in get_amp_ids(frame.meta):   # A-D or 1-4
         #- get the amp region in pix
-        ampboundary=_parse_sec_keyword(frame.meta["CCDSEC"+kk])
+        ampboundary=parse_sec_keyword(frame.meta["CCDSEC"+kk])
         pixboundary.append(ampboundary)
         for ispec in range(frame.flux.shape[0]):
             if np.all(psf.x(ispec) > ampboundary[1].start):
@@ -656,7 +656,7 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
 #        #- Get read noise from Get_RMS TODO: use header information for this
 #        rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
 #        with open(rfile) as rf:
-#            rmsfile=yaml.load(rf)
+#            rmsfile=yaml.safe_load(rf)
 #        rmsval=rmsfile["METRICS"]["NOISE"]
 #        #- The factor of 1e-3 is a very basic (and temporary!!) flux calibration
 #        #- used to convert read noise to proper flux units

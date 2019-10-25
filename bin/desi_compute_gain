@@ -325,6 +325,16 @@ if ofile is not None :
     ofile.close()
     log.info("wrote {}".format(args.outfile))
 
+
+
+print(camera)
+for j in range(len(gain_tbl["AMP"])) :
+    print("{}-{} gain = {:4.3f} +- {:4.3f}".format(camera,gain_tbl['AMP'][j],gain_tbl['GAIN'][j],gain_tbl['ERRGAIN'][j]))
+print("")
+print(camera)
+for j in range(len(gain_tbl["AMP"])) :
+    print("GAIN{}: {:4.3f}".format(gain_tbl['AMP'][j],gain_tbl['GAIN'][j]))
+
 if args.plot :
     plt.show()
     

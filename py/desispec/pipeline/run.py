@@ -13,6 +13,9 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import sys
+import time
+import random
+import signal
 
 import numpy as np
 
@@ -27,6 +30,17 @@ from .prod import load_prod
 
 from .db import check_tasks
 
+from .scriptgen import parse_job_env
+
+from .plan import compute_worker_tasks, worker_times
+
+
+#- TimeoutError and timeout handler to prevent runaway tasks
+class TimeoutError(Exception):
+    pass
+
+def _timeout_handler(signum, frame):
+    raise TimeoutError('Timeout at {}'.format(time.asctime()))
 
 def run_task(name, opts, comm=None, logfile=None, db=None):
     """Run a single task.
@@ -67,23 +81,58 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
             os.remove(logfile)
         # Mark task as in progress
         if db is not None:
-            task_classes[ttype].state_set(db=db,name=name,state="running")
+            task_classes[ttype].state_set(db=db, name=name, state="running")
 
     failcount = 0
-    if logfile is None:
-        # No redirection
-        if db is None:
-            failcount = task_classes[ttype].run(name, opts, comm=comm)
-        else:
-            failcount = task_classes[ttype].run_and_update(db, name, opts,
-                comm=comm)
-    else:
-        with stdouterr_redirected(to=logfile, comm=comm):
+
+    #- Set timeout alarm to avoid runaway tasks
+    old_sighandler = signal.signal(signal.SIGALRM, _timeout_handler)
+    expected_run_time = task_classes[ttype].run_time(name, procs=nproc, db=db)
+
+    # Are we running on a slower/faster node than default timing?
+    timefactor = float(os.getenv("DESI_PIPE_RUN_TIMEFACTOR", default=1.0))
+    expected_run_time *= timefactor
+
+    signal.alarm(int(expected_run_time * 60))
+    if rank == 0:
+        log.debug("Running {} with timeout {:.1f} min".format(
+            name, expected_run_time))
+
+    task_start_time = time.time()
+    try:
+        if logfile is None:
+            # No redirection
             if db is None:
                 failcount = task_classes[ttype].run(name, opts, comm=comm)
             else:
                 failcount = task_classes[ttype].run_and_update(db, name, opts,
                     comm=comm)
+        else:
+            #- time jitter so that we don't open all log files simultaneously
+            time.sleep(2 * random.random())
+            with stdouterr_redirected(to=logfile, comm=comm):
+                if db is None:
+                    failcount = task_classes[ttype].run(name, opts, comm=comm)
+                else:
+                    failcount = task_classes[ttype].run_and_update(db, name,
+                        opts, comm=comm)
+    except TimeoutError:
+        dt = time.time() - task_start_time
+        if rank == 0:
+            log.error("Task {} timed out after {:.1f} sec".format(name, dt))
+            if db is not None:
+                task_classes[ttype].state_set(db, name, "failed")
+
+        failcount = nproc
+    finally:
+        #- Reset timeout alarm whether we finished cleanly or not
+        signal.alarm(0)
+
+    #- Restore previous signal handler
+    signal.signal(signal.SIGALRM, old_sighandler)
+    if rank == 0:
+        log.debug("Finished with task {} sigalarm reset".format(name))
+        log.debug("Task {} returning failcount {}".format(name, failcount))
 
     return failcount
 
@@ -104,6 +153,160 @@ def run_task_simple(name, opts, comm=None):
 
     """
     return run_task(name, opts, comm=comm, logfile=None, db=None)
+
+
+def run_dist(tasktype, tasklist, db, nproc, procs_per_node, force=False):
+    """Compute the runtime distribution of tasks.
+
+    For a given number of processes, parse job environment variables and
+    compute the number of workers to use and the remaining tasks to process.
+    Divide the processes into groups, and associate some (or all) of those
+    groups to workers.  Assign tasks to these groups of processes.  Some groups
+    may have zero tasks if there are more groups than workers needed.
+
+    Returns:
+        tuple:  The (groupsize, groups, tasks, dist) information.  Groupsize
+            is the processes per group.  Groups is a list of
+            tuples (one per process) giving the group number and rank within
+            the group.  The tasks are a sorted list of tasks containing the
+            subset of the inputs that needs to be run.  The dist is a list of
+            tuples (one per group) containing the first task and number of tasks
+            assigned to each group.
+    """
+    from .tasks.base import task_classes, task_type
+    log = get_logger()
+
+    runtasks = None
+    ntask = None
+    ndone = None
+    log.info("Distributing {} {} tasks".format(len(tasklist), tasktype))
+    if force:
+        # Run everything
+        runtasks = tasklist
+        ntask = len(runtasks)
+        ndone = 0
+        log.info("Forcibly running {} tasks regardless of state".format(ntask))
+    else:
+        # Actually check which things need to be run.
+        states = check_tasks(tasklist, db=db)
+        runtasks = [ x for x in tasklist if states[x] == "ready" ]
+        ntask = len(runtasks)
+        ndone = len([ x for x in tasklist if states[x] == "done" ])
+        log.info(
+            "Found {} tasks ready to run and {} tasks done"
+            .format(ntask, ndone)
+        )
+
+    # Query the environment for DESI runtime variables set in
+    # pipeline-generated slurm scripts and use default values if
+    # they are not found.  Then compute the number of workers and the
+    # distribution of tasks in a way that is identical to what was
+    # done during job planning.
+
+    job_env = parse_job_env()
+    tfactor = 1.0
+    if "timefactor" in job_env:
+        tfactor = job_env["timefactor"]
+        log.info("Using timefactor {}".format(tfactor))
+    else:
+        log.warning(
+            "DESI_PIPE_RUN_TIMEFACTOR not found in environment, using 1.0."
+        )
+    startup = 0.0
+    if "startup" in job_env:
+        startup = job_env["startup"]
+        log.info("Using worker startup of {} minutes".format(startup))
+    else:
+        log.warning(
+            "DESI_PIPE_RUN_STARTUP not found in environment, using 0.0."
+        )
+    worker_size = 0
+    if "workersize" in job_env:
+        worker_size = job_env["workersize"]
+        log.info("Found worker size of {} from environment".format(worker_size))
+    else:
+        # We have no information from the planning, so fall back to using the
+        # default for this task type or else one node as the worker size.
+        worker_size = task_classes[tasktype].run_max_procs()
+        if worker_size == 0:
+            worker_size = procs_per_node
+        log.warning(
+            "DESI_PIPE_RUN_WORKER_SIZE not found in environment, using {}."
+            .format(worker_size)
+        )
+    nworker = 0
+    if "workers" in job_env:
+        nworker = job_env["workers"]
+        log.info("Found {} workers from environment".format(nworker))
+    else:
+        # We have no information from the planning
+        nworker = nproc // worker_size
+        if nworker == 0:
+            nworker = 1
+        log.warning(
+            "DESI_PIPE_RUN_WORKERS not found in environment, using {}."
+            .format(nworker)
+        )
+    if nworker > nproc:
+        msg = "Number of workers ({}) larger than number of procs ({}). This should never happen and means that the job script may have been changed by hand.".format(nworker, nproc)
+        raise RuntimeError(msg)
+
+    # A "group" of processes is identical in size to the worker_size above.
+    # However, there may be more process groups than workers.  This can happen
+    # if we reduced the number of workers due to some tasks being completed,
+    # or if there is a "partial" process group remaining when the worker size
+    # does not evenly divide into the total number of processes.  We compute
+    # the process group information here so that the calling code can use it
+    # directly if splitting the communicator.
+
+    ngroup = nproc // worker_size
+    if ngroup * worker_size < nproc:
+        # We have a leftover partial process group
+        ngroup += 1
+
+    groups = [(x // worker_size, x % worker_size) for x in range(nproc)]
+
+    # Compute the task distribution
+
+    if ntask == 0:
+        # All tasks are done!
+        return worker_size, groups, list(), [(-1, 0) for x in range(ngroup)]
+
+    if nworker > len(runtasks):
+        # The number of workers set at job planning time is larger
+        # than the number of tasks that remain to be done.  Reduce
+        # the number of workers.
+        log.info(
+            "Job has {} workers but only {} tasks to run. Reducing number of workers to match."
+            .format(nworker, len(runtasks))
+        )
+        nworker = len(runtasks)
+
+    (worktasks, worktimes, workdist) = compute_worker_tasks(
+        tasktype, runtasks, tfactor, nworker, worker_size,
+        startup=startup, db=db)
+
+    # Compute the times for each worker- just for information
+    workertimes, workermin, workermax = worker_times(
+        worktimes, workdist, startup=startup)
+    log.info(
+        "{} workers have times ranging from {} to {} minutes"
+        .format(nworker, workermin, workermax)
+    )
+
+    dist = list()
+
+    for g in range(ngroup):
+        if g < nworker:
+            # This process group is a being used as a worker.  Assign it the
+            # tasks.
+            dist.append(workdist[g])
+        else:
+            # This process group is idle (not acting as a worker) or contains
+            # the leftover processes to make a whole number of nodes.
+            dist.append((-1, 0))
+
+    return worker_size, groups, worktasks, dist
 
 
 def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
@@ -136,7 +339,8 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
             run the tasks regardless.
 
     Returns:
-        tuple: the number of ready tasks, and the number that failed.
+        tuple: the number of ready tasks, number that are done, and the number
+            that failed.
 
     """
     from .tasks.base import task_classes, task_type
@@ -156,113 +360,72 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
         nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
         procs_per_node = nodecomm.size
 
+    # Total number of input tasks
+    ntask = len(tasklist)
+
     # Get the options for this task type.
 
     options = opts[tasktype]
 
     # Get the tasks that still need to be done.
 
-    runtasks = None
-    ntask = None
-    ndone = None
-
+    groupsize = None
+    groups = None
+    worktasks = None
+    dist = None
     if rank == 0:
-        if force:
-            # Run everything
-            runtasks = tasklist
-            ntask = len(runtasks)
-            ndone = 0
-        else:
-            # Actually check which things need to be run.
-            states = check_tasks(tasklist, db=db)
-            runtasks = [ x for x in tasklist if states[x] == "ready" ]
-            ntask = len(runtasks)
-            ndone = len([ x for x in tasklist if states[x] == "done" ])
+        groupsize, groups, worktasks, dist = run_dist(
+            tasktype, tasklist, db, nproc, procs_per_node, force=force
+        )
 
-        log.debug("Number of {} tasks ready to run is {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
-
+    comm_group = None
+    comm_rank = comm
     if comm is not None:
-        runtasks = comm.bcast(runtasks, root=0)
-        ntask = comm.bcast(ntask, root=0)
-        ndone = comm.bcast(ndone, root=0)
+        groupsize = comm.bcast(groupsize, root=0)
+        groups = comm.bcast(groups, root=0)
+        worktasks = comm.bcast(worktasks, root=0)
+        dist = comm.bcast(dist, root=0)
+        # Determine if we need to split the communicator.  Are any processes
+        # in a group larger than one?
+        largest_rank = np.max([x[1] for x in groups])
+        if largest_rank > 0:
+            comm_group = comm.Split(color=groups[rank][0], key=groups[rank][1])
+            comm_rank = comm.Split(color=groups[rank][1], key=groups[rank][0])
 
-    # Get the weights for each task.  Since this might trigger DB lookups, only
-    # the root process does this.
-
-    weights = None
-    if rank == 0:
-        weights = [ task_classes[tasktype].run_time(x, procs_per_node, db=db) \
-            for x in runtasks ]
-    if comm is not None:
-        weights = comm.bcast(weights, root=0)
-
-    # Now every process has the full list of tasks.  Get the max
-    # number of processes for this task type
-
-    taskproc = task_classes[tasktype].run_max_procs(procs_per_node)
-    if taskproc > nproc:
-        taskproc = nproc
-
-    # If we have multiple processes for each task, split the communicator.
-
-    comm_group = comm
-    comm_rank = None
-    group = rank
-    ngroup = nproc
-    group_rank = 0
-    if comm is not None:
-        if taskproc > 1:
-            ngroup = int(nproc / taskproc)
-            group = int(rank / taskproc)
-            group_rank = rank % taskproc
-            comm_group = comm.Split(color=group, key=group_rank)
-            comm_rank = comm.Split(color=group_rank, key=group)
-        else:
-            comm_group = None
-            comm_rank = comm
-
-    # Now we divide up the tasks among the groups of processes as
-    # equally as possible.
-
-    group_ntask = 0
-    group_firsttask = 0
-
-    if group < ngroup:
-        # only assign tasks to whole groups
-        if ntask < ngroup:
-            if group < ntask:
-                group_ntask = 1
-                group_firsttask = group
-            else:
-                group_ntask = 0
-        else:
-            if ntask <= ngroup:
-                # distribute uniform in this case
-                group_firsttask, group_ntask = dist_uniform(ntask, ngroup,
-                    group)
-            else:
-                group_firsttask, group_ntask = dist_discrete(weights, ngroup,
-                    group)
+    # How many original tasks did we have and how many were done?
+    ntask = len(tasklist)
+    ndone = ntask - len(worktasks)
 
     # every group goes and does its tasks...
 
     rundir = io.get_pipe_rundir()
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
+    group = groups[rank][0]
+    group_rank = groups[rank][1]
+    group_firsttask = dist[group][0]
+    group_ntask = dist[group][1]
+
     failcount = 0
     group_failcount = 0
 
     if group_ntask > 0:
-
-        log.debug("rank #{} Group number of task {}, first task {}".format(rank,group_ntask,group_firsttask))
+        if group_rank == 0:
+            log.debug(
+                "Group {}, running tasks {} to {}".format(
+                    group,
+                    group_firsttask,
+                    (group_firsttask + group_ntask - 1)
+                )
+            )
 
         for t in range(group_firsttask, group_firsttask + group_ntask):
             # For this task, determine the output log file.  If the task has
             # the "night" key in its name, then use that subdirectory.
             # Otherwise, if it has the "pixel" key, use the appropriate
             # subdirectory.
-            tt = task_type(runtasks[t])
-            fields = task_classes[tt].name_split(runtasks[t])
+            tt = task_type(worktasks[t])
+            fields = task_classes[tt].name_split(worktasks[t])
 
             tasklog = None
             if "night" in fields:
@@ -270,7 +433,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                                           "{:08d}".format(fields["night"]))
                 # (this directory should have been made during the prod update)
                 tasklog = os.path.join(tasklogdir,
-                    "{}.log".format(runtasks[t]))
+                    "{}.log".format(worktasks[t]))
             elif "pixel" in fields:
                 tasklogdir = os.path.join(logdir, "healpix",
                     io.healpix_subdirectory(fields["nside"],fields["pixel"]))
@@ -288,15 +451,15 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 except FileExistsError:
                     pass
                 tasklog = os.path.join(tasklogdir,
-                    "{}.log".format(runtasks[t]))
+                    "{}.log".format(worktasks[t]))
 
-            failedprocs = run_task(runtasks[t], options, comm=comm_group,
+            failedprocs = run_task(worktasks[t], options, comm=comm_group,
                 logfile=tasklog, db=db)
 
-            if failedprocs > 1:
+            if failedprocs > 0:
                 group_failcount += 1
-                log.debug('{} failed; group_failcount now {}'.format(
-                    runtasks[t], group_failcount))
+                log.debug("{} failed; group_failcount now {}".format(
+                    worktasks[t], group_failcount))
 
     failcount = group_failcount
 
@@ -307,25 +470,24 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     if comm_rank is not None:
         failcount = comm_rank.allreduce(failcount)
 
+    if rank == 0:
+        log.debug("Tasks done; {} failed".format(failcount))
+
     if db is not None and rank == 0 :
         # postprocess the successful tasks
 
         log.debug("postprocess the successful tasks")
 
-        states = db.get_states(runtasks)
+        states = db.get_states(worktasks)
 
         log.debug("states={}".format(states))
-        log.debug("runtasks={}".format(runtasks))
-
+        log.debug("runtasks={}".format(worktasks))
 
         with db.cursor() as cur :
-            for name in runtasks :
+            for name in worktasks :
                 if states[name] == "done" :
                     log.debug("postprocessing {}".format(name))
                     task_classes[tasktype].postprocessing(db,name,cur)
-
-
-    log.debug("rank #{} done; {} failed".format(rank, failcount))
 
     return ntask, ndone, failcount
 
@@ -391,6 +553,7 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
 
     """
     from .tasks.base import task_classes, task_type
+    log = get_logger()
 
     prefix = "DRYRUN:  "
 
@@ -402,117 +565,48 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
 
     # Get the tasks that still need to be done.
 
-    runtasks = None
+    groupsize, groups, worktasks, dist = run_dist(
+        tasktype, tasklist, db, procs, procs_per_node, force=force
+    )
 
-    if force:
-        # Run everything
-        runtasks = tasklist
-    else:
-        # Actually check which things need to be run.
-        states = check_tasks(tasklist, db=db)
-        runtasks = [ x for x in tasklist if (states[x] == "ready") ]
-
-    ntask = len(runtasks)
-    print("{}{} tasks out of {} are ready to run (or be re-run)".format(prefix,
-        ntask, len(tasklist)))
-    sys.stdout.flush()
-
-    # Get the weights for each task.
-
-    weights = [ task_classes[tasktype].run_time(x, procs_per_node, db=db) \
-            for x in runtasks ]
-
-    # Get the max number of processes for this task type
-
-    taskproc = task_classes[tasktype].run_max_procs(procs_per_node)
-    if taskproc > procs:
-        print("{}task type '{}' can use {} processes per task.  Limiting "
-            " this to {} as requested".format(prefix, tasktype, taskproc,
-            procs))
-        sys.stdout.flush()
-        taskproc = procs
-
-    # If we have multiple processes for each task, create groups
-
-    ngroup = procs
-    if taskproc > 1:
-        ngroup = int(procs / taskproc)
-
-    print("{}using {} groups of {} processes each".format(prefix,
-        ngroup, taskproc))
-    sys.stdout.flush()
-
-    if ngroup * taskproc < procs:
-        print("{}{} processes remain and will sit idle".format(prefix,
-            (procs - ngroup * taskproc)))
-        sys.stdout.flush()
-
-    # Now we divide up the tasks among the groups of processes as
-    # equally as possible.
-
-    group_firsttask = None
-    group_ntask = None
-
-    if ntask <= ngroup:
-        group_firsttask = [ x for x in range(ntask) ]
-        group_ntask = [ 1 for x in range(ntask) ]
-        if ntask < ngroup:
-            group_firsttask.extend([ 0 for x in range(ngroup - ntask) ])
-            group_ntask.extend([ 0 for x in range(ngroup - ntask) ])
-    else:
-        dist = dist_discrete_all(weights, ngroup)
-        group_firsttask = [ x[0] for x in dist ]
-        group_ntask = [ x[1] for x in dist ]
+    # Go through the tasks
 
     rundir = io.get_pipe_rundir()
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
-    maxruntime = 0
-    print("{}".format(prefix))
-    sys.stdout.flush()
-
-    for g in range(ngroup):
-        first = group_firsttask[g]
-        nt = group_ntask[g]
-        if nt == 0:
+    for group, group_rank in groups:
+        group_firsttask = dist[group][0]
+        group_ntask = dist[group][1]
+        if group_ntask == 0:
             continue
-        gruntime = np.sum(weights[first:first+nt])
-        if gruntime > maxruntime:
-            maxruntime = gruntime
-        print("{}group {} estimated runtime is {} minutes".format(prefix,
-            g, gruntime))
-        sys.stdout.flush()
-        for t in range(first, first + nt):
+
+        for t in range(group_firsttask, group_firsttask + group_ntask):
             # For this task, determine the output log file.  If the task has
             # the "night" key in its name, then use that subdirectory.
             # Otherwise, if it has the "pixel" key, use the appropriate
             # subdirectory.
-            tt = task_type(runtasks[t])
-            fields = task_classes[tt].name_split(runtasks[t])
+            tt = task_type(worktasks[t])
+            fields = task_classes[tt].name_split(worktasks[t])
 
             tasklog = None
             if "night" in fields:
                 tasklogdir = os.path.join(logdir, io.get_pipe_nightdir(),
-                    "{:08d}".format(fields["night"]))
+                                          "{:08d}".format(fields["night"]))
+                # (this directory should have been made during the prod update)
                 tasklog = os.path.join(tasklogdir,
-                    "{}.log".format(runtasks[t]))
+                    "{}.log".format(worktasks[t]))
             elif "pixel" in fields:
-                tasklogdir = os.path.join(logdir,
+                tasklogdir = os.path.join(logdir, "healpix",
                     io.healpix_subdirectory(fields["nside"],fields["pixel"]))
                 tasklog = os.path.join(tasklogdir,
-                    "{}.log".format(runtasks[t]))
+                    "{}.log".format(worktasks[t]))
 
-            com = task_classes[tt].run_cli(runtasks[t], options, taskproc,
-                                           launch=launch, log=tasklog, db=db) # need to db for some tasks
-
+            com = task_classes[tt].run_cli(worktasks[t], options, groupsize,
+                                           launch=launch, log=tasklog, db=db)
             print("{}  {}".format(prefix, com))
             sys.stdout.flush()
 
         print("{}".format(prefix))
         sys.stdout.flush()
-
-    print("{}Total estimated runtime is {} minutes".format(prefix,
-        maxruntime))
-    sys.stdout.flush()
 
     return

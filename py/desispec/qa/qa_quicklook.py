@@ -23,7 +23,7 @@ from desispec.io.meta import findfile
 from desispec.io.sky import read_sky
 from desispec.image import Image as im
 from desispec.frame import Frame as fr
-from desispec.preproc import _parse_sec_keyword
+from desispec.preproc import parse_sec_keyword
 from desispec.util import runcmd
 from desispec.qproc.qframe import QFrame
 from desispec.fluxcalibration import isStdStar
@@ -580,16 +580,12 @@ class Get_RMS(MonitoringAlg):
         bias_patnoise=[]
         #bias_overscan=[]        
         #RS: loop through amps based on header info
-        try:
-            header_test=_parse_sec_keyword(image.meta['BIASSEC1'])
-            loop_amps=['1','2','3','4']
-        except:
-            loop_amps=['A','B','C','D']
+        loop_amps = get_amp_ids(image.meta)
         exptime=image.meta["EXPTIME"]
         if exptime == 0.:
             exptime = 1.
         for kk in loop_amps:
-            sel=_parse_sec_keyword(image.meta['BIASSEC'+kk])
+            sel=parse_sec_keyword(image.meta['BIASSEC'+kk])
             #- Obtain counts/second in bias region
 #            pixdata=image[sel]/header["EXPTIME"]
             pixdata=image.pix[sel]/exptime
@@ -1039,16 +1035,16 @@ class Count_Pixels(MonitoringAlg):
         npix_amps=[]
         litfrac_amps=[]
 
-        from desispec.preproc import _parse_sec_keyword
+        from desispec.preproc import parse_sec_keyword
         #RS: loop through amps based on header info
         try:
-            header_test=_parse_sec_keyword(image.meta['CCDSEC1'])
+            header_test=parse_sec_keyword(image.meta['CCDSEC1'])
             loop_amps=['1','2','3','4']
         except:
             loop_amps=['A','B','C','D']
         #- get amp boundary in pixels
         for kk in loop_amps:
-            ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
+            ampboundary=parse_sec_keyword(image.meta["CCDSEC"+kk])
             try:
                 rdnoise_thisamp=image.meta["RDNOISE"+kk]
             except:

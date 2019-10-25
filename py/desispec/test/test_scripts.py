@@ -60,23 +60,6 @@ class TestScripts(unittest.TestCase):
         self.environ_cache.clear()
         return
 
-    @unittest.skipIf(True, 'Skipping code undergoing significant changes.')
-    def test_delivery(self):
-        """Test desispec.scripts.delivery.
-        """
-        from ..scripts.delivery import parse_delivery
-        with self.assertRaises(SystemExit):
-            options = parse_delivery([])
-        with self.assertRaises(SystemExit):
-            options = parse_delivery('filename', '2', '20170317', 'foo')
-        with self.assertRaises(SystemExit):
-            options = parse_delivery('filename', 'foo', '20170317', 'start')
-        options = parse_delivery('filename', '2', '20170317', 'start')
-        self.assertEqual(options.filename, 'filename')
-        self.assertEqual(options.exposure, 2)
-        self.assertEqual(options.night, '20170317')
-        self.assertEqual(options.nightStatus, 'start')
-
 
 def test_suite():
     """Allows testing of only this module with the command::

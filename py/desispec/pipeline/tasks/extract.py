@@ -68,16 +68,16 @@ class TaskExtract(BaseTask):
             }
         return deptasks
 
-    def _run_max_procs(self, procs_per_node):
-        """See BaseTask.run_max_procs.
-        """
-        return 20 # 20 bundles per camera
+    def _run_max_procs(self):
+        # 20 bundles per camera
+        return 20
 
 
-    def _run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 15 # 8 minute per bundle of 25 fibers on edison, but can be slower
+    def _run_time(self, name, procs, db):
+        # Time when running on max procs on machine with scale
+        # factor 1.0
+        mprc = self._run_max_procs()
+        return (7.0 / procs) * mprc
 
 
     def _run_defaults(self):
@@ -87,6 +87,7 @@ class TaskExtract(BaseTask):
         opts["regularize"] = 0.0
         opts["nwavestep"] = 50
         opts["verbose"] = False
+        opts["heliocentric_correction"] = False
         opts["wavelength_b"] = "3579.0,5939.0,0.8"
         opts["wavelength_r"] = "5635.0,7731.0,0.8"
         opts["wavelength_z"] = "7445.0,9824.0,0.8"
