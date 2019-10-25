@@ -190,9 +190,9 @@ def main(args):
     #- Confirm that this PSF covers these wavelengths for these spectra
     psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
     psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
-    if psf_wavemin > wstart:
+    if psf_wavemin-5 > wstart:
         raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
-    if psf_wavemax < wstop:
+    if psf_wavemax+5 < wstop:
         raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     #- Print parameters
@@ -358,9 +358,9 @@ def main_mpi(args, comm=None, timing=None):
 
     psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=-0.5))
     psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-0.5))
-    if psf_wavemin > wstart:
+    if psf_wavemin-5 > wstart:
         raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
-    if psf_wavemax < wstop:
+    if psf_wavemax+5 < wstop:
         raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     # Now we divide our spectra into bundles
