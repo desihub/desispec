@@ -1,0 +1,378 @@
+#!/usr/bin/env python
+
+"""
+One stop shopping for processing a DESI exposure
+"""
+
+import time
+from collections import OrderedDict
+
+progress = OrderedDict(start=time.asctime())
+
+import sys, os, argparse, re, time, collections
+import subprocess
+
+import numpy as np
+import fitsio
+
+import desispec.io
+from desispec.io import findfile
+from desispec.calibfinder import findcalibfile
+from desispec.util import runcmd
+import desispec.scripts.extract
+import desispec.scripts.specex
+
+from desiutil.log import get_logger, DEBUG, INFO
+
+parser = argparse.ArgumentParser(usage = "{prog} [options]")
+parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
+parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
+parser.add_argument("--obstype", type=str,  help="science, arc, flat, dark, zero, ...")
+parser.add_argument("--cameras", type=str,  help="comma separated list of cameras to process")
+
+parser.add_argument("-i", "--input", type=str,  help="input raw data file")
+parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
+
+args = parser.parse_args()
+log = get_logger()
+
+if args.mpi:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.rank
+    size = comm.size
+else:
+    comm = None
+    rank = 0
+    size = 1
+
+#- Preflight checks
+if rank > 0:
+    #- Let rank 0 fetch these, and then broadcast
+    hdr = None
+    camhdr = None
+    args = None
+else:
+    if args.input is None:
+        if args.night is None or args.expid is None:
+            raise RuntimeError('Must specify --input or --night AND --expid')
+    
+        args.input = findfile('raw', night=args.night, expid=args.expid)
+
+    if not os.path.isfile(args.input):
+        raise IOError('Missing input file: {}'.format(args.input))
+
+    #- Fill in values from raw data header if not overridden by command line
+    fx = fitsio.FITS(args.input)
+    if 'SPS' in fx:
+        hdr = fx['SPS'].read_header()
+    else:
+        hdr = fx[0].read_header()
+
+    if args.expid is None:
+        args.expid = int(hdr['EXPID'])
+
+    if args.night is None:
+        args.night = int(hdr['NIGHT'])
+
+    if args.obstype is None:
+        if 'OBSTYPE' in hdr:
+            args.obstype = hdr['OBSTYPE'].strip()
+        elif 'FLAVOR' in hdr:
+            args.obstype = hdr['FLAVOR'].strip()
+            log.warning('Using OBSTYPE={} from FLAVOR keyword'.format(args.obstype))
+        else:
+            raise RuntimeError('Need --obstype or OBSTYPE or FLAVOR header keywords')
+
+    if args.cameras is None:
+        recam = re.compile('^[brzBRZ][\d]$')
+        cameras = list()
+        for hdu in fx.hdu_list:
+            if recam.match(hdu.get_extname()):
+                cameras.append(hdu.get_extname().lower())
+
+        if len(cameras) == 0:
+            raise RuntimeError("No [BRZ][0-9] camera HDUs found in {}".format(args.input))
+
+        args.cameras = cameras
+        cameras = None
+    else:
+        args.cameras = [cam.lower() for cam in args.cameras.split()]
+
+    args.cameras = sorted(args.cameras)  #- just because...
+    camhdr = dict()
+    for cam in args.cameras:
+        camhdr[cam] = fx[cam].read_header()
+
+    fx.close()
+
+if comm is not None:
+    args = comm.bcast(args, root=0)
+    hdr = comm.bcast(hdr, root=0)
+    camhdr = comm.bcast(camhdr, root=0)
+
+args.obstype = args.obstype.upper()
+known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
+    'TESTARC', 'TESTFLAT', 'PIXFLAT', 'SKY', 'TWILIGHT', 'OTHER']
+if args.obstype not in known_obstype:
+    raise RuntimeError('obstype {} not in {}'.format(args.obstype, known_obstype))
+
+#- What are we going to do?
+if rank == 0:
+    log.info('----------')
+    log.info('Input {}'.format(args.input))
+    log.info('Night {} expid {}'.format(args.night, args.expid))
+    log.info('Obstype {}'.format(args.obstype))
+    log.info('Cameras {}'.format(args.cameras))
+    log.info('Output root {}'.format(desispec.io.specprod_root()))
+    log.info('----------')
+
+#- Create output directories if needed
+if rank == 0:
+    preprocdir = os.path.dirname(findfile('preproc', args.night, args.expid, 'b0'))
+    expdir = os.path.dirname(findfile('frame', args.night, args.expid, 'b0'))
+    os.makedirs(preprocdir, exist_ok=True)
+    os.makedirs(expdir, exist_ok=True)
+
+#- Wait for rank 0 to make directories before proceeding
+if comm is not None:
+    comm.barrier()
+
+if rank == 0:
+    progress['init'] = time.asctime()
+
+#-------------------------------------------------------------------------
+#- Preproc
+#- All obstypes get preprocessed
+
+if rank == 0:
+    log.info('Starting preproc at {}'.format(time.asctime()))
+
+for i in range(rank, len(args.cameras), size):
+    camera = args.cameras[i]
+    outfile = findfile('preproc', args.night, args.expid, camera)
+    outdir = os.path.dirname(outfile)
+    cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
+        args.input, outfile, outdir, camera)
+    runcmd(cmd, inputs=[args.input], outputs=[outfile])
+
+if comm is not None:
+    comm.barrier()
+
+if rank == 0:
+    progress['preproc'] = time.asctime()
+
+#-------------------------------------------------------------------------
+#- Traceshift
+
+if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
+    if rank == 0:
+        log.info('Starting traceshift at {}'.format(time.asctime()))
+
+    for i in range(rank, len(args.cameras), size):
+        camera = args.cameras[i]
+        preprocfile = findfile('preproc', args.night, args.expid, camera)
+        inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
+        outpsf = findfile('psf', args.night, args.expid, camera)
+        cmd = "desi_compute_trace_shifts"
+        cmd += " -i {}".format(preprocfile)
+        cmd += " --psf {}".format(inpsf)
+        cmd += " --outpsf {}".format(outpsf)
+        
+        runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+        
+    if comm is not None:
+        comm.barrier()
+
+    if rank == 0:
+        progress['traceshift'] = time.asctime()
+
+#-------------------------------------------------------------------------
+#- PSF
+#- MPI parallelize this step
+
+if args.obstype in ['ARC', 'TESTARC']:
+    if rank == 0:
+        log.info('Starting specex PSF fitting at {}'.format(time.asctime()))
+
+    if rank > 0:
+        cmds = inputs = outputs = None
+    else:
+        cmds = dict()
+        inputs = dict()
+        outputs = dict()
+        for camera in args.cameras:
+            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
+            outpsf = findfile('psf', args.night, args.expid, camera)
+            cmd = 'desi_compute_psf'
+            cmd += ' --input-image {}'.format(preprocfile)
+            cmd += ' --input-psf {}'.format(inpsf)
+            cmd += ' --output-psf {}'.format(outpsf)
+
+            if not os.path.exists(outpsf):
+                cmds[camera] = cmd
+                inputs[camera] = inputs
+                outputs[camera] = outputs
+        
+    if comm is not None:
+        cmds = comm.bcast(cmds, root=0)
+        inputs = comm.bcast(inputs, root=0)
+        outputs = comm.bcast(outputs, root=0)
+        #- split communicator by 20 (number of bundles)
+        group_size = 20
+        if (rank == 0) and (size%group_size != 0):
+            log.warning('MPI size={} should be evenly divisible by {}'.format(
+                size, group_size))
+    
+        group = rank // group_size
+        num_groups = (size + group_size - 1) // group_size
+        comm_group = comm.Split(color=group)
+        
+        for i in range(group, len(args.cameras), num_groups):
+            camera = args.cameras[i]
+            if camera in cmds:
+                cmdargs = cmds[camera].split()[1:]
+                cmdargs = desispec.scripts.specex.parse(cmdargs)
+                if comm_group.rank == 0:
+                    print('RUNNING: {}'.format(cmds[camera]))
+
+                desispec.scripts.specex.main(cmdargs, comm=comm_group)
+
+        comm.barrier()
+        
+    else:
+        log.warning('fitting PSFs without MPI parallelism; this will be SLOW')
+        for camera in args.cameras:
+            runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+
+    if comm is not None:
+        comm.barrier()
+
+    if rank == 0:
+        progress['psf'] = time.asctime()
+
+#-------------------------------------------------------------------------
+#- Extract
+#- This is MPI parallel so handle a bit differently
+
+# maybe add ARC and TESTARC too
+if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
+
+    if rank == 0:
+        log.info('Starting extractions at {}'.format(time.asctime()))
+
+    if rank > 0:
+        cmds = inputs = outputs = None
+    else:
+        cmds = dict()
+        inputs = dict()
+        outputs = dict()
+        for camera in args.cameras:
+            cmd = 'desi_extract_spectra'
+        
+            #- TODO: standardize where these params are kept
+            if camera.startswith('b'):
+                cmd += ' -w 3579.0,5934.0,0.8'
+            elif camera.startswith('r'):
+                cmd += ' -w 5635.0,7731.0,0.8'
+            elif camera.startswith('z'):
+                cmd += ' -w 7445.4,9824.0,0.8'
+        
+            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            psffile = findfile('psf', args.night, args.expid, camera)
+            framefile = findfile('frame', args.night, args.expid, camera)
+            cmd += ' -i {}'.format(preprocfile)
+            cmd += ' -p {}'.format(psffile)
+            cmd += ' -o {}'.format(framefile)
+       
+            if not os.path.exists(framefile):
+                cmds[camera] = cmd
+                inputs[camera] = [preprocfile, psffile]
+                outputs[camera] = [framefile,]
+
+    #- TODO: refactor/combine this with PSF comm splitting logic
+    if comm is not None:
+        cmds = comm.bcast(cmds, root=0)
+        inputs = comm.bcast(inputs, root=0)
+        outputs = comm.bcast(outputs, root=0)
+
+        #- split communicator by 20 (number of bundles)
+        extract_size = 20
+        if (rank == 0) and (size%extract_size != 0):
+            log.warning('MPI size={} should be evenly divisible by {}'.format(
+                size, extract_size))
+    
+        extract_group = rank // extract_size
+        num_extract_groups = (size + extract_size - 1) // extract_size
+        comm_extract = comm.Split(color=extract_group)
+        
+        for i in range(extract_group, len(args.cameras), num_extract_groups):
+            camera = args.cameras[i]
+            if camera in cmds:
+                cmdargs = cmds[camera].split()[1:]
+                extract_args = desispec.scripts.extract.parse(cmdargs)
+                if comm_extract.rank == 0:
+                    print('RUNNING: {}'.format(cmds[camera]))
+
+                desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+
+        comm.barrier()
+        
+    else:
+        log.warning('running extractions without MPI parallelism; this will be SLOW')
+        for camera in args.cameras:
+            runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+
+    if comm is not None:
+        comm.barrier()
+
+    if rank == 0:
+        progress['extract'] = time.asctime()
+
+#-------------------------------------------------------------------------
+#- Fiberflat
+
+if args.obstype in ['FLAT', 'TESTFLAT', 'TWILIGHT']:
+    if rank == 0:
+        log.info('Starting fiberflats at {}'.format(time.asctime()))
+
+    for i in range(rank, len(args.cameras), size):
+        camera = args.cameras[i]
+        framefile = findfile('frame', args.night, args.expid, camera)
+        fiberflatfile = findfile('fiberflat', args.night, args.expid, camera)
+        cmd = "desi_compute_fiberflat"
+        cmd += " -i {}".format(framefile)
+        cmd += " -o {}".format(fiberflatfile)
+        runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+
+    if comm is not None:
+        comm.barrier()
+
+    if rank == 0:
+        progress['extract'] = time.asctime()
+
+#-------------------------------------------------------------------------
+#- Sky subtraction
+#- ...
+
+#-------------------------------------------------------------------------
+#- Wrap up
+
+if rank == 0:
+    progress['done'] = time.asctime()
+
+    t0 = None
+    print('\nSummary of completion times:')
+    for key, value in progress.items():
+        if t0 is None:
+            print('  {:10s} {}'.format(key, value))
+            t0 = time.mktime(time.strptime(value))
+        else:
+            t1 = time.mktime(time.strptime(value))
+            dt = (t1-t0)/60.0
+            t0 = t1
+            print('  {:10s} {} ({:.1f} min)'.format(key, value, dt))
+
+
+
