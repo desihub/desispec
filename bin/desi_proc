@@ -36,6 +36,7 @@ parser.add_argument("--cameras", type=str,  help="comma separated list of camera
 
 parser.add_argument("-i", "--input", type=str,  help="input raw data file")
 parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
+parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
 
 args = parser.parse_args()
 log = get_logger()
@@ -360,6 +361,31 @@ if args.obstype in ['FLAT', 'TESTFLAT', 'TWILIGHT']:
         progress['fiberflat'] = time.asctime()
 
 #-------------------------------------------------------------------------
+#- Apply fiberflat and write fframe file
+
+if args.obstype in ['SCIENCE', 'SKY'] and args.fframe:
+    if rank == 0:
+        log.info('Applying fiberflat at {}'.format(time.asctime()))
+
+    for i in range(rank, len(args.cameras), size):
+        camera = args.cameras[i]
+        fframefile = findfile('fframe', args.night, args.expid, camera)
+        if not os.path.exists(fframefile):
+            framefile = findfile('frame', args.night, args.expid, camera)
+            fr = desispec.io.read_frame(framefile)
+            ff = desispec.io.read_fiberflat(findcalibfile([fr.meta,], 'FIBERFLAT'))
+            apply_fiberflat(fr, ff)
+
+            fframefile = findfile('fframe', args.night, args.expid, camera)
+            desispec.io.write_frame(fframefile, fr)
+
+    if comm is not None:
+        comm.barrier()
+
+    if rank == 0:
+        progress['fframe'] = time.asctime()
+
+#-------------------------------------------------------------------------
 #- Select random sky fibers (inplace update of frame file)
 #- TODO: move this to a function somewhere
 #- TODO: this assigns different sky fibers to each frame of same spectrograph
@@ -434,8 +460,6 @@ if args.obstype in ['SCIENCE', 'SKY']:
     if rank == 0:
         progress['sky'] = time.asctime()
 
-#-------------------------------------------------------------------------
-#- sframe = fiber-flatfielded sky-subtracted but not flux calibrated frame
 #-------------------------------------------------------------------------
 #- Wrap up
 
