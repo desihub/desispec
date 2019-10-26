@@ -8,6 +8,7 @@ desispec Change Log
 * Use rrdesi --no-mpi-abort feature (PR `#823`_).
 * Support extractions of data without fibermaps (PR `#825`_).
 * Propagate FIBERMAP into preproc files (not just frames) (PR `#825`_).
+* New overscan method
 
 .. _`#823`: https://github.com/desihub/desispec/pull/823
 .. _`#825`: https://github.com/desihub/desispec/pull/825
