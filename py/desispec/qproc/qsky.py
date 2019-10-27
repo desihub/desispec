@@ -87,15 +87,20 @@ i.e. not improvement after the first fit.
     
     skyfibers = np.where(qframe.fibermap["OBJTYPE"]=="SKY")[0]
     if skyfibers.size==0 :
-       log.error("No sky fibers!")
-       raise RuntimeError("No sky fibers!") 
-    log.info("Sky fibers: {}".format(skyfibers))
+       log.warning("No sky fibers! I am going to declare the faintest half of the fibers as sky fibers")
+       mflux = np.median(qframe.flux,axis=1)
+       ii = np.argsort(mflux)
+       qframe.fibermap["OBJTYPE"][ii[:ii.size//2]] = "SKY"
+       skyfibers = np.where(qframe.fibermap["OBJTYPE"]=="SKY")[0]
     
+    log.info("Sky fibers: {}".format(skyfibers))
+
     for loop in range(5) : # I need several iterations to remove the effect of the wavelength solution noise
         
         for i in skyfibers :
             jj=(qframe.ivar[i]>0)
-            tflux[i]=np.interp(twave,qframe.wave[i,jj],qframe.flux[i,jj])
+            if np.sum(jj)>0 :
+                tflux[i]=np.interp(twave,qframe.wave[i,jj],qframe.flux[i,jj])
         
         ttsky  = np.median(tflux[skyfibers],axis=0)
         
@@ -103,12 +108,14 @@ i.e. not improvement after the first fit.
             for i in range(qframe.flux.shape[0]) :
                 tmp=np.interp(qframe.wave[i],twave,ttsky)
                 jj=(qframe.flux[i]!=0)
-                qframe.flux[i,jj] -= tmp[jj]
-                sky[i] += tmp
+                if np.sum(jj)>0 :
+                    qframe.flux[i,jj] -= tmp[jj]
+                    sky[i] += tmp
         else :
             for i in range(qframe.flux.shape[0]) :
                 jj=(qframe.flux[i]!=0)
-                qframe.flux[i,jj] -= np.interp(qframe.wave[i,jj],twave,ttsky)
+                if np.sum(jj)>0 :
+                    qframe.flux[i,jj] -= np.interp(qframe.wave[i,jj],twave,ttsky)
         
 
     t1=time.time()
