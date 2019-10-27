@@ -369,7 +369,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     
     cfinder = None
     
-    if ccd_calibration_filename is not False :
+    if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
     
     #- TODO: Check for required keywords first
@@ -380,6 +380,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- convert rawimage to float64 : this is the output format of read_image
     rawimage = rawimage.astype(np.float64)
 
+    # Over-ride savgol?
     bias = get_calibration_image(cfinder,"BIAS",bias)
 
     if bias is not False : #- it's an array
@@ -411,7 +412,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         yy, xx = parse_sec_keyword(header['CCDSEC%s'%amp])
         ny=max(ny,yy.stop)
         nx=max(nx,xx.stop)
-    image = np.zeros( (ny,nx) )
+    image = np.zeros((ny,nx))
 
     readnoise = np.zeros_like(image)
 
@@ -443,7 +444,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
 
-    for amp in amp_ids :
+    for amp in amp_ids:
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
         if 'ORSEC'+amp in header.keys():

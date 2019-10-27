@@ -45,6 +45,8 @@ to use, but also only if a single camera is specified.
                         help = 'mask image calibration file')
     parser.add_argument('--nobias', action = 'store_true',
                         help = 'no bias subtraction')
+    parser.add_argument('--nosavgol', action='store_true',
+                        help = 'do not use Savitsky-Golay filter for the overscan')
     parser.add_argument('--nodark', action = 'store_true',
                         help = 'no dark subtraction')
     parser.add_argument('--nopixflat',action = 'store_true',
@@ -90,9 +92,11 @@ def main(args=None):
     elif isinstance(args, (list, tuple)):
         args = parse(args)
 
+    # Use bias?
     bias=True
     if args.bias : bias=args.bias
     if args.nobias : bias=False
+    # Use dark?
     dark=True
     if args.dark : dark=args.dark
     if args.nodark : dark=False
@@ -153,6 +157,7 @@ def main(args=None):
                               ccd_calibration_filename=ccd_calibration_filename,
                               nocrosstalk=args.nocrosstalk,
                               nogain=args.nogain,
+                              use_savgol=(not args.nosavgol),
                               nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
             )
