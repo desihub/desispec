@@ -386,7 +386,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     # Savgol
     use_savgol = True
     if cfinder and cfinder.haskey("SAVGOL"):
-        use_savgol = cfinder.value["SAVGOL"]
+        use_savgol = cfinder.value("SAVGOL")
     # Over-ride savgol?
     if flag_savgol is not None:
         use_savgol = flag_savgol
