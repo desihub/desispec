@@ -252,7 +252,8 @@ if args.obstype in ['ARC', 'TESTARC']:
     else:
         log.warning('fitting PSFs without MPI parallelism; this will be SLOW')
         for camera in args.cameras:
-            runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+            if camera in cmds:
+                runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
 
     if comm is not None:
         comm.barrier()
