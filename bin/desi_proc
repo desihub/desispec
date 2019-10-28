@@ -220,8 +220,8 @@ if args.obstype in ['ARC', 'TESTARC']:
 
             if not os.path.exists(outpsf):
                 cmds[camera] = cmd
-                inputs[camera] = inputs
-                outputs[camera] = outputs
+                inputs[camera] = [preprocfile, inpsf]
+                outputs[camera] = [outpsf,]
         
     if comm is not None:
         cmds = comm.bcast(cmds, root=0)
