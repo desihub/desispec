@@ -293,7 +293,7 @@ def get_calibration_image(cfinder,keyword,entry) :
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            overscan_per_row=False, use_overscan_row=True, use_savgol=True,
+            overscan_per_row=False, use_overscan_row=True, flag_savgol=None,
             nodarktrail=False):
 
     '''
@@ -322,6 +322,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         use_overscan_row : bool,  Subtract off the overscan_row
             from the data (default: True).  Requires ORSEC in
             the Header
+        flag_savgol : bool,  Specify whether to use Savitsky-Golay filter for
+            the overscan.  If not set and cfinder is not initialized, the
+            default is True.
 
     Optional background subtraction with median filtering if bkgsub=True
 
@@ -371,7 +374,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
-    
+
     #- TODO: Check for required keywords first
 
     #- Subtract bias image
@@ -380,7 +383,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- convert rawimage to float64 : this is the output format of read_image
     rawimage = rawimage.astype(np.float64)
 
+    # Savgol
+    use_savgol = True
+    if cfinder and cfinder.haskey("SAVGOL"):
+        use_savgol = cfinder.value["SAVGOL"]
     # Over-ride savgol?
+    if flag_savgol is not None:
+        use_savgol = flag_savgol
+
     bias = get_calibration_image(cfinder,"BIAS",bias)
 
     if bias is not False : #- it's an array

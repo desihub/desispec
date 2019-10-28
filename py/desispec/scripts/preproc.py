@@ -46,7 +46,7 @@ to use, but also only if a single camera is specified.
     parser.add_argument('--nobias', action = 'store_true',
                         help = 'no bias subtraction')
     parser.add_argument('--nosavgol', action='store_true',
-                        help = 'do not use Savitsky-Golay filter for the overscan')
+                        help='do not use Savitsky-Golay filter for the overscan')
     parser.add_argument('--nodark', action = 'store_true',
                         help = 'no dark subtraction')
     parser.add_argument('--nopixflat',action = 'store_true',
@@ -106,6 +106,10 @@ def main(args=None):
     mask=True
     if args.mask : mask=args.mask
     if args.nomask : mask=False
+    # Savgol
+    flag_savgol = None
+    if args.nosavgol is not None:
+        flag_savgol = False
 
     if args.cameras is None:
         args.cameras = [c+str(i) for c in 'brz' for i in range(10)]
@@ -157,7 +161,7 @@ def main(args=None):
                               ccd_calibration_filename=ccd_calibration_filename,
                               nocrosstalk=args.nocrosstalk,
                               nogain=args.nogain,
-                              use_savgol=(not args.nosavgol),
+                              flag_savgol=flag_savgol,
                               nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
             )
