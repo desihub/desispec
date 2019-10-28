@@ -105,13 +105,12 @@ def main(args=None):
             print("ERROR: Need to specify camera to open a raw fits image (with all cameras in different fits HDUs)")
             print("Try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_qproc --help' for more options")
             sys.exit(12)
-        image = read_raw(args.image, args.camera)
+        image = read_raw(args.image, args.camera,fill_header=[1,])
 
     
     if args.auto :
         log.debug("AUTOMATIC MODE")
         try :
-            flavor = image.meta['FLAVOR'].rstrip().upper()
             night = image.meta['NIGHT']
             if not 'EXPID' in image.meta :
                 if 'EXPNUM' in image.meta :
@@ -119,7 +118,7 @@ def main(args=None):
                     image.meta['EXPID'] = image.meta['EXPNUM']
             expid = image.meta['EXPID']
         except KeyError as e : 
-            log.error("Need at least FLAVOR NIGHT and EXPID (or EXPNUM) to run in auto mode. Retry without the --auto option.")
+            log.error("Need at least NIGHT and EXPID (or EXPNUM) to run in auto mode. Retry without the --auto option.")
             log.error(str(e))
             sys.exit(12)
             
@@ -167,28 +166,22 @@ def main(args=None):
     else :
         fibermap = None
 
-
+    if "OBSTYPE" in image.meta :
+        obstype = image.meta["OBSTYPE"].upper()
+        image.meta["OBSTYPE"]=obstype # make sure it's upper case
+        qframe = None
+    else :
+        log.warning("No OBSTYPE keyword, trying to guess ...")
+        qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
+        obstype = check_qframe_flavor(qframe,input_flavor=image.meta["FLAVOR"]).upper()
+        image.meta["OBSTYPE"]=obstype
+    
+    log.info("OBSTYPE = '{}'".format(obstype))
+    
     if args.auto  :
         
-        log.debug("auto-mode: Need a first extraction to check the flavor of the image")
-        
-        qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
-        
-        qframe.meta["IFLAVOR"] = flavor
-        image.meta["IFLAVOR"]  = flavor
-        
-        flavor = check_qframe_flavor(qframe,input_flavor=flavor)
-        
-        qframe.meta["FLAVOR"] = flavor
-        image.meta["FLAVOR"]  = flavor
-        
-        if qframe.meta["FLAVOR"] != qframe.meta["IFLAVOR"] :
-            log.warning("auto-mode: change of flavor '{}' -> '{}'".format(qframe.meta["IFLAVOR"],qframe.meta["FLAVOR"]))
-
-        log.debug("auto-mode: flavor={} setting lists of things to run".format(flavor))
-        
         # now set the things to do
-        if flavor == "SCIENCE":
+        if obstype == "SKY" or obstype == "TWILIGHT" or obstype == "SCIENCE" :
             
             args.shift_psf       = True
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
@@ -199,35 +192,31 @@ def main(args=None):
             args.fluxcalib       = True
             args.outframe        = '{}/qcframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             
-        elif flavor == "ARC":
+        elif obstype == "ARC" or obstype == "TESTARC" :
 
             args.shift_psf       = True
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.compute_lsf_sigma = True
             
-        elif flavor == "FLAT":
+        elif obstype == "FLAT" or obstype == "TESTFLAT" :
             args.shift_psf       = True
             args.output_psf      = '{}/psf-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.output_rawframe = '{}/qframe-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             args.compute_fiberflat = '{}/qfiberflat-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera, expid)
             
-        
-        
-
     if args.shift_psf :
 
         # using the trace shift script
         if args.auto  :
-            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","continuum":(flavor.upper()=="FLAT"),"sky":(flavor.upper()=="SCIENCE")})
+            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","continuum":((obstype=="FLAT")|(obstype=="TESTFLAT")),"sky":((obstype=="SCIENCE")|(obstype=="SKY"))})
         else :
             options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy"})
         tmp_args = trace_shifts_script.parse(options=options)
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 
-    
     qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
-
+    
     if tset.meta is not None :
         # add traceshift info in the qframe, this will be saved in the qframe header
         if qframe.meta is None :
@@ -282,30 +271,34 @@ def main(args=None):
     if args.fluxcalib :
         if cfinder is None :
             cfinder = CalibFinder([image.meta,primary_header])
-        fluxcalib_filename = cfinder.findfile("FLUXCALIB")
-        fluxcalib = read_average_flux_calibration(fluxcalib_filename)
-        log.info("read average calib in {}".format(fluxcalib_filename))
-        seeing  = qframe.meta["SEEING"]
-        airmass = qframe.meta["AIRMASS"]
-        exptime = qframe.meta["EXPTIME"]
-        exposure_calib = fluxcalib.value(seeing=seeing,airmass=airmass)
-        for q in range(qframe.nspec) :
-            fiber_calib=np.interp(qframe.wave[q],fluxcalib.wave,exposure_calib)*exptime
-            inv_calib = (fiber_calib>0)/(fiber_calib + (fiber_calib==0))
-            qframe.flux[q] *= inv_calib
-            qframe.ivar[q] *= fiber_calib**2*(fiber_calib>0)
+        # check for flux calib 
+        if cfinder.haskey("FLUXCALIB") :
+            fluxcalib_filename = cfinder.findfile("FLUXCALIB")
+            fluxcalib = read_average_flux_calibration(fluxcalib_filename)
+            log.info("read average calib in {}".format(fluxcalib_filename))
+            seeing  = qframe.meta["SEEING"]
+            airmass = qframe.meta["AIRMASS"]
+            exptime = qframe.meta["EXPTIME"]
+            exposure_calib = fluxcalib.value(seeing=seeing,airmass=airmass)
+            for q in range(qframe.nspec) :
+                fiber_calib=np.interp(qframe.wave[q],fluxcalib.wave,exposure_calib)*exptime
+                inv_calib = (fiber_calib>0)/(fiber_calib + (fiber_calib==0))
+                qframe.flux[q] *= inv_calib
+                qframe.ivar[q] *= fiber_calib**2*(fiber_calib>0)
 
-        # add keyword in header giving the calibration factor applied at a reference wavelength
-        band = qframe.meta["CAMERA"].upper()[0]
-        if band == "B" :
-            refwave=4500
-        elif band == "R" :
-            refwave=6500
+            # add keyword in header giving the calibration factor applied at a reference wavelength
+            band = qframe.meta["CAMERA"].upper()[0]
+            if band == "B" :
+                refwave=4500
+            elif band == "R" :
+                refwave=6500
+            else :
+                refwave=8500
+            calvalue = np.interp(refwave,fluxcalib.wave,exposure_calib)*exptime
+            qframe.meta["CALWAVE"]=refwave
+            qframe.meta["CALVALUE"]=calvalue
         else :
-            refwave=8500
-        calvalue = np.interp(refwave,fluxcalib.wave,exposure_calib)*exptime
-        qframe.meta["CALWAVE"]=refwave
-        qframe.meta["CALVALUE"]=calvalue
+            log.error("Cannot calibrate fluxes because no FLUXCALIB keywork in calibration files")
 
     fibers  = parse_fibers(args.fibers)
     if fibers is None : 
