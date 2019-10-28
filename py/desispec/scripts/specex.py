@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import sys
 import os
 import re
+import time
 import argparse
 import numpy as np
 
@@ -224,7 +225,16 @@ def main(args, comm=None):
 
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
+        #- Empirically it appears that files written by one rank sometimes
+        #- aren't fully buffer-flushed and closed before getting here,
+        #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
+        log.info('HACK: taking a 5 sec pause before merging')
+        sys.stdout.flush()
+        time.sleep(5)
+
         merge_psf(inputs,outfits)
+
+        log.info('done merging')
 
         if failcount == 0:
             # only remove the per-bundle files if the merge was good
