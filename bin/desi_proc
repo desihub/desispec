@@ -102,7 +102,7 @@ else:
         args.cameras = cameras
         cameras = None
     else:
-        args.cameras = [cam.lower() for cam in args.cameras.split()]
+        args.cameras = [cam.lower() for cam in args.cameras.split(',')]
 
     args.cameras = sorted(args.cameras)  #- just because...
     camhdr = dict()
