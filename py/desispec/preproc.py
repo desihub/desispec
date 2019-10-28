@@ -391,7 +391,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     if flag_savgol is not None:
         use_savgol = flag_savgol
 
-    import pdb; pdb.set_trace()
     bias = get_calibration_image(cfinder,"BIAS",bias)
 
     if bias is not False : #- it's an array
