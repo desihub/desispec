@@ -6,11 +6,20 @@ desispec Change Log
 -------------------
 
 * Use rrdesi --no-mpi-abort feature (PR `#823`_).
+* Added code to generate pixflats (PR `#824`_).
 * Support extractions of data without fibermaps (PR `#825`_).
-* Propagate FIBERMAP into preproc files (not just frames) (PR `#825`_).
+* Propagate FIBERMAP into preproc files (not just frames)
+  (PR `#825`_ and `#829`_).
+* Allow extraction wavelenghts slightly off CCD (PR `#836`_).
+* PSF I/O pause before merging (PR `#836`_).
+* Use OBSTYPE instead of FLAVOR for desi_qproc (PR `#839`_).
 
 .. _`#823`: https://github.com/desihub/desispec/pull/823
+.. _`#824`: https://github.com/desihub/desispec/pull/824
 .. _`#825`: https://github.com/desihub/desispec/pull/825
+.. _`#829`: https://github.com/desihub/desispec/pull/829
+.. _`#836`: https://github.com/desihub/desispec/pull/836
+.. _`#839`: https://github.com/desihub/desispec/pull/839
 
 0.30.0 (2019-10-17)
 -------------------
