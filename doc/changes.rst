@@ -12,6 +12,7 @@ desispec Change Log
   (PR `#825`_ and `#829`_).
 * Allow extraction wavelenghts slightly off CCD (PR `#836`_).
 * PSF I/O pause before merging (PR `#836`_).
+* Add `bin/desi_proc` single-exposure processing script (PR `#837`_).
 * Use OBSTYPE instead of FLAVOR for desi_qproc (PR `#839`_).
 
 .. _`#823`: https://github.com/desihub/desispec/pull/823
@@ -19,6 +20,7 @@ desispec Change Log
 .. _`#825`: https://github.com/desihub/desispec/pull/825
 .. _`#829`: https://github.com/desihub/desispec/pull/829
 .. _`#836`: https://github.com/desihub/desispec/pull/836
+.. _`#837`: https://github.com/desihub/desispec/pull/837
 .. _`#839`: https://github.com/desihub/desispec/pull/839
 
 0.30.0 (2019-10-17)
