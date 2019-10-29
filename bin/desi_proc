@@ -438,7 +438,8 @@ if args.obstype in ['SCIENCE', 'SKY']:
     for i in range(rank, len(args.cameras), size):
         camera = args.cameras[i]
         framefile = findfile('frame', args.night, args.expid, camera)
-        fiberflatfile = findcalibfile([fr.meta,], 'FIBERFLAT')
+        hdr = fitsio.read_header(framefile, 'FLUX')
+        fiberflatfile = findcalibfile([hdr,], 'FIBERFLAT')
         skyfile = findfile('sky', args.night, args.expid, camera)
 
         cmd = "desi_compute_sky"
