@@ -1,0 +1,31 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script averages psfs
+"""
+
+import sys
+import argparse
+import desispec.scripts.specex as specex
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description="Average specex PSFs")
+    parser.add_argument("-i","--input-psfs", type=str, required=True, nargs="*",
+                        help="input psfs")
+    parser.add_argument("-o", "--output-psf", type=str, required=True,
+                help="output psf file")
+
+    args = parser.parse_args()
+
+    if len(args.input_psfs)<2 :
+        print("ERROR, need at least 2 input PSFS")
+        sys.exit(12)
+
+    specex.mean_psf(args.input_psfs,args.output_psf)
+
