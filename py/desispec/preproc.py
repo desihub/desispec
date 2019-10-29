@@ -571,19 +571,18 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data[k] -= overscan_col[k]
         # And now the rows
         if use_overscan_row:
-            collapse_oscan_row = np.zeros(overscan_row.shape[1])
-            for col in range(overscan_row.shape[1]):
-                o, _ = _overscan(overscan_row[:,col])
-                collapse_oscan_row[col] = o
             # Savgol?
             if use_savgol:
+                collapse_oscan_row = np.zeros(overscan_row.shape[1])
+                for col in range(overscan_row.shape[1]):
+                    o, _ = _overscan(overscan_row[:,col])
+                    collapse_oscan_row[col] = o
                 oscan_row = signal.savgol_filter(collapse_oscan_row, 65, 5)
+                oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
+                data -= oimg_row
             else:
-                oscan_row = collapse_oscan_row
-            oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
-            #o,r = _overscan(overscan_row)
-            #data -= o
-            data -= oimg_row
+                o,r = _overscan(overscan_row)
+                data -= o
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
