@@ -131,7 +131,7 @@ def _savgol_clipped(data, window=165, polyorder=5, niter=3, threshold=3.):
 
     Args:
         data (ndarray):
-        window (int):
+        window (int):  Window parameter for savgol
         polyorder (int):
         niter (int):
         threshold (float):
