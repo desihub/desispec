@@ -56,6 +56,8 @@ for filename in args.image :
     # collect exposure times
     fitsfile=pyfits.open(filename)
     primary_header = fitsfile[0].header
+    if not "EXPTIME" in primary_header :
+        primary_header = fitsfile[1].header
     if "EXPREQ" in primary_header :
         exptime = primary_header["EXPREQ"]
         log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")

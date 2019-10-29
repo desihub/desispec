@@ -9,6 +9,7 @@ import os.path
 import numpy as np
 import scipy, scipy.sparse
 from astropy.io import fits
+from astropy.table import Table
 import warnings
 
 from desiutil.depend import add_dependencies
@@ -184,7 +185,11 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
 
     if 'FIBERMAP' in fx:
-        fibermap = fx['FIBERMAP'].data
+        fibermap = Table(fx['FIBERMAP'].data)
+        if 'DESIGN_X' in fibermap.colnames:
+            fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
+        if 'DESIGN_Y' in fibermap.colnames:
+            fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
     else:
         fibermap = None
 

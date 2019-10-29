@@ -57,9 +57,6 @@ class TaskPSF(BaseTask):
             spectrograph=props["spec"]) ]
 
 
-
-
-
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
@@ -71,16 +68,16 @@ class TaskPSF(BaseTask):
         return deptasks
 
 
-    def _run_max_procs(self, procs_per_node):
-        """See BaseTask.run_max_procs.
-        """
+    def _run_max_procs(self):
+        # 20 bundles per camera
         return 20
 
 
-    def _run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 12 # convergence slower for some realizations
+    def _run_time(self, name, procs, db):
+        # Time when running on max procs on machine with scale
+        # factor 1.0
+        mprc = self._run_max_procs()
+        return (20.0 / procs) * mprc
 
 
     def _run_defaults(self):

@@ -53,7 +53,7 @@ def check_qframe_flavor(qframe,input_flavor=None):
             #- EXPTIME=0 sure sounds like a ZERO...
             guessed_flavor = "ZERO"
     else :
-        guessed_flavor = "SCIENCE"
+        guessed_flavor = "SKY"
 
     if input_flavor.upper() == "ZERO" or input_flavor.upper() == "DARK" :
         if guessed_flavor != "ZERO" :

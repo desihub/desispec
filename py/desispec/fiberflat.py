@@ -21,7 +21,7 @@ from desiutil.log import get_logger
 import math
 
 
-def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
+def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=15,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelength grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
@@ -227,7 +227,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
         # loop on fiber to handle resolution (this is long)
         for fiber in range(nfibers) :
-            if fiber%10==0 :
+            if fiber%100==0 :
                 log.info("2nd pass, filling matrix, iter %d fiber %d"%(iteration,fiber))
 
             ### R = Resolution(resolution_data[fiber])
@@ -818,8 +818,8 @@ def qa_fiberflat(param, frame, fiberflat):
 
     # x, y, area
     fibermap = frame.fibermap
-    x = fibermap['DESIGN_X']
-    y = fibermap['DESIGN_Y']
+    x = fibermap['FIBERASSIGN_X']
+    y = fibermap['FIBERASSIGN_Y']
     area = fiber_area_arcsec2(x, y)
     mean_area = np.mean(area)
     norm_area = area / mean_area

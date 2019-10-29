@@ -4,6 +4,9 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import, division, print_function
+
+import numpy as np
+
 from .base import BaseTask, task_classes, task_type
 from ...io import findfile
 from ...util import option_list
@@ -55,18 +58,63 @@ class TaskRedshift(BaseTask):
         }
         return deptasks
 
-    def run_max_procs(self, procs_per_node):
-        return procs_per_node
+    def _run_max_procs(self):
+        # Redshifts can run on any number of procs.
+        return 0
 
-    def run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 15
+    def _run_time(self, name, procs, db):
+        # Run time on one task on machine with scale factor == 1.0.
+        # This should depend on the total number of unique targets, which is
+        # not known a priori.  Instead, we compute the total targets and reduce
+        # this by some factor.
+        if db is not None:
+            props = self.name_split(name)
+            entries = db.select_healpix_frame(
+                {"pixel":props["pixel"],
+                 "nside":props["nside"]}
+            )
+            ntarget = np.sum([x["ntargets"] for x in entries])
+            neff = 0.3 * ntarget
+            # 2.5 seconds per targets
+            tm = 1 + 2.5 * 0.0167 * neff
+        else:
+            tm = 60
+
+        return tm
+
+    def _run_max_mem_proc(self, name, db):
+        # Per-process memory requirements.  This is determined by the largest
+        # Spectra file that must be read and broadcast.  We compute that size
+        # assuming no coadd and using the total number of targets falling in
+        # our pixel.
+        mem = 0.0
+        if db is not None:
+            props = self.name_split(name)
+            entries = db.select_healpix_frame(
+                {"pixel":props["pixel"],
+                 "nside":props["nside"]}
+            )
+            ntarget = np.sum([x["ntargets"] for x in entries])
+            # DB entry is for one exposure and spectrograph.
+            mem = 0.2 + 0.0002 * 3 * ntarget
+        return mem
+
+    def _run_max_mem_task(self, name, db):
+        # This returns the total aggregate memory needed for the task,
+        # which should be based on the larger of:
+        #  1) the total number of unique (coadded) targets.
+        #  2) the largest spectra file times the number of processes
+        # Since it is not easy to calculate (1), and the constraint for (2)
+        # is already encapsulated in the per-process memory requirements,
+        # we return zero here.  This effectively selects one node.
+        mem = 0.0
+        return mem
+
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.
         """
-        return {}
+        return {'no-mpi-abort': True}
 
     def _option_list(self, name, opts):
         """Build the full list of options.

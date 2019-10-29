@@ -644,11 +644,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if pixflat.shape != image.shape:
             raise ValueError('shape mismatch pixflat {} != image {}'.format(pixflat.shape, image.shape))
 
-        if np.all(pixflat != 0.0):
+        almost_zero = 0.001
+        
+        if np.all(pixflat > almost_zero ):
             image /= pixflat
             readnoise /= pixflat
         else:
-            good = (pixflat != 0.0)
+            good = (pixflat > almost_zero )
             image[good] /= pixflat[good]
             readnoise[good] /= pixflat[good]
             mask[~good] |= ccdmask.PIXFLATZERO

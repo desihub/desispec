@@ -480,8 +480,8 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     yfiber = np.zeros(nfiber)
     for ii,fiber in enumerate(frame.fibers):
         mt = np.where(fiber == fibermap['FIBER'])[0]
-        xfiber[ii] = fibermap['DESIGN_X'][mt]
-        yfiber[ii] = fibermap['DESIGN_Y'][mt]
+        xfiber[ii] = fibermap['FIBERASSIGN_X'][mt]
+        yfiber[ii] = fibermap['FIBERASSIGN_Y'][mt]
     area = fiber_area_arcsec2(xfiber,yfiber)
     mean_area = np.mean(area)
 
@@ -590,8 +590,8 @@ def exposure_fiberflat(channel, expid, metric, outfile=None):
         fibermap = frame.fibermap
         gdp = fiberflat.mask == 0
         # X,Y
-        x.append([fibermap['DESIGN_X']])
-        y.append([fibermap['DESIGN_Y']])
+        x.append([fibermap['FIBERASSIGN_X']])
+        y.append([fibermap['FIBERASSIGN_Y']])
         area = fiber_area_arcsec2(x[-1], y[-1])
         mean_area = np.mean(area)
         # Metric
@@ -708,8 +708,8 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
             fibermap = frame.fibermap
             #
             rows = np.where(qa_exp.qa_s2n['CAMERA'] == camera)[0]
-            qa_exp.qa_s2n['X'][rows] = [fibermap['DESIGN_X'][qa_exp.qa_s2n['FIBER'][rows]]]
-            qa_exp.qa_s2n['Y'][rows] = [fibermap['DESIGN_Y'][qa_exp.qa_s2n['FIBER'][rows]]]
+            qa_exp.qa_s2n['X'][rows] = [fibermap['FIBERASSIGN_X'][qa_exp.qa_s2n['FIBER'][rows]]]
+            qa_exp.qa_s2n['Y'][rows] = [fibermap['FIBERASSIGN_Y'][qa_exp.qa_s2n['FIBER'][rows]]]
 
         # Metric
         if metric == 'resid':

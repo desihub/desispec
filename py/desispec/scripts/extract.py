@@ -145,17 +145,25 @@ def main(args):
     else :
         camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
         spectrograph = int(camera[1])
-        fibermin = spectrograph * psf.nspec + specmin
+        fibermin = spectrograph * 500 + specmin
 
     print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
-        fibermap = fibermap[fibermin:fibermin+nspec]
+    else:
+        try:
+            fibermap = io.read_fibermap(args.input)
+        except (AttributeError, IOError, KeyError):
+            fibermap = None
+
+    #- Trim fibermap to matching fiber range and create fibers array
+    if fibermap:
+        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
+        fibermap = fibermap[ii]
         fibers = fibermap['FIBER']
     else:
-        fibermap = None
         fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
 
     #- Get wavelength grid from options
@@ -165,8 +173,6 @@ def main(args):
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
-        
-    
 
     if args.heliocentric_correction :
         heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)
@@ -184,9 +190,9 @@ def main(args):
     #- Confirm that this PSF covers these wavelengths for these spectra
     psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
     psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
-    if psf_wavemin > wstart:
+    if psf_wavemin-5 > wstart:
         raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
-    if psf_wavemax < wstop:
+    if psf_wavemax+5 < wstop:
         raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     #- Print parameters
@@ -314,10 +320,18 @@ def main_mpi(args, comm=None, timing=None):
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
-        fibermap = fibermap[fibermin:fibermin+nspec]
+    else:
+        try:
+            fibermap = io.read_fibermap(args.input)
+        except (AttributeError, IOError, KeyError):
+            fibermap = None
+
+    #- Trim fibermap to matching fiber range and create fibers array
+    if fibermap:
+        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
+        fibermap = fibermap[ii]
         fibers = fibermap['FIBER']
     else:
-        fibermap = None
         fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
 
     #- Get wavelength grid from options
@@ -344,9 +358,9 @@ def main_mpi(args, comm=None, timing=None):
 
     psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=-0.5))
     psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-0.5))
-    if psf_wavemin > wstart:
+    if psf_wavemin-5 > wstart:
         raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
-    if psf_wavemax < wstop:
+    if psf_wavemax+5 < wstop:
         raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     # Now we divide our spectra into bundles

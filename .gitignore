@@ -1,4 +1,5 @@
 # Compiled files
+__pycache__/
 *.py[co]
 
 # Other generated files
