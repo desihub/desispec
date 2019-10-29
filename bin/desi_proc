@@ -37,6 +37,10 @@ parser.add_argument("--cameras", type=str,  help="comma separated list of camera
 parser.add_argument("-i", "--input", type=str,  help="input raw data file")
 parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
 parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
+parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
+parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
+
+parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
 
 args = parser.parse_args()
 log = get_logger()
@@ -177,7 +181,10 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
     for i in range(rank, len(args.cameras), size):
         camera = args.cameras[i]
         preprocfile = findfile('preproc', args.night, args.expid, camera)
-        inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
+        if args.psf is not None :
+            inpsf = args.psf
+        else :
+            inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
         outpsf = findfile('psf', args.night, args.expid, camera)
         cmd = "desi_compute_trace_shifts"
         cmd += " -i {}".format(preprocfile)
