@@ -84,8 +84,8 @@ def _clipped_std_bias(nsigma):
     return stdbias
 
 def _overscan(pix, nsigma=5, niter=3):
-    '''
-    returns overscan, readnoise from overscan image pixels
+    """
+    Calculates overscan, readnoise from overscan image pixels
 
     Args:
         pix (ndarray) : overscan pixels from CCD image
@@ -93,7 +93,10 @@ def _overscan(pix, nsigma=5, niter=3):
     Optional:
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
-    '''
+    Returns:
+        overscan (float):
+        readnoise (float):
+    """
     log=get_logger()
     #- normalized median absolute deviation as robust version of RMS
     #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
@@ -118,6 +121,50 @@ def _overscan(pix, nsigma=5, niter=3):
     readnoise /= _clipped_std_bias(nsigma)
 
     return overscan, readnoise
+
+
+def _savgol_clipped(data, window=165, polyorder=5, niter=3, threshold=3.):
+    """
+    Simple method to iteratively do a SavGol filter
+    with rejection and replacing rejected pixels by
+    nearest neighbors
+
+    Args:
+        data (ndarray):
+        window (int):
+        polyorder (int):
+        niter (int):
+        threshold (float):
+
+    Returns:
+
+    """
+
+    ### 1st estimation
+    array = data.copy()
+    fitted = signal.savgol_filter(array, window, polyorder)
+    filtered = array - fitted
+    ### nth iteration
+    nrej = 0
+    for i in range(niter):
+        sigma = filtered.std(axis=0)
+        mask = np.abs(filtered) >= threshold*sigma
+        good = np.where(~mask)[0]
+        # Replace with nearest neighbors
+        new_nrej = np.sum(mask)
+        if new_nrej == nrej:
+            break
+        else:
+            nrej = new_nrej
+        for imask in np.where(mask)[0]:
+            # Replace with nearest neighbors
+            i0 = np.max(good[good < imask])
+            i1 = np.min(good[good > imask])
+            array[imask] = np.mean([array[i0], array[i1]])
+        ### Refit
+        fitted = signal.savgol_filter(array, window, polyorder)
+    # Return
+    return fitted
 
 
 def _global_background(image,patch_width=200) :
@@ -577,7 +624,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 for col in range(overscan_row.shape[1]):
                     o, _ = _overscan(overscan_row[:,col])
                     collapse_oscan_row[col] = o
-                oscan_row = signal.savgol_filter(collapse_oscan_row, 65, 5)
+                oscan_row = _savgol_clipped(collapse_oscan_row)
                 oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
                 data -= oimg_row
             else:
