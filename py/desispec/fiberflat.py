@@ -594,8 +594,8 @@ def autocalib_fiberflat(fiberflats):
         Z = []
         for i in ii :
             fflat=fiberflats[i]
-            X.append(fflat.fibermap["DESIGN_X"])
-            Y.append(fflat.fibermap["DESIGN_Y"])
+            X.append(fflat.fibermap["FIBERASSIGN_X"])
+            Y.append(fflat.fibermap["FIBERASSIGN_Y"])
             Z.append(fflat.fiberflat)
         X = np.hstack(X)
         Y = np.hstack(Y)
@@ -640,9 +640,23 @@ def autocalib_fiberflat(fiberflats):
     corr=1./(mflat+(mflat==0))
     for spec in np.unique(spectro) :
         output_fiberflats[spec].fiberflat *= corr
+        mask_bad_fiberflat(output_fiberflats[spec])
     log.info("done")
     return output_fiberflats
     
+def mask_bad_fiberflat(fiberflat) :
+    log = get_logger()
+    
+    for fiber in range(fiberflat.fiberflat.shape[0]) :
+        fiberflat.mask[fiber][fiberflat.fiberflat[fiber]<0.5] |= specmask.LOWFLAT
+        fiberflat.mask[fiber][fiberflat.fiberflat[fiber]>1.2] |= specmask.BADFIBERFLAT
+        nbad = np.sum((fiberflat.ivar[fiber]==0)|(fiberflat.mask[fiber]!=0))
+        if nbad > 500 : 
+            log.warning("fiber {} is 'BAD' because {} flatfield values are bad".format(fiber,nbad))
+            fiberflat.fiberflat[fiber]=1.
+            fiberflat.ivar[fiber]=0.
+            fiberflat.mask[fiber]=specmask.BADFIBERFLAT
+        
 
 def apply_fiberflat(frame, fiberflat):
     """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
