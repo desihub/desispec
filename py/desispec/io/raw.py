@@ -11,11 +11,12 @@ import numpy as np
 
 from desiutil.depend import add_dependencies
 
+import desispec.io
 import desispec.io.util
 import desispec.preproc
 from desiutil.log import get_logger
 
-def read_raw(filename, camera, **kwargs):
+def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
     Returns preprocessed raw data from `camera` extension of `filename`
 
@@ -24,6 +25,7 @@ def read_raw(filename, camera, **kwargs):
         camera : camera name (B0,R1, .. Z9) or FITS extension name or number
 
     Options:
+        fibermapfile : read fibermap from this file; if None create blank fm
         Other keyword arguments are passed to desispec.preproc.preproc(),
         e.g. bias, pixflat, mask.  See preproc() documentation for details.
 
@@ -85,10 +87,35 @@ def read_raw(filename, camera, **kwargs):
                     log.warning("warning HDU %s not in fits file"%str(hdu))
 
         kwargs.pop("fill_header")
-    
+
     fx.close()
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
+
+    if fibermapfile is not None:
+        fibermap = io.read_fibermap(fibermapfile)
+    else:
+        log.warning('creating blank fibermap')
+        fibermap = desispec.io.empty_fibermap(5000)
+
+        #- HACK HACK HACK
+        #- TODO: replace this with a mapping from calibfinder, as soon as
+        #- that is implemented in calibfinder / desi_spectro_calib
+        #- HACK HACK HACK
+
+        #- From DESI-5286v5 page 3 where sp=sm-1 and
+        #- "spectro logical number" = petal_loc
+        spec_to_petal = {4:2, 2:9, 3:0, 5:3, 1:8, 0:4, 6:6, 7:7, 8:5, 9:1}
+        assert set(spec_to_petal.keys()) == set(range(10))
+        assert set(spec_to_petal.values()) == set(range(10))
+
+        petal_loc = spec_to_petal[int(camera[1])]
+        log.warning('Mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
+        ii = (fibermap['PETAL_LOC'] == petal_loc)
+        fibermap = fibermap[ii]
+
+    img.fibermap = fibermap
+
     return img
 
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):

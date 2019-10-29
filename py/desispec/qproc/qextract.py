@@ -61,19 +61,18 @@ def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=No
     wavemax = xytraceset.wavemax
     xcoef   = xytraceset.x_vs_wave_traceset._coeff 
     ycoef   = xytraceset.y_vs_wave_traceset._coeff 
-    
-    spectrograph = 0
-    if "CAMERA" in image.meta :
-        camera=image.meta["CAMERA"].strip()
-        spectrograph = int(camera[-1])
-        log.info("camera='{}' -> spectrograph={}. I AM USING THIS TO DEFINE THE FIBER NUMBER (ASSUMING 500 FIBERS PER SPECTRO).".format(camera,spectrograph))
-    
-    allfibers = np.arange(xcoef.shape[0])+500*spectrograph
-    
-    if fibers is None :
-        fibers = allfibers
 
-    
+    if fibers is None:
+        if fibermap is not None:
+            fibers = fibermap['FIBER']
+        else:
+            spectrograph = 0
+            if "CAMERA" in image.meta :
+                camera=image.meta["CAMERA"].strip()
+                spectrograph = int(camera[-1])
+                log.info("camera='{}' -> spectrograph={}. I AM USING THIS TO DEFINE THE FIBER NUMBER (ASSUMING 500 FIBERS PER SPECTRO).".format(camera,spectrograph))
+
+            fibers = np.arange(xcoef.shape[0])+500*spectrograph
 
     #log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
     
