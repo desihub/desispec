@@ -11,6 +11,7 @@ progress = OrderedDict(start=time.asctime())
 
 import sys, os, argparse, re, time, collections
 import subprocess
+from copy import deepcopy
 
 import numpy as np
 import fitsio
@@ -398,7 +399,10 @@ if args.obstype == 'SKY':
     for i in range(rank, len(args.cameras), size):
         camera = args.cameras[i]
         framefile = findfile('frame', args.night, args.expid, camera)
-        fr = desispec.io.read_frame(framefile)
+        orig_frame = desispec.io.read_frame(framefile)
+
+        #- Make a copy so that we can apply fiberflat
+        fr = deepcopy(orig_frame)
 
         if np.any(fr.fibermap['OBJTYPE'] == 'SKY'):
             log.info('{} sky fibers already set; skipping'.format(
@@ -412,10 +416,12 @@ if args.obstype == 'SKY':
         fluxcut = np.percentile(sumflux, 90)
         iisky = np.where(sumflux < fluxcut)[0]
         iisky = np.random.choice(iisky, size=100, replace=False)
-        fr.fibermap['OBJTYPE'][iisky] = 'SKY'
-        fr.fibermap['DESI_TARGET'][iisky] |= desi_mask.SKY
 
-        desispec.io.write_frame(framefile, fr)
+        #- Update fibermap or original frame and write out
+        orig_frame.fibermap['OBJTYPE'][iisky] = 'SKY'
+        orig_frame.fibermap['DESI_TARGET'][iisky] |= desi_mask.SKY
+
+        desispec.io.write_frame(framefile, orig_frame)
 
     if comm is not None:
         comm.barrier()
