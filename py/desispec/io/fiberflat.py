@@ -11,19 +11,23 @@ from __future__ import absolute_import
 import os
 from astropy.io import fits
 
+from desiutil.io import encode_table
 from desiutil.depend import add_dependencies
 
 from ..fiberflat import FiberFlat
 from .meta import findfile
 from .util import fitsheader, native_endian, makepath
 
-def write_fiberflat(outfile,fiberflat,header=None):
+def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     """Write fiberflat object to outfile
 
     Args:
         outfile: filepath string or (night, expid, camera) tuple
         fiberflat: FiberFlat object
-        header: (optional) dict or fits.Header object to use as HDU 0 header
+
+    Optional:
+        header: dict or fits.Header object to use as HDU 0 header
+        fibermap: table to store as FIBERMAP HDU
 
     Returns:
         filepath of file that was written
@@ -48,10 +52,15 @@ def write_fiberflat(outfile,fiberflat,header=None):
     hdus = fits.HDUList()
     hdus.append(fits.PrimaryHDU(ff.fiberflat.astype('f4'), header=hdr))
     hdus.append(fits.ImageHDU(ff.ivar.astype('f4'),     name='IVAR'))
-    # hdus.append(fits.CompImageHDU(ff.mask,              name='MASK'))
     hdus.append(fits.ImageHDU(ff.mask,              name='MASK'))
     hdus.append(fits.ImageHDU(ff.meanspec.astype('f4'), name='MEANSPEC'))
     hdus.append(fits.ImageHDU(ff.wave.astype('f4'),     name='WAVELENGTH'))
+    if fibermap is None :
+        fibermap=ff.fibermap
+    if fibermap is not None:
+        fibermap = encode_table(fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        hdus.append( fits.convenience.table_to_hdu(fibermap) )
     hdus[-1].header['BUNIT'] = 'Angstrom'
 
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
@@ -78,11 +87,15 @@ def read_fiberflat(filename):
         night, expid, camera = filename
         filename = findfile('fiberflat', night, expid, camera)
 
-    header    = fits.getheader(filename, 0)
-    fiberflat = native_endian(fits.getdata(filename, 0)).astype('f8')
-    ivar      = native_endian(fits.getdata(filename, "IVAR").astype('f8'))
-    mask      = native_endian(fits.getdata(filename, "MASK", uint=True))
-    meanspec  = native_endian(fits.getdata(filename, "MEANSPEC").astype('f8'))
-    wave      = native_endian(fits.getdata(filename, "WAVELENGTH").astype('f8'))
-
-    return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header)
+    fx = fits.open(filename, uint=True, memmap=False)
+    header    = fx[0].header
+    fiberflat = native_endian(fx[0].data.astype('f8'))
+    ivar      = native_endian(fx["IVAR"].data.astype('f8'))
+    mask      = native_endian(fx["MASK"].data)
+    meanspec  = native_endian(fx["MEANSPEC"].data.astype('f8'))
+    wave      = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+    if 'FIBERMAP' in fx:
+        fibermap = fx['FIBERMAP'].data
+    else:
+        fibermap = None
+    return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header, fibermap=fibermap)
