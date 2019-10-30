@@ -92,7 +92,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
 
-    if fibermapfile is not None:
+    if fibermapfile is not None and os.path.exists(fibermapfile):
         fibermap = desispec.io.read_fibermap(fibermapfile)
     else:
         log.warning('creating blank fibermap')
