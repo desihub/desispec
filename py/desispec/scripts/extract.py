@@ -58,8 +58,8 @@ def parse(options=None):
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
     parser.add_argument("--psferr", type=float, default=None, required=False,
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
-    parser.add_argument("--fibermap-index", type=int, default=None, required=False,
-                        help="start at this index in the fibermap table instead of using the spectro id from the camera")
+    # parser.add_argument("--fibermap-index", type=int, default=None, required=False,
+    #                     help="start at this index in the fibermap table instead of using the spectro id from the camera")
     parser.add_argument("--heliocentric-correction", action="store_true", help="apply heliocentric correction to wavelength")
     
     args = None
@@ -127,6 +127,8 @@ def main(args):
         comm = MPI.COMM_WORLD
         return main_mpi(args, comm)
 
+    log = get_logger()
+
     psf_file = args.psf
     input_file = args.input
     specmin = args.specmin
@@ -138,17 +140,6 @@ def main(args):
 
     if nspec is None:
         nspec = psf.nspec
-    specmax = specmin + nspec
-
-    if args.fibermap_index is not None :
-        fibermin = args.fibermap_index
-    else :
-        camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
-        spectrograph = int(camera[1])
-        fibermin = spectrograph * 500 + specmin
-
-    print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
-        specmin, specmin+nspec, time.asctime()))
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
@@ -158,13 +149,17 @@ def main(args):
         except (AttributeError, IOError, KeyError):
             fibermap = None
 
-    #- Trim fibermap to matching fiber range and create fibers array
-    if fibermap:
-        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
-        fibermap = fibermap[ii]
+    if fibermap is not None:
+        fibermap = fibermap[specmin:specmin+nspec]
+        if nspec > len(fibermap):
+            log.warning("nspec {} > len(fibermap) {}; reducing nspec to {}".format(
+                nspec, len(fibermap), len(fibermap)))
+            nspec = len(fibermap)
         fibers = fibermap['FIBER']
     else:
-        fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        fibers = np.arange(specmin, specmin+nspec)
+
+    specmax = specmin + nspec
 
     #- Get wavelength grid from options
     if args.wavelength is not None:
@@ -302,21 +297,12 @@ def main_mpi(args, comm=None, timing=None):
         img = comm.bcast(img, root=0)
 
     psf = load_psf(psf_file)
+    if nspec is None:
+        nspec = psf.nspec
 
     mark_read_input = time.time()
 
     # get spectral range
-
-    if nspec is None:
-        nspec = psf.nspec
-    specmax = specmin + nspec
-
-    if args.fibermap_index is not None :
-        fibermin = args.fibermap_index
-    else :
-        camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
-        spectrograph = int(camera[1])
-        fibermin = spectrograph * psf.nspec + specmin
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
@@ -326,13 +312,17 @@ def main_mpi(args, comm=None, timing=None):
         except (AttributeError, IOError, KeyError):
             fibermap = None
 
-    #- Trim fibermap to matching fiber range and create fibers array
-    if fibermap:
-        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
-        fibermap = fibermap[ii]
+    if fibermap is not None:
+        fibermap = fibermap[specmin:specmin+nspec]
+        if nspec > len(fibermap):
+            log.warning("nspec {} > len(fibermap) {}; reducing nspec to {}".format(
+                nspec, len(fibermap), len(fibermap)))
+            nspec = len(fibermap)
         fibers = fibermap['FIBER']
     else:
-        fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        fibers = np.arange(specmin, specmin+nspec)
+
+    specmax = specmin + nspec
 
     #- Get wavelength grid from options
 
@@ -438,7 +428,7 @@ def main_mpi(args, comm=None, timing=None):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
         outmodel = "{}_model_{:02d}.fits".format(outroot, b)
 
-        log.info('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
+        log.info('extract:  Rank {} extracting {} spectra {}:{} at {}'.format(
             rank, os.path.basename(input_file),
             bspecmin[b], bspecmin[b]+bnspec[b], time.asctime(),
             ) )
