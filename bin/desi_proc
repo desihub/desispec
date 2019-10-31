@@ -177,12 +177,16 @@ if args.batch:
         fx.write('#SBATCH -C haswell\n')
         fx.write('#SBATCH -N {}\n'.format(nodes))
         fx.write('#SBATCH -n {}\n'.format(ncores))
+        fx.write('#SBATCH -c 2\n')
         fx.write('#SBATCH --qos {}\n'.format(args.queue))
         fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
         fx.write('#SBATCH --time=00:{:02d}:00\n'.format(runtime))
-        if nodes > 1:
+
+        #- If we are asking for more than half the node, ask for all of it
+        #- to avoid memory problems with other people's jobs
+        if ncores > 16:
             fx.write('#SBATCH --exclusive\n')
 
         fx.write('\n')
