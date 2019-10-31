@@ -14,6 +14,10 @@ desispec Change Log
 * PSF I/O pause before merging (PR `#836`_).
 * Add `bin/desi_proc` single-exposure processing script (PR `#837`_).
 * Use OBSTYPE instead of FLAVOR for desi_qproc (PR `#839`_).
+* Bug fix for desi_proc double application of fiberflat (PR `#841`_).
+* desi_proc options for non-default PSF and fiberflat (PR `#842`_).
+* Correct fibermap to match what petal we are in (PR `#843`_).
+* Update database loading to match current data model (PR `#844`_).
 
 .. _`#823`: https://github.com/desihub/desispec/pull/823
 .. _`#824`: https://github.com/desihub/desispec/pull/824
@@ -22,6 +26,10 @@ desispec Change Log
 .. _`#836`: https://github.com/desihub/desispec/pull/836
 .. _`#837`: https://github.com/desihub/desispec/pull/837
 .. _`#839`: https://github.com/desihub/desispec/pull/839
+.. _`#841`: https://github.com/desihub/desispec/pull/841
+.. _`#842`: https://github.com/desihub/desispec/pull/842
+.. _`#843`: https://github.com/desihub/desispec/pull/843
+.. _`#844`: https://github.com/desihub/desispec/pull/844
 
 0.30.0 (2019-10-17)
 -------------------
