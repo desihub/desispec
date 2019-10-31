@@ -60,12 +60,13 @@ parser.add_argument("--noskysub", action="store_true", help="Do not subtract the
 parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
 parser.add_argument("--fiberflat",type=str,required=False,default=None, help="use this fiberflat")
 
-
+parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
+parser.add_argument("-q", "--queue", type=str, default="realtime", help="batch queue to use")
 
 args = parser.parse_args()
 log = get_logger()
 
-if args.mpi:
+if args.mpi and not args.batch:
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.rank
@@ -145,6 +146,57 @@ known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
     'TESTARC', 'TESTFLAT', 'PIXFLAT', 'SKY', 'TWILIGHT', 'OTHER']
 if args.obstype not in known_obstype:
     raise RuntimeError('obstype {} not in {}'.format(args.obstype, known_obstype))
+
+#-------------------------------------------------------------------------
+#- Create and submit a batch job if requested
+
+if args.batch:
+    reduxdir = desispec.io.specprod_root()
+    batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(args.night))
+    os.makedirs(batchdir, exist_ok=True)
+    jobname = 'desiproc-{}-{:08d}'.format(args.night, args.expid)
+    scriptfile = os.path.join(batchdir, jobname+'.slurm')
+    
+    with open(scriptfile, 'w') as fx:
+        fx.write('#!/bin/bash -l\n\n')
+        fx.write('#SBATCH -C=haswell\n')
+        fx.write('#SBATCH --qos={}\n'.format(args.queue))
+        fx.write('#SBATCH --account=desi\n')
+        fx.write('#SBATCH --job-name={}\n'.format(jobname))
+        fx.write('#SBATCH --output={}/{}-%j.log\n'.format(batchdir, jobname))
+        
+        if args.obstype in ('ARC', 'TESTARC'):
+            nodes, ncores, runtime = 2, 60, 25
+        elif args.obstype in ('FLAT', 'TESTFLAT'):
+            nodes, ncores, runtime = 1, 20, 20
+        elif args.obstype in ('SKY', 'TWILIGHT'):
+            nodes, ncores, runtime = 1, 20, 15
+        elif args.obstype in ('ZERO', 'DARK'):
+            nodes, ncores, runtime = 1, 20, 5
+
+        assert runtime < 60
+
+        fx.write('#SBATCH --nodes={}\n'.format(nodes))
+        fx.write('#SBATCH --time=00:{:02d}:00\n'.format(runtime))
+
+        fx.write('\n')
+
+        cmd = ' '.join(sys.argv)
+        if not args.mpi:
+            cmd += ' --mpi'
+
+        srun = 'srun -N {} -n {} {}'.format(nodes, ncores, cmd)
+
+        fx.write('echo Starting at $(date)\n')
+        fx.write('echo Running {}\n'.format(srun))
+        fx.write('{}\n'.format(srun))
+        fx.write('echo Done at $(date)\n')
+    
+    print('Wrote {}'.format(scriptfile))
+    sys.exit(0)
+
+#-------------------------------------------------------------------------
+#- Proceeding with running
 
 #- What are we going to do?
 if rank == 0:
