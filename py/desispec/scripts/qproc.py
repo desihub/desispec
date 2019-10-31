@@ -153,13 +153,13 @@ def main(args=None):
 
     tset    = read_xytraceset(args.psf)
 
-
-
-    
     # add fibermap
     if args.fibermap :
         if os.path.isfile(args.fibermap) :
             fibermap = read_fibermap(args.fibermap)
+        elif hasattr(image, 'fibermap') and image.fibermap is not None:
+            log.info('Using fibermap from preproc')
+            fibermap = image.fibermap
         else :
             log.error("no fibermap file {}".format(args.fibermap))
             fibermap = None

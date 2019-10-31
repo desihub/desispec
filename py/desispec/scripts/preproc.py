@@ -59,8 +59,6 @@ to use, but also only if a single camera is specified.
                         help = 'do not apply gain correction') 
     parser.add_argument('--nodarktrail', action='store_true',
                         help = 'do not correct for dark trails if any') 
-    parser.add_argument('--nofibermap', action='store_true',
-                        help = 'do not add FIBERMAP extension')
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
@@ -134,17 +132,10 @@ def main(args=None):
         fibermapfile = infile.replace('desi-', 'fibermap-').replace('.fits.fz', '.fits')
         args.fibermap = os.path.join(datadir, fibermapfile)
 
-    if args.nofibermap:
-        fibermap = None
-    elif os.path.exists(args.fibermap):
-        fibermap = io.read_fibermap(args.fibermap)
-    else:
-        log.warning('fibermap file not found; creating blank fibermap')
-        fibermap = io.empty_fibermap(5000)
-
     for camera in args.cameras:
         try:
             img = io.read_raw(args.infile, camera,
+                              fibermapfile=args.fibermap,
                               bias=bias, dark=dark, pixflat=pixflat, mask=mask, bkgsub=args.bkgsub,
                               nocosmic=args.nocosmic,                              
                               cosmics_nsig=args.cosmics_nsig,
@@ -170,11 +161,6 @@ def main(args=None):
                                   outdir=args.outdir)
         else:
             outfile = args.outfile
-
-        if fibermap:
-            petal_loc = int(img.camera[1])
-            ii = (fibermap['PETAL_LOC'] == petal_loc)
-            img.fibermap = fibermap[ii]
 
         io.write_image(outfile, img)
         log.info("Wrote {}".format(outfile))
