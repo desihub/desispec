@@ -168,6 +168,9 @@ if args.batch:
         ncores, runtime = 20*nspectro, 15
     elif args.obstype in ('ZERO', 'DARK'):
         ncores, runtime = ncameras, 5
+    else:
+        print('ERROR: unknown obstype={}'.format(args.obstype))
+        sys.exit(1)
 
     nodes = (ncores-1) // 32 + 1
     assert runtime < 60
