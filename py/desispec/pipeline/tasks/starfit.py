@@ -60,7 +60,7 @@ class TaskStarFit(BaseTask):
         """
         from .base import task_classes
         props = self.name_split(name)
-        
+
         # we need all the cameras for the fit of standard stars
         deptasks = dict()
         for band in ["b","r","z"] :
@@ -71,16 +71,17 @@ class TaskStarFit(BaseTask):
             deptasks[band+"-sky"]=task_classes["sky"].name_join(props_and_band)
         return deptasks
 
-    def _run_max_procs(self, procs_per_node):
-        """See BaseTask.run_max_procs.
-        """
+    def _run_max_procs(self):
+        # This is a serial task.
         return 1
 
+    def _run_time(self, name, procs, db):
+        # Run time on one proc on machine with scale factor == 1.0
+        return 35.0
 
-    def _run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 15 # less than 4 min on edison but can vary quite a bit
+    def _run_max_mem_proc(self, name, db):
+        # Per-process memory requirements
+        return 5.0
 
 
     def _run_defaults(self):
@@ -132,15 +133,15 @@ class TaskStarFit(BaseTask):
 
         deps = self.deps(name)
         options = {}
-        options["outfile"]=self.paths(name)[0]
-        options["frames"]=[]
-        options["skymodels"]=[]
-        options["fiberflats"]=[]
-
+        ### options["ncpu"] = 1
+        options["outfile"] = self.paths(name)[0]
+        options["frames"] = []
+        options["skymodels"] = []
+        options["fiberflats"] = []
 
         # frames skymodels fiberflats
         props = self.name_split(name)
-        for band in ["b","r","z"] :
+        for band in ["b", "r", "z"] :
             props_and_band = props.copy()
             props_and_band["band"] = band
 

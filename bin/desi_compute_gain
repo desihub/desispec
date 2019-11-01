@@ -2,6 +2,7 @@
 
 
 import astropy.io.fits as pyfits
+from astropy.table import Table
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -72,6 +73,7 @@ parser.add_argument('--deg',type = int, default=3, help="max degree of polynomia
 parser.add_argument('--fix-rdnoise',action='store_true', help="do not refit readnoise")
 parser.add_argument('--plot',action="store_true",help="show the fit")
 parser.add_argument('--outfile',type = str, default=None, help="save PTC values in ASCII file")
+parser.add_argument('--outgain',type = str, default=None, help="save gain values in simple ASCII table")
 
 
 args = parser.parse_args()
@@ -113,8 +115,13 @@ if args.outfile is not None :
     ofile=open(args.outfile,"w")
     ofile.write("# mean var nval amplifier pair\n")
     ofile.write("## amplifiers = {} for {}\n".format(np.arange(len(args.amplifiers)),args.amplifiers))
-    
-    
+
+# Generate a table to save the gain values
+gain_tbl = Table()
+gain_tbl['AMP'] = [amp for amp in args.amplifiers]
+gain_tbl['GAIN'] = np.zeros(len(gain_tbl))
+gain_tbl['ERRGAIN'] = np.zeros(len(gain_tbl))
+
 for a,amp in enumerate(args.amplifiers) :
     
     ax=[] # mean fluxes
@@ -272,7 +279,10 @@ for a,amp in enumerate(args.amplifiers) :
     mgain=np.mean(gain)
     errgain=np.max(gain)-np.min(gain)
     log.info("%s %s gain = $%4.3f \\pm %4.3f$ e/ADU"%(camera,amp,mgain,errgain))
-    
+
+    # Save
+    gain_tbl['GAIN'][a] = mgain
+    gain_tbl['ERRGAIN'][a] = errgain
 
     #chi2=np.sum((y-y0-mypol(x,coef))**2/err**2)
     #ndf=x.size-coef.size
@@ -306,10 +316,24 @@ for a,amp in enumerate(args.amplifiers) :
         plt.legend(fontsize="small")
     # end of loop on amplifiers
 
-  
+
+if args.outgain is not None:
+    gain_tbl.write(args.outgain, format='ascii.fixed_width', overwrite=True)
+
+
 if ofile is not None :
     ofile.close()
     log.info("wrote {}".format(args.outfile))
+
+
+
+print(camera)
+for j in range(len(gain_tbl["AMP"])) :
+    print("{}-{} gain = {:4.3f} +- {:4.3f}".format(camera,gain_tbl['AMP'][j],gain_tbl['GAIN'][j],gain_tbl['ERRGAIN'][j]))
+print("")
+print(camera)
+for j in range(len(gain_tbl["AMP"])) :
+    print("GAIN{}: {:4.3f}".format(gain_tbl['AMP'][j],gain_tbl['GAIN'][j]))
 
 if args.plot :
     plt.show()

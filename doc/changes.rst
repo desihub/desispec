@@ -2,15 +2,126 @@
 desispec Change Log
 ===================
 
-0.27.2 (unreleased)
+0.31.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.31.0 (2019-10-31)
+-------------------
+
+First CMX release with bug fixes for on-sky data.
+
+* Use rrdesi --no-mpi-abort feature (PR `#823`_).
+* Added code to generate pixflats (PR `#824`_).
+* Support extractions of data without fibermaps (PR `#825`_).
+* Propagate FIBERMAP into preproc files (not just frames)
+  (PR `#825`_ and `#829`_).
+* Allow extraction wavelenghts slightly off CCD (PR `#836`_).
+* PSF I/O pause before merging (PR `#836`_).
+* Add `bin/desi_proc` single-exposure processing script (PR `#837`_).
+* Use OBSTYPE instead of FLAVOR for desi_qproc (PR `#839`_).
+* Bug fix for desi_proc double application of fiberflat (PR `#841`_).
+* desi_proc options for non-default PSF and fiberflat (PR `#842`_).
+* Correct fibermap to match what petal we are in (PR `#843`_).
+* Update database loading to match current data model (PR `#844`_).
+* Added desi_proc --batch option (PR `#845`_).
+
+.. _`#823`: https://github.com/desihub/desispec/pull/823
+.. _`#824`: https://github.com/desihub/desispec/pull/824
+.. _`#825`: https://github.com/desihub/desispec/pull/825
+.. _`#829`: https://github.com/desihub/desispec/pull/829
+.. _`#836`: https://github.com/desihub/desispec/pull/836
+.. _`#837`: https://github.com/desihub/desispec/pull/837
+.. _`#839`: https://github.com/desihub/desispec/pull/839
+.. _`#841`: https://github.com/desihub/desispec/pull/841
+.. _`#842`: https://github.com/desihub/desispec/pull/842
+.. _`#843`: https://github.com/desihub/desispec/pull/843
+.. _`#844`: https://github.com/desihub/desispec/pull/844
+.. _`#845`: https://github.com/desihub/desispec/pull/845
+
+0.30.0 (2019-10-17)
+-------------------
+
+* qproc updates (PR `#787`_).
+* QL bias (PR `#789`_).
+* Heliocentric corrections (PR `#790`_).
+* Update photometric filter usages (PR `#791`_).
+* Add gain output option to desi_compute_gain
+* Modify overscan subtraction algorithm in desi.preproc.preproc (PR `#793`_).
+* Cleanup timing parameters (PR `#794`_).
+* Pipeline docs (PR `#797`_).
+* Correct for dark trail in raw images (PR `#798`_).
+* `yaml.load()` to `yaml.save_load()` (PR `#801`_).
+* help numba know the types (PR `#802`_).
+* desi_pipe getready fix (PR `#803`_).
+* Move raw data transfer scripts to desitransfer_ (PR `#804`_).
+* spectra coaddition (PR `#805`_).
+* memory constraints and load balancing (PR `#806`_ and `#809`_).
+* preproc header keywords CCDSEC1-4 vs. A-D (PR `#807`_).
+* Add `desi_pipe status` command (PR `#810`_).
+* Convert any expid input into an int in QA (PR `#814`_).
+* Support new FIBERASSIGN_X/Y instead of DESIGN_X/Y (PR `#821`_).
+* Added hostname and jobid to task logging (PR `#822`_).
+
+.. _desitransfer: https://github.com/desihub/desitransfer
+.. _`#787`: https://github.com/desihub/desispec/pull/787
+.. _`#789`: https://github.com/desihub/desispec/pull/789
+.. _`#790`: https://github.com/desihub/desispec/pull/790
+.. _`#791`: https://github.com/desihub/desispec/pull/791
+.. _`#793`: https://github.com/desihub/desispec/pull/793
+.. _`#794`: https://github.com/desihub/desispec/pull/794
+.. _`#797`: https://github.com/desihub/desispec/pull/797
+.. _`#798`: https://github.com/desihub/desispec/pull/798
+.. _`#801`: https://github.com/desihub/desispec/pull/801
+.. _`#802`: https://github.com/desihub/desispec/pull/802
+.. _`#803`: https://github.com/desihub/desispec/pull/803
+.. _`#804`: https://github.com/desihub/desispec/pull/804
+.. _`#805`: https://github.com/desihub/desispec/pull/805
+.. _`#806`: https://github.com/desihub/desispec/pull/806
+.. _`#807`: https://github.com/desihub/desispec/pull/807
+.. _`#809`: https://github.com/desihub/desispec/pull/809
+.. _`#810`: https://github.com/desihub/desispec/pull/810
+.. _`#814`: https://github.com/desihub/desispec/pull/814
+.. _`#821`: https://github.com/desihub/desispec/pull/821
+.. _`#822`: https://github.com/desihub/desispec/pull/822
+
+0.29.0 (2019-05-30)
+-------------------
+
+* Add HPSS backup to the raw data transfer script (PR `#765`_).
+* Update :mod:`desispec.database.redshift` for latest
+  changes in fiberassign tile file data model (PR `#770`_).
+* Constants, docs, and test cleanup (PR `#771`_, `#773`_, `#776`_).
+* Tune cosmics masking parameters (PR `#775`_).
+* Add desi_compute_pixmask (PR `#777`_).
+* qproc updates for more flexibility and exposure flavors (PR `#778`_).
+* Better io.findfile camera checks (PR `#780`_).
+* Support SV1_DESI_TARGET (PR `#786`_).
+
+.. _`#786`: https://github.com/desihub/desispec/pull/786
+.. _`#780`: https://github.com/desihub/desispec/pull/780
+.. _`#778`: https://github.com/desihub/desispec/pull/778
+.. _`#777`: https://github.com/desihub/desispec/pull/777
+.. _`#776`: https://github.com/desihub/desispec/pull/776
+.. _`#775`: https://github.com/desihub/desispec/pull/775
+.. _`#773`: https://github.com/desihub/desispec/pull/773
+.. _`#771`: https://github.com/desihub/desispec/pull/771
+.. _`#770`: https://github.com/desihub/desispec/pull/770
+.. _`#765`: https://github.com/desihub/desispec/pull/765
+
+0.28.0 (2019-02-28)
 -------------------
 
 * Update (non-essential) transfer script for spectrograph functional
   verification tests (PR `#758`_).
 * New calibration data access (inc var. DESI_SPECTRO_CALIB
-  replacing DESI_CCD_CALIBRATION_DATA).
+  replacing DESI_CCD_CALIBRATION_DATA) (PR `#753`_).
+* Fix offline QA S/N vs. mag fits (PR `#763`_).
 
+.. _`#753`: https://github.com/desihub/desispec/pull/753
 .. _`#758`: https://github.com/desihub/desispec/pull/758
+.. _`#763`: https://github.com/desihub/desispec/pull/763
 
 0.27.1 (2019-01-28)
 -------------------
@@ -45,7 +156,8 @@ desispec Change Log
 * Refactor offline QA (S/N) to work with updated object typing
 * Drop `contam_target` DB truth column; no longer in truth files
   (one-line commit to master, no PR).
-* Bug fix in QA (S/N) + refactor exposure slurping
+* Bug fix in QA (S/N) + refactor exposure slurping (PR `#746`_)
+* Refactor QA_Exposures, QA_Night, and QA_Prod; Generate new Prod QA (offline)
 
 .. _`#722`: https://github.com/desihub/desispec/pull/722
 .. _`#723`: https://github.com/desihub/desispec/pull/723

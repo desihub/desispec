@@ -283,7 +283,7 @@ Where supported commands are:
         """Internal function to parse options passed to desi_night.
         """
         parser.add_argument("--nersc", required=False, default=None,
-            help="write a script for this NERSC system (edison | cori-haswell "
+            help="write a script for this NERSC system (cori-haswell "
             "| cori-knl).  Default uses $NERSC_HOST")
 
         parser.add_argument("--shell", required=False, default=False,
@@ -515,7 +515,7 @@ Where supported commands are:
             if ntflatdeps is None:
                 self.log.info("fiberflatnight for {} already done".format(args.night))
             else:
-                self.log.info("fiberflatnight for {} already submitted to queue (job = {})".format(args.night, ntpsfdeps))
+                self.log.info("fiberflatnight for {} already submitted to queue (job = {})".format(args.night, ntflatdeps))
         else:
             # Safe to run.  Get the job IDs of any previous fiberflat tasks.
             flatjobs = self._read_jobids("fiberflat", args.night)

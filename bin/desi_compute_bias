@@ -39,7 +39,7 @@ for filename in args.image :
     image_header=fitsfile[args.camera].header
 
     # subtract overscan region
-    cfinder=CalibFinder([primary_header,image_header])
+    cfinder=CalibFinder([image_header,primary_header])
     
     image=fitsfile[args.camera].data.astype("float64")
     

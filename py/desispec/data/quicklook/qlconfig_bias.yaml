@@ -4,9 +4,6 @@ Program: dark
 Flavor: bias
 #- Writeout intermediate files
 WritePreprocfile: False
-WriteSkyModelfile: False
-WriteIntermediatefiles: False
-WriteStaticPlots: False
 #-Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file
@@ -19,12 +16,12 @@ Timeout: 120.0
 Pipeline: [Initialize, Preproc]
 Algorithms:
     Initialize:
-        QA: 
-            Bias_From_Overscan:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], BIAS_AMP_WARN_RANGE: [-1.0, 1.0], BIAS_AMP_ALARM_RANGE: [-2.0, 2.0]}
+        QA: {}
     Preproc:
-        QA: 
+        QA:
+            Bias_From_Overscan:
+                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-40.0, 40.0], BIAS_AMP_WARN_RANGE: [-60.0, 60.0], BIAS_AMP_REF:[150.0,150.0,150.0,150.0]}
             Get_RMS:
-                PARAMS: {NOISE_AMP_WARN_RANGE: [-1.0, 1.0], NOISE_AMP_ALARM_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.5,1.5], NOISE_AMP_WARN_RANGE: [-2.0,2.0],NOISE_AMP_REF:[2.6,2.6,2.6,2.6]}
             Count_Pixels:
-                PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
+                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-0.15, 0.15], LITFRAC_AMP_WARN_RANGE: [-0.2, 0.2],LITFRAC_AMP_REF:[0.45,0.45,0.45,0.45]}

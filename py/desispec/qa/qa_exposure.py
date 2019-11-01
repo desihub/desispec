@@ -16,12 +16,17 @@ from desispec.qa.qa_frame import qaframe_from_frame
 from desispec.io.qa import qafile_from_framefile
 from desispec.io import load_qa_multiexp
 from desispec.io import qaprod_root
+from desispec.io import read_meta_frame
+from desispec.io import get_files
+from desispec.io import write_qa_exposure
+from desispec.io import write_qa_multiexp
 
 # log=get_logger()
+desi_params = read_params()
 
 
 class QA_Exposure(object):
-    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None,
+    def __init__(self, expid, night, flavor=None, specprod_dir=None, in_data=None,
                  qaprod_dir=None, no_load=False, multi_root=None, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
@@ -31,8 +36,6 @@ class QA_Exposure(object):
         Args:
             expid: int -- Exposure ID
             night: str -- YYYYMMDD
-            flavor: str
-              exposure type (e.g. flat, arc, science)
             specprod_dir(str): Path containing the exposures/ directory to use. If the value
                 is None, then the value of :func:`specprod_root` is used instead.
             in_data: dict, optional -- Input data
@@ -47,23 +50,37 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        desi_params = read_params()
-        assert flavor in desi_params['frame_types'], "Unknown flavor {} for night {} expid {}".format(flavor, night, expid)
-        if flavor in ['science']:
-            self.type = 'data'
-        else:
-            self.type = 'calib'
-
+        # Init
+        if not isinstance(expid, int):
+            raise IOError("expid must be an int at instantiation")
         self.expid = expid
         self.night = night
+        self.meta = {}
         # Paths
         self.specprod_dir = specprod_dir
         if qaprod_dir is None:
             qaprod_dir = qaprod_root(self.specprod_dir)
         self.qaprod_dir  = qaprod_dir
 
+        # Load meta from frame (ideally)
+        frames_dict = get_files(filetype = str('frame'), night = night,
+                                expid=expid, specprod_dir=self.specprod_dir)
+        if len(frames_dict) > 0:
+            frame_file = list(frames_dict.items())[0][1]  # Any one will do
+            frame_meta = read_meta_frame(frame_file)
+            self.load_meta(frame_meta)
+            flavor = self.meta['FLAVOR']  # Over-rides any input value
+        else:
+            flavor = flavor
+
+        assert flavor in desi_params['frame_types'], "Unknown flavor {} for night {} expid {}".format(flavor, night, expid)
+        if flavor in ['science']:
+            self.type = 'data'
+        else:
+            self.type = 'calib'
         self.flavor = flavor
-        self.meta = {}
+
+        # Internal dicts
         self.data = dict(flavor=self.flavor, expid=self.expid,
                          night=self.night, frames={})
 
@@ -113,7 +130,7 @@ class QA_Exposure(object):
     def load_meta(self, frame_meta):
         """ Load meta info from input Frame meta
         Args:
-            frame_meta:
+            frame_meta: dict of meta data from a frame file
         """
         desi_params = read_params()
         for key in desi_params['frame_meta']:
@@ -126,6 +143,7 @@ class QA_Exposure(object):
 
     def load_qa_data(self, remove=False, multi_root=None):
         """ Load the QA data files for a given exposure (currently yaml)
+
         Args:
             remove: bool, optional
               Remove QA frame files
@@ -141,7 +159,6 @@ class QA_Exposure(object):
                 qa_frame = desiio.load_qa_frame(qadata_path)
                 # Remove?
                 if remove:
-                    #import pdb; pdb.set_trace()
                     os.remove(qadata_path)
                 # Test
                 for key in ['expid','night']:
@@ -151,22 +168,39 @@ class QA_Exposure(object):
         else:
             # Load
             mdict = load_qa_multiexp(os.path.join(self.qaprod_dir, multi_root))
-            # Parse
-            for key in mdict[self.night][str(self.expid)].keys():
-                # A bit kludgy
-                if len(key) > 2:
-                    continue
-                # Load em
-                self.data['frames'][key] = mdict[self.night][str(self.expid)][key].copy()
+            self.parse_multi_qa_dict(mdict)
+
+    def parse_multi_qa_dict(self, mdict):
+        """ Deal with different packing of QA data in slurp file
+
+        Args:
+            mdict: dict
+               Contains the QA
+
+        Returns:
+            Loads up self.data['frames'] and self.data['meta']
+
+        """
+        # Parse
+        for key in mdict[self.night][str(self.expid)].keys():
+            # A bit kludgy
+            if len(key) > 2:
+                if key == 'meta':
+                    self.data[key] = mdict[self.night][str(self.expid)][key].copy()
+                continue
+            # Load em
+            self.data['frames'][key] = mdict[self.night][str(self.expid)][key].copy()
 
     def build_qa_data(self, rebuild=False):
         """
         Build or re-build QA data
 
+
         Args:
             rebuild: bool, optional
 
         :return:
+            Data is loaded in self.data
         """
         frame_files = desiio.get_files(filetype='frame', night=self.night,
                                    expid=self.expid,
@@ -187,12 +221,15 @@ class QA_Exposure(object):
         Generate a flat Table of QA S/N measurements for the Exposure
           Includes all fibers of the exposure
 
+        Args:
+
         Returns:
+            Table is held in self.qa_s2n
 
         """
         from desispec.qa.qalib import s2n_funcs
 
-        qa_tbl = Table()
+        sub_tbls = []
         # Load up
         for camera in self.data['frames'].keys():
             # Sub_tbl
@@ -207,6 +244,8 @@ class QA_Exposure(object):
             s2n_dict = self.data['frames'][camera]['S2N']
             max_o = np.max([len(otype) for otype in s2n_dict['METRICS']['OBJLIST']])
             objtype = np.array([' '*max_o]*len(sub_tbl))
+            # Coeffs
+            coeffs = np.zeros((len(sub_tbl), len(s2n_dict['METRICS']['FITCOEFF_TGT'][0])))
             # Others
             mags = np.zeros_like(sub_tbl['MEDIAN_SNR'].data)
             resid = -999. * np.ones_like(sub_tbl['MEDIAN_SNR'].data)
@@ -215,7 +254,10 @@ class QA_Exposure(object):
             fitfunc = funcMap['astro']
             for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
                 fibers = np.array(s2n_dict['METRICS']['{:s}_FIBERID'.format(otype)])
+                if len(fibers) == 0:
+                    continue
                 coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
+                coeffs[fibers,:] = np.outer(np.ones_like(fibers), coeff)
                 # Set me
                 objtype[fibers] = otype
                 mags[fibers] = np.array(s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1])
@@ -228,11 +270,37 @@ class QA_Exposure(object):
             sub_tbl['MAGS'] = mags
             sub_tbl['RESID'] = resid
             sub_tbl['OBJTYPE'] = objtype
-            # Stack me
-            qa_tbl = vstack([qa_tbl, sub_tbl])
+            sub_tbl['COEFFS'] = coeffs
+            # Save
+            sub_tbls.append(sub_tbl)
+        # Stack me
+        qa_tbl = vstack(sub_tbls)
         # Hold
         self.qa_s2n = qa_tbl
+        # Add meta
+        self.qa_s2n.meta = self.data['meta']
 
+    def slurp_into_file(self, multi_root):
+        """
+        Write the data of an Exposure object into a JSON file
+
+        Args:
+            multi_root:
+
+        Returns:
+
+        """
+        # Load
+        mdict_root = os.path.join(self.qaprod_dir, multi_root)
+        mdict = load_qa_multiexp(mdict_root)
+        # Check on night
+        if self.night not in mdict.keys():
+            mdict[self.night] = {}
+        # Insert
+        idict = write_qa_exposure('foo', self, ret_dict=True)
+        mdict[self.night][str(self.expid)] = idict[self.night][self.expid]
+        # Write
+        write_qa_multiexp(mdict_root, mdict)
 
     def __repr__(self):
         """ Print formatting

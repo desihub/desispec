@@ -9,7 +9,8 @@ import shutil
 from pkg_resources import resource_filename
 
 import desispec.scripts.preproc
-from desispec.preproc import preproc, _parse_sec_keyword, _clipped_std_bias
+from desispec.preproc import preproc, parse_sec_keyword, _clipped_std_bias
+from desispec.preproc import get_amp_ids
 from desispec import io
 
 def xy2hdr(xyslice):
@@ -44,7 +45,7 @@ class TestPreProc(unittest.TestCase):
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
         
         self.calibfile = os.path.join(self.calibdir,'test-calib-askjapqwhezcpasehadfaqp.fits')
-        self.rawfile   = os.path.join(self.calibdir,'test-raw-askjapqwhezcpasehadfaqp.fits')
+        self.rawfile   = os.path.join(self.calibdir,'desi-raw-askjapqwhezcpasehadfaqp.fits')
         self.pixfile   = os.path.join(self.calibdir,'test-pix-askjapqwhezcpasehadfaqp.fits')
 
         primary_hdr = dict()
@@ -64,61 +65,79 @@ class TestPreProc(unittest.TestCase):
         self.ny = ny = 500
         self.nx = nx = 400
         self.noverscan = nover = 50
+        self.noverscan_row = nover_row = 50
 
-        
-        
-        #- BIASSEC = overscan region in raw image
+        #- ORSEC = overscan region in raw image (rows)
+        #- BIASSEC = overscan region in raw image (columns)
         #- DATASEC = data region in raw image
         #- CCDSEC = where should this go in output
 
-        hdr['BIASSEC1'] = xy2hdr(np.s_[0:ny, nx:nx+nover])
-        hdr['DATASEC1'] = xy2hdr(np.s_[0:ny, 0:nx])
-        hdr['CCDSEC1'] = xy2hdr(np.s_[0:ny, 0:nx])
-        
-        hdr['BIASSEC2'] = xy2hdr(np.s_[0:ny, nx+nover:nx+2*nover])
-        hdr['DATASEC2'] = xy2hdr(np.s_[0:ny, nx+2*nover:nx+2*nover+nx])
-        hdr['CCDSEC2'] =  xy2hdr(np.s_[0:ny, nx:nx+nx])
+        hdr['ORSECA'] = xy2hdr(np.s_[ny:ny+nover_row, 0:nx])
+        hdr['BIASSECA'] = xy2hdr(np.s_[0:ny, nx:nx+nover])
+        hdr['DATASECA'] = xy2hdr(np.s_[0:ny, 0:nx])
+        hdr['CCDSECA'] = xy2hdr(np.s_[0:ny, 0:nx])
 
-        hdr['BIASSEC3'] = xy2hdr(np.s_[ny:ny+ny, nx:nx+nover])
-        hdr['DATASEC3'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
-        hdr['CCDSEC3'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
-        
-        hdr['BIASSEC4'] = xy2hdr(np.s_[ny:ny+ny, nx+nover:nx+2*nover])
-        hdr['DATASEC4'] = xy2hdr(np.s_[ny:ny+ny, nx+2*nover:nx+2*nover+nx])
-        hdr['CCDSEC4'] =  xy2hdr(np.s_[ny:ny+ny, nx:nx+nx])
+        hdr['ORSECB'] = xy2hdr(np.s_[ny:ny+nover_row, nx+2*nover:nx+2*nover+nx])
+        hdr['BIASSECB'] = xy2hdr(np.s_[0:ny, nx+nover:nx+2*nover])
+        hdr['DATASECB'] = xy2hdr(np.s_[0:ny, nx+2*nover:nx+2*nover+nx])
+        hdr['CCDSECB'] =  xy2hdr(np.s_[0:ny, nx:nx+nx])
+
+        hdr['ORSECC'] = xy2hdr(np.s_[ny+nover_row:ny+2*nover_row, 0:nx])
+        hdr['BIASSECC'] = xy2hdr(np.s_[ny+2*nover_row:ny+ny+2*nover_row, nx:nx+nover])
+        hdr['DATASECC'] = xy2hdr(np.s_[ny+2*nover_row:ny+ny+2*nover_row, 0:nx])
+        hdr['CCDSECC'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
+
+        hdr['ORSECD'] = xy2hdr(np.s_[ny+nover_row:ny+2*nover_row, nx+2*nover:nx+2*nover+nx])
+        hdr['BIASSECD'] = xy2hdr(np.s_[ny+2*nover_row:ny+ny+2*nover_row, nx+nover:nx+2*nover])
+        hdr['DATASECD'] = xy2hdr(np.s_[ny+2*nover_row:ny+ny+2*nover_row, nx+2*nover:nx+2*nover+nx])
+        hdr['CCDSECD'] =  xy2hdr(np.s_[ny:ny+ny, nx:nx+nx])
         
         hdr['NIGHT'] = '20150102'
         hdr['EXPID'] = 1
-
+        hdr['EXPTIME'] = 10.0
 
         # add to header the minimal set of keywords needed to
         # identify the config in the ccd_calibration.yaml file
         
-        
-        
         self.primary_header = primary_hdr
         self.header = hdr
-        self.rawimage = np.zeros((2*self.ny, 2*self.nx+2*self.noverscan))
-        self.offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
-        self.gain = {'1':1.0, '2':1.5, '3':0.8, '4':1.2}
-        self.rdnoise = {'1':2.0, '2':2.2, '3':2.4, '4':2.6}
+        self.rawimage = np.zeros((2*self.ny+2*self.noverscan_row, 2*self.nx+2*self.noverscan))
+        self.offset = {'A':100.0, 'B':100.5, 'C':50.3, 'D':200.4}
+        self.offset_row = {'A':50.0, 'B':50.5, 'C':20.3, 'D':40.4}
+        self.gain = {'A':1.0, 'B':1.5, 'C':0.8, 'D':1.2}
+        self.rdnoise = {'A':2.0, 'B':2.2, 'C':2.4, 'D':2.6}
         
         self.quad = {
-            '1': np.s_[0:ny, 0:nx], '2': np.s_[0:ny, nx:nx+nx],
-            '3': np.s_[ny:ny+ny, 0:nx], '4': np.s_[ny:ny+ny, nx:nx+nx],
+            'A': np.s_[0:ny, 0:nx], 'B': np.s_[0:ny, nx:nx+nx],
+            'C': np.s_[ny:ny+ny, 0:nx], 'D': np.s_[ny:ny+ny, nx:nx+nx],
         }
         
-        for amp in ('1', '2', '3', '4'):
+        for amp in ('A', 'B', 'C', 'D'):
             self.header['GAIN'+amp] = self.gain[amp]
             self.header['RDNOISE'+amp] = self.rdnoise[amp]
-            
-            xy = _parse_sec_keyword(hdr['BIASSEC'+amp])
+
+            # Overscan row
+            xy = parse_sec_keyword(hdr['ORSEC'+amp])
+            shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
+            self.rawimage[xy] += self.offset_row[amp]
+            self.rawimage[xy] += self.offset[amp]
+            self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
+            # Overscan col
+            xy = parse_sec_keyword(hdr['BIASSEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             self.rawimage[xy] += self.offset[amp]
             self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
-            xy = _parse_sec_keyword(hdr['DATASEC'+amp])
+            # Extend into the row region
+            xy_row = parse_sec_keyword(hdr['ORSEC'+amp])
+            xy = (xy_row[0], xy[1])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             self.rawimage[xy] += self.offset[amp]
+            self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
+            # Data
+            xy = parse_sec_keyword(hdr['DATASEC'+amp])
+            shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
+            self.rawimage[xy] += self.offset[amp]
+            self.rawimage[xy] += self.offset_row[amp]
             self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
 
         #- raw data are integers, not floats
@@ -126,18 +145,71 @@ class TestPreProc(unittest.TestCase):
 
         #- Confirm that all regions were correctly offset
         assert not np.any(self.rawimage == 0.0)
-            
+
+    def test_preproc_no_orsec(self):
+        # Strip out ORSEC
+        old_header = self.header.copy()
+        old_image = self.rawimage.copy()
+        for amp in ('A', 'B', 'C', 'D'):
+            old_header.pop('ORSEC{}'.format(amp))
+            xy = parse_sec_keyword(self.header['DATASEC'+amp])
+            old_image[xy] -= np.int32(self.offset_row[amp])
+        #
+        image = preproc(old_image, old_header, primary_header = self.primary_header)
+        self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
+        self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
+        for amp in ('A', 'B', 'C', 'D'):
+            pix = image.pix[self.quad[amp]]
+            rdnoise = np.median(image.readnoise[self.quad[amp]])
+            npixover = self.ny * self.noverscan
+            self.assertAlmostEqual(np.mean(pix), 0.0, delta=1)  # Using np.int32 pushed this to 1
+            self.assertAlmostEqual(np.std(pix), self.rdnoise[amp], delta=0.2)
+            self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
+
     def test_preproc(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
         self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
-        for amp in ('1', '2', '3', '4'):
+        for amp in ('A', 'B', 'C', 'D'):
             pix = image.pix[self.quad[amp]]
             rdnoise = np.median(image.readnoise[self.quad[amp]])
             npixover = self.ny * self.noverscan
-            self.assertAlmostEqual(np.mean(pix), 0.0, delta=3*rdnoise/np.sqrt(npixover))
+            self.assertAlmostEqual(np.mean(pix), 0.0, delta=5*rdnoise/np.sqrt(npixover)) # JXP increased this
             self.assertAlmostEqual(np.std(pix), self.rdnoise[amp], delta=0.2)
             self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
+
+    def test_preproc1234(self):
+        """Should also work with old amp names 1-4 instead of A-D"""
+        hdr = self.header.copy()
+        for prefix in ('ORSEC', 'BIASSEC', 'DATASEC', 'CCDSEC'):
+            for amp, ampnum in zip(('A','B','C','D'), ('1','2','3','4')):
+                if prefix+amp in hdr:
+                    hdr[prefix+ampnum] = hdr[prefix+amp]
+                    del hdr[prefix+amp]
+
+        image = preproc(self.rawimage, hdr, primary_header=self.primary_header)
+
+    def test_amp_ids(self):
+        """Test auto-detection of amp names"""
+        hdr = dict(
+            CCDSECA=self.header['CCDSECA'],
+            CCDSECB=self.header['CCDSECB'],
+            CCDSECC=self.header['CCDSECC'],
+            CCDSECD=self.header['CCDSECD'],
+            )
+        self.assertEqual(get_amp_ids(hdr), ['A', 'B', 'C', 'D'])
+
+        hdr = dict(
+            CCDSEC1=self.header['CCDSECA'],
+            CCDSEC2=self.header['CCDSECB'],
+            CCDSEC3=self.header['CCDSECC'],
+            CCDSEC4=self.header['CCDSECD'],
+            )
+        self.assertEqual(get_amp_ids(hdr), ['1', '2', '3', '4'])
+
+        hdr = dict()
+        with self.assertRaises(KeyError):
+            get_amp_ids(hdr)
 
     def test_bias(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, bias=False)
@@ -276,7 +348,7 @@ class TestPreProc(unittest.TestCase):
     #- striving for 100% coverage...
     def test_pedantic(self):
         with self.assertRaises(ValueError):
-            _parse_sec_keyword('blat')
+            parse_sec_keyword('blat')
         #- should log a warning about large readnoise
         rawimage = self.rawimage + np.random.normal(scale=2, size=self.rawimage.shape)
         image = preproc(rawimage, self.header, primary_header = self.primary_header)
@@ -293,28 +365,28 @@ class TestPreProc(unittest.TestCase):
         image = preproc(rawimage, self.header, primary_header = self.primary_header)
         #- Missing expected RDNOISE keywords shouldn't be fatal
         hdr = self.header.copy()
-        del hdr['RDNOISE1']
-        del hdr['RDNOISE2']
-        del hdr['RDNOISE3']
-        del hdr['RDNOISE4']
+        del hdr['RDNOISEA']
+        del hdr['RDNOISEB']
+        del hdr['RDNOISEC']
+        del hdr['RDNOISED']
         image = preproc(self.rawimage, hdr, primary_header = self.primary_header)
         #- Missing expected GAIN keywords should log error but not crash
         hdr = self.header.copy()
-        del hdr['GAIN1']
-        del hdr['GAIN2']
-        del hdr['GAIN3']
-        del hdr['GAIN4']
+        del hdr['GAINA']
+        del hdr['GAINB']
+        del hdr['GAINC']
+        del hdr['GAIND']
         image = preproc(self.rawimage, hdr, primary_header = self.primary_header)
 
     def test_preproc_script(self):
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b1')
         args = ['--infile', self.rawfile, '--cameras', 'b0',
-                '--pixfile', self.pixfile]
+                '--outfile', self.pixfile]
         if os.path.exists(self.pixfile):
             os.remove(self.pixfile)            
         desispec.scripts.preproc.main(args)
-        img = io.read_image(self.pixfile)        
+        img = io.read_image(self.pixfile)
         self.assertEqual(img.pix.shape, (2*self.ny, 2*self.nx))
 
     def test_clipped_std_bias(self):
@@ -337,7 +409,14 @@ class TestPreProc(unittest.TestCase):
 
     def test_default_mask(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=True)
-        
-                
+
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
 if __name__ == '__main__':
     unittest.main()

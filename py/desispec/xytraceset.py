@@ -1,14 +1,14 @@
 """
 desispec.xytraceset
-==============
+===================
 
-Lightweight wrapper class for trace coordinates and wavelength solution, to be returned by io.read_xytraceset
+Lightweight wrapper class for trace coordinates and wavelength solution, to be returned by :func:`~desispec.io.xytraceset.read_xytraceset`.
 """
 
 from specter.util.traceset import TraceSet 
 
 class XYTraceSet(object):
-    def __init__(self, xcoef, ycoef, wavemin, wavemax, npix_y, xsigcoef = None, ysigcoef = None) :
+    def __init__(self, xcoef, ycoef, wavemin, wavemax, npix_y, xsigcoef = None, ysigcoef = None, meta = None) :
         """
         Lightweight wrapper for trace coordinates and wavelength solution
         
@@ -43,7 +43,8 @@ class XYTraceSet(object):
             self.ysig_vs_wave_traceset = TraceSet(ysigcoef,[wavemin,wavemax])
         
         self.wave_vs_y_traceset = None
-            
+        self.meta = meta
+
     def x_vs_wave(self,fiber,wavelength) :
         return self.x_vs_wave_traceset.eval(fiber,wavelength)
     

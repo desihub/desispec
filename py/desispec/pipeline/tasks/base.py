@@ -15,6 +15,7 @@ import sys
 import os
 import re
 import time
+import socket
 import traceback
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
 
@@ -262,7 +263,7 @@ class BaseTask(object):
 
         stop = time.time()
         log  = get_logger()
-        log.debug("took {} sec for {}".format(stop-start,name))
+        log.debug("took {:.3f} sec for {} {}".format(stop-start,name, state))
         return
 
 
@@ -346,60 +347,88 @@ class BaseTask(object):
         return self._deps(name, db, inputs)
 
 
-    def _run_max_procs(self, procs_per_node):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
-        return None
+    def _run_max_procs(self):
+        return 0
 
 
-    def run_max_procs(self, procs_per_node):
+    def run_max_procs(self):
         """Maximum number of processes supported by this task type.
 
         Args:
             procs_per_node (int): the number of processes running per node.
 
         Returns:
-            int: the maximum number of processes.
+            int: the maximum number of processes.  Zero indicates no limit.
 
         """
-        return self._run_max_procs(procs_per_node)
+        return self._run_max_procs()
 
 
-    def _run_max_mem(self):
-        """Return the default value for fully packed edison use.
+    def _run_max_mem_proc(self, name, db):
+        """Return zero (i.e. not a limit)
         """
-        return 2.5
+        return 0.0
 
 
-    def run_max_mem(self):
+    def run_max_mem_proc(self, name, db=None):
         """Maximum memory in GB per process required.
+
+        If zero is returned, it indicates that the memory requirement is so
+        small that the code can run fully-packed on any system.
+
+        Args:
+            name (str): the name of the task.
+            db (pipeline.DB): the optional database instance.
 
         Returns:
             float: the required RAM in GB per process.
 
         """
-        return self._run_max_mem()
+        return self._run_max_mem_proc(name, db)
 
 
-    def _run_time(self, name, procs_per_node, db):
+    def _run_max_mem_task(self, name, db):
+        """Return zero (i.e. no memory requirement)
+        """
+        return 0.0
+
+
+    def run_max_mem_task(self, name, db=None):
+        """Maximum memory in GB per task required.
+
+        If zero is returned, it indicates that the memory requirement is so
+        small that the code can run on a single node.
+
+        Args:
+            name (str): the name of the task.
+            db (pipeline.DB): the optional database instance.
+
+        Returns:
+            float: the required RAM in GB per process.
+
+        """
+        return self._run_max_mem_task(name, db)
+
+
+    def _run_time(self, name, procs, db):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")
         return None
 
 
-    def run_time(self, name, procs_per_node, db=None):
+    def run_time(self, name, procs, db=None):
         """Estimated runtime for a task at maximum concurrency.
 
         Args:
             name (str): the name of the task.
-            procs_per_node (int): the number of processes running per node.
+            procs (int): the total number of processes used for this task.
             db (pipeline.DB): the optional database instance.
 
         Returns:
             int: estimated minutes of run time.
 
         """
-        return self._run_time(name, procs_per_node, db)
+        return self._run_time(name, procs, db)
 
 
     def _run_defaults(self):
@@ -482,11 +511,20 @@ class BaseTask(object):
             nproc = comm.size
             rank = comm.rank
 
-        # at debug level, write out the equivalent commandline that was used
+        # at info level, write out the equivalent commandline that was used
         if rank == 0:
+            start_time = time.time()
             lstr = "(run by pipeline with {} procs)".format(nproc)
             com = self.run_cli(name, opts, nproc, db=db)
-            log.debug("{}: {}".format(lstr, com))
+            log.info("{}: {}".format(lstr, com))
+
+            hostname = socket.gethostname()
+            log.info("Starting {} at {} on {}".format(
+                name, time.asctime(), hostname))
+
+            if 'SLURM_JOB_ID' in os.environ:
+                jobid = os.getenv('SLURM_JOB_ID')
+                log.info('slurm job id {}'.format(jobid))
 
         failed = 0
         try:
@@ -510,6 +548,11 @@ class BaseTask(object):
             if rank == 0:
                 log.error("{} of {} processes raised an exception"\
                     .format(failcount, nproc))
+
+        if rank == 0:
+            runtime = (time.time() - start_time) / 60
+            log.info("Finished {} at {} ({:.1f} min)".format(
+                name, time.asctime(), runtime))
 
         return failcount
 

@@ -98,7 +98,7 @@ def runpipeline(pl,convdict,conf):
             but convdict["IMAGE"] is like desispec.image.Image object and so on.
             details in setup_pipeline method below for examples.
         conf: a configured dictionary, read from the configuration yaml file.
-            e.g: conf=configdict=yaml.load(open('configfile.yaml','rb'))
+            e.g: conf=configdict=yaml.safe_load(open('configfile.yaml','rb'))
     """
 
     qlog=qllogger.QLLogger()
@@ -159,7 +159,7 @@ def runpipeline(pl,convdict,conf):
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],[],['Sky_Rband','Integrate_Spec','Calculate_SNR']]
+        qas=[[],['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Calculate_SNR'],['Sky_Rband','Integrate_Spec']]
 
         singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
@@ -235,13 +235,15 @@ def setup_pipeline(config):
     if config is None:
         return None
     log.debug("Reading Configuration")
+    flavor=config["Flavor"]
     if "RawImage" not in config:
         log.critical("Config is missing \"RawImage\" key.")
         sys.exit("Missing \"RawImage\" key.")
     inpname=config["RawImage"]
-    if "FiberMap" not in config:
-        log.critical("Config is missing \"FiberMap\" key.")
-        sys.exit("Missing \"FiberMap\" key.")
+    if flavor != 'bias' and flavor != 'dark':
+        if "FiberMap" not in config:
+            log.critical("Config is missing \"FiberMap\" key.")
+            sys.exit("Missing \"FiberMap\" key.")
     fibname=config["FiberMap"]
     proctype="Exposure"
     if "Camera" in config:
@@ -307,10 +309,13 @@ def setup_pipeline(config):
     hbeat.start("Reading input file {}".format(inpname))
     inp=fits.open(inpname) #- reading raw image directly from astropy.io.fits
     hbeat.start("Reading fiberMap file {}".format(fibname))
-    fibfile=fibIO.read_fibermap(fibname)
-    fibhdr=fibfile.meta
 
-    convdict={"FiberMap":fibfile}
+    convdict={}
+
+    if flavor != 'bias' and flavor != 'dark':
+        fibfile=fibIO.read_fibermap(fibname)
+        fibhdr=fibfile.meta
+        convdict["FiberMap"]=fibfile
 
     if psf_filename is not None:
         convdict["PSFFile"]=psf_filename

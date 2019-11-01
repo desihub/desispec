@@ -29,7 +29,7 @@ def qafile_from_framefile(frame_file, qaprod_dir=None, output_dir=None):
     frame_meta = read_meta_frame(frame_file)
     night = frame_meta['NIGHT'].strip()
     camera = frame_meta['CAMERA'].strip()
-    expid = frame_meta['EXPID']
+    expid = int(frame_meta['EXPID'])
     if frame_meta['FLAVOR'] in ['flat', 'arc']:
         qatype = 'qa_calib'
     else:
@@ -45,7 +45,13 @@ def read_qa_data(filename):
     """
     # Read yaml
     with open(filename, 'r') as infile:
-        qa_data = yaml.load(infile)
+        qa_data = yaml.safe_load(infile)
+    # Convert expid to int
+    for night in qa_data.keys():
+        for expid in qa_data[night].keys():
+            if isinstance(expid,str):
+                qa_data[night][int(expid)] = qa_data[night][expid].copy()
+                qa_data[night].pop(expid)
     # Return
     return qa_data
 
@@ -167,7 +173,7 @@ def write_qa_frame(outfile, qaframe, verbose=False):
     ydict = yamlify(odict)
     # Simple yaml
     with open(outfile, 'w') as yamlf:
-        yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+        yamlf.write(yaml.dump(ydict))
     if verbose:
         log.info("Wrote QA frame file: {:s}".format(outfile))
 
@@ -228,15 +234,13 @@ def load_qa_multiexp(inroot):
     return odict
 
 
-def write_qa_multiexp(outroot, qa_mexp, indent=True, skip_rebuild=False):
+def write_qa_multiexp(outroot, mdict, indent=True):
     """Write QA for a given production
 
     Args:
         outroot : str
           filename without format extension
-        qa_prod : QA_Prod object
-        skip_rebuild : bool, optional
-          Do not rebuild the data dict
+        mdict : dict
 
     Returns:
         outfile: str
@@ -246,13 +250,11 @@ def write_qa_multiexp(outroot, qa_mexp, indent=True, skip_rebuild=False):
     outfile = outroot+'.json'
     outfile = makepath(outfile, 'qa')
 
-    if not skip_rebuild:
-        qa_mexp.build_data()
-    ydict = yamlify(qa_mexp.data)  # This works well for JSON too
+    ydict = yamlify(mdict)  # This works well for JSON too
     # Simple json
     with open(outfile, 'wt') as fh:
         json.dump(ydict, fh, indent=indent)
-    log.info('Wrote QA_Prod file: {:s}'.format(outfile))
+    log.info('Wrote QA Multi-Exposure file: {:s}'.format(outfile))
 
     return outfile
 

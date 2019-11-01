@@ -100,9 +100,9 @@ def reject_cosmic_rays_1d(frame,nsig=3,psferr=0.05) :
                         log.info("fiber {} wave={} S/N={} add cosmic mask of {} pix".format(fiber,int(frame.wave[i]),int(snr),nmasked))
     log.info("done")
 
-@numba.jit
+@numba.jit(nopython=True)
 def dilate_numba(input_boolean_array,include_input=False) :
-    output_boolean_array = np.zeros(input_boolean_array.shape,dtype=bool)
+    output_boolean_array = np.zeros(input_boolean_array.shape, input_boolean_array.dtype)
     if include_input :
         output_boolean_array |= input_boolean_array
     for i0 in range(1,input_boolean_array.shape[0]-1) :
@@ -120,7 +120,7 @@ def dilate_numba(input_boolean_array,include_input=False) :
 
 
 
-@numba.jit
+@numba.jit(nopython=True)
 def _reject_cosmic_rays_ala_sdss_single_numba(pix,ivar,selection,psf_gradients,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
@@ -150,7 +150,7 @@ def _reject_cosmic_rays_ala_sdss_single_numba(pix,ivar,selection,psf_gradients,n
     
     # definition of axis
     naxis = psf_gradients.size
-    dd = np.zeros((naxis,2),dtype=int)
+    dd = np.zeros((naxis,2),dtype=type(n0))
     for a in range(naxis) :
         if a==0 : 
             dd[a,0]=0
@@ -165,7 +165,7 @@ def _reject_cosmic_rays_ala_sdss_single_numba(pix,ivar,selection,psf_gradients,n
             dd[a,0]=1
             dd[a,1]=-1
         
-    rejection=np.zeros(pix.shape,dtype=bool)
+    rejection=np.zeros(pix.shape,dtype=type(True))
     
     for i0 in range(1,n0-1) :
         for i1 in range(1,n1-1) :
@@ -334,7 +334,7 @@ def _reject_cosmic_rays_ala_sdss_single(pix,ivar,selection,psf_gradients,nsig,cf
     rejection[1:-1,1:-1][tselection] = (first_criterion&second_criterion).reshape(pix[1:-1,1:-1][tselection].shape)
     return rejection
 
-def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=True) :
+def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.5,niter=6,dilate=True) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
 
@@ -359,20 +359,28 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
 
     tivar=img.ivar*(img.mask==0)*(img.ivar>0)
     
-    
-
     # those gradients have been computed using the code desi_compute_psf_gradients
+    # 2019-04-17: switch from sharpest psf among all fibers and wavelength to mean psf on the CCD
+    # this is to avoid being sensitive to noisy psf at short or long wavelength.
+    # An analysis of real darks combined with real continuum suggest a best value for c2fudge=0.8
+    # See https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=4893
+    # A new analysis using arc lines gives a conservative value c2fudge=0.5
+    # see https://github.com/desihub/desispec/issues/762
+
     band=img.camera[0].lower()
     if band == 'b':
-        psf_gradients=np.array([0.366247,0.391422,0.172965,0.184552])
+        # desi_compute_psf_gradients -i $DESI_SPECTRO_CALIB/spec/sp2/psf-b2-20190308.fit
+        psf_gradients=np.array([0.758221,0.771945,0.570183,0.592199])
     elif band == 'r':
-        psf_gradients=np.array([0.39508155,0.2951822,0.13044542,0.14904523])
+        # desi_compute_psf_gradients -i $DESI_SPECTRO_CALIB/spec/sp2/psf-r2-20190308.fits
+        psf_gradients=np.array([0.819245,0.847529,0.617514,0.656629])
     elif band == 'z':
-        psf_gradients=np.array([0.513852,0.537679,0.297071,0.276298])
+        # desi_compute_psf_gradients -i $DESI_SPECTRO_CALIB/spec/sp2/psf-z2-20190308.fits
+        psf_gradients=np.array([0.829552,0.862828,0.633424,0.664144])
     else :
         log.error("do not have psf info for band='%s'"%band)
         raise KeyError("do not have psf info for band='%s'"%band)
-    
+
     selection = ((img.pix*np.sqrt(tivar))>nsig)
     
     use_numba = True
@@ -409,9 +417,9 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
 
             # rerun with much more strict cuts
             if use_numba :
-                newrejected=_reject_cosmic_rays_ala_sdss_single_numba(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=1.)
+                newrejected=_reject_cosmic_rays_ala_sdss_single_numba(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=c2fudge)
             else :
-                newrejected=_reject_cosmic_rays_ala_sdss_single(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=1.)
+                newrejected=_reject_cosmic_rays_ala_sdss_single(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=c2fudge)
                 
             log.info("at iter %d: %d new pixels rejected"%(iteration,np.sum(newrejected)))
             if np.sum(newrejected)<1 :            

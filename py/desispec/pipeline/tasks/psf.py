@@ -57,9 +57,6 @@ class TaskPSF(BaseTask):
             spectrograph=props["spec"]) ]
 
 
-
-
-
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
@@ -71,16 +68,16 @@ class TaskPSF(BaseTask):
         return deptasks
 
 
-    def _run_max_procs(self, procs_per_node):
-        """See BaseTask.run_max_procs.
-        """
+    def _run_max_procs(self):
+        # 20 bundles per camera
         return 20
 
 
-    def _run_time(self, name, procs_per_node, db=None):
-        """See BaseTask.run_time.
-        """
-        return 15 # convergence slower for some realizations
+    def _run_time(self, name, procs, db):
+        # Time when running on max procs on machine with scale
+        # factor 1.0
+        mprc = self._run_max_procs()
+        return (20.0 / procs) * mprc
 
 
     def _run_defaults(self):
@@ -95,16 +92,13 @@ class TaskPSF(BaseTask):
         if not envname in os.environ :
             raise KeyError("need to set DESI_SPECTRO_CALIB env. variable")
 
-        # default for now is the simulation directory
-        # think in the future to use another directory
-        opts["input-psf-dir"]   = "{}/spec/sp0".format(os.environ[envname])
-
-        # to get the lampline location, look in our path for specex
-        # and use that install prefix to find the data directory.
-        # if that directory does not exist, use a default NERSC
-        # location.
+        # For the default lampline location, look in the specex installation
+        # location
+        from ...scripts import specex
+        if specex.specexdata is None:
+            raise RuntimeError("Cannot find specex data directory for the default lamp lines")
         opts["lamplines"] = \
-            "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_desi.txt"
+            os.path.join(specex.specexdata, "specex_linelist_desi.txt")
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
             exefile = os.path.join(path, "desi_psf_fit")
@@ -129,16 +123,9 @@ class TaskPSF(BaseTask):
         deps  = self.deps(name)
         props = self.name_split(name)
 
-        inputpsf = "psf-{}{}.fits".format(props["band"],props["spec"])
-
         # make a copy, so we can remove some entries
         opts_copy = opts.copy()
 
-        if "input-psf-dir" in opts_copy :
-            inputpsf = os.path.join(opts_copy["input-psf-dir"], inputpsf)
-            del opts_copy["input-psf-dir"]
-
-        options["input-psf"]   = inputpsf
         options["input-image"] = task_classes["preproc"].paths(deps["input-image"])[0]
         options["output-psf"]  = self.paths(name)
 
@@ -164,7 +151,7 @@ class TaskPSF(BaseTask):
         entry = "desi_compute_psf"
         if procs > 1:
             entry = "desi_compute_psf_mpi"
-        return "{} {}".format(entry, self._option_list(name, opts))
+        return "{} {}".format(entry, " ".join(self._option_list(name, opts)))
 
 
     def _run(self, name, opts, comm, db):

@@ -96,9 +96,9 @@ class TestQA(unittest.TestCase):
             for camera in self.cameras:
                 self._write_flat_file(camera=camera, night=night, expid=expid)
 
-    def _write_qaframe(self, camera='b0', expid=1, night='20160101', ZPval=24.):
+    def _write_qaframe(self, camera='b0', expid=1, night='20160101', ZPval=24., flavor='science'):
         """Write QA data frame files"""
-        frm = self._make_frame(camera=camera)
+        frm = self._make_frame(camera=camera, expid=expid, night=night, flavor=flavor)
         qafrm = QA_Frame(frm)
         # SKY
         qafrm.init_skysub()
@@ -115,10 +115,19 @@ class TestQA(unittest.TestCase):
         # WRITE
         write_qa_frame(qafile, qafrm)
         self.files_written.append(qafile)
+
+        # Generate frame too (for QA_Exposure)
+        frame = self._make_frame(camera=camera, flavor=flavor, night=night, expid=expid)
+        frame_file = findfile('frame', night=night, expid=expid, specprod_dir=self.testDir, camera=camera)
+        _ = write_frame(frame_file, frame)
+        self.files_written.append(frame_file)
+        #
         return qafile
 
     def _write_qaframes(self, **kwargs):
         """ Build the standard set of qaframes
+        and the accompanying frames for QA_Exposure
+
         Args:
             **kwargs:  passed to _write_qaframe
 
@@ -197,7 +206,7 @@ class TestQA(unittest.TestCase):
             if k in environ:
                 cache_env[k] = environ[k]
             environ[k] = './'
-        qaexp = QA_Exposure(1, '20150211', 'arc')
+        qaexp = QA_Exposure(1, '20150211', flavor='arc')
         self.assertEqual(qaexp.expid, 1)
         for k in cache_env:
             if cache_env[k] is None:
@@ -209,9 +218,10 @@ class TestQA(unittest.TestCase):
         #- Test loading data
         self._write_qaframes()
         expid, night = self.expids[0], self.nights[0]
-        qaexp = QA_Exposure(expid, night, 'science', specprod_dir=self.testDir)
+        qaexp = QA_Exposure(expid, night, specprod_dir=self.testDir)
         assert 'b0' in qaexp.data['frames']
         assert 'b1' in qaexp.data['frames']
+        assert qaexp.flavor == 'science'
         # Write
         qafile_exp_file = self.testDir+'/exposures/'+night+'/{:08d}/qa-{:08d}'.format(self.id,self.id)
         write_qa_exposure(qafile_exp_file, qaexp)
@@ -246,30 +256,39 @@ class TestQA(unittest.TestCase):
         qaprod = QA_Prod(self.testDir)
         # Load
         qaprod.make_frameqa()
-        _ = qaprod.slurp()
+        _ = qaprod.slurp_nights(write_nights=True)
         qaprod.build_data()
         # Build a Table
-        tbl = qaprod.get_qa_table('FIBERFLAT', 'CHI2PDF')
+        tbl = qaprod.get_qa_table('FLUXCALIB', 'RMS_ZP')
         # Test
-        assert len(tbl) == 2
-        assert tbl['FLAVOR'][0] == 'flat'
-        assert len(qaprod.qa_exps) == 4
+        assert len(tbl) == 8
+        assert tbl['FLAVOR'][0] == 'science'
+        assert len(qaprod.qa_nights) == 2
         assert '20160101' in qaprod.mexp_dict.keys()
         assert isinstance(qaprod.data, dict)
+        # Load from night JSON QA dicts
+        qaprod2 = QA_Prod(self.testDir)
+        qaprod2.load_data()
+        tbl2 = qaprod.get_qa_table('FLUXCALIB', 'RMS_ZP')
+        assert len(tbl2) == 8
 
     def test_init_qa_night(self):
-        self._write_qaframes()
+        self._write_qaframes()  # Generate a set of science QA frames
         night = self.nights[0]
         qanight = QA_Night(night, specprod_dir=self.testDir)
         # Load
         qanight.make_frameqa()
         _ = qanight.slurp()
         qanight.build_data()
-        # Build a Table
+        # Build an empty Table
         tbl = qanight.get_qa_table('FIBERFLAT', 'CHI2PDF')
+        assert len(tbl) == 0
+        # Build a useful Table
+        tbl2 = qanight.get_qa_table('FLUXCALIB', 'RMS_ZP')
         # Test
-        assert len(tbl) == 2
-        assert tbl['FLAVOR'][0] == 'flat'
+        assert len(tbl2) == 4
+        assert tbl2['FLAVOR'][0] == 'science'
+        # More tests
         assert len(qanight.qa_exps) == 2
         assert night in qanight.mexp_dict.keys()
         assert isinstance(qanight.data, dict)

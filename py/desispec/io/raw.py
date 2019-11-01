@@ -11,11 +11,12 @@ import numpy as np
 
 from desiutil.depend import add_dependencies
 
+import desispec.io
 import desispec.io.util
 import desispec.preproc
 from desiutil.log import get_logger
 
-def read_raw(filename, camera, **kwargs):
+def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
     Returns preprocessed raw data from `camera` extension of `filename`
 
@@ -24,6 +25,7 @@ def read_raw(filename, camera, **kwargs):
         camera : camera name (B0,R1, .. Z9) or FITS extension name or number
 
     Options:
+        fibermapfile : read fibermap from this file; if None create blank fm
         Other keyword arguments are passed to desispec.preproc.preproc(),
         e.g. bias, pixflat, mask.  See preproc() documentation for details.
 
@@ -38,8 +40,18 @@ def read_raw(filename, camera, **kwargs):
 
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
-    primary_header= fx[0].header
+    hdu=0
+    while True :
+        primary_header= fx[hdu].header
+        if "EXPTIME" in primary_header : break
 
+        if len(fx)>hdu+1 :
+            log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
+            hdu +=1 
+        else :
+            log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
+            raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
+    
     blacklist = ["EXTEND","SIMPLE","NAXIS1","NAXIS2","CHECKSUM","DATASUM","XTENSION","EXTNAME","COMMENT"]
     if 'INHERIT' in header and header['INHERIT']:
         h0 = fx[0].header
@@ -75,10 +87,35 @@ def read_raw(filename, camera, **kwargs):
                     log.warning("warning HDU %s not in fits file"%str(hdu))
 
         kwargs.pop("fill_header")
-    
+
     fx.close()
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
+
+    if fibermapfile is not None and os.path.exists(fibermapfile):
+        fibermap = desispec.io.read_fibermap(fibermapfile)
+    else:
+        log.warning('creating blank fibermap')
+        fibermap = desispec.io.empty_fibermap(5000)
+
+        #- HACK HACK HACK
+        #- TODO: replace this with a mapping from calibfinder, as soon as
+        #- that is implemented in calibfinder / desi_spectro_calib
+        #- HACK HACK HACK
+
+        #- From DESI-5286v5 page 3 where sp=sm-1 and
+        #- "spectro logical number" = petal_loc
+        spec_to_petal = {4:2, 2:9, 3:0, 5:3, 1:8, 0:4, 6:6, 7:7, 8:5, 9:1}
+        assert set(spec_to_petal.keys()) == set(range(10))
+        assert set(spec_to_petal.values()) == set(range(10))
+
+        petal_loc = spec_to_petal[int(camera[1])]
+        log.warning('Mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
+        ii = (fibermap['PETAL_LOC'] == petal_loc)
+        fibermap = fibermap[ii]
+
+    img.fibermap = fibermap
+
     return img
 
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):
@@ -89,7 +126,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         filename : file name to write data; if this exists, append a new HDU
         rawdata : 2D ndarray of raw pixel data including overscans
         header : dict-like object or fits.Header with keywords
-            CCDSECx, BIASSECx, DATASECx where x=1,2,3, or 4
+            CCDSECx, BIASSECx, DATASECx where x=A,B,C,D
 
     Options:
         camera : b0, r1 .. z9 - override value in header
@@ -97,13 +134,15 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
 
     The primary utility of this function over raw fits calls is to ensure
     that all necessary keywords are present before writing the file.
-    CCDSECx, BIASSECx, DATASECx where x=1,2,3, or 4
-    DATE-OBS, GAINx and RDNOISEx will generate a non-fatal warning if missing
+    CCDSECx, BIASSECx, DATASECx where x=A,B,C,D
+    DATE-OBS will generate a non-fatal warning if missing
     '''
     log = get_logger()
 
     header = desispec.io.util.fitsheader(header)
     primary_header = desispec.io.util.fitsheader(primary_header)
+
+    header['FILENAME'] = filename
 
     if rawdata.dtype not in (np.int16, np.int32, np.int64):
         message = 'dtype {} not supported for raw data'.format(rawdata.dtype)
@@ -127,7 +166,8 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         log.error("Must provide camera keyword or header['CAMERA']")
         missing_keywords.append('CAMERA')
 
-    for amp in ['1', '2', '3', '4']:
+    ampnames = ['A', 'B', 'C', 'D']  #- previously 1,2,3,4
+    for amp in ampnames:
         for prefix in ['CCDSEC', 'BIASSEC', 'DATASEC']:
             keyword = prefix+amp
             if keyword not in header:
@@ -140,19 +180,6 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
             primary_header['DATE-OBS'] = header['DATE-OBS']
         else:
             log.warning('missing keyword DATE-OBS')
-
-    #- Missing GAINx is warning but not error
-    for amp in ['1', '2', '3', '4']:
-        keyword = 'GAIN'+amp
-        if keyword not in header:
-            log.warning('Gain keyword {} missing; using 1.0'.format(keyword))
-            header[keyword] = 1.0
-
-    #- Missing RDNOISEx is warning but not error
-    for amp in ['1', '2', '3', '4']:
-        keyword = 'RDNOISE'+amp
-        if keyword not in header:
-            log.warning('Readnoise keyword {} missing'.format(keyword))
 
     #- Stop if any keywords are missing
     if len(missing_keywords) > 0:

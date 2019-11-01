@@ -1,6 +1,6 @@
 """
 desispec.quicklook.qlresolution
-===================
+===============================
 
 Quicklook version of resolution object that can 
 calculate resolution efficiently from psf information

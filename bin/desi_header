@@ -36,7 +36,12 @@ if args.key is None or len(args.key)==0 :
     for filename in filenames :
         print(filename)
         print("======================")
-        h=pyfits.open(filename)
+        try :
+            h=pyfits.open(filename)
+        except Exception as e :
+            print("failed to read",filename)
+            print(e)
+            continue
         if args.info :
             h.info()
             print("")
@@ -66,7 +71,12 @@ print(line)
 
 
 for filename in filenames :
-    h=pyfits.open(filename)
+    try :
+        h=pyfits.open(filename)
+    except Exception as e :
+        print("failed to read",filename)
+        print(e)
+        continue
     if not hdu in h :
         print("no HDU %s in %s"%(str(hdu),filename))
         continue

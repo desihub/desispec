@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import sys
 import os
 import re
+import time
 import argparse
 import numpy as np
 
@@ -21,10 +22,17 @@ modext = "so"
 if sys.platform == "darwin":
     modext = "bundle"
 
+specexdata = None
+
 libspecexname = "libspecex.{}".format(modext)
 if "LIBSPECEX_DIR" in os.environ:
     libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"],
         "libspecex.{}".format(modext))
+    specexdata = os.path.join(
+        os.path.dirname(os.environ["LIBSPECEX_DIR"]), "data"
+    )
+elif "SPECEX" in os.environ:
+    specexdata = os.path.join(os.environ["SPECEX"], "data")
 
 libspecex = None
 try:
@@ -33,6 +41,9 @@ except:
     path = find_library("specex")
     if path is not None:
         libspecex = ct.CDLL(path)
+        specexdata = os.path.join(
+            os.path.dirname(os.path.dirname(path)), "data"
+        )
 
 if libspecex is not None:
     libspecex.cspecex_desi_psf_fit.restype = ct.c_int
@@ -57,7 +68,7 @@ def parse(options=None):
         "one frame with specex")
     parser.add_argument("--input-image", type=str, required=True,
                         help="input image")
-    parser.add_argument("--input-psf", type=str, required=True,
+    parser.add_argument("--input-psf", type=str, required=False,
                         help="input psf file")
     parser.add_argument("-o", "--output-psf", type=str, required=True,
                         help="output psf file")
@@ -87,7 +98,13 @@ def main(args, comm=None):
 
     imgfile = args.input_image
     outfile = args.output_psf
-    inpsffile = args.input_psf
+
+    if args.input_psf is not None:
+        inpsffile = args.input_psf
+    else:
+        from desispec.calibfinder import findcalibfile
+        hdr = fits.getheader(imgfile)
+        inpsffile = findcalibfile([hdr,], 'PSF')
 
     optarray = []
     if args.extra is not None:
@@ -208,7 +225,16 @@ def main(args, comm=None):
 
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
+        #- Empirically it appears that files written by one rank sometimes
+        #- aren't fully buffer-flushed and closed before getting here,
+        #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
+        log.info('HACK: taking a 5 sec pause before merging')
+        sys.stdout.flush()
+        time.sleep(5)
+
         merge_psf(inputs,outfits)
+
+        log.info('done merging')
 
         if failcount == 0:
             # only remove the per-bundle files if the merge was good

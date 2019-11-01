@@ -19,7 +19,7 @@ from desispec.fluxcalibration import match_templates,normalize_templates,isStdSt
 from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 from desispec.parallel import default_nproc
-from desispec.io.filters import load_filter
+from desispec.io.filters import load_legacy_survey_filter
 from desiutil.dust import ext_odonnell
 
 def parse(options=None):
@@ -95,7 +95,7 @@ def main(args) :
         frame=io.read_frame(filename)
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
-        frame_starindices = np.where(isStdStar(frame_fibermap['DESI_TARGET']))[0]
+        frame_starindices = np.where(isStdStar(frame_fibermap))[0]
         
         #- Confirm that all fluxes have entries but trust targeting bits
         #- to get basic magnitude range correct
@@ -211,16 +211,9 @@ def main(args) :
         fibermap['EBV'] = 0.0
 
     model_filters = dict()
-    if 'S' in fibermap['PHOTSYS']:
-        for filter_name in ['DECAM_G', 'DECAM_R', 'DECAM_Z']:
-            model_filters[filter_name] = load_filter(filter_name)
-
-    if 'N' in fibermap['PHOTSYS']:
-        for filter_name in ['BASS_G', 'BASS_R', 'MZLS_Z']:
-            model_filters[filter_name] = load_filter(filter_name)
-
-    if len(model_filters) == 0:
-        raise ValueError("No filters loaded; neither 'N' nor 'S' in PHOTSYS?")
+    for band in ["G","R","Z"] :
+        for photsys in np.unique(fibermap['PHOTSYS']) :
+            model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
 
     log.info("computing model mags for %s"%sorted(model_filters.keys()))
     model_mags = dict()
@@ -270,21 +263,12 @@ def main(args) :
                 resolution_data[identifier]=frame.resolution_data[star]
 
         # preselect models based on magnitudes
-        if fibermap['PHOTSYS'][star] == 'N':
-            if args.color == 'G-R':
-                model_colors = model_mags['BASS_G'] - model_mags['BASS_R']
-            elif args.color == 'R-Z':
-                model_colors = model_mags['BASS_R'] - model_mags['MZLS_Z']
-            else:
-                raise ValueError('Unknown color {}'.format(args.color))
-        else:
-            if args.color == 'G-R':
-                model_colors = model_mags['DECAM_G'] - model_mags['DECAM_R']
-            elif args.color == 'R-Z':
-                model_colors = model_mags['DECAM_R'] - model_mags['DECAM_Z']
-            else:
-                raise ValueError('Unknown color {}'.format(args.color))
-
+        photsys=fibermap['PHOTSYS'][star]
+        if not args.color in ['G-R','R-Z'] :
+            raise ValueError('Unknown color {}'.format(args.color))
+        bands=args.color.split("-")
+        model_colors = model_mags[bands[0]+photsys] - model_mags[bands[1]+photsys]
+        
         color_diff = model_colors - star_unextincted_colors[args.color][star]
         selection = np.abs(color_diff) < args.delta_color
 
@@ -329,31 +313,18 @@ def main(args) :
         model *= dust_transmission(stdwave, fibermap['EBV'][star])
 
         # Compute final color of dust-extincted model
-        if fibermap['PHOTSYS'][star] == 'N':
-            if args.color == 'G-R':
-                model_mag1 = model_filters['BASS_G'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_mag2 = model_filters['BASS_R'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_magr = model_mag2
-            elif args.color == 'R-Z':
-                model_mag1 = model_filters['BASS_R'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_mag2 = model_filters['MZLS_Z'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_magr = model_mag1
-            else:
-                raise ValueError('Unknown color {}'.format(args.color))
-        else:
-            if args.color == 'G-R':
-                model_mag1 = model_filters['DECAM_G'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_mag2 = model_filters['DECAM_R'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_magr = model_mag2
-            elif args.color == 'R-Z':
-                model_mag1 = model_filters['DECAM_R'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_mag2 = model_filters['DECAM_Z'].get_ab_magnitude(model*fluxunits, stdwave)
-                model_magr = model_mag1
-            else:
-                raise ValueError('Unknown color {}'.format(args.color))
-
+        photsys=fibermap['PHOTSYS'][star]
+        if not args.color in ['G-R','R-Z'] :
+            raise ValueError('Unknown color {}'.format(args.color))
+        bands=args.color.split("-")
+        model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
+        model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
         fitted_model_colors[star] = model_mag1 - model_mag2
-        
+        if bands[0]=="R" :
+            model_magr = model_mag1 
+        elif bands[1]=="R" :
+            model_magr = model_mag2
+
         #- TODO: move this back into normalize_templates, at the cost of
         #- recalculating a model magnitude?
 

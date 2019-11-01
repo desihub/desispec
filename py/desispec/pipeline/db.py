@@ -903,6 +903,22 @@ class DataBase:
                     log.debug("{} of pixel {} is ready to run".format(tt,entry[1]))
                     cur.execute('update {} set state = {} where nside = {} and pixel = {}'.format(tt,task_state_to_int["ready"],entry[0],entry[1]))
 
+                log.debug("checking waiting {} tasks to see if they are done...".format(tt))
+                cmd = "select pixel from {} where state = {}".format(tt, task_state_to_int["waiting"])
+                cur.execute(cmd)
+                pixels = [ x for (x, ) in cur.fetchall()]
+                if len(pixels) > 0:
+                    log.debug("checking {} {} ...".format(len(pixels),tt))
+                    if tt == "spectra":
+                        required_healpix_frame_state = 2
+                    elif tt == "redshift":
+                        required_healpix_frame_state = 3
+                    for pixel in pixels:
+                        cur.execute('select pixel from healpix_frame where pixel = {} and state != {}'.format(pixel,required_healpix_frame_state))
+                        entries = cur.fetchall()
+                        if len(entries)==0 :
+                            log.debug("{} task of pixel {} is done".format(tt,pixel))
+                            cur.execute('update {} set state = {} where pixel = {}'.format(tt,task_state_to_int["done"],pixel))
         return
 
 

@@ -10,8 +10,9 @@ from .resolution import Resolution
 from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
 from .interpolation import resample_flux
 from desiutil.log import get_logger
-from .io.filters import load_filter
+from .io.filters import load_legacy_survey_filter
 from desispec import util
+from desitarget.targets import main_cmx_or_sv
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
@@ -19,12 +20,18 @@ from astropy import units
 import multiprocessing
 from pkg_resources import resource_exists, resource_filename
 
-def isStdStar(desi_target, bright=None):
+try:
+    from scipy import constants
+    C_LIGHT = constants.c/1000.0
+except TypeError: # This can happen during documentation builds.
+    C_LIGHT = 299792458.0/1000.0
+
+def isStdStar(fibermap, bright=None):
     """
     Determines if target(s) are standard stars
 
     Args:
-        desi_target: int or array of DESI_TARGET targeting bit mask(s)
+        fibermap: table including DESI_TARGET or SV1_DESI_TARGET bit mask(s)
 
     Optional:
         bright: if True, only bright time standards; if False, only darktime, otherwise both
@@ -33,7 +40,10 @@ def isStdStar(desi_target, bright=None):
 
     TODO: move out of scripts/stdstars.py
     """
-    from desitarget.targetmask import desi_mask
+    target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
+    desi_target = fibermap[target_colnames[0]]  # (SV1_)DESI_TARGET
+    desi_mask = target_masks[0]                 # (sv1) desi_mask
+
     yes = (desi_target & desi_mask.STD_WD) != 0
     if bright is None:
         yes |= (desi_target & desi_mask.mask('STD_WD|STD_FAINT|STD_BRIGHT')) != 0
@@ -767,14 +777,15 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     return coef,z,chi2/ndata
 
 
-def normalize_templates(stdwave, stdflux, mag, filter_name):
+def normalize_templates(stdwave, stdflux, mag, band, photsys):
     """Returns spectra normalized to input magnitudes.
 
     Args:
         stdwave : 1D array of standard star wavelengths [Angstroms]
         stdflux : 1D observed flux
         mag : float desired magnitude
-        filter_name : filter_name, e.g. DECAM_G, DECAM_R
+        band : G,R,Z,W1 or W2
+        photsys : N or S (for Legacy Survey North or South)
 
     Returns:
         stdwave : same as input
@@ -784,7 +795,7 @@ def normalize_templates(stdwave, stdflux, mag, filter_name):
     """
     log = get_logger()
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
-    filter_response=load_filter(filter_name)
+    filter_response=load_legacy_survey_filter(band,photsys)
     apMag=filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave)
     scalefac=10**((apMag-mag)/2.5)
     log.debug('scaling mag {:.3f} to {:.3f} using scalefac {:.3f}'.format(apMag,mag, scalefac))
@@ -833,7 +844,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
-    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+    stdfibers = np.where(isStdStar(frame.fibermap))[0]
     assert len(stdfibers) > 0
 
     if not np.all(np.in1d(stdfibers, input_model_fibers)):
@@ -1173,7 +1184,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     exptime = frame.meta['EXPTIME']
 
     # Standard stars
-    stdfibers = np.where(isStdStar(frame.fibermap['DESI_TARGET']))[0]
+    stdfibers = np.where(isStdStar(frame.fibermap))[0]
     stdstars = frame[stdfibers]
     nstds = len(stdfibers)
     #try:

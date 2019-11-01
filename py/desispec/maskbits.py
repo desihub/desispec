@@ -37,7 +37,7 @@ Example::
 import yaml
 from desiutil.bitmask import BitMask
 
-_bitdefs = yaml.load("""
+_bitdefs = yaml.safe_load("""
 #- CCD pixel mask
 ccdmask:
     - [BAD,         0, "Pre-determined bad pixel (any reason)"]

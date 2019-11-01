@@ -1,4 +1,7 @@
-
+"""
+desispec.scripts.trace_shifts
+=============================
+"""
 from __future__ import absolute_import, division
 
 
@@ -29,7 +32,7 @@ Two methods are implemented.
 2) forward model : dy,dy shifts are determined simultaneously by a forward modeling of the image around a given external list of lines (--lines option).
    This method is in principle statistically optimal, but it is slow and cannot be applied to blended and broad sky lines. It is useful to shift traces from arc lamp images (though specex does the same thing in C++).""")
     
-    parser.add_argument('--image', type = str, default = None, required=True,
+    parser.add_argument('-i','--image', type = str, default = None, required=True,
                         help = 'path of DESI preprocessed fits image')
     parser.add_argument('--psf', type = str, default = None, required=True,
                         help = 'path of DESI psf fits file')
@@ -40,7 +43,7 @@ Two methods are implemented.
     parser.add_argument('--sky', action = 'store_true',
                         help = 'use sky spectrum desispec/data/spec-sky.dat for external wavelength calibration')
     
-    parser.add_argument('--outpsf', type = str, default = None, required=True,
+    parser.add_argument('-o','--outpsf', type = str, default = None, required=True,
                         help = 'path of output PSF with shifted traces')
     parser.add_argument('--outoffsets', type = str, default = None, required=False,
                         help = 'path of output ASCII file with measured offsets for QA')
@@ -89,7 +92,8 @@ def read_specter_psf(filename) :
         raise ValueError("Unknown PSFTYPE='{}'".format(psftype))
     return psf
 
-def main(args) :
+
+def fit_trace_shifts(image,args) :
 
     global psfs
 
@@ -97,20 +101,11 @@ def main(args) :
 
     log.info("starting")
     
-    
-    # read preprocessed image
-    image=read_image(args.image)
-    log.info("read image {}".format(args.image))
-    if image.mask is not None :
-        image.ivar *= (image.mask==0)
-
-    
-    
-    xytraceset = read_xytraceset(args.psf)
-    wavemin = xytraceset.wavemin
-    wavemax = xytraceset.wavemax
-    xcoef   = xytraceset.x_vs_wave_traceset._coeff 
-    ycoef   = xytraceset.y_vs_wave_traceset._coeff 
+    tset = read_xytraceset(args.psf)
+    wavemin = tset.wavemin
+    wavemax = tset.wavemax
+    xcoef   = tset.x_vs_wave_traceset._coeff 
+    ycoef   = tset.y_vs_wave_traceset._coeff 
     
     nfibers=xcoef.shape[0]
     log.info("read PSF trace with xcoef.shape = {} , ycoef.shape = {} , and wavelength range {}:{}".format(xcoef.shape,ycoef.shape,int(wavemin),int(wavemax)))
@@ -197,7 +192,7 @@ def main(args) :
         x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
         if internal_wavelength_calib :
             # measure y shifts
-            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xytraceset, image=image, fibers=fibers, width=args.width)
+            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width)
             mdy = np.median(dy)
             log.info("Subtract median(dy)={}".format(mdy))
             dy -= mdy # remove median, because this is an internal calibration
@@ -295,73 +290,61 @@ def main(args) :
     
     
     # compute x y to record max deviations
-    u  = np.linspace(-1,1,5)
-    x0 = np.zeros((xcoef.shape[0],u.size))
-    y0 = np.zeros((ycoef.shape[0],u.size))
-    for f in range(xcoef.shape[0]) :
-        x0[f]=legval(u,xcoef[f])
-        y0[f]=legval(u,ycoef[f])
+    wave = np.linspace(tset.wavemin,tset.wavemax,5)
+    x0 = np.zeros((tset.nspec,wave.size))
+    y0 = np.zeros((tset.nspec,wave.size))
+    for s in range(tset.nspec) :
+        x0[s]=tset.x_vs_wave(s,wave)
+        y0[s]=tset.y_vs_wave(s,wave)
+    
+    tset.x_vs_wave_traceset._coeff,tset.y_vs_wave_traceset._coeff = recompute_legendre_coefficients(xcoef=tset.x_vs_wave_traceset._coeff,
+                                                                                                    ycoef=tset.y_vs_wave_traceset._coeff,
+                                                                                                    wavemin=tset.wavemin,
+                                                                                                    wavemax=tset.wavemax,
+                                                                                                    degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,
+                                                                                                    dx_coeff=dx_coeff,dy_coeff=dy_coeff)
+
     
 
-
-    xcoef,ycoef = recompute_legendre_coefficients(xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,dx_coeff=dx_coeff,dy_coeff=dy_coeff)
-    
     # use an input spectrum as an external calibration of wavelength
     if spectrum_filename  :
-                
-        log.info("write and reread PSF to be sure predetermined shifts were propagated")
-        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
-        #psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.outpsf)
-        
-        xytraceset = read_xytraceset(args.outpsf)
-        wavemin = xytraceset.wavemin
-        wavemax = xytraceset.wavemax
-        xcoef   = xytraceset.x_vs_wave_traceset._coeff 
-        ycoef   = xytraceset.y_vs_wave_traceset._coeff 
-        
-        psf = read_specter_psf(args.outpsf)
-
-        ycoef=shift_ycoef_using_external_spectrum(psf=psf,xytraceset=xytraceset,
-                                                  image=image,fibers=fibers,spectrum_filename=spectrum_filename,degyy=args.degyy,width=7)
-        
-
-        x = np.zeros((xcoef.shape[0],u.size))
-        y = np.zeros((ycoef.shape[0],u.size))
-        for f in range(xcoef.shape[0]) :
-            x[f]=legval(u,xcoef[f])
-            y[f]=legval(u,ycoef[f])
-        dx = x-x0
-        dy = y-y0
-        
-        header_keywords = {}
-        header_keywords["MEANDX"]=np.mean(dx)
-        header_keywords["MINDX"]=np.min(dx)
-        header_keywords["MAXDX"]=np.max(dx)
-        header_keywords["MEANDY"]=np.mean(dy)
-        header_keywords["MINDY"]=np.min(dy)
-        header_keywords["MAXDY"]=np.max(dy)
-        
-        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax,header_keywords=header_keywords)
-        log.info("wrote modified PSF in %s"%args.outpsf)
-        
-    else :
-        x = np.zeros((xcoef.shape[0],u.size))
-        y = np.zeros((ycoef.shape[0],u.size))
-        for f in range(xcoef.shape[0]) :
-            x[f]=legval(u,xcoef[f])
-            y[f]=legval(u,ycoef[f])
-        dx = x-x0
-        dy = y-y0
-        
-        header_keywords = {}
-        header_keywords["MEANDX"]=np.mean(dx)
-        header_keywords["MINDX"]=np.min(dx)
-        header_keywords["MAXDX"]=np.max(dx)
-        header_keywords["MEANDY"]=np.mean(dy)
-        header_keywords["MINDY"]=np.min(dy)
-        header_keywords["MAXDY"]=np.max(dy)
-        
-        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax,header_keywords=header_keywords)
-        log.info("wrote modified PSF in %s"%args.outpsf)
-        
+        # the psf is used only to convolve the input spectrum
+        # the traceset of the psf is not used here
+        psf = read_specter_psf(args.psf)
+        tset.y_vs_wave_traceset._coeff = shift_ycoef_using_external_spectrum(psf=psf,xytraceset=tset,
+                                                                             image=image,fibers=fibers,
+                                                                             spectrum_filename=spectrum_filename,
+                                                                             degyy=args.degyy,width=7)
     
+    x = np.zeros(x0.shape)
+    y = np.zeros(x0.shape)
+    for s in range(tset.nspec) :
+        x[s]=tset.x_vs_wave(s,wave)
+        y[s]=tset.y_vs_wave(s,wave)
+    dx = x-x0
+    dy = y-y0
+    if tset.meta is None : tset.meta = dict()
+    tset.meta["MEANDX"]=np.mean(dx)
+    tset.meta["MINDX"]=np.min(dx)
+    tset.meta["MAXDX"]=np.max(dx)
+    tset.meta["MEANDY"]=np.mean(dy)
+    tset.meta["MINDY"]=np.min(dy)
+    tset.meta["MAXDY"]=np.max(dy)
+
+    return tset
+
+def main(args) :
+    
+    log= get_logger()
+
+    # read preprocessed image
+    image=read_image(args.image)
+    log.info("read image {}".format(args.image))
+    if image.mask is not None :
+        image.ivar *= (image.mask==0)
+    
+    tset = fit_trace_shifts(image=image,args=args)
+    
+    if args.outpsf is not None :
+        write_traces_in_psf(args.psf,args.outpsf,tset)
+        log.info("wrote modified PSF in %s"%args.outpsf)

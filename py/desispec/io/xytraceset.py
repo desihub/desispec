@@ -1,6 +1,6 @@
 """
 desispec.io.xytraceset
-=================
+======================
 
 I/O routines for XYTraceSet objects
 """
@@ -34,9 +34,9 @@ def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
     else :
         wavemax=head["WAVEMAX"]
     if label is not None :
-        log.info("read {} from hdu {}".format(label,extname))
+        log.debug("read {} from hdu {}".format(label,extname))
     else :
-        log.info("read coefficients from hdu {}".format(label,extname))
+        log.debug("read coefficients from hdu {}".format(label,extname))
                 
     return hdu.data,wavemin,wavemax 
 
@@ -68,7 +68,7 @@ def _traceset_from_table(wavemin,wavemax,hdu,pname) :
         else :
             wavemax=twavemax
     
-    log.info("read {} from hdu {}".format(pname,extname))
+    log.debug("read {} from hdu {}".format(pname,extname))
     return table["COEFF"][i],wavemin,wavemax 
 
 def read_xytraceset(filename) :
@@ -108,7 +108,7 @@ def read_xytraceset(filename) :
                 npix_y=int(head["NPIX_Y"])
     if npix_y == 0 :
         raise KeyError("Didn't find head entry NPIX_Y in hdu 0, XTRACE or PSF")
-    log.info("npix_y={}".format(npix_y))
+    log.debug("npix_y={}".format(npix_y))
     
     try :
         psftype=fits_file[0].header["PSFTYPE"]
@@ -116,7 +116,7 @@ def read_xytraceset(filename) :
         psftype=""
     
     # now read trace coefficients
-    log.info("psf is a '%s'"%psftype)
+    log.debug("psf is a '%s'"%psftype)
     if psftype == "bootcalib" :
         xcoef,wavemin,wavemax =_traceset_from_image(wavemin,wavemax,fits_file[0],"xcoef")
         ycoef,wavemin,wavemax =_traceset_from_image(wavemin,wavemax,fits_file[1],"ycoef")
@@ -143,7 +143,7 @@ def read_xytraceset(filename) :
         if xsigcoef is None : xsigcoef,wavemin,wavemax =_traceset_from_table(wavemin,wavemax,hdu,"GHSIGX")
         if ysigcoef is None : ysigcoef,wavemin,wavemax =_traceset_from_table(wavemin,wavemax,hdu,"GHSIGY")
     
-    log.info("wavemin={} wavemax={}".format(wavemin,wavemax))
+    log.debug("wavemin={} wavemax={}".format(wavemin,wavemax))
     
     if xcoef is None or ycoef is None :
         raise ValueError("could not find xcoef and ycoef in psf file %s"%filename)
@@ -190,6 +190,10 @@ def write_xytraceset(outfile,xytraceset) :
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(xytraceset.x_vs_wave_traceset._coeff.astype('f4'))
     x.header['EXTNAME'] = "XTRACE"
+    if xytraceset.meta is not None :
+        for k in xytraceset.meta :
+            if not k in x.header :
+                x.header[k]=xytraceset.meta[k]
     hdus.append(x)
     hdus.append( fits.ImageHDU(xytraceset.y_vs_wave_traceset._coeff.astype('f4'), name="YTRACE") )
     if xytraceset.xsig_vs_wave_traceset is not None : hdus.append( fits.ImageHDU(xytraceset.xsig_vs_wave_traceset._coeff.astype('f4'), name='XSIG') )

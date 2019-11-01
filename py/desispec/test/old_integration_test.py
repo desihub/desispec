@@ -11,6 +11,12 @@ import time
 import numpy as np
 from astropy.io import fits
 
+try:
+    from scipy import constants
+    C_LIGHT = constants.c/1000.0
+except TypeError: # This can happen during documentation builds.
+    C_LIGHT = 299792458.0/1000.0
+
 from ..util import runcmd
 from .. import io
 from ..qa import QA_Exposure
@@ -347,7 +353,7 @@ def integration_test(night=None, nspec=5, clobber=False):
                 oiiflux = elginfo['OIIFLUX'][k]
 
             truez = siminfo['REDSHIFT'][j]
-            dv = 3e5*(z-truez)/(1+truez)
+            dv = C_LIGHT*(z-truez)/(1+truez)
             if truetype == 'SKY' and zwarn > 0:
                 status = 'ok'
             elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
