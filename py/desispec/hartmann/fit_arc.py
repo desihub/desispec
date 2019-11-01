@@ -1,4 +1,5 @@
 import desispec.io
+import fitsio
 import numpy as np
 import matplotlib.pyplot as plt
 from specter.psf.gausshermite  import GaussHermitePSF
@@ -11,14 +12,23 @@ from astropy.table import Table, Column
 
 def fit_arc(file_raw,psf_file,channel,dz,line_file='goodlines_vaccum.ascii',thres=500,ee=0.90,display=False,file_temp='file_temp.fits'):
     linelist=ascii.read(line_file)
-    cmd='desi_preproc -i '+file_raw+' -o '+file_temp+' --camera '+channel
+    os.system('rm '+file_temp)
+    cmd='desi_preproc -i '+file_raw+' -o '+file_temp+' --camera '+channel#[0]
     print(cmd)
     os.system(cmd)
     
     traceset=desispec.io.read_xytraceset(psf_file)
-    psf=GaussHermitePSF(psf_file)
-    wmin=psf.wmin
-    wmax=psf.wmax
+    h=fitsio.read_header(psf_file)
+    if h['PSFTYPE']=='bootcalib':
+        wmin=h['WAVEMIN']
+        wmax=h['WAVEMAX']
+        nspec=h['NAXIS2']
+    else:
+        psf=GaussHermitePSF(psf_file)
+        wmin=psf.wmin
+        wmax=psf.wmax
+        nspec=psf.nspec
+
     # Read in image
     HDUs = fits.open(file_temp)
     hdu=HDUs[0]
@@ -42,7 +52,7 @@ def fit_arc(file_raw,psf_file,channel,dz,line_file='goodlines_vaccum.ascii',thre
     
     if display:
         fig = plt.figure('Data and fit profiles', figsize=(14, 11))
-    for i in range(psf.nspec):
+    for i in range(nspec):
         fiber=i
         x_psf=traceset.x_vs_wave(fiber,wavearr[ind])
         y_psf=traceset.y_vs_wave(fiber,wavearr[ind])
@@ -64,7 +74,7 @@ def fit_arc(file_raw,psf_file,channel,dz,line_file='goodlines_vaccum.ascii',thre
                 ymin = ymax - n
             subim = im[ymin:ymax, xmin:xmax]
             print('x,y',xmin,xmax,ymin,ymax,np.max(subim))
-            if np.max(subim)>thres:
+            if True: # keep format #np.max(subim)>thres:
                 (A, xcentroid, ycentroid, FWHMx, FWHMy,chi2) = psf_tool.PSF_Params(subim, sampling_factor=10.0, display=False, \
                            estimates={'amplitude':subim.max(),'x_mean':n/2,'y_mean':n/2,'x_stddev':FWHM_estim/2.35,'y_stddev':FWHM_estim/2.35}, \
                                                    doSkySub=False)
