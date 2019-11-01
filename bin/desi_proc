@@ -276,7 +276,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
         cmd += " -i {}".format(preprocfile)
         cmd += " --psf {}".format(inpsf)
         cmd += " --outpsf {}".format(outpsf)
-
+        cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
         if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
             cmd += ' --sky'
         
@@ -424,7 +424,8 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
     else:
         log.warning('running extractions without MPI parallelism; this will be SLOW')
         for camera in args.cameras:
-            runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+            if camera in cmds:
+                runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
 
     if comm is not None:
         comm.barrier()
