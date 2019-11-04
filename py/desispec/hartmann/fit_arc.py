@@ -49,7 +49,6 @@ def fit_arc(file_raw,psf_file,channel,dz,line_file='../data/arc_lines/goodlines_
         fig = plt.figure('Data and fit profiles', figsize=(14, 11))
     for i in range(nspec):
         if i%10 == 0 : log.info("fitting fiber {}".format(i))
-        if i%10 !=0 : continue # DEBUG
         
         fiber=i
         x_psf=traceset.x_vs_wave(fiber,wavearr[ind])
