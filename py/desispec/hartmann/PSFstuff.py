@@ -7,8 +7,8 @@ from astropy.modeling import models, fitting
 from desispec.hartmann.centroid import centroid
 from astropy.stats import sigma_clipped_stats
 import matplotlib.pyplot as plt
-import pdb
-import photutils as phot
+#import pdb
+#import photutils as phot
 
 def tiedXmean(GaussTrapModel):
 	return GaussTrapModel.x_mean_0
@@ -188,52 +188,53 @@ def PSF_Params(im, sampling_factor=50.0, display=False, estimates=None, doSkySub
 
 	return (profX.max(), xmean, ymean, FWHMx, FWHMy,chi2)
 
-def EE(im, Rad=None, GaussFitParam=None, doSkySub=True):
-	"""
-	Compute Encircled energy on a PSF, in a circle of radius Rad (in pixels).
-	
-	If Rad is None, defaults to 3 sigma
-	
-	INPUTS:
-	------
-	im: the image containing the PSF. 
-	
-	Rad: the radius on which to compute the encircled energy. If None, defaults to 3 sigma
-	
-	GaussFitParam: dictionnary giving estimates of the best fitting gaussian, with at least the following keys:
-				{'x_mean':x0,'y_mean':y0,'x_stddev':sigmaX0,'y_stddev':sigmaY0}
-				If None (defaults), the best fitting gaussian is computed from PSF_Params()
-	
-	doSkySub: if set, computes the sky level on a 3-pixel wide outer ring, and subtract it. Defaults to True
-	NOTE: phot.aperture_photometry() expects a sky-subtracted image, so if doSkySub is set to False,
-		  make sure the provided image is properly sky-subtracted.
-
-	OUTPUTS:
-	-------
-		The encircled energy, in fraction of the total energy.
-		
-		"""
-	if GaussFitParam is None:
-		(a0, x0, y0, FWHMx, FWHMy,chi2) = PSF_Params(im)
-	else:
-		x0 = GaussFitParam['x_mean']
-		y0 = GaussFitParam['y_mean']
-		FWHMx = GaussFitParam['x_stddev']*2.35
-		FWHMy = GaussFitParam['y_stddev']*2.35
-
-	if doSkySub:
-		(ny,nx)=im.shape
-		mask=np.zeros_like(im,dtype='bool')
-		mask[3:ny-3,3:nx-3]=True
-		sky_mean,sky_med,sky_std = sigma_clipped_stats(im,mask=mask)
-		im -= sky_mean
-		
-	if Rad is None:
-		Rad = 3.0*(FWHMx+FWHMy)*0.424661/2.0
-
-	aper = phot.CircularAperture((x0,y0),Rad)
-
-	table = phot.aperture_photometry(im,aper)
-	EE = table['aperture_sum'].data[0]
-	
-	return EE
+#def EE(im, Rad=None, GaussFitParam=None, doSkySub=True):
+#	"""
+#	Compute Encircled energy on a PSF, in a circle of radius Rad (in pixels).
+#	
+#	If Rad is None, defaults to 3 sigma
+#	
+#	INPUTS:
+#	------
+#	im: the image containing the PSF. 
+#	
+#	Rad: the radius on which to compute the encircled energy. If None, defaults to 3 sigma
+#	
+#	GaussFitParam: dictionnary giving estimates of the best fitting gaussian, with at least the following keys:
+#				{'x_mean':x0,'y_mean':y0,'x_stddev':sigmaX0,'y_stddev':sigmaY0}
+#				If None (defaults), the best fitting gaussian is computed from PSF_Params()
+#	
+#	doSkySub: if set, computes the sky level on a 3-pixel wide outer ring, and subtract it. Defaults to True
+#	NOTE: phot.aperture_photometry() expects a sky-subtracted image, so if doSkySub is set to False,
+#		  make sure the provided image is properly sky-subtracted.
+#
+#	OUTPUTS:
+#	-------
+#		The encircled energy, in fraction of the total energy.
+#		
+#		"""
+#	if GaussFitParam is None:
+#		(a0, x0, y0, FWHMx, FWHMy,chi2) = PSF_Params(im)
+#	else:
+#		x0 = GaussFitParam['x_mean']
+#		y0 = GaussFitParam['y_mean']
+#		FWHMx = GaussFitParam['x_stddev']*2.35
+#		FWHMy = GaussFitParam['y_stddev']*2.35
+#
+#	if doSkySub:
+#		(ny,nx)=im.shape
+#		mask=np.zeros_like(im,dtype='bool')
+#		mask[3:ny-3,3:nx-3]=True
+#		sky_mean,sky_med,sky_std = sigma_clipped_stats(im,mask=mask)
+#		im -= sky_mean
+#		
+#	if Rad is None:
+#		Rad = 3.0*(FWHMx+FWHMy)*0.424661/2.0
+#
+#	aper = phot.CircularAperture((x0,y0),Rad)
+#
+#	table = phot.aperture_photometry(im,aper)
+#	EE = table['aperture_sum'].data[0]
+#	
+#	return EE
+#

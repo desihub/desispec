@@ -1,11 +1,11 @@
-import desispec.hartmann.focus_DESI_2 as foc
+#import desispec.hartmann.focus_DESI_2 as foc
 import desispec.hartmann.fit_arc as fit_arc
-import pdb
+#import pdb
 import pandas as pd
 import matplotlib.pyplot as plt
 from astropy.table import Table
-from astropy.io import ascii
-import pickle as pk
+#from astropy.io import ascii
+#import pickle as pk
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 import argparse
