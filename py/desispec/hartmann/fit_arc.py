@@ -7,12 +7,16 @@ from astropy.io import fits,ascii
 from astropy.modeling import models, fitting
 import os
 from astropy.table import Table, Column
+from desiutil.log import get_logger
 
 def fit_arc(file_raw,psf_file,channel,dz,line_file='../data/arc_lines/goodlines_vacuum_hartmann.ascii',ee=0.90,display=False,file_temp='file_temp.fits'):
+
+    log = get_logger()
+    
     linelist=ascii.read(line_file)
     os.system('rm '+file_temp)
     cmd='desi_preproc -i '+file_raw+' -o '+file_temp+' --camera '+channel#[0]
-    print(cmd)
+    log.info(cmd)
     os.system(cmd)
     
     traceset=desispec.io.read_xytraceset(psf_file)
@@ -44,7 +48,8 @@ def fit_arc(file_raw,psf_file,channel,dz,line_file='../data/arc_lines/goodlines_
     if display:
         fig = plt.figure('Data and fit profiles', figsize=(14, 11))
     for i in range(nspec):
-        if i%10 == 0 : print("fiber",i)
+        if i%10 == 0 : log.info("fitting fiber {}".format(i))
+        if i%10 !=0 : continue # DEBUG
         
         fiber=i
         x_psf=traceset.x_vs_wave(fiber,wavearr[ind])

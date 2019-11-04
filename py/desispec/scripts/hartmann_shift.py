@@ -1,15 +1,11 @@
-#import desispec.hartmann.focus_DESI_2 as foc
 import desispec.hartmann.fit_arc as fit_arc
-#import pdb
-import pandas as pd
 import matplotlib.pyplot as plt
 from astropy.table import Table
-#from astropy.io import ascii
-#import pickle as pk
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 import argparse
 from pkg_resources import resource_exists, resource_filename
+from desiutil.log import get_logger
 
 """
 Code to calcuate the Hartmann shift given a pair of left/right hartmann exposures. 
@@ -62,6 +58,9 @@ def main(args):
     n_exposure=len(serial_arr_left)
 
 
+    log = get_logger()
+    
+
     if read:
         pass
     else:   # Fitting
@@ -89,9 +88,9 @@ def main(args):
 
         n_dot=len(Data_all_left[0]['fiber'])
         for i in range(n_dot):
+            if (i+1)%50==0 : log.info("{}/{}".format(i+1,n_dot))
             source_table=Table([[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]],names=['fiber','lineid','wave','defocus','x_left','y_left','Ree_left','FWHMx_left','FWHMy_left','Amp_left','x_right','y_right','Ree_right','FWHMx_right','FWHMy_right','Amp_right'],dtype=['i4','i4','f4','f4','f4','f4','f4','f4','f4','f4','f4','f4','f4','f4','f4','f4'])
             for k in range(n_exposure):
-                print(k+1,'th exposure')
                 Data_left=Data_all_left[k]
                 Data_right=Data_all_right[k]
                 try:
@@ -115,7 +114,7 @@ def main(args):
     #################################
 
     if read:
-        df_shift_table=pd.read_csv(output_dir+'/shift_table_'+channel+'.csv')    
+        shift_table=Table.read(output_dir+'/shift_table_'+channel+'.ecsv', format='ascii.ecsv')
     else:
         source_table=source_table_all[0]
         shift_table=Table([[],[],[],[],[],[],[]],names=['fiber','lineid','wave','x','y','shift','flux'],dtype=['i4','i4','f4','f4','f4','f4','f4'])
@@ -137,10 +136,9 @@ def main(args):
                 shift_table.add_row([[table_use['fiber']],[table_use['lineid']],[table_use['wave']],[table_use['x_left']],[table_use['y_left']],[y_shift[0]],[table_use['Amp_left']]])
 
 
-        ##  write shift table to csv file ##
-        df_shift_table=shift_table.to_pandas()
-        df_shift_table.to_csv(output_dir+'/shift_table_'+channel+'.csv',index=False)
-
+        shift_table.write(output_dir+'/shift_table_'+channel+'.ecsv',format='ascii.ecsv',overwrite=True)
+    
+        
     pp=PdfPages(output_dir+'/'+channel+'_hartmann_plot.pdf')
     plt.figure(0,figsize=(9.5,4))
     font = {'family':'sans-serif',
@@ -151,9 +149,9 @@ def main(args):
     plt.xlabel('Defocus')
     plt.ylabel('Hartmann Shift')
 
-    x_arr=df_shift_table['x']
-    y_arr=df_shift_table['y']
-    z_arr=df_shift_table['shift']
+    x_arr=shift_table['x']
+    y_arr=shift_table['y']
+    z_arr=shift_table['shift']
 
     ax=plt.gca()
     ax.set_aspect('equal')
@@ -176,8 +174,8 @@ def main(args):
     plt.close()
     pp.close()
 
-    print('Median Hartmann shift for '+channel+' = '+str(np.median(z_arr)).strip()[0:5])
-    print('Check the plot in '+output_dir+'/'+channel+'_hartmann_plot.pdf. xdg-open should work.')
+    log.info('Median Hartmann shift for '+channel+' = '+str(np.median(z_arr)).strip()[0:5])
+    log.info('Check the plot in '+output_dir+'/'+channel+'_hartmann_plot.pdf. xdg-open should work.')
 
 
 

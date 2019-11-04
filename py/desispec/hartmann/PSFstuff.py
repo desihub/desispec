@@ -73,8 +73,8 @@ def PSF_fit(im, gaussian=True, trapezoidal=True, moffat=True, maxiter=200,acc=1e
 	Moff = models.Moffat2D(amplitude = 0, x_0=estimates['x_mean'], y_0=estimates['y_mean'], gamma=estimates['x_stddev'], alpha=2.0)
 
 	# contraindre le trapèze sur le centre de la gaussienne + limites inférieures à 0
-	Gauss.x_stddev.min=0
-	Gauss.y_stddev.min=0
+	Gauss.x_stddev.min=0.001
+	Gauss.y_stddev.min=0.001
 	Gauss.theta.fixed=True
 	Trap.slope.min=0
 	Trap.R_0.min=0
