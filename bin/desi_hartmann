@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script computes the Hartmann shift using a pair of Hartmann exposures.
+desi_hartmann  -r_d /project/projectdirs/desi/spectro/data/20191030/ -c B3 -p /project/projectdirs/desi/users/jguy/kpno/sm4-bootcalib/psfboot-b3.fits -l 22754 -r 22757 -d 0. -rd False -dp False
+"""
+
+import desispec.hartmann.hartmann_shift as hartmann_shift
+
+
+if __name__ == '__main__':
+    args = hartmann_shift.parse()
+    hartmann_shift.main(args)
