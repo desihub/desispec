@@ -32,10 +32,10 @@ from scipy.interpolate import RectBivariateSpline
 # home-made stuff
 #from rebin import rebin
  #from centroid import centroid
-import filesTools as ft
+import desispec.hartmann.filesTools as ft
 from copy import deepcopy
-import DESI_tools as desi
-import PSFstuff as psf
+import desispec.hartmann.DESI_tools as desi
+import desispec.hartmann.PSFstuff as psf
 
 # default parameters for matplotlib
 plt.rcParams['image.aspect']='auto'

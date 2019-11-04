@@ -3,14 +3,14 @@ import fitsio
 import numpy as np
 import matplotlib.pyplot as plt
 from specter.psf.gausshermite  import GaussHermitePSF
-import PSFstuff as psf_tool
+import desispec.hartmann.PSFstuff as psf_tool
 from astropy.io import fits,ascii
 from astropy.modeling import models, fitting
 import pdb
 import os
 from astropy.table import Table, Column
 
-def fit_arc(file_raw,psf_file,channel,dz,line_file='goodlines_vaccum.ascii',thres=500,ee=0.90,display=False,file_temp='file_temp.fits'):
+def fit_arc(file_raw,psf_file,channel,dz,line_file='../data/arc_lines/goodlines_vacuum_hartmann.ascii',ee=0.90,display=False,file_temp='file_temp.fits'):
     linelist=ascii.read(line_file)
     os.system('rm '+file_temp)
     cmd='desi_preproc -i '+file_raw+' -o '+file_temp+' --camera '+channel#[0]
@@ -74,7 +74,7 @@ def fit_arc(file_raw,psf_file,channel,dz,line_file='goodlines_vaccum.ascii',thre
                 ymin = ymax - n
             subim = im[ymin:ymax, xmin:xmax]
             print('x,y',xmin,xmax,ymin,ymax,np.max(subim))
-            if True: # keep format #np.max(subim)>thres:
+            if True: # keep format
                 (A, xcentroid, ycentroid, FWHMx, FWHMy,chi2) = psf_tool.PSF_Params(subim, sampling_factor=10.0, display=False, \
                            estimates={'amplitude':subim.max(),'x_mean':n/2,'y_mean':n/2,'x_stddev':FWHM_estim/2.35,'y_stddev':FWHM_estim/2.35}, \
                                                    doSkySub=False)
@@ -93,7 +93,7 @@ def fit_arc(file_raw,psf_file,channel,dz,line_file='goodlines_vaccum.ascii',thre
     
             #DISPLAY THE FITTED PROFILES AND ENCIRCLED ENERGY
             #------------------------------------------------
-            if display and np.max(subim)>thres:
+            if display:
                 fig.clear()
                 fit = models.Gaussian2D(**GFitParam)
                 # higher resolution grid for plotting

@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 from astropy.modeling import models, fitting
-from centroid import centroid
+from desispec.hartmann.centroid import centroid
 from astropy.stats import sigma_clipped_stats
 import matplotlib.pyplot as plt
 import pdb

@@ -7,7 +7,7 @@ from astropy.io.fits.hdu import HDUList
 # usual stuff
 import numpy as np
 import re
-from filesTools import fsearch
+from desispec.hartmann.filesTools import fsearch
 import sys
 import os
 from datetime import datetime
