@@ -337,7 +337,7 @@ def main(args) :
     
     log= get_logger()
 
-    log.info("degxx={} degxy={} degyx={} degyy={}".format(args.degxx,args.degxx,args.degxx,args.degxx))
+    log.info("degxx={} degxy={} degyx={} degyy={}".format(args.degxx,args.degxy,args.degyx,args.degyy))
     
     # read preprocessed image
     image=read_image(args.image)
