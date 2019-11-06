@@ -182,12 +182,18 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
     flux=np.zeros((nfibers,nwave))
     ivar=np.zeros((nfibers,nwave))
+    n1=frame_ivar.shape[1]
     for i in range(nfibers) :
         #log.info("resampling fiber #%03d"%i)
         #flux[i],ivar[i] = resample_flux(wave, frame_wave[i],frame_flux[i],frame_ivar[i])
         # because I am oversampling, a linear interpolation is sufficient
-        flux[i] = np.interp(wave, frame_wave[i],frame_flux[i])
-        ivar[i] = np.interp(wave, frame_wave[i],frame_ivar[i])/oversampling # larger variance, approximately
+
+        # increase the masked regions.
+        for d in [-2,-1,1,2] :
+            frame_ivar[i,2:n1-2][frame_ivar[i,2+d:n1-2+d]==0]=0
+        j=(frame_ivar[i]>0)
+        flux[i] = np.interp(wave, frame_wave[i][j],frame_flux[i][j],left=0,right=0)
+        ivar[i] = np.interp(wave, frame_wave[i],frame_ivar[i],left=0,right=0)/oversampling # larger variance, approximately
 
     t1=time.time()
     log.info("Resampled {} fibers in {:3.1f} sec".format(nfibers,t1-t0))
@@ -349,7 +355,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             if sw<=0 :
                 continue
 
-            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok],hw=3.)
+            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok]*reference_flux[ok],hw=3., calibrate=True)
 
             if err > 1 :
                 continue
