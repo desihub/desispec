@@ -55,6 +55,7 @@ parser.add_argument("--cameras", type=str,  help="comma separated list of camera
 parser.add_argument("-i", "--input", type=str,  help="input raw data file")
 parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
 parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
+parser.add_argument("--notraceshift", action="store_true", help="Do not shift traces")
 parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
 parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
 parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
@@ -156,7 +157,10 @@ if args.batch:
     reduxdir = desispec.io.specprod_root()
     batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(args.night))
     os.makedirs(batchdir, exist_ok=True)
-    jobname = '{}-{}-{:08d}'.format(args.obstype.lower(), args.night, args.expid)
+    camword=""
+    for cam in args.cameras:
+        camword += cam
+    jobname = '{}-{}-{:08d}-{}'.format(args.obstype.lower(), args.night, args.expid, camword)
     scriptfile = os.path.join(batchdir, jobname+'.slurm')
 
     ncameras = len(args.cameras)
@@ -260,8 +264,9 @@ if rank == 0:
 #-------------------------------------------------------------------------
 #- Traceshift
 
-if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
-    if rank == 0:
+if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
+
+    if rank == 0 and (not args.notraceshift ) :
         log.info('Starting traceshift at {}'.format(time.asctime()))
 
     for i in range(rank, len(args.cameras), size):
@@ -272,13 +277,17 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
         else :
             inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
         outpsf = findfile('psf', args.night, args.expid, camera)
-        cmd = "desi_compute_trace_shifts"
-        cmd += " -i {}".format(preprocfile)
-        cmd += " --psf {}".format(inpsf)
-        cmd += " --outpsf {}".format(outpsf)
-        cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
-        if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
-            cmd += ' --sky'
+
+        if args.notraceshift :
+             cmd = "ln -s {} {}".format(inpsf,outpsf)
+        else :
+            cmd = "desi_compute_trace_shifts"
+            cmd += " -i {}".format(preprocfile)
+            cmd += " --psf {}".format(inpsf)
+            cmd += " --outpsf {}".format(outpsf)
+            cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
+            if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
+                cmd += ' --sky'
         
         runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
         
