@@ -173,7 +173,11 @@ def main(args=None):
     else :
         log.warning("No OBSTYPE keyword, trying to guess ...")
         qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
-        obstype = check_qframe_flavor(qframe,input_flavor=image.meta["FLAVOR"]).upper()
+        if "FLAVOR" in image.meta :
+            input_flavor = image.meta["FLAVOR"]
+        else :
+            input_flavor = None
+        obstype = check_qframe_flavor(qframe,input_flavor=input_flavor).upper()
         image.meta["OBSTYPE"]=obstype
     
     log.info("OBSTYPE = '{}'".format(obstype))
