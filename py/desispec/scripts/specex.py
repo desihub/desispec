@@ -83,7 +83,9 @@ def parse(options=None):
                         "specex_desi_psf_fit")
     parser.add_argument("--debug", action = 'store_true',
                         help="debug mode")
-
+    parser.add_argument("--broken-fibers", type=str, required=False, default=None,
+                        help="comma separated list of broken fibers")
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -163,6 +165,8 @@ def main(args, comm=None):
         log.info("specex:  bundlesize = {}".format(bundlesize))
         log.info("specex:  specmin = {}".format(specmin))
         log.info("specex:  specmax = {}".format(specmax))
+        if args.broken_fibers :
+            log.info("specex:  broken fibers = {}".format(args.broken_fibers))
 
     # get the root output file
 
@@ -190,6 +194,8 @@ def main(args, comm=None):
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
         com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
+        if args.broken_fibers :
+            com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
         if args.debug :
             com.extend(['--debug'])
 
