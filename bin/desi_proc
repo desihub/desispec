@@ -261,6 +261,22 @@ if comm is not None:
 if rank == 0:
     progress['preproc'] = time.asctime()
 
+
+#-------------------------------------------------------------------------
+#- Get input PSFs
+input_psf = dict()
+for camera in args.cameras :
+    if args.psf is not None :
+        input_psf[camera] = args.psf
+    else :
+        # look for a psfnight psf
+        psfnightfile = findfile('psfnight', args.night, args.expid, camera)
+        if os.path.isfile(psfnightfile) :
+            input_psf[camera] = psfnightfile
+        else :
+            input_psf[camera] = findcalibfile([hdr, camhdr[camera]], 'PSF')
+    log.info("Will use input PSF : {}".format(input_psf[camera]))
+
 #-------------------------------------------------------------------------
 #- Traceshift
 
@@ -272,10 +288,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
     for i in range(rank, len(args.cameras), size):
         camera = args.cameras[i]
         preprocfile = findfile('preproc', args.night, args.expid, camera)
-        if args.psf is not None :
-            inpsf = args.psf
-        else :
-            inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
+        inpsf  = input_psf[camera]
         outpsf = findfile('psf', args.night, args.expid, camera)
 
         if args.notraceshift :
@@ -314,11 +327,7 @@ if args.obstype in ['ARC', 'TESTARC']:
         outputs = dict()
         for camera in args.cameras:
             preprocfile = findfile('preproc', args.night, args.expid, camera)
-            if args.psf is not None :
-                inpsf = args.psf
-            else :
-                inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
-                 
+            inpsf  = input_psf[camera]
             outpsf = findfile('psf', args.night, args.expid, camera)
             cmd = 'desi_compute_psf'
             cmd += ' --input-image {}'.format(preprocfile)
@@ -396,7 +405,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
         
             #- TODO: standardize where these params are kept
             if camera.startswith('b'):
-                cmd += ' -w 3579.0,5934.0,0.8'
+                cmd += ' -w 3579.0,5915.0,0.8'
             elif camera.startswith('r'):
                 cmd += ' -w 5635.0,7731.0,0.8'
             elif camera.startswith('z'):
