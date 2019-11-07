@@ -35,7 +35,7 @@ import fitsio
 
 import desispec.io
 from desispec.io import findfile
-from desispec.calibfinder import findcalibfile
+from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.util import runcmd
@@ -307,7 +307,8 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
 if args.obstype in ['ARC', 'TESTARC']:
     if rank == 0:
         log.info('Starting specex PSF fitting at {}'.format(time.asctime()))
-
+        
+        
     if rank > 0:
         cmds = inputs = outputs = None
     else:
@@ -316,12 +317,23 @@ if args.obstype in ['ARC', 'TESTARC']:
         outputs = dict()
         for camera in args.cameras:
             preprocfile = findfile('preproc', args.night, args.expid, camera)
-            inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
+            if args.psf is not None :
+                inpsf = args.psf
+            else :
+                inpsf = findcalibfile([hdr, camhdr[camera]], 'PSF')
+                 
             outpsf = findfile('psf', args.night, args.expid, camera)
             cmd = 'desi_compute_psf'
             cmd += ' --input-image {}'.format(preprocfile)
             cmd += ' --input-psf {}'.format(inpsf)
             cmd += ' --output-psf {}'.format(outpsf)
+            
+            # look for broken fibers
+            cfinder = CalibFinder([hdr, camhdr[camera]])
+            if cfinder.haskey("BROKENFIBERS") :
+                cmd += ' --broken-fibers {}'.format(cfinder.value("BROKENFIBERS"))
+                if rank == 0 :
+                    log.warning('broken fibers: {}'.format(cfinder.value("BROKENFIBERS")))
 
             if not os.path.exists(outpsf):
                 cmds[camera] = cmd
