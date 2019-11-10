@@ -177,6 +177,11 @@ if args.batch:
         print('ERROR: unknown obstype={}'.format(args.obstype))
         sys.exit(1)
 
+    #- We have a limit of 10 realtime nodes
+    if args.queue == 'realtime':
+        ncores = 10*32
+        runtime *= 2
+
     nodes = (ncores-1) // 32 + 1
     assert runtime < 60
 
