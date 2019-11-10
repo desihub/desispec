@@ -178,8 +178,9 @@ if args.batch:
         sys.exit(1)
 
     #- We have a limit of 10 realtime nodes
-    if args.queue == 'realtime':
-        ncores = 10*32
+    max_realtime_cores = 10*32
+    if (args.queue == 'realtime') and (ncores > max_realtime_cores):
+        ncores = max_realtime_cores
         runtime *= 2
 
     nodes = (ncores-1) // 32 + 1
