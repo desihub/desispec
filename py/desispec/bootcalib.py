@@ -69,6 +69,7 @@ def bootcalib(deg,flatimage,arcimage):
 
     camera=flatimage.camera
     flat=flatimage.pix
+    flat[flat<-20]=-20.
     ny=flat.shape[0]
 
     xpk,ypos,cut=find_fiber_peaks(flat)
@@ -79,7 +80,8 @@ def bootcalib(deg,flatimage,arcimage):
     #- Also need wavelength solution not just trace
 
     arc=arcimage.pix
-    arc_ivar=arcimage.ivar
+    arc[arc<-20]=-20.
+    arc_ivar=arcimage.ivar*(arcimage.mask==0)
     all_spec=extract_sngfibers_gaussianpsf(arc,arc_ivar,xfit,gauss)
     llist=load_arcline_list(camera)
     ### dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
@@ -1044,7 +1046,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     #
     return np.array(gauss)
 
-def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
+def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False,thresh=None) :
     """Find the peaks of the fiber flat spectra
     Preforms book-keeping error checking
 
@@ -1079,17 +1081,20 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     #srt = np.sort(cutimg.flatten()) # this does not work for sparse fibers
     #thresh = srt[int(cutimg.size*0.95)] / 2. # this does not work for sparse fibers
 
-    thresh = np.max(cut)/20.
-    pixels_below_threshold=np.where(cut<thresh)[0]
-    if pixels_below_threshold.size>2 :
-        values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,iters=200)
-        if values_below_threshold.size>2 :
-            rms=np.std(values_below_threshold)
-            nsig=7
-            new_thresh=max(thresh,nsig*rms)
-            log.info("Threshold: {:f} -> {:f} ({:d}*rms: {:f})".format(thresh,new_thresh,nsig,nsig*rms))
-            thresh=new_thresh
-
+    if thresh is None :
+        thresh = np.max(cut)/20.
+        log.info("Threshold: {:f}".format(thresh))
+        pixels_below_threshold=np.where(cut<thresh)[0]
+        if pixels_below_threshold.size>2 :
+            values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,iters=200)
+            if values_below_threshold.size>2 :
+                rms=np.std(values_below_threshold)
+                nsig=7
+                new_thresh=max(thresh,nsig*rms)
+                log.info("Threshold: {:f} -> {:f} ({:d}*rms: {:f})".format(thresh,new_thresh,nsig,nsig*rms))
+                thresh=new_thresh
+    else :
+        log.info("Using input threshold: {:f})".format(thresh))
     #gdp = cut > thresh
     # Roll to find peaks (simple algorithm)
     #nstep = nwidth // 2
@@ -1521,7 +1526,7 @@ def fix_ycoeff_outliers(xcoeff, ycoeff, deg=5, tolerance=2):
 #####################################################################
 
 def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_arc=False,
-              XCOEFF=None, fiberflat_header=None, arc_header=None):
+              XCOEFF=None, fiberflat_header=None, arc_header=None, fix_ycoeff=True):
     """ Write the output to a Base PSF format
 
     Parameters
@@ -1608,7 +1613,8 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             XCOEFF[ii, :] = xleg_fit['coeff']
 
     # Fix outliers assuming that coefficients vary smoothly vs. CCD coordinates
-    YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,tolerance=2)
+    if fix_ycoeff :
+        YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,tolerance=2)
 
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
