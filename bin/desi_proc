@@ -501,7 +501,11 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
             if args.fiberflat :
                 flatfilename=args.fiberflat
             else:
-                flatfilename=findcalibfile([fr.meta,], 'FIBERFLAT')
+                fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, camera)
+                if os.path.isfile(fiberflatnightfile) :
+                    flatfilename  = fiberflatnightfile
+                else :
+                    flatfilename=findcalibfile([fr.meta,], 'FIBERFLAT')
             ff = desispec.io.read_fiberflat(flatfilename)
             apply_fiberflat(fr, ff)
 
