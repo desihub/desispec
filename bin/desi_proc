@@ -32,7 +32,7 @@ from copy import deepcopy
 
 import numpy as np
 import fitsio
-
+import glob
 import desispec.io
 from desispec.io import findfile
 from desispec.calibfinder import findcalibfile,CalibFinder
@@ -383,6 +383,26 @@ if args.obstype in ['ARC', 'TESTARC']:
 
     if rank == 0:
         progress['psf'] = time.asctime()
+
+        
+#-------------------------------------------------------------------------
+#- Merge PSF of night is appicable
+
+if args.obstype in ['ARC']:
+    if rank == 0:
+        for camera in args.cameras :
+            psfnightfile = findfile('psfnight', args.night, args.expid, camera)
+            if not os.path.isfile(psfnightfile) : # we still don't have a psf night, see if we can compute it ...
+                psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace(str(args.expid),"*"))
+                log.info("Number of PSF for night={} camera={} = {}".format(args.night,camera,len(psfs)))
+                if len(psfs)>4 : # lets do it!
+                    log.info("Computing psfnight ...")
+                    dirname=os.path.dirname(psfnightfile)
+                    if not os.path.isdir(dirname) :
+                        os.makedirs(dirname)
+                    desispec.scripts.specex.mean_psf(psfs,psfnightfile)
+            if os.path.isfile(psfnightfile) : # now use this one
+                input_psf[camera] = psfnightfile
 
 #-------------------------------------------------------------------------
 #- Extract
