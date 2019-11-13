@@ -55,7 +55,7 @@ parser.add_argument("--cameras", type=str,  help="comma separated list of camera
 parser.add_argument("-i", "--input", type=str,  help="input raw data file")
 parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
 parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
-parser.add_argument("--notraceshift", action="store_true", help="Do not shift traces")
+parser.add_argument("--traceshift", action="store_true", help="Do shift traces")
 parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
 parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
 parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
@@ -282,7 +282,7 @@ for camera in args.cameras :
 
 if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
 
-    if rank == 0 and (not args.notraceshift ) :
+    if rank == 0 and args.traceshift :
         log.info('Starting traceshift at {}'.format(time.asctime()))
 
     for i in range(rank, len(args.cameras), size):
@@ -290,20 +290,21 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
         preprocfile = findfile('preproc', args.night, args.expid, camera)
         inpsf  = input_psf[camera]
         outpsf = findfile('psf', args.night, args.expid, camera)
-
-        if args.notraceshift :
-             cmd = "ln -s {} {}".format(inpsf,outpsf)
+        if not os.path.isfile(outpsf) :
+            if args.traceshift :
+                cmd = "desi_compute_trace_shifts"
+                cmd += " -i {}".format(preprocfile)
+                cmd += " --psf {}".format(inpsf)
+                cmd += " --outpsf {}".format(outpsf)
+                cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
+                if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
+                    cmd += ' --sky'
+            else :
+                cmd = "ln -s {} {}".format(inpsf,outpsf)  
+            runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
         else :
-            cmd = "desi_compute_trace_shifts"
-            cmd += " -i {}".format(preprocfile)
-            cmd += " --psf {}".format(inpsf)
-            cmd += " --outpsf {}".format(outpsf)
-            cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
-            if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
-                cmd += ' --sky'
-        
-        runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
-        
+            log.info("PSF {} exists".format(outpsf))
+
     if comm is not None:
         comm.barrier()
 
@@ -386,7 +387,7 @@ if args.obstype in ['ARC', 'TESTARC']:
 
         
 #-------------------------------------------------------------------------
-#- Merge PSF of night is appicable
+#- Merge PSF of night if applicable
 
 if args.obstype in ['ARC']:
     if rank == 0:
@@ -506,6 +507,86 @@ if args.obstype in ['FLAT', 'TESTFLAT'] :
         progress['fiberflat'] = time.asctime()
 
 #-------------------------------------------------------------------------
+#- Average and auto-calib fiberflats of night if applicable
+
+if args.obstype in ['FLAT']:
+    if rank == 0:
+        fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, args.cameras[0])
+        fiberflatdirname=os.path.dirname(fiberflatnightfile)
+        if not os.path.isfile(fiberflatnightfile) : # we still don't have them, see if we can compute them ...
+            flats = glob.glob(findfile('fiberflat', args.night, args.expid, "b0").replace(str(args.expid),"*").replace("b0","*"))
+            log.info("Number of fiberflat for night {} = {}".format(args.night,len(flats)))
+            if len(flats)>=3*4*len(args.cameras) : # lets do it! (3 exposures x 4 lamps x N cameras)
+                log.info("Computing fiberflatnight per lamp and camera ...")
+                tmpdir=os.path.join(fiberflatdirname,"tmp")
+                if not os.path.isdir(tmpdir) :
+                    os.makedirs(tmpdir)
+
+                log.info("First average measurements per camera and per lamp")
+                average_flats=dict()
+                for camera in args.cameras :
+                    # list of flats for this camera
+                    flats_for_this_camera=[]
+                    for flat in flats :
+                        if flat.find(camera)>=0 :
+                            flats_for_this_camera.append(flat)
+                    #log.info("For camera {} , flats = {}".format(camera,flats_for_this_camera))
+                    #sys.exit(12)
+                            
+                    # average per lamp (and camera)
+                    average_flats[camera] = list()
+                    for lampbox in range(4) :
+                        ofile=os.path.join(tmpdir,"fiberflatnight-camera-{}-lamp-{}.fits".format(camera,lampbox))
+                        if not os.path.isfile(ofile) : 
+                            log.info("Average flat for camera {} and lamp box #{}".format(camera,lampbox))
+                            pg="CALIB DESI-CALIB-0{} LEDs only".format(lampbox)
+                        
+                            cmd="desi_average_fiberflat --program '{}' --outfile {} -i ".format(pg,ofile)
+                            for flat in flats_for_this_camera :
+                                cmd += " {} ".format(flat)
+                            runcmd(cmd, inputs=flats_for_this_camera, outputs=[ofile,])
+                            if os.path.isfile(ofile) :
+                                average_flats[camera].append(ofile)
+                        else :
+                            log.info("Will use existing {}".format(ofile))
+                            average_flats[camera].append(ofile)
+
+                log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
+                for camera_arm in ["b","r","z"] :
+                    cameras_for_this_arm = []
+                    flats_for_this_arm = []
+                    for camera in args.cameras :
+                        if camera[0].lower() == camera_arm :
+                            cameras_for_this_arm.append(camera)
+                            if camera in average_flats :
+                                 for flat in average_flats[camera] :
+                                     flats_for_this_arm.append(flat)
+                    cmd="desi_autocalib_fiberflat --night {} --arm {} -i ".format(args.night,camera_arm)
+                    for flat in flats_for_this_arm :
+                        cmd += " {} ".format(flat)
+                    runcmd(cmd, inputs=flats_for_this_arm, outputs=[])
+                log.info("Done with fiber flats per night")
+
+
+    if comm is not None:
+        comm.barrier()
+
+#-------------------------------------------------------------------------
+#- Get input fiberflat
+input_fiberflat = dict()
+for camera in args.cameras :
+    if args.fiberflat is not None :
+        input_fiberflat[camera] = args.fiberflat
+    else :
+        # look for a fiberflatnight fiberflat
+        fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, camera)
+        if os.path.isfile(fiberflatnightfile) :
+            input_fiberflat[camera] = fiberflatnightfile
+        else :
+            input_fiberflat[camera] = findcalibfile([hdr, camhdr[camera]], 'FIBERFLAT')
+    log.info("Will use input FIBERFLAT : {}".format(input_fiberflat[camera]))
+
+#-------------------------------------------------------------------------
 #- Apply fiberflat and write fframe file
 
 if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat ) :
@@ -518,19 +599,15 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
         if not os.path.exists(fframefile):
             framefile = findfile('frame', args.night, args.expid, camera)
             fr = desispec.io.read_frame(framefile)
-            if args.fiberflat :
-                flatfilename=args.fiberflat
-            else:
-                fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, camera)
-                if os.path.isfile(fiberflatnightfile) :
-                    flatfilename  = fiberflatnightfile
-                else :
-                    flatfilename=findcalibfile([fr.meta,], 'FIBERFLAT')
-            ff = desispec.io.read_fiberflat(flatfilename)
-            apply_fiberflat(fr, ff)
+            flatfilename=input_fiberflat[camera]
+            if flatfilename is not None :
+                ff = desispec.io.read_fiberflat(flatfilename)
+                apply_fiberflat(fr, ff)
 
-            fframefile = findfile('fframe', args.night, args.expid, camera)
-            desispec.io.write_frame(fframefile, fr)
+                fframefile = findfile('fframe', args.night, args.expid, camera)
+                desispec.io.write_frame(fframefile, fr)
+            else :
+                log.warning("Missing fiberflat for camera {}".format(camera))
 
     if comm is not None:
         comm.barrier()
@@ -561,10 +638,10 @@ if args.obstype == 'SKY' and (not args.noskysub) :
             continue
 
         #- Apply fiberflat then select random fibers below a flux cut
-        if args.fiberflat :
-            flatfilename=args.fiberflat
-        else:
-            flatfilename=findcalibfile([fr.meta,], 'FIBERFLAT')
+        flatfilename=input_fiberflat[camera]
+        if flatfilename is None :
+            log.error("No fiberflat for {}".format(camera))
+            continue
         ff = desispec.io.read_fiberflat(flatfilename)
         apply_fiberflat(fr, ff)
         sumflux = np.sum(fr.flux, axis=1)
@@ -594,10 +671,11 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
         camera = args.cameras[i]
         framefile = findfile('frame', args.night, args.expid, camera)
         hdr = fitsio.read_header(framefile, 'FLUX')
-        if args.fiberflat :
-            fiberflatfile=args.fiberflat
-        else:
-            fiberflatfile=findcalibfile([fr.meta,], 'FIBERFLAT')
+        fiberflatfile=input_fiberflat[camera]
+        if fiberflatfile is None :
+            log.error("No fiberflat for {}".format(camera))
+            continue
+
         skyfile = findfile('sky', args.night, args.expid, camera)
 
         cmd = "desi_compute_sky"
