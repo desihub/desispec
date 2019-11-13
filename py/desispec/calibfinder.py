@@ -40,7 +40,10 @@ def findcalibfile(headers,key,yaml_file=None) :
     Returns path to calibration file
     """
     cfinder = CalibFinder(headers,yaml_file)
-    return cfinder.findfile(key)
+    if cfinder.haskey(key) :
+        return cfinder.findfile(key)
+    else :
+        return None
 
 class CalibFinder() :
 
