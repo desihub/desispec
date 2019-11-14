@@ -519,7 +519,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
 #- TODO: move this to a function somewhere
 #- TODO: this assigns different sky fibers to each frame of same spectrograph
 
-if args.obstype == 'SKY' and (not args.noskysub) :
+if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
     if rank == 0:
         log.info('Picking sky fibers at {}'.format(time.asctime()))
 
@@ -573,7 +573,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
         if args.fiberflat :
             fiberflatfile=args.fiberflat
         else:
-            fiberflatfile=findcalibfile([fr.meta,], 'FIBERFLAT')
+            fiberflatfile=findcalibfile([hdr,], 'FIBERFLAT')
         skyfile = findfile('sky', args.night, args.expid, camera)
 
         cmd = "desi_compute_sky"
