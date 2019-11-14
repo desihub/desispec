@@ -169,7 +169,7 @@ if args.batch:
         ncores, runtime = 20*ncameras, 25
     elif args.obstype in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20*nspectro, 25
-    elif args.obstype in ('SKY', 'TWILIGHT'):
+    elif args.obstype in ('SKY', 'TWILIGHT', 'SCIENCE'):
         ncores, runtime = 20*nspectro, 15
     elif args.obstype in ('ZERO', 'DARK'):
         ncores, runtime = ncameras, 5
