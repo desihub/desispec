@@ -5,7 +5,13 @@ desispec Change Log
 0.31.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Adding more desi_proc options (PR `#848`_, `#850`_).
+* Support PSF bootstrapping with broken fibers (PR `#849`_).
+* Hot fixes to desi_proc crashes (pushed directly to master).
+
+.. _`#848`: https://github.com/desihub/desispec/pull/848
+.. _`#849`: https://github.com/desihub/desispec/pull/849
+.. _`#850`: https://github.com/desihub/desispec/pull/850
 
 0.31.0 (2019-10-31)
 -------------------
