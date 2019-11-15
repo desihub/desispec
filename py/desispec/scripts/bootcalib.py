@@ -44,7 +44,8 @@ def parse(options=None):
                         help = 'comma-separated used lamp elements, ex: HgI,NeI,ArI,CdI,KrI')
     parser.add_argument('--good-lines', type = str, default = None, required=False,
                         help = 'ascii files with good lines (default is data/arc_lines/goodlines_vacuum.ascii)')
-
+    parser.add_argument('--threshold', type = float, default = None, required=False, help = 'use this threshold to detect traces (default is automatic)')
+    
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
@@ -55,7 +56,7 @@ def parse(options=None):
     parser.add_argument("--nmax", type = int, default=100, required=False, help="Max number of measured emission lines kept in triplet-matching algorithm")
     parser.add_argument("--out-line-list", type = str, default=False, required=False, help="Write to the list of lines found (can be used as input to specex)")
     parser.add_argument('--fiberflat', type = str, default = None, required=False, help = 'deprecated, same as --contfile')
-    
+    parser.add_argument('--no-y-fix', action="store_true", help = 'do not fix the ycoeff')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -115,7 +116,7 @@ def main(args):
         ###########
         # Find fibers
         log.info("Finding the fibers")
-        xpk, ypos, cut = desiboot.find_fiber_peaks(cont)
+        xpk, ypos, cut = desiboot.find_fiber_peaks(cont,nwidth=5,debug=False,thresh=args.threshold)
         if QA:
             desiboot.qa_fiber_peaks(xpk, cut, pp)
 
@@ -350,7 +351,7 @@ def main(args):
     # Write PSF file
     log.info("Writing PSF file")
     desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, legendre_deg=args.legendre_degree , without_arc=args.trace_only,
-                       XCOEFF=XCOEFF,fiberflat_header=contfile_header,arc_header=arc_header)
+                       XCOEFF=XCOEFF,fiberflat_header=contfile_header,arc_header=arc_header,fix_ycoeff=(not args.no_y_fix))
     log.info("Successfully wrote {:s}".format(args.outfile))
 
     if ( not args.trace_only ) and args.out_line_list :

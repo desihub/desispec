@@ -14,6 +14,7 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
 from desispec.preproc import masked_median
+from desispec.calibfinder import CalibFinder
 from desispec import util
 import scipy,scipy.sparse
 import sys
@@ -95,6 +96,19 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     flux = frame.flux.copy()
     ivar = frame.ivar*(frame.mask==0)
 
+    #- if broken fibers, mask them
+    broken_fibers = []
+    if frame.meta is not None and "CAMERA" in frame.meta  and "DETECTOR" in frame.meta :
+        cfinder = CalibFinder([frame.meta,])
+        if cfinder.haskey("BROKENFIBERS") :
+            for v in cfinder.value("BROKENFIBERS").split(",") :
+                broken_fibers.append(int(v))
+            log.info("Frame has broken fibers: {}".format(broken_fibers))
+
+        for broken_fiber in broken_fibers :
+            flux[broken_fiber] = 0.
+            ivar[broken_fiber] = 0.
+    
 
 
     # iterative fitting and clipping to get precise mean spectrum
@@ -437,9 +451,17 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     log.info("add a systematic error of 0.0035 to fiberflat variance (calibrated on sims)")
     fiberflat_ivar = (fiberflat_ivar>0)/( 1./ (fiberflat_ivar+(fiberflat_ivar==0) ) + 0.0035**2)
-    
-    return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
+
+    fiberflat = FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
                      chi2pdf=chi2pdf,header=frame.meta,fibermap=frame.fibermap)
+        
+    for broken_fiber in broken_fibers :
+        log.info("mask broken fiber {} in flat".format(broken_fiber))
+        fiberflat.fiberflat[fiber]=1.
+        fiberflat.ivar[fiber]=0.
+        fiberflat.mask[fiber]=specmask.BADFIBERFLAT
+    
+    return fiberflat
 
 def average_fiberflat(fiberflats):
     """Average several fiberflats 
@@ -641,6 +663,7 @@ def autocalib_fiberflat(fiberflats):
     for spec in np.unique(spectro) :
         output_fiberflats[spec].fiberflat *= corr
         mask_bad_fiberflat(output_fiberflats[spec])
+        filter_fiberflat(output_fiberflats[spec])
     log.info("done")
     return output_fiberflats
     
@@ -648,15 +671,30 @@ def mask_bad_fiberflat(fiberflat) :
     log = get_logger()
     
     for fiber in range(fiberflat.fiberflat.shape[0]) :
-        fiberflat.mask[fiber][fiberflat.fiberflat[fiber]<0.5] |= specmask.LOWFLAT
-        fiberflat.mask[fiber][fiberflat.fiberflat[fiber]>1.2] |= specmask.BADFIBERFLAT
+        fiberflat.mask[fiber][fiberflat.fiberflat[fiber]<0.1] |= specmask.LOWFLAT
+        fiberflat.mask[fiber][fiberflat.fiberflat[fiber]>2.] |= specmask.BADFIBERFLAT
         nbad = np.sum((fiberflat.ivar[fiber]==0)|(fiberflat.mask[fiber]!=0))
         if nbad > 500 : 
             log.warning("fiber {} is 'BAD' because {} flatfield values are bad".format(fiber,nbad))
             fiberflat.fiberflat[fiber]=1.
             fiberflat.ivar[fiber]=0.
             fiberflat.mask[fiber]=specmask.BADFIBERFLAT
-        
+            
+def filter_fiberflat(fiberflat) :
+    log = get_logger()
+    var=1/(fiberflat.ivar+(fiberflat.ivar==0)*0.000001)
+    diff=np.zeros(fiberflat.fiberflat.shape[1])
+    diffvar=np.zeros(fiberflat.fiberflat.shape[1])
+    for fiber in range(fiberflat.fiberflat.shape[0]) :
+        diff[1:-1] = fiberflat.fiberflat[fiber,1:-1]-(fiberflat.fiberflat[fiber,:-2]+fiberflat.fiberflat[fiber,2:])/2.
+        diffvar[1:-1] = var[fiber,1:-1]+(var[fiber,:-2]+var[fiber,2:])/4.
+        isbad=(diff>(0.1+3*np.sqrt(diffvar)))|(var[fiber]>0.05**2)
+        bad=np.where(isbad)[0] # spike is probably a cosmic
+        good=np.where(isbad!=True)[0]
+        if bad.size>0 and good.size>0 :
+            badflat=fiberflat.fiberflat[fiber,bad].copy()
+            fiberflat.fiberflat[fiber,bad] = np.interp(fiberflat.wave[bad],fiberflat.wave[good],fiberflat.fiberflat[fiber,good],left=1,right=1)
+    return fiberflat
 
 def apply_fiberflat(frame, fiberflat):
     """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
