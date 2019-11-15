@@ -424,14 +424,15 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
         for camera in args.cameras:
             cmd = 'desi_extract_spectra'
         
-            #- TODO: standardize where these params are kept
+            #- Based on data from SM1-SM8, looking at central and edge fibers
+            #- with in mind overlapping arc lamps lines
             if camera.startswith('b'):
-                cmd += ' -w 3579.0,5915.0,0.8'
+                cmd += ' -w 3600.0,5800.0,0.8'
             elif camera.startswith('r'):
-                cmd += ' -w 5635.0,7731.0,0.8'
+                cmd += ' -w 5760.0,7620.0,0.8'
             elif camera.startswith('z'):
-                cmd += ' -w 7445.4,9824.0,0.8'
-        
+                cmd += ' -w 7520.0,9824.0,0.8'
+
             preprocfile = findfile('preproc', args.night, args.expid, camera)
             psffile = findfile('psf', args.night, args.expid, camera)
             framefile = findfile('frame', args.night, args.expid, camera)
@@ -513,7 +514,7 @@ if args.obstype in ['FLAT']:
     if rank == 0:
         fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, args.cameras[0])
         fiberflatdirname=os.path.dirname(fiberflatnightfile)
-        if not os.path.isfile(fiberflatnightfile) : # we still don't have them, see if we can compute them ...
+        if not os.path.isfile(fiberflatnightfile) and len(args.cameras)>=6 : # we still don't have them, see if we can compute them, but need at least 2 spectros ...
             flats = glob.glob(findfile('fiberflat', args.night, args.expid, "b0").replace(str(args.expid),"*").replace("b0","*"))
             log.info("Number of fiberflat for night {} = {}".format(args.night,len(flats)))
             if len(flats)>=3*4*len(args.cameras) : # lets do it! (3 exposures x 4 lamps x N cameras)
