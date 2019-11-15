@@ -662,6 +662,7 @@ def autocalib_fiberflat(fiberflats):
     for spec in np.unique(spectro) :
         output_fiberflats[spec].fiberflat *= corr
         mask_bad_fiberflat(output_fiberflats[spec])
+        filter_fiberflat(output_fiberflats[spec])
     log.info("done")
     return output_fiberflats
     
@@ -677,7 +678,22 @@ def mask_bad_fiberflat(fiberflat) :
             fiberflat.fiberflat[fiber]=1.
             fiberflat.ivar[fiber]=0.
             fiberflat.mask[fiber]=specmask.BADFIBERFLAT
-        
+            
+def filter_fiberflat(fiberflat) :
+    log = get_logger()
+    var=1/(fiberflat.ivar+(fiberflat.ivar==0)*0.000001)
+    diff=np.zeros(fiberflat.fiberflat.shape[1])
+    diffvar=np.zeros(fiberflat.fiberflat.shape[1])
+    for fiber in range(fiberflat.fiberflat.shape[0]) :
+        diff[1:-1] = fiberflat.fiberflat[fiber,1:-1]-(fiberflat.fiberflat[fiber,:-2]+fiberflat.fiberflat[fiber,2:])/2.
+        diffvar[1:-1] = var[fiber,1:-1]+(var[fiber,:-2]+var[fiber,2:])/4.
+        isbad=(diff>(0.1+3*np.sqrt(diffvar)))|(var[fiber]>0.05**2)
+        bad=np.where(isbad)[0] # spike is probably a cosmic
+        good=np.where(isbad!=True)[0]
+        if bad.size>0 and good.size>0 :
+            badflat=fiberflat.fiberflat[fiber,bad].copy()
+            fiberflat.fiberflat[fiber,bad] = np.interp(fiberflat.wave[bad],fiberflat.wave[good],fiberflat.fiberflat[fiber,good],left=1,right=1)
+    return fiberflat
 
 def apply_fiberflat(frame, fiberflat):
     """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
