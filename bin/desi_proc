@@ -168,11 +168,20 @@ if args.batch:
     if args.obstype in ('ARC', 'TESTARC'):
         ncores, runtime = 20*ncameras, 25
     elif args.obstype in ('FLAT', 'TESTFLAT'):
-        ncores, runtime = 20*nspectro, 20
-    elif args.obstype in ('SKY', 'TWILIGHT'):
+        ncores, runtime = 20*nspectro, 25
+    elif args.obstype in ('SKY', 'TWILIGHT', 'SCIENCE'):
         ncores, runtime = 20*nspectro, 15
     elif args.obstype in ('ZERO', 'DARK'):
         ncores, runtime = ncameras, 5
+    else:
+        print('ERROR: unknown obstype={}'.format(args.obstype))
+        sys.exit(1)
+
+    #- We have a limit of 10 realtime nodes
+    max_realtime_cores = 10*32
+    if (args.queue == 'realtime') and (ncores > max_realtime_cores):
+        ncores = max_realtime_cores
+        runtime *= 2
 
     nodes = (ncores-1) // 32 + 1
     assert runtime < 60
@@ -621,7 +630,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
 #- TODO: move this to a function somewhere
 #- TODO: this assigns different sky fibers to each frame of same spectrograph
 
-if args.obstype == 'SKY' and (not args.noskysub) :
+if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
     if rank == 0:
         log.info('Picking sky fibers at {}'.format(time.asctime()))
 
@@ -672,11 +681,18 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
         camera = args.cameras[i]
         framefile = findfile('frame', args.night, args.expid, camera)
         hdr = fitsio.read_header(framefile, 'FLUX')
+<<<<<<< HEAD
         fiberflatfile=input_fiberflat[camera]
         if fiberflatfile is None :
             log.error("No fiberflat for {}".format(camera))
             continue
 
+=======
+        if args.fiberflat :
+            fiberflatfile=args.fiberflat
+        else:
+            fiberflatfile=findcalibfile([hdr,], 'FIBERFLAT')
+>>>>>>> master
         skyfile = findfile('sky', args.night, args.expid, camera)
 
         cmd = "desi_compute_sky"

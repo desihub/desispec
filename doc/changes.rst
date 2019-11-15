@@ -2,8 +2,15 @@
 desispec Change Log
 ===================
 
-0.30.1 (unreleased)
+0.31.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.31.0 (2019-10-31)
+-------------------
+
+First CMX release with bug fixes for on-sky data.
 
 * Use rrdesi --no-mpi-abort feature (PR `#823`_).
 * Added code to generate pixflats (PR `#824`_).
@@ -18,6 +25,7 @@ desispec Change Log
 * desi_proc options for non-default PSF and fiberflat (PR `#842`_).
 * Correct fibermap to match what petal we are in (PR `#843`_).
 * Update database loading to match current data model (PR `#844`_).
+* Added desi_proc --batch option (PR `#845`_).
 
 .. _`#823`: https://github.com/desihub/desispec/pull/823
 .. _`#824`: https://github.com/desihub/desispec/pull/824
@@ -30,6 +38,7 @@ desispec Change Log
 .. _`#842`: https://github.com/desihub/desispec/pull/842
 .. _`#843`: https://github.com/desihub/desispec/pull/843
 .. _`#844`: https://github.com/desihub/desispec/pull/844
+.. _`#845`: https://github.com/desihub/desispec/pull/845
 
 0.30.0 (2019-10-17)
 -------------------

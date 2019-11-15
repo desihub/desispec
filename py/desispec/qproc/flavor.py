@@ -55,6 +55,7 @@ def check_qframe_flavor(qframe,input_flavor=None):
     else :
         guessed_flavor = "SKY"
 
+
     if input_flavor is not None and ( input_flavor.upper() == "ZERO" or input_flavor.upper() == "DARK" ) :
         if guessed_flavor != "ZERO" :
             log.warning("Keep original flavor '{}' despite guess = '{}'".format(input_flavor.upper(),guessed_flavor))
