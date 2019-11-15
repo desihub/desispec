@@ -681,18 +681,10 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
         camera = args.cameras[i]
         framefile = findfile('frame', args.night, args.expid, camera)
         hdr = fitsio.read_header(framefile, 'FLUX')
-<<<<<<< HEAD
         fiberflatfile=input_fiberflat[camera]
         if fiberflatfile is None :
             log.error("No fiberflat for {}".format(camera))
             continue
-
-=======
-        if args.fiberflat :
-            fiberflatfile=args.fiberflat
-        else:
-            fiberflatfile=findcalibfile([hdr,], 'FIBERFLAT')
->>>>>>> master
         skyfile = findfile('sky', args.night, args.expid, camera)
 
         cmd = "desi_compute_sky"
