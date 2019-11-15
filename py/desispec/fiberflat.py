@@ -98,7 +98,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     #- if broken fibers, mask them
     broken_fibers = []
-    if frame.meta is not None and "CAMERA" in frame.meta :
+    if frame.meta is not None and "CAMERA" in frame.meta  and "DETECTOR" in frame.meta :
         cfinder = CalibFinder([frame.meta,])
         if cfinder.haskey("BROKENFIBERS") :
             for v in cfinder.value("BROKENFIBERS").split(",") :
