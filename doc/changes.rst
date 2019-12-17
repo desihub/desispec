@@ -2,16 +2,19 @@
 desispec Change Log
 ===================
 
-0.31.1 (unreleased)
+0.32.0 (unreleased)
 -------------------
 
 * Adding more desi_proc options (PR `#848`_, `#850`_).
 * Support PSF bootstrapping with broken fibers (PR `#849`_).
 * Hot fixes to desi_proc crashes (pushed directly to master).
+* Increase cframe task from 1 min to 2 min (direct to master).
+* Adapt to new spectrograph SMn naming (PR `#853`_).
 
 .. _`#848`: https://github.com/desihub/desispec/pull/848
 .. _`#849`: https://github.com/desihub/desispec/pull/849
 .. _`#850`: https://github.com/desihub/desispec/pull/850
+.. _`#853`: https://github.com/desihub/desispec/pull/853
 
 0.31.0 (2019-10-31)
 -------------------
