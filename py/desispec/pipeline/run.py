@@ -95,7 +95,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
 
     signal.alarm(int(expected_run_time * 60))
     if rank == 0:
-        log.debug("Running {} with timeout {:.1f} min".format(
+        log.info("Running {} with timeout {:.1f} min".format(
             name, expected_run_time))
 
     task_start_time = time.time()
