@@ -32,6 +32,7 @@ from copy import deepcopy
 
 import numpy as np
 import fitsio
+from astropy.io import fits
 import glob
 import desispec.io
 from desispec.io import findfile
@@ -98,8 +99,10 @@ else:
     #- Fill in values from raw data header if not overridden by command line
     fx = fitsio.FITS(args.input)
     if 'SPS' in fx:
-        hdr = fx['SPS'].read_header()
+        hdr = fits.getheader(args.input, 'SPS')
+        #hdr = fx['SPS'].read_header()
     else:
+        #hdr = fits.getheader(args.input, 0)
         hdr = fx[0].read_header()
 
     if args.expid is None:
