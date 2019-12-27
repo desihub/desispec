@@ -2,11 +2,11 @@
 desispec Change Log
 ===================
 
-0.32.1 (unreleased)
+0.32.1 (2019-12-27)
 -------------------
 
 * Integration test simulate past not current date to workaound
-  pixsim header mismatch with `$DESI_SPECTRO_CALIB` calibrations.
+  pixsim header mismatch with :envvar:`DESI_SPECTRO_CALIB` calibrations.
   (direct push to master).
 
 0.32.0 (2019-12-22)
