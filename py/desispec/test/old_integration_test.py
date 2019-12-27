@@ -78,8 +78,9 @@ def integration_test(night=None, nspec=5, clobber=False):
     """
     log = get_logger()
     #- YEARMMDD string, rolls over at noon not midnight
+    #- Simulate 8 years ago, prior to start of survey
     if night is None:
-        night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
+        night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600-(8*365*24*3600)))
 
     #- check for required environment variables
     check_env()
