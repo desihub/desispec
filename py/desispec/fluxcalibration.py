@@ -44,13 +44,23 @@ def isStdStar(fibermap, bright=None):
     desi_target = fibermap[target_colnames[0]]  # (SV1_)DESI_TARGET
     desi_mask = target_masks[0]                 # (sv1) desi_mask
 
-    yes = (desi_target & desi_mask.STD_WD) != 0
-    if bright is None:
-        yes |= (desi_target & desi_mask.mask('STD_WD|STD_FAINT|STD_BRIGHT')) != 0
-    elif bright:
-        yes |= (desi_target & desi_mask.mask('STD_WD|STD_BRIGHT')) != 0
+    # This is a hack...
+    if 'STD_WD' in desi_mask.names():
+        yes = (desi_target & desi_mask.STD_WD) != 0
+        if bright is None:
+            yes |= (desi_target & desi_mask.mask('STD_WD|STD_FAINT|STD_BRIGHT')) != 0
+        elif bright:
+            yes |= (desi_target & desi_mask.mask('STD_WD|STD_BRIGHT')) != 0
+        else:
+            yes |= (desi_target & desi_mask.mask('STD_WD|STD_FAINT')) != 0
     else:
-        yes |= (desi_target & desi_mask.mask('STD_WD|STD_FAINT')) != 0
+        yes = np.zeros(len(fibermap), dtype=bool)
+        if bright is None:
+            yes |= (desi_target & desi_mask.mask('STD_FAINT|STD_BRIGHT')) != 0
+        elif bright:
+            yes |= (desi_target & desi_mask.mask('STD_BRIGHT')) != 0
+        else:
+            yes |= (desi_target & desi_mask.mask('STD_FAINT')) != 0
 
     return yes
 
