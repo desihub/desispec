@@ -143,6 +143,11 @@ def main(args) :
                 (i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i])))
         sys.exit(12)
 
+    # Make sure the fibers of interest aren't entirely masked.
+    if np.sum(np.sum(frame.ivar[model_fibers%500, :] == 0, axis=1) == frame.nwave) == len(model_fibers):
+        log.warning('All standard-star spectra are masked!')
+        return
+        
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500)
 
     # QA
