@@ -265,6 +265,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
     from desispec.io.sky import read_sky
     from desispec.io.fluxcalibration import read_flux_calibration
     from desispec.qa import qa_plots_ql
+    from desispec.calibfinder import CalibFinder
 
     if '/' in frame_file:  # If present, assume full path is used here
         pass
@@ -310,7 +311,9 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
     if qatype == 'qa_data':
         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
 
-        fiberflat_fil = meta.findfile('fiberflatnight', night=night, camera=camera)
+        calib = CalibFinder([frame_meta])
+        fiberflat_fil = os.path.join(os.getenv('DESI_SPECTRO_CALIB'), calib.data['FIBERFLAT'])
+        #fiberflat_fil = meta.findfile('fiberflatnight', night=night, camera=camera)
         if not os.path.exists(fiberflat_fil):
             # Backwards compatibility (for now)
             dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
@@ -364,8 +367,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
             s2n_dict['CAMERA'] = camera
             s2n_dict['EXPID'] = expid
             s2n_dict['PANAME'] = 'SNRFit'
-            s2n_dict['METRICS']['RA'] = frame.fibermap['FIBER_RA']
-            s2n_dict['METRICS']['DEC'] = frame.fibermap['FIBER_DEC']
+            s2n_dict['METRICS']['RA'] = frame.fibermap['TARGET_RA']
+            s2n_dict['METRICS']['DEC'] = frame.fibermap['TARGET_DEC']
             objlist = s2n_dict['METRICS']['OBJLIST']
             # Deal with YAML list instead of ndarray
             s2n_dict['METRICS']['MEDIAN_SNR'] = np.array(s2n_dict['METRICS']['MEDIAN_SNR'])
@@ -383,7 +386,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         # except FileNotFoundError:
         #    warnings.warn("Standard star file {:s} not found.  Skipping..".format(stdstar_fil))
         # else:
-        flux_fil = meta.findfile('calib', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
+        flux_fil = meta.findfile('fluxcalib', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
         try:
             fluxcalib = read_flux_calibration(flux_fil)
         except FileNotFoundError:
