@@ -196,7 +196,7 @@ class QA_MultiExp(object):
                     if os.path.isfile(qafile) and (not clobber) and (not make_plots):
                         continue
                     qaframe_from_frame(frame_fil, make_plots=make_plots, qaprod_dir=self.qaprod_dir,
-                                       clobber=clobber)
+                                       clobber=clobber, specprod_dir=self.specprod_dir)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files to generate

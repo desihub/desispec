@@ -739,6 +739,7 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
                             fita=guess[0]
                             fitb=guess[1]
                 #- Increase granualarity of 'a' by a factor of 10
+                fitc = fita # In case we don't improve chi^2
                 for c in range(100):
                     for d in range(100):
                         guess=[fita-0.05+0.001*c,0.1*d]
