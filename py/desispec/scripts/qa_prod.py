@@ -77,6 +77,7 @@ def main(args) :
 
     # Slurp and write?
     if args.slurp:
+        qa_prod.qaexp_outroot = qaprod_dir 
         qa_prod.slurp_nights(make=(args.make_frameqa > 0), remove=args.remove, write_nights=True)
 
     # Channel histograms
