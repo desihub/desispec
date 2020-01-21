@@ -60,7 +60,7 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         self.data = {}
         # Load
         for night in self.mexp_dict.keys():
-            qaNight = QA_Night(night, specprod_dir=self.specprod_dir)
+            qaNight = QA_Night(night, specprod_dir=self.specprod_dir, qaprod_dir=self.qaprod_dir)
             qaNight.load_data()
             #
             self.data[night] = qaNight.data[night]
@@ -101,7 +101,7 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         self.qa_nights = []
         # Loop on nights
         for night in self.mexp_dict.keys():
-            qaNight = QA_Night(night)
+            qaNight = QA_Night(night, specprod_dir=self.specprod_dir, qaprod_dir=self.qaprod_dir)
             qaNight.slurp(remove=remove)
             # Save nights
             self.qa_nights.append(qaNight)
