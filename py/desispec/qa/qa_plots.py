@@ -127,7 +127,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
     else:
         med_res = np.median(res,axis=0)
-        wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
+        wavg_res = np.sum(res*res_ivar,0) / (np.sum(res_ivar,0) + (np.sum(res_ivar,0)==0))
 
     # Plot
     if quick_look:
@@ -174,7 +174,9 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     else: # Generate for offline
         gd_res = res_ivar > 0.
         devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
-        i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+        min_devs = np.maximum(np.min(devs), xmin*2)
+        max_devs = np.minimum(np.max(devs), xmax*2)
+        i0, i1 = int(min_devs/binsz) - 1, int(max_devs/binsz) + 1
         rng = tuple( binsz*np.array([i0,i1]) )
         nbin = i1-i0
         hist, edges = np.histogram(devs, range=rng, bins=nbin)
