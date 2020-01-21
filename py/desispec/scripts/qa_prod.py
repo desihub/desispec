@@ -124,6 +124,6 @@ def main(args) :
 
     # HTML
     if args.html:
-        html.calib(qaprod_dir=qaprod_dir)
-        html.make_exposures(qaprod_dir=qaprod_dir)
+        html.calib(qaprod_dir=qaprod_dir, specprod_dir=specprod_dir)
+        html.make_exposures(qaprod_dir=qaprod_dir, specprod_dir=specprod_dir)
         html.toplevel(qaprod_dir=qaprod_dir)
