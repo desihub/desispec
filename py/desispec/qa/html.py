@@ -162,7 +162,7 @@ def calib_exp(night, expid, qaprod_dir=None):
     return links, body
 
 
-def make_exposures(qaprod_dir=None, specprod_dir=None):
+def make_exposures(qaprod_dir=None):
     """ Generate HTML to organize exposure HTML
 
     Parameters
@@ -181,7 +181,7 @@ def make_exposures(qaprod_dir=None, specprod_dir=None):
     init(f, 'Exposures QA')
 
     # Loop on Nights
-    nights = get_nights(specprod_dir=specprod_dir)
+    nights = get_nights(specprod_dir=qaprod_dir)  # Scans for nights in QA
     nights.sort()
     links = ''
     body = ''
@@ -190,7 +190,7 @@ def make_exposures(qaprod_dir=None, specprod_dir=None):
         f.write('<h2> Night -- {:s} </h2>\n'.format(night))
         f.write('<h3><ul>\n')
         # Loop on exposures
-        for expid in get_exposures(night, specprod_dir=specprod_dir):
+        for expid in get_exposures(night, specprod_dir=qaprod_dir):
             if not os.path.exists(html_path+'/'+night+'/{:08d}'.format(expid)):
                 continue
             # Link
