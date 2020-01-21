@@ -12,7 +12,7 @@ import copy
 from desiutil.log import get_logger
 
 from desispec.io import read_params
-from desispec.io import read_meta_frame
+from desispec import frame
 
 desi_params = read_params()
 
@@ -26,14 +26,15 @@ class QA_Frame(object):
         x.flavor, x.qa_data, x.camera
 
         Args:
-            inp : Frame meta Header or dict
+            inp : Frame, Frame meta (Header), or dict
+              * Frame
               * astropy.io.fits.Header
               * dict -- Usually read from hard-drive
 
         Notes:
 
         """
-        if isinstance(inp,dict):
+        if isinstance(inp, dict):
             assert len(inp) == 1  # There must be only one night
             self.night = list(inp.keys())[0]
             assert len(inp[self.night]) == 1  # There must be only one exposure
@@ -44,6 +45,8 @@ class QA_Frame(object):
             assert self.camera[0] in ['b','r','z']
             self.qa_data = inp[self.night][self.expid][self.camera]
         else:
+            if isinstance(inp, frame.Frame):
+                inp = inp.meta
             # Generate from Frame and init QA data
             qkeys = ['flavor', 'camera', 'expid', 'night']
             for key in qkeys:
