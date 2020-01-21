@@ -88,6 +88,8 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
               Regenerate the individual QA files (at the frame level first)
             remove: bool, optional
               Remove the individual QA files?
+            **kwargs:
+              Passed to make_frameqa()
 
         Returns:
 
