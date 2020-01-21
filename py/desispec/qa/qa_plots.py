@@ -179,6 +179,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         nbin = i1-i0
         hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
+
     xhist = (edges[1:] + edges[:-1])/2.
     ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
     # PDF for Gaussian
