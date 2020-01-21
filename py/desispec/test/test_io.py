@@ -576,7 +576,7 @@ class TestIO(unittest.TestCase):
         frame = Frame(wave, flux, ivar, spectrograph=0)
         frame.meta = dict(CAMERA='b0', FLAVOR='science', NIGHT='20160607', EXPID=1)
         #- Init
-        qaframe = QA_Frame(frame.meta)
+        qaframe = QA_Frame(frame)
         qaframe.init_skysub()
         # Write
         write_qa_frame(self.testyfile, qaframe)

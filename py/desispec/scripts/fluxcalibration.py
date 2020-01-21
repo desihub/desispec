@@ -154,7 +154,7 @@ def main(args) :
     if (args.qafile is not None):
         log.info("performing fluxcalib QA")
         # Load
-        qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
+        qaframe = load_qa_frame(args.qafile, frame_meta=frame.meta, flavor=frame.meta['FLAVOR'])
         # Run
         #import pdb; pdb.set_trace()
         qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))
