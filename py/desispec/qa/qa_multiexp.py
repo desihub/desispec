@@ -94,7 +94,8 @@ class QA_MultiExp(object):
                 if self.data[night][expid]['flavor'] != 'science':
                     continue
                 # Instantiate
-                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True)
+                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True,
+                                                qaprod_dir=self.qaprod_dir, specprod_dir=self.specprod_dir)
                 qaexp.parse_multi_qa_dict(self.data)
                 qaexp.s2n_table()
                 # Append

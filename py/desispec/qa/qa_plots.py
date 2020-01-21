@@ -1015,7 +1015,7 @@ def prod_avg_s2n(qa_prod, outfile=None, optypes=['ELG'], xaxis='MJD',
 
     # Loop on exposure
     for qaexp in qa_prod.qa_exps:
-        if qaexp.qa_s2n is None:
+        if qaexp.qa_s2n is None or len(qaexp.qa_s2n) == 0:
             continue
         # Loop on objects to plot
         for itype, oplot in enumerate(oplots):
