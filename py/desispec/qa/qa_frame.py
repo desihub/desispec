@@ -352,29 +352,33 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
     if qatype == 'qa_data':
         # cframe
         cframe_file = frame_file.replace('frame-', 'cframe-')
-        cframe = read_frame(cframe_file)
-        if qaframe.run_qa('S2N', (cframe,), clobber=clobber):
-            write=True
-        # Figure?
-        if make_plots:
-            s2n_dict = copy.deepcopy(qaframe.qa_data['S2N'])
-            qafig = meta.findfile('qa_s2n_fig', night=night, camera=camera, expid=expid,
-                              specprod_dir=specprod_dir, outdir=output_dir, qaprod_dir=qaprod_dir)
-            #badfibs = np.where(np.isnan(s2n_dict['METRICS']['MEDIAN_SNR']))[0].tolist()
-            #sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
-            coeff = s2n_dict['METRICS']['FITCOEFF_TGT']#[sci_idx]
-            # Add an item or two for the QL method
-            s2n_dict['CAMERA'] = camera
-            s2n_dict['EXPID'] = expid
-            s2n_dict['PANAME'] = 'SNRFit'
-            s2n_dict['METRICS']['RA'] = frame.fibermap['TARGET_RA']
-            s2n_dict['METRICS']['DEC'] = frame.fibermap['TARGET_DEC']
-            objlist = s2n_dict['METRICS']['OBJLIST']
-            # Deal with YAML list instead of ndarray
-            s2n_dict['METRICS']['MEDIAN_SNR'] = np.array(s2n_dict['METRICS']['MEDIAN_SNR'])
-            # Generate
-            if (not os.path.isfile(qafig)) or clobber:
-                qa_plots_ql.plot_SNR(s2n_dict, qafig, objlist, [[]]*len(objlist), coeff)
+        try:
+            cframe = read_frame(cframe_file)
+        except FileNotFoundError:
+            warnings.warn("cframe file {:s} not found.  Skipping..".format(cframe_file))
+        else:
+            if qaframe.run_qa('S2N', (cframe,), clobber=clobber):
+                write=True
+            # Figure?
+            if make_plots:
+                s2n_dict = copy.deepcopy(qaframe.qa_data['S2N'])
+                qafig = meta.findfile('qa_s2n_fig', night=night, camera=camera, expid=expid,
+                                  specprod_dir=specprod_dir, outdir=output_dir, qaprod_dir=qaprod_dir)
+                #badfibs = np.where(np.isnan(s2n_dict['METRICS']['MEDIAN_SNR']))[0].tolist()
+                #sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
+                coeff = s2n_dict['METRICS']['FITCOEFF_TGT']#[sci_idx]
+                # Add an item or two for the QL method
+                s2n_dict['CAMERA'] = camera
+                s2n_dict['EXPID'] = expid
+                s2n_dict['PANAME'] = 'SNRFit'
+                s2n_dict['METRICS']['RA'] = frame.fibermap['TARGET_RA']
+                s2n_dict['METRICS']['DEC'] = frame.fibermap['TARGET_DEC']
+                objlist = s2n_dict['METRICS']['OBJLIST']
+                # Deal with YAML list instead of ndarray
+                s2n_dict['METRICS']['MEDIAN_SNR'] = np.array(s2n_dict['METRICS']['MEDIAN_SNR'])
+                # Generate
+                if (not os.path.isfile(qafig)) or clobber:
+                    qa_plots_ql.plot_SNR(s2n_dict, qafig, objlist, [[]]*len(objlist), coeff)
 
     # FluxCalib QA
     if qatype == 'qa_data':
