@@ -12,6 +12,7 @@ import copy
 from desiutil.log import get_logger
 
 from desispec.io import read_params
+from desispec.io import read_meta_frame
 
 desi_params = read_params()
 
@@ -25,8 +26,8 @@ class QA_Frame(object):
         x.flavor, x.qa_data, x.camera
 
         Args:
-            inp : Frame object or dict
-              * Frame -- Must contain meta data
+            inp : Frame meta Header or dict
+              * astropy.io.fits.Header
               * dict -- Usually read from hard-drive
 
         Notes:
@@ -46,7 +47,7 @@ class QA_Frame(object):
             # Generate from Frame and init QA data
             qkeys = ['flavor', 'camera', 'expid', 'night']
             for key in qkeys:
-                setattr(self, key, inp.meta[key.upper()])  # FITS header
+                setattr(self, key, inp[key.upper()])  # FITS header
             self.qa_data = {}
 
         # Final test
@@ -272,7 +273,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
     else: # Find the frame file in the desispec hierarchy?
         frame_file = search_for_framefile(frame_file)
 
-    # Load frame
+    # Load frame meta
     frame = read_frame(frame_file)
     frame_meta = frame.meta
     night = frame_meta['NIGHT'].strip()
@@ -286,7 +287,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         write = False
     else:
         write = True
-    qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+    qaframe = load_qa_frame(qafile, frame_meta, flavor=frame_meta['FLAVOR'])
     # Flat QA
     if frame_meta['FLAVOR'] in ['flat']:
         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
