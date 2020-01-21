@@ -7,6 +7,7 @@ import numpy as np
 import glob
 
 from desispec.io import meta, get_nights, get_exposures
+from desispec.io.util import makepath
 
 def header(title):
     """
@@ -82,6 +83,8 @@ def calib(qaprod_dir=None, specprod_dir=None):
     # Organized HTML
     html_file = meta.findfile('qa_calib_html', qaprod_dir=qaprod_dir)
     html_path,_ = os.path.split(html_file)
+    makepath(html_file)
+    # Open
     f = open(html_file, 'w')
     init(f, 'Calibration QA')
 
