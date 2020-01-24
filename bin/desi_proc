@@ -328,10 +328,31 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
 #- MPI parallelize this step
 
 if args.obstype in ['ARC', 'TESTARC']:
+    
+    if rank == 0:
+        log.info('Starting traceshift before specex PSF fit at {}'.format(time.asctime()))
+
+    for i in range(rank, len(args.cameras), size):
+        camera = args.cameras[i]
+        preprocfile = findfile('preproc', args.night, args.expid, camera)
+        inpsf  = input_psf[camera]
+        outpsf = findfile('psf', args.night, args.expid, camera).replace("psf","shifted-input-psf")
+        if not os.path.isfile(outpsf) :
+            cmd = "desi_compute_trace_shifts"
+            cmd += " -i {}".format(preprocfile)
+            cmd += " --psf {}".format(inpsf)
+            cmd += " --outpsf {}".format(outpsf)
+            cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
+            runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+        else :
+             log.info("PSF {} exists".format(outpsf))
+
+    if comm is not None:
+        comm.barrier()
+        
     if rank == 0:
         log.info('Starting specex PSF fitting at {}'.format(time.asctime()))
-        
-        
+    
     if rank > 0:
         cmds = inputs = outputs = None
     else:
@@ -340,8 +361,12 @@ if args.obstype in ['ARC', 'TESTARC']:
         outputs = dict()
         for camera in args.cameras:
             preprocfile = findfile('preproc', args.night, args.expid, camera)
-            inpsf  = input_psf[camera]
-            outpsf = findfile('psf', args.night, args.expid, camera)
+            tmpname = findfile('psf', args.night, args.expid, camera)
+            inpsf = tmpname.replace("psf","shifted-input-psf")
+            outpsf = tmpname.replace("psf","fit-psf")
+            
+            log.info("now run specex psf fit")
+            
             cmd = 'desi_compute_psf'
             cmd += ' --input-image {}'.format(preprocfile)
             cmd += ' --input-psf {}'.format(inpsf)
@@ -406,7 +431,7 @@ if args.obstype in ['ARC']:
         for camera in args.cameras :
             psfnightfile = findfile('psfnight', args.night, args.expid, camera)
             if not os.path.isfile(psfnightfile) : # we still don't have a psf night, see if we can compute it ...
-                psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace(str(args.expid),"*"))
+                psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace("psf","fit-psf").replace(str(args.expid),"*"))
                 log.info("Number of PSF for night={} camera={} = {}".format(args.night,camera,len(psfs)))
                 if len(psfs)>4 : # lets do it!
                     log.info("Computing psfnight ...")
