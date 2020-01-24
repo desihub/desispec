@@ -309,6 +309,8 @@ parser.add_argument('--out-mean', type = str, default = None, required = False,
 parser.add_argument('-d','--debug', action = 'store_true', help="write a lot of debugging images")
 #parser.add_argument('--minflux',type = float, default=0.05,help="minimum flux fraction of median")
 #parser.add_argument('--maxerr',type = float, default=0.02,help="maximum error")
+parser.add_argument('--min-flat-for-mask',type=float, default=0.99,help="threshold for masking pixels in flat")
+parser.add_argument('--max-flat-for-mask',type=float, default=1.02,help="threshold for masking pixels in flat")
 
 
 args = parser.parse_args()
@@ -392,9 +394,11 @@ sigma_of_gaussian_smoothing_for_large_gradient_regions=100. # pixels
 flat_error_threshold_for_large_gradient_regions=0.1
 mask_margin_for_large_gradient_regions=30 # pixels
 
+
+
 # Parameters for mask during fit (to avoid haloes around CCD defects)
-min_flat_for_fit_mask = 0.99
-max_flat_for_fit_mask = 1.03
+min_flat_for_fit_mask = args.min_flat_for_mask
+max_flat_for_fit_mask = args.max_flat_for_mask
 margin_for_fit_mask = 3 # increase mask by 3 pix in each direction
 max_fraction_of_masked_pixels = 0.05
 #############################################################
@@ -668,10 +672,10 @@ for loop in range(nloop) :
     step+=1; log.info("step {}/{} masking pixels".format(step,nstep))
 
     # auto-adjust the mask threshold
-    for nsig in [3.,5.,10.,20.] :    
+    for nsig in [3.,3.5,4.,5.,10.,20.] :    
         mask = (flat<(min_flat_for_fit_mask-nsig*err))|(flat>(max_flat_for_fit_mask+nsig*err))|(original_image<=minimum_flux_for_second_mask)
         mask = dilate_mask(mask,margin_for_fit_mask,margin_for_fit_mask)
-        frac = np.sum(mask>0)/float(mask.size)
+        frac = np.sum((mask>0)&(mask0==0))/float(np.sum(mask0==0)) #float(mask.size)
         if frac<max_fraction_of_masked_pixels :
             break
     log.info("Used nsig = {}, frac = {:4.3f}".format(nsig,frac))
