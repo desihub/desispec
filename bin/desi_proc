@@ -61,6 +61,7 @@ parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fib
 parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
 parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
 parser.add_argument("--fiberflat",type=str,required=False,default=None, help="use this fiberflat")
+parser.add_argument("--scattered-light",action='store_true',help="fit and remove scattered light")
 parser.add_argument("--extra-variance", action='store_true',
                     help = 'increase sky model variance based on chi2 on sky lines')
 parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
@@ -265,6 +266,8 @@ for i in range(rank, len(args.cameras), size):
     outdir = os.path.dirname(outfile)
     cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
         args.input, outfile, outdir, camera)
+    if args.scattered_light :
+        cmd += " --scattered-light"
     runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
 if comm is not None:
@@ -308,7 +311,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
                 cmd += " -i {}".format(preprocfile)
                 cmd += " --psf {}".format(inpsf)
                 cmd += " --outpsf {}".format(outpsf)
-                cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
+                cmd += " --degxx 2 --degxy 0 --degyx 2 --degyy 0"
                 if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
                     cmd += ' --sky'
             else :
@@ -476,7 +479,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
             cmd += ' -i {}'.format(preprocfile)
             cmd += ' -p {}'.format(psffile)
             cmd += ' -o {}'.format(framefile)
-       
+            cmd += ' --psferr 0.1'
             if not os.path.exists(framefile):
                 cmds[camera] = cmd
                 inputs[camera] = [preprocfile, psffile]
@@ -683,7 +686,7 @@ if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
         ff = desispec.io.read_fiberflat(flatfilename)
         apply_fiberflat(fr, ff)
         sumflux = np.sum(fr.flux, axis=1)
-        fluxcut = np.percentile(sumflux, 90)
+        fluxcut = np.percentile(sumflux, 30)
         iisky = np.where(sumflux < fluxcut)[0]
         iisky = np.random.choice(iisky, size=100, replace=False)
 

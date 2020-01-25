@@ -76,6 +76,7 @@ to use, but also only if a single camera is specified.
     parser.add_argument('--ccd-calib-filename', required=False, default=None,
                         help = 'specify a difference ccd calibration filename (for dev. purpose), default is in desispec/data/ccd')
     parser.add_argument('--fill-header', type = str, default = None,  nargs ='*', help="fill camera header with contents of those of other hdus")
+    parser.add_argument('--scattered-light', action="store_true", help="fit and remove scattered light")
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -146,6 +147,7 @@ def main(args=None):
                               nogain=args.nogain,
                               nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
+                              remove_scattered_light=args.scattered_light
             )
         except IOError:
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
