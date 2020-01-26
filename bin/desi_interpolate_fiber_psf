@@ -59,7 +59,7 @@ for bad_fiber in bad_fibers :
     x = h["XTRACE"].data[:,0]
     dx=np.median(np.gradient(x))
     print(dx)
-    x_of_bad=h["XTRACE"].data[other_fiber,0] + dx*(bad_fiber-other_fiber)
+    x_of_bad=h["XTRACE"].data[neighboring_fiber,0] + dx*(bad_fiber-neighboring_fiber)
     h["XTRACE"].data[bad_fiber,0] = x_of_bad
     
     y = h["YTRACE"].data[:,0]
