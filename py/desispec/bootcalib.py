@@ -893,7 +893,9 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         dx=[]
         flux=[]
         for y in range(ny) :
-            yflux=flat[y,begin_xpix[y]:end_xpix[y]]
+            yflux=np.zeros(2*box_radius+1)
+            tmp=flat[y,begin_xpix[y]:end_xpix[y]]
+            yflux[:tmp.size] = tmp
             syflux=np.sum(yflux)
             if syflux<minflux :
                 continue
@@ -911,7 +913,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         bflux=[]
         for b in bins :
             ok=(dx>=b)&(dx<(b+bstep))
-            if np.sum(ok)>0 :
+            if np.sum(ok)>1 :
                 bdx.append(np.mean(dx[ok]))
                 bflux.append(np.median(flux[ok]))
         if len(bdx)<10 :
@@ -989,7 +991,10 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
-            mask[iy,ix] = 1
+            try :
+                mask[iy,ix] = 1
+            except IndexError :
+                pass
         dx_img = xpix_img - np.outer(xtrc[:,ii],np.ones(flat.shape[1]))
         # Sum
         flux = np.sum(mask*flat,axis=1)
@@ -1257,9 +1262,14 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         ixt = np.round(xtrc[:,qq]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
-            mask[iy,ix] = 1
+            try :
+                mask[iy,ix] = 1
+            except IndexError :
+                pass
+        
         # Sub-image (for speed, not convenience)
         gdp = np.where(mask == 1)
+        if len(gdp[1])<2: continue
         minx = np.min(gdp[1])
         maxx = np.max(gdp[1])
         nx = (maxx-minx)+1
