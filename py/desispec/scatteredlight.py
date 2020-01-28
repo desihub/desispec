@@ -13,11 +13,20 @@ from desispec.qproc.qextract import numba_extract
 
 def model_scattered_light(image,xyset) :
     """
+    Model the scattered light in a preprocessed image.
+    The method consist in convolving the "direct" light
+    image (image * mask along spectral traces) and
+    calibrating this convolved image using the data
+    between the fiber bundles.
+    
     Args:
       
       image: desispec.image.Image object
       xyset: desispec.xytraceset.XYTraceSet object
-      sigma: sigma of Gaussian convolution in pixels
+
+    Returns:
+
+      model: np.array of same shape as image.pix
     """  
 
     log = get_logger()
