@@ -61,6 +61,7 @@ parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fib
 parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
 parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
 parser.add_argument("--fiberflat",type=str,required=False,default=None, help="use this fiberflat")
+parser.add_argument("--calibnight",type=int,required=False,default=None, help="use this night to find nighly PSF and fiberflats")
 parser.add_argument("--scattered-light",action='store_true',help="fit and remove scattered light")
 parser.add_argument("--extra-variance", action='store_true',
                     help = 'increase sky model variance based on chi2 on sky lines')
@@ -283,6 +284,13 @@ input_psf = dict()
 for camera in args.cameras :
     if args.psf is not None :
         input_psf[camera] = args.psf
+    elif args.calibnight is not None :
+        # look for a psfnight psf for this calib night
+        psfnightfile = findfile('psfnight', args.calibnight, args.expid, camera)
+        if not os.path.isfile(psfnightfile) :
+            log.error("no {}".format(psfnightfile))
+            raise IOError("no {}".format(psfnightfile))
+        input_psf[camera] = psfnightfile
     else :
         # look for a psfnight psf
         psfnightfile = findfile('psfnight', args.night, args.expid, camera)
@@ -618,6 +626,13 @@ input_fiberflat = dict()
 for camera in args.cameras :
     if args.fiberflat is not None :
         input_fiberflat[camera] = args.fiberflat
+    elif args.calibnight is not None :
+        # look for a fiberflatnight for this calib night
+        fiberflatnightfile = findfile('fiberflatnight', args.calibnight, args.expid, camera)
+        if not os.path.isfile(fiberflatnightfile) :
+            log.error("no {}".format(fiberflatnightfile))
+            raise IOError("no {}".format(fiberflatnightfile))
+        input_fiberflat[camera] = fiberflatnightfile
     else :
         # look for a fiberflatnight fiberflat
         fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, camera)
