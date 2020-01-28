@@ -57,18 +57,17 @@ def cosmic_lines(mask):
     '''Finds a line representing each cosmic track.
     Returns three points representing each line.
     '''
-    # Downsample the image by 2 for speed
-    m2 = downsample_image(mask, 2) > 0
+    m = mask > 0
 
     # Dilation to expand disconnected cosmics
     k = np.ones((10, 10))
-    m_dilate = binary_dilation(m2, k)
+    m_dilate = binary_dilation(m, k)
 
     # Label each discrete
     m_labels, num_labels = scipy.ndimage.label(m_dilate)
 
     # Perform the hough transform to find straight lines
-    lines = probabilistic_hough_line(m2, threshold=10, line_length=5, line_gap=6, seed=1)
+    lines = probabilistic_hough_line(m, threshold=10, line_length=5, line_gap=6, seed=1)
 
     # Reduces the number of lines by categorizing.
     # Checks end points of lines, sees which category they're in and returns.
@@ -93,12 +92,15 @@ def cosmic_lines(mask):
 
     return new_groups
 
-def cosmics(mask):
+def cosmics(mask, downsample=1):
     '''Joins the cosmics in a given mask.
     Returns an updated mask with each cosmic joined across gaps.
     '''
     # Downsample for speed.
-    m = downsample_image(mask, 2)
+    if downsample > 1:
+        m = downsample_image(mask, downsample)
+    else:
+        m = np.copy(mask)
 
     # We need to carefully control the figure size in order
     # to get the masking image to come out exactly the same size as before.
@@ -114,7 +116,7 @@ def cosmics(mask):
     ax.imshow(m, cmap="gray", vmin=0, vmax=1, origin="lower")
 
     # Gets the points corresponding to a line representing each cosmic
-    groups = cosmic_lines(mask)
+    groups = cosmic_lines(m)
     for line in groups:
         p0, p1, p2 = line
         ax.plot((p0[0], p1[0], p2[0]), (p0[1], p1[1], p2[1]), linewidth=1, color="white")
