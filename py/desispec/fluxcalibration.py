@@ -52,7 +52,7 @@ def isStdStar(fibermap, bright=None):
         yes = (desi_target & desi_mask.mask('STD_FAINT')) != 0
 
     if 'STD_WD' in desi_mask.names():
-        yes |= (desi_target & desi_mask.STD_WD)
+        yes |= (desi_target & desi_mask.STD_WD) != 0
 
     return yes
 
