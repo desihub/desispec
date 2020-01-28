@@ -19,7 +19,9 @@ Here is the magic to expose a set of QA products
 made at NERSC to the world:
 
 1. cp -rp QA into www area :: /project/projectdirs/desi/www
-2. fix_permissions.sh -a QA
+2. fix_permissions.sh -a QA  [This may no longer be necessary]
+
+These are then exposed at https://portal.nersc.gov/cfs/desi/rest_of_path
 
 Scripts
 =======

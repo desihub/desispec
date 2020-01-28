@@ -233,6 +233,8 @@ class QA_Exposure(object):
         # Load up
         for camera in self.data['frames'].keys():
             # Sub_tbl
+            if 'S2N' not in self.data['frames'][camera].keys():
+                continue
             sub_tbl = Table()
             sub_tbl['MEDIAN_SNR'] = self.data['frames'][camera]['S2N']['METRICS']['MEDIAN_SNR']
             sub_tbl['FIBER'] = np.arange(len(sub_tbl), dtype=int)
@@ -274,7 +276,10 @@ class QA_Exposure(object):
             # Save
             sub_tbls.append(sub_tbl)
         # Stack me
-        qa_tbl = vstack(sub_tbls)
+        if len(sub_tbls) > 0:
+            qa_tbl = vstack(sub_tbls)
+        else:
+            qa_tbl = Table()
         # Hold
         self.qa_s2n = qa_tbl
         # Add meta

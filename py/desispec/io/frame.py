@@ -153,8 +153,8 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         night, expid, camera = filename
         filename = findfile('frame', night, expid, camera)
 
-    if not os.path.isfile(filename) :
-        raise IOError("cannot open"+filename)
+    if not os.path.isfile(filename):
+        raise FileNotFoundError("cannot open"+filename)
 
     fx = fits.open(filename, uint=True, memmap=False)
     hdr = fx[0].header

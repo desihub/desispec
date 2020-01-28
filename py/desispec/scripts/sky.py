@@ -71,7 +71,7 @@ def main(args) :
     if (args.qafile is not None) or (args.qafig is not None):
         log.info("performing skysub QA")
         # Load
-        qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
+        qaframe = load_qa_frame(args.qafile, frame_meta=frame.meta, flavor=frame.meta['FLAVOR'])
         # Run
         qaframe.run_qa('SKYSUB', (frame, skymodel))
         # Write
