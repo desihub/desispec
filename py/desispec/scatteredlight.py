@@ -8,8 +8,10 @@ import astropy.io.fits as pyfits
 from scipy.signal import fftconvolve
 from desispec.image import Image
 from desiutil.log import get_logger
+from desispec.qproc.qextract import numba_extract
 
-def model_scattered_light(image,xyset,sigma1=20,sigma2=100,a1=0.8) :
+
+def model_scattered_light(image,xyset) :
     """
     Args:
       
@@ -22,51 +24,63 @@ def model_scattered_light(image,xyset,sigma1=20,sigma2=100,a1=0.8) :
 
     log.info("compute mask")
     mask_in  = np.zeros(image.pix.shape,dtype=int)
-    mask_out = np.ones(image.pix.shape,dtype=float)
-
+    
     yy = np.arange(image.pix.shape[0],dtype=int)
     for fiber in range(xyset.nspec) :
         xx = xyset.x_vs_y(fiber,yy).astype(int)
         for x,y in zip(xx,yy) :
             mask_in[y,x-1:x+2] = 1
-            mask_out[y,x-5:x+6] = 0
-
     mask_in *= (image.mask==0)*(image.ivar>0)
-    mask_out *= (image.mask==0)*image.ivar
-             
-    log.info("convolving mask_in*image")
-    hw = int(3*max(sigma1,sigma2))
+              
+    log.info("convolving mask*image")
+    hw = 1000
     x1d = np.linspace(-hw,hw,2*hw+1)
     x2d = np.tile(x1d,(2*hw+1,1))
-    r2  = x2d**2+x2d.T**2
-    kern = a1*np.exp(-0.5*r2/sigma1**2)+(1-a1)*np.exp(-0.5*r2/sigma2**2)
+    r   = np.sqrt(x2d**2+x2d.T**2)
+
+    # convolution kernel shape found empirically
+    # by looking at one arc lamp image, preproc-z0-00043688.fits
+    ##################################################################
+    scale=70.
+    kern1 = (1-r/scale)*(r<scale)
+    kern2 = np.exp(-0.5*(r/150)**2)
+    kern1 /= np.sum(kern1)
+    kern2 /= np.sum(kern2)
+    kern = 0.4*kern1+kern2
     kern /= np.sum(kern)
+    ##################################################################
+
     model  = fftconvolve(image.pix*mask_in,kern,mode="same")
     model *= (model>0)
-    model2 = model**2  
-    n0=image.pix.shape[0]
-    n1=image.pix.shape[1]
-    yy = np.tile(np.linspace(-1,1,n0),(n1,1)).T
-    xx = np.tile(np.linspace(-1,1,n1),(n0,1))
-    
-    # adjust this model weighted by a polynomial of x and y
-    xp=[0,1,2,0,1,0]
-    yp=[0,0,0,1,1,2]
-    log.info("compute linear system matrices")
-    npar=len(xp)
-    B=np.zeros(npar)
-    A=np.zeros((npar,npar))
-    for i in range(npar) :
-        B[i] = np.sum(mask_out*image.pix*model*xx**xp[i]*yy**yp[i])        
-        for j in range(i+1) :
-            A[i,j] = A[j,i] = np.sum(mask_out*model2*(xx**(xp[i]+xp[j])*yy**(yp[i]+yp[j])))
 
-    log.info("solve and apply")
-    Ai = np.linalg.inv(A)
-    alpha = Ai.dot(B)
-    log.info("coefficients= {}".format(alpha))
-    pmod = np.zeros(mod.shape)
-    for i in range(npar) :
-        pmod += alpha[i] * model * xx**xp[i] * yy**yp[i]
-    pmod[pmod<0]=0.
-    return pmod
+    log.info("calibrating scattered light model between fiber bundles")
+    ny=image.pix.shape[0]    
+    yy=np.arange(ny)
+    xinter = np.zeros((21,ny))
+    ratio = np.zeros((21,ny))
+    for i in range(21) :
+        if i==0 : xinter[i] =  xyset.x_vs_y(0,yy)-7
+        elif i==20 : xinter[i] =  xyset.x_vs_y(499,yy)+7
+        else : xinter[i] = (xyset.x_vs_y(i*25-1,yy)+xyset.x_vs_y(i*25,yy))/2.
+        meas,junk = numba_extract(image.pix,image.ivar,xinter[i],hw=3)
+        mod,junk  = numba_extract(model,image.ivar,xinter[i],hw=3)
+        # compute median ratio in bins of y
+        bins=np.linspace(0,ny,10).astype(int)
+        tmpratios=np.zeros(bins.size-1)
+        for b in range(bins.size-1) :
+            yb=bins[b]
+            ye=bins[b+1]
+            tmpratios[b] = np.median(meas[yb:ye]/mod[yb:ye])
+        # fit ratio in bins with a deg2 polynomial
+        centers=(bins[:-1]+bins[1:])/2.
+        pol=np.poly1d(np.polyfit(centers,tmpratios,4))
+        log.info("#{} x[2000]={} ratio={}".format(i,xinter[i,2000],pol(2000.)))
+        ratio[i] = pol(yy)
+
+    log.info("interpolating over bundles, using fitted calibration")
+    xx = np.arange(image.pix.shape[1])
+    for j in range(ny) :
+        model[j] *= np.interp(xx,xinter[:,j],ratio[:,j])
+    model *= (model>0)
+
+    return model

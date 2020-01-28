@@ -77,7 +77,8 @@ to use, but also only if a single camera is specified.
                         help = 'specify a difference ccd calibration filename (for dev. purpose), default is in desispec/data/ccd')
     parser.add_argument('--fill-header', type = str, default = None,  nargs ='*', help="fill camera header with contents of those of other hdus")
     parser.add_argument('--scattered-light', action="store_true", help="fit and remove scattered light")
-
+    parser.add_argument('--psf', type = str, required=False, default=None, help="psf file to remove scattered light")
+    
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
 
