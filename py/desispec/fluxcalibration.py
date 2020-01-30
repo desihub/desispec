@@ -853,7 +853,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         bad = set(input_model_fibers) - set(stdfibers)
         log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
         stdfibers = np.intersect1d(stdfibers, input_model_fibers)
-
+    
+    # also other way around
+    stdfibers = np.intersect1d(input_model_fibers, stdfibers)
+    log.info("Std stars fibers: {}".format(stdfibers))
+    
     stdstars = frame[stdfibers]
 
     nwave=stdstars.nwave

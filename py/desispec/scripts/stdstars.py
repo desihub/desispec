@@ -188,6 +188,36 @@ def main(args) :
                     frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
             frame.resolution_data = frame.resolution_data[starindices]
 
+    # CHECK S/N
+    ############################################
+    # for each band in 'brz', record quadratic sum of median S/N across wavelength
+    snr2=dict()
+    for band in ['b','r','z'] :
+        snr2[band]=np.zeros(starindices.size)
+    for cam in frames :
+        band=cam[0].lower()
+        for frame in frames[cam] :
+            msnr = np.median( frame.flux * np.sqrt( frame.ivar ) / np.sqrt(np.gradient(frame.wave)) , axis=1 ) # median SNR per sqrt(A.)
+            msnr *= (msnr>0)
+            snr2[band] += msnr**2
+    log.info("SNR(B) = {}".format(np.sqrt(snr2['b'])))
+    log.info("SNR(R) = {}".format(np.sqrt(snr2['r'])))
+    log.info("SNR(Z) = {}".format(np.sqrt(snr2['z'])))
+
+    min_blue_snr = 4.
+    validstars = np.where(np.sqrt(snr2['b'])>min_blue_snr)[0]
+    log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
+    if validstars.size == 0 :
+        log.error("No valid star")
+        sys.exit(12)
+             
+    for cam in frames :
+        for frame in frames[cam] :
+            frame.flux = frame.flux[validstars]
+            frame.ivar = frame.ivar[validstars]
+            frame.resolution_data = frame.resolution_data[validstars]
+    starindices = starindices[validstars]
+    starfibers  = starfibers[validstars]
     nstars = starindices.size
     fibermap = Table(fibermap[starindices])
 
