@@ -76,6 +76,7 @@ def main(args) :
     log = get_logger()
 
     log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
+    log.info('multiprocess parallelizing with {} processes'.format(args.ncpu))
 
     frames={}
     flats={}
