@@ -342,7 +342,7 @@ def main(args) :
         
         linear_coefficients[star,selection] = coefficients
         
-        log.info('Star Fiber: {0}; TEFF: {1}; LOGG: {2}; FEH: {3}; Redshift: {4}; Chisq/dof: {5}'.format(
+        log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
             starfibers[star],
             np.inner(teff,linear_coefficients[star]),
             np.inner(logg,linear_coefficients[star]),
@@ -380,7 +380,7 @@ def main(args) :
         # Normalize the best model using reported magnitude
         scalefac=10**((model_magr - star_mags['R'][star])/2.5)
 
-        log.info('scaling R mag {} to {} using scale {}'.format(model_magr, star_mags['R'][star], scalefac))
+        log.info('scaling R mag {:.3f} to {:.3f} using scale {}'.format(model_magr, star_mags['R'][star], scalefac))
         normflux.append(model*scalefac)
 
     # Now write the normalized flux for all best models to a file
