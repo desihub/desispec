@@ -38,6 +38,8 @@ def parse(options=None):
     parser.add_argument('--z-max', type = float, default = 0.008, required = False, help = 'max peculiar velocity (blue/red)shift range')
     parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
+    parser.add_argument('--maxstdstars', type=int, default=30, \
+            help='Maximum number of stdstars to include')
     
     log = get_logger()
     args = None
@@ -207,13 +209,14 @@ def main(args) :
     snr=np.sqrt(snr2['b'])
     ###############################
     min_blue_snr = 4.
-    max_number_of_stars = 50
     ###############################
-    indices=np.argsort(snr)[::-1][:max_number_of_stars]
-    
+    indices=np.argsort(snr)[::-1][:args.maxstdstars]
     
     validstars = np.where(snr[indices]>min_blue_snr)[0]
     
+    #- TODO: later we filter on models based upon color, thus throwing
+    #- away very blue stars for which we don't have good models.
+
     log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
     if validstars.size == 0 :
         log.error("No valid star")
