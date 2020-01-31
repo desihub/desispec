@@ -385,14 +385,20 @@ def main(args) :
 
     # Now write the normalized flux for all best models to a file
     normflux=np.array(normflux)
+
+    fitted_stars = np.where(chi2dof != 0)[0]
+    if fitted_stars.size == 0 :
+        log.error("No star has been fit.")
+        sys.exit(12)
+
     data={}
-    data['LOGG']=linear_coefficients.dot(logg)
-    data['TEFF']= linear_coefficients.dot(teff)
-    data['FEH']= linear_coefficients.dot(feh)
-    data['CHI2DOF']=chi2dof
-    data['REDSHIFT']=redshift
-    data['COEFF']=linear_coefficients
-    data['DATA_%s'%args.color]=star_colors[args.color]
-    data['MODEL_%s'%args.color]=fitted_model_colors
-    io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers,data)
+    data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
+    data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
+    data['FEH']= linear_coefficients[fitted_stars,:].dot(feh)
+    data['CHI2DOF']=chi2dof[fitted_stars]
+    data['REDSHIFT']=redshift[fitted_stars]
+    data['COEFF']=linear_coefficients[fitted_stars,:]
+    data['DATA_%s'%args.color]=star_colors[args.color][fitted_stars]
+    data['MODEL_%s'%args.color]=fitted_model_colors[fitted_stars]
+    io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers[fitted_stars],data)
 
