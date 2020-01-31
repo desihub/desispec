@@ -188,6 +188,47 @@ def main(args) :
                     frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
             frame.resolution_data = frame.resolution_data[starindices]
 
+    # CHECK S/N
+    ############################################
+    # for each band in 'brz', record quadratic sum of median S/N across wavelength
+    snr2=dict()
+    for band in ['b','r','z'] :
+        snr2[band]=np.zeros(starindices.size)
+    for cam in frames :
+        band=cam[0].lower()
+        for frame in frames[cam] :
+            msnr = np.median( frame.flux * np.sqrt( frame.ivar ) / np.sqrt(np.gradient(frame.wave)) , axis=1 ) # median SNR per sqrt(A.)
+            msnr *= (msnr>0)
+            snr2[band] += msnr**2
+    log.info("SNR(B) = {}".format(np.sqrt(snr2['b'])))
+    log.info("SNR(R) = {}".format(np.sqrt(snr2['r'])))
+    log.info("SNR(Z) = {}".format(np.sqrt(snr2['z'])))
+
+    snr=np.sqrt(snr2['b'])
+    ###############################
+    min_blue_snr = 4.
+    max_number_of_stars = 50
+    ###############################
+    indices=np.argsort(snr)[::-1][:max_number_of_stars]
+    
+    
+    validstars = np.where(snr[indices]>min_blue_snr)[0]
+    
+    log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
+    if validstars.size == 0 :
+        log.error("No valid star")
+        sys.exit(12)
+
+    validstars = indices[validstars]
+    log.info("SNR of selected stars={}".format(snr[validstars]))
+    
+    for cam in frames :
+        for frame in frames[cam] :
+            frame.flux = frame.flux[validstars]
+            frame.ivar = frame.ivar[validstars]
+            frame.resolution_data = frame.resolution_data[validstars]
+    starindices = starindices[validstars]
+    starfibers  = starfibers[validstars]
     nstars = starindices.size
     fibermap = Table(fibermap[starindices])
 
@@ -272,7 +313,11 @@ def main(args) :
         
         color_diff = model_colors - star_unextincted_colors[args.color][star]
         selection = np.abs(color_diff) < args.delta_color
-
+        if np.sum(selection) == 0 :
+            log.warning("no model in the selected color range for this star")
+            continue
+        
+        
         # smallest cube in parameter space including this selection (needed for interpolation)
         new_selection = (teff>=np.min(teff[selection]))&(teff<=np.max(teff[selection]))
         new_selection &= (logg>=np.min(logg[selection]))&(logg<=np.max(logg[selection]))
