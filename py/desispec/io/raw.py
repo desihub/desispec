@@ -99,6 +99,18 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         log.warning('creating blank fibermap')
         fibermap = desispec.io.empty_fibermap(5000)
 
+    #- Augment the image header with some tile info from fibermap if needed
+    for key in ['TILEID', 'TILERA', 'TILEDEC']:
+        if key in fibermap.meta:
+            if key not in img.meta:
+                log.info('Updating header from fibermap {}={}'.format(
+                    key, fibermap.meta[key]))
+                img.meta[key] = fibermap.meta[key]
+            elif img.meta[key] != fibermap.meta[key]:
+                #- complain loudly, but don't crash and don't override
+                log.error('Inconsistent {}: raw header {} != fibermap header {}'.format(key, img.meta[key], fibermap.meta[key]))
+
+
     #- Trim to matching camera based upon PETAL_LOC, but that requires
     #- a mapping prior to 20191211
 
