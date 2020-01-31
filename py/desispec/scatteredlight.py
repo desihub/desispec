@@ -78,7 +78,7 @@ def model_scattered_light(image,xyset) :
     params['z0']=np.array([1.0000,1.2187,1.3041,0.8125,0.5324,0.5660,0.2830,0.0637,0.0915,0.0045,0.0000,])
     params['z1']=np.array([1.0000,0.4882,0.9247,0.4095,0.1006,0.1259,0.0635,0.0022,0.0028,-0.0000,0.0000,])
     params['z2']=np.array([1.0000,0.8952,1.0721,0.6368,0.3757,0.4195,0.1516,0.0792,0.1059,-0.0000,0.0000,])
-    params['z3']=np.array([1.0000,1.0599,1.1540,0.7297,0.5138,0.4930,0.3286,0.0145,0.0336,0.0018,0.0000,])
+    params['z3']=np.array([1.0000,0.9608,1.0748,0.6764,0.4919,0.4806,0.3256,0.0496,0.0401,0.0000,0.0000,])
     params['z4']=np.array([1.0000,1.6451,1.4325,1.1856,1.0914,1.2408,0.8704,0.1198,0.0826,0.0037,0.0000,])
     params['z5']=np.array([1.0000,0.4804,0.7011,0.3784,0.0633,0.0954,0.1605,0.0275,0.0182,-0.0000,0.0000,])
     params['z6']=np.array([1.0000,0.9678,1.2216,0.7484,0.4634,0.4786,0.3571,0.0569,0.0382,-0.0000,0.0000,])
@@ -87,6 +87,8 @@ def model_scattered_light(image,xyset) :
     params['z9']=np.array([1.0000,0.8205,1.0013,0.7501,0.4873,0.3066,0.1290,0.0576,0.0158,-0.0000,0.0000,])
     
     camera = image.meta["CAMERA"].strip().lower()
+
+    
     log.info("camera= '{}'".format(camera))
     par=params[camera]
     
@@ -104,7 +106,7 @@ def model_scattered_light(image,xyset) :
     xinter = np.zeros((21,ny))
     mod_scale = np.zeros((21,ny))
         
-    nbins=ny//5
+    nbins=ny//100
     # compute median ratio in bins of y
     bins=np.linspace(0,ny,nbins+1).astype(int)
     meas_bins=np.zeros(nbins)
@@ -142,5 +144,9 @@ def model_scattered_light(image,xyset) :
         func = interp1d(xinter[:,j],mod_scale[:,j], kind='linear', bounds_error = False, fill_value=0.)
         model[j] *= func(xx)
     model *= (model>0)
+
+    if camera == 'r2' :
+        log.warning("do not try to remove scattered light for this one on the left hand side of the image")
+        model[:,:model.shape[1]//2] = 0.
     
     return model
