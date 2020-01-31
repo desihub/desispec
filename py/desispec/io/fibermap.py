@@ -455,6 +455,10 @@ def assemble_fibermap(night, expid):
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
+    #- Some code incorrectly relies upon the fibermap being sorted by
+    #- fiber number, so accomodate that before returning the table
+    fibermap.sort('FIBER')
+
     return fibermap
 
 def fibermap_new2old(fibermap):
