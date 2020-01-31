@@ -32,6 +32,8 @@ desi_params = read_params()
 
 from desispec.qa.qalib import s2n_funcs
 
+from desiutil.log import get_logger
+
 def brick_zbest(outfil, zf, qabrick):
     """ QA plots for Flux calibration in a Frame
 
@@ -108,6 +110,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     qaframe: QAFrame object
     """
     from desispec.sky import subtract_sky
+    log = get_logger()
 
     # Access metrics
     '''
@@ -127,7 +130,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
     else:
         med_res = np.median(res,axis=0)
-        wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
+        wavg_res = np.sum(res*res_ivar,0) / (np.sum(res_ivar,0) + (np.sum(res_ivar,0)==0))
 
     # Plot
     if quick_look:
@@ -173,19 +176,25 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         edges = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_EDGES"])
     else: # Generate for offline
         gd_res = res_ivar > 0.
-        devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
-        i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
-        rng = tuple( binsz*np.array([i0,i1]) )
-        nbin = i1-i0
-        hist, edges = np.histogram(devs, range=rng, bins=nbin)
+        if not np.any(gd_res):
+            log.info("No good residuals in frame_skyres plot")
+            edges = None
+        else:
+            devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
+            min_devs = np.maximum(np.min(devs), xmin*2)
+            max_devs = np.minimum(np.max(devs), xmax*2)
+            i0, i1 = int(min_devs/binsz) - 1, int(max_devs/binsz) + 1
+            rng = tuple( binsz*np.array([i0,i1]) )
+            nbin = i1-i0
+            hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
-    xhist = (edges[1:] + edges[:-1])/2.
-    ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
-    # PDF for Gaussian
-    area = binsz * np.sum(hist)
-
-    xppf = np.linspace(scipy.stats.norm.ppf(0.0001), scipy.stats.norm.ppf(0.9999), 100)
-    ax1.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
+    if edges is not None:
+        xhist = (edges[1:] + edges[:-1])/2.
+        ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
+        # PDF for Gaussian
+        area = binsz * np.sum(hist)
+        xppf = np.linspace(scipy.stats.norm.ppf(0.0001), scipy.stats.norm.ppf(0.9999), 100)
+        ax1.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
 
     ax1.set_xlabel(r'Res/$\sigma$')
     ax1.set_ylabel('N')
@@ -1006,7 +1015,7 @@ def prod_avg_s2n(qa_prod, outfile=None, optypes=['ELG'], xaxis='MJD',
 
     # Loop on exposure
     for qaexp in qa_prod.qa_exps:
-        if qaexp.qa_s2n is None:
+        if qaexp.qa_s2n is None or len(qaexp.qa_s2n) == 0:
             continue
         # Loop on objects to plot
         for itype, oplot in enumerate(oplots):

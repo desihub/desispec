@@ -7,6 +7,7 @@ import numpy as np
 import glob
 
 from desispec.io import meta, get_nights, get_exposures
+from desispec.io.util import makepath
 
 def header(title):
     """
@@ -76,17 +77,19 @@ def init(f, title):
     return links
 
 
-def calib(qaprod_dir=None):
+def calib(qaprod_dir=None, specprod_dir=None):
     """ Generate HTML to orgainze calib HTML
     """
     # Organized HTML
     html_file = meta.findfile('qa_calib_html', qaprod_dir=qaprod_dir)
     html_path,_ = os.path.split(html_file)
+    makepath(html_file)
+    # Open
     f = open(html_file, 'w')
     init(f, 'Calibration QA')
 
     # Loop on Nights
-    nights = get_nights(sub_folder='calibnight')
+    nights = get_nights(sub_folder='calibnight', specprod_dir=specprod_dir)
     nights.sort()
     links = ''
     body = ''
@@ -181,7 +184,7 @@ def make_exposures(qaprod_dir=None):
     init(f, 'Exposures QA')
 
     # Loop on Nights
-    nights = get_nights()
+    nights = get_nights(specprod_dir=qaprod_dir)  # Scans for nights in QA
     nights.sort()
     links = ''
     body = ''
@@ -189,8 +192,8 @@ def make_exposures(qaprod_dir=None):
         # HTML
         f.write('<h2> Night -- {:s} </h2>\n'.format(night))
         f.write('<h3><ul>\n')
-        # Loop on expsoures
-        for expid in get_exposures(night):
+        # Loop on exposures
+        for expid in get_exposures(night, specprod_dir=qaprod_dir):
             if not os.path.exists(html_path+'/'+night+'/{:08d}'.format(expid)):
                 continue
             # Link

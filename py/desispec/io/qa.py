@@ -16,6 +16,7 @@ from desispec.io.util import makepath
 from desiutil.log import get_logger
 # log=get_logger()
 
+
 def qafile_from_framefile(frame_file, qaprod_dir=None, output_dir=None):
     """ Derive the QA filename from an input frame file
     Args:
@@ -39,6 +40,7 @@ def qafile_from_framefile(frame_file, qaprod_dir=None, output_dir=None):
                       outdir=output_dir, qaprod_dir=qaprod_dir)
     # Return
     return qafile, qatype
+
 
 def read_qa_data(filename):
     """Read data from a QA file
@@ -87,12 +89,12 @@ def read_qa_frame(filename):
     return qaframe
 
 
-def load_qa_frame(filename, frame=None, flavor=None):
+def load_qa_frame(filename, frame_meta=None, flavor=None):
     """ Load an existing QA_Frame or generate one, as needed
 
     Args:
         filename: str
-        frame: Frame object, optional
+        frame_meta: dict like, optional
         flavor: str, optional
             Type of QA_Frame
 
@@ -105,13 +107,13 @@ def load_qa_frame(filename, frame=None, flavor=None):
         qaframe = read_qa_frame(filename)
         log.info("Loaded QA file {:s}".format(filename))
         # Check against frame, if provided
-        if frame is not None:
+        if frame_meta is not None:
             for key in ['camera','expid','night','flavor']:
-                assert getattr(qaframe, key) == frame.meta[key.upper()]
+                assert getattr(qaframe, key) == frame_meta[key.upper()]
     else:  # Init
-        if frame is None:
+        if frame_meta is None:
             log.error("QA file {:s} does not exist.  Expecting frame input".format(filename))
-        qaframe = QA_Frame(frame)
+        qaframe = QA_Frame(frame_meta)
     # Set flavor?
     if flavor is not None:
         qaframe.flavor = flavor

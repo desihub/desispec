@@ -32,6 +32,7 @@ from copy import deepcopy
 
 import numpy as np
 import fitsio
+from astropy.io import fits
 import glob
 import desispec.io
 from desispec.io import findfile
@@ -60,6 +61,8 @@ parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fib
 parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
 parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
 parser.add_argument("--fiberflat",type=str,required=False,default=None, help="use this fiberflat")
+parser.add_argument("--calibnight",type=int,required=False,default=None, help="use this night to find nighly PSF and fiberflats")
+parser.add_argument("--scattered-light",action='store_true',help="fit and remove scattered light")
 parser.add_argument("--extra-variance", action='store_true',
                     help = 'increase sky model variance based on chi2 on sky lines')
 parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
@@ -98,8 +101,10 @@ else:
     #- Fill in values from raw data header if not overridden by command line
     fx = fitsio.FITS(args.input)
     if 'SPS' in fx:
-        hdr = fx['SPS'].read_header()
+        hdr = fits.getheader(args.input, 'SPS')
+        #hdr = fx['SPS'].read_header()
     else:
+        #hdr = fits.getheader(args.input, 0)
         hdr = fx[0].read_header()
 
     if args.expid is None:
@@ -262,6 +267,8 @@ for i in range(rank, len(args.cameras), size):
     outdir = os.path.dirname(outfile)
     cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
         args.input, outfile, outdir, camera)
+    if args.scattered_light :
+        cmd += " --scattered-light"
     runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
 if comm is not None:
@@ -277,6 +284,13 @@ input_psf = dict()
 for camera in args.cameras :
     if args.psf is not None :
         input_psf[camera] = args.psf
+    elif args.calibnight is not None :
+        # look for a psfnight psf for this calib night
+        psfnightfile = findfile('psfnight', args.calibnight, args.expid, camera)
+        if not os.path.isfile(psfnightfile) :
+            log.error("no {}".format(psfnightfile))
+            raise IOError("no {}".format(psfnightfile))
+        input_psf[camera] = psfnightfile
     else :
         # look for a psfnight psf
         psfnightfile = findfile('psfnight', args.night, args.expid, camera)
@@ -305,7 +319,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
                 cmd += " -i {}".format(preprocfile)
                 cmd += " --psf {}".format(inpsf)
                 cmd += " --outpsf {}".format(outpsf)
-                cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
+                cmd += " --degxx 2 --degxy 0 --degyx 2 --degyy 0"
                 if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
                     cmd += ' --sky'
             else :
@@ -325,10 +339,31 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
 #- MPI parallelize this step
 
 if args.obstype in ['ARC', 'TESTARC']:
+    
+    if rank == 0:
+        log.info('Starting traceshift before specex PSF fit at {}'.format(time.asctime()))
+
+    for i in range(rank, len(args.cameras), size):
+        camera = args.cameras[i]
+        preprocfile = findfile('preproc', args.night, args.expid, camera)
+        inpsf  = input_psf[camera]
+        outpsf = findfile('psf', args.night, args.expid, camera).replace("psf","shifted-input-psf")
+        if not os.path.isfile(outpsf) :
+            cmd = "desi_compute_trace_shifts"
+            cmd += " -i {}".format(preprocfile)
+            cmd += " --psf {}".format(inpsf)
+            cmd += " --outpsf {}".format(outpsf)
+            cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
+            runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+        else :
+             log.info("PSF {} exists".format(outpsf))
+
+    if comm is not None:
+        comm.barrier()
+        
     if rank == 0:
         log.info('Starting specex PSF fitting at {}'.format(time.asctime()))
-        
-        
+    
     if rank > 0:
         cmds = inputs = outputs = None
     else:
@@ -337,8 +372,12 @@ if args.obstype in ['ARC', 'TESTARC']:
         outputs = dict()
         for camera in args.cameras:
             preprocfile = findfile('preproc', args.night, args.expid, camera)
-            inpsf  = input_psf[camera]
-            outpsf = findfile('psf', args.night, args.expid, camera)
+            tmpname = findfile('psf', args.night, args.expid, camera)
+            inpsf = tmpname.replace("psf","shifted-input-psf")
+            outpsf = tmpname.replace("psf","fit-psf")
+            
+            log.info("now run specex psf fit")
+            
             cmd = 'desi_compute_psf'
             cmd += ' --input-image {}'.format(preprocfile)
             cmd += ' --input-psf {}'.format(inpsf)
@@ -403,7 +442,7 @@ if args.obstype in ['ARC']:
         for camera in args.cameras :
             psfnightfile = findfile('psfnight', args.night, args.expid, camera)
             if not os.path.isfile(psfnightfile) : # we still don't have a psf night, see if we can compute it ...
-                psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace(str(args.expid),"*"))
+                psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace("psf","fit-psf").replace(str(args.expid),"*"))
                 log.info("Number of PSF for night={} camera={} = {}".format(args.night,camera,len(psfs)))
                 if len(psfs)>4 : # lets do it!
                     log.info("Computing psfnight ...")
@@ -448,7 +487,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
             cmd += ' -i {}'.format(preprocfile)
             cmd += ' -p {}'.format(psffile)
             cmd += ' -o {}'.format(framefile)
-       
+            cmd += ' --psferr 0.1'
             if not os.path.exists(framefile):
                 cmds[camera] = cmd
                 inputs[camera] = [preprocfile, psffile]
@@ -587,6 +626,13 @@ input_fiberflat = dict()
 for camera in args.cameras :
     if args.fiberflat is not None :
         input_fiberflat[camera] = args.fiberflat
+    elif args.calibnight is not None :
+        # look for a fiberflatnight for this calib night
+        fiberflatnightfile = findfile('fiberflatnight', args.calibnight, args.expid, camera)
+        if not os.path.isfile(fiberflatnightfile) :
+            log.error("no {}".format(fiberflatnightfile))
+            raise IOError("no {}".format(fiberflatnightfile))
+        input_fiberflat[camera] = fiberflatnightfile
     else :
         # look for a fiberflatnight fiberflat
         fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, camera)
@@ -655,7 +701,7 @@ if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
         ff = desispec.io.read_fiberflat(flatfilename)
         apply_fiberflat(fr, ff)
         sumflux = np.sum(fr.flux, axis=1)
-        fluxcut = np.percentile(sumflux, 90)
+        fluxcut = np.percentile(sumflux, 30)
         iisky = np.where(sumflux < fluxcut)[0]
         iisky = np.random.choice(iisky, size=100, replace=False)
 

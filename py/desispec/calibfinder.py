@@ -13,7 +13,7 @@ import os.path
 from desiutil.log import get_logger
 
 
-def _parse_date_obs(value):
+def parse_date_obs(value):
     '''
     converts DATE-OBS keywork to int
     with for instance DATE-OBS=2016-12-21T18:06:21.268371-05:00
@@ -99,12 +99,18 @@ class CalibFinder() :
             raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
         
         log.debug("header['CAMERA']={}".format(header['CAMERA']))
-        cameraid=header["CAMERA"].strip().lower()
-
+        camera=header["CAMERA"].strip().lower()
+        
+        if "SPECID" in header :
+            log.debug("header['SPECID']={}".format(header['SPECID']))
+            specid=int(header["SPECID"])
+        else :
+            specid=None
+        
         if "NIGHT" in header:
             dateobs = int(header["NIGHT"])
         elif "DATE-OBS" in header:
-            dateobs=_parse_date_obs(header["DATE-OBS"])
+            dateobs=parse_date_obs(header["DATE-OBS"])
         else:
             msg = "Need either NIGHT or DATE-OBS in header"
             log.error(msg)
@@ -140,12 +146,23 @@ class CalibFinder() :
         if not os.path.isdir(self.directory):
             raise IOError("Calibration directory {} not found".format(self.directory))
 
-        spectro=int(cameraid[-1])
-        if yaml_file is None :
-            if old_version :
-                yaml_file = os.path.join(self.directory,"ccd_calibration.yaml")
-            else :
-                yaml_file = "{}/spec/sp{}/{}.yaml".format(self.directory,spectro,cameraid)
+        
+        if dateobs < 20191211 : # old spectro identifiers
+            cameraid = camera
+            spectro=int(camera[-1])
+            if yaml_file is None :
+                if old_version :
+                    yaml_file = os.path.join(self.directory,"ccd_calibration.yaml")
+                else :
+                    yaml_file = "{}/spec/sp{}/{}.yaml".format(self.directory,spectro,cameraid)
+        else :
+            if specid is None :
+                log.error("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
+                raise RuntimeError("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
+            log.debug("Use spectrograph hardware identifier SMY")
+            cameraid    = "sm{}-{}".format(specid,camera[0].lower())
+            if yaml_file is None :
+                yaml_file = "{}/spec/sm{}/{}.yaml".format(self.directory,specid,cameraid)
         
         if not os.path.isfile(yaml_file) :
             log.error("Cannot read {}".format(yaml_file))
@@ -157,6 +174,8 @@ class CalibFinder() :
         stream = open(yaml_file, 'r')
         data   = yaml.safe_load(stream)
         stream.close()
+
+        
         
         if not cameraid in data :
             log.error("Cannot find data for camera %s in filename %s"%(cameraid,yaml_file))

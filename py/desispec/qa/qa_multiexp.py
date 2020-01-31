@@ -94,7 +94,8 @@ class QA_MultiExp(object):
                 if self.data[night][expid]['flavor'] != 'science':
                     continue
                 # Instantiate
-                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True)
+                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True,
+                                                qaprod_dir=self.qaprod_dir, specprod_dir=self.specprod_dir)
                 qaexp.parse_multi_qa_dict(self.data)
                 qaexp.s2n_table()
                 # Append
@@ -191,12 +192,13 @@ class QA_MultiExp(object):
             for exposure in self.mexp_dict[night]:
                 # Object only??
                 for camera,frame_fil in self.mexp_dict[night][exposure].items():
-                    # Load frame
+                    # QA filename
                     qafile, _ = qafile_from_framefile(frame_fil, qaprod_dir=self.qaprod_dir)
                     if os.path.isfile(qafile) and (not clobber) and (not make_plots):
                         continue
+                    # Make QA
                     qaframe_from_frame(frame_fil, make_plots=make_plots, qaprod_dir=self.qaprod_dir,
-                                       clobber=clobber)
+                                       clobber=clobber, specprod_dir=self.specprod_dir)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files to generate

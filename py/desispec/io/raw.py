@@ -15,6 +15,7 @@ import desispec.io
 import desispec.io.util
 import desispec.preproc
 from desiutil.log import get_logger
+from desispec.calibfinder import parse_date_obs
 
 def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
@@ -109,8 +110,22 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         assert set(spec_to_petal.keys()) == set(range(10))
         assert set(spec_to_petal.values()) == set(range(10))
 
-        petal_loc = spec_to_petal[int(camera[1])]
-        log.warning('Mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
+        #- Mapping only for dates < 20191211
+        if "NIGHT" in primary_header:
+            dateobs = int(primary_header["NIGHT"])
+        elif "DATE-OBS" in primary_header:
+            dateobs=parse_date_obs(primary_header["DATE-OBS"])
+        else:
+            msg = "Need either NIGHT or DATE-OBS in primary header"
+            log.error(msg)
+            raise KeyError(msg)
+        if dateobs < 20191211 :
+            petal_loc = spec_to_petal[int(camera[1])]
+            log.warning('Mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
+        else :
+            petal_loc = int(camera[1])
+            log.warning('Since 20191211, camera {} is PETAL_LOC={}'.format(camera, petal_loc))
+        
         ii = (fibermap['PETAL_LOC'] == petal_loc)
         fibermap = fibermap[ii]
 

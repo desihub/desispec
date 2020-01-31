@@ -26,6 +26,7 @@ def parse(options=None):
     parser.add_argument('--html', default = False, action='store_true',
                         help = 'Generate HTML files?')
     parser.add_argument('--qaprod_dir', type=str, default=None, help='Path to where QA is generated.  Default is qaprod_dir')
+    parser.add_argument('--specprod_dir', type=str, default=None, help='Path to spectro production folder.  Default is specprod_dir')
     parser.add_argument('--S2N_plot', default=False, action='store_true',
                         help = 'Generate a S/N plot for the production (vs. xaxis)')
     parser.add_argument('--ZP_plot', default=False, action='store_true',
@@ -52,9 +53,12 @@ def main(args) :
 
     log.info("starting")
     # Initialize
-    specprod_dir = meta.specprod_root()
+    if args.specprod_dir is None:
+        specprod_dir = meta.specprod_root()
+    else:
+        specprod_dir = args.specprod_dir
     if args.qaprod_dir is None:
-        qaprod_dir = meta.qaprod_root()
+        qaprod_dir = meta.qaprod_root(specprod_dir=specprod_dir)
     else:
         qaprod_dir = args.qaprod_dir
 
@@ -73,6 +77,7 @@ def main(args) :
 
     # Slurp and write?
     if args.slurp:
+        qa_prod.qaexp_outroot = qaprod_dir 
         qa_prod.slurp_nights(make=(args.make_frameqa > 0), remove=args.remove, write_nights=True)
 
     # Channel histograms
@@ -120,6 +125,6 @@ def main(args) :
 
     # HTML
     if args.html:
-        html.calib(qaprod_dir=qaprod_dir)
+        html.calib(qaprod_dir=qaprod_dir, specprod_dir=specprod_dir)
         html.make_exposures(qaprod_dir=qaprod_dir)
         html.toplevel(qaprod_dir=qaprod_dir)

@@ -44,13 +44,11 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         nights = get_nights(specprod_dir=self.specprod_dir)
         for night in nights:
             self.mexp_dict[night] = {}
-            '''
             for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
                 # Object only??
                 frames_dict = get_files(filetype = str('frame'), night = night,
                                         expid = exposure, specprod_dir = self.specprod_dir)
                 self.mexp_dict[night][exposure] = frames_dict
-            '''
         # Output file names
         self.qaexp_outroot = self.qaprod_dir+'/'+self.prod_name+'_qa'
         # Nights list
@@ -62,7 +60,7 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         self.data = {}
         # Load
         for night in self.mexp_dict.keys():
-            qaNight = QA_Night(night, specprod_dir=self.specprod_dir)
+            qaNight = QA_Night(night, specprod_dir=self.specprod_dir, qaprod_dir=self.qaprod_dir)
             qaNight.load_data()
             #
             self.data[night] = qaNight.data[night]
@@ -90,6 +88,8 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
               Regenerate the individual QA files (at the frame level first)
             remove: bool, optional
               Remove the individual QA files?
+            **kwargs:
+              Passed to make_frameqa()
 
         Returns:
 
@@ -103,7 +103,7 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         self.qa_nights = []
         # Loop on nights
         for night in self.mexp_dict.keys():
-            qaNight = QA_Night(night)
+            qaNight = QA_Night(night, specprod_dir=self.specprod_dir, qaprod_dir=self.qaprod_dir)
             qaNight.slurp(remove=remove)
             # Save nights
             self.qa_nights.append(qaNight)
