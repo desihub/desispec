@@ -126,7 +126,7 @@ def main(args=None):
     elif args.ccd_calib_filename is not None :
         ccd_calibration_filename = args.ccd_calib_filename
 
-    if args.fibermap and not os.path.exists(fibermap):
+    if args.fibermap and not os.path.exists(args.fibermap):
         raise ValueError('--fibermap {} not found'.format(args.fibermap))
 
     if args.fibermap is None:

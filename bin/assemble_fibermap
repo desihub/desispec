@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+
+"""
+Assemble fibermap from input exposures
+"""
+
+import argparse
+from desispec.io.fibermap import find_fiberassign_file, assemble_fibermap
+
+#----
+
+parser = argparse.ArgumentParser(usage = "{prog} [options]")
+parser.add_argument("-n", "--night", type=int, help="input night")
+parser.add_argument("-e", "--expid", type=int, help="spectroscopic exposure ID")
+parser.add_argument("-o", "--outfile", type=str, help="output filename")
+parser.add_argument("--debug", action="store_true", help="enter ipython debug mode at end")
+parser.add_argument("--overwrite", action="store_true", help="overwrite pre-existing output file")
+
+args = parser.parse_args()
+
+fibermap = assemble_fibermap(args.night, args.expid)
+
+if args.outfile:
+    fibermap.write(args.outfile, overwrite=args.overwrite)
+
+if args.debug:
+    import IPython; IPython.embed()
+
+
+
+
+
+
+

@@ -38,6 +38,8 @@ def parse(options=None):
     parser.add_argument('--z-max', type = float, default = 0.008, required = False, help = 'max peculiar velocity (blue/red)shift range')
     parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
+    parser.add_argument('--maxstdstars', type=int, default=30, \
+            help='Maximum number of stdstars to include')
     
     log = get_logger()
     args = None
@@ -76,6 +78,7 @@ def main(args) :
     log = get_logger()
 
     log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
+    log.info('multiprocess parallelizing with {} processes'.format(args.ncpu))
 
     frames={}
     flats={}
@@ -187,6 +190,48 @@ def main(args) :
                     frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
             frame.resolution_data = frame.resolution_data[starindices]
 
+    # CHECK S/N
+    ############################################
+    # for each band in 'brz', record quadratic sum of median S/N across wavelength
+    snr2=dict()
+    for band in ['b','r','z'] :
+        snr2[band]=np.zeros(starindices.size)
+    for cam in frames :
+        band=cam[0].lower()
+        for frame in frames[cam] :
+            msnr = np.median( frame.flux * np.sqrt( frame.ivar ) / np.sqrt(np.gradient(frame.wave)) , axis=1 ) # median SNR per sqrt(A.)
+            msnr *= (msnr>0)
+            snr2[band] += msnr**2
+    log.info("SNR(B) = {}".format(np.sqrt(snr2['b'])))
+    log.info("SNR(R) = {}".format(np.sqrt(snr2['r'])))
+    log.info("SNR(Z) = {}".format(np.sqrt(snr2['z'])))
+
+    snr=np.sqrt(snr2['b'])
+    ###############################
+    min_blue_snr = 4.
+    ###############################
+    indices=np.argsort(snr)[::-1][:args.maxstdstars]
+    
+    validstars = np.where(snr[indices]>min_blue_snr)[0]
+    
+    #- TODO: later we filter on models based upon color, thus throwing
+    #- away very blue stars for which we don't have good models.
+
+    log.info("Number of stars with median stacked blue S/N > {} /sqrt(A) = {}".format(min_blue_snr,validstars.size))
+    if validstars.size == 0 :
+        log.error("No valid star")
+        sys.exit(12)
+
+    validstars = indices[validstars]
+    log.info("SNR of selected stars={}".format(snr[validstars]))
+    
+    for cam in frames :
+        for frame in frames[cam] :
+            frame.flux = frame.flux[validstars]
+            frame.ivar = frame.ivar[validstars]
+            frame.resolution_data = frame.resolution_data[validstars]
+    starindices = starindices[validstars]
+    starfibers  = starfibers[validstars]
     nstars = starindices.size
     fibermap = Table(fibermap[starindices])
 
@@ -271,7 +316,11 @@ def main(args) :
         
         color_diff = model_colors - star_unextincted_colors[args.color][star]
         selection = np.abs(color_diff) < args.delta_color
-
+        if np.sum(selection) == 0 :
+            log.warning("no model in the selected color range for this star")
+            continue
+        
+        
         # smallest cube in parameter space including this selection (needed for interpolation)
         new_selection = (teff>=np.min(teff[selection]))&(teff<=np.max(teff[selection]))
         new_selection &= (logg>=np.min(logg[selection]))&(logg<=np.max(logg[selection]))
@@ -293,7 +342,7 @@ def main(args) :
         
         linear_coefficients[star,selection] = coefficients
         
-        log.info('Star Fiber: {0}; TEFF: {1}; LOGG: {2}; FEH: {3}; Redshift: {4}; Chisq/dof: {5}'.format(
+        log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
             starfibers[star],
             np.inner(teff,linear_coefficients[star]),
             np.inner(logg,linear_coefficients[star]),
@@ -331,19 +380,25 @@ def main(args) :
         # Normalize the best model using reported magnitude
         scalefac=10**((model_magr - star_mags['R'][star])/2.5)
 
-        log.info('scaling R mag {} to {} using scale {}'.format(model_magr, star_mags['R'][star], scalefac))
+        log.info('scaling R mag {:.3f} to {:.3f} using scale {}'.format(model_magr, star_mags['R'][star], scalefac))
         normflux.append(model*scalefac)
 
     # Now write the normalized flux for all best models to a file
     normflux=np.array(normflux)
+
+    fitted_stars = np.where(chi2dof != 0)[0]
+    if fitted_stars.size == 0 :
+        log.error("No star has been fit.")
+        sys.exit(12)
+
     data={}
-    data['LOGG']=linear_coefficients.dot(logg)
-    data['TEFF']= linear_coefficients.dot(teff)
-    data['FEH']= linear_coefficients.dot(feh)
-    data['CHI2DOF']=chi2dof
-    data['REDSHIFT']=redshift
-    data['COEFF']=linear_coefficients
-    data['DATA_%s'%args.color]=star_colors[args.color]
-    data['MODEL_%s'%args.color]=fitted_model_colors
-    io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers,data)
+    data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
+    data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
+    data['FEH']= linear_coefficients[fitted_stars,:].dot(feh)
+    data['CHI2DOF']=chi2dof[fitted_stars]
+    data['REDSHIFT']=redshift[fitted_stars]
+    data['COEFF']=linear_coefficients[fitted_stars,:]
+    data['DATA_%s'%args.color]=star_colors[args.color][fitted_stars]
+    data['MODEL_%s'%args.color]=fitted_model_colors[fitted_stars]
+    io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers[fitted_stars],data)
 
