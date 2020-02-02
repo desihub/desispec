@@ -237,8 +237,7 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:-margin+i])**2)                
             else :
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:])**2)
-    import matplotlib.pyplot as plt
-    
+        
     i=np.argmin(chi2)-margin
     z=10**(-i*lstep)-1
     log.debug("Best z=%f"%z)
@@ -881,21 +880,36 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     #- Start with a first pass median rejection
     calib = (convolved_model_flux!=0)*(stdstars.flux/(convolved_model_flux + (convolved_model_flux==0)))
     median_calib = np.median(calib, axis=0)
-
+        
     # First fit of smooth correction per fiber, and 10% model error to variance,  and perform first outlier rejection
     smooth_fiber_correction=np.ones((stdstars.flux.shape))
     chi2=np.zeros((stdstars.flux.shape))  
 
+    badfiber=np.zeros(nstds,dtype=int)
+    
     for fiber in range(nstds) :
+        if badfiber[fiber] : continue
+        if np.sum(current_ivar[fiber]) == 0 :
+            log.warning("null inverse variance for fiber {}".format(fiber))
+            badfiber[fiber] = 1
+            continue
+        
         M = median_calib*stdstars.R[fiber].dot(model_flux[fiber])
         
         try:
-            pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
+            ii = np.where(M>0.1*np.mean(M))[0]
+            if ii.size == 0 :
+                current_ivar[fiber]=0.
+                badfiber[fiber] = 1
+                continue
+            pol=np.poly1d(np.polyfit(dwave[ii],stdstars.flux[fiber,ii]/M[ii],deg=deg,w=current_ivar[fiber,ii]*M[ii]**2))
             smooth_fiber_correction[fiber]=pol(dwave)
         except ValueError :
             log.warning("polynomial fit for fiber %d failed"%fiber)
             current_ivar[fiber]=0.
-
+            badfiber[fiber] = 1
+            continue
+        
         chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
         
     
@@ -922,6 +936,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         for fiber in range(nstds) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
+
+            if badfiber[fiber]: continue
 
             R = stdstars.R[fiber]
 
@@ -964,10 +980,17 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             if fiber%10==0 :
                 log.info("iter %d fiber %d(smooth)"%(iteration,fiber))
 
+            if badfiber[fiber]: continue
+            
             M = stdstars.R[fiber].dot(calibration*model_flux[fiber])
 
             try:
-                pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
+                ii = np.where(M>0.1*np.mean(M))[0]
+                if ii.size == 0 :
+                    current_ivar[fiber]=0.
+                    badfiber[fiber] = 1
+                    continue
+                pol=np.poly1d(np.polyfit(dwave[ii],stdstars.flux[fiber,ii]/M[ii],deg=deg,w=current_ivar[fiber,ii]*M[ii]**2))
                 smooth_fiber_correction[fiber]=pol(dwave)
             except ValueError :
                 log.warning("polynomial fit for fiber %d failed"%fiber)
