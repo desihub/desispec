@@ -35,9 +35,11 @@ def parse(options=None):
                         help = 'path of spetro-photometric stellar spectra fits file')
     parser.add_argument('--chi2cut', type = float, default = 0., required=False,
                         help = 'apply a reduced chi2 cut for the selection of stars')
-    parser.add_argument('--chi2cut-nsig', type = float, default = 3., required=False,
+    parser.add_argument('--chi2cut-nsig', type = float, default = 0., required=False,
                         help = 'discard n-sigma outliers from the reduced chi2 of the standard star fit')
-    parser.add_argument('--delta-color-cut', type = float, default = 0.1, required=False,
+    parser.add_argument('--min-color', type = float, default = 0.25, required=False,
+                        help = 'only consider stars with g-r greater than this')
+    parser.add_argument('--delta-color-cut', type = float, default = 0.3, required=False,
                         help = 'discard model stars with different broad-band color from imaging')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
@@ -88,43 +90,36 @@ def main(args) :
     # read models
     model_flux,model_wave,model_fibers,model_metadata=read_stdstar_models(args.models)
 
+    ok=np.ones(len(model_metadata),dtype=bool)
+    
     if args.chi2cut > 0 :
-        ok = np.where(model_metadata["CHI2DOF"]<args.chi2cut)[0]
-        if ok.size == 0 :
-            log.error("chi2cut has discarded all stars")
-            sys.exit(12)
-        nstars=model_flux.shape[0]
-        nbad=nstars-ok.size
-        if nbad>0 :
-            log.warning("discarding %d star(s) out of %d because of chi2cut"%(nbad,nstars))
-            model_flux=model_flux[ok]
-            model_fibers=model_fibers[ok]
-            model_metadata=model_metadata[:][ok]
-    
+        log.info("Apply cut CHI2DOF<{}".format(args.chi2cut))
+        ok &= (model_metadata["CHI2DOF"]<args.chi2cut)
     if args.delta_color_cut > 0 :
-        ok = np.where(np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)[0]
-        nstars=model_flux.shape[0]
-        nbad=nstars-ok.size
-        if nbad>0 :
-            log.warning("discarding %d star(s) out of %d because |delta_color|>%f"%(nbad,nstars,args.delta_color_cut))
-            model_flux=model_flux[ok]
-            model_fibers=model_fibers[ok]
-            model_metadata=model_metadata[:][ok]
-    
+        log.info("Apply cut |delta color|<{}".format(args.delta_color_cut))
+        ok &= (np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)
+    log.info("Apply cut DATA_G-R>{}".format(args.min_color))
+    ok &= (model_metadata["DATA_G-R"]>args.min_color)
 
-    # automatically reject stars that ar chi2 outliers
     if args.chi2cut_nsig > 0 :
+        # automatically reject stars that ar chi2 outliers
         mchi2=np.median(model_metadata["CHI2DOF"])
         rmschi2=np.std(model_metadata["CHI2DOF"])
         maxchi2=mchi2+args.chi2cut_nsig*rmschi2
-        ok=np.where(model_metadata["CHI2DOF"]<=maxchi2)[0]
-        nstars=model_flux.shape[0]
-        nbad=nstars-ok.size
-        if nbad>0 :
-            log.warning("discarding %d star(s) out of %d because reduced chi2 outliers (at %d sigma, giving rchi2<%f )"%(nbad,nstars,args.chi2cut_nsig,maxchi2))
-            model_flux=model_flux[ok]
-            model_fibers=model_fibers[ok]
-            model_metadata=model_metadata[:][ok]
+        log.info("Apply cut CHI2DOF<{} based on chi2cut_nsig={}".format(maxchi2,args.chi2cut_nsig))
+        ok &= (model_metadata["CHI2DOF"]<=maxchi2)
+    
+    ok=np.where(ok)[0]
+    if ok.size == 0 :
+        log.error("cuts discarded all stars")
+        sys.exit(12)
+    nstars=model_flux.shape[0]
+    nbad=nstars-ok.size
+    if nbad>0 :
+        log.warning("discarding %d star(s) out of %d because of cuts"%(nbad,nstars))
+        model_flux=model_flux[ok]
+        model_fibers=model_fibers[ok]
+        model_metadata=model_metadata[:][ok]
     
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
