@@ -899,7 +899,7 @@ if args.obstype in ['SCIENCE',] and (not args.noskysub ) :
         if args.nofluxcalib or ( not os.path.isfile(calibfile) ) :
             calibfile = findcalibfile([hdr, camhdr[camera]], 'FLUXCALIB')
             if calibfile is None :
-                log.error("No default flux calibreation for {}".format(camera))
+                log.error("No default flux calibration for {}".format(camera))
                 continue
             log.info("Using calib file {}".format(calibfile))
             
