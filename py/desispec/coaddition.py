@@ -41,7 +41,7 @@ def coadd_fibermap(fibermap) :
     for k in ['DELTA_X','DELTA_Y'] :
         if k in fibermap.colnames :
             tfmap.rename_column(k,'MEAN_'+k)
-            xx = Column(np.arange(ntarget))
+            xx = Column(np.zeros(ntarget))
             tfmap.add_column(xx,name='RMS_'+k)
     for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
         if k in fibermap.colnames :
@@ -59,6 +59,7 @@ def coadd_fibermap(fibermap) :
                 vals=fibermap[k][jj]
                 tfmap['MEAN_'+k][i] = np.mean(vals)
                 tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)) # inc. mean offset, not same as std
+
         for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]
@@ -88,7 +89,7 @@ def coadd(spectra, cosmics_nsig=0.) :
     targets = np.unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
     log.debug("number of targets= {}".format(ntarget))
-    for b in spectra._bands :
+    for b in spectra.bands :
         log.debug("coadding band '{}'".format(b))
         nwave=spectra.wave[b].size
         tflux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
@@ -181,8 +182,8 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
     log = get_logger()
     
     # ordering
-    mwave=[np.mean(spectra.wave[b]) for b in spectra._bands]
-    sbands=np.array(spectra._bands)[np.argsort(mwave)] # bands sorted by inc. wavelength
+    mwave=[np.mean(spectra.wave[b]) for b in spectra.bands]
+    sbands=np.array(spectra.bands)[np.argsort(mwave)] # bands sorted by inc. wavelength
     log.debug("wavelength sorted cameras= {}".format(sbands))
     
     # create wavelength array
@@ -197,7 +198,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
 
     # check alignment
     number_of_overlapping_cameras=np.zeros(nwave)
-    for b in spectra._bands :
+    for b in spectra.bands :
         windices=np.argmin((np.tile(wave,(spectra.wave[b].size,1))-np.tile(spectra.wave[b],(wave.size,1)).T)**2,axis=1)
         dist=np.sqrt(np.max(spectra.wave[b] - wave[windices]))
         log.debug("camera {} max dist= {}A".format(b,dist))
@@ -231,7 +232,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
     
     rdata=np.zeros((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
     
-    for b in spectra._bands :
+    for b in spectra.bands :
         log.debug("coadding band '{}'".format(b))
 
         # indices
@@ -428,7 +429,7 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
     
 def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,flux,ivar,rdata) :
     cinv = None
-    for b in spectra._bands :
+    for b in spectra.bands :
         twave=spectra.wave[b]
         jj=(twave>=wave[0])&(twave<=wave[-1])
         twave=twave[jj]
@@ -510,7 +511,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     log = get_logger()
     log.debug("resampling to wave grid of size {}: {}".format(wave.size,wave))
 
-    b=spectra._bands[0]
+    b=spectra.bands[0]
     ntarget=spectra.flux[b].shape[0]
     nwave=wave.size
     
@@ -521,7 +522,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     # number of diagonals is the max of the number of diagonals in the
     # input spectra cameras
     ndiag = 0
-    for b in spectra._bands :
+    for b in spectra.bands :
         ndiag = max(ndiag,spectra.resolution_data[b].shape[1])
         
     
@@ -530,7 +531,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     log.debug("min wavelength bin= {:2.1f} A; ndiag= {:d}".format(wavebin,ndiag))
     log.debug("compute resampling matrices")
     resampling_matrix=dict()
-    for b in spectra._bands :
+    for b in spectra.bands :
         twave=spectra.wave[b]
         jj=np.where((twave>=wave[0])&(twave<=wave[-1]))[0]
         twave=spectra.wave[b][jj]
@@ -562,7 +563,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
         shm_in_rdata  = list()
         in_nwave = list()
         in_ndiag = list()
-        for b in spectra._bands :
+        for b in spectra.bands :
             shm_in_wave.append( multiprocessing.Array('d',spectra.wave[b],lock=False) )
             shm_in_flux.append( multiprocessing.Array('d',spectra.flux[b].ravel(),lock=False) )
             shm_in_ivar.append( multiprocessing.Array('d',spectra.ivar[b].ravel(),lock=False) )
@@ -589,7 +590,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
             log.debug("starting process #{}".format(proc_index+1))
             proc = multiprocessing.Process(target=spectroperf_resample_spectrum_multiproc,
                                            args=(shm_in_wave,shm_in_flux,shm_in_ivar,shm_in_rdata,
-                                                 in_nwave,in_ndiag,spectra._bands,
+                                                 in_nwave,in_ndiag,spectra.bands,
                                                  target_indices[proc_index],wave,wavebin,
                                                  resampling_matrix,ndiag,ntarget,
                                                  shm_flux,shm_ivar,shm_rdata))
@@ -603,7 +604,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
         log.info("all done!")
     
     bands=""
-    for b in spectra._bands : bands += b
+    for b in spectra.bands : bands += b
 
     if spectra.mask is not None :
         dmask={bands:mask,}
@@ -633,7 +634,7 @@ def fast_resample_spectra(spectra, wave) :
     
     
     nwave=wave.size
-    b=spectra._bands[0]
+    b=spectra.bands[0]
     ntarget=spectra.flux[b].shape[0]
     nres=spectra.resolution_data[b].shape[1]
     ivar=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
@@ -644,7 +645,7 @@ def fast_resample_spectra(spectra, wave) :
         mask = None
     rdata=np.ones((ntarget,1,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
     bands=""
-    for b in spectra._bands :
+    for b in spectra.bands :
         if spectra.mask is not None :
             tivar=spectra.ivar[b]*(spectra.mask[b]==0)
         else :
@@ -685,7 +686,7 @@ def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False
 
     wmin=None
     wmax=None
-    for b in spectra._bands :
+    for b in spectra.bands :
         if wmin is None :
             wmin=spectra.wave[b][0]
             wmax=spectra.wave[b][-1]
