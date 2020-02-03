@@ -974,6 +974,15 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             log.info('cholesky fails in iteration {}, trying svd'.format(iteration))
             calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 
+        wmask = (np.diagonal(A)<=0)
+        if np.sum(wmask)>0 :
+            wmask = wmask.astype(float)
+            wmask = R.dot(R.dot(wmask))
+            bad = np.where(wmask!=0)[0]
+            log.info("nbad={}".format(bad.size))
+            good = np.where(wmask==0)[0]
+            calibration[bad] = np.interp(bad,good,calibration[good],left=0,right=0)
+                
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
         for fiber in range(nstds) :
@@ -1078,6 +1087,18 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     ccalibvar *= mean**2
     ccalibivar=(ccalibvar>0)/(ccalibvar+(ccalibvar==0))
 
+    # at least a few stars at each wavelength
+    min_number_of_stars = min(3,max(1,nstds//2))
+    log.info("Requesting at least {} star spectra at each wavelength".format(min_number_of_stars))
+    nstars_with_signal=np.sum(current_ivar>0,axis=0)
+    bad = (nstars_with_signal<min_number_of_stars)
+    # increase by 1 pixel
+    bad[1:-1] |= bad[2:]
+    bad[1:-1] |= bad[:-2]
+    
+    ccalibivar[bad]=0.
+    ccalibration[:,bad]=0.
+        
     # convert to 2D
     # For now this is the same for all fibers; in the future it may not be
     ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
