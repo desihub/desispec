@@ -205,6 +205,7 @@ def main(args) :
     log.info("SNR(B) = {}".format(snr['b']))
     
     ###############################
+    max_number_of_stars = 50
     min_blue_snr = 4.
     ###############################
     indices=np.argsort(snr['b'])[::-1][:max_number_of_stars]
