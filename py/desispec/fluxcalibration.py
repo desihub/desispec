@@ -19,6 +19,7 @@ import time
 from astropy import units
 import multiprocessing
 from pkg_resources import resource_exists, resource_filename
+import numpy.linalg
 
 try:
     from scipy import constants
@@ -909,6 +910,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             current_ivar[fiber]=0.
             badfiber[fiber] = 1
             continue
+        except numpy.linalg.LinAlgError :
+            log.warning("polynomial fit for fiber %d failed"%fiber)
+            current_ivar[fiber]=0.
+            badfiber[fiber] = 1
+            continue
         
         chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
         
@@ -970,7 +976,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         calibration = B*0
         try:
             calibration[w]=cholesky_solve(A_pos_def, B[w])
-        except np.linalg.linalg.LinAlgError:
+        except np.linalg.linalg.LinAlgError :
             log.info('cholesky fails in iteration {}, trying svd'.format(iteration))
             calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 
@@ -1001,9 +1007,16 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
                     continue
                 pol=np.poly1d(np.polyfit(dwave[ii],stdstars.flux[fiber,ii]/M[ii],deg=deg,w=current_ivar[fiber,ii]*M[ii]**2))
                 smooth_fiber_correction[fiber]=pol(dwave)
-            except ValueError :
+            except ValueError as e  :
                 log.warning("polynomial fit for fiber %d failed"%fiber)
                 current_ivar[fiber]=0.
+                badfiber[fiber] = 1.
+                continue
+            except numpy.linalg.LinAlgError as e  :
+                log.warning("polynomial fit for fiber %d failed"%fiber)
+                current_ivar[fiber]=0.
+                badfiber[fiber] = 1.
+                continue
             chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
 
         log.info("iter {0:d} rejecting".format(iteration))
