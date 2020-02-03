@@ -52,14 +52,18 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
     median_ivar = np.median(skymodel.ivar,axis=0)
     min_ivar =  0.03 * np.median(skymodel.ivar)
 
+    log = get_logger()
+    
     ii = np.where(median_ivar[:median_ivar.size//2]<min_ivar)[0]
     if ii.size>0 :
         begin = ii[-1]+1
+        log.warning("setting to zero poorly constrained sky flux with wave<{:4.1f}A".format(skymodel.wave[begin]))
         skymodel.flux[:,:begin] *= 0
         skymodel.ivar[:,:begin] *= 0
     ii = np.where(median_ivar[median_ivar.size//2:]<min_ivar)[0]
     if ii.size>0 :
         end = median_ivar.size//2+ii[0]
+        log.warning("setting to zero poorly constrained sky flux with wave>={:4.1f}A".format(skymodel.wave[end]))
         skymodel.flux[:,end:] *= 0
         skymodel.ivar[:,end:] *= 0
 
