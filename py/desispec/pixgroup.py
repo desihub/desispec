@@ -290,11 +290,9 @@ class SpectraLite(object):
 
         #- create directory if missing
         dirname=os.path.dirname(filename)
-        try :
-            if not os.path.isdir(dirname) :
-                os.makedirs(dirname)
-        except FileExistsError :
-            pass
+        if dirname != '':
+            os.makedirs(dirname, exist_ok=True)
+
         tmpout = filename + '.tmp'
 
         #- work around c/fitsio bug that appends spaces to string column values
