@@ -870,7 +870,9 @@ if args.obstype in ['SCIENCE',] and \
         cmd += " --fiberflat {}".format(fiberflatfile)
         cmd += " --models {}".format(stdfile)
         cmd += " --outfile {}".format(calibfile)
-        cmd += " --delta-color-cut 12"  #- CMX hack
+        cmd += " --delta-color-cut 0.2"
+        cmd += " --min-color 0.25"
+         
 
         inputs = [framefile, skyfile, fiberflatfile, stdfile]
         runcmd(cmd, inputs=inputs, outputs=[calibfile,])
