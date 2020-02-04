@@ -1054,8 +1054,12 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         if ndf>0 :
             chi2pdf=sum_chi2/ndf
 
-        # normalize to get a mean fiberflat=1
-        mean=np.nanmean(smooth_fiber_correction,axis=0)
+        # normalize to preserve the average throughput
+        # and throughput = < data/model/correction >
+        # and we would like to have throughput = < data/model >
+        # (we don't do that directly to reduce noise)
+        # so we want to average the inverse of the smooth correction
+        mean=1./np.nanmean(1./smooth_fiber_correction[badfiber==0],axis=0)
         smooth_fiber_correction /= mean
 
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
