@@ -193,26 +193,24 @@ def main(args) :
     # CHECK S/N
     ############################################
     # for each band in 'brz', record quadratic sum of median S/N across wavelength
-    snr2=dict()
+    snr=dict()
     for band in ['b','r','z'] :
-        snr2[band]=np.zeros(starindices.size)
+        snr[band]=np.zeros(starindices.size)
     for cam in frames :
         band=cam[0].lower()
         for frame in frames[cam] :
             msnr = np.median( frame.flux * np.sqrt( frame.ivar ) / np.sqrt(np.gradient(frame.wave)) , axis=1 ) # median SNR per sqrt(A.)
             msnr *= (msnr>0)
-            snr2[band] += msnr**2
-    log.info("SNR(B) = {}".format(np.sqrt(snr2['b'])))
-    log.info("SNR(R) = {}".format(np.sqrt(snr2['r'])))
-    log.info("SNR(Z) = {}".format(np.sqrt(snr2['z'])))
-
-    snr=np.sqrt(snr2['b'])
+            snr[band] = np.sqrt( snr[band]**2 + msnr**2 )
+    log.info("SNR(B) = {}".format(snr['b']))
+    
     ###############################
+    max_number_of_stars = 50
     min_blue_snr = 4.
     ###############################
-    indices=np.argsort(snr)[::-1][:args.maxstdstars]
+    indices=np.argsort(snr['b'])[::-1][:max_number_of_stars]
     
-    validstars = np.where(snr[indices]>min_blue_snr)[0]
+    validstars = np.where(snr['b'][indices]>min_blue_snr)[0]
     
     #- TODO: later we filter on models based upon color, thus throwing
     #- away very blue stars for which we don't have good models.
@@ -223,7 +221,11 @@ def main(args) :
         sys.exit(12)
 
     validstars = indices[validstars]
-    log.info("SNR of selected stars={}".format(snr[validstars]))
+
+    for band in ['b','r','z'] :
+        snr[band]=snr[band][validstars]
+    
+    log.info("BLUE SNR of selected stars={}".format(snr['b']))
     
     for cam in frames :
         for frame in frames[cam] :
@@ -234,6 +236,19 @@ def main(args) :
     starfibers  = starfibers[validstars]
     nstars = starindices.size
     fibermap = Table(fibermap[starindices])
+
+    # MASK OUT THROUGHPUT DIP REGION
+    ############################################
+    mask_throughput_dip_region = True
+    if mask_throughput_dip_region :
+        wmin=4300.
+        wmax=4500.
+        log.warning("Masking out the wavelength region [{},{}]A in the standard star fit".format(wmin,wmax))
+    for cam in frames :
+        for frame in frames[cam] :
+            ii=np.where( (frame.wave>=wmin)&(frame.wave<=wmax) )[0]
+            if ii.size>0 :
+                frame.ivar[:,ii] = 0
 
     # READ MODELS
     ############################################
@@ -400,5 +415,8 @@ def main(args) :
     data['COEFF']=linear_coefficients[fitted_stars,:]
     data['DATA_%s'%args.color]=star_colors[args.color][fitted_stars]
     data['MODEL_%s'%args.color]=fitted_model_colors[fitted_stars]
+    data['BLUE_SNR'] = snr['b'][fitted_stars]
+    data['RED_SNR']  = snr['r'][fitted_stars]
+    data['NIR_SNR']  = snr['z'][fitted_stars]
     io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers[fitted_stars],data)
 

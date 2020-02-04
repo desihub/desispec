@@ -870,7 +870,9 @@ if args.obstype in ['SCIENCE',] and \
         cmd += " --fiberflat {}".format(fiberflatfile)
         cmd += " --models {}".format(stdfile)
         cmd += " --outfile {}".format(calibfile)
-        cmd += " --delta-color-cut 12"  #- CMX hack
+        cmd += " --delta-color-cut 0.2"
+        cmd += " --min-color 0.25"
+         
 
         inputs = [framefile, skyfile, fiberflatfile, stdfile]
         runcmd(cmd, inputs=inputs, outputs=[calibfile,])
@@ -883,19 +885,26 @@ if args.obstype in ['SCIENCE',] and \
 #-------------------------------------------------------------------------
 #- Applying flux calibration
 
-if args.obstype in ['SCIENCE',] and \
-        (not args.noskysub ) and \
-        (not args.nofluxcalib) :
+if args.obstype in ['SCIENCE',] and (not args.noskysub ) :
+
+    night, expid = args.night, args.expid #- shorter
 
     if rank == 0:
         log.info('Starting cframe file creation at {}'.format(time.asctime()))
-
+    
     for camera in args.cameras[rank::size]:
         framefile = findfile('frame', night, expid, camera)
         skyfile = findfile('sky', night, expid, camera)
         spectrograph = int(camera[1])
         stdfile = findfile('stdstars', night, expid, spectrograph=spectrograph)
         calibfile = findfile('fluxcalib', night, expid, camera)
+        if args.nofluxcalib or ( not os.path.isfile(calibfile) ) :
+            calibfile = findcalibfile([hdr, camhdr[camera]], 'FLUXCALIB')
+            if calibfile is None :
+                log.error("No default flux calibration for {}".format(camera))
+                continue
+            log.info("Using calib file {}".format(calibfile))
+            
         cframefile = findfile('cframe', night, expid, camera)
 
         fiberflatfile = input_fiberflat[camera]
