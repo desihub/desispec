@@ -21,6 +21,9 @@ log = get_logger()
 outdirs = set()
 tilenightexp = set()
 
+args.indir = os.path.normpath(os.path.abspath(args.indir))
+args.outdir = os.path.normpath(os.path.abspath(args.outdir))
+
 cframefiles = sorted(glob.glob(f'{args.indir}/*/cframe-*.fits'))
 num_new = 0
 num_preexisting = 0
@@ -46,10 +49,14 @@ for filename in cframefiles:
             log.info(f'Creating {tilenightdir}')
             os.makedirs(tilenightdir, exist_ok=True)
 
-    symlink = os.path.join(tilenightdir, os.path.basename(filename))
+    log.debug(f'cd {tilenightdir}')
+    os.chdir(tilenightdir)
+
+    symlink = os.path.basename(filename)
+    relpath = os.path.relpath(filename, tilenightdir)
     if not os.path.exists(symlink):
-        log.debug(f'Creating symlink {symlink} -> {filename}')
-        os.symlink(filename, symlink)
+        log.debug(f'Creating symlink {symlink} -> {relpath}')
+        os.symlink(relpath, symlink)
         num_new += 1
     else:
         num_preexisting += 1
