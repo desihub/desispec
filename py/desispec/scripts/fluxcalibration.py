@@ -47,7 +47,9 @@ def parse(options=None):
                         help='path of QA file.')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
-
+    parser.add_argument('--highest-throughput', type = int, default = 0, required=False,
+                        help = 'use this number of stars ranked by highest throughput to normalize transmission (for DESI commissioning)')
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -143,7 +145,7 @@ def main(args) :
         log.warning('All standard-star spectra are masked!')
         return
         
-    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500)
+    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput)
 
     # QA
     if (args.qafile is not None):

@@ -807,7 +807,8 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False):
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0) :
+    
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
@@ -1060,6 +1061,12 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         # (we don't do that directly to reduce noise)
         # so we want to average the inverse of the smooth correction
         mean=1./np.nanmean(1./smooth_fiber_correction[badfiber==0],axis=0)
+        if highest_throughput_nstars > 0 :
+            medcorr = np.median(smooth_fiber_correction,axis=1)
+            ii=np.argsort(medcorr)[::-1][:highest_throughput_nstars]
+            mean=1./np.nanmean(1./smooth_fiber_correction[ii][badfiber[ii]==0],axis=0)
+                
+        
         smooth_fiber_correction /= mean
 
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
