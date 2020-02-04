@@ -13,7 +13,7 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
-from desispec.preproc import masked_median
+from desispec.maskedmedian import masked_median
 from desispec.calibfinder import CalibFinder
 from desispec import util
 import scipy,scipy.sparse
