@@ -807,7 +807,7 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=4.,deg=2,debug=False):
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False):
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
@@ -916,7 +916,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             badfiber[fiber] = 1
             continue
         
-        chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
+        # add few percent multiplicative error to ivar for sigma clipping 
+        chi2[fiber]=(current_ivar[fiber]>0)*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2/(1./(current_ivar[fiber] + (current_ivar[fiber]==0))+(0.1*stdstars.flux[fiber])**2)
         
     
     bad=(chi2>nsig_clipping**2)
@@ -1102,12 +1103,14 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     # at least a few stars at each wavelength
     min_number_of_stars = min(3,max(1,nstds//2))
-    log.info("Requesting at least {} star spectra at each wavelength".format(min_number_of_stars))
     nstars_with_signal=np.sum(current_ivar>0,axis=0)
     bad = (nstars_with_signal<min_number_of_stars)
+    nallbad = np.sum(nstars_with_signal==0)
     # increase by 1 pixel
     bad[1:-1] |= bad[2:]
     bad[1:-1] |= bad[:-2]
+    nbad=np.sum(bad>0)
+    log.info("Requesting at least {} star spectra at each wavelength results in masking {} add. flux bins ({} already masked)".format(min_number_of_stars,nbad-nallbad,nallbad))
     
     ccalibivar[bad]=0.
     ccalibration[:,bad]=0.
