@@ -950,7 +950,7 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
 
     # set sky flux and ivar to zero to poorly constrained regions
     # and add margins to avoid expolation issues with the resolution matrix
-    wmask = (np.diagonal(A)<=0).astype(float)
+    wmask = (np.diagonal(A[:nwave,:nwave])<=0).astype(float)
     # empirically, need to account for the full width of the resolution band
     # (realized here by applying twice the resolution)
     wmask = Rmean.dot(Rmean.dot(wmask))
