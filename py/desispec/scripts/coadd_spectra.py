@@ -4,16 +4,18 @@ Coadd spectra
 
 from __future__ import absolute_import, division, print_function
 
+from astropy.table import Table
 
 from desiutil.log import get_logger
-from desispec.io import read_spectra,write_spectra
+from desispec.io import read_spectra,write_spectra,read_frame
 from desispec.coaddition import coadd,coadd_cameras,resample_spectra_lin_or_log
+from desispec.pixgroup import frames2spectra
 
 def parse(options=None):
     import argparse
 
     parser = argparse.ArgumentParser("Coadd all spectra per target, and optionally resample on linear or logarithmic wavelength grid")
-    parser.add_argument("-i","--infile", type=str,  help="input spectra file")
+    parser.add_argument("-i","--infile", type=str, nargs='+', help="input spectra file or input frame files")
     parser.add_argument("-o","--outfile", type=str,  help="output spectra file")
     parser.add_argument("--nsig", type=float, default=None, help="nsigma rejection threshold for cosmic rays")
     parser.add_argument("--lin-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
@@ -47,8 +49,23 @@ def main(args=None):
         return 12
 
     log.info("reading spectra ...")
-    spectra = read_spectra(args.infile)
+    if len(args.infile) == 1:
+        spectra = read_spectra(args.infile)
+    else:
+        frames = dict()
+        for filename in args.infile:
+            frame = read_frame(filename)
+            night = frame.meta['NIGHT']
+            expid = frame.meta['EXPID']
+            camera = frame.meta['CAMERA']
+            frames[(night,expid,camera)] = frame
 
+        spectra = frames2spectra(frames)
+
+        #- hacks to make SpectraLite like a Spectra
+        spectra.fibermap = Table(spectra.fibermap)
+
+        del frames  #- maybe free some memory
 
     if args.coadd_cameras :
         log.info("coadding cameras ...")
