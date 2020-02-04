@@ -48,25 +48,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
             skymodel = compute_non_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg)
         else :
             skymodel = compute_polynomial_times_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg,chromatic_variation_deg=chromatic_variation_deg)
-
-    median_ivar = np.median(skymodel.ivar,axis=0)
-    min_ivar =  0.03 * np.median(skymodel.ivar)
-
-    log = get_logger()
-    
-    ii = np.where(median_ivar[:median_ivar.size//2]<min_ivar)[0]
-    if ii.size>0 :
-        begin = ii[-1]+1
-        log.warning("setting to zero poorly constrained sky flux with wave<{:4.1f}A".format(skymodel.wave[begin]))
-        skymodel.flux[:,:begin] *= 0
-        skymodel.ivar[:,:begin] *= 0
-    ii = np.where(median_ivar[median_ivar.size//2:]<min_ivar)[0]
-    if ii.size>0 :
-        end = median_ivar.size//2+ii[0]
-        log.warning("setting to zero poorly constrained sky flux with wave>={:4.1f}A".format(skymodel.wave[end]))
-        skymodel.flux[:,end:] *= 0
-        skymodel.ivar[:,end:] *= 0
-
+ 
     return skymodel
 
 def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
@@ -362,6 +344,16 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
 
+    # minimum number of fibers at each wavelength
+    min_number_of_fibers = min(10,max(1,skyfibers.size//2))
+    fibers_with_signal=np.sum(current_ivar>0,axis=0)
+    bad = (fibers_with_signal<min_number_of_fibers)
+    # increase by 1 pixel
+    bad[1:-1] |= bad[2:]
+    bad[1:-1] |= bad[:-2]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+    
     # need to do better here
     mask = (modified_cskyivar==0).astype(np.uint32)
     
@@ -646,6 +638,17 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
 
+    # minimum number of fibers at each wavelength
+    min_number_of_fibers = min(10,max(1,skyfibers.size//2))
+    fibers_with_signal=np.sum(current_ivar>0,axis=0)
+    bad = (fibers_with_signal<min_number_of_fibers)
+    # increase by 1 pixel
+    bad[1:-1] |= bad[2:]
+    bad[1:-1] |= bad[:-2]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+    
+    
     # need to do better here
     mask = (modified_cskyivar==0).astype(np.uint32)
     
@@ -958,6 +961,17 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
 
+    # minimum number of fibers at each wavelength
+    min_number_of_fibers = min(10,max(1,skyfibers.size//2))
+    fibers_with_signal=np.sum(current_ivar>0,axis=0)
+    bad = (fibers_with_signal<min_number_of_fibers)
+    # increase by 1 pixel
+    bad[1:-1] |= bad[2:]
+    bad[1:-1] |= bad[:-2]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+    
+    
     # need to do better here
     mask = (modified_cskyivar==0).astype(np.uint32)
     
