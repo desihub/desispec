@@ -183,7 +183,7 @@ if args.batch:
     elif args.obstype in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20*nspectro, 25
     elif args.obstype in ('SKY', 'TWILIGHT', 'SCIENCE'):
-        ncores, runtime = 20*nspectro, 30
+        ncores, runtime = 16*nspectro, 30
     elif args.obstype in ('ZERO', 'DARK'):
         ncores, runtime = ncameras, 5
     else:
@@ -195,19 +195,19 @@ if args.batch:
 
     #- We have a limit of 10 realtime nodes
     max_realtime_cores = 10*32
+
     if (args.queue == 'realtime') and (ncores > max_realtime_cores):
         ncores = max_realtime_cores
         runtime *= 2
 
     nodes = (ncores-1) // 32 + 1
-    assert runtime < 60
+    assert runtime <= 60
 
     with open(scriptfile, 'w') as fx:
         fx.write('#!/bin/bash -l\n\n')
         fx.write('#SBATCH -C haswell\n')
         fx.write('#SBATCH -N {}\n'.format(nodes))
         fx.write('#SBATCH -n {}\n'.format(ncores))
-        fx.write('#SBATCH -c 2\n')
         fx.write('#SBATCH --qos {}\n'.format(args.queue))
         fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
@@ -221,16 +221,31 @@ if args.batch:
 
         fx.write('\n')
 
-        cmd = ' '.join(sys.argv).replace(' --batch', ' ')
+        cmd = ' '.join(sys.argv)
+        cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
+
         if not args.mpi:
             cmd += ' --mpi'
 
-        srun = 'srun -N {} -n {} {}'.format(nodes, ncores, cmd)
+        fx.write(f'# {args.obstype} exposure with {ncameras} cameras\n')
+        fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
+
+        fx.write('\n# Do steps through skysub at full MPI parallelism\n')
+        srun = 'srun -N {} -n {} -c 2 {} --nofluxcalib'.format(
+                nodes, ncores, cmd)
         fx.write('echo Running {}\n'.format(srun))
         fx.write('{}\n'.format(srun))
-        fx.write('echo Done at $(date)\n')
+
+        if args.obstype == 'SCIENCE':
+            fx.write('\n# Then switch to less MPI parallelism for fluxcalib MP parallelism\n')
+            fx.write('# This should quickly skip over the steps already done\n')
+            srun = 'srun -N {} -n {} -c 32 {} '.format(nodes, nodes*2, cmd)
+            fx.write('echo Running {}\n'.format(srun))
+            fx.write('{}\n'.format(srun))
+
+        fx.write('\necho Done at $(date)\n')
     
     print('Wrote {}'.format(scriptfile))
     err = 0
