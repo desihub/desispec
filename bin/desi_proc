@@ -885,7 +885,7 @@ if args.obstype in ['SCIENCE',] and \
 #-------------------------------------------------------------------------
 #- Applying flux calibration
 
-if args.obstype in ['SCIENCE',] and (not args.noskysub ) :
+if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcalib) :
 
     night, expid = args.night, args.expid #- shorter
 
@@ -898,13 +898,6 @@ if args.obstype in ['SCIENCE',] and (not args.noskysub ) :
         spectrograph = int(camera[1])
         stdfile = findfile('stdstars', night, expid, spectrograph=spectrograph)
         calibfile = findfile('fluxcalib', night, expid, camera)
-        if args.nofluxcalib or ( not os.path.isfile(calibfile) ) :
-            calibfile = findcalibfile([hdr, camhdr[camera]], 'FLUXCALIB')
-            if calibfile is None :
-                log.error("No default flux calibration for {}".format(camera))
-                continue
-            log.info("Using calib file {}".format(calibfile))
-            
         cframefile = findfile('cframe', night, expid, camera)
 
         fiberflatfile = input_fiberflat[camera]
