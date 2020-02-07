@@ -1,0 +1,156 @@
+#!/usr/bin/env python
+
+"""
+Work in progress testing by Stephen and AK
+The catchup file should be a single night listed per row
+No delimiters as it is only a single column (loaded as csv internally)
+Presently hardcoded to be in the present directory as "catchup_list.csv"
+"""
+
+import sys, os, glob, time, subprocess
+import psutil
+import socket
+import datetime
+import desispec.io
+import fitsio
+from astropy.io import fits
+import numpy as np
+
+########################
+### Helper Functions ###
+########################
+def what_night_is_it():
+    d = datetime.datetime.utcnow() - datetime.timedelta(7/24+0.5)
+    tonight = int(d.strftime('%Y%m%d'))
+    return tonight
+
+def find_newexp(night, fileglob, known_exposures):
+    datafiles = sorted(glob.glob(fileglob))
+    newexp = list()
+    for filepath in datafiles:
+        expid = int(os.path.basename(os.path.dirname(filepath)))
+        if (night, expid) not in known_exposures:
+            newexp.append( (night, expid) )
+
+    return set(newexp)
+
+def get_catchup_nights(catchup_filename):
+    if catchup_filename is not None and os.path.exists(catchup_filename):
+        catchup = np.atleast_1d(np.loadtxt(catchup_filename,dtype=int)).tolist()
+    else:
+        catchup = []
+    return catchup
+
+###############################
+### Define hardcoded params ###
+###############################
+pause_nmins = 5
+maxsubmit = 2  # number to submit to cori at once
+catchup_filename = 'catchup_list.csv' # must be relative
+                                      # path from codedir
+reduxdir = desispec.io.specprod_root() # directory for reductions
+
+# Check if we should force the script to use
+# environment variable (for debugging)
+# Otherwise if it's the desi user, force to 'daily'
+# otherwise use whatever is defined with a default
+# of 'daily'
+if 'SPECPROD_OVERRIDE' not in os.environ.keys():
+    if str(os.environ['USER']).lower() == 'desi':
+        os.environ['SPECPROD'] = 'daily'
+    elif 'SPECPROD' not in os.environ.keys():
+        os.environ['SPECPROD'] = 'daily'
+
+
+#########################
+### Setup for Running ###
+#########################
+
+#- Preflight checks
+if socket.gethostname() != 'cori21':
+    print('This should only run on cori21')
+    sys.exit(1)
+
+ok = True
+mypid = os.getpid()
+for p in psutil.process_iter():
+    if p.pid != mypid and 'desi_dailyproc' in ' '.join(p.cmdline()):
+        print('ERROR: desi_dailyproc already running as PID {}:'.format(p.pid))
+        print('  ' + ' '.join(p.cmdline()))
+        ok = False
+        break
+
+if ok:
+    print('OK to run')
+else:
+    sys.exit(1)
+
+### nights = [20191031, 20191030, 20191029, 20191028]
+
+###catchup = [20191214,20191215,20191216,20191217]
+
+catchup = get_catchup_nights(catchup_filename)
+    
+
+#- First identify exposures that are already processed
+known_exposures = set()
+
+tonight = what_night_is_it()
+for night in [tonight,] + catchup:
+    fileglob = '{}/preproc/{}/*/preproc-*'.format(reduxdir, night)
+    newexp = find_newexp(night, fileglob, known_exposures)
+    print('{} exposures already processed on {}'.format(len(newexp), night))
+    known_exposures.update(newexp)
+
+print('redux output to {}'.format(reduxdir))
+sys.stdout.flush()
+
+
+##################################
+### Run until something breaks ###
+##################################
+while True:
+    tonight = what_night_is_it()
+    catchup = get_catchup_nights(catchup_filename)
+    for night in [tonight,] + catchup:
+        print('{} Checking for new files on {}'.format(time.asctime(), night))
+        fileglob = '{}/{}/*/desi-*.fits.fz'.format(
+            os.getenv('DESI_SPECTRO_DATA'), night)
+
+        newexp = find_newexp(night, fileglob, known_exposures)
+        if len(newexp) > 0:
+            print('{}  {} new files found'.format(time.asctime(), len(newexp)))
+            nsubmit = 0
+            for night, expid in sorted(newexp):
+                known_exposures.add( (night, expid) )
+
+                #- skip ZEROs for now
+                rawfile = desispec.io.findfile('raw', night, expid)
+                ### hdr = fitsio.read_header(rawfile, 1)
+                hdr = fits.getheader(rawfile, 1)
+                if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ZERO':
+                    print('Skipping OBSTYPE=ZERO exposure {}/{}'.format(night, expid))
+                    continue
+                #if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ARC':
+                #    print('Temporarily skipping OBSTYPE=ARC exposure {}/{}'.format(night, expid))
+                #    continue
+
+                #- submit batch jobs for others
+                cmd = 'desi_proc --scattered-light --batch --traceshift -n {} -e {}'.format(night, expid)
+                print(cmd)
+                subprocess.call(cmd.split())
+                sys.stdout.flush()
+
+                #- Don't overwhelm the queue
+                nsubmit += 1
+                if nsubmit >= maxsubmit:
+                    break
+
+            #- if we found any exposures, take a break after submitting
+            #- them without checking prior nights to not overwhelm the queue
+            break
+
+    print('PID '+str(os.getpid())+' {} sleeping...'.format(time.asctime()))
+    sys.stdout.flush()
+    time.sleep(pause_nmins*60)
+
