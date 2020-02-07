@@ -389,16 +389,26 @@ def assemble_fibermap(night, expid):
     log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
 
     #- Count offset iterations by counting columns with name OFFSET_{n}
-    numiter = len([col for col in pm.colnames if col.startswith('OFFSET_')])
+    numiter = len([col for col in pm.colnames if col.startswith('FVC_X_')])
 
     #- Create fibermap table to merge with fiberassign file
     fibermap = Table()
     fibermap['LOCATION'] = pm['LOCATION']
     fibermap['NUM_ITER'] = numiter
-    fibermap['FIBER_X'] = pm[f'FPA_X_{numiter-1}']
-    fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
-    fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
-    fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
+
+    #- Sometimes these columns are missing in the coordinates files, maybe
+    #- only when numiter=1, i.e. only a blind move but not corrections?
+    if f'FPA_X_{numiter-1}' in pm.colnames:
+        fibermap['FIBER_X'] = pm[f'FPA_X_{numiter-1}']
+        fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
+        fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
+        fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
+    else:
+        log.warning('No FIBER_X/Y or DELTA_X/Y information from platemaker')
+        fibermap['FIBER_X'] = np.zeros(len(pm))
+        fibermap['FIBER_Y'] = np.zeros(len(pm))
+        fibermap['DELTA_X'] = np.zeros(len(pm))
+        fibermap['DELTA_Y'] = np.zeros(len(pm))
 
     #- pre-parse which positioners were good
     expflag = pm[f'FLAGS_EXP_{numiter-1}']
@@ -412,8 +422,9 @@ def assemble_fibermap(night, expid):
     fibermap['_BADPOS'][bad] = True
 
     #- Missing columns from coordinates file...
-    # fibermap['FIBER_RA']
-    # fibermap['FIBER_DEC']
+    log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
+    fibermap['FIBER_RA'] = np.zeros(len(pm))
+    fibermap['FIBER_DEC'] = np.zeros(len(pm))
 
     fibermap = join(fa, fibermap, join_type='left')
 
