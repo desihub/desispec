@@ -6,25 +6,28 @@ import time,datetime
 import numpy as np
 import psutil
 from os import listdir
-os.system('source /project/projectdirs/desi/software/desi_environment.sh master')
 
 
-import desispec.io as desi_io
+#import desispec.io as desi_io
 
 
 class DESI_PROC_DASHBOARD(object):
     """ Code to generate a webpage for monitoring of desi_dailyproc production status   
     Usage:
     Normal Mode:
-    desi_proc_dashboard -n all --n_night 60  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
-
+    desi_proc_dashboard -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
+    
     Cron job script:
-*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all -nn 60 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/  >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
+*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all --n_night 30 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
 
 
     """
 
     def __init__(self):
+        if not os.getenv('DESI_SPECTRO_REDUX'): # these are not set by default in cronjob mode.
+            os.environ['DESI_SPECTRO_REDUX']='/global/cfs/cdirs/desi/spectro/redux/'
+            os.environ['DESI_SPECTRO_DATA']='/global/cfs/cdirs/desi/spectro/data/'
+            os.environ['SPECPROD']='daily'
         ############
         ## Input ###
         ############
@@ -35,9 +38,6 @@ class DESI_PROC_DASHBOARD(object):
         self.output_dir=args.output_dir # Portal directory for output html files
         self.output_url=args.output_url # corresponding URL
 
-        if not os.getenv('DESI_SPECTRO_REDUX'): # these are not set by default in cronjob mode. 
-            os.environ['DESI_SPECTRO_REDUX']='/global/cfs/cdirs/desi/spectro/redux/'
-            os.environ['DESI_SPECTRO_DATA']='/global/cfs/cdirs/desi/spectro/data/'
         if args.nights=='all':
             nights=listdir(os.path.join(args.prod_dir,'exposures'))
             nights=[int(x) for x in nights]
@@ -95,7 +95,7 @@ class DESI_PROC_DASHBOARD(object):
         """
         parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor")
         parser.add_argument('--n_night', type=str, default = None, required = False, help="all:all nights. ifdigit: the last n nights.")
-        parser.add_argument('--prod_dir', type=str, default = desi_io.specprod_root(), required = False, help="Product directory, point to desispec.io.specprod_root() by default ")
+        parser.add_argument('--prod_dir', type=str, default = os.path.join(os.environ['DESI_SPECTRO_REDUX'],os.environ['SPECPROD']), required = False, help="Product directory, point to desispec.io.specprod_root() by default ")
         parser.add_argument('--output_dir', type=str, default = None, required = True, help="output portal directory for the html pages ")
         parser.add_argument('--output_url', type=str, default = None, required = True, help="output portal directory url ")
         return parser
