@@ -5,8 +5,12 @@ desispec Change Log
 0.33.0 (unreleased)
 -------------------
 
-* make assemble_fibermap more robust to missing input columns
-  in the platmaker coordinates files (hotfix to master).
+* Two hotfixes to master to re-enable daily processing:
+
+  * make assemble_fibermap more robust to missing input columns
+    in the platmaker coordinates files.
+  * better packing of extraction MPI ranks
+
 
 0.32.1 (2019-12-27)
 -------------------

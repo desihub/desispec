@@ -183,7 +183,7 @@ if args.batch:
     elif args.obstype in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20*nspectro, 25
     elif args.obstype in ('SKY', 'TWILIGHT', 'SCIENCE'):
-        ncores, runtime = 16*nspectro, 30
+        ncores, runtime = 20*nspectro, 30
     elif args.obstype in ('ZERO', 'DARK'):
         ncores, runtime = ncameras, 5
     else:
@@ -193,14 +193,14 @@ if args.batch:
     if args.runtime is not None:
         runtime = args.runtime
 
-    #- We have a limit of 10 realtime nodes
-    max_realtime_cores = 10*32
-
-    if (args.queue == 'realtime') and (ncores > max_realtime_cores):
-        ncores = max_realtime_cores
-        runtime *= 2
-
     nodes = (ncores-1) // 32 + 1
+
+    #- Only use 5 realtime nodes at a time to enable two jobs to run together
+    max_realtime_nodes = 5
+    if (args.queue == 'realtime') and (nodes > max_realtime_nodes):
+        nodes = max_realtime_nodes
+        ncores = 32*nodes
+
     assert runtime <= 60
 
     with open(scriptfile, 'w') as fx:
