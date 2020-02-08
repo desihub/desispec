@@ -4,10 +4,10 @@
 Work in progress testing by Stephen and AK
 The catchup file should be a single night listed per row
 No delimiters as it is only a single column (loaded as csv internally)
-Presently hardcoded to be in the present directory as "catchup_list.csv"
 """
 
 import sys, os, glob, time, subprocess
+import argparse
 import psutil
 import socket
 import datetime
@@ -34,123 +34,201 @@ def find_newexp(night, fileglob, known_exposures):
 
     return set(newexp)
 
-def get_catchup_nights(catchup_filename):
-    if catchup_filename is not None and os.path.exists(catchup_filename):
+def get_catchup_nights(catchup_filename,docatchup=True):
+    if docatchup and catchup_filename is not None and os.path.exists(catchup_filename):
         catchup = np.atleast_1d(np.loadtxt(catchup_filename,dtype=int)).tolist()
     else:
         catchup = []
+        
     return catchup
 
-###############################
-### Define hardcoded params ###
-###############################
-pause_nmins = 5
-maxsubmit = 2  # number to submit to cori at once
-catchup_filename = 'catchup_list.csv' # must be relative
-                                      # path from codedir
-reduxdir = desispec.io.specprod_root() # directory for reductions
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Perform daily processing of spectral"+
+                                     "data using the pipeline. Can also catchup on"+
+                                     "past nights.")
+    # Runtime params
+    parser.add_argument("-t","--pausetime", type=int, default=5, required=False,
+                        help="Number of minutes to pause after 'nsubmit' "+
+                             "submissions or after completing all known files.")
+    parser.add_argument("-n", "--nsubmits", type=int, required=False, default=10,
+                        help="Number of submissions to make to cori at a time."+
+                             "After 'nsubmits,' the script will wait 'pausetime'"+
+                             "minutes before submitting another 'nsubmits.'")
+    # File and dir defs
+    parser.add_argument("-c", "--catchupfile", type=str, required=False, default='None',
+                        help="Relative path+name for catchup file. Automatically "+
+                             "triggers '--catchup' to be true.")
+    parser.add_argument("-s", "--specprod", type=str, required=False, default='None',
+                        help="Directory name where the output files should be saved.")
+    parser.add_argument("-r", "--reduxdir", type=str, required=False, default='None',
+                        help="Main reduction dir where specprod dir will reside.")
 
-# Check if we should force the script to use
-# environment variable (for debugging)
-# Otherwise if it's the desi user, force to 'daily'
-# otherwise use whatever is defined with a default
-# of 'daily'
-if 'SPECPROD_OVERRIDE' not in os.environ.keys():
-    if str(os.environ['USER']).lower() == 'desi':
-        os.environ['SPECPROD'] = 'daily'
-    elif 'SPECPROD' not in os.environ.keys():
-        os.environ['SPECPROD'] = 'daily'
+    # Code Flags
+    parser.add_argument("--forcespecprod", action="store_true",
+                        help="Force the files to be written to custom SPECPROD "+
+                             "even if user is desi.")
+    parser.add_argument("--ignoreinstances", action="store_true",
+                        help="Allow script to run even if another instance is "+
+                             "running. Use with care.")
+    parser.add_argument("--ignorecorinode", action="store_true",
+                        help="Allow script to run on nodes other than cori21")
+    parser.add_argument("--catchup", action="store_true",
+                        help="Load in catch up file and rerun the listed nights")
+    parser.add_argument("--dryrun", action="store_true",
+                        help="Perform a dry run where no jobs are actually submitted.")
+
+    # Read in command line and return
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+def main(args):
+
+    ###############################
+    ### Define hardcoded params ###
+    ###############################
+    if args.catchupfile.lower() != 'none':
+        args.catchup = True
+
+    catchup_filename = 'none'
+    if args.catchup:
+        if args.catchupfile.lower() == 'none':
+            catchup_filename = 'catchup_list.csv' # must be relative
+                                                  # path from codedir
+        else:
+            catchup_filename = args.catchupfile
+            
+    if args.reduxdir.lower() == 'none':
+        reduxdir = desispec.io.specprod_root() # directory for reductions
+    else:
+        reduxdir = args.reduxdir
+
+    # Check if we should force the script to use
+    # environment variable (for debugging)
+    # Otherwise if it's the desi user, force to 'daily'
+    # otherwise use whatever is defined with a default
+    # of 'daily'
+    if args.forcespecprod:
+        if args.specprod.lower()=='none':
+            if 'SPECPROD' not in os.environ.keys():
+                os.environ['SPECPROD'] = 'daily'
+            # else specprod already defined as desired
+        else:
+            os.environ['SPECPROD'] = args.specprod
+    else:
+        if str(os.environ['USER']).lower()=='desi':
+            os.environ['SPECPROD'] = 'daily'
+        elif args.specprod.lower()=='none':
+            if 'SPECPROD' not in os.environ.keys():
+                os.environ['SPECPROD'] = 'daily'
+            # else specprod already define
+        else:
+            os.environ['SPECPROD'] = args.specprod
 
 
-#########################
-### Setup for Running ###
-#########################
+    #########################
+    ### Setup for Running ###
+    #########################
+    #- Preflight checks
+    if not args.ignorecorinode and socket.gethostname() != 'cori21':
+        print('This should only run on cori21')
+        sys.exit(1)
 
-#- Preflight checks
-if socket.gethostname() != 'cori21':
-    print('This should only run on cori21')
-    sys.exit(1)
+    if not args.ignoreinstances:
+        ok = True
+        mypid = os.getpid()
+        for p in psutil.process_iter():
+            if p.pid != mypid and 'desi_dailyproc' in ' '.join(p.cmdline()):
+                print('ERROR: desi_dailyproc already running as PID {}:'.format(p.pid))
+                print('  ' + ' '.join(p.cmdline()))
+                ok = False
+                break
 
-ok = True
-mypid = os.getpid()
-for p in psutil.process_iter():
-    if p.pid != mypid and 'desi_dailyproc' in ' '.join(p.cmdline()):
-        print('ERROR: desi_dailyproc already running as PID {}:'.format(p.pid))
-        print('  ' + ' '.join(p.cmdline()))
-        ok = False
-        break
+        if ok:
+            print('OK to run')
+        else:
+            sys.exit(1)
 
-if ok:
-    print('OK to run')
-else:
-    sys.exit(1)
+    ### nights = [20191031, 20191030, 20191029, 20191028]
 
-### nights = [20191031, 20191030, 20191029, 20191028]
+    ###catchup = [20191214,20191215,20191216,20191217]
 
-###catchup = [20191214,20191215,20191216,20191217]
+    catchup = get_catchup_nights(catchup_filename,args.catchup)
 
-catchup = get_catchup_nights(catchup_filename)
-    
+    #- First identify exposures that are already processed
+    known_exposures = set()
 
-#- First identify exposures that are already processed
-known_exposures = set()
-
-tonight = what_night_is_it()
-for night in [tonight,] + catchup:
-    fileglob = '{}/preproc/{}/*/preproc-*'.format(reduxdir, night)
-    newexp = find_newexp(night, fileglob, known_exposures)
-    print('{} exposures already processed on {}'.format(len(newexp), night))
-    known_exposures.update(newexp)
-
-print('redux output to {}'.format(reduxdir))
-sys.stdout.flush()
-
-
-##################################
-### Run until something breaks ###
-##################################
-while True:
     tonight = what_night_is_it()
-    catchup = get_catchup_nights(catchup_filename)
     for night in [tonight,] + catchup:
-        print('{} Checking for new files on {}'.format(time.asctime(), night))
-        fileglob = '{}/{}/*/desi-*.fits.fz'.format(
-            os.getenv('DESI_SPECTRO_DATA'), night)
-
+        fileglob = '{}/preproc/{}/*/preproc-*'.format(reduxdir, night)
         newexp = find_newexp(night, fileglob, known_exposures)
-        if len(newexp) > 0:
-            print('{}  {} new files found'.format(time.asctime(), len(newexp)))
-            nsubmit = 0
-            for night, expid in sorted(newexp):
-                known_exposures.add( (night, expid) )
+        print('{} exposures already processed on {}'.format(len(newexp), night))
+        known_exposures.update(newexp)
 
-                #- skip ZEROs for now
-                rawfile = desispec.io.findfile('raw', night, expid)
-                ### hdr = fitsio.read_header(rawfile, 1)
-                hdr = fits.getheader(rawfile, 1)
-                if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ZERO':
-                    print('Skipping OBSTYPE=ZERO exposure {}/{}'.format(night, expid))
-                    continue
-                #if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ARC':
-                #    print('Temporarily skipping OBSTYPE=ARC exposure {}/{}'.format(night, expid))
-                #    continue
-
-                #- submit batch jobs for others
-                cmd = 'desi_proc --scattered-light --batch --traceshift -n {} -e {}'.format(night, expid)
-                print(cmd)
-                subprocess.call(cmd.split())
-                sys.stdout.flush()
-
-                #- Don't overwhelm the queue
-                nsubmit += 1
-                if nsubmit >= maxsubmit:
-                    break
-
-            #- if we found any exposures, take a break after submitting
-            #- them without checking prior nights to not overwhelm the queue
-            break
-
-    print('PID '+str(os.getpid())+' {} sleeping...'.format(time.asctime()))
+    print('redux output to {}'.format(reduxdir))
     sys.stdout.flush()
-    time.sleep(pause_nmins*60)
 
+
+    ##################################
+    ### Run until something breaks ###
+    ##################################
+    while True:
+        tonight = what_night_is_it()
+        catchup = get_catchup_nights(catchup_filename,args.catchup)
+        for night in [tonight,] + catchup:
+            print('{} Checking for new files on {}'.format(time.asctime(), night))
+            fileglob = '{}/{}/*/desi-*.fits.fz'.format(
+                os.getenv('DESI_SPECTRO_DATA'), night)
+
+            newexp = find_newexp(night, fileglob, known_exposures)
+            if len(newexp) > 0:
+                print('{}  {} new files found'.format(time.asctime(), len(newexp)))
+                if args.dryrun:
+                    print("\n\n\n\tDry run, nothing submitted.")
+                nsubmit = 0
+                for night, expid in sorted(newexp):
+                    known_exposures.add( (night, expid) )
+
+                    #- skip ZEROs for now
+                    rawfile = desispec.io.findfile('raw', night, expid)
+                    ### hdr = fitsio.read_header(rawfile, 1)
+                    hdr = fits.getheader(rawfile, 1)
+                    if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ZERO':
+                        print('Skipping OBSTYPE=ZERO exposure {}/{}'.format(night, expid))
+                        continue
+                    #if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ARC':
+                    #    print('Temporarily skipping OBSTYPE=ARC exposure {}/{}'.format(night, expid))
+                    #    continue
+
+                    #- submit batch jobs for others
+                    cmd = 'desi_proc --scattered-light --batch --traceshift -n {} -e {}'.format(night, expid)
+                    print(cmd)
+                    if args.dryrun:
+                        print("\tOutput file would have been: {}".format(os.path.join(reduxdir,os.environ['SPECPROD'])))
+                    else:
+                        subprocess.call(cmd.split())
+                    sys.stdout.flush()
+
+                    #- Don't overwhelm the queue
+                    nsubmit += 1
+                    if nsubmit >= args.nsubmits:
+                        break
+
+                #- if we found any exposures, take a break after submitting
+                #- them without checking prior nights to not overwhelm the queue
+                break
+
+        print('PID '+str(os.getpid())+' {} sleeping...'.format(time.asctime()))
+        sys.stdout.flush()
+        if args.dryrun:
+            print("\n\n\tWould have paused for {} min. here, but this is a dry run. Continuing.\n".format(args.pausetime))
+            time.sleep(4)
+        else:
+            time.sleep(args.pausetime*60)
+
+if __name__=='__main__':
+    args = parse(options=None)
+    main(args)
