@@ -99,35 +99,50 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         log.warning('creating blank fibermap')
         fibermap = desispec.io.empty_fibermap(5000)
 
-        #- HACK HACK HACK
-        #- TODO: replace this with a mapping from calibfinder, as soon as
-        #- that is implemented in calibfinder / desi_spectro_calib
-        #- HACK HACK HACK
+    #- Augment the image header with some tile info from fibermap if needed
+    for key in ['TILEID', 'TILERA', 'TILEDEC']:
+        if key in fibermap.meta:
+            if key not in img.meta:
+                log.info('Updating header from fibermap {}={}'.format(
+                    key, fibermap.meta[key]))
+                img.meta[key] = fibermap.meta[key]
+            elif img.meta[key] != fibermap.meta[key]:
+                #- complain loudly, but don't crash and don't override
+                log.error('Inconsistent {}: raw header {} != fibermap header {}'.format(key, img.meta[key], fibermap.meta[key]))
 
-        #- From DESI-5286v5 page 3 where sp=sm-1 and
-        #- "spectro logical number" = petal_loc
-        spec_to_petal = {4:2, 2:9, 3:0, 5:3, 1:8, 0:4, 6:6, 7:7, 8:5, 9:1}
-        assert set(spec_to_petal.keys()) == set(range(10))
-        assert set(spec_to_petal.values()) == set(range(10))
 
-        #- Mapping only for dates < 20191211
-        if "NIGHT" in primary_header:
-            dateobs = int(primary_header["NIGHT"])
-        elif "DATE-OBS" in primary_header:
-            dateobs=parse_date_obs(primary_header["DATE-OBS"])
-        else:
-            msg = "Need either NIGHT or DATE-OBS in primary header"
-            log.error(msg)
-            raise KeyError(msg)
-        if dateobs < 20191211 :
-            petal_loc = spec_to_petal[int(camera[1])]
-            log.warning('Mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
-        else :
-            petal_loc = int(camera[1])
-            log.warning('Since 20191211, camera {} is PETAL_LOC={}'.format(camera, petal_loc))
-        
-        ii = (fibermap['PETAL_LOC'] == petal_loc)
-        fibermap = fibermap[ii]
+    #- Trim to matching camera based upon PETAL_LOC, but that requires
+    #- a mapping prior to 20191211
+
+    #- HACK HACK HACK
+    #- TODO: replace this with a mapping from calibfinder, as soon as
+    #- that is implemented in calibfinder / desi_spectro_calib
+    #- HACK HACK HACK
+
+    #- From DESI-5286v5 page 3 where sp=sm-1 and
+    #- "spectro logical number" = petal_loc
+    spec_to_petal = {4:2, 2:9, 3:0, 5:3, 1:8, 0:4, 6:6, 7:7, 8:5, 9:1}
+    assert set(spec_to_petal.keys()) == set(range(10))
+    assert set(spec_to_petal.values()) == set(range(10))
+
+    #- Mapping only for dates < 20191211
+    if "NIGHT" in primary_header:
+        dateobs = int(primary_header["NIGHT"])
+    elif "DATE-OBS" in primary_header:
+        dateobs=parse_date_obs(primary_header["DATE-OBS"])
+    else:
+        msg = "Need either NIGHT or DATE-OBS in primary header"
+        log.error(msg)
+        raise KeyError(msg)
+    if dateobs < 20191211 :
+        petal_loc = spec_to_petal[int(camera[1])]
+        log.warning('Mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
+    else :
+        petal_loc = int(camera[1])
+        log.warning('Since 20191211, camera {} is PETAL_LOC={}'.format(camera, petal_loc))
+    
+    ii = (fibermap['PETAL_LOC'] == petal_loc)
+    fibermap = fibermap[ii]
 
     img.fibermap = fibermap
 

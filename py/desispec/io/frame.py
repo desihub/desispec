@@ -186,6 +186,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
 
     if 'FIBERMAP' in fx:
         fibermap = Table(fx['FIBERMAP'].data)
+        fibermap.meta.update(fx['FIBERMAP'].header)
         if 'DESIGN_X' in fibermap.colnames:
             fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
         if 'DESIGN_Y' in fibermap.colnames:

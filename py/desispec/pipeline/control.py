@@ -25,7 +25,7 @@ from desiutil.log import get_logger
 from .. import io
 
 from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
-    stdouterr_redirected, use_mpi)
+    stdouterr_redirected)
 
 from .defs import (task_states, prod_options_name,
     task_state_to_int, task_int_to_state)

@@ -13,6 +13,7 @@ from desispec.io.util import fitsheader, native_endian, makepath
 from astropy.io import fits
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
+from astropy.table import Table
 
 def write_image(outfile, image, meta=None):
     """Writes image object to outfile
@@ -59,7 +60,13 @@ def write_image(outfile, image, meta=None):
         hx.append(fits.ImageHDU(image.readnoise.astype(np.float32), name='READNOISE'))
 
     if hasattr(image, 'fibermap'):
-        hx.append(fits.BinTableHDU(image.fibermap, name='FIBERMAP'))
+        if isinstance(image.fibermap, Table):
+            fmhdu = fits.convenience.table_to_hdu(image.fibermap)
+            fmhdu.name = 'FIBERMAP'
+        else:
+            fmhdu = fits.BinTableHDU(image.fibermap, name='FIBERMAP')
+
+        hx.append(fmhdu)
 
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)

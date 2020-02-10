@@ -147,8 +147,8 @@ class TestBinScripts(unittest.TestCase):
         # cannot be exactly the same values 
         data['CHI2DOF']=np.ones(fibers.size)+0.1*(fibers%2) 
         data['REDSHIFT']=np.zeros(fibers.size)
-        data['DATA_G-R']=np.zeros(fibers.size)
-        data['MODEL_G-R']=np.zeros(fibers.size)        
+        data['DATA_G-R']=0.3*np.ones(fibers.size)
+        data['MODEL_G-R']=0.3*np.ones(fibers.size)        
         io.write_stdstar_models(self.stdfile,stdflux,self.wave,fibers,data)
 
     def _remove_files(self, filenames):
@@ -202,7 +202,7 @@ class TestBinScripts(unittest.TestCase):
         self._write_skymodel()
         self._write_stdstars()
 
-        cmd = "{} {}/desi_compute_fluxcalibration --infile {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {}".format(
+        cmd = "{} {}/desi_compute_fluxcalibration --infile {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {} --min-color 0.".format(
             sys.executable, self.binDir, self.framefile, self.fiberflatfile, self.skyfile, self.stdfile,
                 self.calibfile, self.qa_data_file, self.qafig)
         inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.stdfile]

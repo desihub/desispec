@@ -16,6 +16,7 @@ import sys
 import os
 import numpy as np
 from astropy.io import fits
+from astropy.table import Table
 
 from desispec.frame import Frame
 import desispec.io
@@ -106,6 +107,11 @@ def main(args):
             fibermap['FIBER'] = np.arange(fibermin, fibermin+nspec)
 
         fibermap[ii] = xfibermap
+
+    #- Use fibermap header from first input file
+    fmhdr = fits.getheader(args.files[0], 'FIBERMAP')
+    fibermap = Table(fibermap)
+    fibermap.meta.update(fmhdr)
 
     #- Write it out
     print("Writing", args.output)

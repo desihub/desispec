@@ -278,8 +278,16 @@ def main(args=None):
             fluxcalib_filename = cfinder.findfile("FLUXCALIB")
             fluxcalib = read_average_flux_calibration(fluxcalib_filename)
             log.info("read average calib in {}".format(fluxcalib_filename))
-            seeing  = qframe.meta["SEEING"]
-            airmass = qframe.meta["AIRMASS"]
+            if "SEEING" in qframe.meta :
+                seeing  = qframe.meta["SEEING"]
+            else :
+                log.warning("no SEEING information")
+                seeing = 1
+            if "AIRMASS" in qframe.meta :
+                airmass = qframe.meta["AIRMASS"]
+            else :
+                log.warning("no AIRMASS information")
+                airmass = 1
             exptime = qframe.meta["EXPTIME"]
             exposure_calib = fluxcalib.value(seeing=seeing,airmass=airmass)
             for q in range(qframe.nspec) :

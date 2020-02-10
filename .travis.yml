@@ -73,7 +73,7 @@ env:
         # These packages will always be installed.
         - CONDA_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
-        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml numba numpy"
+        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml numba numpy pytz"
         # These packages will always be installed.
         - PIP_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
