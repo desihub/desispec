@@ -15,10 +15,10 @@ class DESI_PROC_DASHBOARD(object):
     """ Code to generate a webpage for monitoring of desi_dailyproc production status   
     Usage:
     Normal Mode:
-    desi_proc_dashboard -n all --n_night 3  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
+    desi_proc_dashboard -n all --n_night 3  --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
     
     Cron job script:
-*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/project/projectdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all --n_night 30 --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/project/projectdirs/desi/users/zhangkai/desi_proc_dashboard.err &
+*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/cfs/cdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all --n_night 30 --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/ >/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.err &
 
 
     """
