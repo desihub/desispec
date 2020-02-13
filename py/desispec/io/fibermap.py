@@ -389,7 +389,8 @@ def assemble_fibermap(night, expid):
     log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
 
     #- Count offset iterations by counting columns with name OFFSET_{n}
-    numiter = len([col for col in pm.colnames if col.startswith('FVC_X_')])
+    # numiter = len([col for col in pm.colnames if col.startswith('FVC_X_')])
+    numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
 
     #- Create fibermap table to merge with fiberassign file
     fibermap = Table()
@@ -412,10 +413,15 @@ def assemble_fibermap(night, expid):
 
     #- pre-parse which positioners were good
     expflag = pm[f'FLAGS_EXP_{numiter-1}']
-    cntflag = pm[f'FLAGS_CNT_{numiter-1}']
-    good = ((expflag & 4) != 0) & \
-           (expflag < 200) & \
-           ((cntflag & 1) != 0)
+    good = ((expflag & 4) != 0) & (expflag < 200)
+
+    flags_cnt_colname = f'FLAGS_CNT_{numiter-1}'
+    if flags_cnt_colname in pm.colnames:
+        cntflag = pm[flags_cnt_colname]
+        good &= ((cntflag & 1) != 0)
+    else:
+        log.warning(f'coordinates file missing column {flags_cnt_colname}')
+
     bad = ~good
 
     fibermap['_BADPOS'] = np.zeros(len(fibermap), dtype=bool)
