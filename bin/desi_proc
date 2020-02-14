@@ -242,10 +242,20 @@ if args.batch:
             fx.write('\n# Then switch to less MPI parallelism for fluxcalib MP parallelism\n')
             fx.write('# This should quickly skip over the steps already done\n')
             srun = 'srun -N {} -n {} -c 32 {} '.format(nodes, nodes*2, cmd)
-            fx.write('echo Running {}\n'.format(srun))
-            fx.write('{}\n'.format(srun))
+            fx.write('if [ $? -eq 0 ]; then\n')
+            fx.write('  echo Running {}\n'.format(srun))
+            fx.write('  {}\n'.format(srun))
+            fx.write('else\n')
+            fx.write('  echo FAILED: done at $(date)\n')
+            fx.write('  exit 1\n')
+            fx.write('fi\n')
 
-        fx.write('\necho Done at $(date)\n')
+        fx.write('\nif [ $? -eq 0 ]; then\n')
+        fx.write('  echo SUCCESS: done at $(date)\n')
+        fx.write('else\n')
+        fx.write('  echo FAILED: done at $(date)\n')
+        fx.write('  exit 1\n')
+        fx.write('fi\n')
     
     print('Wrote {}'.format(scriptfile))
     err = 0
@@ -299,6 +309,21 @@ if rank == 0:
             cmd = 'assemble_fibermap -n {} -e {} -o {}'.format(
                     args.night, args.expid, fibermap)
             runcmd(cmd, inputs=[], outputs=[fibermap])
+
+#- if assemble_fibermap failed and obstype is SCIENCE, exit now
+fibermap_ok = None
+if rank == 0:
+    fibermap_ok = os.path.exists(fibermap)
+
+if comm is not None:
+    fibermap_ok = comm.bcast(fibermap_ok, root=0)
+
+if args.obstype == 'SCIENCE' and not fibermap_ok:
+    sys.stdout.flush()
+    if rank == 0:
+        log.critical('assemble_fibermap failed for science exposure; exiting now')
+
+    sys.exit(13)
 
 #- Wait for rank 0 to make fibermap if needed
 if comm is not None:
