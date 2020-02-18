@@ -14,6 +14,7 @@ from desispec.sky import subtract_sky
 from desispec.fluxcalibration import compute_flux_calibration, isStdStar
 from desiutil.log import get_logger
 from desispec.qa import qa_plots
+from desitarget.targets import main_cmx_or_sv
 
 import argparse
 import os
@@ -130,14 +131,11 @@ def main(args) :
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
     fibermap_std_indices = np.where(isStdStar(fibermap))[0]
     if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
-        if 'DESI_TARGET' in fibermap:
-            colname = 'DESI_TARGET'
-        else:
-            colname = 'SV1_DESI_TARGET'  #- TODO: could become SV2_DESI_TARGET
-
+        target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
+        colname =  target_colnames[0]
         for i in model_fibers%500:
-            log.error("inconsistency with spectrum {}, OBJTYPE='{}', {}={} in fibermap".format(
-                (i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i])))
+            log.error("inconsistency with spectrum {}, OBJTYPE={}, {}={} in fibermap".format(
+                i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i]))
         sys.exit(12)
 
     # Make sure the fibers of interest aren't entirely masked.
