@@ -537,6 +537,12 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
             cmd += ' -p {}'.format(psffile)
             cmd += ' -o {}'.format(framefile)
             cmd += ' --psferr 0.1'
+            
+            if args.obstype == 'SCIENCE' or args.obstype == 'SKY' or args.obstype == 'TWILIGHT' :
+                if rank == 0:
+                    log.info('Include barycentric correction')
+                cmd += ' --barycentric-correction'
+            
             if not os.path.exists(framefile):
                 cmds[camera] = cmd
                 inputs[camera] = [preprocfile, psffile]
