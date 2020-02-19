@@ -54,6 +54,11 @@ def parse(options=None):
                         help="Number of submissions to make to cori at a time."+
                              "After 'nsubmits,' the script will wait 'pausetime'"+
                              "minutes before submitting another 'nsubmits.'")
+
+    parser.add_argument("--cameras", type=str, required=False, default='None',
+                        help="Explicitly define the spectrographs for which you want"+
+                             " to reduce the data. Should be a comma separated list.")
+
     # File and dir defs
     parser.add_argument("-c", "--catchupfile", type=str, required=False, default='None',
                         help="Relative path+name for catchup file. Automatically "+
@@ -74,6 +79,8 @@ def parse(options=None):
                         help="Allow script to run on nodes other than cori21")
     parser.add_argument("--catchup", action="store_true",
                         help="Load in catch up file and rerun the listed nights")
+    parser.add_argument("--scatteredlight", action="store_true",
+                        help="Pass scattered light command to desi_proc. Fits and removes scattered light.")
     parser.add_argument("--dryrun", action="store_true",
                         help="Perform a dry run where no jobs are actually submitted.")
 
@@ -83,16 +90,28 @@ def parse(options=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
+
+    if args.catchupfile.lower() != 'none':
+        args.catchup = True
+
+    if args.cameras.lower() != 'none':
+        args.cameras = args.cameras.strip(' \t')
+        # turns out argparse will fail, so this isn't a possibility:
+        # # If more than one and no commas, turn space separated into comma sep'd
+        # if len(args.cameras) > 3 and ',' not in args.cameras:
+        #     args.cameras = args.cameras.replace(' ',',')
+        # # Remove additional whitespace
+        # if ' ' in args.cameras:
+        #     args.cameras = args.cameras.replace(' ','')
+
     return args
+
 
 def main(args):
 
     ###############################
     ### Define hardcoded params ###
     ###############################
-    if args.catchupfile.lower() != 'none':
-        args.catchup = True
-
     catchup_filename = 'none'
     if args.catchup:
         if args.catchupfile.lower() == 'none':
@@ -172,6 +191,19 @@ def main(args):
     sys.stdout.flush()
 
 
+    ###############################                                                                                                                         
+    ### Define desi_proc params ###                                                                                                                             
+    ############################### 
+    if args.scatteredlight:
+        scatter_light_str = '--scattered-light '
+    else:
+        scatter_light_str = ''
+    if args.cameras.lower() == 'none':
+        cameras_str = ''
+    else:
+        cameras_str = '--cameras={} '.format(args.cameras)
+
+                        
     ##################################
     ### Run until something breaks ###
     ##################################
@@ -204,10 +236,14 @@ def main(args):
                     #    continue
 
                     #- submit batch jobs for others
-                    cmd = 'desi_proc --scattered-light --batch --traceshift -n {} -e {}'.format(night, expid)
+                    cmd = 'desi_proc {sclight}--batch --traceshift {cameras}-n {night} -e {exp}'.format(sclight=scatter_light_str,
+                                                                                                        cameras=cameras_str,
+                                                                                                        night=night,
+                                                                                                        exp=expid)
                     print(cmd)
                     if args.dryrun:
                         print("\tOutput file would have been: {}".format(os.path.join(reduxdir,os.environ['SPECPROD'])))
+                        #print("\tCommand to be run: {}".format(cmd))
                     else:
                         subprocess.call(cmd.split())
                     sys.stdout.flush()
