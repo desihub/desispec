@@ -52,8 +52,7 @@ def isStdStar(fibermap, bright=None):
     else:
         yes = (desi_target & desi_mask.mask('STD_FAINT')) != 0
 
-
-    for bla in ['STD_GAIA','SV0_STD_FAINT','SV0_STD_BRIGHT','STD_TEST','STD_CALSPEC','STD_DITHER','STD_FAINT','STD_BRIGHT'] :
+    for bla in ['STD_GAIA','SV0_STD_FAINT','SV0_STD_BRIGHT','STD_TEST','STD_CALSPEC','STD_FAINT','STD_BRIGHT'] :
         if bla in desi_mask.names():
             yes |= (desi_target & desi_mask[bla]) != 0
 
@@ -872,9 +871,12 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     model_flux=np.zeros((nstds, nwave))
     convolved_model_flux=np.zeros((nstds, nwave))
 
-    for fiber in range(model_flux.shape[0]) :
-        model_flux[fiber]=resample_flux(stdstars.wave,input_model_wave,input_model_flux[fiber])
-        convolved_model_flux[fiber]=stdstars.R[fiber].dot(model_flux[fiber])
+    for star in range(nstds) :
+        model_flux_index = np.where(input_model_fibers == stdfibers[star])[0][0]
+        model_flux[star]=resample_flux(stdstars.wave,input_model_wave,input_model_flux[model_flux_index])
+        convolved_model_flux[star]=stdstars.R[star].dot(model_flux[star])
+
+    input_model_flux = None # I shall not use any more the input_model_flux here
 
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=stdstars.ivar*(stdstars.mask==0)
@@ -889,38 +891,47 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     badfiber=np.zeros(nstds,dtype=int)
     
-    for fiber in range(nstds) :
-        if badfiber[fiber] : continue
-        if np.sum(current_ivar[fiber]) == 0 :
-            log.warning("null inverse variance for fiber {}".format(fiber))
-            badfiber[fiber] = 1
+    for star in range(nstds) :
+        if badfiber[star] : continue
+        if np.sum(current_ivar[star]) == 0 :
+            log.warning("null inverse variance for star {}".format(star))
+            badfiber[star] = 1
             continue
-        
-        M = median_calib*stdstars.R[fiber].dot(model_flux[fiber])
-        
+
+        M = median_calib*stdstars.R[star].dot(model_flux[star])
+
         try:
             ii = np.where(M>0.1*np.mean(M))[0]
             if ii.size == 0 :
-                current_ivar[fiber]=0.
-                badfiber[fiber] = 1
+                current_ivar[star]=0.
+                badfiber[star] = 1
                 continue
-            pol=np.poly1d(np.polyfit(dwave[ii],stdstars.flux[fiber,ii]/M[ii],deg=deg,w=current_ivar[fiber,ii]*M[ii]**2))
-            smooth_fiber_correction[fiber]=pol(dwave)
+            pol=np.poly1d(np.polyfit(dwave[ii],stdstars.flux[star,ii]/M[ii],deg=deg,w=current_ivar[star,ii]*M[ii]**2))
+            smooth_fiber_correction[star]=pol(dwave)
         except ValueError :
-            log.warning("polynomial fit for fiber %d failed"%fiber)
-            current_ivar[fiber]=0.
-            badfiber[fiber] = 1
+            log.warning("polynomial fit for star %d failed"%star)
+            current_ivar[star]=0.
+            badfiber[star] = 1
             continue
         except numpy.linalg.LinAlgError :
-            log.warning("polynomial fit for fiber %d failed"%fiber)
-            current_ivar[fiber]=0.
-            badfiber[fiber] = 1
+            log.warning("polynomial fit for star %d failed"%star)
+            current_ivar[star]=0.
+            badfiber[star] = 1
             continue
         
         # add few percent multiplicative error to ivar for sigma clipping 
-        chi2[fiber]=(current_ivar[fiber]>0)*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2/(1./(current_ivar[fiber] + (current_ivar[fiber]==0))+(0.1*stdstars.flux[fiber])**2)
-        
-    
+        chi2[star]=(current_ivar[star]>0)*(stdstars.flux[star]-smooth_fiber_correction[star]*M)**2/(1./(current_ivar[star] + (current_ivar[star]==0))+(0.1*stdstars.flux[star])**2)
+        # checking indexing using mags
+        #from desispec.io.filters import load_legacy_survey_filter
+        #from astropy import units
+        #filter_response=load_legacy_survey_filter("R","N")
+        #fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
+        #dummy_wave = np.linspace(3000,12000,12000-3000)
+        #dummy_flux = np.interp(dummy_wave,stdstars.wave,M,left=0,right=0)
+        #mag = filter_response.get_ab_magnitude(dummy_flux*fluxunits,dummy_wave)
+        #fmapmag = -2.5*np.log10(stdstars.fibermap["FLUX_R"][star])+22.5
+        #print("star index={} flux ratio={}".format(star,10**(0.4*(mag-fmapmag))))
+
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
     
@@ -940,22 +951,22 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
         B=np.zeros((nwave))
 
-        # loop on fiber to handle resolution
-        for fiber in range(nstds) :
-            if fiber%10==0 :
-                log.info("iter %d fiber %d"%(iteration,fiber))
+        # loop on star to handle resolution
+        for star in range(nstds) :
+            if star%10==0 :
+                log.info("iter %d star %d"%(iteration,star))
 
-            if badfiber[fiber]: continue
+            if badfiber[star]: continue
 
-            R = stdstars.R[fiber]
+            R = stdstars.R[star]
 
             # diagonal sparse matrix with content = sqrt(ivar)*flat
-            D1.setdiag(sqrtw[fiber]*smooth_fiber_correction[fiber])
-            D2.setdiag(model_flux[fiber])
+            D1.setdiag(sqrtw[star]*smooth_fiber_correction[star])
+            D2.setdiag(model_flux[star])
             sqrtwmodelR = D1.dot(R.dot(D2)) # chi2 = sum (sqrtw*data_flux -diag(sqrtw)*smooth_fiber_correction*R*diag(model_flux)*calib )
 
             A = A+(sqrtwmodelR.T*sqrtwmodelR).tocsr()
-            B += sqrtwmodelR.T*sqrtwflux[fiber]
+            B += sqrtwmodelR.T*sqrtwflux[star]
 
         if np.sum(current_ivar>0)==0 :
             log.error("null ivar, cannot calibrate this frame")
@@ -993,40 +1004,40 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
                 
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
-        for fiber in range(nstds) :
-            if fiber%10==0 :
-                log.info("iter %d fiber %d(smooth)"%(iteration,fiber))
+        for star in range(nstds) :
+            if star%10==0 :
+                log.info("iter %d fiber %d(smooth)"%(iteration,star))
 
-            if badfiber[fiber]: continue
+            if badfiber[star]: continue
             
-            M = stdstars.R[fiber].dot(calibration*model_flux[fiber])
+            M = stdstars.R[star].dot(calibration*model_flux[star])
 
             try:
                 ii = np.where(M>0.1*np.mean(M))[0]
                 if ii.size == 0 :
-                    current_ivar[fiber]=0.
-                    badfiber[fiber] = 1
+                    current_ivar[star]=0.
+                    badfiber[star] = 1
                     continue
-                pol=np.poly1d(np.polyfit(dwave[ii],stdstars.flux[fiber,ii]/M[ii],deg=deg,w=current_ivar[fiber,ii]*M[ii]**2))
-                smooth_fiber_correction[fiber]=pol(dwave)
+                pol=np.poly1d(np.polyfit(dwave[ii],stdstars.flux[star,ii]/M[ii],deg=deg,w=current_ivar[star,ii]*M[ii]**2))
+                smooth_fiber_correction[star]=pol(dwave)
             except ValueError as e  :
-                log.warning("polynomial fit for fiber %d failed"%fiber)
-                current_ivar[fiber]=0.
-                badfiber[fiber] = 1.
+                log.warning("polynomial fit for star %d failed"%star)
+                current_ivar[star]=0.
+                badfiber[star] = 1.
                 continue
             except numpy.linalg.LinAlgError as e  :
-                log.warning("polynomial fit for fiber %d failed"%fiber)
-                current_ivar[fiber]=0.
-                badfiber[fiber] = 1.
+                log.warning("polynomial fit for star %d failed"%star)
+                current_ivar[star]=0.
+                badfiber[star] = 1.
                 continue
-            chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
+            chi2[star]=current_ivar[star]*(stdstars.flux[star]-smooth_fiber_correction[star]*M)**2
 
         log.info("iter {0:d} rejecting".format(iteration))
 
         nout_iter=0
         if iteration<1 :
             # only remove worst outlier per wave
-            # apply rejection iteratively, only one entry per wave among fibers
+            # apply rejection iteratively, only one entry per wave among stars
             # find waves with outlier (fastest way)
             nout_per_wave=np.sum(chi2>nsig_clipping**2,axis=0)
             selection=np.where(nout_per_wave>0)[0]
@@ -1062,11 +1073,12 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         # so we want to average the inverse of the smooth correction
         mean=1./np.nanmean(1./smooth_fiber_correction[badfiber==0],axis=0)
         if highest_throughput_nstars > 0 :
+            log.info("keeping {} stars with highest throughput".format(highest_throughput_nstars))
             medcorr = np.median(smooth_fiber_correction,axis=1)
+            log.info("median correction = {}".format(medcorr))
             ii=np.argsort(medcorr)[::-1][:highest_throughput_nstars]
+            log.info("use those with median correction = {}".format(medcorr[ii]))
             mean=1./np.nanmean(1./smooth_fiber_correction[ii][badfiber[ii]==0],axis=0)
-                
-        
         smooth_fiber_correction /= mean
 
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
@@ -1266,10 +1278,6 @@ def qa_fluxcalib(param, frame, fluxcalib):
     stdfibers = np.where(isStdStar(frame.fibermap))[0]
     stdstars = frame[stdfibers]
     nstds = len(stdfibers)
-    #try:
-    #    assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
-    #except AssertionError:
-    #    log.error("Bad indexing in standard stars")
 
     # Calculate ZP for mean spectrum
     #medcalib = np.median(fluxcalib.calib,axis=0)
