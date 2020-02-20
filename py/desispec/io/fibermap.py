@@ -342,7 +342,17 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     return fafile
 
-def assemble_fibermap(night, expid):
+def assemble_fibermap(night, expid, force=False):
+    """
+    Create a fibermap for a given night and expid
+
+    Args:
+        night (int): YEARMMDD night of sunset
+        expid (int): exposure ID
+
+    Options:
+        force (bool): create fibermap even if missing coordinates/guide files
+    """
 
     log = get_logger()
 
@@ -355,19 +365,33 @@ def assemble_fibermap(night, expid):
     if len(globfiles) == 1:
         coordfile = globfiles[0]
     elif len(globfiles) == 0:
-        raise FileNotFoundError(
-            f'No coordinates*.fits file in fiberassign dir {dirname}')
+        message = f'No coordinates*.fits file in fiberassign dir {dirname}'
+        if force:
+            log.error(message + '; continuing anyway')
+            coordfile = None
+        else:
+            raise FileNotFoundError(message)
+
     elif len(globfiles) > 1:
         raise RuntimeError(
             f'Multiple coordinates*.fits files in fiberassign dir {dirname}')
 
     #- And guide file
-    dirname, filename = os.path.split(coordfile)
-    guidefile = os.path.join(dirname, filename.replace('coordinates-','guide-'))
-    guidefile = guidefile + '.fz'
+    dirname, filename = os.path.split(fafile)
+    globfiles = glob.glob(dirname+'/guide-????????.fits.fz')
+    if len(globfiles) == 1:
+        guidefile = globfiles[0]
+    elif len(globfiles) == 0:
+        message = f'No guide-*.fits.fz file in fiberassign dir {dirname}'
+        if force:
+            log.error(message + '; continuing anyway')
+            guidefile = None
+        else:
+            raise FileNotFoundError(message)
 
-    if not os.path.exists(guidefile):
-        raise FileNotFoundError(f'Missing {guidefile}')
+    elif len(globfiles) > 1:
+        raise RuntimeError(
+            f'Multiple guide-*.fits.fz files in fiberassign dir {dirname}')
 
     #- Preflight announcements
     log.info(f'Night {night} spectro expid {expid}')
@@ -379,68 +403,79 @@ def assemble_fibermap(night, expid):
     #- Read and assemble
 
     fa = Table.read(fafile, 'FIBERASSIGN')
-    pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
-
     fa.sort('LOCATION')
-    pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
-    keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
-    pm = pm[keep]
-    pm.sort('LOCATION')
-    log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
 
-    #- Count offset iterations by counting columns with name OFFSET_{n}
-    # numiter = len([col for col in pm.colnames if col.startswith('FVC_X_')])
-    numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
+    if coordfile is not None:
+        pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
+        pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
+        keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
+        pm = pm[keep]
+        pm.sort('LOCATION')
+        log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
 
-    #- Create fibermap table to merge with fiberassign file
-    fibermap = Table()
-    fibermap['LOCATION'] = pm['LOCATION']
-    fibermap['NUM_ITER'] = numiter
+        #- Count offset iterations by counting columns with name OFFSET_{n}
+        # numiter = len([col for col in pm.colnames if col.startswith('FVC_X_')])
+        numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
 
-    #- Sometimes these columns are missing in the coordinates files, maybe
-    #- only when numiter=1, i.e. only a blind move but not corrections?
-    if f'FPA_X_{numiter-1}' in pm.colnames:
-        fibermap['FIBER_X'] = pm[f'FPA_X_{numiter-1}']
-        fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
-        fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
-        fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
+        #- Create fibermap table to merge with fiberassign file
+        fibermap = Table()
+        fibermap['LOCATION'] = pm['LOCATION']
+        fibermap['NUM_ITER'] = numiter
+
+        #- Sometimes these columns are missing in the coordinates files, maybe
+        #- only when numiter=1, i.e. only a blind move but not corrections?
+        if f'FPA_X_{numiter-1}' in pm.colnames:
+            fibermap['FIBER_X'] = pm[f'FPA_X_{numiter-1}']
+            fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
+            fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
+            fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
+        else:
+            log.warning('No FIBER_X/Y or DELTA_X/Y information from platemaker')
+            fibermap['FIBER_X'] = np.zeros(len(pm))
+            fibermap['FIBER_Y'] = np.zeros(len(pm))
+            fibermap['DELTA_X'] = np.zeros(len(pm))
+            fibermap['DELTA_Y'] = np.zeros(len(pm))
+
+        #- pre-parse which positioners were good
+        expflag = pm[f'FLAGS_EXP_{numiter-1}']
+        good = ((expflag & 4) != 0) & (expflag < 200)
+
+        flags_cnt_colname = f'FLAGS_CNT_{numiter-1}'
+        if flags_cnt_colname in pm.colnames:
+            cntflag = pm[flags_cnt_colname]
+            good &= ((cntflag & 1) != 0)
+        else:
+            log.warning(f'coordinates file missing column {flags_cnt_colname}')
+
+        bad = ~good
+
+        fibermap['_BADPOS'] = np.zeros(len(fibermap), dtype=bool)
+        fibermap['_BADPOS'][bad] = True
+
+        #- Missing columns from coordinates file...
+        log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
+        fibermap['FIBER_RA'] = np.zeros(len(pm))
+        fibermap['FIBER_DEC'] = np.zeros(len(pm))
+
+        fibermap = join(fa, fibermap, join_type='left')
+
+        #- Set fiber status bits
+        missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
+        fibermap['FIBERSTATUS'][missing] |= 2**8
+
+        badpos = fibermap['_BADPOS']
+        fibermap['FIBERSTATUS'][badpos] |= 2**9
+        fibermap.remove_column('_BADPOS')
+
     else:
-        log.warning('No FIBER_X/Y or DELTA_X/Y information from platemaker')
-        fibermap['FIBER_X'] = np.zeros(len(pm))
-        fibermap['FIBER_Y'] = np.zeros(len(pm))
-        fibermap['DELTA_X'] = np.zeros(len(pm))
-        fibermap['DELTA_Y'] = np.zeros(len(pm))
-
-    #- pre-parse which positioners were good
-    expflag = pm[f'FLAGS_EXP_{numiter-1}']
-    good = ((expflag & 4) != 0) & (expflag < 200)
-
-    flags_cnt_colname = f'FLAGS_CNT_{numiter-1}'
-    if flags_cnt_colname in pm.colnames:
-        cntflag = pm[flags_cnt_colname]
-        good &= ((cntflag & 1) != 0)
-    else:
-        log.warning(f'coordinates file missing column {flags_cnt_colname}')
-
-    bad = ~good
-
-    fibermap['_BADPOS'] = np.zeros(len(fibermap), dtype=bool)
-    fibermap['_BADPOS'][bad] = True
-
-    #- Missing columns from coordinates file...
-    log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
-    fibermap['FIBER_RA'] = np.zeros(len(pm))
-    fibermap['FIBER_DEC'] = np.zeros(len(pm))
-
-    fibermap = join(fa, fibermap, join_type='left')
-
-    #- Set fiber status bits
-    missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
-    fibermap['FIBERSTATUS'][missing] |= 2**8
-
-    badpos = fibermap['_BADPOS']
-    fibermap['FIBERSTATUS'][badpos] |= 2**9
-    fibermap.remove_column('_BADPOS')
+        #- No coordinates file; just use fiberassign + dummy columns
+        fibermap = fa
+        fibermap['FIBER_RA'] = 0.0
+        fibermap['FIBER_DEC'] = 0.0
+        fibermap['FIBER_X'] = 0.0
+        fibermap['FIBER_Y'] = 0.0
+        fibermap['DELTA_X'] = 0.0
+        fibermap['DELTA_Y'] = 0.0
 
     #- Update SKY and STD target bits to be in both CMX_TARGET and DESI_TARGET
     #- i.e. if they are set in one, also set in the other.  Ditto for SV*
@@ -454,23 +489,40 @@ def assemble_fibermap(night, expid):
                 fibermap['DESI_TARGET'][ii] |= mask
 
     #- Add header info from guide file
-    hdr = fits.getheader(guidefile, 0)
+    if guidefile is not None:
+        hdr = fits.getheader(guidefile, 0)
 
-    skipkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
-                'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS']
-    if fibermap.meta['TILEID'] != hdr['TILEID']:
-        raise RuntimeError('fiberassign tile {} != guider tile {}'.format(
-            fibermap.meta['TILEID'], hdr['TILEID']))
+        skipkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
+                    'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
+                    'XTENSTION', 'TFIELDS']
+        if fibermap.meta['TILEID'] != hdr['TILEID']:
+            raise RuntimeError('fiberassign tile {} != guider tile {}'.format(
+                fibermap.meta['TILEID'], hdr['TILEID']))
 
-    for key, value in hdr.items():
-        if key not in skipkeys:
-            if key not in fibermap.meta:
-                fibermap.meta[key] = value
-            elif fibermap.meta[key] != hdr[key]:
-                fmval = fibermap.meta[key]
-                log.warning(f'fibermap[{key}] {fmval} != guide[{key}] {value}')
+        for key, value in hdr.items():
+            if key not in skipkeys \
+                   and not key.startswith('TTYPE') \
+                   and not key.startswith('TFORM') \
+                   and not key.startswith('TUNIT'):
+
+                if key not in fibermap.meta:
+                    fibermap.meta[key] = value
+                elif fibermap.meta[key] != hdr[key]:
+                    fmval = fibermap.meta[key]
+                    log.warning(f'fibermap[{key}] {fmval} != guide[{key}] {value}')
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
+
+    #- Record input guide and coordinates files
+    if guidefile is not None:
+        fibermap.meta['GUIDEFIL'] = guidefile
+    else:
+        fibermap.meta['GUIDEFIL'] = 'MISSING'
+
+    if coordfile is not None:
+        fibermap.meta['COORDFIL'] = coordfile
+    else:
+        fibermap.meta['COORDFIL'] = 'MISSING'
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table
