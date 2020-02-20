@@ -55,35 +55,35 @@ def parse(options=None):
                              "After 'nsubmits,' the script will wait 'pausetime'"+
                              "minutes before submitting another 'nsubmits.'")
 
-    parser.add_argument("--cameras", type=str, required=False, default='None',
+    parser.add_argument("--cameras", type=str, required=False,
                         help="Explicitly define the spectrographs for which you want"+
                              " to reduce the data. Should be a comma separated list."+
                              " Numbers only assumes you want to reduce R, B, and Z "+
                              "for that camera. Otherwise specify separately [BRZ|brz][0-9].")
 
     # File and dir defs
-    parser.add_argument("-c", "--catchupfile", type=str, required=False, default='None',
+    parser.add_argument("-c", "--catchup-file", type=str, required=False,
                         help="Relative path+name for catchup file. Automatically "+
                              "triggers '--catchup' to be true.")
-    parser.add_argument("-s", "--specprod", type=str, required=False, default='None',
+    parser.add_argument("-s", "--specprod", type=str, required=False,
                         help="Directory name where the output files should be saved.")
-    parser.add_argument("-r", "--reduxdir", type=str, required=False, default='None',
+    parser.add_argument("-r", "--reduxdir", type=str, required=False,
                         help="Main reduction dir where specprod dir will reside.")
 
     # Code Flags
-    parser.add_argument("--forcespecprod", action="store_true",
+    parser.add_argument("--force-specprod", action="store_true",
                         help="Force the files to be written to custom SPECPROD "+
                              "even if user is desi.")
-    parser.add_argument("--ignoreinstances", action="store_true",
+    parser.add_argument("--ignore-instances", action="store_true",
                         help="Allow script to run even if another instance is "+
                              "running. Use with care.")
-    parser.add_argument("--ignorecorinode", action="store_true",
+    parser.add_argument("--ignore-cori-node", action="store_true",
                         help="Allow script to run on nodes other than cori21")
     parser.add_argument("--catchup", action="store_true",
                         help="Load in catch up file and rerun the listed nights")
-    parser.add_argument("--scatteredlight", action="store_true",
+    parser.add_argument("--scattered-light", action="store_true",
                         help="Pass scattered light command to desi_proc. Fits and removes scattered light.")
-    parser.add_argument("--dryrun", action="store_true",
+    parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually submitted.")
 
     # Read in command line and return
@@ -93,20 +93,9 @@ def parse(options=None):
     else:
         args = parser.parse_args(options)
 
-    if args.catchupfile.lower() != 'none':
+    if args.catchup_file is not None:
         args.catchup = True
 
-    if args.cameras.lower() != 'none':
-        args.cameras = args.cameras.strip(' \t')
-        if args.cameras.lower()[0] not in ['b','r','z'] and \
-           args.cameras.split(',')[0].isnumeric():
-            cameras = args.cameras.split(',')
-            outstr = ''
-            for camnum in cameras:
-                for ccd in ['B','R','Z']:
-                    outstr += '{}{},'.format(ccd,camnum)
-            outstr = outstr[:-1]
-            args.cameras = outstr
 
     return args
 
@@ -118,13 +107,13 @@ def main(args):
     ###############################
     catchup_filename = 'none'
     if args.catchup:
-        if args.catchupfile.lower() == 'none':
+        if args.catchup_file is None:
             catchup_filename = 'catchup_list.csv' # must be relative
                                                   # path from codedir
         else:
-            catchup_filename = args.catchupfile
+            catchup_filename = args.catchup_file
             
-    if args.reduxdir.lower() == 'none':
+    if args.reduxdir is None:
         reduxdir = desispec.io.specprod_root() # directory for reductions
     else:
         reduxdir = args.reduxdir
@@ -134,8 +123,8 @@ def main(args):
     # Otherwise if it's the desi user, force to 'daily'
     # otherwise use whatever is defined with a default
     # of 'daily'
-    if args.forcespecprod:
-        if args.specprod.lower()=='none':
+    if args.force_specprod:
+        if args.specprod is None:
             if 'SPECPROD' not in os.environ.keys():
                 os.environ['SPECPROD'] = 'daily'
             # else specprod already defined as desired
@@ -144,7 +133,7 @@ def main(args):
     else:
         if str(os.environ['USER']).lower()=='desi':
             os.environ['SPECPROD'] = 'daily'
-        elif args.specprod.lower()=='none':
+        elif args.specprod is None:
             if 'SPECPROD' not in os.environ.keys():
                 os.environ['SPECPROD'] = 'daily'
             # else specprod already define
@@ -156,11 +145,11 @@ def main(args):
     ### Setup for Running ###
     #########################
     #- Preflight checks
-    if not args.ignorecorinode and socket.gethostname() != 'cori21':
+    if not args.ignore_cori_node and socket.gethostname() != 'cori21':
         print('This should only run on cori21')
         sys.exit(1)
 
-    if not args.ignoreinstances:
+    if not args.ignore_instances:
         ok = True
         mypid = os.getpid()
         for p in psutil.process_iter():
@@ -198,13 +187,14 @@ def main(args):
     ###############################                                                                                                                         
     ### Define desi_proc params ###                                                                                                                             
     ############################### 
-    cmd_base = 'desi_proc '
-    cmd_base += '--batch '
-    cmd_base += '--traceshift '
-    if args.scatteredlight:
-        cmd_base += '--scattered-light '
-    if args.cameras.lower() != 'none':
-        cmd_base += '--cameras {} '.format(args.cameras)
+    cmd_base = 'desi_proc'
+    cmd_base += ' --batch'
+    cmd_base += ' --traceshift'
+    if args.scattered_light:
+        cmd_base += ' --scattered-light'
+    if args.cameras is not None:
+        args.cameras = args.cameras.strip(' \t')
+        cmd_base += ' --cameras {}'.format(args.cameras)
 
                         
     ##################################
@@ -221,7 +211,7 @@ def main(args):
             newexp = find_newexp(night, fileglob, known_exposures)
             if len(newexp) > 0:
                 print('{}  {} new files found'.format(time.asctime(), len(newexp)))
-                if args.dryrun:
+                if args.dry_run:
                     print("\n\n\n\tDry run, nothing submitted.")
                 nsubmit = 0
                 for night, expid in sorted(newexp):
@@ -242,7 +232,7 @@ def main(args):
                     cmd = '{basecall} -n {night} -e {exp}'.format(basecall=cmd_base,night=night,exp=expid)
                                          
                     print(cmd)
-                    if args.dryrun:
+                    if args.dry_run:
                         print("\tOutput file would have been: {}".format(os.path.join(reduxdir,os.environ['SPECPROD'])))
                         print("\tCommand to be run: {}".format(cmd.split()))
                     else:
@@ -260,7 +250,7 @@ def main(args):
 
         print('PID '+str(os.getpid())+' {} sleeping...'.format(time.asctime()))
         sys.stdout.flush()
-        if args.dryrun:
+        if args.dry_run:
             print("\n\n\tWould have paused for {} min. here, but this is a dry run. Continuing.\n".format(args.pausetime))
             time.sleep(4)
         else:
