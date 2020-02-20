@@ -57,7 +57,9 @@ def parse(options=None):
 
     parser.add_argument("--cameras", type=str, required=False, default='None',
                         help="Explicitly define the spectrographs for which you want"+
-                             " to reduce the data. Should be a comma separated list.")
+                             " to reduce the data. Should be a comma separated list."+
+                             " Numbers only assumes you want to reduce R, B, and Z "+
+                             "for that camera. Otherwise specify separately [BRZ|brz][0-9].")
 
     # File and dir defs
     parser.add_argument("-c", "--catchupfile", type=str, required=False, default='None',
@@ -96,13 +98,15 @@ def parse(options=None):
 
     if args.cameras.lower() != 'none':
         args.cameras = args.cameras.strip(' \t')
-        # turns out argparse will fail, so this isn't a possibility:
-        # # If more than one and no commas, turn space separated into comma sep'd
-        # if len(args.cameras) > 3 and ',' not in args.cameras:
-        #     args.cameras = args.cameras.replace(' ',',')
-        # # Remove additional whitespace
-        # if ' ' in args.cameras:
-        #     args.cameras = args.cameras.replace(' ','')
+        if args.cameras.lower()[0] not in ['b','r','z'] and \
+           args.cameras.split(',')[0].isnumeric():
+            cameras = args.cameras.split(',')
+            outstr = ''
+            for camnum in cameras:
+                for ccd in ['B','R','Z']:
+                    outstr += '{}{},'.format(ccd,camnum)
+            outstr = outstr[:-1]
+            args.cameras = outstr
 
     return args
 
@@ -194,14 +198,13 @@ def main(args):
     ###############################                                                                                                                         
     ### Define desi_proc params ###                                                                                                                             
     ############################### 
+    cmd_base = 'desi_proc '
+    cmd_base += '--batch '
+    cmd_base += '--traceshift '
     if args.scatteredlight:
-        scatter_light_str = '--scattered-light '
-    else:
-        scatter_light_str = ''
-    if args.cameras.lower() == 'none':
-        cameras_str = ''
-    else:
-        cameras_str = '--cameras={} '.format(args.cameras)
+        cmd_base += '--scattered-light '
+    if args.cameras.lower() != 'none':
+        cmd_base += '--cameras {} '.format(args.cameras)
 
                         
     ##################################
@@ -236,14 +239,12 @@ def main(args):
                     #    continue
 
                     #- submit batch jobs for others
-                    cmd = 'desi_proc {sclight}--batch --traceshift {cameras}-n {night} -e {exp}'.format(sclight=scatter_light_str,
-                                                                                                        cameras=cameras_str,
-                                                                                                        night=night,
-                                                                                                        exp=expid)
+                    cmd = '{basecall} -n {night} -e {exp}'.format(basecall=cmd_base,night=night,exp=expid)
+                                         
                     print(cmd)
                     if args.dryrun:
                         print("\tOutput file would have been: {}".format(os.path.join(reduxdir,os.environ['SPECPROD'])))
-                        #print("\tCommand to be run: {}".format(cmd))
+                        print("\tCommand to be run: {}".format(cmd.split()))
                     else:
                         subprocess.call(cmd.split())
                     sys.stdout.flush()
