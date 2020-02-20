@@ -51,8 +51,10 @@ parser = argparse.ArgumentParser(usage = "{prog} [options]")
 parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
 parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
 parser.add_argument("--obstype", type=str,  help="science, arc, flat, dark, zero, ...")
-parser.add_argument("--cameras", type=str,  help="comma separated list of cameras to process")
-
+parser.add_argument("--cameras", type=str,  help="Explicitly define the spectrographs for which you want"+
+                                                 " to reduce the data. Should be a comma separated list."+
+                                                 " Numbers only assumes you want to reduce R, B, and Z "+
+                                                 "for that spectrograph. Otherwise specify separately [BRZ|brz][0-9].")
 parser.add_argument("-i", "--input", type=str,  help="input raw data file")
 parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
 parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
@@ -143,7 +145,15 @@ else:
         args.cameras = cameras
         cameras = None
     else:
-        args.cameras = [cam.lower() for cam in args.cameras.split(',')]
+        cam_str = args.cameras.strip(' \t').lower()
+        cameras = cam_str.split(',')
+        if cam_str[0] not in ['b','r','z'] and cameras[0].isnumeric():
+            args.cameras = []
+            for camnum in cameras:
+                for ccd in ['b','r','z']:
+                    args.cameras.append('{}{}'.format(ccd,camnum))
+        else:
+            args.cameras = cameras
 
     args.cameras = sorted(args.cameras)  #- just because...
     camhdr = dict()
