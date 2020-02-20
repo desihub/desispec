@@ -24,7 +24,7 @@ from desispec.maskbits import specmask
 
 import desispec.scripts.mergebundles as mergebundles
 from desispec.specscore import compute_and_append_frame_scores
-from desispec.heliocentric import heliocentric_velocity_multiplicative_corr
+from desispec.heliocentric import barycentric_velocity_multiplicative_corr
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
@@ -60,7 +60,7 @@ def parse(options=None):
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
     # parser.add_argument("--fibermap-index", type=int, default=None, required=False,
     #                     help="start at this index in the fibermap table instead of using the spectro id from the camera")
-    parser.add_argument("--heliocentric-correction", action="store_true", help="apply heliocentric correction to wavelength")
+    parser.add_argument("--barycentric-correction", action="store_true", help="apply barycentric correction to wavelength")
     
     args = None
     if options is None:
@@ -75,9 +75,9 @@ def _trim(filepath, maxchar=40):
     if len(filepath) > maxchar:
         return '...{}'.format(filepath[-maxchar:])
 
-def heliocentric_correction_multiplicative_factor(header) :
+def barycentric_correction_multiplicative_factor(header) :
     """
-    Returns mult. heliocentric correction factor using coords in `header`
+    Returns mult. barycentric correction factor using coords in `header`
 
     `header` must contrain MJD or MJD-OBS; and
     TARGTRA,TARGTDEC or SKYRA,SKYDEC or TELRA,TELDEC or RA,DEC
@@ -112,10 +112,10 @@ def heliocentric_correction_multiplicative_factor(header) :
     else :
         raise KeyError("no MJD-OBS nor MJD in header")
 
-    val = heliocentric_velocity_multiplicative_corr(ra, dec, mjd)
+    val = barycentric_velocity_multiplicative_corr(ra, dec, mjd)
 
     log = get_logger()
-    log.debug("Heliocentric correction factor = {}".format(val))
+    log.debug("Barycentric correction factor = {}".format(val))
 
     return val
     
@@ -169,13 +169,13 @@ def main(args):
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
 
-    if args.heliocentric_correction :
-        heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)
-        wstart /= heliocentric_correction_factor
-        wstop  /= heliocentric_correction_factor
-        dw     /= heliocentric_correction_factor
+    if args.barycentric_correction :
+        barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)
+        wstart /= barycentric_correction_factor
+        wstop  /= barycentric_correction_factor
+        dw     /= barycentric_correction_factor
     else :
-        heliocentric_correction_factor = 1.
+        barycentric_correction_factor = 1.
     
     wave = np.arange(wstart, wstop+dw/2.0, dw)
         
@@ -221,14 +221,14 @@ regularize: {regularize}
     mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
     mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
-    if heliocentric_correction_factor != 1 :
-        #- Apply heliocentric correction factor to the wavelength
+    if barycentric_correction_factor != 1 :
+        #- Apply barycentric correction factor to the wavelength
         #- without touching the spectra, that is the whole point
-        wave   *= heliocentric_correction_factor
-        wstart *= heliocentric_correction_factor
-        wstop  *= heliocentric_correction_factor
-        dw     *= heliocentric_correction_factor
-        img.meta['HELIOCOR']   = heliocentric_correction_factor
+        wave   *= barycentric_correction_factor
+        wstart *= barycentric_correction_factor
+        wstop  *= barycentric_correction_factor
+        dw     *= barycentric_correction_factor
+        img.meta['HELIOCOR']   = barycentric_correction_factor
     
     #- Augment input image header for output
     img.meta['NSPEC']   = (nspec, 'Number of spectra')
@@ -333,13 +333,13 @@ def main_mpi(args, comm=None, timing=None):
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
 
-    if args.heliocentric_correction :
-        heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)        
-        wstart /= heliocentric_correction_factor
-        wstop  /= heliocentric_correction_factor
-        dw     /= heliocentric_correction_factor
+    if args.barycentric_correction :
+        barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)        
+        wstart /= barycentric_correction_factor
+        wstop  /= barycentric_correction_factor
+        dw     /= barycentric_correction_factor
     else :
-        heliocentric_correction_factor = 1.
+        barycentric_correction_factor = 1.
 
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
@@ -451,14 +451,14 @@ def main_mpi(args, comm=None, timing=None):
             mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
             mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
-            if heliocentric_correction_factor != 1 :
-                #- Apply heliocentric correction factor to the wavelength
+            if barycentric_correction_factor != 1 :
+                #- Apply barycentric correction factor to the wavelength
                 #- without touching the spectra, that is the whole point
-                wave   *= heliocentric_correction_factor
-                wstart *= heliocentric_correction_factor
-                wstop  *= heliocentric_correction_factor
-                dw     *= heliocentric_correction_factor
-                img.meta['HELIOCOR']   = heliocentric_correction_factor
+                wave   *= barycentric_correction_factor
+                wstart *= barycentric_correction_factor
+                wstop  *= barycentric_correction_factor
+                dw     *= barycentric_correction_factor
+                img.meta['HELIOCOR']   = barycentric_correction_factor
 
             #- Augment input image header for output
             img.meta['NSPEC']   = (nspec, 'Number of spectra')
