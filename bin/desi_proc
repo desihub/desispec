@@ -294,27 +294,27 @@ if rank == 0:
 #- Preproc
 #- All obstypes get preprocessed
 
-fibermap = None
 if rank == 0:
     log.info('Starting preproc at {}'.format(time.asctime()))
 
-    if args.obstype == 'SCIENCE':
-        fibermap = findfile('fibermap', args.night, args.expid)
-        if not os.path.exists(fibermap):
-            tmp = findfile('preproc', args.night, args.expid, 'b0')
-            preprocdir = os.path.dirname(tmp)
-            fibermap = os.path.join(preprocdir, os.path.basename(fibermap))
-
-            log.info('Creating fibermap {}'.format(fibermap))
-            cmd = 'assemble_fibermap -n {} -e {} -o {}'.format(
-                    args.night, args.expid, fibermap)
-            runcmd(cmd, inputs=[], outputs=[fibermap])
-
-#- if assemble_fibermap failed and obstype is SCIENCE, exit now
+#- Assemble fibermap for science exposures
+fibermap = None
 fibermap_ok = None
-if rank == 0:
+if rank == 0 and args.obstype == 'SCIENCE':
+    fibermap = findfile('fibermap', args.night, args.expid)
+    if not os.path.exists(fibermap):
+        tmp = findfile('preproc', args.night, args.expid, 'b0')
+        preprocdir = os.path.dirname(tmp)
+        fibermap = os.path.join(preprocdir, os.path.basename(fibermap))
+
+        log.info('Creating fibermap {}'.format(fibermap))
+        cmd = 'assemble_fibermap -n {} -e {} -o {}'.format(
+                args.night, args.expid, fibermap)
+        runcmd(cmd, inputs=[], outputs=[fibermap])
+
     fibermap_ok = os.path.exists(fibermap)
 
+#- if assemble_fibermap failed and obstype is SCIENCE, exit now
 if comm is not None:
     fibermap_ok = comm.bcast(fibermap_ok, root=0)
 
