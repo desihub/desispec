@@ -515,12 +515,12 @@ def assemble_fibermap(night, expid, force=False):
 
     #- Record input guide and coordinates files
     if guidefile is not None:
-        fibermap.meta['GUIDEFIL'] = guidefile
+        fibermap.meta['GUIDEFIL'] = os.path.basename(guidefile)
     else:
         fibermap.meta['GUIDEFIL'] = 'MISSING'
 
     if coordfile is not None:
-        fibermap.meta['COORDFIL'] = coordfile
+        fibermap.meta['COORDFIL'] = os.path.basename(coordfile)
     else:
         fibermap.meta['COORDFIL'] = 'MISSING'
 
