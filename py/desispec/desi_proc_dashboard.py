@@ -7,10 +7,63 @@ import numpy as np
 import psutil
 from os import listdir
 
+#HEX #005AB5 R 0  G 90  B 181
+#HEX #DC3220 R 220  G 50  B
 
 #import desispec.io as desi_io
+########################
+### Helper Functions ###
+########################
+def what_night_is_it():
+    """
+    Return the current night
+    """
+    d = datetime.datetime.utcnow() - datetime.timedelta(7 / 24 + 0.5)
+    tonight = int(d.strftime('%Y%m%d'))
+    return tonight
 
 
+def find_newexp(night, fileglob, known_exposures):
+    """
+    Check the path given for new exposures
+    """
+    datafiles = sorted(glob.glob(fileglob))
+    newexp = list()
+    for filepath in datafiles:
+        expid = int(os.path.basename(os.path.dirname(filepath)))
+        if (night, expid) not in known_exposures:
+            newexp.append((night, expid))
+
+    return set(newexp)
+
+
+def get_catchup_nights(catchup_filename, docatchup=True):
+    if docatchup and catchup_filename is not None and os.path.exists(catchup_filename):
+        catchup = np.atleast_1d(np.loadtxt(catchup_filename, dtype=int)).tolist()
+    else:
+        catchup = []
+
+    return catchup
+
+def check_running(proc_name= 'desi_dailyproc'):
+    """
+    Check if the desi_dailyproc process is running
+    """
+    running = False
+    mypid = os.getpid()
+    for p in psutil.process_iter():
+        if p.pid != mypid and proc_name in ' '.join(p.cmdline()):
+            print('ERROR: {}} already running as PID {}:'.format(proc_name,p.pid))
+            print('  ' + ' '.join(p.cmdline()))
+            running = True
+            break
+    return running
+
+
+
+######################
+### Main Functions ###
+######################
 class DESI_PROC_DASHBOARD(object):
     """ Code to generate a webpage for monitoring of desi_dailyproc production status   
     Usage:
@@ -20,9 +73,12 @@ class DESI_PROC_DASHBOARD(object):
     desi_proc_dashboard -n 20200101,20200102 --n_nights 3  --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/
     desi_proc_dashboard -n 20200101 20200102 --n_nights 3  --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/
     Cron job script:
-*/30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 /global/cfs/cdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all --n_nights 30 --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/ >/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.log 2>/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.err &
-    output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
-
+        */30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 \
+            /global/cfs/cdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all \
+            --n_nights 30 --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/ \
+            >/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.log \
+            2>/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.err & \
+            output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
     """
 
     def __init__(self):
@@ -82,14 +138,14 @@ class DESI_PROC_DASHBOARD(object):
             strTable=strTable+self._add_html_table(stat_night,str(night))
             
         timestamp=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
-        #print(timestamp)
-        running=self.check_running()
-        strTable=strTable+"<div style='color:#00FF00'>"+timestamp+" "+"desi_dailyproc running: "+running+"</div>"
+        running='No'
+        if self.check_running(proc_name='desi_dailyproc'):
+            running='Yes'
+        strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>".format(timestamp,'desi_dailyproc',running)
         strTable=strTable+self._add_js_script1()
         strTable=strTable+"</html>"
-        hs=open(os.path.join(self.output_dir,"desi_proc_dashboard.html"),'w')
-        hs.write(strTable)
-        hs.close()
+        with open(os.path.join(self.output_dir,"desi_proc_dashboard.html"),'w') as hs:
+            hs.write(strTable)
 
         ##########################
         #### Fix Permission ######
@@ -103,7 +159,8 @@ class DESI_PROC_DASHBOARD(object):
         """
         parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor",nargs="*")
         parser.add_argument('--n_nights', type=str, default = None, required = False, help="all:all nights. ifdigit: the last n nights.")
-        parser.add_argument('--prod_dir', type=str, default = os.path.join(os.environ['DESI_SPECTRO_REDUX'],os.environ['SPECPROD']), required = False, help="Product directory, point to $DESI_SPECTRO_REDUX/$SPECPROD by default ")
+        parser.add_argument('--prod_dir', type=str, default = os.path.join(os.environ['DESI_SPECTRO_REDUX'],os.environ['SPECPROD']),
+                            required = False, help="Product directory, point to $DESI_SPECTRO_REDUX/$SPECPROD by default ")
         parser.add_argument('--output_dir', type=str, default = None, required = True, help="output portal directory for the html pages ")
         return parser
 
@@ -124,47 +181,36 @@ class DESI_PROC_DASHBOARD(object):
         n_cframe: number of cframe files
         n_sky: number of sky files
         """
-        fileglob = '{}/{}/*/desi-*.fits.fz'.format(os.getenv('DESI_SPECTRO_DATA'), night)
+        rawdata_fileglob = '{}/{}/*/desi-*.fits.fz'.format(os.getenv('DESI_SPECTRO_DATA'), night)
         known_exposures = set()
-        newexp = self.find_newexp(night, fileglob, known_exposures)
+        newexp = find_newexp(night, rawdata_fileglob, known_exposures)
         expids=[t[1] for t in newexp]
         expids.sort(reverse=True)
         output={}
+        fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'),os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
         for expid in expids:
+            zfild_expid = str(expid).zfill(8)
             # Check the redux folder for reduced files 
-            filename=os.getenv('DESI_SPECTRO_DATA')+'/'+str(night)+'/'+str(expid).zfill(8)+'/desi-'+str(expid).zfill(8)+'.fits.fz'
+            filename=os.path.join(os.getenv('DESI_SPECTRO_DATA'), str(night), zfild_expid,'desi-'+str(expid).zfill(8)+'.fits.fz')
             h1=fits.getheader(filename,1)
-            flavor=h1['flavor'].strip()
-            try:
-                a= h1['SPCGRPHS']
-                b=a.split(',')
-            except:
-                a='SPX'
-                b=['SPX']
-            n_spectrographs=len(b)
 
-            exptime=str(h1['EXPTIME']).strip()
-            try:
-                obstype=h1['OBSTYPE'].strip()
-            except:
-                obstype='None'
-            #print(expid,flavor,obstype)
-            fileglob_psf=os.path.join(self.prod_dir,'exposures',str(night),str(expid).zfill(8),'psf*.fits')
-            fileglob_fit_psf=os.path.join(self.prod_dir,'exposures',str(night),str(expid).zfill(8),'fit-psf*.fits')
-            fileglob_fiberflat=os.path.join(self.prod_dir,'exposures',str(night),str(expid).zfill(8),'fiberflat*.fits')
-            fileglob_frame=os.path.join(self.prod_dir,'exposures',str(night),str(expid).zfill(8),'frame*.fits')
-            fileglob_sframe=os.path.join(self.prod_dir,'exposures',str(night),str(expid).zfill(8),'sframe*.fits')
-            fileglob_cframe=os.path.join(self.prod_dir,'exposures',str(night),str(expid).zfill(8),'cframe*.fits')
-            fileglob_sky=os.path.join(self.prod_dir,'exposures',str(night),str(expid).zfill(8),'sky*.fits')
+            header_info = {keyword:'Unknown' for keyword in ['FLAVOR','SPCGRPHS','EXPTIME','OBSTYPE']}
+            for keyword in header_info.keys():
+                if keyword in h1.keys():
+                    header_info[keyword] = h1[keyword].strip()
 
-            file_psf=sorted(glob.glob(fileglob_psf))
-            file_fit_psf=sorted(glob.glob(fileglob_fit_psf))
-            file_fiberflat=sorted(glob.glob(fileglob_fiberflat))
-            file_frame=sorted(glob.glob(fileglob_frame))
-            file_sframe=sorted(glob.glob(fileglob_sframe))
-            file_cframe=sorted(glob.glob(fileglob_cframe))
-            file_sky=sorted(glob.glob(fileglob_sky))
-            output[str(expid)]={'FLAVOR':flavor,'OBSTYPE':obstype,'EXPTIME':exptime,'SPECTROGRAPHS':a,'n_spectrographs':n_spectrographs,'n_psf':len(file_psf)+len(file_fit_psf),'n_ff':len(file_fiberflat),'n_frame':len(file_frame),'n_sframe':len(file_sframe),'n_cframe':len(file_cframe),'n_sky':len(file_sky)}
+            file_psf=      glob.glob(fileglob.format(zfild_expid,'psf*.fits'))
+            file_fit_psf=  glob.glob(fileglob.format(zfild_expid,'fit-psf*.fits'))
+            file_fiberflat=glob.glob(fileglob.format(zfild_expid,'fiberflat*.fits'))
+            file_frame=    glob.glob(fileglob.format(zfild_expid,'frame*.fits'))
+            file_sframe=   glob.glob(fileglob.format(zfild_expid,'sframe*.fits'))
+            file_cframe=   glob.glob(fileglob.format(zfild_expid,'cframe*.fits'))
+            file_sky=      glob.glob(fileglob.format(zfild_expid,'sky*.fits'))
+
+            output[str(expid)]={'FLAVOR':header_info['FLAVOR'],'OBSTYPE':header_info['OBSTYPE'],'EXPTIME':header_info['EXPTIME'],
+                                'SPECTROGRAPHS':header_info['SPCGRPHS'],'n_spectrographs':len(header_info['SPCGRPHS'].split(',')),
+                                'n_psf':len(file_psf)+len(file_fit_psf),'n_ff':len(file_fiberflat),'n_frame':len(file_frame),
+                                'n_sframe':len(file_sframe),'n_cframe':len(file_cframe),'n_sky':len(file_sky)}
         return(output)
 
     def _initialize_page(self):
@@ -259,7 +305,12 @@ class DESI_PROC_DASHBOARD(object):
                     n_ref=[str(n_spectrographs*0),str(n_spectrographs*0),str(n_spectrographs*0),str(n_spectrographs*0),str(n_spectrographs*0),str(n_spectrographs*0)]
 
                 color="green"
-                str_row="<tr><td>"+expid+"</td><td>"+str(table[expid]['FLAVOR'])+"</td><td>"+str(table[expid]['OBSTYPE'])+"</td><td>"+str(table[expid]['EXPTIME'])+"</td><td>"+table[expid]['SPECTROGRAPHS']+"</td><td>"+str(table[expid]['n_psf'])+'/'+n_ref[0]+"</td><td>"+str(table[expid]['n_ff'])+'/'+n_ref[1]+"</td><td>"+str(table[expid]['n_frame'])+'/'+n_ref[2]+"</td><td>"+str(table[expid]['n_sframe'])+'/'+n_ref[3]+"</td><td>"+str(table[expid]['n_sky'])+'/'+n_ref[4]+"</td><td>"+str(table[expid]['n_cframe'])+'/'+n_ref[5]+"</td></tr>"
+                str_row="<tr><td>"+expid+"</td><td>"+str(table[expid]['FLAVOR'])+"</td><td>"+str(table[expid]['OBSTYPE'])+\
+                        "</td><td>"+str(table[expid]['EXPTIME'])+"</td><td>"+table[expid]['SPECTROGRAPHS']+"</td><td>"+\
+                        str(table[expid]['n_psf'])+'/'+n_ref[0]+"</td><td>"+str(table[expid]['n_ff'])+'/'+n_ref[1]+\
+                        "</td><td>"+str(table[expid]['n_frame'])+'/'+n_ref[2]+"</td><td>"+str(table[expid]['n_sframe'])+\
+                        '/'+n_ref[3]+"</td><td>"+str(table[expid]['n_sky'])+'/'+n_ref[4]+"</td><td>"+\
+                        str(table[expid]['n_cframe'])+'/'+n_ref[5]+"</td></tr>"
                 strTable=strTable+str_row
             else:
                 pass
@@ -298,62 +349,9 @@ class DESI_PROC_DASHBOARD(object):
             </script>"""
         return s
 
-    def _add_js_script2(self,n_modal):
-        """
-        Return the another javascript script to be added to the html file
-        """
-        s="""<script>"""
-        for i in range(n_modal):
-            s=s+"""
-                var modal"""+str(i)+""" = document.getElementById('modal"""+str(i)+"""');
-                var l"""+str(i)+""" = document.getElementById('Btn"""+str(i)+"""');
-
-                l"""+str(i)+""".addEventListener('click',function() {
-                  modal"""+str(i)+""".style.display = "block";
-                })
-
-                span"""+str(i)+""".addEventListener('click',function() {
-                  modal"""+str(i)+""".style.display = "none";
-                })"""
-
-        s=s+"""</script>"""
-        return s
 
 
 
-    def what_night_is_it(self):
-        """
-        Return the current night
-        """
-
-        d = datetime.datetime.utcnow() - datetime.timedelta(7/24+0.5)
-        tonight = int(d.strftime('%Y%m%d'))
-        return tonight
-
-    def find_newexp(self,night, fileglob, known_exposures):
-        """
-        Check the path given for new exposures
-        """
-        datafiles = sorted(glob.glob(fileglob))
-        newexp = list()
-        for filepath in datafiles:
-            expid = int(os.path.basename(os.path.dirname(filepath)))
-            if (night, expid) not in known_exposures:
-                newexp.append( (night, expid) )
-        return set(newexp)
-
-    def check_running(self):
-        """ 
-        Check if the desi_dailyproc process is running
-        """
-        a=psutil.process_iter()
-        running='No'
-        for p in a:
-            if 'desi_dailyproc' in ' '.join(p.cmdline()):
-                running='Yes'
-                break
-
-        return running
 
         
 if __name__=="__main__":

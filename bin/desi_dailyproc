@@ -19,28 +19,7 @@ import numpy as np
 ########################
 ### Helper Functions ###
 ########################
-def what_night_is_it():
-    d = datetime.datetime.utcnow() - datetime.timedelta(7/24+0.5)
-    tonight = int(d.strftime('%Y%m%d'))
-    return tonight
-
-def find_newexp(night, fileglob, known_exposures):
-    datafiles = sorted(glob.glob(fileglob))
-    newexp = list()
-    for filepath in datafiles:
-        expid = int(os.path.basename(os.path.dirname(filepath)))
-        if (night, expid) not in known_exposures:
-            newexp.append( (night, expid) )
-
-    return set(newexp)
-
-def get_catchup_nights(catchup_filename,docatchup=True):
-    if docatchup and catchup_filename is not None and os.path.exists(catchup_filename):
-        catchup = np.atleast_1d(np.loadtxt(catchup_filename,dtype=int)).tolist()
-    else:
-        catchup = []
-        
-    return catchup
+from desispec.desi_proc_dashboard import what_night_is_it, find_newexp, get_catchup_nights, check_running
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Perform daily processing of spectral"+
@@ -102,9 +81,21 @@ def parse(options=None):
 
 def main(args):
 
-    ###############################
-    ### Define hardcoded params ###
-    ###############################
+    #- Preflight checks
+    if not args.ignore_cori_node and socket.gethostname() != 'cori21':
+        print('This should only run on cori21')
+        sys.exit(1)
+
+    if not args.ignore_instances:
+        running = check_running(proc_name='desi_dailyproc')
+        if not running:
+            print('OK to run')
+        else:
+            sys.exit(1)
+
+    ########################
+    ### Define io params ###
+    ########################
     catchup_filename = 'none'
     if args.catchup:
         if args.catchup_file is None:
@@ -144,30 +135,6 @@ def main(args):
     #########################
     ### Setup for Running ###
     #########################
-    #- Preflight checks
-    if not args.ignore_cori_node and socket.gethostname() != 'cori21':
-        print('This should only run on cori21')
-        sys.exit(1)
-
-    if not args.ignore_instances:
-        ok = True
-        mypid = os.getpid()
-        for p in psutil.process_iter():
-            if p.pid != mypid and 'desi_dailyproc' in ' '.join(p.cmdline()):
-                print('ERROR: desi_dailyproc already running as PID {}:'.format(p.pid))
-                print('  ' + ' '.join(p.cmdline()))
-                ok = False
-                break
-
-        if ok:
-            print('OK to run')
-        else:
-            sys.exit(1)
-
-    ### nights = [20191031, 20191030, 20191029, 20191028]
-
-    ###catchup = [20191214,20191215,20191216,20191217]
-
     catchup = get_catchup_nights(catchup_filename,args.catchup)
 
     #- First identify exposures that are already processed
