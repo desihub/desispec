@@ -50,11 +50,13 @@ if ( targetids is None ) and ( args.targetid is not None ) :
     targetids=[args.targetid,]
 
 zbest=None
-if ( targetids is None ) and ( args.zbest is not None ) and ( args.spectype is not None ):
+if  args.zbest is not None :
     zbest=Table.read(args.zbest,"ZBEST")
+ 
+if ( targetids is None ) and ( zbest is not None ) and ( args.spectype is not None ):
     selection = np.where((zbest["SPECTYPE"]==args.spectype)&(zbest["ZWARN"]==0))[0]
     targetids=np.unique(spectra[0].fibermap["TARGETID"][selection])
-    
+
 if targetids is None :        
     targetids=np.unique(spectra[0].fibermap["TARGETID"])
 
