@@ -8,7 +8,6 @@ import numpy as np
 import fitsio
 from desispec.io import read_spectra
 from desispec.interpolation import resample_flux
-from prospect import plotframes
 from astropy.table import Table
 import redrock.templates
 
