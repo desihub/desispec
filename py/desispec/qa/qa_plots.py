@@ -909,6 +909,9 @@ def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None
     for cc, channel in enumerate(['b','r','z']):
         ax = plt.subplot(gs[cc])
         qa_tbl = qa_multi.get_qa_table(qatype, metric, channels=channel)
+        if len(qa_tbl) == 0:
+            log.info("QA Table is empty..  Maybe you input an incorrect metric?")
+            continue
         '''
         # Check for nans
         isnan = np.isnan(qa_arr)
@@ -917,6 +920,7 @@ def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None
                 qatype, metric, channel))
             qa_arr[isnan] = -999.
         '''
+        import pdb; pdb.set_trace()
         # Convert Date to MJD
         atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
         atime.format = 'mjd'

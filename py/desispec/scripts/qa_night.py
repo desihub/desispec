@@ -79,8 +79,8 @@ def main(args) :
         # QATYPE-METRIC
         qa_prod.load_data()
         # Run
-        qatype, metric = args.exp_series.split('-')
-        outfile= qaprod_dir+'/QA_expid_{:s}.png'.format(args.exp_series)
+        qatype, metric = args.expid_series.split('-')
+        outfile= qaprod_dir+'/QA_expid_{:s}.png'.format(args.expid_series)
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile,
                               bright_dark=args.bright_dark, exposures=True)
 
