@@ -9,25 +9,17 @@ from desispec.qa import __offline_qa_version__
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v{:s}]".format(__offline_qa_version__))
 
-    parser.add_argument('--make_frameqa', type = int, default = 0,
-                        help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
-    parser.add_argument('--slurp', default = False, action='store_true',
-                        help = 'slurp production QA files into one per night?')
-    parser.add_argument('--remove', default = False, action='store_true',
-                        help = 'remove frame QA files?')
-    parser.add_argument('--clobber', default=False, action='store_true',
-                        help='clobber existing QA files?')
     parser.add_argument('--channel_hist', type=str, default=None,
                         help='Generate channel histogram(s)')
-    parser.add_argument('--time_series', type=str, default=None,
-                        help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-RESID')
+    parser.add_argument('--expid_series', type=str, default=None,
+                        help='Generate exposure series plot. Input is QATYPE-METRIC, e.g. SKYSUB-RESID')
     parser.add_argument('--bright_dark', type=int, default=0,
                         help='Restrict to bright/dark (flag: 0=all; 1=bright; 2=dark; only used in time_series)')
     parser.add_argument('--html', default = False, action='store_true',
                         help = 'Generate HTML files?')
     parser.add_argument('--qaprod_dir', type=str, default=None, help='Path to where QA is generated.  Default is qaprod_dir')
     parser.add_argument('--specprod_dir', type=str, default=None, help='Path to spectro production folder.  Default is specprod_dir')
-    parser.add_argument('--night', type=str, default=None, help='Only process this night')
+    parser.add_argument('--night', type=str, help='Night; required')
     parser.add_argument('--S2N_plot', default=False, action='store_true',
                         help = 'Generate a S/N plot for the production (vs. xaxis)')
     parser.add_argument('--ZP_plot', default=False, action='store_true',
@@ -44,7 +36,7 @@ def parse(options=None):
 
 def main(args) :
 
-    from desispec.qa import QA_Prod
+    from desispec.qa import QA_Night
     from desispec.qa import html
     from desiutil.log import get_logger
     from desispec.io import meta
@@ -63,29 +55,7 @@ def main(args) :
     else:
         qaprod_dir = args.qaprod_dir
 
-    qa_prod = QA_Prod(specprod_dir, qaprod_dir=qaprod_dir)
-
-    # Restrict to a nights
-    restrict_nights = [args.night] if args.night is not None else None
-
-    # Remake Frame QA?
-    if args.make_frameqa > 0:
-        log.info("(re)generating QA related to frames")
-        if (args.make_frameqa % 4) >= 2:
-            make_frame_plots = True
-        else:
-            make_frame_plots = False
-        # Run
-        if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
-            # Allow for restricted nights
-            qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber,
-                                 restrict_nights=restrict_nights)
-
-    # Slurp and write?
-    if args.slurp:
-        qa_prod.qaexp_outroot = qaprod_dir 
-        qa_prod.slurp_nights(make=(args.make_frameqa > 0), remove=args.remove, write_nights=True,
-                             restrict_nights=restrict_nights)
+    qa_prod = QA_Night(args.night, specprod_dir=specprod_dir, qaprod_dir=qaprod_dir)
 
     # Channel histograms
     if args.channel_hist is not None:
@@ -104,14 +74,15 @@ def main(args) :
         print("Writing {:s}".format(outfile))
         pp.close()
 
-    # Time plots
-    if args.time_series is not None:
+    # Exposure plots
+    if args.expid_series is not None:
         # QATYPE-METRIC
         qa_prod.load_data()
         # Run
-        qatype, metric = args.time_series.split('-')
-        outfile= qaprod_dir+'/QA_time_{:s}.png'.format(args.time_series)
-        dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile, bright_dark=args.bright_dark)
+        qatype, metric = args.exp_series.split('-')
+        outfile= qaprod_dir+'/QA_expid_{:s}.png'.format(args.exp_series)
+        dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile,
+                              bright_dark=args.bright_dark, exposures=True)
 
     # <S/N> plot
     if args.S2N_plot:

@@ -878,21 +878,19 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     else:  # Show
         plt.show()
 
-def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=True, pp=None,
-                     bright_dark=0):
+def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None,
+                     bright_dark=0, exposures=False):
     """ Generate a time series plot for a production
+    Can be MJD or Exposure number
+
     Args:
-        qa_prod:
-        qatype:
-        metric:
-        xlim:
-        outfile:
-        close:
+        qa_multi: QA_Prod or QA_Night
+        qatype: str
+        metric: str
+        outfile: str, optional
+        close: bool, optional
         pp:
         bright_dark: int, optional; (flag: 0=all; 1=bright; 2=dark)
-
-    Returns:
-
     """
 
     log = get_logger()
@@ -910,7 +908,7 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     all_ax = []
     for cc, channel in enumerate(['b','r','z']):
         ax = plt.subplot(gs[cc])
-        qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
+        qa_tbl = qa_multi.get_qa_table(qatype, metric, channels=channel)
         '''
         # Check for nans
         isnan = np.isnan(qa_arr)
@@ -939,7 +937,11 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
             mjd = mjd[dark]
 
         # Scatter me
-        ax.scatter(mjd, qa_tbl[metric], color=clrs[channel], s=4.)
+        if exposures:
+            xval = qa_tbl['EXPID']
+        else:
+            xval = mjd
+        ax.scatter(xval, qa_tbl[metric], color=clrs[channel], s=4.)
         # Axes
         ax.set_ylabel('Metric')
         if cc < 2:
@@ -951,11 +953,14 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
 
     # Label
     #ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
-    ax.set_xlabel('MJD')
-    all_times = np.concatenate(all_times)
-    xmin, xmax = np.min(all_times), np.max(all_times)
-    for cc in range(3):
-        all_ax[cc].set_xlim(xmin,xmax)
+    if exposures:
+        ax.set_xlabel('EXPID')
+    else:
+        ax.set_xlabel('MJD')
+        all_times = np.concatenate(all_times)
+        xmin, xmax = np.min(all_times), np.max(all_times)
+        for cc in range(3):
+            all_ax[cc].set_xlim(xmin,xmax)
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
