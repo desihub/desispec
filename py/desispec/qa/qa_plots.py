@@ -942,6 +942,7 @@ def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None
         # Scatter me
         if exposures:
             xval = qa_tbl['EXPID']
+            plt.xticks(rotation=90)
         else:
             xval = mjd
         ax.scatter(xval, qa_tbl[metric], color=clrs[channel], s=4.)
