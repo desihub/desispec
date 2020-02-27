@@ -1,13 +1,12 @@
-# Script for generating QA from a Production run
+# Script for analyzing QA from a Night
 from __future__ import absolute_import, division
 
 import argparse
-import numpy as np
 
 from desispec.qa import __offline_qa_version__
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v{:s}]".format(__offline_qa_version__))
+    parser = argparse.ArgumentParser(description="Analyze Night Level QA [v{:s}]".format(__offline_qa_version__))
 
     #parser.add_argument('--channel_hist', type=str, default=None,
     #                    help='Generate channel histogram(s)')
@@ -24,7 +23,6 @@ def parse(options=None):
     #                    help = 'Generate a ZP plot for the production (vs. xaxis)')
     #parser.add_argument('--xaxis', type=str, default='MJD', help='Specify x-axis for S/N and ZP plots')
 
-    args = None
     if options is None:
         args = parser.parse_args()
     else:

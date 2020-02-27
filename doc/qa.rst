@@ -202,7 +202,7 @@ First generate the QA for the given night with desi_qa_prod, e.g.::
 
 Then generate the Night plots::
 
-
+    desi_qa_night --specprod_dir /global/projecta/projectdirs/desi/spectro/redux/daily --qaprod_dir /global/projecta/projectdirs/desi/spectro/redux/xavier/daily/QA --night 20200224 --expid_series
 
 
 desi_qa_prod

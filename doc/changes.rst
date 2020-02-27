@@ -11,6 +11,7 @@ desispec Change Log
     in the platmaker coordinates files.
   * better packing of extraction MPI ranks
 
+* Generate QA for a given night + QA bug fixes
 
 0.32.1 (2019-12-27)
 -------------------
