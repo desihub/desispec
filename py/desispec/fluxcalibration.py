@@ -1298,6 +1298,8 @@ def qa_fluxcalib(param, frame, fluxcalib):
     for ii in range(nstds):
         # Good pixels
         gdp = stdstars.ivar[ii, :] > 0.
+        if not np.any(gdp):
+            continue
         icalib = fluxcalib.calib[stdfibers[ii]][gdp]
         i_wave = fluxcalib.wave[gdp]
         # ZP
