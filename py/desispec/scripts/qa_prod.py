@@ -27,6 +27,7 @@ def parse(options=None):
                         help = 'Generate HTML files?')
     parser.add_argument('--qaprod_dir', type=str, default=None, help='Path to where QA is generated.  Default is qaprod_dir')
     parser.add_argument('--specprod_dir', type=str, default=None, help='Path to spectro production folder.  Default is specprod_dir')
+    parser.add_argument('--night', type=str, default=None, help='Only process this night')
     parser.add_argument('--S2N_plot', default=False, action='store_true',
                         help = 'Generate a S/N plot for the production (vs. xaxis)')
     parser.add_argument('--ZP_plot', default=False, action='store_true',
@@ -73,7 +74,10 @@ def main(args) :
             make_frame_plots = False
         # Run
         if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
-            qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
+            restrict_nights = [args.night] if args.night is not None else None
+            import pdb; pdb.set_trace()
+            qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber,
+                                 restrict_nights=restrict_nights)
 
     # Slurp and write?
     if args.slurp:
