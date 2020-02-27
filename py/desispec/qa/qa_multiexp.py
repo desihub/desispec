@@ -235,7 +235,7 @@ class QA_MultiExp(object):
                 if len(frames_dict) == 0:
                     continue
                 # Load any frame (for the type)
-                qa_exp = QA_Exposure(exposure, night,
+                qa_exp = QA_Exposure(exposure, night, qaprod_dir=self.qaprod_dir,
                                      specprod_dir=self.specprod_dir, remove=remove)
                 # Append
                 self.qa_exps.append(qa_exp)
