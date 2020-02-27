@@ -64,6 +64,12 @@ def main(args) :
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile,
                               bright_dark=args.bright_dark, exposures=True,
                               night=args.night, horiz_line=0.)
+        # FLUXCALIB ZP
+        qatype, metric = 'FLUXCALIB', 'ZP' #args.expid_series.split('-')
+        outfile = qaprod_dir+'/QA_{:s}_expid_{:s}-{:s}.png'.format(args.night, qatype, metric)
+        dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile,
+                              bright_dark=args.bright_dark, exposures=True,
+                              night=args.night)
 
     ''' The stuff down here does not work, or has not been tested on Night QA
     # Channel histograms
