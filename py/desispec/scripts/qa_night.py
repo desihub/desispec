@@ -80,7 +80,7 @@ def main(args) :
         qa_prod.load_data()
         # Run
         qatype, metric = args.expid_series.split('-')
-        outfile= qaprod_dir+'/QA_expid_{:s}.png'.format(args.expid_series)
+        outfile= qaprod_dir+'/QA_{:s}_expid_{:s}.png'.format(args.night, args.expid_series)
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile,
                               bright_dark=args.bright_dark, exposures=True)
 
