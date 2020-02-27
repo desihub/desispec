@@ -879,7 +879,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
         plt.show()
 
 def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None,
-                     bright_dark=0, exposures=False):
+                     bright_dark=0, exposures=False, night=None, horiz_line=None):
     """ Generate a time series plot for a production
     Can be MJD or Exposure number
 
@@ -891,6 +891,10 @@ def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None
         close: bool, optional
         pp:
         bright_dark: int, optional; (flag: 0=all; 1=bright; 2=dark)
+        night: str, optional
+            Only used for the Title
+        horiz_line: float, optional
+            Draw a horizontal line at input value
     """
 
     log = get_logger()
@@ -946,12 +950,23 @@ def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None
         else:
             xval = mjd
         ax.scatter(xval, qa_tbl[metric], color=clrs[channel], s=4.)
+        # Camera
+        ax.text(0.05, 0.85, channel,
+                       transform=ax.transAxes, fontsize=13., ha='left', color=clrs[channel])
         # Axes
         ax.set_ylabel('Metric')
         if cc < 2:
             ax.get_xaxis().set_ticks([])
-        if cc ==0:
-            ax.set_title('{:s} :: {:s}'.format(qatype,metric))
+        if cc == 0:
+            title = '{:s} :: {:s}'.format(qatype,metric)
+            if night is not None:
+                title = night+' '+title
+            #
+            ax.set_title(title)
+        # Horizontal line?
+        if horiz_line is not None:
+            ax.axhline(horiz_line, color='gray', ls='--')
+        # Append
         all_times.append(mjd)
         all_ax.append(ax)
 
