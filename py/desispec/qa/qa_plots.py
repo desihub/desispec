@@ -920,7 +920,6 @@ def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None
                 qatype, metric, channel))
             qa_arr[isnan] = -999.
         '''
-        import pdb; pdb.set_trace()
         # Convert Date to MJD
         atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
         atime.format = 'mjd'

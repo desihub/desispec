@@ -110,7 +110,6 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
                     continue
             qaNight = QA_Night(night, specprod_dir=self.specprod_dir, qaprod_dir=self.qaprod_dir)
             qaNight.slurp(remove=remove)
-            import pdb; pdb.set_trace()
             # Save nights
             self.qa_nights.append(qaNight)
             # Write?
