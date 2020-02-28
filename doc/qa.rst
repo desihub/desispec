@@ -197,7 +197,7 @@ Current recommendation
 
 First generate the QA for the given night with desi_qa_prod, e.g.::
 
-    desi_qa_prod --make_frameqa 3 --specprod_dir /global/projecta/projectdirs/desi/spectro/redux/daily --night 20200224 --qaprod_dir /global/projecta/projectdirs/desi/spectro/redux/xavier/daily/QA
+    desi_qa_prod --make_frameqa 3 --specprod_dir /global/projecta/projectdirs/desi/spectro/redux/daily --night 20200224 --qaprod_dir /global/projecta/projectdirs/desi/spectro/redux/xavier/daily/QA --slurp
 
 
 Then generate the Night plots::
