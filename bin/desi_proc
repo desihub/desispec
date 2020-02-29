@@ -47,6 +47,12 @@ from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
 
+
+import desisurvey.utils
+
+desisurvey.utils.freeze_iers()
+
+
 parser = argparse.ArgumentParser(usage = "{prog} [options]")
 parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
 parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
@@ -273,6 +279,7 @@ if args.batch:
         fx.write('fi\n')
     
     print('Wrote {}'.format(scriptfile))
+    print('logfile will be {}/{}-%j.log\n'.format(batchdir, jobname))
     err = 0
     if not args.nosubmit:
         err = subprocess.call(['sbatch', scriptfile])
@@ -386,13 +393,13 @@ if rank == 0:
                 # Set the time as Noon on the day in question
                 today = time.strptime('{} 12'.format(args.night),'%Y%m%d %H')
                 one_day = 60*60*24 # seconds
-                previous_night = today
+                test_night_struct = today
                 successful = False
                 # Search a month in the past
                 for daysback in range(30):
-                    previous_night = time.strftime('%Y%m%d',\
-                                     time.strptime(time.ctime(time.mktime(previous_night)-(60*60*24))))
-                    psfnightfile = findfile('psfnight', previous_night, args.expid, camera)
+                    test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
+                    test_night_str = time.strftime('%Y%m%d', test_night_struct)
+                    psfnightfile = findfile('psfnight', test_night_str, args.expid, camera)
                     if os.path.isfile(psfnightfile) :
                         input_psf[camera] = psfnightfile
                         successful = True
