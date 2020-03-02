@@ -47,6 +47,12 @@ from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
 
+
+import desisurvey.utils
+
+desisurvey.utils.freeze_iers()
+
+
 parser = argparse.ArgumentParser(usage = "{prog} [options]")
 parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
 parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
@@ -66,7 +72,7 @@ parser.add_argument('--maxstdstars', type=int, default=None, \
         help='Maximum number of stdstars to include')
 parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
 parser.add_argument("--fiberflat",type=str,required=False,default=None, help="use this fiberflat")
-parser.add_argument("--calibnight",type=int,required=False,default=None, help="use this night to find nighly PSF and fiberflats")
+parser.add_argument("--calibnight",type=int,required=False,default=None, help="use this night to find nightly PSF and fiberflats")
 parser.add_argument("--scattered-light",action='store_true',help="fit and remove scattered light")
 parser.add_argument("--extra-variance", action='store_true',
                     help = 'increase sky model variance based on chi2 on sky lines')
@@ -74,6 +80,44 @@ parser.add_argument("--batch", action="store_true", help="Submit a batch job to 
 parser.add_argument("--nosubmit", action="store_true", help="Create batch script but don't submit")
 parser.add_argument("-q", "--queue", type=str, default="realtime", help="batch queue to use")
 parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in minutes")
+parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
+                    " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
+
+
+
+def find_most_recent(night, file_type='psfnight', n_nights=30):
+    '''
+       Searches back in time for either psfnight or fiberflatnight (or anything supported by 
+       desispec.calibfinder.findcalibfile. 
+       
+       Inputs:
+         night : str YYYMMDD   night to look back from
+         file_type : str psfnight or fiberflatnight
+         n_nights : int  number of nights to step back before giving up
+       
+      returns: 
+         nightfile : str Full pathname to calibration file of interest.
+                     If none found, None is returned.
+       
+    '''
+    # Set the time as Noon on the day in question
+    today = time.strptime('{} 12'.format(night),'%Y%m%d %H')
+    one_day = 60*60*24 # seconds                                                                              \
+
+    test_night_struct = today
+
+    # Search a month in the past
+    for daysback in range(n_nights) :
+        test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
+        test_night_str = time.strftime('%Y%m%d', test_night_struct)
+        nightfile = findfile(file_type, test_night_str, '00000000', camera)
+        if os.path.isfile(nightfile) :
+            return nightfile
+		
+    return None
+
+
+
 
 args = parser.parse_args()
 log = get_logger()
@@ -271,6 +315,7 @@ if args.batch:
         fx.write('fi\n')
     
     print('Wrote {}'.format(scriptfile))
+    print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
     err = 0
     if not args.nosubmit:
         err = subprocess.call(['sbatch', scriptfile])
@@ -376,10 +421,16 @@ if rank == 0:
                 raise IOError("no {}".format(psfnightfile))
             input_psf[camera] = psfnightfile
         else :
-            # look for a psfnight psf
+            # look for a psfnight psf 
             psfnightfile = findfile('psfnight', args.night, args.expid, camera)
             if os.path.isfile(psfnightfile) :
                 input_psf[camera] = psfnightfile
+            elif args.most_recent_calib:
+                nightfile = find_most_recent(args.night, file_type='psfnight')
+                if nightfile is None:
+                    input_psf[camera] = findcalibfile([hdr, camhdr[camera]], 'PSF')
+                else:
+                    input_psf[camera] = nightfile
             else :
                 input_psf[camera] = findcalibfile([hdr, camhdr[camera]], 'PSF')
         log.info("Will use input PSF : {}".format(input_psf[camera]))
@@ -734,6 +785,12 @@ if rank == 0:
                     args.night, args.expid, camera)
             if os.path.isfile(fiberflatnightfile) :
                 input_fiberflat[camera] = fiberflatnightfile
+            elif args.most_recent_calib:
+                nightfile = find_most_recent(args.night, file_type='fiberflatnight')
+                if nightfile is None:
+                    input_fiberflat[camera] = findcalibfile([hdr, camhdr[camera]], 'FIBERFLAT')
+                else:
+                    input_fiberflat[camera] = nightfile
             else :
                 input_fiberflat[camera] = findcalibfile(
                         [hdr, camhdr[camera]], 'FIBERFLAT')
