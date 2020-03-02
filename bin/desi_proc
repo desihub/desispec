@@ -83,6 +83,42 @@ parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in
 parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
                     " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
 
+
+
+def find_most_recent(night, file_type='psfnight', n_nights=30):
+    '''
+       Searches back in time for either psfnight or fiberflatnight (or anything supported by 
+       desispec.calibfinder.findcalibfile. 
+       
+       Inputs:
+         night : str YYYMMDD   night to look back from
+         file_type : str psfnight or fiberflatnight
+         n_nights : int  number of nights to step back before giving up
+       
+      returns: 
+         nightfile : str Full pathname to calibration file of interest.
+                     If none found, None is returned.
+       
+    '''
+    # Set the time as Noon on the day in question
+    today = time.strptime('{} 12'.format(night),'%Y%m%d %H')
+    one_day = 60*60*24 # seconds                                                                              \
+
+    test_night_struct = today
+
+    # Search a month in the past
+    for daysback in range(n_nights) :
+        test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
+        test_night_str = time.strftime('%Y%m%d', test_night_struct)
+        nightfile = findfile(file_type, test_night_str, '00000000', camera)
+        if os.path.isfile(nightfile) :
+            return nightfile
+		
+    return None
+
+
+
+
 args = parser.parse_args()
 log = get_logger()
 
@@ -279,7 +315,7 @@ if args.batch:
         fx.write('fi\n')
     
     print('Wrote {}'.format(scriptfile))
-    print('logfile will be {}/{}-%j.log\n'.format(batchdir, jobname))
+    print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
     err = 0
     if not args.nosubmit:
         err = subprocess.call(['sbatch', scriptfile])
@@ -390,22 +426,11 @@ if rank == 0:
             if os.path.isfile(psfnightfile) :
                 input_psf[camera] = psfnightfile
             elif args.most_recent_calib:
-                # Set the time as Noon on the day in question
-                today = time.strptime('{} 12'.format(args.night),'%Y%m%d %H')
-                one_day = 60*60*24 # seconds
-                test_night_struct = today
-                successful = False
-                # Search a month in the past
-                for daysback in range(30):
-                    test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
-                    test_night_str = time.strftime('%Y%m%d', test_night_struct)
-                    psfnightfile = findfile('psfnight', test_night_str, args.expid, camera)
-                    if os.path.isfile(psfnightfile) :
-                        input_psf[camera] = psfnightfile
-                        successful = True
-                        break
-                if not successful:
+                nightfile = find_most_recent(args.night, file_type='psfnight')
+                if nightfile is None:
                     input_psf[camera] = findcalibfile([hdr, camhdr[camera]], 'PSF')
+                else:
+                    input_psf[camera] = nightfile
             else :
                 input_psf[camera] = findcalibfile([hdr, camhdr[camera]], 'PSF')
         log.info("Will use input PSF : {}".format(input_psf[camera]))
@@ -760,6 +785,12 @@ if rank == 0:
                     args.night, args.expid, camera)
             if os.path.isfile(fiberflatnightfile) :
                 input_fiberflat[camera] = fiberflatnightfile
+            elif args.most_recent_calib:
+                nightfile = find_most_recent(args.night, file_type='fiberflatnight')
+                if nightfile is None:
+                    input_fiberflat[camera] = findcalibfile([hdr, camhdr[camera]], 'FIBERFLAT')
+                else:
+                    input_fiberflat[camera] = nightfile
             else :
                 input_fiberflat[camera] = findcalibfile(
                         [hdr, camhdr[camera]], 'FIBERFLAT')
