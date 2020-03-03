@@ -374,6 +374,7 @@ def main(args) :
                 model += c*np.interp(stdwave,redshifted_stdwave,stdflux[i])
 
         # Apply dust extinction to the model
+        log.info("Applying MW dust extinction to star {} with EBV = {}".format(star,fibermap['EBV'][star]))
         model *= dust_transmission(stdwave, fibermap['EBV'][star])
 
         # Compute final color of dust-extincted model
