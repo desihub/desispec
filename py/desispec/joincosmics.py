@@ -121,11 +121,11 @@ class RepairMask:
             2D spectrograph cosmic ray mask with binary closure applied.
         """
         # Convert mask to binary.
-        bmask = np.zeros_like(mask, dtype=int)
+        bmask = np.zeros(mask.shape, dtype=mask.dtype)
         bmask[mask > 0] = 1
 
         # Apply binary closure using each selection element. OR results.
-        bc = np.zeros_like(mask, dtype=int)
+        bc = np.zeros(mask.shape, dtype=dtype)
 
         for se in self.selems:
             bc = bc | binary_closing(bmask, selem=se.se)
