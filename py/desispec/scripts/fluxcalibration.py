@@ -38,9 +38,9 @@ def parse(options=None):
                         help = 'apply a reduced chi2 cut for the selection of stars')
     parser.add_argument('--chi2cut-nsig', type = float, default = 0., required=False,
                         help = 'discard n-sigma outliers from the reduced chi2 of the standard star fit')
-    parser.add_argument('--min-color', type = float, default = 0.25, required=False,
+    parser.add_argument('--min-color', type = float, default = None, required=False,
                         help = 'only consider stars with g-r greater than this')
-    parser.add_argument('--delta-color-cut', type = float, default = 0.3, required=False,
+    parser.add_argument('--delta-color-cut', type = float, default = 0.2, required=False,
                         help = 'discard model stars with different broad-band color from imaging')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
@@ -101,9 +101,9 @@ def main(args) :
     if args.delta_color_cut > 0 :
         log.info("Apply cut |delta color|<{}".format(args.delta_color_cut))
         ok &= (np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)
-    log.info("Apply cut DATA_G-R>{}".format(args.min_color))
-    ok &= (model_metadata["DATA_G-R"]>args.min_color)
-
+    if args.min_color is not None :
+        log.info("Apply cut DATA_G-R>{}".format(args.min_color))
+        ok &= (model_metadata["DATA_G-R"]>args.min_color)
     if args.chi2cut_nsig > 0 :
         # automatically reject stars that ar chi2 outliers
         mchi2=np.median(model_metadata["CHI2DOF"])
@@ -142,7 +142,7 @@ def main(args) :
     if np.sum(np.sum(frame.ivar[model_fibers%500, :] == 0, axis=1) == frame.nwave) == len(model_fibers):
         log.warning('All standard-star spectra are masked!')
         return
-        
+
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput)
 
     # QA
