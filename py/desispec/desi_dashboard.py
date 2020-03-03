@@ -9,6 +9,8 @@ import numpy as np
 import psycopg2
 import hashlib
 import pdb
+
+
 class DESI_DASHBOARD(object):
     """ Code to generate the statistic of desi_pipe production status   
     Usage:
