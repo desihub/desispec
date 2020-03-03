@@ -1072,13 +1072,27 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         # (we don't do that directly to reduce noise)
         # so we want to average the inverse of the smooth correction
         mean=1./np.nanmean(1./smooth_fiber_correction[badfiber==0],axis=0)
+        medcorr = np.median(smooth_fiber_correction,axis=1)
+        log.info("median correction = {}".format(medcorr))
+
         if highest_throughput_nstars > 0 :
             log.info("keeping {} stars with highest throughput".format(highest_throughput_nstars))
-            medcorr = np.median(smooth_fiber_correction,axis=1)
-            log.info("median correction = {}".format(medcorr))
             ii=np.argsort(medcorr)[::-1][:highest_throughput_nstars]
-            log.info("use those with median correction = {}".format(medcorr[ii]))
+            log.info("use those fibers = {}".format(stdfibers[ii]))
+            log.info("with median correction = {}".format(medcorr[ii]))
             mean=1./np.nanmean(1./smooth_fiber_correction[ii][badfiber[ii]==0],axis=0)
+        else :
+            mmedcorr = np.median(medcorr)
+            rmscorr = 1.4*np.median(np.abs(medcorr-mmedcorr))
+            log.info("mean rms correction = {} {}".format(mmedcorr,rmscorr))
+            bad=(np.abs(medcorr-mmedcorr)>3*rmscorr)
+            if np.sum(bad)>0 :
+                good=(np.abs(medcorr-mmedcorr)<=3*rmscorr)
+                log.info("use {} stars, discarding 3 sigma outlier stars with medcorr = {}".format(np.sum(good),medcorr[bad]))
+                mean=1./np.nanmean(1./smooth_fiber_correction[good][badfiber[good]==0],axis=0)
+            else :
+                log.info("use {} stars".format(medcorr.size))
+
         smooth_fiber_correction /= mean
 
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
