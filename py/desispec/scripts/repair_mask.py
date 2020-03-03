@@ -38,9 +38,9 @@ def main(args):
         img = hdus['IMAGE'].data
         mask = hdus['MASK'].data
 
-        rep = RepairMask(img, mask)
+        rep = RepairMask()
         logging.info('Repairing cosmic mask for {}.'.format(infile))
-        newmask = rep.repair()
+        newmask = rep.repair(mask)
 
         # Set up image file prefix.
         prefix = os.path.basename(infile)
@@ -48,8 +48,8 @@ def main(args):
 
         # Output initial image, mask, and patched mask.
         logging.info('Plotting IMG, MASK, NEWMASK.')
-        rep.plot(prefix=prefix)
+        rep.plot(img, mask, newmask, prefix=prefix)
 
         # Output image chunks for easier visual inspection.
         logging.info('Plotting image chunks.')
-        rep.plot_chunks(prefix=prefix)
+        rep.plot_chunks(img, mask, newmask, prefix=prefix)

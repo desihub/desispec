@@ -155,7 +155,7 @@ class RepairMask:
         """
         # Plot the input.
         dpi = 256
-        m = downsample_image(self.img, downsample) if downsample>1 else np.copy(self.img)
+        m = downsample_image(img, downsample) if downsample>1 else np.copy(img)
         fig = plt.figure(figsize=(m.shape[1]/dpi, m.shape[0]/dpi), dpi=dpi)
         ax = plt.Axes(fig, [0,0,1,1])
         ax.set_axis_off()
@@ -166,7 +166,7 @@ class RepairMask:
         plt.close()
 
         # Plot the mask.
-        m = downsample_image(self.mask, downsample) if downsample>1 else np.copy(self.mask)
+        m = downsample_image(mask, downsample) if downsample>1 else np.copy(mask)
         fig = plt.figure(figsize=(m.shape[1]/dpi, m.shape[0]/dpi), dpi=dpi)
         ax = plt.Axes(fig, [0,0,1,1])
         ax.set_axis_off()
@@ -177,8 +177,8 @@ class RepairMask:
         plt.close()
 
         # Plot the repaired mask.
-        if self.repaired_mask is not None:
-            m = downsample_image(self.repaired_mask, downsample) if downsample>1 else np.copy(self.repaired_mask)
+        if repaired_mask is not None:
+            m = downsample_image(repaired_mask, downsample) if downsample>1 else np.copy(repaired_mask)
             fig = plt.figure(figsize=(m.shape[1]/dpi, m.shape[0]/dpi), dpi=dpi)
             ax = plt.Axes(fig, [0,0,1,1])
             ax.set_axis_off()
