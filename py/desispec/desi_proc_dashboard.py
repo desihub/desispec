@@ -38,13 +38,6 @@ def find_newexp(night, fileglob, known_exposures):
     return set(newexp)
 
 
-def get_catchup_nights(catchup_filename, docatchup=True):
-    if docatchup and catchup_filename is not None and os.path.exists(catchup_filename):
-        catchup = np.atleast_1d(np.loadtxt(catchup_filename, dtype=int)).tolist()
-    else:
-        catchup = []
-
-    return catchup
 
 def check_running(proc_name= 'desi_dailyproc'):
     """
