@@ -125,7 +125,7 @@ class RepairMask:
         bmask[mask > 0] = 1
 
         # Apply binary closure using each selection element. OR results.
-        bc = np.zeros(mask.shape, dtype=dtype)
+        bc = np.zeros(mask.shape, dtype=mask.dtype)
 
         for se in self.selems:
             bc = bc | binary_closing(bmask, selem=se.se)
