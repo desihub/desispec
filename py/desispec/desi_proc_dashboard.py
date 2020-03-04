@@ -17,15 +17,27 @@ from collections import OrderedDict
 ########################
 def return_color_profile():
     color_profile = {}
-    color_profile['NULL'] = {'font':'#708090' ,'background':'#778899'}
-    color_profile['BAD'] = {'font':'#000000' ,'background':'#DC3220'}
-    color_profile['INCOMPLETE'] = {'font': '#000000','background':'#E66100'}
-    color_profile['GOOD'] = {'font':'#000000' ,'background':'#005AB5'}
-    color_profile['OVERFUL'] = {'font': '#000000','background':'#5D3A9B'}
+    color_profile['NULL'] = {'font':'#34495e' ,'background':'#ccd1d1'} # gray
+    color_profile['BAD'] = {'font':'#000000' ,'background':'#d98880'}  #  red
+    color_profile['INCOMPLETE'] = {'font': '#000000','background':'#f39c12'}  #  orange
+    color_profile['GOOD'] = {'font':'#000000' ,'background':'#7fb3d5'}   #  blue
+    color_profile['OVERFUL'] = {'font': '#000000','background':'#c39bd3'}   # purple
     #color_profile['H1'] = {'font': '','background':''}
     #color_profile['H2'] = {'font': '','background':''}
     return color_profile
+# #34495e black
+# #ccd1d1  gray
+# #d98880  redish
+# #f39c12  orange
+# #7fb3d5 blue
+# #c39bd3  purple
 
+# #000000  black
+# #778899  gray
+# #DC3220  redish
+# #E66100  orange
+# #005AB5 blue
+# #5D3A9B  purple
 def what_night_is_it():
     """
     Return the current night
@@ -83,8 +95,6 @@ def parse(options):
                                                                                           "comma separated list of YYYYMMDD or"+
                                                                                           "a number specifying the previous n nights to show"+
                                                                                           " (counting in reverse chronological order).")
-    parser.add_argument('--all', action="store_true",
-                        help="run all nights. If set, ignores --nights (i.e. this supersedes it).")
 
     # Data Pruning
     parser.add_argument("--cameras", type=str, required=False,
@@ -140,27 +150,24 @@ def main(args):
     ## Input ###
     ############
 
-    if args.nights=='all':
+    if args.nights=='all' or ',' not in args.nights:
         nights = list()
         for n in listdir(os.getenv('DESI_SPECTRO_DATA')):
             #- nights are 20YYMMDD
             if re.match('^20\d{6}$', n):
                 nights.append(n)
     else:
-        try:
-            print(args.nights)
-            if len(args.nights)==1: # list separted by , or a single night
-                nights=[night for night in args.nights[0].split(',')]
-            else:
-                nights=[night for night in args.nights]
-            print('Get nights',nights)
-        except:
-            nights=[]
+        nights = [nigh.strip(' \t') for nigh in args.nights.split(',')]
 
     tonight=what_night_is_it()
     if not tonight in nights:
         nights.append(str(tonight))
     nights.sort(reverse=True)
+
+    if args.nights.isnumeric():
+        nights = nights[:int(args.nights)]
+
+    print('Get nights',nights)
 
     nights_dict = OrderedDict()
     for night in nights:
@@ -187,6 +194,11 @@ def main(args):
         strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>".format(timestamp,'desi_dailyproc',running)
 
     for month, nights in nights_dict.items():
+        webpage = os.path.join(os.getenv('DESI_WWW'), 'collab', 'dailyproc', 'links', month)
+        if not os.path.exists(webpage):
+            os.mkdir(webpage)
+        cmd = "fix_permissions.sh -a {}".format(webpage)
+        os.system(cmd)
         nightly_tables = []
         for night in nights:
             ####################################
@@ -292,6 +304,15 @@ def calculate_one_night(night):
     expids.sort(reverse=True)
 
     fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
+
+    logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
+    cmd="fix_permissions.sh -a {}".format(logpath)
+    os.system(cmd)
+
+    webpage = os.path.join(os.getenv('DESI_WWW'),'collab','dailyproc','links',night[:-2])
+    logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}')
+    logfiletemplate = os.path.join(logpath,'{}-{}-{}-{}{}.{}')
+
     output = OrderedDict()
     for expid in expids:
         zfild_expid = str(expid).zfill(8)
@@ -325,52 +346,68 @@ def calculate_one_night(night):
         npsfs = len(file_psf) + len(file_fit_psf)        
         nframes = len(file_frame)
         ncframes = len(file_cframe)
+        if obstype.lower() == 'arc':
+            nfiles = npsfs
+            n_tot_spgrphs = n_spgrph * n_tots['psf']
+        elif obstype.lower() == 'flat':
+            nfiles = nframes
+            n_tot_spgrphs = n_spgrph * n_tots['frame']
+        elif obstype.lower() == 'science':
+            nfiles = ncframes
+            n_tot_spgrphs = n_spgrph * n_tots['sframe']
 
         if n_tots['psf'] == 0:
             row_color = 'NULL'
-        elif obstype.lower() == 'arc':
-            if npsfs == 0:
-                row_color = 'BAD'
-            elif npsfs < n_spgrph * n_tots['psf']:
-                row_color = 'INCOMPLETE'
-            elif npsfs == n_spgrph * n_tots['psf']:
-                row_color = 'GOOD'
-            else:
-                row_color = 'OVERFUL'
-        elif obstype.lower() == 'flat':
-            if nframes == 0:
-                row_color = 'BAD'
-            elif nframes < n_spgrph * n_tots['frame']:
-                row_color = 'INCOMPLETE'
-            elif nframes == n_spgrph * n_tots['frame']:
-                row_color = 'GOOD'
-            else:
-                row_color = 'OVERFUL'
-        elif obstype.lower() == 'science':
-            if ncframes == 0:
-                row_color = 'BAD'
-            elif ncframes < n_spgrph * n_tots['sframe']:
-                row_color = 'INCOMPLETE'
-            elif ncframes == n_spgrph * n_tots['sframe']:
-                row_color = 'GOOD'
-            else:
-                row_color = 'OVERFUL'
+        elif nfiles == 0:
+            row_color = 'BAD'
+        elif nfiles < n_tot_spgrphs:
+            row_color = 'INCOMPLETE'
+        elif nfiles == n_tot_spgrphs:
+            row_color = 'GOOD'
+        else:
+            row_color = 'OVERFUL'
 
+        if row_color not in ['GOOD','NULL']:
+            lognames = glob.glob(logfileglob.format(obstype.lower(), night,zfild_expid,'log'))
+            newest_jobid = '00000000'
+            spectrographs = ''
+            for log in lognames:
+                jobid = log[-12:-4]
+                if int(jobid) > int(newest_jobid):
+                    newest_jobid = jobid
+                    spectrographs = log.split('-')[-2]
+
+            logname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
+            logname_only = logname.split('/')[-1]
+
+            slurmname = logfileglob.format(obstype.lower(), night,zfild_expid,spectrographs,'slurm')
+            slurnname_only = slurmname.split('/')[-1]
+
+            cmd = "ln -s {} ".format(logname,os.path.join(webpage,logname_only))
+            os.system(cmd)
+            cmd = "ln -s {} ".format(slurmname, os.path.join(webpage, slurnname_only))
+            os.system(cmd)
+
+            hlink1 = _hyperlink('./{}/{}/{}'.format('links',night[:-2],logname_only), 'Slurm')
+            hlink2 = _hyperlink('./{}/{}/{}'.format('links',night[:-2],slurnname_only), 'Log')
+        else:
+            hlink1 = 'N/A'
+            hlink2 = 'N/A'
 
         output[str(expid)] = [row_color, \
                               expid, \
                               header_info['FLAVOR'],\
-                              header_info['OBSTYPE'],\
+                              obstype,\
                               header_info['EXPTIME'], \
-                              'SP:'+header_info['SPCGRPHS'].replace('SP',''), \
-                              _str_frac( npsfs, n_spgrph * n_tots['psf']), \
-                              _str_frac( len(file_fiberflat),               n_spgrph * n_tots['ff']), \
-                              _str_frac( nframes,                   n_spgrph * n_tots['frame']), \
-                              _str_frac( len(file_sframe),                  n_spgrph * n_tots['sframe']), \
-                              _str_frac( len(file_sky),                     n_spgrph * n_tots['sframe']), \
-                              _str_frac( ncframes,                  n_spgrph * n_tots['sframe']), \
-                              _hyperlink('./here.txt', 'Slurm'), \
-                              _hyperlink('./there.txt', 'Log')         ]
+                              'SP: '+header_info['SPCGRPHS'].replace('SP',''), \
+                              _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
+                              _str_frac( len(file_fiberflat), n_spgrph * n_tots['ff']), \
+                              _str_frac( nframes,             n_spgrph * n_tots['frame']), \
+                              _str_frac( len(file_sframe),    n_spgrph * n_tots['sframe']), \
+                              _str_frac( len(file_sky),       n_spgrph * n_tots['sframe']), \
+                              _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
+                              hlink1, \
+                              hlink2         ]
     return output
 
 
@@ -387,7 +424,7 @@ def _initialize_page(color_profile):
     #c td, #c th {border: 1px solid #ddd;padding: 8px;}
     /* #c tr:nth-child(even){background-color: #f2f2f2;} */
     #c tr:hover {background-color: #ddd;}
-    #c th {padding-top: 12px;  padding-bottom: 12px;  text-align: left;  background-color: #4CAF50;  color: white;}
+    #c th {padding-top: 12px;  padding-bottom: 12px;  text-align: left;  background-color: #34495e;  color: white;}
     .collapsible {background-color: #eee;color: #444;cursor: pointer;padding: 18px;width: 100%;border: none;text-align: left;outline: none;font-size: 25px;}
     .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 18px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 25px;}
     .active, .collapsible:hover { background-color: #ccc;}
