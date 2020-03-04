@@ -470,12 +470,25 @@ def assemble_fibermap(night, expid, force=False):
     else:
         #- No coordinates file; just use fiberassign + dummy columns
         fibermap = fa
-        fibermap['FIBER_RA'] = 0.0
-        fibermap['FIBER_DEC'] = 0.0
+        # Include NUM_ITER that is added if coord file exists
+        fibermap['NUM_ITER'] = 0
         fibermap['FIBER_X'] = 0.0
         fibermap['FIBER_Y'] = 0.0
         fibermap['DELTA_X'] = 0.0
         fibermap['DELTA_Y'] = 0.0
+        fibermap['FIBER_RA'] = 0.0
+        fibermap['FIBER_DEC'] = 0.0
+        # Update data types to be consistent with updated value if coord file was used.
+        for val in ['FIBER_X','FIBER_Y','DELTA_X','DELTA_Y']:
+            old_col = fibermap[val]
+            fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype='>f8'))
+        for val	in ['LOCATION','NUM_ITER']:
+            old_col = fibermap[val]
+            fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype=np.int64))
+
+            
+    #for col in fibermap.colnames:
+    #    print(col,fibermap[col].dtype)
 
     #- Update SKY and STD target bits to be in both CMX_TARGET and DESI_TARGET
     #- i.e. if they are set in one, also set in the other.  Ditto for SV*
