@@ -350,7 +350,10 @@ def calculate_one_night(night):
         elif obstype.lower() == 'science':
             nfiles = ncframes
             n_tot_spgrphs = n_spgrph * n_tots['sframe']
-
+        else:
+            nfiles = 0
+            n_tot_spgrphs = 0
+            
         if n_tots['psf'] == 0:
             row_color = 'NULL'
         elif nfiles == 0:
