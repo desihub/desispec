@@ -4,6 +4,8 @@ Coadd spectra
 
 from __future__ import absolute_import, division, print_function
 
+import os
+
 from astropy.table import Table
 
 from desiutil.log import get_logger
@@ -84,6 +86,13 @@ def main(args=None):
 
     #- Add scores (S/N, flux, etc.)
     compute_coadd_scores(spectra, update_coadd=True)
+
+    #- Add input files to header
+    if spectra.meta is None:
+        spectra.meta = dict()
+
+    for i, filename in enumerate(args.infile):
+        spectra.meta['INFIL{:03d}'.format(i)] = os.path.basename(filename)
 
     log.info("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)
