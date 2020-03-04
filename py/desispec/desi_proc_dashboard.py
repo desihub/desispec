@@ -8,13 +8,11 @@ import psutil
 from os import listdir
 from collections import OrderedDict
 
-#HEX #005AB5 R 0  G 90  B 181
-#HEX #DC3220 R 220  G 50  B
 
-#import desispec.io as desi_io
 ########################
 ### Helper Functions ###
 ########################
+
 def return_color_profile():
     color_profile = {}
     color_profile['NULL'] = {'font':'#34495e' ,'background':'#ccd1d1'} # gray
@@ -22,22 +20,8 @@ def return_color_profile():
     color_profile['INCOMPLETE'] = {'font': '#000000','background':'#f39c12'}  #  orange
     color_profile['GOOD'] = {'font':'#000000' ,'background':'#7fb3d5'}   #  blue
     color_profile['OVERFUL'] = {'font': '#000000','background':'#c39bd3'}   # purple
-    #color_profile['H1'] = {'font': '','background':''}
-    #color_profile['H2'] = {'font': '','background':''}
     return color_profile
-# #34495e black
-# #ccd1d1  gray
-# #d98880  redish
-# #f39c12  orange
-# #7fb3d5 blue
-# #c39bd3  purple
 
-# #000000  black
-# #778899  gray
-# #DC3220  redish
-# #E66100  orange
-# #005AB5 blue
-# #5D3A9B  purple
 def what_night_is_it():
     """
     Return the current night
@@ -62,7 +46,7 @@ def find_newexp(night, fileglob, known_exposures):
 
 
 
-def check_running(proc_name= 'desi_dailyproc'):
+def check_running(proc_name= 'desi_dailyproc',suppress_outputs=False):
     """
     Check if the desi_dailyproc process is running
     """
@@ -70,8 +54,9 @@ def check_running(proc_name= 'desi_dailyproc'):
     mypid = os.getpid()
     for p in psutil.process_iter():
         if p.pid != mypid and proc_name in ' '.join(p.cmdline()):
-            print('ERROR: {} already running as PID {}:'.format(proc_name,p.pid))
-            print('  ' + ' '.join(p.cmdline()))
+            if not suppress_outputs:
+                print('ERROR: {} already running as PID {}:'.format(proc_name,p.pid))
+                print('  ' + ' '.join(p.cmdline()))
             running = True
             break
     return running
@@ -91,24 +76,11 @@ def parse(options):
     parser.add_argument('--output-name', type=str, help="name of the html page (to be placed in --output-dir, which defaults to your home directory).")
 
     # Specify Nights of Interest
-    parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor. Can be a "+
-                                                                                          "comma separated list of YYYYMMDD or"+
+    parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor. Can be 'all', a "+
+                                                                                          "comma separated list of YYYYMMDD, or"+
                                                                                           "a number specifying the previous n nights to show"+
                                                                                           " (counting in reverse chronological order).")
 
-    # Data Pruning
-    parser.add_argument("--cameras", type=str, required=False,
-                        help="Explicitly define the spectrographs for which you want"+
-                             " summary statistics. Should be a comma separated list."+
-                             " Just a number assumes you want to reduce R, B, and Z "+
-                             "for that camera. Otherwise specify separately [BRZ|brz][0-9].")
-
-    # Additional Options / Code Flags
-    parser.add_argument("--ignore-instances", action="store_true",
-                        help="Allow script to run even if another instance is "+
-                             "running. Use with care.")
-    parser.add_argument("--ignore-cori-node", action="store_true",
-                        help="Allow script to run on nodes other than cori21")
 
     # Read in command line and return
     args = None
@@ -129,17 +101,10 @@ def main(args):
     Usage:
     -n can be 'all' or series of nights separated by comma or blank like 20200101,20200102 or 20200101 20200102
     Normal Mode:
-    desi_proc_dashboard -n all --n_nights 3  --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/
-    desi_proc_dashboard -n 20200101,20200102 --n_nights 3  --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/
-    desi_proc_dashboard -n 20200101 20200102 --n_nights 3  --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/
-    Cron job script:
-        */30 * * * * /global/common/software/desi/cori/desiconda/20190804-1.3.0-spec/conda/bin/python3 \
-            /global/cfs/cdirs/desi/users/zhangkai/desi/code/desispec/py/desispec/desi_proc_dashboard.py -n all \
-            --n_nights 30 --output_dir /global/cfs/cdirs/desi/www/users/zhangkai/desi_proc_dashboard/ \
-            >/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.log \
-            2>/global/cfs/cdirs/desi/users/zhangkai/desi_proc_dashboard.err & \
-            output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
+    desi_proc_dashboard -n 3  --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
+    desi_proc_dashboard -n 20200101,20200102 --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     """
+
     if 'DESI_SPECTRO_REDUX' not in os.environ.keys(): # these are not set by default in cronjob mode.
         os.environ['DESI_SPECTRO_REDUX']='/global/cfs/cdirs/desi/spectro/redux/'
         os.environ['DESI_SPECTRO_DATA']='/global/cfs/cdirs/desi/spectro/data/'
@@ -160,14 +125,13 @@ def main(args):
         nights = [nigh.strip(' \t') for nigh in args.nights.split(',')]
 
     tonight=what_night_is_it()
-    if not tonight in nights:
+    if str(tonight) not in nights:
         nights.append(str(tonight))
     nights.sort(reverse=True)
 
     if args.nights.isnumeric():
+        print("Only showing the most recent {} days".format(int(args.nights)))
         nights = nights[:int(args.nights)]
-
-    print('Get nights',nights)
 
     nights_dict = OrderedDict()
     for night in nights:
@@ -189,25 +153,27 @@ def main(args):
 
     timestamp=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
     running='No'
-    if check_running(proc_name='desi_dailyproc'):
+    if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
         running='Yes'
         strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>".format(timestamp,'desi_dailyproc',running)
 
-    for month, nights in nights_dict.items():
+    for month, nights_in_month in nights_dict.items():
+        print("Month: {}, nights: {}".format(month,nights_in_month))
         webpage = os.path.join(os.getenv('DESI_WWW'), 'collab', 'dailyproc', 'links', month)
         if not os.path.exists(webpage):
             os.mkdir(webpage)
         cmd = "fix_permissions.sh -a {}".format(webpage)
         os.system(cmd)
         nightly_tables = []
-        for night in nights:
+        for night in nights_in_month:
             ####################################
             ### Table for individual night ####
             ####################################
             nightly_tables.append(nightly_table(night))
-            strTable += monthly_table(nightly_tables,month)
+        strTable += monthly_table(nightly_tables,month)
 
-    strTable += js_import_str(args.output_dir)
+    #strTable += js_import_str(args.output_dir)
+    strTable += js_str()
     strTable += _closing_str()
     with open(os.path.join(args.output_dir,args.output_name),'w') as hs:
         hs.write(strTable)
@@ -233,7 +199,7 @@ def monthly_table(tables,month):
     month_dict = {'01':'January','02':'February','03':'March','04':'April','05':'May','06':'June',
                   '07':'July','08':'August','09':'September','10':'October','11':'November','12':'December'}
 
-    heading="{} {}  ({})".format(month_dict[month[4:]],month[:4],month)
+    heading="{} {} ({})".format(month_dict[month[4:]],month[:4],month)
     month_table_str = '\n<!--Begin {}-->\n'.format(month)
     month_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
     #month_table_str += "<table id='c'>"
@@ -253,18 +219,42 @@ def nightly_table(night):
     night: like 20200131
     output: The string to be added to the html file
     """
-    heading="Night {}".format(night)
+    night_info = calculate_one_night(night)
+
+    ngood,ninter,nbad,nnull,nover,n_notnull = 0,0,0,0,0,0
+    main_body = ""
+    for expid,row_info in night_info.items():
+        table_row = _table_row(row_info[1:],idlabel=row_info[0])
+        main_body += table_row
+        if 'GOOD' in table_row:
+            ngood += 1
+            n_notnull += 1
+        elif 'BAD' in table_row:
+            nbad += 1
+            n_notnull += 1
+        elif 'INTERMEDIATE' in table_row:
+            ninter += 1
+            n_notnull += 1
+        elif 'OVERFUL' in table_row:
+            nover += 1
+            n_notnull += 1
+        else:
+            nnull += 1
+        
+
+    heading="Night {night}   Complete: {ngood}/{nnotnull}    Some: {ninter}/{nnotnull}    Bad: {nbad}/{nnotnull}".format(
+                                                                                                         night=night,\
+                                                                                                         ngood=ngood,\
+                                                                                                         nnotnull=n_notnull,\
+                                                                                                         ninter=ninter,\
+                                                                                                         nbad=nbad)        
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
-    nightly_table_str += "<button class='collapsible'>"+heading+"</button><div class='content' style='display:inline-block;min-height:0%;'>\n"
-    nightly_table_str += "<table id='c'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAGHS</th>"
+    nightly_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
+    nightly_table_str += "<table id='c'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th>"
     nightly_table_str += "<th>PSF File</th><th>FFlat file</th><th>frame file</th><th>sframe file</th><th>sky file</th>"
     nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th></tr>"
 
-    night_info = calculate_one_night(night)
-
-    for expid,row_info in night_info.items():
-        nightly_table_str += _table_row(row_info[1:],idlabel=row_info[0])
-
+    nightly_table_str += main_body
     nightly_table_str += "</tbody></table></div>\n"
     nightly_table_str += '<!--End {}-->\n\n'.format(night)
     return nightly_table_str
@@ -380,19 +370,21 @@ def calculate_one_night(night):
             logname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
             logname_only = logname.split('/')[-1]
 
-            slurmname = logfileglob.format(obstype.lower(), night,zfild_expid,spectrographs,'slurm')
-            slurnname_only = slurmname.split('/')[-1]
+            slurmname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'','slurm')
+            slurmname_only = slurmname.split('/')[-1]
 
-            cmd = "ln -s {} ".format(logname,os.path.join(webpage,logname_only))
-            os.system(cmd)
-            cmd = "ln -s {} ".format(slurmname, os.path.join(webpage, slurnname_only))
-            os.system(cmd)
+            if not os.path.exists(os.path.join(webpage,logname_only)):
+                cmd = "ln -s {} {}".format(logname,os.path.join(webpage,logname_only))
+                os.system(cmd)
+            if not os.path.exists(os.path.join(webpage, slurmname_only)):
+                cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, slurmname_only))
+                os.system(cmd)
 
-            hlink1 = _hyperlink('./{}/{}/{}'.format('links',night[:-2],logname_only), 'Slurm')
-            hlink2 = _hyperlink('./{}/{}/{}'.format('links',night[:-2],slurnname_only), 'Log')
+            hlink1 = _hyperlink(os.path.join('links',night[:-2],slurmname_only), 'Slurm')
+            hlink2 = _hyperlink(os.path.join('links',night[:-2],logname_only), 'Log')
         else:
-            hlink1 = 'N/A'
-            hlink2 = 'N/A'
+            hlink1 = '----'
+            hlink2 = '----'
 
         output[str(expid)] = [row_color, \
                               expid, \
@@ -418,7 +410,8 @@ def _initialize_page(color_profile):
     # strTable="<html><style> table {font-family: arial, sans-serif;border-collapse: collapse;width: 100%;}"
     # strTable=strTable+"td, th {border: 1px solid #dddddd;text-align: left;padding: 8px;}"
     # strTable=strTable+"tr:nth-child(even) {background-color: #dddddd;}</style>"
-    html_page = """<html><style>
+    html_page = """<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"><style>
     h1 {font-family: 'sans-serif';font-size:50px;color:#4CAF50}
     #c {font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}
     #c td, #c th {border: 1px solid #ddd;padding: 8px;}
@@ -474,7 +467,7 @@ def _initialize_page(color_profile):
         html_page += 'table tr#'+str(ctype)+'  {background-color:'+str(background)+'; color:'+str(font)+';}\n'
 
     html_page += '</style>\n'
-    html_page += '<h1>DESI Daily Processing Status Monitor</h1>\n'
+    html_page += '</head><body><h1>DESI Daily Processing Status Monitor</h1>\n'
 
     return html_page
 
@@ -491,7 +484,7 @@ def _table_row(elements,idlabel=None):
         row_str = '<tr id="'+str(idlabel)+'">'
     for elem in elements:
         row_str += _table_element(elem)
-    row_str += '</tr>\n'
+    row_str += '</tr>'#\n'
     return row_str
 
 def _table_element(elem):
@@ -514,7 +507,7 @@ def js_import_str(output_dir):
         os.makedirs(os.path.join(output_dir,'js'))
     if not os.path.exists(output_path):
         _write_js_script(output_path)
-    return '<script type = "text/javascript" src="{}"></script>'.format(output_path)
+    return '<script type="text/javascript" src="{}"></script>'.format(output_path)
 
 def _write_js_script(output_path):
     """
@@ -549,8 +542,39 @@ def _write_js_script(output_path):
     with open(output_path,'w') as outjs:
         outjs.write(s)
 
-
-
+def js_str():
+    """                                                                                                                  
+        Return the javascript script to be added to the html file                                                                 
+        """
+    s="""                                                                                                                    
+        <script >
+            var coll = document.getElementsByClassName('collapsible');
+            var i;
+            for (i = 0; i < coll.length; i++) {
+                coll[i].nextElementSibling.style.maxHeight='0px';
+                coll[i].addEventListener('click', function() {
+                    this.classList.toggle('active');
+                    var content = this.nextElementSibling;
+                    if (content.style.maxHeight){
+                       content.style.maxHeight = null;
+                    } else {
+                      content.style.maxHeight = '0px';
+                            } 
+                    });
+             };
+             var b1 = document.getElementById('b1');
+             b1.addEventListener('click',function() {
+                 for (i = 0; i < coll.length; i++) {
+                     coll[i].nextElementSibling.style.maxHeight=null;
+                                                   }});
+             var b2 = document.getElementById('b2');
+             b2.addEventListener('click',function() {
+                 for (i = 0; i < coll.length; i++) {
+                     coll[i].nextElementSibling.style.maxHeight='0px'
+                             }});
+       </script>                                                                                                 
+        """
+    return s
 
 
 
