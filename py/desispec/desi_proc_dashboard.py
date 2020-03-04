@@ -155,13 +155,17 @@ def main(args):
     running='No'
     if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
         running='Yes'
-        strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>".format(timestamp,'desi_dailyproc',running)
-
+        strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>\n".format(timestamp,'desi_dailyproc',running)
+    for ctype,cdict in color_profile.items():
+        background = cdict['background']
+        strTable += "\t<div style='color:{}'>{}</div>".format(background,ctype)
+        
+    strTable += '\n\n'
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month,nights_in_month))
         webpage = os.path.join(os.getenv('DESI_WWW'), 'collab', 'dailyproc', 'links', month)
         if not os.path.exists(webpage):
-            os.mkdir(webpage)
+            os.makedirs(webpage)
         cmd = "fix_permissions.sh -a {}".format(webpage)
         os.system(cmd)
         nightly_tables = []
@@ -232,7 +236,7 @@ def nightly_table(night):
         elif 'BAD' in table_row:
             nbad += 1
             n_notnull += 1
-        elif 'INTERMEDIATE' in table_row:
+        elif 'INCOMPLETE' in table_row:
             ninter += 1
             n_notnull += 1
         elif 'OVERFUL' in table_row:
@@ -296,8 +300,9 @@ def calculate_one_night(night):
     fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
 
     logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
-    cmd="fix_permissions.sh -a {}".format(logpath)
-    os.system(cmd)
+    if os.path.exists(logpath):
+        cmd="fix_permissions.sh -a {}".format(logpath)
+        os.system(cmd)
 
     webpage = os.path.join(os.getenv('DESI_WWW'),'collab','dailyproc','links',night[:-2])
     logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}')
@@ -357,7 +362,7 @@ def calculate_one_night(night):
         else:
             row_color = 'OVERFUL'
 
-        if row_color not in ['GOOD','NULL']:
+        if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
             lognames = glob.glob(logfileglob.format(obstype.lower(), night,zfild_expid,'log'))
             newest_jobid = '00000000'
             spectrographs = ''
@@ -366,22 +371,26 @@ def calculate_one_night(night):
                 if int(jobid) > int(newest_jobid):
                     newest_jobid = jobid
                     spectrographs = log.split('-')[-2]
+            if newest_jobid != '00000000' and len(spectrographs)!=0:
+                logname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
+                logname_only = logname.split('/')[-1]
 
-            logname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
-            logname_only = logname.split('/')[-1]
+                slurmname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'','slurm')
+                slurmname_only = slurmname.split('/')[-1]
 
-            slurmname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'','slurm')
-            slurmname_only = slurmname.split('/')[-1]
+                if not os.path.exists(os.path.join(webpage,logname_only)):
+                    cmd = "ln -s {} {}".format(logname,os.path.join(webpage,logname_only))
+                    os.system(cmd)
+                if not os.path.exists(os.path.join(webpage, slurmname_only)):
+                    cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, slurmname_only))
+                    os.system(cmd)
 
-            if not os.path.exists(os.path.join(webpage,logname_only)):
-                cmd = "ln -s {} {}".format(logname,os.path.join(webpage,logname_only))
-                os.system(cmd)
-            if not os.path.exists(os.path.join(webpage, slurmname_only)):
-                cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, slurmname_only))
-                os.system(cmd)
-
-            hlink1 = _hyperlink(os.path.join('links',night[:-2],slurmname_only), 'Slurm')
-            hlink2 = _hyperlink(os.path.join('links',night[:-2],logname_only), 'Log')
+                hlink1 = _hyperlink(os.path.join('links',night[:-2],slurmname_only), 'Slurm')
+                hlink2 = _hyperlink(os.path.join('links',night[:-2],logname_only), 'Log')
+            else:
+                hlink1 = '----'
+                hlink2 = '----'
+                    
         else:
             hlink1 = '----'
             hlink2 = '----'
