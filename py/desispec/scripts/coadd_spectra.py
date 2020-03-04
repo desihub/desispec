@@ -4,12 +4,15 @@ Coadd spectra
 
 from __future__ import absolute_import, division, print_function
 
+import os
+
 from astropy.table import Table
 
 from desiutil.log import get_logger
 from desispec.io import read_spectra,write_spectra,read_frame
 from desispec.coaddition import coadd,coadd_cameras,resample_spectra_lin_or_log
 from desispec.pixgroup import frames2spectra
+from desispec.specscore import compute_coadd_scores
 
 def parse(options=None):
     import argparse
@@ -80,6 +83,16 @@ def main(args=None):
     if args.log10_step is not None :
         log.info("resampling ...")
         spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
+
+    #- Add scores (S/N, flux, etc.)
+    compute_coadd_scores(spectra, update_coadd=True)
+
+    #- Add input files to header
+    if spectra.meta is None:
+        spectra.meta = dict()
+
+    for i, filename in enumerate(args.infile):
+        spectra.meta['INFIL{:03d}'.format(i)] = os.path.basename(filename)
 
     log.info("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)

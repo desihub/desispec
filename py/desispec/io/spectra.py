@@ -80,7 +80,8 @@ def write_spectra(outfile, spec, units=None):
             comment = fibermap_comments[name]
             hdu.header[key] = (name, comment)
         else:
-            print('Unknown comment for {}'.format(colname))
+            pass
+            #print('Unknown comment for {}'.format(colname))
 
     all_hdus.append(hdu)
 
@@ -124,6 +125,19 @@ def write_spectra(outfile, spec, units=None):
                 hdu = fits.ImageHDU(name="{}_{}".format(band.upper(), ex[0]))
                 hdu.data = ex[1].astype("f4")
                 all_hdus.append(hdu)
+
+    if spec.scores is not None :
+        scores_tbl = encode_table(spec.scores)  #- unicode -> bytes
+        scores_tbl.meta['EXTNAME'] = 'SCORES'
+        all_hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
+        if spec.scores_comments is not None : # add comments in header
+            hdu=all_hdus['SCORES']
+            for i in range(1,999):
+                key = 'TTYPE'+str(i)
+                if key in hdu.header:
+                    value = hdu.header[key]
+                    if value in spec.scores_comments.keys() :
+                        hdu.header[key] = (value, spec.scores_comments[value])
 
     all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
     os.rename("{}.tmp".format(outfile), outfile)
