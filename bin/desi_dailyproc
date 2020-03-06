@@ -19,17 +19,8 @@ import numpy as np
 ########################
 ### Helper Functions ###
 ########################
-from desispec.desi_proc_dashboard import what_night_is_it, find_newexp, check_running
-
-def get_file_list(filename, doaction=True):
-    if doaction and filename is not None and os.path.exists(filename):
-        output = np.atleast_1d(np.loadtxt(filename, dtype=int)).tolist()
-    else:
-        output = []
-    return output
-
-def get_skipped_expids(expid_filename, skip_expids=True):
-    return get_file_list(filename=expid_filename, doaction=skip_expids)
+from desispec.desi_proc_dashboard import what_night_is_it, find_newexp, check_running,\
+                                         get_file_list, get_skipped_expids
 
 def get_catchup_nights(catchup_filename, docatchup=True):
     return get_file_list(filename=catchup_filename, doaction=docatchup)
