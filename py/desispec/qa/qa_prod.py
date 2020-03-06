@@ -79,7 +79,8 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         # Finish
         self.data = odict
 
-    def slurp_nights(self, make_frameqa=False, remove=True, write_nights=False, **kwargs):
+    def slurp_nights(self, make_frameqa=False, remove=True, restrict_nights=None,
+                     write_nights=False, **kwargs):
         """ Slurp all the individual QA files, night by night
         Loops on nights, generating QANight objects along the way
 
@@ -88,6 +89,7 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
               Regenerate the individual QA files (at the frame level first)
             remove: bool, optional
               Remove the individual QA files?
+            restrict_nights: list, optional
             **kwargs:
               Passed to make_frameqa()
 
@@ -103,6 +105,9 @@ class QA_Prod(qa_multiexp.QA_MultiExp):
         self.qa_nights = []
         # Loop on nights
         for night in self.mexp_dict.keys():
+            if restrict_nights is not None:
+                if night not in restrict_nights:
+                    continue
             qaNight = QA_Night(night, specprod_dir=self.specprod_dir, qaprod_dir=self.qaprod_dir)
             qaNight.slurp(remove=remove)
             # Save nights

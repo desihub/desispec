@@ -20,13 +20,14 @@ def parse(options=None):
     parser.add_argument('--channel_hist', type=str, default=None,
                         help='Generate channel histogram(s)')
     parser.add_argument('--time_series', type=str, default=None,
-                        help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-MED_RESID')
+                        help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-RESID')
     parser.add_argument('--bright_dark', type=int, default=0,
                         help='Restrict to bright/dark (flag: 0=all; 1=bright; 2=dark; only used in time_series)')
     parser.add_argument('--html', default = False, action='store_true',
                         help = 'Generate HTML files?')
     parser.add_argument('--qaprod_dir', type=str, default=None, help='Path to where QA is generated.  Default is qaprod_dir')
     parser.add_argument('--specprod_dir', type=str, default=None, help='Path to spectro production folder.  Default is specprod_dir')
+    parser.add_argument('--night', type=str, default=None, help='Only process this night')
     parser.add_argument('--S2N_plot', default=False, action='store_true',
                         help = 'Generate a S/N plot for the production (vs. xaxis)')
     parser.add_argument('--ZP_plot', default=False, action='store_true',
@@ -64,6 +65,9 @@ def main(args) :
 
     qa_prod = QA_Prod(specprod_dir, qaprod_dir=qaprod_dir)
 
+    # Restrict to a nights
+    restrict_nights = [args.night] if args.night is not None else None
+
     # Remake Frame QA?
     if args.make_frameqa > 0:
         log.info("(re)generating QA related to frames")
@@ -73,12 +77,15 @@ def main(args) :
             make_frame_plots = False
         # Run
         if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
-            qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
+            # Allow for restricted nights
+            qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber,
+                                 restrict_nights=restrict_nights)
 
     # Slurp and write?
     if args.slurp:
         qa_prod.qaexp_outroot = qaprod_dir 
-        qa_prod.slurp_nights(make=(args.make_frameqa > 0), remove=args.remove, write_nights=True)
+        qa_prod.slurp_nights(make=(args.make_frameqa > 0), remove=args.remove, write_nights=True,
+                             restrict_nights=restrict_nights)
 
     # Channel histograms
     if args.channel_hist is not None:

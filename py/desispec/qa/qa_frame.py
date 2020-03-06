@@ -31,6 +31,11 @@ class QA_Frame(object):
               * astropy.io.fits.Header
               * dict -- Usually read from hard-drive
 
+        Attributes:
+            night: str
+            expid: int
+            camera: str
+
         Notes:
 
         """

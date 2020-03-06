@@ -22,6 +22,16 @@ def return_color_profile():
     color_profile['OVERFUL'] = {'font': '#000000','background':'#c39bd3'}   # purple
     return color_profile
 
+def get_file_list(filename, doaction=True):
+    if doaction and filename is not None and os.path.exists(filename):
+        output = np.atleast_1d(np.loadtxt(filename, dtype=int)).tolist()
+    else:
+        output = []
+    return output
+
+def get_skipped_expids(expid_filename, skip_expids=True):
+    return get_file_list(filename=expid_filename, doaction=skip_expids)
+
 def what_night_is_it():
     """
     Return the current night
@@ -71,10 +81,20 @@ def parse(options):
                                      " or use --all to get all past nights.")
 
     # File I/O
-    parser.add_argument('--prod-dir', type=str, help="Product directory, point to $DESI_SPECTRO_REDUX/$SPECPROD by default ")
+    parser.add_argument('--redux-dir', type=str, help="Product directory, point to $DESI_SPECTRO_REDUX by default ")
     parser.add_argument('--output-dir', type=str, help="output portal directory for the html pages ")
     parser.add_argument('--output-name', type=str, help="name of the html page (to be placed in --output-dir, which defaults to your home directory).")
-
+    parser.add_argument('--specprod',type=str, help="overwrite the environment keyword for $SPECPROD")
+    parser.add_argument("-e", "--skip-expid-file", type=str, required=False,
+                        help="Relative pathname for file containing expid's to skip. "+\
+                             "Automatically. They are assumed to be in a column"+\
+                             "format, one per row. Stored internally as integers, so zero padding is "+\
+                             "accepted but not required.")
+    #parser.add_argument("--skip-null", type=str, required=False,
+    #                    help="Relative pathname for file containing expid's to skip. "+\
+    #                         "Automatically. They are assumed to be in a column"+\
+    #                         "format, one per row. Stored internally as integers, so zero padding is "+\
+    #                         "accepted but not required.")
     # Specify Nights of Interest
     parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor. Can be 'all', a "+
                                                                                           "comma separated list of YYYYMMDD, or"+
@@ -104,17 +124,30 @@ def main(args):
     desi_proc_dashboard -n 3  --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     desi_proc_dashboard -n 20200101,20200102 --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     """
-
+    args.show_null = True
     if 'DESI_SPECTRO_REDUX' not in os.environ.keys(): # these are not set by default in cronjob mode.
         os.environ['DESI_SPECTRO_REDUX']='/global/cfs/cdirs/desi/spectro/redux/'
         os.environ['DESI_SPECTRO_DATA']='/global/cfs/cdirs/desi/spectro/data/'
         os.environ['SPECPROD']='daily'
-    if args.prod_dir is None:
-        args.prod_dir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'])
+
+    if args.redux_dir is None:
+        args.redux_dir = os.getenv('DESI_SPECTRO_REDUX')
+    else:
+        os.environ['DESI_SPECTRO_REDUX'] = args.redux_dir
+
+    if args.specprod is None:
+        args.specprod = os.getenv("SPECPROD")
+    else:
+        os.environ['SPECPROD'] = args.specprod
+    args.prod_dir = os.path.join(args.redux_dir,args.specprod)
     ############
     ## Input ###
     ############
-
+    if args.skip_expid_file is not None:
+        skipd_expids = set(get_skipped_expids(args.skip_expid_file, skip_expids=True))
+    else:
+        skipd_expids = set()
+        
     if args.nights=='all' or ',' not in args.nights:
         nights = list()
         for n in listdir(os.getenv('DESI_SPECTRO_DATA')):
@@ -173,7 +206,7 @@ def main(args):
             ####################################
             ### Table for individual night ####
             ####################################
-            nightly_tables.append(nightly_table(night))
+            nightly_tables.append(nightly_table(night,skipd_expids,show_null=args.show_null))
         strTable += monthly_table(nightly_tables,month)
 
     #strTable += js_import_str(args.output_dir)
@@ -216,7 +249,7 @@ def monthly_table(tables,month):
 
     return month_table_str
 
-def nightly_table(night):
+def nightly_table(night,skipd_expids=set(),show_null=True):
     """
     Add a collapsible and extendable table to the html file for one specific night
     Input
@@ -228,7 +261,13 @@ def nightly_table(night):
     ngood,ninter,nbad,nnull,nover,n_notnull = 0,0,0,0,0,0
     main_body = ""
     for expid,row_info in night_info.items():
+        if int(expid) in skipd_expids:
+            continue
         table_row = _table_row(row_info[1:],idlabel=row_info[0])
+
+        if not show_null and 'NULL' in table_row:
+            continue
+        
         main_body += table_row
         if 'GOOD' in table_row:
             ngood += 1
