@@ -193,7 +193,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
     return files
 
 
-def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
+def get_files(filetype, night, expid, specprod_dir=None, qaprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified
@@ -213,7 +213,8 @@ def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
         dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
-    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
+    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir,
+                            qaprod_dir=qaprod_dir)
     literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
