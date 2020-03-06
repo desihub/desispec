@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.33.0 (unreleased)
+0.33.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.33.0 (2020-03-05)
 -------------------
 
 * Metadata bookkeeping for early CMX data (PR `#857`_)
@@ -25,6 +30,7 @@ desispec Change Log
 * Generate QA for a given night + QA bug fixes (PR `#894`_)
 * coadd metadata propagation (PR `#900`_)
 * don't use FIBERSTATUS!=0 spectra in coadds (PR `#903`_)
+* desi_proc more control options for minisv2 run (PR `#904`_)
 * Two hotfixes to master to re-enable daily processing:
 
   * make assemble_fibermap more robust to missing input columns
@@ -61,6 +67,7 @@ desispec Change Log
 .. _`#901`: https://github.com/desihub/desispec/pull/901
 .. _`#902`: https://github.com/desihub/desispec/pull/902
 .. _`#903`: https://github.com/desihub/desispec/pull/903
+.. _`#904`: https://github.com/desihub/desispec/pull/904
 
 0.32.1 (2019-12-27)
 -------------------
