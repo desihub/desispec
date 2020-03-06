@@ -22,6 +22,7 @@ desispec Change Log
 * enable barycentric correction in desi_proc (PR `#879`_)
 * new plot_spectra script (PR `#890`_)
 * new desi_nightly_redshifts script (PR `#892`_)
+* Generate QA for a given night + QA bug fixes (PR `#894`_)
 * coadd metadata propagation (PR `#900`_)
 * don't use FIBERSTATUS!=0 spectra in coadds (PR `#903`_)
 * Two hotfixes to master to re-enable daily processing:
@@ -53,6 +54,7 @@ desispec Change Log
 .. _`#883`: https://github.com/desihub/desispec/pull/883
 .. _`#890`: https://github.com/desihub/desispec/pull/890
 .. _`#892`: https://github.com/desihub/desispec/pull/892
+.. _`#894`: https://github.com/desihub/desispec/pull/894
 .. _`#895`: https://github.com/desihub/desispec/pull/895
 .. _`#898`: https://github.com/desihub/desispec/pull/898
 .. _`#900`: https://github.com/desihub/desispec/pull/900
