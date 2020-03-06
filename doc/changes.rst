@@ -5,12 +5,60 @@ desispec Change Log
 0.33.0 (unreleased)
 -------------------
 
+* Metadata bookkeeping for early CMX data (PR `#857`_)
+* Improved PSF handling in desi_proc (PR `#858`_)
+* Modeling scattered light (PR `#859`_, `#861`_, `#862`_)
+* desi_proc --calibnight option (PR `#860`_)
+* expanding flux calib stdstar bits (PR `#862`_)
+* new assemble_fibermap script (PR `#864`_, `#902`_)
+* improved sky subtraction and flux calibration robustness (PR `#865`_)
+* new desi_group_tileframes script; coadd frames directly (PR `#866`_)
+* flux calibration improvements (PR `#868`_, `#871`_, `#880`_, `#898`_)
+* more efficient desi_proc --batch parallelism packing (PR `#869`_)
+* new desi_proc_dashboard script (PR `#870`_, `#901`_)
+* new desi_dailyproc script (PR `#872`_, `#881`_, `#895`_)
+* more robustness to missing inputs (PR `#875`_, `#876`_, `#883`_)
+* groundwork for improving cosmics masking (PR `#878`_)
+* enable barycentric correction in desi_proc (PR `#879`_)
+* new plot_spectra script (PR `#890`_)
+* new desi_nightly_redshifts script (PR `#892`_)
+* coadd metadata propagation (PR `#900`_)
+* don't use FIBERSTATUS!=0 spectra in coadds (PR `#903`_)
 * Two hotfixes to master to re-enable daily processing:
 
   * make assemble_fibermap more robust to missing input columns
     in the platmaker coordinates files.
   * better packing of extraction MPI ranks
 
+.. _`#857`: https://github.com/desihub/desispec/pull/857
+.. _`#858`: https://github.com/desihub/desispec/pull/858
+.. _`#859`: https://github.com/desihub/desispec/pull/859
+.. _`#860`: https://github.com/desihub/desispec/pull/860
+.. _`#861`: https://github.com/desihub/desispec/pull/861
+.. _`#862`: https://github.com/desihub/desispec/pull/862
+.. _`#864`: https://github.com/desihub/desispec/pull/864
+.. _`#865`: https://github.com/desihub/desispec/pull/865
+.. _`#866`: https://github.com/desihub/desispec/pull/869
+.. _`#868`: https://github.com/desihub/desispec/pull/868
+.. _`#869`: https://github.com/desihub/desispec/pull/869
+.. _`#870`: https://github.com/desihub/desispec/pull/870
+.. _`#871`: https://github.com/desihub/desispec/pull/871
+.. _`#872`: https://github.com/desihub/desispec/pull/872
+.. _`#875`: https://github.com/desihub/desispec/pull/875
+.. _`#876`: https://github.com/desihub/desispec/pull/876
+.. _`#878`: https://github.com/desihub/desispec/pull/878
+.. _`#879`: https://github.com/desihub/desispec/pull/879
+.. _`#880`: https://github.com/desihub/desispec/pull/880
+.. _`#881`: https://github.com/desihub/desispec/pull/881
+.. _`#883`: https://github.com/desihub/desispec/pull/883
+.. _`#890`: https://github.com/desihub/desispec/pull/890
+.. _`#892`: https://github.com/desihub/desispec/pull/892
+.. _`#895`: https://github.com/desihub/desispec/pull/895
+.. _`#898`: https://github.com/desihub/desispec/pull/898
+.. _`#900`: https://github.com/desihub/desispec/pull/900
+.. _`#901`: https://github.com/desihub/desispec/pull/901
+.. _`#902`: https://github.com/desihub/desispec/pull/902
+.. _`#903`: https://github.com/desihub/desispec/pull/903
 
 0.32.1 (2019-12-27)
 -------------------
