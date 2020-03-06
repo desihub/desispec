@@ -19,15 +19,24 @@ import numpy as np
 ########################
 ### Helper Functions ###
 ########################
-from desispec.desi_proc_dashboard import what_night_is_it, find_newexp, check_running
+from desispec.desi_proc_dashboard import what_night_is_it, find_newexp, check_running,\
+                                         get_file_list, get_skipped_expids
 
 def get_catchup_nights(catchup_filename, docatchup=True):
-    if docatchup and catchup_filename is not None and os.path.exists(catchup_filename):
-        catchup = np.atleast_1d(np.loadtxt(catchup_filename, dtype=int)).tolist()
-    else:
-        catchup = []
+    return get_file_list(filename=catchup_filename, doaction=docatchup)
 
-    return catchup
+def get_nights(catchup_filename, args):
+    catchup = get_catchup_nights(catchup_filename,args.catchup)
+
+    if args.skip_today and not args.catchup:
+        print("I have no work to do. I'm skipping today and have no catchup.")
+        sys.exit(1)
+    elif args.skip_today:
+        tonight = []
+    else:
+        tonight = [what_night_is_it(),]
+    return tonight + catchup
+
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Perform daily processing of spectral"+
@@ -52,6 +61,11 @@ def parse(options=None):
     parser.add_argument("-c", "--catchup-file", type=str, required=False,
                         help="Relative path+name for catchup file. Automatically "+
                              "triggers '--catchup' to be true.")
+    parser.add_argument("-e", "--skip-expid-file", type=str, required=False,
+                        help="Relative pathname for file containing expid's to skip. Automatically "+\
+                             "triggers '--skip--expids' to be true. They are assumed to be in a column"+\
+                             "format, one per row. Stored internally as integers, so zero padding is "+\
+                             "accepted but not required.")
     parser.add_argument("-s", "--specprod", type=str, required=False,
                         help="Directory name where the output files should be saved.")
     parser.add_argument("-r", "--reduxdir", type=str, required=False,
@@ -66,6 +80,16 @@ def parse(options=None):
                              "running. Use with care.")
     parser.add_argument("--ignore-cori-node", action="store_true",
                         help="Allow script to run on nodes other than cori21")
+    parser.add_argument("--skip-expids", action="store_true",
+                        help="Load in the skipped exposures id file and skip them instead of running them.")
+    parser.add_argument("--skip-today",action="store_true",
+                        help="If given the code does not search for new files on the current day. "+\
+                             "Used for catchup runs. To not interfere with daily processing, also use --ignore-instances.")
+    parser.add_argument("--do-zeros", action="store_true",
+                        help="Set this flag to process zeros. Otherwise they will be skipped.")
+    parser.add_argument("--do-short-scis", action="store_true",
+                        help="If set, all SCIENCE exposures will be processed. Otherwise those shorter than 60s will"+\
+                             " be skipped and not processed.")
     parser.add_argument("--catchup", action="store_true",
                         help="Load in catch up file and rerun the listed nights")
     parser.add_argument("--scattered-light", action="store_true",
@@ -82,7 +106,8 @@ def parse(options=None):
 
     if args.catchup_file is not None:
         args.catchup = True
-
+    if args.skip_expid_file is not None:
+        args.skip_expids = True
 
     return args
 
@@ -104,19 +129,22 @@ def main(args):
     ########################
     ### Define io params ###
     ########################
-    catchup_filename = 'none'
+    catchup_filename = None
     if args.catchup:
         if args.catchup_file is None:
             catchup_filename = 'catchup_list.csv' # must be relative
                                                   # path from codedir
         else:
             catchup_filename = args.catchup_file
-            
-    if args.reduxdir is None:
-        reduxdir = desispec.io.specprod_root() # directory for reductions
-    else:
-        reduxdir = args.reduxdir
 
+    expid_filename = None
+    if args.skip_expids:
+        if args.skip_expid_file is None:
+            expid_filename = 'skipped_expid_list.csv' # must be relative                                           
+                                                  # path from codedir                                                        
+        else:
+            expid_filename = args.skip_expid_file
+    
     # Check if we should force the script to use
     # environment variable (for debugging)
     # Otherwise if it's the desi user, force to 'daily'
@@ -139,17 +167,21 @@ def main(args):
         else:
             os.environ['SPECPROD'] = args.specprod
 
-
+    if args.reduxdir is None:
+        reduxdir = desispec.io.specprod_root() # directory for reductions                                                     
+    else:
+        reduxdir = args.reduxdir
+            
     #########################
     ### Setup for Running ###
     #########################
-    catchup = get_catchup_nights(catchup_filename,args.catchup)
-
+    skipd_expids = get_skipped_expids(expid_filename,args.skip_expids)
+    skipd_expid_set = set(skipd_expids)
+    
     #- First identify exposures that are already processed
     known_exposures = set()
 
-    tonight = what_night_is_it()
-    for night in [tonight,] + catchup:
+    for night in get_nights(catchup_filename,args):
         fileglob = '{}/preproc/{}/*/preproc-*'.format(reduxdir, night)
         newexp = find_newexp(night, fileglob, known_exposures)
         print('{} exposures already processed on {}'.format(len(newexp), night))
@@ -177,9 +209,7 @@ def main(args):
     ### Run until something breaks ###
     ##################################
     while True:
-        tonight = what_night_is_it()
-        catchup = get_catchup_nights(catchup_filename,args.catchup)
-        for night in [tonight,] + catchup:
+        for night in get_nights(catchup_filename,args):
             print('{} Checking for new files on {}'.format(time.asctime(), night))
             fileglob = '{}/{}/*/desi-*.fits.fz'.format(
                 os.getenv('DESI_SPECTRO_DATA'), night)
@@ -193,13 +223,25 @@ def main(args):
                 for night, expid in sorted(newexp):
                     known_exposures.add( (night, expid) )
 
-                    #- skip ZEROs for now
-                    rawfile = desispec.io.findfile('raw', night, expid)
-                    ### hdr = fitsio.read_header(rawfile, 1)
-                    hdr = fits.getheader(rawfile, 1)
-                    if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ZERO':
-                        print('Skipping OBSTYPE=ZERO exposure {}/{}'.format(night, expid))
+                    if args.skip_expids and expid in skipd_expid_set:
                         continue
+
+                    if args.do_zeros and args.do_short_scis:
+                        pass
+                    else:
+                        #- skip ZEROs for now
+                        rawfile = desispec.io.findfile('raw', night, expid)
+                        ### hdr = fitsio.read_header(rawfile, 1)
+                        hdr = fits.getheader(rawfile, 1)
+                        if (not args.do_zeros) and ('OBSTYPE' in hdr) and (hdr['OBSTYPE'].strip().upper() == 'ZERO'):
+                            print('Skipping OBSTYPE=ZERO exposure {}/{}'.format(night, expid))
+                            continue
+                        if (not args.do_short_scis) and ('OBSTYPE' in hdr) and \
+                           (hdr['OBSTYPE'].strip().upper() == 'SCIENCE') and \
+                           ('EXPTIME' in hdr) and (float(hdr['EXPTIME']) < 60.):
+                            print('Skipping OBSTYPE=SCIENCE exposure {}/{} with EXPTIME={}'.format(night,expid,\
+                                                                                                   float(hdr['EXPTIME'])))
+                            continue
                     #if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ARC':
                     #    print('Temporarily skipping OBSTYPE=ARC exposure {}/{}'.format(night, expid))
                     #    continue
@@ -209,7 +251,7 @@ def main(args):
                                          
                     print(cmd)
                     if args.dry_run:
-                        print("\tOutput file would have been: {}".format(os.path.join(reduxdir,os.environ['SPECPROD'])))
+                        print("\tOutput file would have been: {}".format(reduxdir))
                         print("\tCommand to be run: {}".format(cmd.split()))
                     else:
                         subprocess.call(cmd.split())
