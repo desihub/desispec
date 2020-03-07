@@ -152,7 +152,7 @@ def coadd(spectra, cosmics_nsig=0.) :
                 ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
             else :
                 ivarjj=spectra.ivar[b][jj]
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>0  :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
                 nspec=grad.shape[0]
@@ -299,7 +299,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
             else :
                 ivarjj=spectra.ivar[b][jj]
             
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>0  :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
                 nspec=grad.shape[0]
