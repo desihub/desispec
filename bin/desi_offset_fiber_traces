@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+
+import argparse
+import numpy as np
+
+import astropy.io.fits as pyfits
+
+
+
+parser = argparse.ArgumentParser(description="Interpolate the trace and PSF parameters from neighboring fibers. This is to get an approximate trace and PSF model for fibers that have 0/low throughput or dark/hot CCD columns along their trace.")
+
+parser.add_argument('-i','--infile', type = str, default = None, required=True,
+                    help = 'input psf fits file')
+parser.add_argument('-o','--outfile', type = str, default = None, required=True,
+                    help = 'output psf fits file')
+parser.add_argument('--dx', type = float, default = 0.,
+                    help = 'shift traces along the cross-dispersion axis (in pixels)')
+parser.add_argument('--dy', type = float, default = 0.,
+                    help = 'shift traces along the dispersion/wavelength axis (in pixels)')
+
+
+
+args   = parser.parse_args()
+
+h = pyfits.open(args.infile)
+
+h["XTRACE"].data[:,0] += args.dx
+h["YTRACE"].data[:,0] += args.dy
+
+h.writeto(args.outfile,overwrite=True)
+print("wrote {}".format(args.outfile))
+
