@@ -86,4 +86,5 @@ if lines is not None :
 
 plt.xlabel("xccd")
 plt.ylabel("yccd")
+plt.tight_layout()
 plt.show()
