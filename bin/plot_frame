@@ -6,6 +6,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import fitsio
+from pkg_resources import resource_exists, resource_filename
 
 from desispec.qproc.util import parse_fibers
 from desispec.qproc.io import read_qframe
@@ -122,6 +123,10 @@ parser.add_argument('--batch', action='store_true', default = False, required = 
                     help = 'batch mode (to save figure and exit')
 parser.add_argument('-o','--outfile', type = str, default = None, required = False,
                     help = 'save figure in this file')
+parser.add_argument('--ascii-spectrum', type = str, default = None, required = False,
+                    help = 'also plot this ascii spectrum (first column=wavelength, second column=flux)')
+parser.add_argument('--sky-spectrum', action = 'store_true',
+                    help = 'also plot the sky spectrum')
 
 
 args   = parser.parse_args()
@@ -159,7 +164,7 @@ for filename in args.infile :
 
         if np.sum(selection)==0 :
             print("empty selection")
-            print("for this frame fibers are in [{},{}] (included)".format(np.min(fibers_in_frame),np.max(fibers_in_frame)))
+            print("fibers are in the range [{},{}] (included)".format(np.min(fibers_in_frame),np.max(fibers_in_frame)))
             sys.exit(12)
         
         frame = frame[selection]
@@ -185,6 +190,22 @@ for filename in args.infile :
         
         plt.plot(wave[jj],frame.flux[i,jj],label=label)
 
+if args.sky_spectrum :
+    args.ascii_spectrum = resource_filename('desispec','data/spec-sky.dat')
+
+    
+if args.ascii_spectrum :
+    tmp = np.loadtxt(args.ascii_spectrum)
+    spec_wave=tmp[:,0]
+    spec_flux=tmp[:,1]
+    spec_flux *= np.max(frame.flux)/np.max(spec_flux)
+    kk = (spec_wave>np.min(wave))&(spec_wave<np.max(wave))
+    if np.sum(kk)==0 :
+        print("no intersecting wavelength in file {} (first column interpreted as wavelength)".format(args.ascii_spectrum))
+    else :
+        plt.plot(spec_wave[kk],spec_flux[kk],label=os.path.basename(args.ascii_spectrum))
+
+        
 if args.legend :
     plt.legend()
 if args.log :
