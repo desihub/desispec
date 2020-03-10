@@ -569,6 +569,26 @@ if args.obstype in ['ARC', 'TESTARC']:
         comm.barrier()
 
     if rank == 0:
+        # loop on all cameras and interpolate bad fibers
+        for camera in args.cameras:
+            cfinder = CalibFinder([hdr, camhdr[camera]])
+            if cfinder.haskey("BROKENFIBERS") :
+                brokenfibers = cfinder.value("BROKENFIBERS")
+                tmpname = findfile('psf', args.night, args.expid, camera)
+                inpsf = tmpname.replace("psf","fit-psf")
+                outpsf = tmpname.replace("psf","fit-psf-fixed-brokenfibers")
+                if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
+                    cmd = 'desi_interpolate_fiber_psf'
+                    cmd += ' --infile {}'.format(inpsf)
+                    cmd += ' --outfile {}'.format(outpsf)
+                    cmd += ' --fibers {}'.format(brokenfibers)
+                    log.info('For camera {} interpolating PSF for broken fibers: {}'.format(camera,brokenfibers))
+                    runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
+                    if os.path.isfile(outpsf) :
+                        os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-brokenfibers-fix"))
+                        subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
+
+    if rank == 0:
         progress['psf'] = time.asctime()
 
         
