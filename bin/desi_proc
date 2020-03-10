@@ -521,12 +521,18 @@ if args.obstype in ['ARC', 'TESTARC']:
             cmd += ' --input-psf {}'.format(inpsf)
             cmd += ' --output-psf {}'.format(outpsf)
             
-            # look for broken fibers
+            # look for fiber blacklist
             cfinder = CalibFinder([hdr, camhdr[camera]])
-            if cfinder.haskey("BROKENFIBERS") :
-                cmd += ' --broken-fibers {}'.format(cfinder.value("BROKENFIBERS"))
+            blacklistkey="FIBERBLACKLIST"
+            if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
+                log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+                blacklistkey="BROKENFIBERS"
+
+            if cfinder.haskey(blacklistkey) :
+                blacklist = cfinder.value(blacklistkey)
+                cmd += ' --broken-fibers {}'.format(blacklist)
                 if rank == 0 :
-                    log.warning('broken fibers: {}'.format(cfinder.value("BROKENFIBERS")))
+                    log.warning('broken fibers: {}'.format(blacklist))
 
             if not os.path.exists(outpsf):
                 cmds[camera] = cmd
@@ -567,6 +573,33 @@ if args.obstype in ['ARC', 'TESTARC']:
 
     if comm is not None:
         comm.barrier()
+
+    if rank == 0:
+        # loop on all cameras and interpolate bad fibers
+        for camera in args.cameras:
+            
+            # look for fiber blacklist
+            cfinder = CalibFinder([hdr, camhdr[camera]])
+            blacklistkey="FIBERBLACKLIST"
+            if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
+                log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+                blacklistkey="BROKENFIBERS"
+            
+            if cfinder.haskey(blacklistkey):
+                fiberblacklist = cfinder.value(blacklistkey)
+                tmpname = findfile('psf', args.night, args.expid, camera)
+                inpsf = tmpname.replace("psf","fit-psf")
+                outpsf = tmpname.replace("psf","fit-psf-fixed-blacklisted")
+                if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
+                    cmd = 'desi_interpolate_fiber_psf'
+                    cmd += ' --infile {}'.format(inpsf)
+                    cmd += ' --outfile {}'.format(outpsf)
+                    cmd += ' --fibers {}'.format(fiberblacklist)
+                    log.info('For camera {} interpolating PSF for broken fibers: {}'.format(camera,fiberblacklist))
+                    runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
+                    if os.path.isfile(outpsf) :
+                        os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-blacklisted-fix"))
+                        subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
 
     if rank == 0:
         progress['psf'] = time.asctime()

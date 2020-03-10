@@ -100,8 +100,12 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     broken_fibers = []
     if frame.meta is not None and "CAMERA" in frame.meta  and "DETECTOR" in frame.meta :
         cfinder = CalibFinder([frame.meta,])
-        if cfinder.haskey("BROKENFIBERS") :
-            val=cfinder.value("BROKENFIBERS")
+        blacklistkey="FIBERBLACKLIST"
+        if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
+            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+            blacklistkey="BROKENFIBERS"       
+        if cfinder.haskey(blacklistkey) :
+            val=cfinder.value(blacklistkey)
             if type(val) == int :
                 broken_fibers.append(val)
             else :
