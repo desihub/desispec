@@ -53,7 +53,7 @@ def main(args=None):
 
     log.info("reading spectra ...")
     if len(args.infile) == 1:
-        spectra = read_spectra(args.infile)
+        spectra = read_spectra(args.infile[0])
     else:
         frames = dict()
         for filename in args.infile:
