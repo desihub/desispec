@@ -338,14 +338,16 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
             fiberflat_files.sort()
             fiberflat_fil = fiberflat_files[0]
 
-        fiberflat = read_fiberflat(fiberflat_fil)
-        apply_fiberflat(frame, fiberflat)
         # Load sky model and run
         try:
             skymodel = read_sky(sky_fil)
         except FileNotFoundError:
             warnings.warn("Sky file {:s} not found.  Skipping..".format(sky_fil))
         else:
+            # Only load if found
+            fiberflat = read_fiberflat(fiberflat_fil)
+            apply_fiberflat(frame, fiberflat)
+            #
             if qaframe.run_qa('SKYSUB', (frame, skymodel), clobber=clobber):
                 write=True
             if make_plots:
