@@ -385,7 +385,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     # Median residual
     qadict['RESID'] = float(np.median(res)) # Median residual (counts)
     log.info("Median residual for sky fibers = {:g}".format(
-        qadict['RESID']))
+            qadict['RESID']))
 
     # Residual percentiles
     perc = dustat.perc(res, per=param['PER_RESID'])
@@ -611,6 +611,7 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
     Returns:
         qadict : dict
     """
+    print("Starting SNR Fit")
 
     #- Get imaging magnitudes and calculate SNR
     fmag=22.0
@@ -809,6 +810,7 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
     qadict["RA"]=frame.fibermap['TARGET_RA']
     qadict["DEC"]=frame.fibermap['TARGET_DEC']
 
+    print("End SNR Fit")
     return qadict,fitsnr
 
 def gauss(x,a,mu,sigma):
