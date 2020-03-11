@@ -35,6 +35,7 @@ def main(args) :
     log.info("starting")
     if args.specprod_dir is None:
         specprod_dir = meta.specprod_root()
+        qaprod_dir = None
     else:
         specprod_dir = args.specprod_dir
         qaprod_dir = meta.qaprod_root(specprod_dir=specprod_dir)

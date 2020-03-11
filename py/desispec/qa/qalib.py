@@ -571,59 +571,47 @@ def s2n_flux_astro(flux, A, B):
     Function for  a normalized (by texp**1/2) curve to flux vs S/N
 
     Args:
-        flux:
-        A:
-        B:
+        flux (float or np.ndarray):
+            Flux value(s)
+        A (float):
+            Scale coefficient
+        B (float):
+            Offset coefficient
 
     Returns:
+        S/N at the input flux
 
     """
     return flux*A/np.sqrt(A*flux + B)
 
 
-def SNRFit(frame, camera, params):
+def s2nfit(frame, camera, params):
     """
     Signal vs. Noise With fitting
 
     Take flux and inverse variance arrays and calculate S/N for individual
     targets (ELG, LRG, QSO, STD) and for each amplifier of the camera.
-    then fit the log(snr)=a+b*mag or log(snr)=poly(mag)
+    then fit snr=A*mag/sqrt(A*mag+B)
 
     see http://arXiv.org/abs/0706.1062v2 for proper fitting of power-law distributions
     it is not implemented here!
 
-    qadict has the following data model
-      "MAGNITUDES" : ndarray - Depends on camera (DECAM_G, DECAM_R, DECAM_Z)
-      "MEDIAN_SNR" : ndarray (nfiber)
-      "NUM_NEGATIVE_SNR" : int
-      "SNR_MAG_TGT"
-      "FITCOEFF_TGT" : list
-      "SNR_RESID" : list, can be trimmed down during the fitting
-      "FIDSNR_TGT"
-      "RA" : ndarray (nfiber)
-      "DEC" : ndarray (nfiber)
-      "OBJLIST" : list - Save a copy to make sense of the list order later
-      "EXPTIME" : float
-      "FIT_FILTER" : str
-      "r2" : float - Fitting parameter
+    Instead we use scipy.optimize.curve_fit
 
     Args:
         frame: desispec.Frame object
-        night :
-        camera :
-        expid : int
-        params: parameters dictionary
-        {
-          "Func": "linear", # Fit function type one of ["linear","poly","astro"]
-          "FIDMAG": 22.0, # magnitude to evaluate the fit
-          "Filter":"DECAM_R", #filter name
-        }
-
-        fidboundary : list of slices indicating where to select in fiber
-            and wavelength directions for each amp (output of slice_fidboundary function)
+        camera: str, name of the camera
+        params: parameters dictionary for S/N
 
     Returns:
         qadict : dict
+            MEDIAN_SNR (ndarray, nfiber): Median S/N of light in each fiber
+            FIT_FILTER (str):  Filter used for the fluxes
+            EXPTIME (float):  Exposure time
+            XXX_FIBERID (list): Fibers matching ELG, LRG, BGS, etc.
+            SNR_MAG_TGT (list): List of lists with S/N and mag of ELG, LRG, BGS, etc.
+            FITCOEFF_TGT (list): List of fitted coefficients.  Junk fits have np.nan
+            OBJLIST (list): List of object types analyzed (1 or more fiber)
     """
     # Median snr
     snr = frame.flux * np.sqrt(frame.ivar)
@@ -653,8 +641,6 @@ def SNRFit(frame, camera, params):
     else:
         raise ValueError('Unknown filter {}'.format(thisfilter))
 
-    qadict["FILTERS"] = ['G', 'R', 'Z']
-
     # - Loop over each target type, and associate SNR and image magnitudes for each type.
     fitcoeff = []
     snrmag = []
@@ -678,7 +664,6 @@ def SNRFit(frame, camera, params):
         if len(fibers) == 0:
             continue
 
-        print("Working on {}".format(T))
         # S/N of the fibers
         medsnr = mediansnr[fibers]
         mags = np.zeros(medsnr.shape)
@@ -690,7 +675,7 @@ def SNRFit(frame, camera, params):
             popt, pcov = optimize.curve_fit(s2n_flux_astro, photflux[fibers][fit_these].data,
                                         medsnr[fit_these]/exptime**(1/2), p0=(0.02, 1.))
         except RuntimeError:
-            fitcoeff.append(np.nan)
+            fitcoeff.append([np.nan, np.nan])
         else:
             fitcoeff.append([popt[0], popt[1]])
         # Save

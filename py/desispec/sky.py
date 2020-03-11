@@ -1166,7 +1166,7 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
     log.info("done")
 
 
-def qa_skysub(param, frame, skymodel, quick_look=False, deepcopy=False):
+def qa_skysub(param, frame, skymodel, quick_look=False):
     """Calculate QA on SkySubtraction
 
     Note: Pixels rejected in generating the SkyModel (as above), are
@@ -1179,8 +1179,6 @@ def qa_skysub(param, frame, skymodel, quick_look=False, deepcopy=False):
         skymodel : desispec.SkyModel object
         quick_look : bool, optional
           If True, do QuickLook specific QA (or avoid some)
-        deepcopy : bool, optional
-          If True, do not work on the input frame.  This speeds things up when performed after
     Returns:
         qadict: dict of QA outputs
           Need to record simple Python objects for yaml (str, float, int)
@@ -1192,10 +1190,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False, deepcopy=False):
 
     #- QAs
     #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately.
-    if deepcopy:
-        tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame unaffected so that downstream pipeline uses it.
-    else:
-        tempframe = frame
+    tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame unaffected so that downstream pipeline uses it.
     subtract_sky(tempframe,skymodel) #- Note: sky subtract is done to get residuals. As part of pipeline it is done in fluxcalib stage
 
     # Sky residuals first
@@ -1203,14 +1198,12 @@ def qa_skysub(param, frame, skymodel, quick_look=False, deepcopy=False):
 
     # Sky continuum
     if not quick_look:  # Sky continuum is measured after flat fielding in QuickLook
-        log.info("Sky continuum")
         channel = frame.meta['CAMERA'][0]
         wrange1, wrange2 = param[channel.upper()+'_CONT']
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(frame,wrange1,wrange2)
         qadict["SKYFIBERID"] = skyfiber.tolist()
         qadict["SKYCONT"] = skycont
         qadict["SKYCONT_FIBER"] = meancontfiber
-        log.info("Sky continuum done")
 
     if quick_look:  # The following can be a *large* dict
         qadict_snr = qalib.SignalVsNoise(tempframe,param)

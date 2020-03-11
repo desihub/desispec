@@ -188,7 +188,7 @@ class QA_Frame(object):
         from desispec.sky import qa_skysub
         from desispec.fiberflat import qa_fiberflat
         from desispec.fluxcalibration import qa_fluxcalib
-        from desispec.qa.qalib import SNRFit
+        from desispec.qa.qalib import s2nfit
 
         # Check for previous QA if clobber==False
         if (not clobber) and (qatype in self.qa_data.keys()):
@@ -224,13 +224,7 @@ class QA_Frame(object):
             # Init parameters (as necessary)
             self.init_s2n()
             # Run
-            qadict,fitsnr = SNRFit(inputs[0], self.camera, self.qa_data[qatype]['PARAMS'])
-            #qadict,fitsnr = SNRFit(inputs[0], self.night, self.camera, self.expid,
-            #                       self.qa_data[qatype]['PARAMS'], fidboundary=None,
-            #                       offline=True)
-            # Remove undesired
-            #for key in ['RA', 'DEC']:
-            #    qadict.pop(key)
+            qadict,fitsnr = s2nfit(inputs[0], self.camera, self.qa_data[qatype]['PARAMS'])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update
@@ -321,7 +315,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
     if qatype == 'qa_data':
         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
 
-        try:
+        try: # For backwards compatability
             calib = CalibFinder([frame_meta])
         except KeyError:
             fiberflat_fil = meta.findfile('fiberflatnight', night=night, camera=camera, specprod_dir=specprod_dir)
@@ -348,7 +342,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         except FileNotFoundError:
             warnings.warn("Sky file {:s} not found.  Skipping..".format(sky_fil))
         else:
-            # Only load if found
+            # Load if skymodel found
             fiberflat = read_fiberflat(fiberflat_fil)
             apply_fiberflat(frame, fiberflat)
             #
@@ -379,13 +373,10 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
                 s2n_dict = copy.deepcopy(qaframe.qa_data['S2N'])
                 qafig = meta.findfile('qa_s2n_fig', night=night, camera=camera, expid=expid,
                                   specprod_dir=specprod_dir, outdir=output_dir, qaprod_dir=qaprod_dir)
-                #badfibs = np.where(np.isnan(s2n_dict['METRICS']['MEDIAN_SNR']))[0].tolist()
-                #sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
-                coeff = s2n_dict['METRICS']['FITCOEFF_TGT']#[sci_idx]
                 # Add an item or two for the QL method
                 s2n_dict['CAMERA'] = camera
                 s2n_dict['EXPID'] = expid
-                s2n_dict['PANAME'] = 'SNRFit'
+                s2n_dict['PANAME'] = 's2nfit'
                 s2n_dict['METRICS']['RA'] = frame.fibermap['TARGET_RA'].data
                 s2n_dict['METRICS']['DEC'] = frame.fibermap['TARGET_DEC'].data
                 # Deal with YAML list instead of ndarray
@@ -393,7 +384,6 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
                 # Generate
                 if (not os.path.isfile(qafig)) or clobber:
                     qa_plots.frame_s2n(s2n_dict, qafig)
-                    #qa_plots_ql.plot_SNR(s2n_dict, qafig, objlist, [[]]*len(objlist), coeff)
 
     # FluxCalib QA
     if qatype == 'qa_data':

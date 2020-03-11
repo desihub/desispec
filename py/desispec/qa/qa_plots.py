@@ -632,7 +632,7 @@ def frame_s2n(s2n_dict, outfile, rescut=0.2, verbose=True):
     #import pdb; pdb.set_trace()
     ax_S2N.set_xlabel('Fiber #')
     ax_S2N.set_ylabel('Median S/N')
-    ax_S2N.set_yscale('log')
+    ax_S2N.set_yscale('log', nonposy='clip')
     ax_S2N.set_ylim(0.01, 100.)
 
     # RA, DEC with residuals
@@ -759,12 +759,13 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
         plt.close()
 
 
-def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
+def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
+                 specprod_dir=None):
     """ Generate an Exposure level plot of a S/N metric
     Args:
         qa_exp: QA_Exposure
         metric: str,  allowed entires are: ['resid']
-        mag_mnx: Range of magnitudes used for residual plot
+        specprod_dir: str, optional
 
     Returns:
 
@@ -777,7 +778,7 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
     cclrs = get_channel_clrs()
 
     # Find exposure
-    night = find_exposure_night(qa_exp.expid)
+    night = find_exposure_night(qa_exp.expid, specprod_dir=specprod_dir)
 
 
     # Plot
@@ -801,7 +802,8 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
         for wedge in range(10):
             # Load
             camera=channel+'{:d}'.format(wedge)
-            frame_file = findfile('frame', camera=camera, night=night, expid=qa_exp.expid)
+            frame_file = findfile('frame', camera=camera, night=night, expid=qa_exp.expid,
+                                  specprod_dir=specprod_dir)
             try:
                 frame = read_frame(frame_file)
             except:

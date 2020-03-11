@@ -5,7 +5,8 @@ desispec Change Log
 0.33.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Refactor S/N fit for QA
+* Speed up QA
 
 0.33.0 (2020-03-05)
 -------------------

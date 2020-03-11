@@ -208,11 +208,12 @@ class QA_Exposure(object):
         # Load into frames
         for camera, frame_file in frame_files.items():
             if rebuild:
-                qafile, qatype = qafile_from_framefile(frame_file)
+                qafile, qatype = qafile_from_framefile(frame_file, qaprod_dir=self.qaprod_dir)
                 if os.path.isfile(qafile):
                     os.remove(qafile)
             # Generate qaframe (and figures?)
-            _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False)
+            _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False,
+                                   qaprod_dir=self.qaprod_dir)
         # Reload
         self.load_qa_data()
 
@@ -246,7 +247,7 @@ class QA_Exposure(object):
             s2n_dict = self.data['frames'][camera]['S2N']
             max_o = np.max([len(otype) for otype in s2n_dict['METRICS']['OBJLIST']])
             objtype = np.array([' '*max_o]*len(sub_tbl))
-            # Coeffs
+            # Coeffs -- Avoid nan
             coeffs = np.zeros((len(sub_tbl), len(s2n_dict['METRICS']['FITCOEFF_TGT'][0])))
             # Others
             mags = np.zeros_like(sub_tbl['MEDIAN_SNR'].data)
@@ -258,6 +259,8 @@ class QA_Exposure(object):
                 if len(fibers) == 0:
                     continue
                 coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
+                if np.any(np.isnan(coeff)):
+                    continue
                 coeffs[fibers,:] = np.outer(np.ones_like(fibers), coeff)
                 # Set me
                 objtype[fibers] = otype
@@ -282,14 +285,15 @@ class QA_Exposure(object):
         # Hold
         self.qa_s2n = qa_tbl
         # Add meta
-        self.qa_s2n.meta = self.data['meta']
+        if 'meta' in self.data.keys():
+            self.qa_s2n.meta = self.data['meta']
 
     def slurp_into_file(self, multi_root):
         """
         Write the data of an Exposure object into a JSON file
 
         Args:
-            multi_root:
+            multi_root (str): root name of the slurped file
 
         Returns:
 
