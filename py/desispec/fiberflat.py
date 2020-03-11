@@ -13,6 +13,7 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
+from desispec.maskbits import fibermask as fmsk
 from desispec.maskedmedian import masked_median
 from desispec.calibfinder import CalibFinder
 from desispec import util
@@ -20,7 +21,7 @@ import scipy,scipy.sparse
 import sys
 from desiutil.log import get_logger
 import math
-
+from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays
 
 def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=15,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
@@ -89,39 +90,15 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     # (it's faster that way, and we try to use sparse matrices as much as possible)
     #
 
-    #- Shortcuts
+    #- Shortcuts                                                                                                      
     nwave=frame.nwave
     nfibers=frame.nspec
     wave = frame.wave.copy()  #- this will become part of output too
-    flux = frame.flux.copy()
-    ivar = frame.ivar*(frame.mask==0)
-
     #- if broken fibers, mask them
-    broken_fibers = []
-    if frame.meta is not None and "CAMERA" in frame.meta  and "DETECTOR" in frame.meta :
-        cfinder = CalibFinder([frame.meta,])
-        blacklistkey="FIBERBLACKLIST"
-        if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
-            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
-            blacklistkey="BROKENFIBERS"       
-        if cfinder.haskey(blacklistkey) :
-            val=cfinder.value(blacklistkey)
-            if type(val) == int :
-                broken_fibers.append(val)
-            else :
-                for v in val.split(",") :
-                    broken_fibers.append(int(v))
-            log.info("Frame has broken fibers: {}".format(broken_fibers))
-
-        for broken_fiber in broken_fibers :
-            flux[broken_fiber] = 0.
-            ivar[broken_fiber] = 0.
-    
+    flux, ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='flat',ivar_framemask=True)
 
 
     # iterative fitting and clipping to get precise mean spectrum
-
-
 
 
     # we first need to iterate to converge on a solution of mean spectrum
