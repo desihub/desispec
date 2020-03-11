@@ -227,7 +227,7 @@ class QA_Exposure(object):
             Table is held in self.qa_s2n
 
         """
-        from desispec.qa.qalib import s2n_funcs
+        from desispec.qa.qalib import s2n_flux_astro
 
         sub_tbls = []
         # Load up
@@ -252,8 +252,7 @@ class QA_Exposure(object):
             mags = np.zeros_like(sub_tbl['MEDIAN_SNR'].data)
             resid = -999. * np.ones_like(sub_tbl['MEDIAN_SNR'].data)
             # Fitting
-            funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
-            fitfunc = funcMap['astro']
+            #fitfunc = s2n_flux_astro()#exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
             for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
                 fibers = np.array(s2n_dict['METRICS']['{:s}_FIBERID'.format(otype)])
                 if len(fibers) == 0:
@@ -266,13 +265,13 @@ class QA_Exposure(object):
 
                 # Residuals
                 flux = 10 ** (-0.4 * (mags[fibers] - 22.5))
-                fit_snr = fitfunc(flux, *coeff)
+                fit_snr = s2n_flux_astro(flux, *coeff) * s2n_dict['METRICS']['EXPTIME']**(1/2)
                 resid[fibers] = (sub_tbl['MEDIAN_SNR'][fibers] - fit_snr) / fit_snr
             # Sub_tbl
             sub_tbl['MAGS'] = mags
             sub_tbl['RESID'] = resid
             sub_tbl['OBJTYPE'] = objtype
-            sub_tbl['COEFFS'] = coeffs
+            #sub_tbl['COEFFS'] = coeffs
             # Save
             sub_tbls.append(sub_tbl)
         # Stack me

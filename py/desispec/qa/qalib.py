@@ -422,6 +422,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     return qadict
 
 
+'''
 def SN_ratio(flux,ivar):
     """
     SN Ratio
@@ -439,6 +440,7 @@ def SN_ratio(flux,ivar):
     snr = flux * np.sqrt(ivar)
     medsnr = np.median(snr, axis=1)
     return medsnr #, totsnr
+'''
 
 def _get_mags(frame):
     '''Extract frame.fibermap fluxes into mags depending upon camera
@@ -564,7 +566,195 @@ def s2n_funcs(exptime=None):
              }
     return funcMap
 
-def SNRFit(frame,night,camera,expid,params,fidboundary=None,
+def s2n_flux_astro(flux, A, B):
+    """
+    Function for  a normalized (by texp**1/2) curve to flux vs S/N
+
+    Args:
+        flux:
+        A:
+        B:
+
+    Returns:
+
+    """
+    return flux*A/np.sqrt(A*flux + B)
+
+
+def SNRFit(frame, camera, params):
+    """
+    Signal vs. Noise With fitting
+
+    Take flux and inverse variance arrays and calculate S/N for individual
+    targets (ELG, LRG, QSO, STD) and for each amplifier of the camera.
+    then fit the log(snr)=a+b*mag or log(snr)=poly(mag)
+
+    see http://arXiv.org/abs/0706.1062v2 for proper fitting of power-law distributions
+    it is not implemented here!
+
+    qadict has the following data model
+      "MAGNITUDES" : ndarray - Depends on camera (DECAM_G, DECAM_R, DECAM_Z)
+      "MEDIAN_SNR" : ndarray (nfiber)
+      "NUM_NEGATIVE_SNR" : int
+      "SNR_MAG_TGT"
+      "FITCOEFF_TGT" : list
+      "SNR_RESID" : list, can be trimmed down during the fitting
+      "FIDSNR_TGT"
+      "RA" : ndarray (nfiber)
+      "DEC" : ndarray (nfiber)
+      "OBJLIST" : list - Save a copy to make sense of the list order later
+      "EXPTIME" : float
+      "FIT_FILTER" : str
+      "r2" : float - Fitting parameter
+
+    Args:
+        frame: desispec.Frame object
+        night :
+        camera :
+        expid : int
+        params: parameters dictionary
+        {
+          "Func": "linear", # Fit function type one of ["linear","poly","astro"]
+          "FIDMAG": 22.0, # magnitude to evaluate the fit
+          "Filter":"DECAM_R", #filter name
+        }
+
+        fidboundary : list of slices indicating where to select in fiber
+            and wavelength directions for each amp (output of slice_fidboundary function)
+
+    Returns:
+        qadict : dict
+    """
+    print("Starting SNR Fit")
+
+    # - Get imaging magnitudes and calculate SNR
+    fmag = 22.0
+    if "FIDMAG" in params:
+        fmag = params["FIDMAG"]
+
+    # Median snr
+    snr = frame.flux * np.sqrt(frame.ivar)
+    mediansnr = np.median(snr, axis=1)
+    qadict = {"MEDIAN_SNR": mediansnr}
+    exptime = frame.meta["EXPTIME"]
+
+    snr_norm = mediansnr / exptime**(1/2)
+
+    if "Filter" in params:
+        thisfilter = params["Filter"]
+    elif camera[0] == 'b':
+        thisfilter = 'DECAM_G'
+    elif camera[0] == 'r':
+        thisfilter = 'DECAM_R'
+    else:
+        thisfilter = 'DECAM_Z'
+
+    qadict["FIT_FILTER"] = thisfilter
+    qadict["EXPTIME"] = exptime
+
+    if thisfilter in ('DECAM_G', 'BASS_G'):
+        photflux = frame.fibermap['FLUX_G']
+    elif thisfilter in ('DECAM_R', 'BASS_R'):
+        photflux = frame.fibermap['FLUX_R']
+    elif thisfilter in ('DECAM_Z', 'MZLS_Z'):
+        photflux = frame.fibermap['FLUX_Z']
+    else:
+        raise ValueError('Unknown filter {}'.format(thisfilter))
+
+    '''
+    mag_grz = np.zeros((3, frame.nspec)) + 99.0
+    for i, colname in enumerate(['FLUX_G', 'FLUX_R', 'FLUX_Z']):
+        ok = frame.fibermap[colname] > 0
+        mag_grz[i, ok] = 22.5 - 2.5 * np.log10(frame.fibermap[colname][ok])
+    '''
+
+    qadict["FILTERS"] = ['G', 'R', 'Z']
+
+    # Use astronomically motivated function for SNR fit
+    #funcMap = s2n_funcs(exptime=exptime)
+    #fit = funcMap['astro']
+
+
+    # Use median inverse variance of each fiber for chi2 minimization
+    '''
+    var = []
+    for i in range(len(ivar)):
+        var.append(1 / np.median(ivar[i]))
+    '''
+
+    neg_snr_tot = []
+    # - neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should
+    # - not happen for non-sky fibers with actual flux in them.  However, it does happen rarely
+    # - in sims.  To avoid this, we omit such fibers in the fit, but keep count for diagnostic
+    # - purposes.
+
+    # - Loop over each target type, and associate SNR and image magnitudes for each type.
+    resid_snr = []
+    #fidsnr_tgt = []
+    fitcoeff = []
+    #fitcovar = []
+    snrmag = []
+    fitsnr = []
+    fitT = []
+    elgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.ELG) != 0)[0]
+    lrgfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.LRG) != 0)[0]
+    qsofibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.QSO) != 0)[0]
+    bgsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.BGS_ANY) != 0)[0]
+    mwsfibers = np.where((frame.fibermap['DESI_TARGET'] & desi_mask.MWS_ANY) != 0)[0]
+    stdfibers = np.where(isStdStar(frame.fibermap))[0]
+
+    for T, fibers in (
+            ['ELG', elgfibers],
+            ['LRG', lrgfibers],
+            ['QSO', qsofibers],
+            ['BGS', bgsfibers],
+            ['MWS', mwsfibers],
+            ['STAR', stdfibers],
+    ):
+        if len(fibers) == 0:
+            continue
+
+        print("Working on {}".format(T))
+        # S/N of the fibers
+        medsnr = mediansnr[fibers]
+        mags = np.zeros(medsnr.shape)
+        fit_these = photflux[fibers] > 0
+        mags[fit_these] = 22.5 - 2.5 * np.log10(photflux[fibers][fit_these])
+
+        # Fit
+        popt, pcov = optimize.curve_fit(s2n_flux_astro, photflux[fibers][fit_these],
+                                        medsnr[fit_these]/exptime**(1/2), p0=(0.02, 1.))
+
+        # Save
+        fitcoeff.append([popt[0], popt[1]])
+        #fidsnr_tgt.append(fit(10 ** (-0.4 * (fmag - 22.5)), fita, fitb))
+        fitT.append(T)
+
+        qadict["{:s}_FIBERID".format(T)] = fibers.tolist()
+        snr_mag = [medsnr, mags]
+        snrmag.append(snr_mag)
+
+        # - Calculate residual SNR for focal plane plots
+        #x = 10 ** (-0.4 * (mags - 22.5))
+        #fit_snr = fit_astro(x, fite, fitf)
+        #fitsnr.append(fit_snr)
+        #resid = (all_medsnr - fit_snr) / fit_snr
+        #resid_snr += resid.tolist()
+
+    #qadict["NUM_NEGATIVE_SNR"] = sum(neg_snr_tot)
+    qadict["SNR_MAG_TGT"] = snrmag
+    qadict["FITCOEFF_TGT"] = fitcoeff
+    #qadict["SNR_RESID"] = resid_snr
+    #qadict["FIDSNR_TGT"] = fidsnr_tgt
+    qadict["OBJLIST"] = fitT
+    #qadict["RA"] = frame.fibermap['TARGET_RA']
+    #qadict["DEC"] = frame.fibermap['TARGET_DEC']
+
+    print("End SNR Fit")
+    return qadict, fitsnr
+
+
+def orig_SNRFit(frame,night,camera,expid,params,fidboundary=None,
            offline=False):
     """
     Signal vs. Noise With fitting
@@ -706,99 +896,100 @@ def SNRFit(frame,night,camera,expid,params,fidboundary=None,
             ['STAR', stdfibers],
             ):
         if len(fibers) == 0:
-            pass
+            continue
+
+        # S/N
+        objvar = np.array(var)[fibers]
+        medsnr = mediansnr[fibers]
+        all_medsnr = medsnr.copy()  # In case any are cut below
+        mags = np.zeros(medsnr.shape)
+        ok = (photflux[fibers] > 0)
+        mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
+
+        try:
+            #- Determine negative SNR and mag values and remove
+            neg_snr=len(np.where(medsnr<=0.0)[0])
+            neg_snr_tot.append(neg_snr)
+            xs=mags.argsort()
+            #- Convert magnitudes to flux
+            x=10**(-0.4*(mags[xs]-22.5))
+            med_snr=medsnr[xs]
+            y=med_snr
+            #- Fit SNR vs. Magnitude using chi squared minimization,
+            #- evaluate at fiducial magnitude, and store results in METRICS
+            #- Set high minimum initally chi2 value to be overwritten when fitting
+            minchi2=1e10
+            for a in range(100):
+                for b in range(100):
+                    guess=[0.01*a,0.1*b]
+                    fitdata=fit(x,guess[0],guess[1])
+                    totchi2=[]
+                    for k in range(len(x)):
+                        singlechi2=((y[k]-fitdata[k])/objvar[k])**2
+                        totchi2.append(singlechi2)
+                    chi2=np.sum(totchi2)
+                    if chi2<=minchi2:
+                        minchi2=chi2
+                        fita=guess[0]
+                        fitb=guess[1]
+            #- Increase granualarity of 'a' by a factor of 10
+            fitc = fita # In case we don't improve chi^2
+            for c in range(100):
+                for d in range(100):
+                    guess=[fita-0.05+0.001*c,0.1*d]
+                    fitdata=fit(x,guess[0],guess[1])
+                    totchi2=[]
+                    for k in range(len(x)):
+                        singlechi2=((y[k]-fitdata[k])/objvar[k])**2
+                        totchi2.append(singlechi2)
+                    chi2=np.sum(totchi2)
+                    if chi2<=minchi2:
+                        minchi2=chi2
+                        fitc=guess[0]
+                        fitd=guess[1]
+            #- Increase granualarity of 'a' by another factor of 10
+            for e in range(100):
+                for f in range(100):
+                    guess=[fitc-0.005+0.0001*e,0.1*f]
+                    fitdata=fit(x,guess[0],guess[1])
+                    totchi2=[]
+                    for k in range(len(x)):
+                        singlechi2=((y[k]-fitdata[k])/objvar[k])**2
+                        totchi2.append(singlechi2)
+                    chi2=np.sum(totchi2)
+                    if chi2<=minchi2:
+                        minchi2=chi2
+                        fite=guess[0]
+                        fitf=guess[1]
+            # Save
+            fitcoeff.append([fite,fitf])
+            fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
+            fitT.append(T)
+        except RuntimeError:
+            log.warning("In fit of {}, Fit minimization failed!".format(T))
+            fitcoeff.append(np.nan)
+            fidsnr_tgt.append(np.nan)
+
+        qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
+        if offline:
+            snr_mag=[medsnr,mags]
+            snrmag.append(snr_mag)
         else:
-            objvar = np.array(var)[fibers]
-            medsnr = mediansnr[fibers]
-            all_medsnr = medsnr.copy()  # In case any are cut below
-            mags = np.zeros(medsnr.shape)
-            ok = (photflux[fibers] > 0)
-            mags[ok] = 22.5 - 2.5 * np.log10(photflux[fibers][ok])
-    
-            try:
-    	        #- Determine negative SNR and mag values and remove
-                neg_snr=len(np.where(medsnr<=0.0)[0])
-                neg_snr_tot.append(neg_snr)
-                xs=mags.argsort()
-                #- Convert magnitudes to flux
-                x=10**(-0.4*(mags[xs]-22.5))
-                med_snr=medsnr[xs]
-                y=med_snr
-                #- Fit SNR vs. Magnitude using chi squared minimization,
-                #- evaluate at fiducial magnitude, and store results in METRICS
-                #- Set high minimum initally chi2 value to be overwritten when fitting
-                minchi2=1e10
-                for a in range(100):
-                    for b in range(100):
-                        guess=[0.01*a,0.1*b]
-                        fitdata=fit(x,guess[0],guess[1])
-                        totchi2=[]
-                        for k in range(len(x)):
-                            singlechi2=((y[k]-fitdata[k])/objvar[k])**2
-                            totchi2.append(singlechi2)
-                        chi2=np.sum(totchi2)
-                        if chi2<=minchi2:
-                            minchi2=chi2
-                            fita=guess[0]
-                            fitb=guess[1]
-                #- Increase granualarity of 'a' by a factor of 10
-                fitc = fita # In case we don't improve chi^2
-                for c in range(100):
-                    for d in range(100):
-                        guess=[fita-0.05+0.001*c,0.1*d]
-                        fitdata=fit(x,guess[0],guess[1])
-                        totchi2=[]
-                        for k in range(len(x)):
-                            singlechi2=((y[k]-fitdata[k])/objvar[k])**2
-                            totchi2.append(singlechi2)
-                        chi2=np.sum(totchi2)
-                        if chi2<=minchi2:
-                            minchi2=chi2
-                            fitc=guess[0]
-                            fitd=guess[1]
-                #- Increase granualarity of 'a' by another factor of 10
-                for e in range(100):
-                    for f in range(100):
-                        guess=[fitc-0.005+0.0001*e,0.1*f]
-                        fitdata=fit(x,guess[0],guess[1])
-                        totchi2=[]
-                        for k in range(len(x)):
-                            singlechi2=((y[k]-fitdata[k])/objvar[k])**2
-                            totchi2.append(singlechi2)
-                        chi2=np.sum(totchi2)
-                        if chi2<=minchi2:
-                            minchi2=chi2
-                            fite=guess[0]
-                            fitf=guess[1]
-                # Save
-                fitcoeff.append([fite,fitf])
-                fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
-                fitT.append(T)
-            except RuntimeError:
-                log.warning("In fit of {}, Fit minimization failed!".format(T))
-                fitcoeff.append(np.nan)
-                fidsnr_tgt.append(np.nan)
-    
-            qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
-            if offline:
-                snr_mag=[medsnr,mags]
-                snrmag.append(snr_mag)
-            else:
-                snr_mag=[all_medsnr,mags]
-                snrmag.append(snr_mag)
-    
-            #- Calculate residual SNR for focal plane plots
-            if not offline:
-                fit_snr = fit(x,fite,fitf)
-                fitsnr.append(fit_snr)
-                resid = (med_snr-fit_snr)/fit_snr
-                resid_snr += resid.tolist()
-            else:
-                x=10**(-0.4*(mags-22.5))
-                fit_snr = fit(x,fite,fitf)
-                fitsnr.append(fit_snr)
-                resid = (all_medsnr-fit_snr)/fit_snr
-                resid_snr += resid.tolist()
+            snr_mag=[all_medsnr,mags]
+            snrmag.append(snr_mag)
+
+        #- Calculate residual SNR for focal plane plots
+        if not offline:
+            fit_snr = fit(x,fite,fitf)
+            fitsnr.append(fit_snr)
+            resid = (med_snr-fit_snr)/fit_snr
+            resid_snr += resid.tolist()
+        else:
+            x=10**(-0.4*(mags-22.5))
+            fit_snr = fit(x,fite,fitf)
+            fitsnr.append(fit_snr)
+            resid = (all_medsnr-fit_snr)/fit_snr
+            resid_snr += resid.tolist()
 
 
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
