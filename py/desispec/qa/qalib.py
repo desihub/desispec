@@ -722,33 +722,25 @@ def SNRFit(frame, camera, params):
         mags[fit_these] = 22.5 - 2.5 * np.log10(photflux[fibers][fit_these])
 
         # Fit
-        popt, pcov = optimize.curve_fit(s2n_flux_astro, photflux[fibers][fit_these],
+        try:
+            popt, pcov = optimize.curve_fit(s2n_flux_astro, photflux[fibers][fit_these].data,
                                         medsnr[fit_these]/exptime**(1/2), p0=(0.02, 1.))
-
+        except RuntimeError:
+            #from IPython import embed; embed(header='729 of qalib')
+            fitcoeff.append(np.nan)
+        else:
+            fitcoeff.append([popt[0], popt[1]])
         # Save
-        fitcoeff.append([popt[0], popt[1]])
-        #fidsnr_tgt.append(fit(10 ** (-0.4 * (fmag - 22.5)), fita, fitb))
         fitT.append(T)
 
         qadict["{:s}_FIBERID".format(T)] = fibers.tolist()
-        snr_mag = [medsnr, mags]
+        snr_mag = [medsnr.tolist(), mags.tolist()]
         snrmag.append(snr_mag)
 
-        # - Calculate residual SNR for focal plane plots
-        #x = 10 ** (-0.4 * (mags - 22.5))
-        #fit_snr = fit_astro(x, fite, fitf)
-        #fitsnr.append(fit_snr)
-        #resid = (all_medsnr - fit_snr) / fit_snr
-        #resid_snr += resid.tolist()
 
-    #qadict["NUM_NEGATIVE_SNR"] = sum(neg_snr_tot)
     qadict["SNR_MAG_TGT"] = snrmag
     qadict["FITCOEFF_TGT"] = fitcoeff
-    #qadict["SNR_RESID"] = resid_snr
-    #qadict["FIDSNR_TGT"] = fidsnr_tgt
     qadict["OBJLIST"] = fitT
-    #qadict["RA"] = frame.fibermap['TARGET_RA']
-    #qadict["DEC"] = frame.fibermap['TARGET_DEC']
 
     print("End SNR Fit")
     return qadict, fitsnr
