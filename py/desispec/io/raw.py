@@ -16,6 +16,7 @@ import desispec.io.util
 import desispec.preproc
 from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder 
+import desispec.maskbits as maskbits
 
 def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
@@ -159,7 +160,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         mod_fibers = fibermap['FIBER'].data % 500
         for fiber in fiberblacklist:
             loc = np.where(mod_fibers==fiber)[0]
-            fibermap['FIBERSTATUS'][loc] |= 2**16
+            fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
 
     img.fibermap = fibermap
 
