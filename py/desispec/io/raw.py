@@ -155,12 +155,10 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         if type(fiberblacklist) is str and ',' in fiberblacklist:
             fiberblacklist = fiberblacklist.split(',')
              
-        #print(fiberblacklist,type(fiberblacklist))
         fiberblacklist = np.array(list(fiberblacklist),dtype=np.int32)
-        #print(fiberblacklist)
+        mod_fibers = fibermap['FIBER'].data % 500
         for fiber in fiberblacklist:
-            loc = np.where(fibermap['DEVICE_LOC']==fiber)[0]
-            #print(fiber,loc, fibermap[loc])
+            loc = np.where(mod_fibers==fiber)[0]
             fibermap['FIBERSTATUS'][loc] |= 2**16
 
     img.fibermap = fibermap
