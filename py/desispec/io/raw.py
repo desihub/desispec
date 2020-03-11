@@ -15,7 +15,7 @@ import desispec.io
 import desispec.io.util
 import desispec.preproc
 from desiutil.log import get_logger
-from desispec.calibfinder import parse_date_obs
+from desispec.calibfinder import parse_date_obs, CalibFinder 
 
 def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
@@ -143,6 +143,25 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     
     ii = (fibermap['PETAL_LOC'] == petal_loc)
     fibermap = fibermap[ii]
+
+    ## Mask blacklisted fibers
+    cfinder = CalibFinder([header,primary_header])
+    blacklistkey="FIBERBLACKLIST"
+    if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
+         log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+         blacklistkey="BROKENFIBERS"
+    if cfinder.haskey(blacklistkey):
+        fiberblacklist = cfinder.value(blacklistkey)
+        if type(fiberblacklist) is str and ',' in fiberblacklist:
+            fiberblacklist = fiberblacklist.split(',')
+             
+        #print(fiberblacklist,type(fiberblacklist))
+        fiberblacklist = np.array(list(fiberblacklist),dtype=np.int32)
+        #print(fiberblacklist)
+        for fiber in fiberblacklist:
+            loc = np.where(fibermap['DEVICE_LOC']==fiber)[0]
+            #print(fiber,loc, fibermap[loc])
+            fibermap['FIBERSTATUS'][loc] |= 2**16
 
     img.fibermap = fibermap
 
