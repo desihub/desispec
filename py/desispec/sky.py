@@ -1188,6 +1188,8 @@ def qa_skysub(param, frame, skymodel, quick_look=False, deepcopy=False):
     from desispec.qa import qalib
     import copy
 
+    log=get_logger()
+
     #- QAs
     #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately.
     if deepcopy:
@@ -1197,16 +1199,20 @@ def qa_skysub(param, frame, skymodel, quick_look=False, deepcopy=False):
     subtract_sky(tempframe,skymodel) #- Note: sky subtract is done to get residuals. As part of pipeline it is done in fluxcalib stage
 
     # Sky residuals first
+    log.info("Sky residuals")
     qadict = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
+    log.info("Sky residuals done")
 
     # Sky continuum
     if not quick_look:  # Sky continuum is measured after flat fielding in QuickLook
+        log.info("Sky continuum")
         channel = frame.meta['CAMERA'][0]
         wrange1, wrange2 = param[channel.upper()+'_CONT']
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(frame,wrange1,wrange2)
         qadict["SKYFIBERID"] = skyfiber.tolist()
         qadict["SKYCONT"] = skycont
         qadict["SKYCONT_FIBER"] = meancontfiber
+        log.info("Sky continuum done")
 
     if quick_look:  # The following can be a *large* dict
         qadict_snr = qalib.SignalVsNoise(tempframe,param)

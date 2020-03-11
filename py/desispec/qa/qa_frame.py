@@ -416,6 +416,5 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
                     qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)  # , model_tuple)
     # Write
     if write:
-        print("About to write")
         write_qa_frame(qafile, qaframe, verbose=True)
     return qaframe
