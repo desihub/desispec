@@ -50,12 +50,15 @@ ccdmask:
 
 #- Mask bits that apply to an entire fiber
 fibermask:
-    - [BADFIBER,     0, "Broken or otherwise unusable fiber"]
-    - [BADTRACE,     1, "Bad trace solution"]
-    - [BADFLAT,      2, "Bad fiber flat"]
-    - [BADARC,       3, "Bad arc solution"]
-    - [MANYBADCOL,   4, ">10% of pixels are bad columns"]
-    - [MANYREJECTED, 5, ">10% of pixels rejected in extraction"]
+    - [STUCKPOSITIONER, 1, "Stuck positioner"]
+    - [BROKENFIBER,     2, "Broken fiber"]
+    - [BADTARGET,       3, "Fiber is not a known target"]
+    - [BADFIBER,       16, "Unusable fiber"]
+    - [BADTRACE,       17, "Bad trace solution"]
+    - [BADFLAT,        18, "Bad fiber flat"]
+    - [BADARC,         19, "Bad arc solution"]
+    - [MANYBADCOL,     20, ">10% of pixels are bad columns"]
+    - [MANYREJECTED,   21, ">10% of pixels rejected in extraction"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
 specmask:
