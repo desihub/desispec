@@ -1199,9 +1199,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False, deepcopy=False):
     subtract_sky(tempframe,skymodel) #- Note: sky subtract is done to get residuals. As part of pipeline it is done in fluxcalib stage
 
     # Sky residuals first
-    log.info("Sky residuals")
     qadict = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
-    log.info("Sky residuals done")
 
     # Sky continuum
     if not quick_look:  # Sky continuum is measured after flat fielding in QuickLook

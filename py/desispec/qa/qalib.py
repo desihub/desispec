@@ -625,21 +625,13 @@ def SNRFit(frame, camera, params):
     Returns:
         qadict : dict
     """
-    print("Starting SNR Fit")
-
-    # - Get imaging magnitudes and calculate SNR
-    fmag = 22.0
-    if "FIDMAG" in params:
-        fmag = params["FIDMAG"]
-
     # Median snr
     snr = frame.flux * np.sqrt(frame.ivar)
     mediansnr = np.median(snr, axis=1)
     qadict = {"MEDIAN_SNR": mediansnr}
     exptime = frame.meta["EXPTIME"]
 
-    snr_norm = mediansnr / exptime**(1/2)
-
+    # Parse filters
     if "Filter" in params:
         thisfilter = params["Filter"]
     elif camera[0] == 'b':
@@ -661,38 +653,10 @@ def SNRFit(frame, camera, params):
     else:
         raise ValueError('Unknown filter {}'.format(thisfilter))
 
-    '''
-    mag_grz = np.zeros((3, frame.nspec)) + 99.0
-    for i, colname in enumerate(['FLUX_G', 'FLUX_R', 'FLUX_Z']):
-        ok = frame.fibermap[colname] > 0
-        mag_grz[i, ok] = 22.5 - 2.5 * np.log10(frame.fibermap[colname][ok])
-    '''
-
     qadict["FILTERS"] = ['G', 'R', 'Z']
 
-    # Use astronomically motivated function for SNR fit
-    #funcMap = s2n_funcs(exptime=exptime)
-    #fit = funcMap['astro']
-
-
-    # Use median inverse variance of each fiber for chi2 minimization
-    '''
-    var = []
-    for i in range(len(ivar)):
-        var.append(1 / np.median(ivar[i]))
-    '''
-
-    neg_snr_tot = []
-    # - neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should
-    # - not happen for non-sky fibers with actual flux in them.  However, it does happen rarely
-    # - in sims.  To avoid this, we omit such fibers in the fit, but keep count for diagnostic
-    # - purposes.
-
     # - Loop over each target type, and associate SNR and image magnitudes for each type.
-    resid_snr = []
-    #fidsnr_tgt = []
     fitcoeff = []
-    #fitcovar = []
     snrmag = []
     fitsnr = []
     fitT = []
@@ -726,7 +690,6 @@ def SNRFit(frame, camera, params):
             popt, pcov = optimize.curve_fit(s2n_flux_astro, photflux[fibers][fit_these].data,
                                         medsnr[fit_these]/exptime**(1/2), p0=(0.02, 1.))
         except RuntimeError:
-            #from IPython import embed; embed(header='729 of qalib')
             fitcoeff.append(np.nan)
         else:
             fitcoeff.append([popt[0], popt[1]])
@@ -737,12 +700,11 @@ def SNRFit(frame, camera, params):
         snr_mag = [medsnr.tolist(), mags.tolist()]
         snrmag.append(snr_mag)
 
-
+    # Save
     qadict["SNR_MAG_TGT"] = snrmag
     qadict["FITCOEFF_TGT"] = fitcoeff
     qadict["OBJLIST"] = fitT
-
-    print("End SNR Fit")
+    # Return
     return qadict, fitsnr
 
 
