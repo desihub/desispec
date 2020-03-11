@@ -16,6 +16,7 @@ from desispec import util
 from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
+from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberbitmasked_frame
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0) :
     """Compute a sky model.
