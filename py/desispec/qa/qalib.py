@@ -346,7 +346,6 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     """
     # Output dict
     qadict = {}
-#    qadict['NREJ'] = int(skymodel.nrej)
 
     if quick_look:
         qadict['RA'] = frame.fibermap['TARGET_RA']
@@ -358,29 +357,21 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     nfibers=len(skyfibers)
     qadict['NSKY_FIB'] = int(nfibers)
 
-    #current_ivar=frame.ivar[skyfibers].copy()
-    #flux = frame.flux[skyfibers]
-
-    # Record median flux
-    #qadict['MED_SKY'] = np.median(skymodel[skyfibers])  # Counts
 
     #- Residuals
     res=frame.flux[skyfibers] #- as this frame is already sky subtracted
     res_ivar=frame.ivar[skyfibers]
 
     # Chi^2 and Probability
-    if quick_look:
-        chi2_fiber = np.sum(res_ivar*(res**2),1)
-        chi2_prob = np.zeros(nfibers)
-        for ii in range(nfibers):
-            # Stats
-            dof = np.sum(res_ivar[ii,:] > 0.)
-            chi2_prob[ii] = scipy.stats.distributions.chi2.sf(chi2_fiber[ii], dof)
-        # Bad models
-        qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
-        if qadict['NBAD_PCHI'] > 0:
-            log.warning("Bad Sky Subtraction in {:d} fibers".format(
-                    qadict['NBAD_PCHI']))
+    chi2_fiber = np.sum(res_ivar*(res**2),1)
+    dof = np.sum(res_ivar > 0., axis=1)
+    chi2_prob = scipy.stats.distributions.chi2.sf(chi2_fiber, dof)
+
+    # Bad models
+    qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
+    if qadict['NBAD_PCHI'] > 0:
+        log.warning("Bad Sky Subtraction in {:d} fibers".format(
+                qadict['NBAD_PCHI']))
 
     # Median residual
     qadict['RESID'] = float(np.median(res)) # Median residual (counts)
