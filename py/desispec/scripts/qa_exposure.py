@@ -14,6 +14,8 @@ def parse(options=None):
     parser.add_argument('--channels', type=str, help="List of channels to include. Default = b,r,z]")
     parser.add_argument('--specprod_dir', type = str, default=None, metavar='PATH',
                         help='Override default path to processed data.')
+    parser.add_argument('--qaprod_dir', type=str, default=None, metavar='PATH',
+                        help='Override default path to QA data.')
     parser.add_argument('--rebuild', default=False, action="store_true",
                         help = 'Regenerate the QA files for this exposure?')
     parser.add_argument('--qamulti_root', type=str, default=None,
@@ -44,7 +46,10 @@ def main(args) :
         specprod_dir = meta.specprod_root()
     else:
         specprod_dir = args.specprod_dir
-        #qaprod_dir = meta.qaprod_root(specprod_dir=specprod_dir)
+    if args.qaprod_dir is None:
+        qaprod_dir = meta.qaprod_root(specprod_dir=specprod_dir)
+    else:
+        qaprod_dir = args.qaprod_dir
     if args.channels is None:
         channels = ['b','r','z']
     else:
@@ -55,6 +60,7 @@ def main(args) :
 
     # Instantiate
     qa_exp = QA_Exposure(args.expid, night, specprod_dir=specprod_dir,
+                         qaprod_dir=qaprod_dir,
                          no_load=args.rebuild, multi_root=args.qamulti_root)
     # Rebuild?
     if args.rebuild:

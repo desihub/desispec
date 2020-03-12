@@ -63,7 +63,7 @@ class QA_Exposure(object):
         self.qaprod_dir  = qaprod_dir
 
         # Load meta from frame (ideally)
-        frames_dict = get_files(filetype = str('frame'), night = night,
+        frames_dict = get_files(filetype=str('frame'), night=night,
                                 expid=expid, specprod_dir=self.specprod_dir)
         if len(frames_dict) > 0:
             frame_file = list(frames_dict.items())[0][1]  # Any one will do
