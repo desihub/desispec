@@ -16,9 +16,11 @@ from desispec.maskbits import specmask
 
 def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
     """
-        Wrapper script of get_fiberbitmasked_frame_arrays that will
-        return a modified version of the cframe instead of just the 
-        flux and ivar
+    Wrapper script of get_fiberbitmasked_frame_arrays that will
+    return a modified version of the cframe instead of just the 
+    flux and ivar
+    NOTE: The input "frame" variable itself is modified and returned, 
+          not a copy.
     """
     ivar,mask = get_fiberbitmasked_frame_arrays(frame,bitmask,ivar_framemask,return_mask=True)
     outframe = frame
@@ -28,29 +30,32 @@ def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
 
 def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,return_mask=False):
     """
-       Function that takes a frame object and a bitmask and
-       returns ivar (and optionally mask) array(s) that have fibers with 
-       offending bits in fibermap['FIBERSTATUS'] set to
-       0 in ivar and optionally flips a bit in mask.
+    Function that takes a frame object and a bitmask and
+    returns ivar (and optionally mask) array(s) that have fibers with 
+    offending bits in fibermap['FIBERSTATUS'] set to
+    0 in ivar and optionally flips a bit in mask.
 
-       input:
-            frame: frame object
-            bitmask: int32 or list/array of int32's derived from desispec.maskbits.fibermask
-                     OR string indicating a keyword for get_fiberbitmask_comparison_value()
-            ivar_framemask: bool (default=True), tells code whether to multiply the output
-                     variance by (frame.mask==0)
-            return_mask: bool, (default=False). Returns the frame.mask with the logic of
-                            FIBERSTATUS applied.
+    input:
+        frame: frame object
+        bitmask: int32 or list/array of int32's derived from desispec.maskbits.fibermask
+                 OR string indicating a keyword for get_fiberbitmask_comparison_value()
+        ivar_framemask: bool (default=True), tells code whether to multiply the output
+                 variance by (frame.mask==0)
+        return_mask: bool, (default=False). Returns the frame.mask with the logic of
+                 FIBERSTATUS applied.
 
-       output:
-            ivar: frame.ivar where the fibers with FIBERSTATUS & bitmask > 0                               
-                  set to zero ivar
-            mask: (optional) frame.mask logically OR'ed with BADFIBER bit in cases with 
-                  a bad FIBERSTATUS
+    output:
+        ivar: frame.ivar where the fibers with FIBERSTATUS & bitmask > 0                               
+              set to zero ivar
+        mask: (optional) frame.mask logically OR'ed with BADFIBER bit in cases with 
+              a bad FIBERSTATUS
     
-       example bitmask list:
-                  bad_bits =  [fmsk.BROKENFIBER,fmsk.BADTARGET,fmsk.BADFIBER,\
-                               fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
+    example bitmask list:
+        bitmask = [fmsk.BROKENFIBER,fmsk.BADTARGET,fmsk.BADFIBER,\
+                    fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
+        bitmask = get_fiberbitmask_comparison_value(kind='fluxcalib')
+        bitmask = 'fluxcalib'
+        bitmask = 4128780
     """
     ivar = frame.ivar.copy()
     mask = frame.mask.copy()
