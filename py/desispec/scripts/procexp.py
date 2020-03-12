@@ -101,10 +101,13 @@ def main(args):
         fluxcalib=read_flux_calibration(args.calib)
         # apply calibration
         apply_flux_calibration(frame, fluxcalib)
+
+        # Ensure that ivars are set to 0 for all values if any designated
+        # fibermask bit is set. Also flips a bits for each frame.mask value using specmask.BADFIBER
+        frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
 
     # save output
     write_frame(args.outfile, frame, units='10**-17 erg/(s cm2 Angstrom)')
-
     log.info("successfully wrote %s"%args.outfile)

@@ -155,7 +155,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='all',ivar_framemask=True,return_mask=False)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
     current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
 
@@ -696,7 +696,7 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='all',ivar_framemask=True,return_mask=False)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
     current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
@@ -1029,7 +1029,7 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
     log.info("starting")
 
     # Set fibermask flagged spectra to have 0 flux and variance
-    frame = get_fiberbitmasked_frame(frame,bitmask='all',ivar_framemask=True)
+    frame = get_fiberbitmasked_frame(frame,bitmask='sky',ivar_framemask=True)
     
     # check same wavelength, die if not the case
     if not np.allclose(frame.wave, skymodel.wave):
