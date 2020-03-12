@@ -17,16 +17,15 @@ from desispec.maskbits import specmask
 def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
     """
     Wrapper script of get_fiberbitmasked_frame_arrays that will
-    return a modified version of the cframe instead of just the 
+    return a modified version of the frame instead of just the 
     flux and ivar
     NOTE: The input "frame" variable itself is modified and returned, 
           not a copy.
     """
     ivar,mask = get_fiberbitmasked_frame_arrays(frame,bitmask,ivar_framemask,return_mask=True)
-    outframe = frame
-    outframe.mask = mask
-    outframe.ivar = ivar
-    return outframe
+    frame.mask = mask
+    frame.ivar = ivar
+    return frame
 
 def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,return_mask=False):
     """
