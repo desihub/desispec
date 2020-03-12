@@ -399,12 +399,11 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    flux, current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
     current_ivar = current_ivar[skyfibers]
-    flux = flux[skyfibers]
+    flux = frame.flux[skyfibers]
     
     Rsky = frame.R[skyfibers]
-    
 
     input_ivar=None 
     if model_ivar :
