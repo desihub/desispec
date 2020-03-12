@@ -561,12 +561,13 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
 
 def frame_s2n(s2n_dict, outfile, rescut=0.2, verbose=True):
     """
-    Plot SNR
+    Plot S/N diagnostics for a given frame
+    Replaces a previous-QL script
 
     Args:
         s2n_dict (dict): dictionary of qa outputs repackaged a bit
-        outfile: output png file
-        rescut: only plot residuals (+/-) less than rescut (default 0.2)
+        outfile (str): output png filename
+        rescut (float, optional): only plot residuals (+/-) less than rescut
     """
     from desispec.qa.qalib import s2n_flux_astro
     # Plot

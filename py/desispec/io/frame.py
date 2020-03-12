@@ -243,6 +243,7 @@ def search_for_framefile(frame_file, specprod_dir=None):
     """ Search for an input frame_file in the desispec redux hierarchy
     Args:
         frame_file:  str
+        specprod_dir: str, optional
 
     Returns:
         mfile: str,  full path to frame_file if found else raise error

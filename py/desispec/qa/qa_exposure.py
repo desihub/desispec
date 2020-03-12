@@ -247,7 +247,7 @@ class QA_Exposure(object):
             s2n_dict = self.data['frames'][camera]['S2N']
             max_o = np.max([len(otype) for otype in s2n_dict['METRICS']['OBJLIST']])
             objtype = np.array([' '*max_o]*len(sub_tbl))
-            # Coeffs -- Avoid nan
+            # Coeffs
             coeffs = np.zeros((len(sub_tbl), len(s2n_dict['METRICS']['FITCOEFF_TGT'][0])))
             # Others
             mags = np.zeros_like(sub_tbl['MEDIAN_SNR'].data)
@@ -259,6 +259,7 @@ class QA_Exposure(object):
                 if len(fibers) == 0:
                     continue
                 coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
+                # Avoid NAN
                 if np.any(np.isnan(coeff)):
                     continue
                 coeffs[fibers,:] = np.outer(np.ones_like(fibers), coeff)

@@ -246,6 +246,7 @@ def find_exposure_night(expid, specprod_dir=None):
     """ Find the night that has the exposure
     Args:
         expid: int
+        specprod_dir: str, optional
 
     Returns:
         night: str

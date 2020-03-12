@@ -19,7 +19,7 @@ def parse(options=None):
     parser.add_argument('--qamulti_root', type=str, default=None,
                         help='Root name for a set of slurped QA files (e.g. mini_qa). Uses $SPECPROD/QA for path')
     parser.add_argument('--slurp', type=str, default=None,
-                        help='Root name for slurp QA file to add to (e.g. mini_qa). File must exist.  Uses $SPECPROD/QA for path')
+                        help='Root name for slurp QA file to add to (e.g. mini_qa). File must already exist.  Uses $SPECPROD/QA for path')
 
     if options is None:
         args = parser.parse_args()
