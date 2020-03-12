@@ -90,12 +90,14 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     # (it's faster that way, and we try to use sparse matrices as much as possible)
     #
 
+    #- if problematic fibers, set ivars to 0 and mask them with specmask.BADFIBER                 
+    frame = get_fiberbitmasked_frame(frame,bitmask='flat',ivar_framemask=True)
+
     #- Shortcuts                                                                                                      
     nwave=frame.nwave
     nfibers=frame.nspec
     wave = frame.wave.copy()  #- this will become part of output too
-    #- if broken fibers, mask them
-    ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='flat',ivar_framemask=True,return_mask=False)
+    ivar = frame.ivar.copy()
     flux = frame.flux.copy()
 
 
@@ -321,7 +323,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     mask=np.zeros((flux.shape), dtype='uint32')
 
     # reset ivar
-    ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='flat',ivar_framemask=True,return_mask=False)
+    ivar = frame,ivar.copy()
     
     fiberflat_mask=12 # place holder for actual mask bit when defined
 
