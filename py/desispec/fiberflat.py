@@ -441,11 +441,11 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     fiberflat = FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
                      chi2pdf=chi2pdf,header=frame.meta,fibermap=frame.fibermap)
         
-    for broken_fiber in broken_fibers :
-        log.info("mask broken fiber {} in flat".format(broken_fiber))
-        fiberflat.fiberflat[fiber]=1.
-        fiberflat.ivar[fiber]=0.
-        fiberflat.mask[fiber]=specmask.BADFIBERFLAT
+    #for broken_fiber in broken_fibers :
+    #    log.info("mask broken fiber {} in flat".format(broken_fiber))
+    #    fiberflat.fiberflat[fiber]=1.
+    #    fiberflat.ivar[fiber]=0.
+    #    fiberflat.mask[fiber]=specmask.BADFIBERFLAT
     
     return fiberflat
 
