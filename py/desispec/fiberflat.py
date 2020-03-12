@@ -323,7 +323,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     mask=np.zeros((flux.shape), dtype='uint32')
 
     # reset ivar
-    ivar = frame,ivar.copy()
+    ivar = frame.ivar.copy()
     
     fiberflat_mask=12 # place holder for actual mask bit when defined
 
