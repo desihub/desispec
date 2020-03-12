@@ -670,7 +670,7 @@ def autocalib_fiberflat(fiberflats):
     corr=1./(mflat+(mflat==0))
     for spec in np.unique(spectro) :
         output_fiberflats[spec].fiberflat *= corr
-        mask_bad_fiberflat(output_fiberflats[spec])
+        #mask_bad_fiberflat(output_fiberflats[spec])
         filter_fiberflat(output_fiberflats[spec])
     log.info("done")
     return output_fiberflats
