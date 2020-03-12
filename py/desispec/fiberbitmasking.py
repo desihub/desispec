@@ -1,16 +1,18 @@
 """
-desispec.frame
+desispec.fiberbitmasking
 ==============
 
-Lightweight wrapper class for spectra, to be returned by io.read_frame
+Functions to properly take FIBERSTATUS into account in the variances for data reduction
 """
 
 from __future__ import absolute_import, division
 import numpy as np
+from astropy.table import Table
 
 from desiutil.log import get_logger
 from desispec.maskbits import fibermask as fmsk
-from astropy.table import Table
+from desispec.maskbits import specmask
+
 
 def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
     """
@@ -18,18 +20,18 @@ def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
         return a modified version of the cframe instead of just the 
         flux and ivar
     """
-    flux,ivar = get_fiberbitmasked_frame_arrays(frame,bitmask,ivar_framemask)
+    ivar,mask = get_fiberbitmasked_frame_arrays(frame,bitmask,ivar_framemask,return_mask=True)
     outframe = frame
-    outframe.flux = flux
+    outframe.mask = mask
     outframe.ivar = ivar
     return outframe
 
-def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True):
+def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,return_mask=False):
     """
        Function that takes a frame object and a bitmask and
-       returns flux and ivar arrays that have fibers with 
+       returns ivar (and optionally mask) array(s) that have fibers with 
        offending bits in fibermap['FIBERSTATUS'] set to
-       0 flux and ivar
+       0 in ivar and optionally flips a bit in mask.
 
        input:
             frame: frame object
@@ -37,19 +39,21 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True):
                      OR string indicating a keyword for get_fiberbitmask_comparison_value()
             ivar_framemask: bool (default=True), tells code whether to multiply the output
                      variance by (frame.mask==0)
+            return_mask: bool, (default=False). Returns the frame.mask with the logic of
+                            FIBERSTATUS applied.
 
        output:
-            flux: frame.flux where the fibers with FIBERSTATUS & bitmask > 0
-                  set to zero fluxes
             ivar: frame.ivar where the fibers with FIBERSTATUS & bitmask > 0                               
                   set to zero ivar
+            mask: (optional) frame.mask logically OR'ed with BADFIBER bit in cases with 
+                  a bad FIBERSTATUS
     
        example bitmask list:
                   bad_bits =  [fmsk.BROKENFIBER,fmsk.BADTARGET,fmsk.BADFIBER,\
                                fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
     """
-    flux = frame.flux.copy()
     ivar = frame.ivar.copy()
+    mask = frame.mask.copy()
     if ivar_framemask and frame.mask is not None:
         ivar *= (frame.mask==0)
 
@@ -58,10 +62,13 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True):
     if frame.fibermap is None:
         log = get_logger()
         log.warning("No fibermap was given, so no FIBERSTATUS check applied.")
-        return flux, ivar
-    if bitmask is None:
-        return flux, ivar
-
+        
+    if bitmask is None or frame.fibermap is None:
+        if return_mask:
+            return ivar, mask
+        else:
+            return ivar
+        
     if type(bitmask) in [int,np.int32]:
         bad = bitmask
     elif type(bitmask) == str:
@@ -79,10 +86,13 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True):
 
     # For the bad fibers, loop through and nullify them                                                   
     for fiber in badfibers:                                                
-        flux[fiber] = 0.
+        mask[fiber] |= specmask.BADFIBER
         ivar[fiber] = 0.
-        
-    return flux, ivar
+
+    if return_mask:
+        return ivar,mask
+    else:
+        return ivar
 
 
 def get_fiberbitmask_comparison_value(kind='fluxcalib'):

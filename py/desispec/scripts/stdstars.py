@@ -97,6 +97,8 @@ def main(args) :
 
         log.info("reading %s"%filename)
         frame=io.read_frame(filename)
+        # Set fibermask flagged spectra to have 0 flux and variance    
+        frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
         frame_starindices = np.where(isStdStar(frame_fibermap))[0]
@@ -129,8 +131,6 @@ def main(args) :
         if not camera in frames :
             frames[camera]=[]
 
-        # Set fibermask flagged spectra to have 0 flux and variance 
-        frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
         frames[camera].append(frame)
  
     for filename in args.skymodels :

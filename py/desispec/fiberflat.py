@@ -95,7 +95,8 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     nfibers=frame.nspec
     wave = frame.wave.copy()  #- this will become part of output too
     #- if broken fibers, mask them
-    flux, ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='flat',ivar_framemask=True)
+    ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='flat',ivar_framemask=True,return_mask=False)
+    flux = frame.flux.copy()
 
 
     # iterative fitting and clipping to get precise mean spectrum
@@ -320,8 +321,8 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     mask=np.zeros((flux.shape), dtype='uint32')
 
     # reset ivar
-    ivar=frame.ivar
-
+    ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='flat',ivar_framemask=True,return_mask=False)
+    
     fiberflat_mask=12 # place holder for actual mask bit when defined
 
     nsig_for_mask=nsig_clipping # only mask out N sigma outliers

@@ -76,7 +76,7 @@ def main(args) :
     frame = read_frame(args.infile)
 
     # Set fibermask flagged spectra to have 0 flux and variance
-    frame = get_fiberbitmasked_frame(frame, bitmask='flux',ivar_framemask=True)
+    frame = get_fiberbitmasked_frame(frame, bitmask='all',ivar_framemask=True)
     
     log.info("apply fiberflat")
     # read fiberflat
