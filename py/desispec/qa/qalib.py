@@ -413,7 +413,6 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     return qadict
 
 
-'''
 def SN_ratio(flux,ivar):
     """
     SN Ratio
@@ -431,7 +430,7 @@ def SN_ratio(flux,ivar):
     snr = flux * np.sqrt(ivar)
     medsnr = np.median(snr, axis=1)
     return medsnr #, totsnr
-'''
+
 
 def _get_mags(frame):
     '''Extract frame.fibermap fluxes into mags depending upon camera
