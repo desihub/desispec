@@ -667,7 +667,7 @@ def mask_bad_fiberflat(fiberflat) :
             log.warning("fiber {} is 'BAD' because {} flatfield values are bad".format(fiber,nbad))
             fiberflat.fiberflat[fiber]=1.
             fiberflat.ivar[fiber]=0.
-            fiberflat.mask[fiber]=specmask.BADFIBERFLAT
+            fiberflat.mask[fiber] |= specmask.BADFIBERFLAT
             
 def filter_fiberflat(fiberflat) :
     log = get_logger()
