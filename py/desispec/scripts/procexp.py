@@ -14,6 +14,7 @@ from desispec.fluxcalibration import apply_flux_calibration
 from desiutil.log import get_logger
 from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores
+from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 import argparse
 import sys
