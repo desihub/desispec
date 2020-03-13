@@ -87,7 +87,7 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
             
     # find if any fibers have an intersection with the bad bits                                           
     badfibers = fmap['FIBER'][ (fmap['FIBERSTATUS'] & bad) > 0 ].data
-
+    badfibers = badfibers % 500
     # For the bad fibers, loop through and nullify them                                                   
     for fiber in badfibers:                                                
         mask[fiber] |= specmask.BADFIBER
