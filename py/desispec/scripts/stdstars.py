@@ -21,6 +21,7 @@ from desiutil.log import get_logger
 from desispec.parallel import default_nproc
 from desispec.io.filters import load_legacy_survey_filter
 from desiutil.dust import ext_odonnell
+from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Fit of standard star spectra in frames.")
@@ -96,6 +97,8 @@ def main(args) :
 
         log.info("reading %s"%filename)
         frame=io.read_frame(filename)
+        # Set fibermask flagged spectra to have 0 flux and variance    
+        frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
         frame_starindices = np.where(isStdStar(frame_fibermap))[0]
@@ -127,6 +130,7 @@ def main(args) :
 
         if not camera in frames :
             frames[camera]=[]
+
         frames[camera].append(frame)
  
     for filename in args.skymodels :

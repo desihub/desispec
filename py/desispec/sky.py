@@ -16,6 +16,7 @@ from desispec import util
 from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
+from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberbitmasked_frame
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0) :
     """Compute a sky model.
@@ -154,8 +155,10 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+    current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
+
     Rsky = frame.R[skyfibers]
     
     input_ivar=None 
@@ -396,10 +399,11 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+    current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
-    Rsky = frame.R[skyfibers]
     
+    Rsky = frame.R[skyfibers]
 
     input_ivar=None 
     if model_ivar :
@@ -692,7 +696,8 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+    current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
     
@@ -1023,6 +1028,9 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
     log=get_logger()
     log.info("starting")
 
+    # Set fibermask flagged spectra to have 0 flux and variance
+    frame = get_fiberbitmasked_frame(frame,bitmask='sky',ivar_framemask=True)
+    
     # check same wavelength, die if not the case
     if not np.allclose(frame.wave, skymodel.wave):
         message = "frame and sky not on same wavelength grid"

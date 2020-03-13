@@ -14,6 +14,7 @@ from desispec.fluxcalibration import apply_flux_calibration
 from desiutil.log import get_logger
 from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores
+from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 import argparse
 import sys
@@ -101,10 +102,13 @@ def main(args):
         fluxcalib=read_flux_calibration(args.calib)
         # apply calibration
         apply_flux_calibration(frame, fluxcalib)
+
+        # Ensure that ivars are set to 0 for all values if any designated
+        # fibermask bit is set. Also flips a bits for each frame.mask value using specmask.BADFIBER
+        frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
 
     # save output
     write_frame(args.outfile, frame, units='10**-17 erg/(s cm2 Angstrom)')
-
     log.info("successfully wrote %s"%args.outfile)
