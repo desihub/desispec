@@ -1011,7 +1011,7 @@ class SkyModel(object):
         self.nrej = nrej
         self.stat_ivar = stat_ivar
 
-def subtract_sky(frame, skymodel, throughput_correction = False, default_throughput_correction = 1.) :
+def subtract_sky(frame, skymodel, throughput_correction = False) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 
     Args:
@@ -1020,7 +1020,6 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
 
     Option:
         throughput_correction : if True, fit for an achromatic throughput correction. This is to absorb variations of Focal Ratio Degradation with fiber flexure.
-        default_throughput_correction : float, default value of correction if the fit on sky lines failed.
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
@@ -1160,7 +1159,6 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
             
             if mcoeferr>np.abs(mcoef-1) :
                 log.warning("throughput corr error = %5.4f is too large compared to the correction value = %5.4f for fiber #%03d, do not apply correction"%(mcoeferr,(mcoef-1),fiber))
-                throughput_correction_value = default_throughput_correction
             else :
                 throughput_correction_value = mcoef
         
