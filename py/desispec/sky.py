@@ -1159,6 +1159,7 @@ def subtract_sky(frame, skymodel, throughput_correction = False) :
             
             if mcoeferr>np.abs(mcoef-1) :
                 log.warning("throughput corr error = %5.4f is too large compared to the correction value = %5.4f for fiber #%03d, do not apply correction"%(mcoeferr,(mcoef-1),fiber))
+                throughput_correction_value = 1.0
             else :
                 throughput_correction_value = mcoef
         
