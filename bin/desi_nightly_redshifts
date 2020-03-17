@@ -48,7 +48,7 @@ if [ $BATCH = true ]; then
 #SBATCH --account desi
 #SBATCH --job-name redrock-${NIGHT}
 #SBATCH --output ${scriptdir}/coadd-redshifts-${NIGHT}-%j.log
-#SBATCH --time=00:30:00
+#SBATCH --time=00:40:00
 #SBATCH --exclusive
 
 desi_nightly_redshifts $NIGHT
@@ -84,14 +84,14 @@ for TILEID in $TILEIDS; do
             coadd=coadd-${SPECTRO}-${TILEID}-${NIGHT}.fits
             colog=coadd-${SPECTRO}-${TILEID}-${NIGHT}.log
             if [ $numframes -eq 0 ]; then
-                echo spectrograph $SPECTRO: no cframes
+                echo tile $TILEID spectrograph $SPECTRO: no cframes
             elif [ ! -f $coadd ]; then
-                echo spectrograph $SPECTRO: generating $coadd at $(date)
+                echo tile $TILEID spectrograph $SPECTRO: generating $coadd at $(date)
                 srun -N 1 -n 1 -c 64 desi_coadd_spectra \
                         --coadd-cameras --nproc 16 \
                         -i cframe-?${SPECTRO}-*.fits -o $coadd &> $colog &
             else
-                echo spectrograph $SPECTRO: $coadd already exists
+                echo tile $TILEID spectrograph $SPECTRO: $coadd already exists
             fi
         done
     fi
@@ -99,6 +99,7 @@ done
 
 echo Waiting for coadds to finish at $(date)
 wait
+echo Coadds done at $(date)
 
 #- Spawn runrock in the background
 echo -- Redrock --
@@ -109,18 +110,22 @@ for TILEID in $TILEIDS; do
         for SPECTRO in $SPECTROGRAPHS; do
             #- count frames while hiding error message if there aren't any
             numframes=$(ls cframe-[brz]${SPECTRO}-*.fits 2>/dev/null | wc -l)
+            coadd=coadd-${SPECTRO}-${TILEID}-${NIGHT}.fits
             zbest=zbest-${SPECTRO}-${TILEID}-${NIGHT}.fits
             rrlog=redrock-${SPECTRO}-${TILEID}-${NIGHT}.log
-            if [ $numframes -eq 0 ]; then
-                echo spectrograph $SPECTRO: no cframes
+            if [ ! -f $coadd ]; then
+                echo tile $TILEID spectrograph $SPECTRO: no coadd
             elif [ ! -f $zbest ]; then
-                echo spectrograph $SPECTRO: running redrock for $zbest at $(date)
+                echo tile $TILEID spectrograph $SPECTRO: running redrock for $zbest at $(date)
                 srun -N 1 -n 32 -c 2 rrdesi_mpi \
                     -z $zbest \
                     -o redrock-${SPECTRO}-${TILEID}-${NIGHT}.h5 \
                     coadd-${SPECTRO}-*.fits &> $rrlog &
+
+                #- Sleep a moment to not overwhelm slurm
+                sleep 2
             else
-                echo spectrograph $SPECTRO: $zbest exists
+                echo tile $TILEID spectrograph $SPECTRO: $zbest exists
             fi
         done
     fi
@@ -129,5 +134,6 @@ done
 #- Wait for the various redrock commands to finish
 echo Waiting for redrock commands to finish at $(date)
 wait
+echo Redrock done at $(date)
 
 echo All done at $(date)
