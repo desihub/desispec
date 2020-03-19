@@ -660,7 +660,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
             cmd += ' -o {}'.format(framefile)
             cmd += ' --psferr 0.1'
             
-            if args.obstype == 'SCIENCE' or args.obstype == 'SKY' or args.obstype == 'TWILIGHT' :
+            if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                 if rank == 0:
                     log.info('Include barycentric correction')
                 cmd += ' --barycentric-correction'
