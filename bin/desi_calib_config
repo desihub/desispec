@@ -164,7 +164,7 @@ class ConfigEditor(object) :
 
         with open(yaml_file,'r') as ifile :
             for line in ifile.readlines() :
-
+                
                 in_latest_version_header = False
                 for version in versions :
                     if line.find(version)>=0 :
@@ -187,8 +187,9 @@ class ConfigEditor(object) :
         if args.overwrite and args.ofilename is None :
             args.ofilename = yaml_file
 
+        tmp_filename = args.ofilename+".tmp"
                 
-        with open(args.ofilename,'w') as ofile :
+        with open(tmp_filename,'w') as ofile :
 
             # write header
             for line in lines_in_header :
@@ -233,6 +234,17 @@ class ConfigEditor(object) :
             for line in lines_in_other_version :
                 ofile.write(line)
         
+        # now check at least it's a valid yaml file
+        # (will raise an exception if fails)
+        try :
+            with open(tmp_filename,"r") as file:
+                data   = yaml.safe_load(file)
+        except Exception as e:
+            print("Apparently I failed to write a correct yaml file, sorry about that.")
+            print(e)
+            sys.exit(12)
+        os.rename(tmp_filename,args.ofilename)
+        
         print("wrote {}".format(args.ofilename))
     
     def update(self):
@@ -256,7 +268,7 @@ class ConfigEditor(object) :
                                          usage="desi_calib_config test")
 
         raise RuntimeError("not implemented")
-
+    
         return
 
         
