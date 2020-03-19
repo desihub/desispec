@@ -149,16 +149,12 @@ class ConfigEditor(object) :
             versions.append(version)
         most_recent_version=versions[np.argmax(dates)]
         print("Will copy the most recent version {}".format(most_recent_version))
-
-        # need to check validity of dates !!
-                
-        # now what: write by hand, because we want to keep all the comments,
-        # the indentation, and the ordering
         
-       
+        # write "by hand" because we want to keep all the comments,
+        # the indentation, and the ordering
+               
         ifile = open(yaml_file,'r')
         
-
         in_latest_version = False
         in_some_version   = False
         
@@ -168,16 +164,19 @@ class ConfigEditor(object) :
 
         with open(yaml_file,'r') as ifile :
             for line in ifile.readlines() :
-                
+
+                in_latest_version_header = False
                 for version in versions :
                     if line.find(version)>=0 :
                         in_some_version = True
                         if version == most_recent_version :
                             in_latest_version = True
+                            in_latest_version_header = True
                         else :
                             in_latest_version = False
+                if in_latest_version_header : continue
                 
-                if in_latest_version and line.find(most_recent_version)<0 :   
+                if in_latest_version :   
                     lines_in_latest_version.append(line)
                 else :
                     if not in_some_version :
@@ -196,9 +195,10 @@ class ConfigEditor(object) :
                 ofile.write(line)
 
             # write new version
-            ofile.write(" {}:\n".format(args.name))
+            ofile.write("\n {}:\n\n".format(args.name))
             if args.comments is not None :
                 ofile.write (" # {}\n".format(args.comments))
+            ofile.write("\n")
             ofile.write ("  DATE-OBS-BEGIN: '{}'\n".format(args.date_obs_begin))
             keys = entries.keys()
             for line in lines_in_latest_version :
@@ -234,9 +234,7 @@ class ConfigEditor(object) :
                 ofile.write(line)
         
         print("wrote {}".format(args.ofilename))
-
-        return
-
+    
     def update(self):
         parser = argparse.ArgumentParser(description="Update an existing configuration",
                                          usage="desi_calib_config update [options] (use --help for details)")
