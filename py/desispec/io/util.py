@@ -388,7 +388,7 @@ def decode_camword(camword):
     while len(searchstr) > 1:
         key = searchstr[0]
         searchstr = searchstr[1:]
-        print(key,searchstr)
+
         while len(searchstr) > 0 and searchstr[0].isnumeric():
             if key == 'a':
                 camlist.append('b'+searchstr[0])
