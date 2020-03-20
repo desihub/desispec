@@ -36,6 +36,7 @@ from astropy.io import fits
 import glob
 import desispec.io
 from desispec.io import findfile
+from desispec.io.util import create_camword
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -227,9 +228,7 @@ if args.batch:
     reduxdir = desispec.io.specprod_root()
     batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(args.night))
     os.makedirs(batchdir, exist_ok=True)
-    camword=""
-    for cam in args.cameras:
-        camword += cam
+    camword = create_camword(args.cameras)
     jobname = '{}-{}-{:08d}-{}'.format(args.obstype.lower(), args.night, args.expid, camword)
     scriptfile = os.path.join(batchdir, jobname+'.slurm')
 
