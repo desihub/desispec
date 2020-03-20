@@ -360,7 +360,8 @@ def create_camword(cameras):
 
     outstr = 'a'+''.join(allcam)
 
-    for key,val in camdict.items():
+    for key in np.sort(list(camdict.keys())):
+        val = camdict[key]
         if len(val) == 0:
             continue
         uniq = np.sort(list(set(val).difference(allcam)))
