@@ -334,3 +334,67 @@ def healpix_subdirectory(nside, pixel):
     # subnside, subpixel = healpix_degrade_fixed(nside, pixel)
     # return os.path.join("{}-{}".format(subnside, subpixel),
     #     "{}-{}".format(nside, pixel))
+
+    
+def create_camword(cameras):
+    """
+    Function that takes in a list of cameras and creates a succinct listing
+    of all spectrographs in the list with cameras. It uses "a" followed by
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.
+    b, r, and z represent the camera of the same name. All trailing numbers
+    represent the spectrographs for which that camera exists in the list.
+
+    Args:
+       cameras (1-d array or list): iterable containing strings of
+                                     cameras, e.g. 'b0','r1',...
+    Returns (str):
+       A string representing all information about the spectrographs/cameras
+       given in the input iterable, e.g. a01234678b59z9
+    """
+    camdict = {'r':[],'b':[],'z':[]}
+
+    for c in cameras:
+        camdict[c[0]].append(c[1])
+
+    allcam = np.sort(list((set(camdict['r']).intersection(set(camdict['b'])).intersection(set(camdict['z'])))))
+
+    outstr = 'a'+''.join(allcam)
+
+    for key in np.sort(list(camdict.keys())):
+        val = camdict[key]
+        if len(val) == 0:
+            continue
+        uniq = np.sort(list(set(val).difference(allcam)))
+        if len(uniq) > 0:
+            outstr += (key + ''.join(uniq))
+    return outstr
+
+def decode_camword(camword):
+    """                                                                                                                             Function that takes in a succinct listing                                                     
+    of all spectrographs and outputs a 1-d numpy array with a list of all
+    spectrograph/camera pairs. It uses "a" followed by                                                      
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.                                             
+    b, r, and z represent the camera of the same name. All trailing numbers                                                     
+    represent the spectrographs for which that camera exists in the list.                                                       
+                                                                                                                                
+    Args:                      
+       camword (str): A string representing all information about the spectrographs/cameras                                    
+                        e.g. a01234678b59z9                                                                                                  
+    Returns (np.ndarray, 1d):  an array containing strings of                                                              
+                                cameras, e.g. 'b0','r1',...                                                                
+    """
+    searchstr = camword
+    camlist = []
+    while len(searchstr) > 1:
+        key = searchstr[0]
+        searchstr = searchstr[1:]
+
+        while len(searchstr) > 0 and searchstr[0].isnumeric():
+            if key == 'a':
+                camlist.append('b'+searchstr[0])
+                camlist.append('r'+searchstr[0])
+                camlist.append('z'+searchstr[0])
+            else:
+                camlist.append(key+searchstr[0])
+            searchstr = searchstr[1:]
+    return np.sort(camlist)
