@@ -53,6 +53,7 @@ fibermask:
     - [STUCKPOSITIONER, 1, "Stuck positioner"]
     - [BROKENFIBER,     2, "Broken fiber"]
     - [BADTARGET,       3, "Fiber is not a known target"]
+    - [MISSINGPOSITION, 8, "Fiber location information is missing"]
     - [BADPOSITION,     9, "ICS flag that positioner is not at target location"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]

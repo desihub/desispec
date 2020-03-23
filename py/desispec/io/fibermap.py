@@ -20,6 +20,7 @@ from desiutil.depend import add_dependencies
 from desispec.io.util import fitsheader, write_bintable, makepath
 from desispec.io.meta import rawdata_root
 
+from desispec.maskbits import fibermask
 
 #- Subset of columns that come from original target/MTL catalog
 target_columns = [
@@ -461,10 +462,10 @@ def assemble_fibermap(night, expid, force=False):
 
         #- Set fiber status bits
         missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
-        fibermap['FIBERSTATUS'][missing] |= 2**8
+        fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
 
         badpos = fibermap['_BADPOS']
-        fibermap['FIBERSTATUS'][badpos] |= 2**9
+        fibermap['FIBERSTATUS'][badpos] |= fibermask.BADPOSITION
         fibermap.remove_column('_BADPOS')
 
     else:
@@ -486,10 +487,18 @@ def assemble_fibermap(night, expid, force=False):
             old_col = fibermap[val]
             fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype=np.int64))
 
-            
-    #for col in fibermap.colnames:
-    #    print(col,fibermap[col].dtype)
-
+    # Mask the bad CCD2 fibers if the night is before July 1st 2020 (to be replaced
+    # by the true date it was replaced
+    if int(night) < 20200701:
+        # Highly verbose way of selecting 1000<=FIBER<1125
+        badccd = 2
+        first_n_fibers = 125 
+        min_badfib = badccd*500
+        max_badfib = min_badfib + first_n_fibers
+        ccd2_badfibermask = ((fibermap['FIBER'] >= min_badfib) & (fibermap['FIBER'] < max_badfib))
+        # If between 1000 and 1125, set as MANYBADCOL so they aren't used
+        fibermap['FIBERSTATUS'][ccd2_badfibermask] |= fibermask.MANYBADCOL
+    
     #- Update SKY and STD target bits to be in both CMX_TARGET and DESI_TARGET
     #- i.e. if they are set in one, also set in the other.  Ditto for SV*
     for targetcol in ['CMX_TARGET', 'SV0_TARGET', 'SV1_TARGET', 'SV2_TARGET']:
