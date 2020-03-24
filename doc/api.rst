@@ -40,6 +40,9 @@ Full desispec API Reference
 .. automodule:: desispec.fiberflat
     :members:
 
+.. automodule:: desispec.fiberbitmasking
+    :members:
+
 .. automodule:: desispec.fluxcalibration
     :members:
 
@@ -248,9 +251,6 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.qproc.qsky
-    :members:
-
-.. automodule:: desispec.qproc.util
     :members:
 
 .. automodule:: desispec.quicklook
