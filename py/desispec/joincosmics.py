@@ -15,7 +15,27 @@ import time
 from desispec.maskbits import ccdmask
 from desispec.maskbits import specmask
 
-from skimage.morphology import binary_dilation, binary_closing
+try:
+    # Note: scikit-image is not part of desiconda.
+    from skimage.morphology import binary_closing
+except ImportError as e:
+    # If scikit-image is not available, redefine the interface.
+    def binary_dilation(image, selem=None, out=None):
+        if out is None:
+            out = np.empty(image.shape, dtype=np.bool)
+        scipy.ndimage.binary_dilation(image, structure=selem, output=out)
+        return out
+
+    def binary_erosion(image, selem=None, out=None):
+        if out is None:
+            out = np.empty(image.shape, dtype=np.bool)
+        scipy.ndimage.binary_erosion(image, structure=selem, output=out, border_value=True)
+        return out
+
+    def binary_closing(image, selem=None, out=None):
+        dilated = binary_dilation(image, selem)
+        out = binary_erosion(dilated, selem, out=out)
+        return out
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
