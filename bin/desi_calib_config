@@ -6,7 +6,10 @@ import argparse
 import yaml
 import numpy as np
 import copy
+import traceback
 from datetime import datetime,timedelta
+from desispec.calibfinder import CalibFinder
+from desiutil.log import get_logger
 
 class ConfigEditor(object) :
     
@@ -76,8 +79,63 @@ class ConfigEditor(object) :
                 raise ValueError("cannot interpret {} as dictionary entry of the form key=val".format(keyval))
             res[kv[0]]=kv[1]
         return res
+
+    def test_yaml_file(self,yaml_filename) :
+
+        log = get_logger()
         
+        with open(yaml_filename,"r") as file:
+            data   = yaml.safe_load(file)
             
+            for camid in data :
+                
+                date_begin=[]
+                date_end=[]
+                for version in data[camid] :
+                    log.info("checking {} version {} in {}".format(camid,version,os.path.basename(yaml_filename)))
+                    # check for mandatory keys
+                    for k in ['DATE-OBS-BEGIN','DETECTOR'] :
+                        if not k in data[camid][version] :
+                            log.error("no {} in version {} of {}".format(k,version,yaml_filename))
+                            raise KeyError("no {} in version {} of {}".format(k,version,yaml_filename))
+                    # for filenames check they exist
+                    for k in ["PSF","FIBERFLAT",] :
+                        if k in data[camid][version] :
+                            calib_filename = os.path.join(self.calib_dir,data[camid][version][k])
+                            if not os.path.isfile(calib_filename) :
+                                log.error("cannot open {}".format(calib_filename))
+                                raise IOError("cannot open {}".format(calib_filename))
+                            else :
+                                log.debug("checked {}".format(calib_filename))
+
+                    # now cook up a header that matches this version and see if the calibfinder works with it
+                    head = dict()
+                    night = int(data[camid][version]['DATE-OBS-BEGIN'])
+                    
+                    yyyy = night//10000
+                    mm = (night%10000)//100
+                    dd = night%100
+                    head["DATE-OBS"]="{:04d}-{:02d}-{:02d}T18:06:21.268371-05:00".format(yyyy,mm,dd)
+                    # decoding camid ...
+                    vals=camid.split("-")
+                    sm=vals[0].upper()
+                    sp=self.SM2SP[sm]
+                    specid=int(sm.replace("SM",""))
+                    spectro=int(sp[2])
+                    band=vals[1].lower()
+                    camera="{}{}".format(band,spectro)
+                    head["CAMERA"]=camera
+                    head["SPECID"]=specid
+                    
+                    for k in ["DETECTOR","CCDCFG","CCDTMING","NIGHT"] :
+                        if k in data[camid][version] :
+                            head[k]=data[camid][version][k]
+                    log.debug("header={}".format(head))
+                    
+                    # try to get this calib
+                    cfinder = CalibFinder([head,],yaml_file=yaml_filename)
+                    
+
     def add(self):
         parser = argparse.ArgumentParser(description="Add a new configuration, starting from the most recent one and adding/replacing requested keywords",
                                          usage="desi_calib_config add [options] (use --help for details).")
@@ -105,6 +163,8 @@ class ConfigEditor(object) :
         
         args = parser.parse_args(sys.argv[2:])
 
+        log = get_logger()
+        
         if args.ofilename is None and not args.overwrite :
             print("need either an output filename or --overwrite (use --help for details)")
             sys.exit(12)
@@ -117,7 +177,7 @@ class ConfigEditor(object) :
         date=datetime.strptime(str(args.date_obs_begin), "%Y%m%d")
         thedaybefore = date - timedelta(days=1)
         previous_config_date_obs_end = thedaybefore.year*10000+thedaybefore.month*100+thedaybefore.day
-        print("previous config DATE-OBS-END = {}".format(previous_config_date_obs_end))
+        log.debug("previous config DATE-OBS-END = {}".format(previous_config_date_obs_end))
 
         if args.name is None :
             args.name = "V{}".format(args.date_obs_begin)
@@ -131,8 +191,9 @@ class ConfigEditor(object) :
         # yaml file
         cameraid     = "{}-{}".format(SM.lower(),args.camera_arm.lower())
         yaml_file = "{}/spec/{}/{}.yaml".format(self.calib_dir,SM.lower(),cameraid)
-        print("Yaml file is {}".format(yaml_file))
+        log.debug("yaml file is {}".format(yaml_file))
         if not os.path.isfile(yaml_file) :
+            log.error("no file {}".format(yaml_file))
             raise IOError("no file {}".format(yaml_file))
 
         # find version of most recent entry
@@ -140,6 +201,7 @@ class ConfigEditor(object) :
         data   = yaml.safe_load(stream)
         stream.close()
         if not cameraid in data :
+            log.error("Cannot find  data for camera %s in filename %s"%(cameraid,yaml_file))
             raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,yaml_file))
         data=data[cameraid]
         dates=[]
@@ -148,7 +210,7 @@ class ConfigEditor(object) :
             dates.append(data[version]["DATE-OBS-BEGIN"])
             versions.append(version)
         most_recent_version=versions[np.argmax(dates)]
-        print("Will copy the most recent version {}".format(most_recent_version))
+        log.debug("Will copy the most recent version {}".format(most_recent_version))
         
         # write "by hand" because we want to keep all the comments,
         # the indentation, and the ordering
@@ -237,11 +299,11 @@ class ConfigEditor(object) :
         # now check at least it's a valid yaml file
         # (will raise an exception if fails)
         try :
-            with open(tmp_filename,"r") as file:
-                data   = yaml.safe_load(file)
+            self.test_yaml_file(tmp_filename)
         except Exception as e:
-            print("Apparently I failed to write a correct yaml file, sorry about that.")
+            traceback.format_exc()
             print(e)
+            print("Something is wrong in the yaml file, sorry about that.")
             sys.exit(12)
         os.rename(tmp_filename,args.ofilename)
         
