@@ -90,8 +90,8 @@ def main(args) :
         frame=io.read_frame(filename)
         header=fits.getheader(filename, 0)
         expid = safe_read_key(header,"EXPID")
-        camspec = safe_read_key(header,"CAMERA").strip(' \t').lower()
-        camera,spec = camspec[0],camspec[1]
+        camera=safe_read_key(header,"CAMERA").strip().lower()
+        spec = camera[1]
         uniq_key = (expid,spec)
         if uniq_key in frames_by_expid.keys():
             frames_by_expid[uniq_key][camera] = frame
@@ -113,7 +113,7 @@ def main(args) :
     for (expid,spec),camdict in frames_by_expid.items():
 
         fiberstatus = None
-        for camera,frame in camdict.items():
+        for frame in camdict.values():
             if fiberstatus is None:
                 fiberstatus = frame.fibermap['FIBERSTATUS'].data.copy()
             else:
@@ -156,7 +156,8 @@ def main(args) :
 
     # possibly cleanup memory
     del frames_by_expid
-    
+    #import pdb
+    #pdb.set_trace()
     for filename in args.skymodels :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
