@@ -93,9 +93,9 @@ class TestNight(unittest.TestCase):
         str1 = '0:10'
         str2 = '1,2,3,4:8'
         str3 = '1..5,6,7,8:10,11-14'
-        outarr1 = np.array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9])
-        outarr2  = np.array([1, 2, 3, 4, 5, 6, 7])
-        outarr3 = np.array([ 1,  2,  3,  4,  6,  7,  8,  9, 11, 12, 13])
+        arr1 = np.array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9])
+        arr2  = np.array([1, 2, 3, 4, 5, 6, 7])
+        arr3 = np.array([ 1,  2,  3,  4,  6,  7,  8,  9, 11, 12, 13])
         for instr,arr in zip([str1,str2,str3],
                              [arr1,arr2,arr3]):
             returned_arr = parse_fibers(instr)
