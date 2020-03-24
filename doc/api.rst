@@ -40,9 +40,6 @@ Full desispec API Reference
 .. automodule:: desispec.fiberflat
     :members:
 
-.. automodule:: desispec.fiberbitmasking
-    :members:
-
 .. automodule:: desispec.fluxcalibration
     :members:
 
