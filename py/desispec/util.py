@@ -365,14 +365,14 @@ def parse_fibers(fiber_string) :
     Short func that parses a string containing a comma separated list of 
     integers, which can include ":" or ".." or "-" labeled ranges
 
-    Args
-    fiber_string (str) : list of integers or integer ranges
+    Args:
+        fiber_string (str) : list of integers or integer ranges
 
-    Returns (array 1-D)
-    1D numpy array listing all of the integers given in the list,
-      including enumerations of ranges given.
+    Returns (array 1-D):
+        1D numpy array listing all of the integers given in the list,
+        including enumerations of ranges given.
 
-    *Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
     """
     if fiber_string is None :
         return None
