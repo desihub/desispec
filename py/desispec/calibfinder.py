@@ -280,7 +280,7 @@ class CalibFinder() :
             fiberblacklist_str = self.value(blacklistkey)
             fiberblacklist = parse_fibers(fiberblacklist_str)
         else:
-             fiberblacklist = None   
+             fiberblacklist = np.array([])  
         return fiberblacklist
 
     def fibers_to_exclude(self):
@@ -292,8 +292,8 @@ class CalibFinder() :
             If no excluded fibers, returns None                                                  
         """
         key = 'EXCLUDEFIBERS'
-        if not self.haskey('EXCLUDEFIBERS') :
-            excluded = None
+        if not self.haskey(key) :
+            excluded = np.array([])
         else:
             excluded_str =  self.value(key)
             excluded = parse_fibers(excluded_str)

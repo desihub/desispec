@@ -88,9 +88,8 @@ def main(args) :
     for filename in args.frames :
         log.info("reading %s"%filename)
         frame=io.read_frame(filename)
-        header=fits.getheader(filename, 0)
-        expid = safe_read_key(header,"EXPID")
-        camera=safe_read_key(header,"CAMERA").strip().lower()
+        expid = safe_read_key(frame.meta,"EXPID")
+        camera = safe_read_key(frame.meta,"CAMERA").strip().lower()
         spec = camera[1]
         uniq_key = (expid,spec)
         if uniq_key in frames_by_expid.keys():
@@ -160,17 +159,15 @@ def main(args) :
     for filename in args.skymodels :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
-        header=fits.getheader(filename, 0)
-        camera=safe_read_key(header,"CAMERA").strip().lower()
+        camera=safe_read_key(sky.header,"CAMERA").strip().lower()
         if not camera in skies :
             skies[camera]=[]
         skies[camera].append(sky)
         
     for filename in args.fiberflats :
         log.info("reading %s"%filename)
-        header=fits.getheader(filename, 0)
         flat=io.read_fiberflat(filename)
-        camera=safe_read_key(header,"CAMERA").strip().lower()
+        camera=safe_read_key(flat.header,"CAMERA").strip().lower()
 
         # NEED TO ADD MORE CHECKS
         if camera in flats:

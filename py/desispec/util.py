@@ -375,12 +375,12 @@ def parse_fibers(fiber_string) :
     Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
     """
     if fiber_string is None :
-        return None
+        return np.array([])
     else:
         fiber_string = str(fiber_string)
 
     if len(fiber_string.strip(' \t'))==0:
-        return None
+        return np.array([])
 
     fibers=[]
 
@@ -395,7 +395,7 @@ def parse_fibers(fiber_string) :
         for symbol in [':','..','-']:
             if not match and symbol in sub:
                 tmp = sub.split(symbol)
-                if ((len(tmp) is 2) and tmp[0].isdigit() == True and tmp[1].isdigit() == True) :
+                if (len(tmp) == 2) and tmp[0].isdigit() and tmp[1].isdigit() :
                     match = True
                     for f in range(int(tmp[0]),int(tmp[1])) :
                         fibers.append(f)
