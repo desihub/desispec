@@ -156,8 +156,7 @@ def main(args) :
 
     # possibly cleanup memory
     del frames_by_expid
-    #import pdb
-    #pdb.set_trace()
+
     for filename in args.skymodels :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
