@@ -7,6 +7,7 @@ import yaml
 import numpy as np
 import copy
 import traceback
+import glob
 from datetime import datetime,timedelta
 from desispec.calibfinder import CalibFinder
 from desiutil.log import get_logger
@@ -92,7 +93,7 @@ class ConfigEditor(object) :
                 date_begin=[]
                 date_end=[]
                 for version in data[camid] :
-                    log.info("checking {} version {} in {}".format(camid,version,os.path.basename(yaml_filename)))
+                    log.debug("checking {} version {} in {}".format(camid,version,os.path.basename(yaml_filename)))
                     # check for mandatory keys
                     for k in ['DATE-OBS-BEGIN','DETECTOR'] :
                         if not k in data[camid][version] :
@@ -111,7 +112,9 @@ class ConfigEditor(object) :
                     # now cook up a header that matches this version and see if the calibfinder works with it
                     head = dict()
                     night = int(data[camid][version]['DATE-OBS-BEGIN'])
-                    
+                    if night < 20191211 :
+                        log.debug("skip config with DATE-OBS-BEGIN = {} < 20191211".format(night))
+                        continue
                     yyyy = night//10000
                     mm = (night%10000)//100
                     dd = night%100
@@ -329,9 +332,27 @@ class ConfigEditor(object) :
         parser = argparse.ArgumentParser(description="Test the configurations",
                                          usage="desi_calib_config test")
 
-        raise RuntimeError("not implemented")
-    
-        return
+        parser.add_argument("-i","--ifile", type=str, nargs="*", required=False, default=None,
+                            help="test this yaml file (s)(default is all sm*.yaml")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        if args.ifile is not None and len(args.ifile)>0 :
+            filenames = args.ifile
+        else :
+            
+            filenames = np.sort(glob.glob("{}/spec/sm*/sm*.yaml".format(self.calib_dir)))
+            
+        for filename in filenames :
+            try :
+                self.test_yaml_file(filename)
+                print("Checked {}".format(filename))
+            except Exception as e:
+                print("Something is wrong with {}".format(filename))
+                
+            
+        
+            
 
         
         
