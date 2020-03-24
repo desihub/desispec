@@ -150,4 +150,4 @@ def get_stdstars_fiberbitmask_val():
 def get_all_fiberbitmask_val():
     return (fmsk.STUCKPOSITIONER | fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.MISSINGPOSITION | fmsk.BADPOSITION | \
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
-            fmsk.MANYBADCOL | fmsk.MANYREJECTED)
+            fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADAMP )

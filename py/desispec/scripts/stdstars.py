@@ -81,6 +81,23 @@ def main(args) :
     log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
     log.info('multiprocess parallelizing with {} processes'.format(args.ncpu))
 
+    # READ DATA
+    ############################################
+    # First loop through and group by exposure and spectrograph
+    frames_by_expid = {}
+    for filename in args.frames :
+        log.info("reading %s"%filename)
+        frame=io.read_frame(filename)
+        header=fits.getheader(filename, 0)
+        expid = safe_read_key(header,"EXPID")
+        camspec = safe_read_key(header,"CAMERA").strip(' \t').lower()
+        camera,spec = camspec[0],camspec[1]
+        uniq_key = (expid,spec)
+        if uniq_key in frames_by_expid.keys():
+            frames_by_expid[uniq_key][camera] = frame
+        else:
+            frames_by_expid[uniq_key] = {camera: frame}
+
     frames={}
     flats={}
     skies={}
@@ -90,49 +107,56 @@ def main(args) :
     starindices=None
     fibermap=None
 
-    # READ DATA
-    ############################################
+    # For each unique expid,spec pair, get the logical OR of the FIBERSTATUS for all
+    # cameras and then proceed with extracting the frame information
+    # once we modify the fibermap FIBERSTATUS
+    for (expid,spec),camdict in frames_by_expid.items():
 
-    for filename in args.frames :
+        fiberstatus = None
+        for camera,frame in camdict.items():
+            if fiberstatus is None:
+                fiberstatus = frame.fibermap['FIBERSTATUS'].data.copy()
+            else:
+                fiberstatus |= frame.fibermap['FIBERSTATUS']
+            
+        for camera,frame in camdict.items():
+            frame.fibermap['FIBERSTATUS'] |= fiberstatus
+            # Set fibermask flagged spectra to have 0 flux and variance                       
+            frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
+            frame_fibermap = frame.fibermap
+            frame_starindices = np.where(isStdStar(frame_fibermap))[0]
 
-        log.info("reading %s"%filename)
-        frame=io.read_frame(filename)
-        # Set fibermask flagged spectra to have 0 flux and variance    
-        frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
-        header=fits.getheader(filename, 0)
-        frame_fibermap = frame.fibermap
-        frame_starindices = np.where(isStdStar(frame_fibermap))[0]
+            #- Confirm that all fluxes have entries but trust targeting bits
+            #- to get basic magnitude range correct
+            keep = np.ones(len(frame_starindices), dtype=bool)
+
+            for colname in ['FLUX_G', 'FLUX_R', 'FLUX_Z']:  #- and W1 and W2?
+                keep &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
+                keep &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
+
+            frame_starindices = frame_starindices[keep]
         
-        #- Confirm that all fluxes have entries but trust targeting bits
-        #- to get basic magnitude range correct
-        keep = np.ones(len(frame_starindices), dtype=bool)
+            if spectrograph is None :
+                spectrograph = frame.spectrograph
+                fibermap = frame_fibermap
+                starindices=frame_starindices
+                starfibers=fibermap["FIBER"][starindices]
 
-        for colname in ['FLUX_G', 'FLUX_R', 'FLUX_Z']:  #- and W1 and W2?
-            keep &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
-            keep &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
+            elif spectrograph != frame.spectrograph :
+                log.error("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
+                raise ValueError("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
+            elif starindices.size != frame_starindices.size or np.sum(starindices!=frame_starindices)>0 :
+                log.error("incompatible fibermap")
+                raise ValueError("incompatible fibermap")
 
-        frame_starindices = frame_starindices[keep]
-        
-        camera=safe_read_key(header,"CAMERA").strip().lower()
+            if not camera in frames :
+                frames[camera]=[]
 
-        if spectrograph is None :
-            spectrograph = frame.spectrograph
-            fibermap = frame_fibermap
-            starindices=frame_starindices
-            starfibers=fibermap["FIBER"][starindices]
+            frames[camera].append(frame)
 
-        elif spectrograph != frame.spectrograph :
-            log.error("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
-            raise ValueError("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
-        elif starindices.size != frame_starindices.size or np.sum(starindices!=frame_starindices)>0 :
-            log.error("incompatible fibermap")
-            raise ValueError("incompatible fibermap")
-
-        if not camera in frames :
-            frames[camera]=[]
-
-        frames[camera].append(frame)
- 
+    # possibly cleanup memory
+    del frames_by_expid
+    
     for filename in args.skymodels :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
@@ -166,7 +190,10 @@ def main(args) :
     
     # DIVIDE FLAT AND SUBTRACT SKY , TRIM DATA
     ############################################
-    for cam in frames :
+    # since poping dict, we need to copy keys to iterate over to avoid
+    # RuntimeError due to changing dict
+    frame_cams = list(frames.keys())
+    for cam in frame_cams:
 
         if not cam in skies:
             log.warning("Missing sky for %s"%cam)
@@ -177,7 +204,6 @@ def main(args) :
             frames.pop(cam)
             continue
         
-
         flat=flats[cam]
         for frame,sky in zip(frames[cam],skies[cam]) :
             frame.flux = frame.flux[starindices]

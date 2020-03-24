@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import fitsio
 
 from desispec.io import read_xytraceset
-from desispec.qproc.util import parse_fibers
+from desispec.util import parse_fibers
 
 def u(wave,wavemin,wavemax) :
     return 2.*(wave-wavemin)/(wavemax-wavemin)-1.

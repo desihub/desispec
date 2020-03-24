@@ -61,6 +61,7 @@ fibermask:
     - [BADARC,         19, "Bad arc solution"]
     - [MANYBADCOL,     20, ">10% of pixels are bad columns"]
     - [MANYREJECTED,   21, ">10% of pixels rejected in extraction"]
+    - [BADAMP,         22, "Issues in the amplifier readouts make this unusable"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
 specmask:

@@ -10,6 +10,7 @@ import os
 import numpy as np
 import yaml
 import os.path
+from desispec.util import parse_fibers
 from desiutil.log import get_logger
 
 
@@ -276,10 +277,24 @@ class CalibFinder() :
             log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
             blacklistkey="BROKENFIBERS"
         if self.haskey(blacklistkey):
-            fiberblacklist = self.value(blacklistkey)
-            if type(fiberblacklist) is str and ',' in fiberblacklist:
-                fiberblacklist = fiberblacklist.split(',')
-            fiberblacklist = np.atleast_1d(fiberblacklist).astype(np.int32)
+            fiberblacklist_str = self.value(blacklistkey)
+            fiberblacklist = parse_fibers(fiberblacklist_str)
         else:
              fiberblacklist = None   
         return fiberblacklist
+
+    def fibers_to_exclude(self):
+        """                                                                                         
+        Args:                                                                                       
+            None                                                                                  
+        Returns:                                                                                    
+            List of excluded fibers from yaml file as a 1D array of intergers                    
+            If no excluded fibers, returns None                                                  
+        """
+        key = 'EXCLUDEFIBERS'
+        if not self.haskey('EXCLUDEFIBERS') :
+            excluded = None
+        else:
+            excluded_str =  self.value(key)
+            excluded = parse_fibers(excluded_str)
+        return excluded

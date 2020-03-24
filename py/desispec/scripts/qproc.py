@@ -24,7 +24,7 @@ from desispec.qproc.io import read_qframe,write_qframe
 from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat,qproc_compute_fiberflat
 from desispec.qproc.qsky import qproc_sky_subtraction
-from desispec.qproc.util import parse_fibers
+from desispec.util import parse_fibers
 from desispec.qproc.qarc import process_arc
 from desispec.qproc.flavor import check_qframe_flavor
 
