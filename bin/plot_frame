@@ -1,0 +1,135 @@
+#!/usr/bin/env python
+
+
+import sys,os
+import argparse
+import matplotlib.pyplot as plt
+import numpy as np
+import fitsio
+from pkg_resources import resource_exists, resource_filename
+
+from desispec.qproc.util import parse_fibers
+from desispec.qproc.io import read_qframe
+from desispec.io import read_fibermap,read_frame
+from desispec.interpolation import resample_flux
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
+                    help = 'path to one or several frame fits files')
+parser.add_argument('--fibers', type=str, default = None, required = False,
+                    help = 'defines from_to which fiber to work on. (ex: --fibers=50:60,4 means that only fibers 4, and fibers from 50 to 60 (excluded) will be plotted)')
+parser.add_argument('--legend', action='store_true',help="show legend")
+parser.add_argument('--log', action='store_true', default = False, required = False,
+                    help = 'log scale')
+parser.add_argument('--batch', action='store_true', default = False, required = False,
+                    help = 'batch mode (to save figure and exit')
+parser.add_argument('-o','--outfile', type = str, default = None, required = False,
+                    help = 'save figure in this file')
+parser.add_argument('--ascii-spectrum', type = str, default = None, required = False,
+                    help = 'also plot this ascii spectrum (first column=wavelength, second column=flux)')
+parser.add_argument('--sky-spectrum', action = 'store_true',
+                    help = 'also plot the sky spectrum')
+parser.add_argument('--rebin', type = int, default=None)
+
+
+args   = parser.parse_args()
+
+
+fig=plt.figure()
+subplot=plt.subplot(1,1,1)
+
+fibers = parse_fibers(args.fibers)
+
+for filename in args.infile :
+
+    print(filename)
+    
+    # frame or qframe ...
+    head=fitsio.read_header(filename,"WAVELENGTH")
+    naxis=head["NAXIS"]
+    if naxis==2 :
+        frame = read_qframe(filename)
+    else :
+        frame = read_frame(filename)
+
+
+    if frame.fibermap is not None :
+        fibers_in_frame = frame.fibermap["FIBER"]
+    else :
+        fibers_in_frame = np.arange(frame.flux.shape[0])
+        
+        
+    if fibers is None :
+        fibers = fibers_in_frame
+    else :
+        selection = np.in1d(fibers_in_frame,fibers)
+        
+
+        if np.sum(selection)==0 :
+            print("empty selection")
+            print("fibers are in the range [{},{}] (included)".format(np.min(fibers_in_frame),np.max(fibers_in_frame)))
+            sys.exit(12)
+        
+        frame = frame[selection]
+        if len(fibers) > np.sum(selection) :
+            print("not all requested fibers are in frame")
+            fibers = fibers[np.in1d(fibers,fibers_in_frame)]
+            print("will show only {}".format(fibers))
+    
+    for i,fiber in enumerate(fibers) :
+
+        jj=np.where((frame.ivar[i]>0)&(frame.mask[i]==0))[0]
+        if jj.size==0 :
+            print("fiber {} has no valid flux value".format(fiber))
+            continue
+
+        if len(frame.wave.shape)>1 :
+            wave=frame.wave[i]
+        else :
+            wave=frame.wave
+        label="fiber {:03d}".format(fiber)
+        if len(args.infile) > 1 :
+            label += " {}".format(os.path.basename(filename))
+        if args.rebin is None :
+            plt.plot(wave[jj],frame.flux[i,jj],label=label)
+        else :
+            rwave=np.linspace(wave[0],wave[-1],wave.size//args.rebin)
+            rflux,rivar=resample_flux(rwave,wave,frame.flux[i],frame.ivar[i]*(frame.mask[i]==0))
+            jj=(rivar>0)
+            if jj.size>0 :
+                plt.plot(rwave[jj],rflux[jj],label=label)
+
+if args.sky_spectrum :
+    args.ascii_spectrum = resource_filename('desispec','data/spec-sky.dat')
+
+    
+if args.ascii_spectrum :
+    tmp = np.loadtxt(args.ascii_spectrum)
+    spec_wave=tmp[:,0]
+    spec_flux=tmp[:,1]
+    spec_flux *= np.max(frame.flux)/np.max(spec_flux)
+    kk = (spec_wave>np.min(wave))&(spec_wave<np.max(wave))
+    if np.sum(kk)==0 :
+        print("no intersecting wavelength in file {} (first column interpreted as wavelength)".format(args.ascii_spectrum))
+    else :
+        plt.plot(spec_wave[kk],spec_flux[kk],label=os.path.basename(args.ascii_spectrum))
+
+        
+if args.legend :
+    plt.legend()
+if args.log :
+    plt.yscale("log")
+
+
+plt.xlabel("Wavelength (A)")
+plt.ylabel("Flux")
+plt.grid()
+plt.tight_layout()
+
+if args.outfile is not None :
+    fig.savefig(args.outfile)
+    print("wrote {}".format(args.outfile))
+
+if not args.batch :
+    plt.show()
+

@@ -6,6 +6,7 @@ Spectral scores routines.
 """
 from __future__ import absolute_import
 import numpy as np
+from desispec.frame import Frame
 from desiutil.log import get_logger
 
 # Definition of hard-coded top hat filter sets for each camera B,R,Z.
@@ -17,6 +18,52 @@ def _auto_detect_camera(frame) :
     if mwave<=tophat_wave["b"][1] : return "b"
     elif mwave>=tophat_wave["z"][0] : return "z"
     else : return "r"
+
+def compute_coadd_scores(coadd, update_coadd=True):
+    """Compute scores for a coadded Spectra object
+
+    Args:
+        coadd: a Spectra object from a coadd
+
+    Options:
+        update_coadd: if True, update coadd.scores
+
+    Returns tuple of dictionaries (scores, comments); see compute_frame_scores
+    """
+    scores = dict()
+    comments = dict()
+    if coadd.bands == ['brz']:
+        #- i.e. this is a coadd across cameras
+        fr = Frame(coadd.wave['brz'], coadd.flux['brz'], coadd.ivar['brz'],
+                    fibermap=coadd.fibermap, meta=coadd.meta,
+                    resolution_data=coadd.resolution_data['brz'])
+        for band in ['b', 'r', 'z']:
+            bandscores, bandcomments = compute_frame_scores(fr, band=band,
+                    suffix='COADD', flux_per_angstrom=True)
+            scores.update(bandscores)
+            comments.update(bandcomments)
+    else:
+        #- otherwise try individual bands, upper or lowercase
+        for band in ['b', 'r', 'z', 'B', 'R', 'Z']:
+            if band in coadd.bands:
+                fr = Frame(coadd.wave[band], coadd.flux[band], coadd.ivar[band],
+                        fibermap=coadd.fibermap, meta=coadd.meta,
+                        resolution_data=coadd.resolution_data[band])
+                bandscores, bandcomments = compute_frame_scores(fr, band=band,
+                        suffix='COADD', flux_per_angstrom=True)
+                scores.update(bandscores)
+                comments.update(bandcomments)
+
+    if update_coadd:
+        if hasattr(coadd, 'scores') and coadd.scores is not None:
+            for key in scores:
+                coadd.scores[key] = scores[key]
+                coadd.scores_comments[key] = comments[key]
+        else:
+            coadd.scores = scores
+            coadd.scores_comments = comments
+
+    return scores, comments
 
 def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     """Computes scores in spectra of a frame.

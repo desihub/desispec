@@ -15,6 +15,7 @@ from desispec.resolution import Resolution
 from desiutil.log import get_logger
 from desispec import util
 
+
 class Spectrum(object):
     def __init__(self, wave, flux, ivar, mask=None, R=None):
         """Lightweight wrapper of a single spectrum

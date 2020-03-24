@@ -15,6 +15,7 @@ from desispec.fluxcalibration import compute_flux_calibration, isStdStar
 from desiutil.log import get_logger
 from desispec.qa import qa_plots
 from desitarget.targets import main_cmx_or_sv
+from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 import argparse
 import os
@@ -74,6 +75,9 @@ def main(args) :
     # read frame
     frame = read_frame(args.infile)
 
+    # Set fibermask flagged spectra to have 0 flux and variance
+    frame = get_fiberbitmasked_frame(frame, bitmask='flux',ivar_framemask=True)
+    
     log.info("apply fiberflat")
     # read fiberflat
     fiberflat = read_fiberflat(args.fiberflat)

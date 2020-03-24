@@ -37,6 +37,10 @@ def coadd_fibermap(fibermap) :
     for i,tid in enumerate(targets) :
         jj[i]=np.where(fibermap["TARGETID"]==tid)[0][0]
     tfmap=fibermap[jj]
+
+    #- initialize NUMEXP=-1 to check that they all got filled later
+    tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
+
     # smarter values for some columns
     for k in ['DELTA_X','DELTA_Y'] :
         if k in fibermap.colnames :
@@ -54,6 +58,13 @@ def coadd_fibermap(fibermap) :
 
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
+
+        #- coadded FIBERSTATUS = bitwise AND of input FIBERSTATUS
+        tfmap['FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap['FIBERSTATUS'][jj])
+
+        #- Only FIBERSTATUS=0 were included in the coadd
+        tfmap['COADD_NUMEXP'][i] = np.count_nonzero(fibermap['FIBERSTATUS'][jj] == 0)
+
         for k in ['DELTA_X','DELTA_Y'] :
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]
@@ -101,8 +112,13 @@ def coadd(spectra, cosmics_nsig=0.) :
         trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
         
         for i,tid in enumerate(targets) :
-            jj=np.where(spectra.fibermap["TARGETID"]==tid)[0]
+            jj=np.where((spectra.fibermap["TARGETID"]==tid) & \
+                        (spectra.fibermap["FIBERSTATUS"]==0))[0]
 
+            #- if all spectra were flagged as bad (FIBERSTATUS != 0), contine
+            #- to next target, leaving tflux and tivar=0 for this target
+            if len(jj) == 0:
+                continue
 
             if cosmics_nsig is not None and cosmics_nsig > 0 :
                 # interpolate over bad measurements
@@ -136,7 +152,7 @@ def coadd(spectra, cosmics_nsig=0.) :
                 ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
             else :
                 ivarjj=spectra.ivar[b][jj]
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>0  :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
                 nspec=grad.shape[0]
@@ -241,8 +257,13 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
         band_ndiag = spectra.resolution_data[b].shape[1]
         
         for i,tid in enumerate(targets) :
-            jj=np.where(spectra.fibermap["TARGETID"]==tid)[0]
+            jj=np.where((spectra.fibermap["TARGETID"]==tid) & \
+                        (spectra.fibermap["FIBERSTATUS"]==0))[0]
 
+            #- if all spectra were flagged as bad (FIBERSTATUS != 0), contine
+            #- to next target, leaving tflux and tivar=0 for this target
+            if len(jj) == 0:
+                continue
 
             if cosmics_nsig is not None and cosmics_nsig > 0 :
                 # interpolate over bad measurements
@@ -278,7 +299,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
             else :
                 ivarjj=spectra.ivar[b][jj]
             
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>0  :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
                 nspec=grad.shape[0]

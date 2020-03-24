@@ -234,8 +234,7 @@ class CalibFinder() :
 
         
         self.data = matching_data
-        
-
+                
     def haskey(self,key) :
         """
         Args:
@@ -263,3 +262,24 @@ class CalibFinder() :
         """
         return os.path.join(self.directory,self.data[key]) 
 
+    def fiberblacklist(self):
+        """
+        Args:
+            None
+        Returns:
+            List of blacklisted fibers from yaml file as a 1D array of intergers
+            If no blacklisted fibers, returns None
+        """
+        log = get_logger()
+        blacklistkey="FIBERBLACKLIST"
+        if not self.haskey(blacklistkey) and self.haskey("BROKENFIBERS") :
+            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+            blacklistkey="BROKENFIBERS"
+        if self.haskey(blacklistkey):
+            fiberblacklist = self.value(blacklistkey)
+            if type(fiberblacklist) is str and ',' in fiberblacklist:
+                fiberblacklist = fiberblacklist.split(',')
+            fiberblacklist = np.atleast_1d(fiberblacklist).astype(np.int32)
+        else:
+             fiberblacklist = None   
+        return fiberblacklist

@@ -40,7 +40,54 @@ class TestCoadd(unittest.TestCase):
         s1 = self._random_spectra(1,20)
         wave = np.linspace(5000, 5100, 10)
         s2 = fast_resample_spectra(s1,wave=wave)
+
+    def test_fiberstatus(self):
+        """Test that FIBERSTATUS=0 isn't included in coadd"""
+        def _makespec(nspec, nwave):
+            s1 = self._random_spectra(nspec, nwave)
+            s1.flux['x'][:,:] = 1.0
+            s1.ivar['x'][:,:] = 1.0
+            return s1
+
+        #- Nothing masked
+        nspec, nwave = 4,10
+        s1 = _makespec(nspec, nwave)
+        self.assertEqual(len(s1.fibermap), nspec)
+        coadd(s1)
+        self.assertEqual(len(s1.fibermap), 1)
+        self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec)
+        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 0)
+        self.assertTrue(np.all(s1.flux['x'] == 1.0))
+        self.assertTrue(np.allclose(s1.ivar['x'], 1.0*nspec))
+
+        #- Two spectra masked
+        nspec, nwave = 5,10
+        s1 = _makespec(nspec, nwave)
+        self.assertEqual(len(s1.fibermap), nspec)
+
+        s1.fibermap['FIBERSTATUS'][0] = 1
+        s1.fibermap['FIBERSTATUS'][1] = 2
+ 
+        coadd(s1)
+        self.assertEqual(len(s1.fibermap), 1)
+        self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec-2)
+        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 0)
+        self.assertTrue(np.all(s1.flux['x'] == 1.0))
+        self.assertTrue(np.allclose(s1.ivar['x'], 1.0*(nspec-2)))
+
+        #- All spectra masked
+        nspec, nwave = 5,10
+        s1 = _makespec(nspec, nwave)
+        self.assertEqual(len(s1.fibermap), nspec)
+
+        s1.fibermap['FIBERSTATUS'] = 1
         
+        coadd(s1)
+        self.assertEqual(len(s1.fibermap), 1)
+        self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], 0)
+        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 1)
+        self.assertTrue(np.all(s1.flux['x'] == 0.0))
+        self.assertTrue(np.all(s1.ivar['x'] == 0.0))
 
 if __name__ == '__main__':
     unittest.main()           
