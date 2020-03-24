@@ -221,7 +221,7 @@ class CalibFinder() :
             #    log.debug("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
             #   continue
 
-            log.info("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
+            log.debug("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
             if found :
                 log.error("But we already has a match. Please fix this ambiguity in %s"%yaml_file)
                 raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%yaml_file)
