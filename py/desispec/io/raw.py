@@ -145,14 +145,21 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     ii = (fibermap['PETAL_LOC'] == petal_loc)
     fibermap = fibermap[ii]
 
-    ## Mask blacklisted fibers
+    ## Mask fibers
     cfinder = CalibFinder([header,primary_header])
+    mod_fibers = fibermap['FIBER'].data % 500
+
+    ## Mask blacklisted fibers
     fiberblacklist = cfinder.fiberblacklist()
-    if fiberblacklist is not None:
-        mod_fibers = fibermap['FIBER'].data % 500
-        for fiber in fiberblacklist:
-            loc = np.where(mod_fibers==fiber)[0]
-            fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
+    for fiber in fiberblacklist:
+        loc = np.where(mod_fibers==fiber)[0]
+        fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
+
+    # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
+    fibers_to_exclude = cfinder.fibers_to_exclude()
+    for fiber in fibers_to_exclude:
+        loc = np.where(mod_fibers==fiber)[0]
+        fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADAMP        
 
     img.fibermap = fibermap
 

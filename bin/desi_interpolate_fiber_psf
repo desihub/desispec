@@ -7,7 +7,7 @@ import astropy.io.fits as pyfits
 
 from desispec.io import read_xytraceset,write_xytraceset
 from desispec.xytraceset import XYTraceSet
-from desispec.qproc.util import parse_fibers
+from desispec.util import parse_fibers
 
 parser = argparse.ArgumentParser(description="Interpolate the trace and PSF parameters from neighboring fibers. This is to get an approximate trace and PSF model for fibers that have 0/low throughput or dark/hot CCD columns along their trace.")
 

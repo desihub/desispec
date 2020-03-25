@@ -5,7 +5,7 @@ import numpy as np
 
 from desispec.io import read_xytraceset,write_xytraceset
 from desispec.xytraceset import XYTraceSet
-from desispec.qproc.util import parse_fibers
+from desispec.util import parse_fibers
 
 def extrapolate(x,xo,yo) :
     y=np.interp(x,xo,yo)

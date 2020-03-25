@@ -20,6 +20,7 @@ from desiutil.depend import add_dependencies
 from desispec.io.util import fitsheader, write_bintable, makepath
 from desispec.io.meta import rawdata_root
 
+from desispec.maskbits import fibermask
 
 #- Subset of columns that come from original target/MTL catalog
 target_columns = [
@@ -461,10 +462,10 @@ def assemble_fibermap(night, expid, force=False):
 
         #- Set fiber status bits
         missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
-        fibermap['FIBERSTATUS'][missing] |= 2**8
+        fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
 
         badpos = fibermap['_BADPOS']
-        fibermap['FIBERSTATUS'][badpos] |= 2**9
+        fibermap['FIBERSTATUS'][badpos] |= fibermask.BADPOSITION
         fibermap.remove_column('_BADPOS')
 
     else:
@@ -485,10 +486,6 @@ def assemble_fibermap(night, expid, force=False):
         for val	in ['LOCATION','NUM_ITER']:
             old_col = fibermap[val]
             fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype=np.int64))
-
-            
-    #for col in fibermap.colnames:
-    #    print(col,fibermap[col].dtype)
 
     #- Update SKY and STD target bits to be in both CMX_TARGET and DESI_TARGET
     #- i.e. if they are set in one, also set in the other.  Ditto for SV*
