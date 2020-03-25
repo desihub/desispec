@@ -100,7 +100,7 @@ class ConfigEditor(object) :
                             log.error("no {} in version {} of {}".format(k,version,yaml_filename))
                             raise KeyError("no {} in version {} of {}".format(k,version,yaml_filename))
                     # for filenames check they exist
-                    for k in ["PSF","FIBERFLAT",] :
+                    for k in ["PSF","FIBERFLAT","BIAS","DARK","MASK","PIXFLAT","FLUXCALIB"] :
                         if k in data[camid][version] :
                             calib_filename = os.path.join(self.calib_dir,data[camid][version][k])
                             if not os.path.isfile(calib_filename) :
@@ -139,6 +139,9 @@ class ConfigEditor(object) :
                     cfinder = CalibFinder([head,],yaml_file=yaml_filename)
                     
 
+
+    
+
     def add(self):
         parser = argparse.ArgumentParser(description="Add a new configuration, starting from the most recent one and adding/replacing requested keywords",
                                          usage="desi_calib_config add [options] (use --help for details).")
@@ -163,9 +166,44 @@ class ConfigEditor(object) :
                             help="write to this file")
 
         parser.add_argument("--overwrite",action="store_true",help="directly overwrite the SVN yaml file, use with care!")
+
+        parser.add_argument("--force",action="store_true",help="create a new config with the given date-obs-begin even if there is an existing one with the same date or more recent")
+
         
         args = parser.parse_args(sys.argv[2:])
 
+        self.add_or_update(args,add_new_version=True)
+
+    def update(self):
+        parser = argparse.ArgumentParser(description="Update an existing configuration",
+                                         usage="desi_calib_config update [options] (use --help for details)")
+
+       
+        parser.add_argument("--spectro", type=str, required=True, default=None,
+                            help="either SPX or SMY ")
+
+        parser.add_argument("--camera-arm", required=True, default=None,
+                            help="b, r or z")
+
+        parser.add_argument("--name", required=True, default=None,
+                            help="configuration version name")
+        
+        parser.add_argument("--entries", required=True, default=None,
+                            help="coma separated list of key=values, like '--keyval PSF=toto.fits,FIBERFLAT=fiberflat.fits'")
+        parser.add_argument("--comments", required=False, default=None,
+                            help="add this comment")
+        parser.add_argument("-o","--ofilename", required=False, default=None,
+                            help="write to this file")
+
+        parser.add_argument("--overwrite",action="store_true",help="directly overwrite the SVN yaml file, use with care!")
+
+        args = parser.parse_args(sys.argv[2:])
+        
+        self.add_or_update(args,add_new_version=False)
+    
+        
+    def add_or_update(self,args,add_new_version):
+        
         log = get_logger()
         
         if args.ofilename is None and not args.overwrite :
@@ -173,24 +211,23 @@ class ConfigEditor(object) :
             sys.exit(12)
         
         entries = self.parse_dict(args.entries)
-        if "DATE-OBS-BEGIN" in entries :
-            print("please remove DATE-OBS-BEGIN from the entries, use argument --date-obs-begin instead")
-            sys.exit(12)
-
-        date=datetime.strptime(str(args.date_obs_begin), "%Y%m%d")
-        thedaybefore = date - timedelta(days=1)
-        previous_config_date_obs_end = thedaybefore.year*10000+thedaybefore.month*100+thedaybefore.day
-        log.debug("previous config DATE-OBS-END = {}".format(previous_config_date_obs_end))
-
-        if args.name is None :
-            args.name = "V{}".format(args.date_obs_begin)
-        
+               
+        if add_new_version :
+            
+            if "DATE-OBS-BEGIN" in entries :
+                print("please remove DATE-OBS-BEGIN from the entries")
+                print("use argument --date-obs-begin instead")
+                sys.exit(12)
+                
+            date=datetime.strptime(str(args.date_obs_begin), "%Y%m%d")
+            thedaybefore = date - timedelta(days=1)
+            previous_config_date_obs_end = thedaybefore.year*10000+thedaybefore.month*100+thedaybefore.day
+            log.debug("previous config DATE-OBS-END = {}".format(previous_config_date_obs_end))
+            if args.name is None :
+                args.name = "V{}".format(args.date_obs_begin)
         
         SP,SM   = self.parse_spectro(args.spectro)
         camera  = args.camera_arm.lower()+"{:d}".format(int(SP[-1]))
-        
-        #print("{} {} {}".format(SP,SM,camera))
-
         # yaml file
         cameraid     = "{}-{}".format(SM.lower(),args.camera_arm.lower())
         yaml_file = "{}/spec/{}/{}.yaml".format(self.calib_dir,SM.lower(),cameraid)
@@ -199,50 +236,69 @@ class ConfigEditor(object) :
             log.error("no file {}".format(yaml_file))
             raise IOError("no file {}".format(yaml_file))
 
-        # find version of most recent entry
+        
         stream = open(yaml_file, 'r')
         data   = yaml.safe_load(stream)
         stream.close()
         if not cameraid in data :
-            log.error("Cannot find  data for camera %s in filename %s"%(cameraid,yaml_file))
-            raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,yaml_file))
+            log.error("Cannot find  data for camera %s in %s"%(cameraid,yaml_file))
+            raise KeyError("Cannot find  data for camera %s in %s"%(cameraid,yaml_file))
         data=data[cameraid]
         dates=[]
         versions=[]
         for version in data :
             dates.append(data[version]["DATE-OBS-BEGIN"])
             versions.append(version)
-        most_recent_version=versions[np.argmax(dates)]
-        log.debug("Will copy the most recent version {}".format(most_recent_version))
+
+        if add_new_version :
+            reference_version=versions[np.argmax(dates)]
+            if args.name in versions :
+                log.error("There is already a configuration named '{}' in {}".format(args.name,yaml_file))
+                sys.exit(12)
+        else :
+            reference_version = args.name
+            if not reference_version in data :
+                log.error("No configuration named '{}' in {}".format(reference_version,yaml_file))
+                sys.exit(12)
+        
+        if add_new_version :
+            if data[reference_version]["DATE-OBS-BEGIN"] >= args.date_obs_begin :
+                log.warning("There is a another version with DATE-OBS-BEGIN {} >= {}".format(data[reference_version]["DATE-OBS-BEGIN"],args.date_obs_begin))
+                if not args.force :
+                    print("Use --force to add a new version anyway")
+                    sys.exit(12)
+        
+        
+            log.debug("Will copy the most recent version {}".format(reference_version))
         
         # write "by hand" because we want to keep all the comments,
         # the indentation, and the ordering
                
         ifile = open(yaml_file,'r')
         
-        in_latest_version = False
+        in_reference_version = False
         in_some_version   = False
         
         lines_in_header = []
-        lines_in_latest_version = []
+        lines_in_reference_version = []
         lines_in_other_version  = []
 
         with open(yaml_file,'r') as ifile :
             for line in ifile.readlines() :
                 
-                in_latest_version_header = False
+                in_reference_version_header = False
                 for version in versions :
                     if line.find(version)>=0 :
                         in_some_version = True
-                        if version == most_recent_version :
-                            in_latest_version = True
-                            in_latest_version_header = True
+                        if version == reference_version :
+                            in_reference_version = True
+                            in_reference_version_header = True
                         else :
-                            in_latest_version = False
-                if in_latest_version_header : continue
+                            in_reference_version = False
+                if in_reference_version_header : continue
                 
-                if in_latest_version :   
-                    lines_in_latest_version.append(line)
+                if in_reference_version :   
+                    lines_in_reference_version.append(line)
                 else :
                     if not in_some_version :
                         lines_in_header.append(line)
@@ -260,17 +316,31 @@ class ConfigEditor(object) :
             for line in lines_in_header :
                 ofile.write(line)
 
-            # write new version
-            ofile.write("\n {}:\n\n".format(args.name))
+            if add_new_version :
+                # write new version
+                ofile.write("\n {}:\n\n".format(args.name))
+            else :
+                # update version
+                ofile.write(" {}:\n".format(reference_version))
+            
             if args.comments is not None :
+                # add comments
                 ofile.write (" # {}\n".format(args.comments))
-            ofile.write("\n")
-            ofile.write ("  DATE-OBS-BEGIN: '{}'\n".format(args.date_obs_begin))
-            keys = entries.keys()
-            for line in lines_in_latest_version :
                 
-                if line.find("DATE-OBS-BEGIN")>=0 : continue
-                if line.find("DATE-OBS-END")>=0 : continue
+            if add_new_version :
+                ofile.write("\n")
+                ofile.write ("  DATE-OBS-BEGIN: '{}'\n".format(args.date_obs_begin))
+
+            keys = entries.keys()
+            for line in lines_in_reference_version :
+
+                if add_new_version : # otherwise we keep this 
+                    if line.find("DATE-OBS-BEGIN")>=0 : continue
+                    if line.find("DATE-OBS-END")>=0 : continue
+
+                if line.find("#")>=0 :
+                    ofile.write(line)
+                    continue
                 
                 is_a_new_entry=False
                 for k in keys :
@@ -287,14 +357,15 @@ class ConfigEditor(object) :
                 ofile.write("  {} : {}\n".format(k,entries[k]))
             ofile.write("\n\n")
 
-            # write most recent version but change or add DATE-OBS-END
-            ofile.write(" {}:\n".format(most_recent_version))
-            for line in lines_in_latest_version :
-                if line.find("DATE-OBS-END")>=0 : continue
-                ofile.write(line)
-                if line.find("DATE-OBS-BEGIN")>=0 : 
-                    ofile.write("  DATE-OBS-END: '{}'\n".format(previous_config_date_obs_end))
-
+            if add_new_version :
+                # write most recent version but change or add DATE-OBS-END
+                ofile.write(" {}:\n".format(reference_version))
+                for line in lines_in_reference_version :
+                    if line.find("DATE-OBS-END")>=0 : continue
+                    ofile.write(line)
+                    if line.find("DATE-OBS-BEGIN")>=0 : 
+                        ofile.write("  DATE-OBS-END: '{}'\n".format(previous_config_date_obs_end))
+            
             # now rewrite older versions
             for line in lines_in_other_version :
                 ofile.write(line)
@@ -306,28 +377,12 @@ class ConfigEditor(object) :
         except Exception as e:
             traceback.format_exc()
             print(e)
-            print("Something is wrong in the yaml file, sorry about that.")
+            print("Something is wrong in the yaml file, sorry about that. The output file {} has not been written.".format(args.ofilename))
             sys.exit(12)
         os.rename(tmp_filename,args.ofilename)
         
         print("wrote {}".format(args.ofilename))
     
-    def update(self):
-        parser = argparse.ArgumentParser(description="Update an existing configuration",
-                                         usage="desi_calib_config update [options] (use --help for details)")
-
-        parser.add_argument("--spectro", type=str, required=True, default=None,
-                            help="either SPX or SMY ")
-
-        parser.add_argument("--camera-arm", required=True, default=None,
-                            help="b, r or z")
-
-        args = parser.parse_args(sys.argv[2:])
-
-        raise RuntimeError("not implemented")
-
-        return
-
     def test(self):
         parser = argparse.ArgumentParser(description="Test the configurations",
                                          usage="desi_calib_config test")
