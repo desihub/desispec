@@ -13,6 +13,7 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
+from desispec.maskbits import fibermask as fmsk
 from desispec.maskedmedian import masked_median
 from desispec.calibfinder import CalibFinder
 from desispec import util
@@ -20,6 +21,7 @@ import scipy,scipy.sparse
 import sys
 from desiutil.log import get_logger
 import math
+from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 
 def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=15,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
@@ -89,39 +91,18 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     # (it's faster that way, and we try to use sparse matrices as much as possible)
     #
 
-    #- Shortcuts
+    #- if problematic fibers, set ivars to 0 and mask them with specmask.BADFIBER                 
+    frame = get_fiberbitmasked_frame(frame,bitmask='flat',ivar_framemask=True)
+
+    #- Shortcuts                                                                                                      
     nwave=frame.nwave
     nfibers=frame.nspec
     wave = frame.wave.copy()  #- this will become part of output too
+    ivar = frame.ivar.copy()
     flux = frame.flux.copy()
-    ivar = frame.ivar*(frame.mask==0)
-
-    #- if broken fibers, mask them
-    broken_fibers = []
-    if frame.meta is not None and "CAMERA" in frame.meta  and "DETECTOR" in frame.meta :
-        cfinder = CalibFinder([frame.meta,])
-        blacklistkey="FIBERBLACKLIST"
-        if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
-            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
-            blacklistkey="BROKENFIBERS"       
-        if cfinder.haskey(blacklistkey) :
-            val=cfinder.value(blacklistkey)
-            if type(val) == int :
-                broken_fibers.append(val)
-            else :
-                for v in val.split(",") :
-                    broken_fibers.append(int(v))
-            log.info("Frame has broken fibers: {}".format(broken_fibers))
-
-        for broken_fiber in broken_fibers :
-            flux[broken_fiber] = 0.
-            ivar[broken_fiber] = 0.
-    
 
 
     # iterative fitting and clipping to get precise mean spectrum
-
-
 
 
     # we first need to iterate to converge on a solution of mean spectrum
@@ -343,8 +324,8 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     mask=np.zeros((flux.shape), dtype='uint32')
 
     # reset ivar
-    ivar=frame.ivar
-
+    ivar = frame.ivar.copy()
+    
     fiberflat_mask=12 # place holder for actual mask bit when defined
 
     nsig_for_mask=nsig_clipping # only mask out N sigma outliers
@@ -463,11 +444,11 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     fiberflat = FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
                      chi2pdf=chi2pdf,header=frame.meta,fibermap=frame.fibermap)
         
-    for broken_fiber in broken_fibers :
-        log.info("mask broken fiber {} in flat".format(broken_fiber))
-        fiberflat.fiberflat[fiber]=1.
-        fiberflat.ivar[fiber]=0.
-        fiberflat.mask[fiber]=specmask.BADFIBERFLAT
+    #for broken_fiber in broken_fibers :
+    #    log.info("mask broken fiber {} in flat".format(broken_fiber))
+    #    fiberflat.fiberflat[fiber]=1.
+    #    fiberflat.ivar[fiber]=0.
+    #    fiberflat.mask[fiber]=specmask.BADFIBERFLAT
     
     return fiberflat
 
@@ -670,7 +651,7 @@ def autocalib_fiberflat(fiberflats):
     corr=1./(mflat+(mflat==0))
     for spec in np.unique(spectro) :
         output_fiberflats[spec].fiberflat *= corr
-        mask_bad_fiberflat(output_fiberflats[spec])
+        #mask_bad_fiberflat(output_fiberflats[spec])
         filter_fiberflat(output_fiberflats[spec])
     log.info("done")
     return output_fiberflats
@@ -686,7 +667,7 @@ def mask_bad_fiberflat(fiberflat) :
             log.warning("fiber {} is 'BAD' because {} flatfield values are bad".format(fiber,nbad))
             fiberflat.fiberflat[fiber]=1.
             fiberflat.ivar[fiber]=0.
-            fiberflat.mask[fiber]=specmask.BADFIBERFLAT
+            fiberflat.mask[fiber] |= specmask.BADFIBERFLAT
             
 def filter_fiberflat(fiberflat) :
     log = get_logger()

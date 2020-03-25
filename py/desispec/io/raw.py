@@ -16,6 +16,7 @@ import desispec.io.util
 import desispec.preproc
 from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder 
+import desispec.maskbits as maskbits
 
 def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
@@ -144,22 +145,21 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     ii = (fibermap['PETAL_LOC'] == petal_loc)
     fibermap = fibermap[ii]
 
-    ## Mask blacklisted fibers
+    ## Mask fibers
     cfinder = CalibFinder([header,primary_header])
-    blacklistkey="FIBERBLACKLIST"
-    if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
-         log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
-         blacklistkey="BROKENFIBERS"
-    if cfinder.haskey(blacklistkey):
-        fiberblacklist = cfinder.value(blacklistkey)
-        if type(fiberblacklist) is str and ',' in fiberblacklist:
-            fiberblacklist = fiberblacklist.split(',')
-             
-        fiberblacklist = np.array(list(fiberblacklist),dtype=np.int32)
-        mod_fibers = fibermap['FIBER'].data % 500
-        for fiber in fiberblacklist:
-            loc = np.where(mod_fibers==fiber)[0]
-            fibermap['FIBERSTATUS'][loc] |= 2**16
+    mod_fibers = fibermap['FIBER'].data % 500
+
+    ## Mask blacklisted fibers
+    fiberblacklist = cfinder.fiberblacklist()
+    for fiber in fiberblacklist:
+        loc = np.where(mod_fibers==fiber)[0]
+        fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
+
+    # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
+    fibers_to_exclude = cfinder.fibers_to_exclude()
+    for fiber in fibers_to_exclude:
+        loc = np.where(mod_fibers==fiber)[0]
+        fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADAMP        
 
     img.fibermap = fibermap
 

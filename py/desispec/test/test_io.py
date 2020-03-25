@@ -789,7 +789,54 @@ class TestIO(unittest.TestCase):
         self.assertIsNone(paths[0])
         # self.assertFalse(os.path.exists(paths[0]))
 
+    def test_create_camword(self):
+        """ Test desispec.io.create_camword                                                                  
+        """
+        from ..io.util import create_camword
+        # Create some lists to convert
+        cameras1 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8', 'z9']
+        cameras2 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7']
+        cameras3 = ['b0', 'b1', 'b2', 'b3', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z9']
 
+        for array_type in [list,np.array]:
+            camword1 = create_camword(array_type(cameras1))
+            self.assertEqual(camword1, 'a0123456789')
+            camword2 = create_camword(array_type(cameras2))
+            self.assertEqual(camword2, 'a01234567b89r89')
+            camword3 = create_camword(array_type(cameras3))
+            self.assertEqual(camword3, 'a01235679b8r48z4')
+
+    def test_decode_camword(self):
+        """ Test desispec.io.decode_camword
+        """
+        from ..io.util import decode_camword
+        # Create some lists to convert                                                                    
+        cameras1 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8', 'z9']
+        cameras2 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7']
+        cameras3 = ['b0', 'b1', 'b2', 'b3', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z9']
+
+        camword1 = 'a0123456789'
+        camword2 = 'a01234567b89r89'
+        camword3 = 'a01235679b8r48z4'
+            
+        for cameras,camword in zip([cameras1,cameras2,cameras3],\
+                                   [camword1,camword2,camword3]):
+            decoded = decode_camword(camword)
+            for ii in range(len(decoded)):
+                self.assertEqual(str(decoded[ii]),str(cameras[ii]))
+        
 def test_suite():
     """Allows testing of only this module with the command::
 

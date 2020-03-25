@@ -110,7 +110,7 @@ for tid in targetids :
             for b in spec._bands :
                 
                 i=np.where(spec.ivar[b][j]*(spec.mask[b][j]==0)>0)[0]
-                
+                if i.size<10 : continue
                 if args.rebin is not None and args.rebin>0:
                     rwave=np.linspace(spec.wave[b][0],spec.wave[b][-1],spec.wave[b].size//args.rebin)
                     rflux,rivar = resample_flux(rwave,spec.wave[b],spec.flux[b][j],ivar=spec.ivar[b][j]*(spec.mask[b][j]==0))
@@ -120,7 +120,9 @@ for tid in targetids :
                 
                 c=np.polyfit(spec.wave[b][i],spec.flux[b][j,i],3)
                 pol=np.poly1d(c)(spec.wave[b][i])
-                
+
+        print(spec.fibermap[jj])
+
     if zbest is not None :
         for band in spectra[0].bands:
             plt.plot(wavescale*spectra[0].wave[band],model_flux[band],"-",alpha=0.6)
@@ -134,7 +136,7 @@ for tid in targetids :
         plt.xlabel("rest-frame wavelength [A]")
     else :
         plt.xlabel("wavelength [A]")
-    
+    plt.grid()
     props = dict(boxstyle='round', facecolor='yellow', alpha=0.2)    
     bla="TID = {}".format(tid)
     if zbest is not None :

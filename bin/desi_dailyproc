@@ -96,7 +96,10 @@ def parse(options=None):
                         help="Pass scattered light command to desi_proc. Fits and removes scattered light.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually submitted.")
-
+    parser.add_argument("--most-recent-calib", action="store_true",
+                        help="Look backward in time for the most recent night with good calibration files."+\
+                        " If not set the defaults in DESI_SPECTRO_CALIB are used.")
+    
     # Read in command line and return
     args = None
     if options is None:
@@ -197,7 +200,9 @@ def main(args):
     cmd_base = 'desi_proc'
     cmd_base += ' --batch'
     cmd_base += ' --traceshift'
-    cmd_base += ' --most-recent-calib'
+   
+    if args.most_recent_calib:
+        cmd_base += ' --most-recent-calib'
     if args.scattered_light:
         cmd_base += ' --scattered-light'
     if args.cameras is not None:

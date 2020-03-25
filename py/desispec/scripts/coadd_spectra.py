@@ -5,7 +5,7 @@ Coadd spectra
 from __future__ import absolute_import, division, print_function
 
 import os
-
+import numpy as np
 from astropy.table import Table
 
 from desiutil.log import get_logger
@@ -56,13 +56,30 @@ def main(args=None):
         spectra = read_spectra(args.infile[0])
     else:
         frames = dict()
+        cameras = {}
         for filename in args.infile:
             frame = read_frame(filename)
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
             camera = frame.meta['CAMERA']
+            cam,spec = camera[0],camera[1]
+            # Keep a list of cameras (b,r,z) for each exposure + spec
+            if (night,expid) not in cameras.keys():
+                cameras[(night,expid)] = {spec:[cam]}
+            elif spec not in cameras[(night,expid)].keys():
+                cameras[(night,expid)][spec] = [cam]
+            else:
+                cameras[(night,expid)][spec].append(cam)
             frames[(night,expid,camera)] = frame
 
+        # If not all 3 cameras are available, remove the incomplete sets
+        for (night,expid), camdict in cameras.items():
+            for spec,camlist in camdict.items():
+                log.info("Found {} for SP{} on NIGHT {} EXP {}".format(camlist,spec,night,expid))
+                if len(camlist) != 3 or np.any(np.sort(camlist) != np.array(['b','r','z'])):
+                    for cam in camlist:
+                        frames.pop((night,expid,cam+spec))
+                        log.warning("Removing {}{} from Night {} EXP {}".format(cam,spec,night,expid))
         spectra = frames2spectra(frames)
 
         #- hacks to make SpectraLite like a Spectra

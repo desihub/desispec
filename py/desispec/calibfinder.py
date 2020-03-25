@@ -10,6 +10,7 @@ import os
 import numpy as np
 import yaml
 import os.path
+from desispec.util import parse_fibers
 from desiutil.log import get_logger
 
 
@@ -221,7 +222,7 @@ class CalibFinder() :
             #    log.debug("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
             #   continue
 
-            log.info("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
+            log.debug("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
             if found :
                 log.error("But we already has a match. Please fix this ambiguity in %s"%yaml_file)
                 raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%yaml_file)
@@ -234,8 +235,7 @@ class CalibFinder() :
 
         
         self.data = matching_data
-        
-
+                
     def haskey(self,key) :
         """
         Args:
@@ -263,3 +263,38 @@ class CalibFinder() :
         """
         return os.path.join(self.directory,self.data[key]) 
 
+    def fiberblacklist(self):
+        """
+        Args:
+            None
+        Returns:
+            List of blacklisted fibers from yaml file as a 1D array of intergers
+            If no blacklisted fibers, returns None
+        """
+        log = get_logger()
+        blacklistkey="FIBERBLACKLIST"
+        if not self.haskey(blacklistkey) and self.haskey("BROKENFIBERS") :
+            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+            blacklistkey="BROKENFIBERS"
+        if self.haskey(blacklistkey):
+            fiberblacklist_str = self.value(blacklistkey)
+            fiberblacklist = parse_fibers(fiberblacklist_str)
+        else:
+             fiberblacklist = np.array([])  
+        return fiberblacklist
+
+    def fibers_to_exclude(self):
+        """                                                                                         
+        Args:                                                                                       
+            None                                                                                  
+        Returns:                                                                                    
+            List of excluded fibers from yaml file as a 1D array of intergers                    
+            If no excluded fibers, returns None                                                  
+        """
+        key = 'EXCLUDEFIBERS'
+        if not self.haskey(key) :
+            excluded = np.array([])
+        else:
+            excluded_str =  self.value(key)
+            excluded = parse_fibers(excluded_str)
+        return excluded
