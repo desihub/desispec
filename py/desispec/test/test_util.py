@@ -98,7 +98,7 @@ class TestNight(unittest.TestCase):
         arr3 = np.array([ 1,  2,  3,  4,  6,  7,  8,  9, 11, 12, 13])
         for instr,arr in zip([str1,str2,str3],
                              [arr1,arr2,arr3]):
-            returned_arr = parse_fibers(instr)
+            returned_arr = util.parse_fibers(instr)
             self.assertEqual(len(returned_arr),len(arr))
             for v1,v2 in zip(returned_arr,arr):
                 self.assertEqual(int(v1),int(v2))
