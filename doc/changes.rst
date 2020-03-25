@@ -5,11 +5,14 @@ desispec Change Log
 0.33.1 (unreleased)
 -------------------
 
+* Refactor S/N fit for QA (PR `#917`_)
+* Speed up QA (PR `#917`_)
 * Don't mask extreme mask fiberflat >2 or <0.1 in routine autocalib_fiberflat
   because the fiberflat includes the throughput difference between
   spectrographs (push to master to address issue `#897`_).
 
 .. _`#897`: https://github.com/desihub/desispec/issues/897
+.. _`#917`: https://github.com/desihub/desispec/issues/917
 
 0.33.0 (2020-03-05)
 -------------------

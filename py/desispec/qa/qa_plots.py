@@ -559,6 +559,100 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
+def frame_s2n(s2n_dict, outfile, rescut=0.2, verbose=True):
+    """
+    Plot S/N diagnostics for a given frame
+    Replaces a previous-QL script
+
+    Args:
+        s2n_dict (dict): dictionary of qa outputs repackaged a bit
+        outfile (str): output png filename
+        rescut (float, optional): only plot residuals (+/-) less than rescut
+    """
+    from desispec.qa.qalib import s2n_flux_astro
+    # Plot
+    stypes = get_sty_otype()
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,6)
+    plt.suptitle("Signal/Noise after {}, Camera: {}, ExpID: {}".format(
+        s2n_dict['PANAME'], s2n_dict['CAMERA'], s2n_dict['EXPID']), fontsize=10, y=0.99)
+    cmap = plt.get_cmap('RdBu')
+
+    # Unpack a bit
+    objlist = s2n_dict['METRICS']['OBJLIST']
+    nfibers = len(s2n_dict['METRICS']['MEDIAN_SNR'])
+
+    # Loop over object types
+    resids = np.zeros(nfibers)
+    mags, snrs = [], []
+    ss = 0
+    for oid, otype in enumerate(objlist):
+        # Truncate
+        if ss > 5:
+            continue
+        mag = s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
+        snr = s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
+        mags += mag
+        snrs += snr
+
+        # Residuals
+        fibers = s2n_dict['METRICS']['%s_FIBERID' % otype]
+        coeff = np.array(s2n_dict['METRICS']['FITCOEFF_TGT'][oid])
+        if np.any(np.isnan(coeff)):
+            continue
+        amag = np.array(mag)
+        flux = 10 ** (-0.4 * (amag - 22.5))
+        fit_snr = s2n_flux_astro(flux, *coeff) * s2n_dict['METRICS']['EXPTIME'] ** (1 / 2)
+        resids[fibers] = (s2n_dict['METRICS']['MEDIAN_SNR'][fibers] - fit_snr) / fit_snr
+
+        # Object fits
+        ax_obj = plt.subplot(gs[0, ss])
+        # Scatter
+        if otype in stypes.keys():
+            clr = stypes[otype]['color']
+        else:
+            clr = 'gray'
+        ax_obj.scatter(amag, snr, s=1, color=clr)
+
+        xval = np.linspace(np.min(amag), np.max(amag))
+        xflux = 10 ** (-0.4 * (xval - 22.5))
+        ax_obj.plot(xval, s2n_flux_astro(xflux, *coeff) * s2n_dict['METRICS']['EXPTIME'] ** (1/2),
+                    color='k')
+        #ax_obj.set_xlabel('{:s} mag ({:s})'.format(otype, s2n_dict['METRICS']['FIT_FILTER']))
+        ax_obj.set_xlabel('{:s}'.format(otype))
+        ax_obj.set_ylabel('S/N')
+        ax_obj.set_yscale('log')
+        # Increment
+        ss += 1
+
+    # Median S/N
+    ax_S2N = plt.subplot(gs[1, 0:3])
+
+    gdfibers = s2n_dict['METRICS']['MEDIAN_SNR'] > 0.
+    ax_S2N.scatter(np.arange(nfibers)[gdfibers], s2n_dict['METRICS']['MEDIAN_SNR'][gdfibers])
+    #import pdb; pdb.set_trace()
+    ax_S2N.set_xlabel('Fiber #')
+    ax_S2N.set_ylabel('Median S/N')
+    ax_S2N.set_yscale('log', nonposy='clip')
+    ax_S2N.set_ylim(0.01, 100.)
+
+    # RA, DEC with residuals
+    ax_res = plt.subplot(gs[1, 3:])
+    ax_res.set_title('Residual SNR: (calculated SNR - fit SNR) / fit SNR', fontsize=8)
+    resid_plot = ax_res.scatter(s2n_dict['METRICS']['RA'], s2n_dict['METRICS']['DEC'],
+                                s=2, c=resids, cmap=cmap, vmin=-rescut, vmax=rescut)
+    fig.colorbar(resid_plot, ticks=[-rescut, 0., rescut])
+    #fig.colorbar(resid_plot, ticks=[np.min(resids), 0, np.max(resids)])
+    ax_res.set_xlabel('RA')
+    ax_res.set_ylabel('DEC')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    _ = makepath(outfile)
+    plt.savefig(outfile)
+    if verbose:
+        print("Wrote: {:s}".format(outfile))
+    plt.close()
 
 def exposure_fiberflat(channel, expid, metric, outfile=None):
     """ Generate an Exposure level plot of a FiberFlat metric
@@ -667,25 +761,25 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
 
 
 def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
-                 mag_mnx=[18.,23.]):
+                 specprod_dir=None):
     """ Generate an Exposure level plot of a S/N metric
     Args:
         qa_exp: QA_Exposure
         metric: str,  allowed entires are: ['resid']
-        mag_mnx: Range of magnitudes used for residual plot
+        specprod_dir: str, optional
 
     Returns:
 
     """
     from desispec.io.meta import find_exposure_night, findfile
     from desispec.io.frame import read_meta_frame, read_frame
-    from desispec.io.fiberflat import read_fiberflat
+
     log = get_logger()
 
     cclrs = get_channel_clrs()
 
     # Find exposure
-    night = find_exposure_night(qa_exp.expid)
+    night = find_exposure_night(qa_exp.expid, specprod_dir=specprod_dir)
 
 
     # Plot
@@ -709,7 +803,8 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
         for wedge in range(10):
             # Load
             camera=channel+'{:d}'.format(wedge)
-            frame_file = findfile('frame', camera=camera, night=night, expid=qa_exp.expid)
+            frame_file = findfile('frame', camera=camera, night=night, expid=qa_exp.expid,
+                                  specprod_dir=specprod_dir)
             try:
                 frame = read_frame(frame_file)
             except:

@@ -1193,6 +1193,8 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     from desispec.qa import qalib
     import copy
 
+    log=get_logger()
+
     #- QAs
     #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately.
     tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame unaffected so that downstream pipeline uses it.

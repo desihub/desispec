@@ -242,19 +242,20 @@ def validate_night(night):
         raise RuntimeError('Badly formatted night %s' % night)
 
 
-def find_exposure_night(expid):
+def find_exposure_night(expid, specprod_dir=None):
     """ Find the night that has the exposure
     Args:
         expid: int
+        specprod_dir: str, optional
 
     Returns:
         night: str
 
     """
     # Search for the exposure folder
-    nights = get_nights()
+    nights = get_nights(specprod_dir=specprod_dir)
     for night in nights:
-        for exposure in get_exposures(night):
+        for exposure in get_exposures(night, specprod_dir=specprod_dir):
             if exposure == expid:
                 return night
 
