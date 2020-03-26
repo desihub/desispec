@@ -100,7 +100,6 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if frame.scores is not None :
         scores_tbl = encode_table(frame.scores)  #- unicode -> bytes
         scores_tbl.meta['EXTNAME'] = 'SCORES'
-
         hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
         if frame.scores_comments is not None : # add comments in header
             hdu=hdus['SCORES']
