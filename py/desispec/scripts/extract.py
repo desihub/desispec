@@ -170,7 +170,12 @@ def main(args):
         dw = 0.7
 
     if args.barycentric_correction :
-        barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)
+        try:
+            barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)
+        except KeyError:
+            #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
+            barycentric_correction_factor = barycentric_correction_multiplicative_factor(fibermap.meta)
+
         wstart /= barycentric_correction_factor
         wstop  /= barycentric_correction_factor
         dw     /= barycentric_correction_factor
@@ -334,7 +339,12 @@ def main_mpi(args, comm=None, timing=None):
         dw = 0.7
 
     if args.barycentric_correction :
-        barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)        
+        try:
+            barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)
+        except KeyError:
+            #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
+            barycentric_correction_factor = barycentric_correction_multiplicative_factor(fibermap.meta)
+
         wstart /= barycentric_correction_factor
         wstop  /= barycentric_correction_factor
         dw     /= barycentric_correction_factor
