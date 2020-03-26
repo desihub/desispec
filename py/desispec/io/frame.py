@@ -100,6 +100,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if frame.scores is not None :
         scores_tbl = encode_table(frame.scores)  #- unicode -> bytes
         scores_tbl.meta['EXTNAME'] = 'SCORES'
+
         hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
         if frame.scores_comments is not None : # add comments in header
             hdu=hdus['SCORES']
@@ -185,8 +186,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
 
     if 'FIBERMAP' in fx:
-        fibermap = Table(fx['FIBERMAP'].data)
-        fibermap.meta.update(fx['FIBERMAP'].header)
+        fibermap = Table.read(fx, 'FIBERMAP')
         if 'DESIGN_X' in fibermap.colnames:
             fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
         if 'DESIGN_Y' in fibermap.colnames:

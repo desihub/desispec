@@ -18,7 +18,7 @@ def read_params(filename=None, reload=False):
     """
     global _params_cache  # Cache
     if filename is None:
-        filename = resource_filename('desispec','/data/params/desispec_param.yml')
+        filename = resource_filename('desispec','data/params/desispec_param.yml')
 
     # Init
     if (filename not in _params_cache) or (reload is True):
