@@ -87,15 +87,16 @@ def read_fiberflat(filename):
         night, expid, camera = filename
         filename = findfile('fiberflat', night, expid, camera)
 
-    fx = fits.open(filename, uint=True, memmap=False)
-    header    = fx[0].header
-    fiberflat = native_endian(fx[0].data.astype('f8'))
-    ivar      = native_endian(fx["IVAR"].data.astype('f8'))
-    mask      = native_endian(fx["MASK"].data)
-    meanspec  = native_endian(fx["MEANSPEC"].data.astype('f8'))
-    wave      = native_endian(fx["WAVELENGTH"].data.astype('f8'))
-    if 'FIBERMAP' in fx:
-        fibermap = fx['FIBERMAP'].data
-    else:
-        fibermap = None
+    with fits.open(filename, uint=True, memmap=False) as fx:
+        header    = fx[0].header
+        fiberflat = native_endian(fx[0].data.astype('f8'))
+        ivar      = native_endian(fx["IVAR"].data.astype('f8'))
+        mask      = native_endian(fx["MASK"].data)
+        meanspec  = native_endian(fx["MEANSPEC"].data.astype('f8'))
+        wave      = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+        if 'FIBERMAP' in fx:
+            fibermap = fx['FIBERMAP'].data
+        else:
+            fibermap = None
+
     return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header, fibermap=fibermap)

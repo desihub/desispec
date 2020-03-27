@@ -185,8 +185,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
 
     if 'FIBERMAP' in fx:
-        fibermap = Table(fx['FIBERMAP'].data)
-        fibermap.meta.update(fx['FIBERMAP'].header)
+        fibermap = Table.read(fx, 'FIBERMAP')
         if 'DESIGN_X' in fibermap.colnames:
             fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
         if 'DESIGN_Y' in fibermap.colnames:
