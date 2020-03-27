@@ -170,11 +170,18 @@ def main(args):
         dw = 0.7
 
     if args.barycentric_correction :
-        try:
-            barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)
-        except KeyError:
-            #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
-            barycentric_correction_factor = barycentric_correction_multiplicative_factor(fibermap.meta)
+        if ('RA' in img.meta) or ('TARGTRA' in img.meta):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(img.meta)
+        #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
+        elif fibermap is not None and \
+                (('RA' in fibermap.meta) or ('TARGTRA' in fibermap.meta)):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(fibermap.meta)
+        else:
+            msg = 'Barycentric corr requires (TARGT)RA in HDU 0 or fibermap'
+            log.critical(msg)
+            raise KeyError(msg)
 
         wstart /= barycentric_correction_factor
         wstop  /= barycentric_correction_factor
@@ -339,11 +346,18 @@ def main_mpi(args, comm=None, timing=None):
         dw = 0.7
 
     if args.barycentric_correction :
-        try:
-            barycentric_correction_factor = barycentric_correction_multiplicative_factor(img.meta)
-        except KeyError:
-            #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
-            barycentric_correction_factor = barycentric_correction_multiplicative_factor(fibermap.meta)
+        if ('RA' in img.meta) or ('TARGTRA' in img.meta):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(img.meta)
+        #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
+        elif fibermap is not None and \
+                (('RA' in fibermap.meta) or ('TARGTRA' in fibermap.meta)):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(fibermap.meta)
+        else:
+            msg = 'Barycentric corr requires (TARGT)RA in HDU 0 or fibermap'
+            log.critical(msg)
+            raise KeyError(msg)
 
         wstart /= barycentric_correction_factor
         wstop  /= barycentric_correction_factor
