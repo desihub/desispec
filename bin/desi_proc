@@ -371,7 +371,16 @@ if rank == 0 and args.obstype == 'SCIENCE':
 
     fibermap_ok = os.path.exists(fibermap)
 
-#- if assemble_fibermap failed and obstype is SCIENCE, exit now
+    #- Some commissioning files didn't have coords* files that caused assemble_fibermap to fail
+    #- these are well known failures with no other solution, so for those, just force creation
+    #- of a fibermap with null coordinate information
+    if not fibermap_ok and int(args.night) <	20200310:
+        log.info("Since night is before 20200310, trying to force fibermap creation without coords file")
+        cmd += ' --force'
+        runcmd(cmd, inputs=[], outputs=[fibermap])
+        fibermap_ok = os.path.exists(fibermap)   
+    
+#- If assemble_fibermap failed and obstype is SCIENCE, exit now
 if comm is not None:
     fibermap_ok = comm.bcast(fibermap_ok, root=0)
 
