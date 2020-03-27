@@ -109,7 +109,6 @@ def main(args):
         fibermap[ii] = xfibermap
 
     #- Use fibermap header from first input file
-    # fmhdr = fits.getheader(args.files[0], 'FIBERMAP')
     fm = Table.read(args.files[0], 'FIBERMAP')
     fibermap = Table(fibermap)
     fibermap.meta.update(fm.meta)
