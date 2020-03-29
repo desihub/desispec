@@ -12,6 +12,8 @@ from desispec.image import Image
 from desispec.io.util import fitsheader, native_endian, makepath
 from astropy.io import fits
 from desiutil.depend import add_dependencies
+from desiutil.log import get_logger
+from astropy.table import Table
 
 def write_image(outfile, image, meta=None):
     """Writes image object to outfile
@@ -25,12 +27,19 @@ def write_image(outfile, image, meta=None):
         meta : dict-like object with metadata key/values (e.g. FITS header)
     """
 
+    log = get_logger()
     if meta is not None:
         hdr = fitsheader(meta)
     else:
         hdr = fitsheader(image.meta)
 
     add_dependencies(hdr)
+
+    #- Work around fitsio>1.0 writing blank keywords, e.g. on 20191212
+    for key in hdr.keys():
+        if type(hdr[key]) == fits.card.Undefined:
+            log.warning('Setting blank keyword {} to None'.format(key))
+            hdr[key] = None
 
     outdir = os.path.dirname(os.path.abspath(outfile))
     if not os.path.isdir(outdir):
@@ -51,7 +60,13 @@ def write_image(outfile, image, meta=None):
         hx.append(fits.ImageHDU(image.readnoise.astype(np.float32), name='READNOISE'))
 
     if hasattr(image, 'fibermap'):
-        hx.append(fits.BinTableHDU(image.fibermap, name='FIBERMAP'))
+        if isinstance(image.fibermap, Table):
+            fmhdu = fits.convenience.table_to_hdu(image.fibermap)
+            fmhdu.name = 'FIBERMAP'
+        else:
+            fmhdu = fits.BinTableHDU(image.fibermap, name='FIBERMAP')
+
+        hx.append(fmhdu)
 
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)

@@ -86,6 +86,22 @@ class TestNight(unittest.TestCase):
         self.assertTrue(isinstance(ivar, np.ndarray))
         self.assertEqual(ivar.ndim, 0)
 
+    def test_parse_fibers(self):
+        """
+        test the util func parse_fibers
+        """
+        str1 = '0:10'
+        str2 = '1,2,3,4:8'
+        str3 = '1..5,6,7,8:10,11-14'
+        arr1 = np.array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9])
+        arr2  = np.array([1, 2, 3, 4, 5, 6, 7])
+        arr3 = np.array([ 1,  2,  3,  4,  6,  7,  8,  9, 11, 12, 13])
+        for instr,arr in zip([str1,str2,str3],
+                             [arr1,arr2,arr3]):
+            returned_arr = util.parse_fibers(instr)
+            self.assertEqual(len(returned_arr),len(arr))
+            for v1,v2 in zip(returned_arr,arr):
+                self.assertEqual(int(v1),int(v2))
 
 #- TODO: override log level to quiet down error messages that are supposed
 #- to be there from these tests

@@ -24,7 +24,7 @@ from desispec.qproc.io import read_qframe,write_qframe
 from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat,qproc_compute_fiberflat
 from desispec.qproc.qsky import qproc_sky_subtraction
-from desispec.qproc.util import parse_fibers
+from desispec.util import parse_fibers
 from desispec.qproc.qarc import process_arc
 from desispec.qproc.flavor import check_qframe_flavor
 
@@ -153,13 +153,13 @@ def main(args=None):
 
     tset    = read_xytraceset(args.psf)
 
-
-
-    
     # add fibermap
     if args.fibermap :
         if os.path.isfile(args.fibermap) :
             fibermap = read_fibermap(args.fibermap)
+        elif hasattr(image, 'fibermap') and image.fibermap is not None:
+            log.info('Using fibermap from preproc')
+            fibermap = image.fibermap
         else :
             log.error("no fibermap file {}".format(args.fibermap))
             fibermap = None
@@ -173,7 +173,9 @@ def main(args=None):
     else :
         log.warning("No OBSTYPE keyword, trying to guess ...")
         qframe  = qproc_boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
-        obstype = check_qframe_flavor(qframe,input_flavor=image.meta["FLAVOR"]).upper()
+        input_flavor = None
+        if "FLAVOR" in image.meta : input_flavor = image.meta["FLAVOR"]
+        obstype = check_qframe_flavor(qframe,input_flavor=input_flavor).upper()
         image.meta["OBSTYPE"]=obstype
     
     log.info("OBSTYPE = '{}'".format(obstype))
@@ -276,8 +278,16 @@ def main(args=None):
             fluxcalib_filename = cfinder.findfile("FLUXCALIB")
             fluxcalib = read_average_flux_calibration(fluxcalib_filename)
             log.info("read average calib in {}".format(fluxcalib_filename))
-            seeing  = qframe.meta["SEEING"]
-            airmass = qframe.meta["AIRMASS"]
+            if "SEEING" in qframe.meta :
+                seeing  = qframe.meta["SEEING"]
+            else :
+                log.warning("no SEEING information")
+                seeing = 1
+            if "AIRMASS" in qframe.meta :
+                airmass = qframe.meta["AIRMASS"]
+            else :
+                log.warning("no AIRMASS information")
+                airmass = 1
             exptime = qframe.meta["EXPTIME"]
             exposure_calib = fluxcalib.value(seeing=seeing,airmass=airmass)
             for q in range(qframe.nspec) :

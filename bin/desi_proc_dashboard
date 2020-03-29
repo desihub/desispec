@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script uses 
+Usage:
+desi_proc_dashboard.py -n all --n_night 60  --output_dir /global/project/projectdirs/desi/www/users/zhangkai/desi_proc_dashboard/ --output_url https://portal.nersc.gov/project/desi/users/zhangkai/desi_proc_dashboard/
+
+"""
+
+from desispec.desi_proc_dashboard import parse,main
+
+args = parse(options=None)
+main(args)
+

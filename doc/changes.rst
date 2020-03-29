@@ -2,8 +2,110 @@
 desispec Change Log
 ===================
 
-0.30.1 (unreleased)
+0.33.1 (unreleased)
 -------------------
+
+* Refactor S/N fit for QA (PR `#917`_)
+* Speed up QA (PR `#917`_)
+* Don't mask extreme mask fiberflat >2 or <0.1 in routine autocalib_fiberflat
+  because the fiberflat includes the throughput difference between
+  spectrographs (push to master to address issue `#897`_).
+* New overscan method with savgol
+
+.. _`#897`: https://github.com/desihub/desispec/issues/897
+.. _`#917`: https://github.com/desihub/desispec/issues/917
+
+0.33.0 (2020-03-05)
+-------------------
+
+* Metadata bookkeeping for early CMX data (PR `#857`_)
+* Improved PSF handling in desi_proc (PR `#858`_)
+* Modeling scattered light (PR `#859`_, `#861`_, `#862`_)
+* desi_proc --calibnight option (PR `#860`_)
+* expanding flux calib stdstar bits (PR `#862`_)
+* new assemble_fibermap script (PR `#864`_, `#902`_)
+* improved sky subtraction and flux calibration robustness (PR `#865`_)
+* new desi_group_tileframes script; coadd frames directly (PR `#866`_)
+* flux calibration improvements (PR `#868`_, `#871`_, `#880`_, `#898`_)
+* more efficient desi_proc --batch parallelism packing (PR `#869`_)
+* new desi_proc_dashboard script (PR `#870`_, `#901`_)
+* new desi_dailyproc script (PR `#872`_, `#881`_, `#895`_)
+* more robustness to missing inputs (PR `#875`_, `#876`_, `#883`_)
+* groundwork for improving cosmics masking (PR `#878`_)
+* enable barycentric correction in desi_proc (PR `#879`_)
+* new plot_spectra script (PR `#890`_)
+* new desi_nightly_redshifts script (PR `#892`_)
+* Generate QA for a given night + QA bug fixes (PR `#894`_)
+* coadd metadata propagation (PR `#900`_)
+* don't use FIBERSTATUS!=0 spectra in coadds (PR `#903`_)
+* desi_proc more control options for minisv2 run (PR `#904`_)
+* Two hotfixes to master to re-enable daily processing:
+
+  * make assemble_fibermap more robust to missing input columns
+    in the platmaker coordinates files.
+  * better packing of extraction MPI ranks
+
+.. _`#857`: https://github.com/desihub/desispec/pull/857
+.. _`#858`: https://github.com/desihub/desispec/pull/858
+.. _`#859`: https://github.com/desihub/desispec/pull/859
+.. _`#860`: https://github.com/desihub/desispec/pull/860
+.. _`#861`: https://github.com/desihub/desispec/pull/861
+.. _`#862`: https://github.com/desihub/desispec/pull/862
+.. _`#864`: https://github.com/desihub/desispec/pull/864
+.. _`#865`: https://github.com/desihub/desispec/pull/865
+.. _`#866`: https://github.com/desihub/desispec/pull/869
+.. _`#868`: https://github.com/desihub/desispec/pull/868
+.. _`#869`: https://github.com/desihub/desispec/pull/869
+.. _`#870`: https://github.com/desihub/desispec/pull/870
+.. _`#871`: https://github.com/desihub/desispec/pull/871
+.. _`#872`: https://github.com/desihub/desispec/pull/872
+.. _`#875`: https://github.com/desihub/desispec/pull/875
+.. _`#876`: https://github.com/desihub/desispec/pull/876
+.. _`#878`: https://github.com/desihub/desispec/pull/878
+.. _`#879`: https://github.com/desihub/desispec/pull/879
+.. _`#880`: https://github.com/desihub/desispec/pull/880
+.. _`#881`: https://github.com/desihub/desispec/pull/881
+.. _`#883`: https://github.com/desihub/desispec/pull/883
+.. _`#890`: https://github.com/desihub/desispec/pull/890
+.. _`#892`: https://github.com/desihub/desispec/pull/892
+.. _`#894`: https://github.com/desihub/desispec/pull/894
+.. _`#895`: https://github.com/desihub/desispec/pull/895
+.. _`#898`: https://github.com/desihub/desispec/pull/898
+.. _`#900`: https://github.com/desihub/desispec/pull/900
+.. _`#901`: https://github.com/desihub/desispec/pull/901
+.. _`#902`: https://github.com/desihub/desispec/pull/902
+.. _`#903`: https://github.com/desihub/desispec/pull/903
+.. _`#904`: https://github.com/desihub/desispec/pull/904
+
+0.32.1 (2019-12-27)
+-------------------
+
+* Integration test simulate past not current date to workaound
+  pixsim header mismatch with :envvar:`DESI_SPECTRO_CALIB` calibrations.
+  (direct push to master).
+
+0.32.0 (2019-12-22)
+-------------------
+
+* Adding more desi_proc options (PR `#848`_, `#850`_).
+* Support PSF bootstrapping with broken fibers (PR `#849`_).
+* Hot fixes to desi_proc crashes (pushed directly to master).
+* Increase cframe task from 1 min to 2 min (direct to master).
+* Adapt to new spectrograph SMn naming (PR `#853`_).
+* Workaround fitsio bug by setting blank keywords to ``None``;
+  adapt to new fiberassign file names (PR `#855`_).
+
+.. _`#848`: https://github.com/desihub/desispec/pull/848
+.. _`#849`: https://github.com/desihub/desispec/pull/849
+.. _`#850`: https://github.com/desihub/desispec/pull/850
+.. _`#853`: https://github.com/desihub/desispec/pull/853
+.. _`#855`: https://github.com/desihub/desispec/pull/855
+
+
+0.31.0 (2019-10-31)
+-------------------
+
+First CMX release with bug fixes for on-sky data.
 
 * Use rrdesi --no-mpi-abort feature (PR `#823`_).
 * Added code to generate pixflats (PR `#824`_).
@@ -14,7 +116,11 @@ desispec Change Log
 * PSF I/O pause before merging (PR `#836`_).
 * Add `bin/desi_proc` single-exposure processing script (PR `#837`_).
 * Use OBSTYPE instead of FLAVOR for desi_qproc (PR `#839`_).
-* New overscan method with savgol
+* Bug fix for desi_proc double application of fiberflat (PR `#841`_).
+* desi_proc options for non-default PSF and fiberflat (PR `#842`_).
+* Correct fibermap to match what petal we are in (PR `#843`_).
+* Update database loading to match current data model (PR `#844`_).
+* Added desi_proc --batch option (PR `#845`_).
 
 .. _`#823`: https://github.com/desihub/desispec/pull/823
 .. _`#824`: https://github.com/desihub/desispec/pull/824
@@ -23,6 +129,11 @@ desispec Change Log
 .. _`#836`: https://github.com/desihub/desispec/pull/836
 .. _`#837`: https://github.com/desihub/desispec/pull/837
 .. _`#839`: https://github.com/desihub/desispec/pull/839
+.. _`#841`: https://github.com/desihub/desispec/pull/841
+.. _`#842`: https://github.com/desihub/desispec/pull/842
+.. _`#843`: https://github.com/desihub/desispec/pull/843
+.. _`#844`: https://github.com/desihub/desispec/pull/844
+.. _`#845`: https://github.com/desihub/desispec/pull/845
 
 0.30.0 (2019-10-17)
 -------------------

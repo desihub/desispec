@@ -15,6 +15,7 @@ from desispec.resolution import Resolution
 from desiutil.log import get_logger
 from desispec import util
 
+
 class Spectrum(object):
     def __init__(self, wave, flux, ivar, mask=None, R=None):
         """Lightweight wrapper of a single spectrum
@@ -63,7 +64,7 @@ class Frame(object):
             fibermap: fibermap table
             chi2pix: 2D[nspec, nwave] chi2 of 2D model to pixel-level data
                 for pixels that contributed to each flux bin
-            scores: dictionnary of 1D arrays of size nspec
+            scores: dictionary of 1D arrays of size nspec
             scores_comments: dictionnary of string (explaining the scores)
             suppress_res_warning: bool to suppress Warning message when the Resolution image is not read
         

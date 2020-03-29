@@ -24,7 +24,7 @@ from desiutil.log import get_logger
 from .. import io
 
 from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
-    stdouterr_redirected, use_mpi)
+    stdouterr_redirected)
 
 from .prod import load_prod
 
@@ -95,7 +95,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
 
     signal.alarm(int(expected_run_time * 60))
     if rank == 0:
-        log.debug("Running {} with timeout {:.1f} min".format(
+        log.info("Running {} with timeout {:.1f} min".format(
             name, expected_run_time))
 
     task_start_time = time.time()

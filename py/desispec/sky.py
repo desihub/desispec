@@ -16,6 +16,7 @@ from desispec import util
 from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
+from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberbitmasked_frame
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0) :
     """Compute a sky model.
@@ -42,14 +43,14 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
     if angular_variation_deg == 0 : 
-        return compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance)
+        skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance)
     else :
         if chromatic_variation_deg < 0 :
-            return compute_non_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg)
+            skymodel = compute_non_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg)
         else :
-            return compute_polynomial_times_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg,chromatic_variation_deg=chromatic_variation_deg)
-    
-   
+            skymodel = compute_polynomial_times_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg,chromatic_variation_deg=chromatic_variation_deg)
+ 
+    return skymodel
 
 def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
     """look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
@@ -154,8 +155,10 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+    current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
+
     Rsky = frame.R[skyfibers]
     
     input_ivar=None 
@@ -326,15 +329,36 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     cskyflux = np.zeros(frame.flux.shape)
     for i in range(frame.nspec):
         cskyflux[i] = frame.R[i].dot(parameters)
-        
+
+
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
         modified_cskyivar = _model_variance(frame,cskyflux,cskyivar,skyfibers)
     else :
         modified_cskyivar = cskyivar.copy()
+
+    # set sky flux and ivar to zero to poorly constrained regions
+    # and add margins to avoid expolation issues with the resolution matrix
+    wmask = (np.diagonal(A)<=0).astype(float)
+    # empirically, need to account for the full width of the resolution band
+    # (realized here by applying twice the resolution)
+    wmask = Rmean.dot(Rmean.dot(wmask))
+    bad = np.where(wmask!=0)[0]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+
+    # minimum number of fibers at each wavelength
+    min_number_of_fibers = min(10,max(1,skyfibers.size//2))
+    fibers_with_signal=np.sum(current_ivar>0,axis=0)
+    bad = (fibers_with_signal<min_number_of_fibers)
+    # increase by 1 pixel
+    bad[1:-1] |= bad[2:]
+    bad[1:-1] |= bad[:-2]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
     
     # need to do better here
-    mask = (cskyivar==0).astype(np.uint32)
+    mask = (modified_cskyivar==0).astype(np.uint32)
     
     return SkyModel(frame.wave.copy(), cskyflux, modified_cskyivar, mask,
                     nrej=nout_tot, stat_ivar = cskyivar) # keep a record of the statistical ivar for QA
@@ -375,10 +399,11 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+    current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
-    Rsky = frame.R[skyfibers]
     
+    Rsky = frame.R[skyfibers]
 
     input_ivar=None 
     if model_ivar :
@@ -606,9 +631,30 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
         modified_cskyivar = _model_variance(frame,cskyflux,cskyivar,skyfibers)
     else :
         modified_cskyivar = cskyivar.copy()
+
+    # set sky flux and ivar to zero to poorly constrained regions
+    # and add margins to avoid expolation issues with the resolution matrix
+    wmask = (np.diagonal(A)<=0).astype(float)
+    # empirically, need to account for the full width of the resolution band
+    # (realized here by applying twice the resolution)
+    wmask = Rmean.dot(Rmean.dot(wmask))
+    bad = np.where(wmask!=0)[0]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+
+    # minimum number of fibers at each wavelength
+    min_number_of_fibers = min(10,max(1,skyfibers.size//2))
+    fibers_with_signal=np.sum(current_ivar>0,axis=0)
+    bad = (fibers_with_signal<min_number_of_fibers)
+    # increase by 1 pixel
+    bad[1:-1] |= bad[2:]
+    bad[1:-1] |= bad[:-2]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+    
     
     # need to do better here
-    mask = (cskyivar==0).astype(np.uint32)
+    mask = (modified_cskyivar==0).astype(np.uint32)
     
     return SkyModel(frame.wave.copy(), cskyflux, modified_cskyivar, mask,
                     nrej=nout_tot, stat_ivar = cskyivar) # keep a record of the statistical ivar for QA
@@ -650,7 +696,8 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
+    current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+    current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
     
@@ -908,9 +955,30 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
         modified_cskyivar = _model_variance(frame,cskyflux,cskyivar,skyfibers)
     else :
         modified_cskyivar = cskyivar.copy()
+
+    # set sky flux and ivar to zero to poorly constrained regions
+    # and add margins to avoid expolation issues with the resolution matrix
+    wmask = (np.diagonal(A[:nwave,:nwave])<=0).astype(float)
+    # empirically, need to account for the full width of the resolution band
+    # (realized here by applying twice the resolution)
+    wmask = Rmean.dot(Rmean.dot(wmask))
+    bad = np.where(wmask!=0)[0]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+
+    # minimum number of fibers at each wavelength
+    min_number_of_fibers = min(10,max(1,skyfibers.size//2))
+    fibers_with_signal=np.sum(current_ivar>0,axis=0)
+    bad = (fibers_with_signal<min_number_of_fibers)
+    # increase by 1 pixel
+    bad[1:-1] |= bad[2:]
+    bad[1:-1] |= bad[:-2]
+    cskyflux[:,bad]=0.
+    modified_cskyivar[:,bad]=0.
+    
     
     # need to do better here
-    mask = (cskyivar==0).astype(np.uint32)
+    mask = (modified_cskyivar==0).astype(np.uint32)
     
     return SkyModel(frame.wave.copy(), cskyflux, modified_cskyivar, mask,
                     nrej=nout_tot, stat_ivar = cskyivar) # keep a record of the statistical ivar for QA
@@ -943,7 +1011,7 @@ class SkyModel(object):
         self.nrej = nrej
         self.stat_ivar = stat_ivar
 
-def subtract_sky(frame, skymodel, throughput_correction = False, default_throughput_correction = 1.) :
+def subtract_sky(frame, skymodel, throughput_correction = False) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 
     Args:
@@ -952,7 +1020,6 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
 
     Option:
         throughput_correction : if True, fit for an achromatic throughput correction. This is to absorb variations of Focal Ratio Degradation with fiber flexure.
-        default_throughput_correction : float, default value of correction if the fit on sky lines failed.
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
@@ -960,6 +1027,9 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
     log=get_logger()
     log.info("starting")
 
+    # Set fibermask flagged spectra to have 0 flux and variance
+    frame = get_fiberbitmasked_frame(frame,bitmask='sky',ivar_framemask=True)
+    
     # check same wavelength, die if not the case
     if not np.allclose(frame.wave, skymodel.wave):
         message = "frame and sky not on same wavelength grid"
@@ -1087,9 +1157,9 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
                 plt.show()
             '''
             
-            if mcoeferr>0.01 :
-                log.warning("throughput corr error = %5.4f is too large for fiber #%03d, do not apply correction"%(mcoeferr,fiber))
-                throughput_correction_value = default_throughput_correction
+            if mcoeferr>np.abs(mcoef-1) :
+                log.warning("throughput corr error = %5.4f is too large compared to the correction value = %5.4f for fiber #%03d, do not apply correction"%(mcoeferr,(mcoef-1),fiber))
+                throughput_correction_value = 1.0
             else :
                 throughput_correction_value = mcoef
         
@@ -1122,6 +1192,8 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     """
     from desispec.qa import qalib
     import copy
+
+    log=get_logger()
 
     #- QAs
     #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately.

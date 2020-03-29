@@ -83,7 +83,11 @@ def parse(options=None):
                         "specex_desi_psf_fit")
     parser.add_argument("--debug", action = 'store_true',
                         help="debug mode")
-
+    parser.add_argument("--broken-fibers", type=str, required=False, default=None,
+                        help="comma separated list of broken fibers")
+    parser.add_argument("--disable-merge", action = 'store_true',
+                        help="disable merging fiber bundles")
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -163,6 +167,8 @@ def main(args, comm=None):
         log.info("specex:  bundlesize = {}".format(bundlesize))
         log.info("specex:  specmin = {}".format(specmin))
         log.info("specex:  specmax = {}".format(specmax))
+        if args.broken_fibers :
+            log.info("specex:  broken fibers = {}".format(args.broken_fibers))
 
     # get the root output file
 
@@ -190,6 +196,8 @@ def main(args, comm=None):
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
         com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
+        if args.broken_fibers :
+            com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
         if args.debug :
             com.extend(['--debug'])
 
@@ -225,22 +233,25 @@ def main(args, comm=None):
 
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
-        #- Empirically it appears that files written by one rank sometimes
-        #- aren't fully buffer-flushed and closed before getting here,
-        #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
-        log.info('HACK: taking a 5 sec pause before merging')
-        sys.stdout.flush()
-        time.sleep(5)
+        if args.disable_merge :
+            log.info("don't merge")
+        else :
+            #- Empirically it appears that files written by one rank sometimes
+            #- aren't fully buffer-flushed and closed before getting here,
+            #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
+            log.info('HACK: taking a 20 sec pause before merging')
+            sys.stdout.flush()
+            time.sleep(20.)
 
-        merge_psf(inputs,outfits)
+            merge_psf(inputs,outfits)
 
-        log.info('done merging')
+            log.info('done merging')
 
-        if failcount == 0:
-            # only remove the per-bundle files if the merge was good
-            for f in inputs :
-                if os.path.isfile(f):
-                    os.remove(f)
+            if failcount == 0:
+                # only remove the per-bundle files if the merge was good
+                for f in inputs :
+                    if os.path.isfile(f):
+                        os.remove(f)
 
     if comm is not None:
         failcount = comm.bcast(failcount, root=0)
@@ -341,7 +352,10 @@ def mean_psf(inputs, output):
     bundle_rchi2=[]
     nbundles=None
     nfibers_per_bundle=None
+
+    
     for input in inputs :
+        log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
             log.warning("missing {}".format(input))
             continue
@@ -381,10 +395,10 @@ def mean_psf(inputs, output):
 
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
-    log.info("bundle_rchi2= {}".format(str(bundle_rchi2)))
+    log.debug("bundle_rchi2= {}".format(str(bundle_rchi2)))
     median_bundle_rchi2 = np.median(bundle_rchi2)
     rchi2_threshold=median_bundle_rchi2+1.
-    log.info("median chi2={} threshold={}".format(median_bundle_rchi2,
+    log.debug("median chi2={} threshold={}".format(median_bundle_rchi2,
         rchi2_threshold))
 
     WAVEMIN=refhead["WAVEMIN"]
@@ -399,9 +413,6 @@ def mean_psf(inputs, output):
     bundles=np.unique(bundle_of_fibers)
     for b in bundles :
         fibers_in_bundle[b]=np.where(bundle_of_fibers==b)[0]
-
-    for b in bundles :
-        print("{} : {}".format(b,fibers_in_bundle[b]))
 
     for entry in range(tables[0].size) :
         PARAM=tables[0][entry]["PARAM"]
@@ -444,18 +455,18 @@ def mean_psf(inputs, output):
                     ok.size))
 
             if ok.size>=2 : # use median
-                log.info("bundle #{} : use median".format(bundle))
+                log.debug("bundle #{} : use median".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=np.median(coeff[ok,f],axis=0)
                 output_rchi2[bundle]=np.median(bundle_rchi2[ok,bundle])
             elif ok.size==1 : # copy
-                log.info("bundle #{} : use only one psf ".format(bundle))
+                log.debug("bundle #{} : use only one psf ".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[ok[0],f]
                 output_rchi2[bundle]=bundle_rchi2[ok[0],bundle]
 
             else : # we have a problem here, take the smallest rchi2
-                log.info("bundle #{} : take smallest chi2 ".format(bundle))
+                log.debug("bundle #{} : take smallest chi2 ".format(bundle))
                 i=np.argmin(bundle_rchi2[:,bundle])
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[i,f]
@@ -494,6 +505,11 @@ def mean_psf(inputs, output):
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
 
+    for hdu in ["XTRACE","YTRACE","PSF"] :
+        if hdu in hdulist :
+            for input in inputs :
+                hdulist[hdu].header["comment"] = "inc {}".format(input)
+        
     # save output PSF
     hdulist.writeto(output, overwrite=True)
     log.info("wrote {}".format(output))

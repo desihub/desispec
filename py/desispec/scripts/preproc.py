@@ -61,8 +61,6 @@ to use, but also only if a single camera is specified.
                         help = 'do not apply gain correction') 
     parser.add_argument('--nodarktrail', action='store_true',
                         help = 'do not correct for dark trails if any') 
-    parser.add_argument('--nofibermap', action='store_true',
-                        help = 'do not add FIBERMAP extension')
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
@@ -80,7 +78,9 @@ to use, but also only if a single camera is specified.
     parser.add_argument('--ccd-calib-filename', required=False, default=None,
                         help = 'specify a difference ccd calibration filename (for dev. purpose), default is in desispec/data/ccd')
     parser.add_argument('--fill-header', type = str, default = None,  nargs ='*', help="fill camera header with contents of those of other hdus")
-
+    parser.add_argument('--scattered-light', action="store_true", help="fit and remove scattered light")
+    parser.add_argument('--psf', type = str, required=False, default=None, help="psf file to remove scattered light")
+    
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
 
@@ -135,7 +135,7 @@ def main(args=None):
     elif args.ccd_calib_filename is not None :
         ccd_calibration_filename = args.ccd_calib_filename
 
-    if args.fibermap and not os.path.exists(fibermap):
+    if args.fibermap and not os.path.exists(args.fibermap):
         raise ValueError('--fibermap {} not found'.format(args.fibermap))
 
     if args.fibermap is None:
@@ -143,17 +143,10 @@ def main(args=None):
         fibermapfile = infile.replace('desi-', 'fibermap-').replace('.fits.fz', '.fits')
         args.fibermap = os.path.join(datadir, fibermapfile)
 
-    if args.nofibermap:
-        fibermap = None
-    elif os.path.exists(args.fibermap):
-        fibermap = io.read_fibermap(args.fibermap)
-    else:
-        log.warning('fibermap file not found; creating blank fibermap')
-        fibermap = io.empty_fibermap(5000)
-
     for camera in args.cameras:
         try:
             img = io.read_raw(args.infile, camera,
+                              fibermapfile=args.fibermap,
                               bias=bias, dark=dark, pixflat=pixflat, mask=mask, bkgsub=args.bkgsub,
                               nocosmic=args.nocosmic,                              
                               cosmics_nsig=args.cosmics_nsig,
@@ -165,6 +158,7 @@ def main(args=None):
                               flag_savgol=flag_savgol,
                               nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
+                              remove_scattered_light=args.scattered_light
             )
         except IOError:
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
@@ -180,11 +174,6 @@ def main(args=None):
                                   outdir=args.outdir)
         else:
             outfile = args.outfile
-
-        if fibermap:
-            petal_loc = int(img.camera[1])
-            ii = (fibermap['PETAL_LOC'] == petal_loc)
-            img.fibermap = fibermap[ii]
 
         io.write_image(outfile, img)
         log.info("Wrote {}".format(outfile))

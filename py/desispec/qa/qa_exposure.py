@@ -63,7 +63,7 @@ class QA_Exposure(object):
         self.qaprod_dir  = qaprod_dir
 
         # Load meta from frame (ideally)
-        frames_dict = get_files(filetype = str('frame'), night = night,
+        frames_dict = get_files(filetype=str('frame'), night=night,
                                 expid=expid, specprod_dir=self.specprod_dir)
         if len(frames_dict) > 0:
             frame_file = list(frames_dict.items())[0][1]  # Any one will do
@@ -153,7 +153,7 @@ class QA_Exposure(object):
         if multi_root is None:
             qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
                                       expid=self.expid,
-                                      specprod_dir=self.specprod_dir)
+                                      qaprod_dir=self.qaprod_dir)
             # Load into frames
             for camera,qadata_path in qafiles.items():
                 qa_frame = desiio.load_qa_frame(qadata_path)
@@ -208,11 +208,12 @@ class QA_Exposure(object):
         # Load into frames
         for camera, frame_file in frame_files.items():
             if rebuild:
-                qafile, qatype = qafile_from_framefile(frame_file)
+                qafile, qatype = qafile_from_framefile(frame_file, qaprod_dir=self.qaprod_dir)
                 if os.path.isfile(qafile):
                     os.remove(qafile)
             # Generate qaframe (and figures?)
-            _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False)
+            _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False,
+                                   qaprod_dir=self.qaprod_dir)
         # Reload
         self.load_qa_data()
 
@@ -227,12 +228,14 @@ class QA_Exposure(object):
             Table is held in self.qa_s2n
 
         """
-        from desispec.qa.qalib import s2n_funcs
+        from desispec.qa.qalib import s2n_flux_astro
 
         sub_tbls = []
         # Load up
         for camera in self.data['frames'].keys():
             # Sub_tbl
+            if 'S2N' not in self.data['frames'][camera].keys():
+                continue
             sub_tbl = Table()
             sub_tbl['MEDIAN_SNR'] = self.data['frames'][camera]['S2N']['METRICS']['MEDIAN_SNR']
             sub_tbl['FIBER'] = np.arange(len(sub_tbl), dtype=int)
@@ -250,13 +253,15 @@ class QA_Exposure(object):
             mags = np.zeros_like(sub_tbl['MEDIAN_SNR'].data)
             resid = -999. * np.ones_like(sub_tbl['MEDIAN_SNR'].data)
             # Fitting
-            funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
-            fitfunc = funcMap['astro']
+            #fitfunc = s2n_flux_astro()#exptime=s2n_dict['METRICS']['EXPTIME']) #r2=s2n_dict['METRICS']['r2'])
             for oid, otype in enumerate(s2n_dict['METRICS']['OBJLIST']):
                 fibers = np.array(s2n_dict['METRICS']['{:s}_FIBERID'.format(otype)])
                 if len(fibers) == 0:
                     continue
                 coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][oid]
+                # Avoid NAN
+                if np.any(np.isnan(coeff)):
+                    continue
                 coeffs[fibers,:] = np.outer(np.ones_like(fibers), coeff)
                 # Set me
                 objtype[fibers] = otype
@@ -264,28 +269,32 @@ class QA_Exposure(object):
 
                 # Residuals
                 flux = 10 ** (-0.4 * (mags[fibers] - 22.5))
-                fit_snr = fitfunc(flux, *coeff)
+                fit_snr = s2n_flux_astro(flux, *coeff) * s2n_dict['METRICS']['EXPTIME']**(1/2)
                 resid[fibers] = (sub_tbl['MEDIAN_SNR'][fibers] - fit_snr) / fit_snr
             # Sub_tbl
             sub_tbl['MAGS'] = mags
             sub_tbl['RESID'] = resid
             sub_tbl['OBJTYPE'] = objtype
-            sub_tbl['COEFFS'] = coeffs
+            #sub_tbl['COEFFS'] = coeffs
             # Save
             sub_tbls.append(sub_tbl)
         # Stack me
-        qa_tbl = vstack(sub_tbls)
+        if len(sub_tbls) > 0:
+            qa_tbl = vstack(sub_tbls)
+        else:
+            qa_tbl = Table()
         # Hold
         self.qa_s2n = qa_tbl
         # Add meta
-        self.qa_s2n.meta = self.data['meta']
+        if 'meta' in self.data.keys():
+            self.qa_s2n.meta = self.data['meta']
 
     def slurp_into_file(self, multi_root):
         """
         Write the data of an Exposure object into a JSON file
 
         Args:
-            multi_root:
+            multi_root (str): root name of the slurped file
 
         Returns:
 

@@ -14,6 +14,8 @@ from desispec.sky import subtract_sky
 from desispec.fluxcalibration import compute_flux_calibration, isStdStar
 from desiutil.log import get_logger
 from desispec.qa import qa_plots
+from desitarget.targets import main_cmx_or_sv
+from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 import argparse
 import os
@@ -35,9 +37,11 @@ def parse(options=None):
                         help = 'path of spetro-photometric stellar spectra fits file')
     parser.add_argument('--chi2cut', type = float, default = 0., required=False,
                         help = 'apply a reduced chi2 cut for the selection of stars')
-    parser.add_argument('--chi2cut-nsig', type = float, default = 3., required=False,
+    parser.add_argument('--chi2cut-nsig', type = float, default = 0., required=False,
                         help = 'discard n-sigma outliers from the reduced chi2 of the standard star fit')
-    parser.add_argument('--delta-color-cut', type = float, default = 0.1, required=False,
+    parser.add_argument('--min-color', type = float, default = None, required=False,
+                        help = 'only consider stars with g-r greater than this')
+    parser.add_argument('--delta-color-cut', type = float, default = 0.2, required=False,
                         help = 'discard model stars with different broad-band color from imaging')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
@@ -45,7 +49,9 @@ def parse(options=None):
                         help='path of QA file.')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
-
+    parser.add_argument('--highest-throughput', type = int, default = 0, required=False,
+                        help = 'use this number of stars ranked by highest throughput to normalize transmission (for DESI commissioning)')
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -69,6 +75,9 @@ def main(args) :
     # read frame
     frame = read_frame(args.infile)
 
+    # Set fibermask flagged spectra to have 0 flux and variance
+    frame = get_fiberbitmasked_frame(frame, bitmask='flux',ivar_framemask=True)
+    
     log.info("apply fiberflat")
     # read fiberflat
     fiberflat = read_fiberflat(args.fiberflat)
@@ -88,43 +97,36 @@ def main(args) :
     # read models
     model_flux,model_wave,model_fibers,model_metadata=read_stdstar_models(args.models)
 
+    ok=np.ones(len(model_metadata),dtype=bool)
+    
     if args.chi2cut > 0 :
-        ok = np.where(model_metadata["CHI2DOF"]<args.chi2cut)[0]
-        if ok.size == 0 :
-            log.error("chi2cut has discarded all stars")
-            sys.exit(12)
-        nstars=model_flux.shape[0]
-        nbad=nstars-ok.size
-        if nbad>0 :
-            log.warning("discarding %d star(s) out of %d because of chi2cut"%(nbad,nstars))
-            model_flux=model_flux[ok]
-            model_fibers=model_fibers[ok]
-            model_metadata=model_metadata[:][ok]
-    
+        log.info("Apply cut CHI2DOF<{}".format(args.chi2cut))
+        ok &= (model_metadata["CHI2DOF"]<args.chi2cut)
     if args.delta_color_cut > 0 :
-        ok = np.where(np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)[0]
-        nstars=model_flux.shape[0]
-        nbad=nstars-ok.size
-        if nbad>0 :
-            log.warning("discarding %d star(s) out of %d because |delta_color|>%f"%(nbad,nstars,args.delta_color_cut))
-            model_flux=model_flux[ok]
-            model_fibers=model_fibers[ok]
-            model_metadata=model_metadata[:][ok]
-    
-
-    # automatically reject stars that ar chi2 outliers
+        log.info("Apply cut |delta color|<{}".format(args.delta_color_cut))
+        ok &= (np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)
+    if args.min_color is not None :
+        log.info("Apply cut DATA_G-R>{}".format(args.min_color))
+        ok &= (model_metadata["DATA_G-R"]>args.min_color)
     if args.chi2cut_nsig > 0 :
+        # automatically reject stars that ar chi2 outliers
         mchi2=np.median(model_metadata["CHI2DOF"])
         rmschi2=np.std(model_metadata["CHI2DOF"])
         maxchi2=mchi2+args.chi2cut_nsig*rmschi2
-        ok=np.where(model_metadata["CHI2DOF"]<=maxchi2)[0]
-        nstars=model_flux.shape[0]
-        nbad=nstars-ok.size
-        if nbad>0 :
-            log.warning("discarding %d star(s) out of %d because reduced chi2 outliers (at %d sigma, giving rchi2<%f )"%(nbad,nstars,args.chi2cut_nsig,maxchi2))
-            model_flux=model_flux[ok]
-            model_fibers=model_fibers[ok]
-            model_metadata=model_metadata[:][ok]
+        log.info("Apply cut CHI2DOF<{} based on chi2cut_nsig={}".format(maxchi2,args.chi2cut_nsig))
+        ok &= (model_metadata["CHI2DOF"]<=maxchi2)
+    
+    ok=np.where(ok)[0]
+    if ok.size == 0 :
+        log.error("cuts discarded all stars")
+        sys.exit(12)
+    nstars=model_flux.shape[0]
+    nbad=nstars-ok.size
+    if nbad>0 :
+        log.warning("discarding %d star(s) out of %d because of cuts"%(nbad,nstars))
+        model_flux=model_flux[ok]
+        model_fibers=model_fibers[ok]
+        model_metadata=model_metadata[:][ok]
     
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
@@ -133,23 +135,25 @@ def main(args) :
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
     fibermap_std_indices = np.where(isStdStar(fibermap))[0]
     if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
-        if 'DESI_TARGET' in fibermap:
-            colname = 'DESI_TARGET'
-        else:
-            colname = 'SV1_DESI_TARGET'  #- TODO: could become SV2_DESI_TARGET
-
+        target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
+        colname =  target_colnames[0]
         for i in model_fibers%500:
-            log.error("inconsistency with spectrum {}, OBJTYPE='{}', {}={} in fibermap".format(
-                (i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i])))
+            log.error("inconsistency with spectrum {}, OBJTYPE={}, {}={} in fibermap".format(
+                i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i]))
         sys.exit(12)
 
-    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500)
+    # Make sure the fibers of interest aren't entirely masked.
+    if np.sum(np.sum(frame.ivar[model_fibers%500, :] == 0, axis=1) == frame.nwave) == len(model_fibers):
+        log.warning('All standard-star spectra are masked!')
+        return
+
+    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput)
 
     # QA
     if (args.qafile is not None):
         log.info("performing fluxcalib QA")
         # Load
-        qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
+        qaframe = load_qa_frame(args.qafile, frame_meta=frame.meta, flavor=frame.meta['FLAVOR'])
         # Run
         #import pdb; pdb.set_trace()
         qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))

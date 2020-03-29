@@ -30,6 +30,8 @@ if __name__ == '__main__':
     parser.add_argument('-i','--infile', type = str, default = None, required=True, nargs='*', help = 'path to DESI frame calib fits files')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True, help = 'output calibration file')
     parser.add_argument('--plot', action = 'store_true', help = 'plot the result')
+    parser.add_argument('--no-airmass-term', action = 'store_true', help = 'do not try to estimate an airmass term')
+    parser.add_argument('--no-seeing-term', action = 'store_true', help = 'do not try to estimate a seeing term')
 
     args = parser.parse_args()
     log=get_logger()
@@ -38,10 +40,15 @@ if __name__ == '__main__':
     ###########################################################
 
     camera=None
+    arm=None
+    spec=None
     wave=None
     calibs=list()
     airmass=list()
     seeing=list()
+
+    with_airmass = not args.no_airmass_term 
+    with_seeing  = not args.no_seeing_term 
     
     for filename in args.infile :
         log.info("reading {}".format(filename))
@@ -49,12 +56,16 @@ if __name__ == '__main__':
         
         if camera is None :
             camera=header["camera"].strip().lower()
+            arm=camera[0]
+            spec=camera[-1]
         else :
-            assert(camera==header["camera"].strip().lower())
+            assert(arm==header["camera"].strip().lower()[0])
         
         exptime = float(header["exptime"])
-        airmass.append(float(header["airmass"]))
-        seeing.append(float(header["seeing"]))
+        if with_airmass :
+            airmass.append(float(header["airmass"]))
+        if with_seeing :
+            seeing.append(float(header["seeing"]))
         
         cal=read_flux_calibration(filename)
         
@@ -138,18 +149,28 @@ if __name__ == '__main__':
     lcal = -2.5*np.log10(ncalibs*(ncalibs>0)+(ncalibs<=0))
     weight=(lcal!=0)
     
-    # fit a model with 3 terms
+    # fit a model with several terms
     # mean , derivative with seeing, derivative with airmass
-    npar=3
+    npar=1
+    if with_airmass: npar +=1
+    if with_seeing: npar +=1
+    
+    
     B = np.zeros((npar,wave.size))
     A = np.zeros((npar,npar,wave.size))
     M = np.zeros((npar,wave.size))
     X = np.ones((npar,nexp))
-    pivot_seeing  = np.median(seeing)
-    pivot_airmass = np.median(airmass)
-    X[1] = airmass-pivot_airmass
-    X[2] = seeing-pivot_seeing
-    
+    index=1
+    if with_airmass:
+        pivot_airmass = np.median(airmass)
+        X[index] = airmass-pivot_airmass
+        airmass_index = index
+        index += 1
+    if with_seeing:
+        pivot_seeing  = np.median(seeing)
+        X[index] = seeing-pivot_seeing
+        seeing_index = index
+        index += 1
     
     ME = np.zeros((npar,wave.size)) # error on model
     
@@ -170,22 +191,24 @@ if __name__ == '__main__':
             rms = np.std(res[:,i]-M[:,i].dot(X))
             ME[:,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
             
-    # smooth the seeing term over telluric features, freeze it and refit the two
-    # other terms on telluric features
-    tck=scipy.interpolate.splrep(wave,M[2],task=-1,t=twave,k=3)
-    M[2] = scipy.interpolate.splev(wave,tck)
-    # this estimation of uncertainty is very approximative
-    tck=scipy.interpolate.splrep(wave,ME[2],task=-1,t=twave,k=3)
-    ME[2] = scipy.interpolate.splev(wave,tck)
-        
+    if with_seeing :
+        # smooth the seeing term over telluric features, freeze it and refit the two
+        # other terms on telluric features
+        tck=scipy.interpolate.splrep(wave,M[seeing_index],task=-1,t=twave,k=3)
+        M[seeing_index] = scipy.interpolate.splev(wave,tck)
+        # this estimation of uncertainty is very approximative
+        tck=scipy.interpolate.splrep(wave,ME[seeing_index],task=-1,t=twave,k=3)
+        ME[seeing_index] = scipy.interpolate.splev(wave,tck)
+    
     lmod   = X.T.dot(M)
     res    = lcal-lmod
-    npar=2
-    B = np.zeros((npar,wave.size))
-    A = np.zeros((npar,npar,wave.size))
-    for i in range(npar) :
+    nparbis = npar
+    if with_seeing : nparbis -= 1
+    B = np.zeros((nparbis,wave.size))
+    A = np.zeros((nparbis,nparbis,wave.size))
+    for i in range(nparbis) :
         B[i]   = np.sum(weight*res*X[i][:,None],axis=0)
-        for j in range(i,npar) :
+        for j in range(i,nparbis) :
             A[i,j] = np.sum(weight*X[i][:,None]*X[j][:,None],axis=0)
             if j !=i : A[j,i] = A[i,j]
     # solve the linear system per wavelength
@@ -193,22 +216,39 @@ if __name__ == '__main__':
         if A[0,0,i]>0 :
             Aii=np.linalg.inv(A[:,:,i])
             dMi=Aii.dot(B[:,i])
-            M[:2,i] += dMi
-            rms = np.std(res[:,i]-M[:2,i].dot(X[:2]))
-            ME[:2,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
+            M[:nparbis,i] += dMi
+            rms = np.std(res[:,i]-M[:nparbis,i].dot(X[:nparbis]))
+            ME[:nparbis,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
     
     # interpolate over sky lines
-    for c in range(3) :
+    for c in range(npar) :
         M[c]=np.interp(wave,wave[skymask==0],M[c][skymask==0])
+
+
+    if with_airmass :
+        airmass_term=M[airmass_index]
+        airmass_term_uncertainty=ME[airmass_index]
+    else :
+        airmass_term=np.zeros(M[0].size)
+        airmass_term_uncertainty=np.zeros(M[0].size)
+        pivot_airmass=1
+        
+    if with_seeing :
+        seeing_term=M[seeing_index]
+        seeing_term_uncertainty=ME[seeing_index]        
+    else :
+        seeing_term=np.zeros(M[0].size)
+        seeing_term_uncertainty=np.zeros(M[0].size)
+        pivot_seeing=1
     
     fluxcal=AverageFluxCalib(wave=wave,
                              average_calib=10**(-0.4*M[0]),
-                             atmospheric_extinction=M[1],
-                             seeing_term=M[2],
+                             atmospheric_extinction=airmass_term,
+                             seeing_term=seeing_term,
                              pivot_airmass=pivot_airmass,
                              pivot_seeing=pivot_seeing,
-                             atmospheric_extinction_uncertainty=ME[1],
-                             seeing_term_uncertainty=ME[2])
+                             atmospheric_extinction_uncertainty=airmass_term_uncertainty,
+                             seeing_term_uncertainty=seeing_term_uncertainty)
     
     # write the result ...
     

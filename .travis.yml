@@ -73,7 +73,7 @@ env:
         # These packages will always be installed.
         - CONDA_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
-        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml numba numpy"
+        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml numba numpy pytz"
         # These packages will always be installed.
         - PIP_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
@@ -84,10 +84,6 @@ env:
         # Debug the Travis install process.
         - DEBUG=False
     matrix:
-       # - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
-       # - PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
-        - PYTHON_VERSION=3.5 SETUP_CMD='egg_info'
-        - PYTHON_VERSION=3.5 SETUP_CMD='bdist_egg'
         - PYTHON_VERSION=3.6 SETUP_CMD='egg_info'
         - PYTHON_VERSION=3.6 SETUP_CMD='bdist_egg'
 
@@ -110,7 +106,7 @@ matrix:
         # Note: this test is not a perfectly realistic test of ReadTheDocs
         # builds, which operate in a much more bare-bones environment
         - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
+          env: PYTHON_VERSION=3.6 SETUP_CMD='build_sphinx --warning-is-error'
                CONDA_DEPENDENCIES="sqlalchemy"
                DESIHUB_PIP_DEPENDENCIES="desiutil=${DESIUTIL_VERSION}"
 
@@ -118,22 +114,11 @@ matrix:
         # change the set of packages installed by conda, so we do
         # separate 'test' and 'test --coverage'.
         - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='test --coverage'
+          env: PYTHON_VERSION=3.6 SETUP_CMD='test --coverage'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Standard tests.
-       # - os: linux
-       #   env: PYTHON_VERSION=2.7 SETUP_CMD='test'
-       #        CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-       #        PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
-
-        # Redundant with the coverage test
-        # - os: linux
-        #   env: PYTHON_VERSION=3.5 SETUP_CMD='test'
-        #        CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-        #        PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
-
         - os: linux
           env: PYTHON_VERSION=3.6 SETUP_CMD='test'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
@@ -144,25 +129,6 @@ matrix:
                ASTROPY_VERSION=3.0
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
-
-        # More recent versions
-        # We're already on the "more recent" versions.
-        # - os: linux
-        #   env: PYTHON_VERSION=2.7 ASTROPY_VERSION=1.1.1 NUMPY_VERSION=1.10.4 SCIPY_VERSION=0.17.0 SETUP_CMD='test'
-
-        # - os: osx
-        #   env: PYTHON_VERSION=2.7 SETUP_CMD='test'
-        # - python: 3.3
-        #   env: SETUP_CMD='test --open-files'
-        # - python: 3.4
-        #   env: SETUP_CMD='test --open-files'
-
-        # Now try do scipy on 2.7 and an appropriate 3.x build (with latest numpy)
-        # We also note the code coverage on Python 2.7.
-        # - python: 2.7
-        #   env: SETUP_CMD='test --coverage'  OPTIONAL_DEPS=true LC_CTYPE=C.ascii LC_ALL=C.ascii
-        # - python: 3.4
-        #   env: SETUP_CMD='test'  OPTIONAL_DEPS=true LC_CTYPE=C.ascii LC_ALL=C.ascii
 
         # Try older numpy versions
         # - python: 2.7

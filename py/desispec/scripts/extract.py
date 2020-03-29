@@ -24,7 +24,7 @@ from desispec.maskbits import specmask
 
 import desispec.scripts.mergebundles as mergebundles
 from desispec.specscore import compute_and_append_frame_scores
-from desispec.heliocentric import heliocentric_velocity_multiplicative_corr
+from desispec.heliocentric import barycentric_velocity_multiplicative_corr
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
@@ -58,9 +58,9 @@ def parse(options=None):
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
     parser.add_argument("--psferr", type=float, default=None, required=False,
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
-    parser.add_argument("--fibermap-index", type=int, default=None, required=False,
-                        help="start at this index in the fibermap table instead of using the spectro id from the camera")
-    parser.add_argument("--heliocentric-correction", action="store_true", help="apply heliocentric correction to wavelength")
+    # parser.add_argument("--fibermap-index", type=int, default=None, required=False,
+    #                     help="start at this index in the fibermap table instead of using the spectro id from the camera")
+    parser.add_argument("--barycentric-correction", action="store_true", help="apply barycentric correction to wavelength")
     
     args = None
     if options is None:
@@ -75,9 +75,9 @@ def _trim(filepath, maxchar=40):
     if len(filepath) > maxchar:
         return '...{}'.format(filepath[-maxchar:])
 
-def heliocentric_correction_multiplicative_factor(header) :
+def barycentric_correction_multiplicative_factor(header) :
     """
-    Returns mult. heliocentric correction factor using coords in `header`
+    Returns mult. barycentric correction factor using coords in `header`
 
     `header` must contrain MJD or MJD-OBS; and
     TARGTRA,TARGTDEC or SKYRA,SKYDEC or TELRA,TELDEC or RA,DEC
@@ -112,10 +112,10 @@ def heliocentric_correction_multiplicative_factor(header) :
     else :
         raise KeyError("no MJD-OBS nor MJD in header")
 
-    val = heliocentric_velocity_multiplicative_corr(ra, dec, mjd)
+    val = barycentric_velocity_multiplicative_corr(ra, dec, mjd)
 
     log = get_logger()
-    log.debug("Heliocentric correction factor = {}".format(val))
+    log.debug("Barycentric correction factor = {}".format(val))
 
     return val
     
@@ -126,6 +126,8 @@ def main(args):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         return main_mpi(args, comm)
+
+    log = get_logger()
 
     psf_file = args.psf
     input_file = args.input
@@ -138,17 +140,6 @@ def main(args):
 
     if nspec is None:
         nspec = psf.nspec
-    specmax = specmin + nspec
-
-    if args.fibermap_index is not None :
-        fibermin = args.fibermap_index
-    else :
-        camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
-        spectrograph = int(camera[1])
-        fibermin = spectrograph * 500 + specmin
-
-    print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
-        specmin, specmin+nspec, time.asctime()))
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
@@ -158,13 +149,17 @@ def main(args):
         except (AttributeError, IOError, KeyError):
             fibermap = None
 
-    #- Trim fibermap to matching fiber range and create fibers array
-    if fibermap:
-        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
-        fibermap = fibermap[ii]
+    if fibermap is not None:
+        fibermap = fibermap[specmin:specmin+nspec]
+        if nspec > len(fibermap):
+            log.warning("nspec {} > len(fibermap) {}; reducing nspec to {}".format(
+                nspec, len(fibermap), len(fibermap)))
+            nspec = len(fibermap)
         fibers = fibermap['FIBER']
     else:
-        fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        fibers = np.arange(specmin, specmin+nspec)
+
+    specmax = specmin + nspec
 
     #- Get wavelength grid from options
     if args.wavelength is not None:
@@ -174,13 +169,25 @@ def main(args):
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
 
-    if args.heliocentric_correction :
-        heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)
-        wstart /= heliocentric_correction_factor
-        wstop  /= heliocentric_correction_factor
-        dw     /= heliocentric_correction_factor
+    if args.barycentric_correction :
+        if ('RA' in img.meta) or ('TARGTRA' in img.meta):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(img.meta)
+        #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
+        elif fibermap is not None and \
+                (('RA' in fibermap.meta) or ('TARGTRA' in fibermap.meta)):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(fibermap.meta)
+        else:
+            msg = 'Barycentric corr requires (TARGT)RA in HDU 0 or fibermap'
+            log.critical(msg)
+            raise KeyError(msg)
+
+        wstart /= barycentric_correction_factor
+        wstop  /= barycentric_correction_factor
+        dw     /= barycentric_correction_factor
     else :
-        heliocentric_correction_factor = 1.
+        barycentric_correction_factor = 1.
     
     wave = np.arange(wstart, wstop+dw/2.0, dw)
         
@@ -226,14 +233,14 @@ regularize: {regularize}
     mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
     mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
-    if heliocentric_correction_factor != 1 :
-        #- Apply heliocentric correction factor to the wavelength
+    if barycentric_correction_factor != 1 :
+        #- Apply barycentric correction factor to the wavelength
         #- without touching the spectra, that is the whole point
-        wave   *= heliocentric_correction_factor
-        wstart *= heliocentric_correction_factor
-        wstop  *= heliocentric_correction_factor
-        dw     *= heliocentric_correction_factor
-        img.meta['HELIOCOR']   = heliocentric_correction_factor
+        wave   *= barycentric_correction_factor
+        wstart *= barycentric_correction_factor
+        wstop  *= barycentric_correction_factor
+        dw     *= barycentric_correction_factor
+        img.meta['HELIOCOR']   = barycentric_correction_factor
     
     #- Augment input image header for output
     img.meta['NSPEC']   = (nspec, 'Number of spectra')
@@ -302,21 +309,12 @@ def main_mpi(args, comm=None, timing=None):
         img = comm.bcast(img, root=0)
 
     psf = load_psf(psf_file)
+    if nspec is None:
+        nspec = psf.nspec
 
     mark_read_input = time.time()
 
     # get spectral range
-
-    if nspec is None:
-        nspec = psf.nspec
-    specmax = specmin + nspec
-
-    if args.fibermap_index is not None :
-        fibermin = args.fibermap_index
-    else :
-        camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
-        spectrograph = int(camera[1])
-        fibermin = spectrograph * psf.nspec + specmin
 
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
@@ -326,13 +324,17 @@ def main_mpi(args, comm=None, timing=None):
         except (AttributeError, IOError, KeyError):
             fibermap = None
 
-    #- Trim fibermap to matching fiber range and create fibers array
-    if fibermap:
-        ii = np.in1d(fibermap['FIBER'], np.arange(fibermin, fibermin+nspec))
-        fibermap = fibermap[ii]
+    if fibermap is not None:
+        fibermap = fibermap[specmin:specmin+nspec]
+        if nspec > len(fibermap):
+            log.warning("nspec {} > len(fibermap) {}; reducing nspec to {}".format(
+                nspec, len(fibermap), len(fibermap)))
+            nspec = len(fibermap)
         fibers = fibermap['FIBER']
     else:
-        fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        fibers = np.arange(specmin, specmin+nspec)
+
+    specmax = specmin + nspec
 
     #- Get wavelength grid from options
 
@@ -343,13 +345,25 @@ def main_mpi(args, comm=None, timing=None):
         wstop = np.floor(psf.wmax_all)
         dw = 0.7
 
-    if args.heliocentric_correction :
-        heliocentric_correction_factor = heliocentric_correction_multiplicative_factor(img.meta)        
-        wstart /= heliocentric_correction_factor
-        wstop  /= heliocentric_correction_factor
-        dw     /= heliocentric_correction_factor
+    if args.barycentric_correction :
+        if ('RA' in img.meta) or ('TARGTRA' in img.meta):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(img.meta)
+        #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
+        elif fibermap is not None and \
+                (('RA' in fibermap.meta) or ('TARGTRA' in fibermap.meta)):
+            barycentric_correction_factor = \
+                    barycentric_correction_multiplicative_factor(fibermap.meta)
+        else:
+            msg = 'Barycentric corr requires (TARGT)RA in HDU 0 or fibermap'
+            log.critical(msg)
+            raise KeyError(msg)
+
+        wstart /= barycentric_correction_factor
+        wstop  /= barycentric_correction_factor
+        dw     /= barycentric_correction_factor
     else :
-        heliocentric_correction_factor = 1.
+        barycentric_correction_factor = 1.
 
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
@@ -438,7 +452,7 @@ def main_mpi(args, comm=None, timing=None):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
         outmodel = "{}_model_{:02d}.fits".format(outroot, b)
 
-        log.info('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
+        log.info('extract:  Rank {} extracting {} spectra {}:{} at {}'.format(
             rank, os.path.basename(input_file),
             bspecmin[b], bspecmin[b]+bnspec[b], time.asctime(),
             ) )
@@ -461,14 +475,14 @@ def main_mpi(args, comm=None, timing=None):
             mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
             mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
-            if heliocentric_correction_factor != 1 :
-                #- Apply heliocentric correction factor to the wavelength
+            if barycentric_correction_factor != 1 :
+                #- Apply barycentric correction factor to the wavelength
                 #- without touching the spectra, that is the whole point
-                wave   *= heliocentric_correction_factor
-                wstart *= heliocentric_correction_factor
-                wstop  *= heliocentric_correction_factor
-                dw     *= heliocentric_correction_factor
-                img.meta['HELIOCOR']   = heliocentric_correction_factor
+                wave   *= barycentric_correction_factor
+                wstart *= barycentric_correction_factor
+                wstop  *= barycentric_correction_factor
+                dw     *= barycentric_correction_factor
+                img.meta['HELIOCOR']   = barycentric_correction_factor
 
             #- Augment input image header for output
             img.meta['NSPEC']   = (nspec, 'Number of spectra')

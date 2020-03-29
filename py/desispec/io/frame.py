@@ -153,8 +153,8 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         night, expid, camera = filename
         filename = findfile('frame', night, expid, camera)
 
-    if not os.path.isfile(filename) :
-        raise IOError("cannot open"+filename)
+    if not os.path.isfile(filename):
+        raise FileNotFoundError("cannot open"+filename)
 
     fx = fits.open(filename, uint=True, memmap=False)
     hdr = fx[0].header
@@ -185,7 +185,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
 
     if 'FIBERMAP' in fx:
-        fibermap = Table(fx['FIBERMAP'].data)
+        fibermap = Table.read(fx, 'FIBERMAP')
         if 'DESIGN_X' in fibermap.colnames:
             fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
         if 'DESIGN_Y' in fibermap.colnames:
@@ -238,10 +238,11 @@ def read_frame(filename, nspec=None, skip_resolution=False):
     return frame
 
 
-def search_for_framefile(frame_file):
+def search_for_framefile(frame_file, specprod_dir=None):
     """ Search for an input frame_file in the desispec redux hierarchy
     Args:
         frame_file:  str
+        specprod_dir: str, optional
 
     Returns:
         mfile: str,  full path to frame_file if found else raise error
@@ -256,11 +257,11 @@ def search_for_framefile(frame_file):
     fexposure = int(splits[2].split('.')[0])
 
     # Loop on nights
-    nights = get_nights()
+    nights = get_nights(specprod_dir=specprod_dir)
     for night in nights:
-        for exposure in get_exposures(night):
+        for exposure in get_exposures(night, specprod_dir=specprod_dir):
             if exposure == fexposure:
-                mfile = findfile(root, camera=camera, night=night, expid=exposure)
+                mfile = findfile(root, camera=camera, night=night, expid=exposure, specprod_dir=specprod_dir)
                 if os.path.isfile(mfile):
                     return mfile
                 else:

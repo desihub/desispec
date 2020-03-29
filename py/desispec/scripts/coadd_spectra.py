@@ -4,16 +4,21 @@ Coadd spectra
 
 from __future__ import absolute_import, division, print_function
 
+import os
+import numpy as np
+from astropy.table import Table
 
 from desiutil.log import get_logger
-from desispec.io import read_spectra,write_spectra
+from desispec.io import read_spectra,write_spectra,read_frame
 from desispec.coaddition import coadd,coadd_cameras,resample_spectra_lin_or_log
+from desispec.pixgroup import frames2spectra
+from desispec.specscore import compute_coadd_scores
 
 def parse(options=None):
     import argparse
 
     parser = argparse.ArgumentParser("Coadd all spectra per target, and optionally resample on linear or logarithmic wavelength grid")
-    parser.add_argument("-i","--infile", type=str,  help="input spectra file")
+    parser.add_argument("-i","--infile", type=str, nargs='+', help="input spectra file or input frame files")
     parser.add_argument("-o","--outfile", type=str,  help="output spectra file")
     parser.add_argument("--nsig", type=float, default=None, help="nsigma rejection threshold for cosmic rays")
     parser.add_argument("--lin-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
@@ -47,8 +52,40 @@ def main(args=None):
         return 12
 
     log.info("reading spectra ...")
-    spectra = read_spectra(args.infile)
+    if len(args.infile) == 1:
+        spectra = read_spectra(args.infile[0])
+    else:
+        frames = dict()
+        cameras = {}
+        for filename in args.infile:
+            frame = read_frame(filename)
+            night = frame.meta['NIGHT']
+            expid = frame.meta['EXPID']
+            camera = frame.meta['CAMERA']
+            cam,spec = camera[0],camera[1]
+            # Keep a list of cameras (b,r,z) for each exposure + spec
+            if (night,expid) not in cameras.keys():
+                cameras[(night,expid)] = {spec:[cam]}
+            elif spec not in cameras[(night,expid)].keys():
+                cameras[(night,expid)][spec] = [cam]
+            else:
+                cameras[(night,expid)][spec].append(cam)
+            frames[(night,expid,camera)] = frame
 
+        # If not all 3 cameras are available, remove the incomplete sets
+        for (night,expid), camdict in cameras.items():
+            for spec,camlist in camdict.items():
+                log.info("Found {} for SP{} on NIGHT {} EXP {}".format(camlist,spec,night,expid))
+                if len(camlist) != 3 or np.any(np.sort(camlist) != np.array(['b','r','z'])):
+                    for cam in camlist:
+                        frames.pop((night,expid,cam+spec))
+                        log.warning("Removing {}{} from Night {} EXP {}".format(cam,spec,night,expid))
+        spectra = frames2spectra(frames)
+
+        #- hacks to make SpectraLite like a Spectra
+        spectra.fibermap = Table(spectra.fibermap)
+
+        del frames  #- maybe free some memory
 
     if args.coadd_cameras :
         log.info("coadding cameras ...")
@@ -63,6 +100,16 @@ def main(args=None):
     if args.log10_step is not None :
         log.info("resampling ...")
         spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
+
+    #- Add scores (S/N, flux, etc.)
+    compute_coadd_scores(spectra, update_coadd=True)
+
+    #- Add input files to header
+    if spectra.meta is None:
+        spectra.meta = dict()
+
+    for i, filename in enumerate(args.infile):
+        spectra.meta['INFIL{:03d}'.format(i)] = os.path.basename(filename)
 
     log.info("writing {} ...".format(args.outfile))
     write_spectra(args.outfile,spectra)

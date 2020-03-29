@@ -57,6 +57,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
         calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',
+        fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
         qa_data = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
         qa_data_exp = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
         qa_bootcalib = '{qaprod_dir}/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
@@ -192,7 +193,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
     return files
 
 
-def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
+def get_files(filetype, night, expid, specprod_dir=None, qaprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified
@@ -212,7 +213,8 @@ def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
         dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
-    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
+    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir,
+                            qaprod_dir=qaprod_dir)
     literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
@@ -240,19 +242,20 @@ def validate_night(night):
         raise RuntimeError('Badly formatted night %s' % night)
 
 
-def find_exposure_night(expid):
+def find_exposure_night(expid, specprod_dir=None):
     """ Find the night that has the exposure
     Args:
         expid: int
+        specprod_dir: str, optional
 
     Returns:
         night: str
 
     """
     # Search for the exposure folder
-    nights = get_nights()
+    nights = get_nights(specprod_dir=specprod_dir)
     for night in nights:
-        for exposure in get_exposures(night):
+        for exposure in get_exposures(night, specprod_dir=specprod_dir):
             if exposure == expid:
                 return night
 

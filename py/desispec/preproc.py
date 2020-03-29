@@ -16,6 +16,9 @@ from desispec.maskbits import ccdmask
 from desiutil.log import get_logger
 from desispec.calibfinder import CalibFinder
 from desispec.darktrail import correct_dark_trail
+from desispec.scatteredlight import model_scattered_light
+from desispec.io.xytraceset import read_xytraceset
+from desispec.maskedmedian import masked_median
 
 # log = get_logger()
 
@@ -194,26 +197,6 @@ def _global_background(image,patch_width=200) :
     spline=scipy.interpolate.RectBivariateSpline(nodes0,nodes1,bkg_grid,kx=2, ky=2, s=0)
     return spline(np.arange(0,image.shape[0]),np.arange(0,image.shape[1]))
 
-def masked_median(images,masks=None) :
-    '''
-    Perfomes a median of an list of input images. If a list of mask is provided,
-    the median is performed only on unmasked pixels.
-
-    Args:
-       images : 3D numpy array : list of images of same shape
-    Options:
-       masks : list of mask images of same shape as the images. Only pixels with mask==0 are considered in the median.
-
-    Returns : median image
-    '''
-    log = get_logger()
-
-    if masks is None :
-        log.info("simple median of %d images"%len(images))
-        return np.median(images,axis=0)
-    else :
-        log.info("masked array median of %d images"%len(images))
-        return np.ma.median(np.ma.masked_array(data=images,mask=(masks!=0)),axis=0).data
 
 def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     '''
@@ -341,7 +324,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=True, flag_savgol=None,
-            nodarktrail=False):
+            nodarktrail=False,remove_scattered_light=False,psf_filename=None):
 
     '''
     preprocess image using metadata in header
@@ -382,6 +365,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         cosmics_nsig: number of sigma above background required
         cosmics_cfudge: number of sigma inconsistent with PSF required
         cosmics_c2fudge:  fudge factor applied to PSF
+
+    Optional fit and subtraction of scattered light
 
     Returns Image object with member variables:
         image : 2D preprocessed image in units of electrons per pixel
@@ -744,6 +729,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     if not nocosmic :
         cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
+
+    if remove_scattered_light :
+        if psf_filename is None :
+            psf_filename = cfinder.findfile("PSF")
+        xyset = read_xytraceset(psf_filename)
+        img.pix -= model_scattered_light(img,xyset)
 
     return img
 
