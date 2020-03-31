@@ -45,7 +45,8 @@ def write_sky(outfile, skymodel, header=None):
     hx.append( fits.ImageHDU(skymodel.wave.astype('f4'), name='WAVELENGTH') )
     if skymodel.stat_ivar is not None :
        hx.append( fits.ImageHDU(skymodel.stat_ivar.astype('f4'), name='STATIVAR') )
-
+    if skymodel.throughput_corrections is not None:
+        hx.append( fits.ImageHDU(skymodel.throughput_corrections.astype('f4'), name='THRPUTCORR') )
 
     hx[-1].header['BUNIT'] = 'Angstrom'
 
@@ -79,8 +80,13 @@ def read_sky(filename) :
         stat_ivar = native_endian(fx["STATIVAR"].data.astype('f8'))
     else :
         stat_ivar = None
+    if "THRPUTCORR" in fx :
+        throughput_corrections = native_endian(fx["THRPUTCORR"].data.astype('f8'))
+    else :
+        throughput_corrections = None
     fx.close()
 
-    skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr,stat_ivar=stat_ivar)
+    skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr,stat_ivar=stat_ivar,\
+                        throughput_corrections=throughput_corrections)
 
     return skymodel

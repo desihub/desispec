@@ -1069,7 +1069,6 @@ if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcal
         cmd += " --calib {}".format(calibfile)
         cmd += " --outfile {}".format(cframefile)
         cmd += " --cosmics-nsig 6"
-        cmd += " --sky-throughput-correction"
 
         inputs = [framefile, fiberflatfile, skyfile, calibfile]
         runcmd(cmd, inputs=inputs, outputs=[cframefile,])
