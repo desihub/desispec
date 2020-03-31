@@ -1015,7 +1015,7 @@ class SkyModel(object):
         self.stat_ivar = stat_ivar
         self.throughput_corrections = throughput_corrections
 
-def subtract_sky(frame, skymodel, throughput_correction = True) :
+def subtract_sky(frame, skymodel, apply_throughput_correction = True) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 
     Args:
@@ -1023,7 +1023,8 @@ def subtract_sky(frame, skymodel, throughput_correction = True) :
         skymodel : desispec.SkyModel object
 
     Option:
-        throughput_correction : if True, fit for an achromatic throughput correction. This is to absorb variations of Focal Ratio Degradation with fiber flexure.
+        apply_throughput_correction : if True, fit for an achromatic throughput correction. 
+                                      This is to absorb variations of Focal Ratio Degradation with fiber flexure.
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
@@ -1040,7 +1041,7 @@ def subtract_sky(frame, skymodel, throughput_correction = True) :
         log.error(message)
         raise ValueError(message)
 
-    if throughput_correction and skymodel.throughput_corrections is not None :
+    if apply_throughput_correction and skymodel.throughput_corrections is not None :
         # need to fit for a multiplicative factor of the sky model
         # before subtraction
         # we are going to use a set of bright sky lines,
@@ -1067,7 +1068,7 @@ def calculate_throughput_corrections(frame,skymodel):
         skymodel (SkyModel object): skymodel object that contains the information about the sky for the given exposure/frame
 
     Output:
-        corrections (dict):  keys are the FIBER number and the values are the multiplicative corrections that would 
+        corrections (1D array):  1D array where the index corresponds to the fiber % 500 and the values are the multiplicative corrections that would 
                              be applied to the fluxes in frame.flux to correct them based on the input skymodel
     """
     # need to fit for a multiplicative factor of the sky model                                                                                        
