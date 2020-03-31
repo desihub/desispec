@@ -346,7 +346,14 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             w=fiberflat_ivar[fiber,:]>0
             if w.sum()<100:
                 break
-            smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
+            try :
+                smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
+            except ValueError as e :
+                print("error in spline_fit")
+                mask[fiber] += fiberflat_mask
+                fiberflat_ivar[fiber] = 0.
+                break
+                
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
             bad=np.where(chi2>nsig_for_mask**2)[0]
             if bad.size>0 :
