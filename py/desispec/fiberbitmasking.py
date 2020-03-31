@@ -129,14 +129,15 @@ def get_fiberbitmask_comparison_value(kind='fluxcalib'):
     
 def get_skysub_fiberbitmask_val():
     #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
-    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED)
+    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED)    
     return get_all_fiberbitmask_val()
     
 def get_flat_fiberbitmask_val():
     #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
     #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC)
-    return get_all_fiberbitmask_val()
-    
+    return (fmsk.BROKENFIBER | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
+            fmsk.MANYBADCOL | fmsk.MANYREJECTED )
+
 def get_fluxcalib_fiberbitmask_val():
     #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
     #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC | fmsk.BADFLAT)
