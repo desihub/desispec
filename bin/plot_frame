@@ -30,19 +30,36 @@ parser.add_argument('--ascii-spectrum', type = str, default = None, required = F
 parser.add_argument('--sky-spectrum', action = 'store_true',
                     help = 'also plot the sky spectrum')
 parser.add_argument('--rebin', type = int, default=None)
+parser.add_argument('--focal-plane', action = 'store_true', help = 'show focal plane view with median flux per fiber')
+parser.add_argument('--norm', action = 'store_true', help = 'normalize for color scale of focal plane view')
+parser.add_argument('--vmin', type = float, default=None, help = 'min value for color scale of focal plane view')
+parser.add_argument('--vmax', type = float, default=None, help = 'max value for color scale of focal plane view')
+parser.add_argument('--radial', action = 'store_true', help = 'show radial focal plane view with median flux per fiber (requires option --focal-plane)')
+parser.add_argument('--wmin', type = float, default=None, help = 'min of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
+parser.add_argument('--wmax', type = float, default=None, help = 'max of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
 
 
 args   = parser.parse_args()
 
+if not args.focal_plane :
+    fig=plt.figure()
+    subplot=plt.subplot(1,1,1)
 
-fig=plt.figure()
-subplot=plt.subplot(1,1,1)
 
-fibers = parse_fibers(args.fibers)
-
+if args.focal_plane :
+    x=list()
+    y=list()
+    z=list()
+    medflux=None
+    
 for filename in args.infile :
 
     print(filename)
+
+    if args.fibers is not None :
+        fibers = parse_fibers(args.fibers)
+    else :
+        fibers = None
     
     # frame or qframe ...
     head=fitsio.read_header(filename,"WAVELENGTH")
@@ -52,6 +69,23 @@ for filename in args.infile :
     else :
         frame = read_frame(filename)
 
+    if args.focal_plane and frame.fibermap is not None :
+        x.append(frame.fibermap["FIBERASSIGN_X"])
+        y.append(frame.fibermap["FIBERASSIGN_Y"])
+
+        if args.wmin is not None and len(frame.wave.shape) == 1 :
+            b=np.where(frame.wave>=args.wmin)[0][0]
+        else :
+            b=200 # to avoid edge of camera with variable dichroic transmission
+        if args.wmax is not None and len(frame.wave.shape) == 1 :
+            e=np.where(frame.wave<=args.wmax)[0][-1]+1
+        else :
+            e=frame.wave.size-200 # to avoid edge of camera with variable dichroic transmission
+        
+        vals = np.median(frame.flux[:,b:e],axis=1)*(frame.fibermap["FIBERSTATUS"]==0)
+        z.append(vals)
+        continue
+    
 
     if frame.fibermap is not None :
         fibers_in_frame = frame.fibermap["FIBER"]
@@ -99,37 +133,71 @@ for filename in args.infile :
             if jj.size>0 :
                 plt.plot(rwave[jj],rflux[jj],label=label)
 
-if args.sky_spectrum :
-    args.ascii_spectrum = resource_filename('desispec','data/spec-sky.dat')
+if not args.focal_plane :
 
-    
-if args.ascii_spectrum :
-    tmp = np.loadtxt(args.ascii_spectrum)
-    spec_wave=tmp[:,0]
-    spec_flux=tmp[:,1]
-    spec_flux *= np.max(frame.flux)/np.max(spec_flux)
-    kk = (spec_wave>np.min(wave))&(spec_wave<np.max(wave))
-    if np.sum(kk)==0 :
-        print("no intersecting wavelength in file {} (first column interpreted as wavelength)".format(args.ascii_spectrum))
+    if args.sky_spectrum :
+        args.ascii_spectrum = resource_filename('desispec','data/spec-sky.dat')
+
+
+    if args.ascii_spectrum :
+        tmp = np.loadtxt(args.ascii_spectrum)
+        spec_wave=tmp[:,0]
+        spec_flux=tmp[:,1]
+        spec_flux *= np.max(frame.flux)/np.max(spec_flux)
+        kk = (spec_wave>np.min(wave))&(spec_wave<np.max(wave))
+        if np.sum(kk)==0 :
+            print("no intersecting wavelength in file {} (first column interpreted as wavelength)".format(args.ascii_spectrum))
+        else :
+            plt.plot(spec_wave[kk],spec_flux[kk],label=os.path.basename(args.ascii_spectrum))
+
+
+    if args.legend :
+        plt.legend()
+    if args.log :
+        plt.yscale("log")
+
+
+    plt.xlabel("Wavelength (A)")
+    plt.ylabel("Flux")
+    plt.grid()
+    plt.tight_layout()
+
+
+if args.focal_plane :
+    x=np.hstack(x)
+    y=np.hstack(y)
+    z=np.hstack(z)
+    ii = (z!=0)
+    if args.norm :
+        z /= np.median(z[ii])
+        ii = (z>0.5)
+    fig = plt.figure("focal_plane",figsize=(6,5))
+    mz=np.median(z[ii])
+    rmsz=1.4*np.median(np.abs(z[ii]-mz))
+    if args.vmin is not None:
+        vmin = args.vmin
     else :
-        plt.plot(spec_wave[kk],spec_flux[kk],label=os.path.basename(args.ascii_spectrum))
-
-        
-if args.legend :
-    plt.legend()
-if args.log :
-    plt.yscale("log")
-
-
-plt.xlabel("Wavelength (A)")
-plt.ylabel("Flux")
-plt.grid()
-plt.tight_layout()
+        vmin=mz-3*rmsz
+    if args.vmax is not None:
+        vmax = args.vmax
+    else :
+        vmax=mz+3*rmsz
+    
+    plt.scatter(x[ii],y[ii],c=z[ii],vmin=vmin,vmax=vmax,s=9)
+    plt.axis("off")
+    plt.colorbar()
+    plt.tight_layout()
 
 if args.outfile is not None :
     fig.savefig(args.outfile)
     print("wrote {}".format(args.outfile))
-
+    
+if args.focal_plane and args.radial :
+    plt.figure("radial")
+    r=np.sqrt(x**2+y**2)
+    plt.plot(r[ii],z[ii],".",alpha=0.6)
+    plt.ylim([vmin,vmax])
+        
 if not args.batch :
     plt.show()
 
