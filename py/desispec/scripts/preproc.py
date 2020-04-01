@@ -106,11 +106,6 @@ def main(args=None):
     mask=True
     if args.mask : mask=args.mask
     if args.nomask : mask=False
-    # Savgol
-    if args.flag_savgol is not None:
-        flag_savgol = args.flag_savgol == 'True'
-    else:
-        flag_savgol = None
 
     if args.cameras is None:
         args.cameras = [c+str(i) for c in 'brz' for i in range(10)]
@@ -155,7 +150,7 @@ def main(args=None):
                               ccd_calibration_filename=ccd_calibration_filename,
                               nocrosstalk=args.nocrosstalk,
                               nogain=args.nogain,
-                              use_savgol=use_savgol,
+                              use_savgol=args.use_savgol,
                               nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
                               remove_scattered_light=args.scattered_light
