@@ -67,6 +67,9 @@ def main(args) :
         fiberflat_per_program_and_camera = []
         for p in uprog :
 
+            if p.find("CALIB DESI-CALIB-00 to 03")>=0 :
+                log.warning("ignore program {}".format(p))
+                continue
 
             log.debug("make sure we have the same list of exposures per camera, for each program")
             common_expid=None
