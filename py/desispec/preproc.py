@@ -96,9 +96,11 @@ def _overscan(pix, nsigma=5, niter=3):
     Optional:
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
+
     Returns:
         overscan (float): Mean, sigma-clipped value
         readnoise (float):
+
     """
     log=get_logger()
     #- normalized median absolute deviation as robust version of RMS
