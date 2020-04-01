@@ -465,9 +465,14 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
                 cmd += " -i {}".format(preprocfile)
                 cmd += " --psf {}".format(inpsf)
                 cmd += " --outpsf {}".format(outpsf)
-                cmd += " --degxx 2 --degxy 0 --degyx 2 --degyy 0"
-                if args.obstype in ['SCIENCE', 'SKY', 'TWILIGHT']:
+                cmd += " --degxx 2 --degxy 0"
+                if args.obstype in ['FLAT', 'TESTFLAT', 'TWILIGHT'] :
+                    cmd += " --continuum"
+                else :
+                    cmd += " --degyx 2 --degyy 0"
+                if args.obstype in ['SCIENCE', 'SKY']:
                     cmd += ' --sky'
+                
             else :
                 cmd = "ln -s {} {}".format(inpsf,outpsf)  
             runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])

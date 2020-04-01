@@ -24,6 +24,8 @@ parser.add_argument('--vmin', type=float, default = None, required = False,
                     help = 'min value for image display')
 parser.add_argument('--vmax', type=float, default = None, required = False,
                     help = 'max value for image display')
+parser.add_argument('--other-psf', type= str, default = None, required = False,
+                    help = 'other psf to compare with')
 
 args = parser.parse_args()
 
@@ -38,13 +40,17 @@ if args.lines :
 
 tset = read_xytraceset(args.inpsf)
 
-fibers = parse_fibers(args.fibers)
-if fibers is None :
-    fibers=np.arange(tset.nspec)
+if args.fibers is not None :
+    fibers = parse_fibers(args.fibers)
+else :
+    fibers = np.arange(tset.nspec)
 
 nw=50
 wave = np.linspace(tset.wavemin,tset.wavemax,nw)
-    
+
+print(wave)
+print(fibers)
+
 x=np.zeros((fibers.size,nw))
 y=np.zeros((fibers.size,nw))
     
@@ -87,4 +93,26 @@ if lines is not None :
 plt.xlabel("xccd")
 plt.ylabel("yccd")
 plt.tight_layout()
+
+
+
+if args.other_psf is not None :
+    plt.figure()
+    otset = read_xytraceset(args.other_psf)
+    dx=np.zeros(len(fibers))
+    dy=np.zeros(len(fibers))
+    for i,fiber in enumerate(fibers) :
+        x = tset.x_vs_wave(fiber,wave)
+        y = tset.y_vs_wave(fiber,wave)
+        ox = otset.x_vs_wave(fiber,wave)
+        oy = otset.y_vs_wave(fiber,wave)
+        dx[i]=np.mean(x-ox)
+        dy[i]=np.mean(y-oy)
+    plt.plot(fibers,dx,"-",label="dx")
+    plt.plot(fibers,dy,"-",label="dy") 
+    plt.xlabel("fiber")
+    plt.ylabel("delta")
+    plt.legend()
+    plt.tight_layout()
+
 plt.show()
