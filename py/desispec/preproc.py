@@ -6,9 +6,9 @@ import re
 import os
 import numpy as np
 import scipy.interpolate
-import yaml
-import os.path
 from pkg_resources import resource_exists, resource_filename
+
+from scipy import signal
 
 from desispec.image import Image
 from desispec import cosmics
@@ -87,8 +87,8 @@ def _clipped_std_bias(nsigma):
     return stdbias
 
 def _overscan(pix, nsigma=5, niter=3):
-    '''
-    returns overscan, readnoise from overscan image pixels
+    """
+    Calculates overscan, readnoise from overscan image pixels
 
     Args:
         pix (ndarray) : overscan pixels from CCD image
@@ -96,7 +96,12 @@ def _overscan(pix, nsigma=5, niter=3):
     Optional:
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
-    '''
+
+    Returns:
+        overscan (float): Mean, sigma-clipped value
+        readnoise (float):
+
+    """
     log=get_logger()
     #- normalized median absolute deviation as robust version of RMS
     #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
@@ -121,6 +126,51 @@ def _overscan(pix, nsigma=5, niter=3):
     readnoise /= _clipped_std_bias(nsigma)
 
     return overscan, readnoise
+
+
+def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
+    """
+    Simple method to iteratively do a SavGol filter
+    with rejection and replacing rejected pixels by
+    nearest neighbors
+
+    Args:
+        data (ndarray):
+        window (int):  Window parameter for savgol
+        polyorder (int):
+        niter (int):
+        threshold (float):
+
+    Returns:
+
+    """
+    print("Window: {}".format(window))
+
+    ### 1st estimation
+    array = data.copy()
+    fitted = signal.savgol_filter(array, window, polyorder)
+    filtered = array - fitted
+    ### nth iteration
+    nrej = 0
+    for i in range(niter):
+        sigma = filtered.std(axis=0)
+        mask = np.abs(filtered) >= threshold*sigma
+        good = np.where(~mask)[0]
+        # Replace with nearest neighbors
+        new_nrej = np.sum(mask)
+        if new_nrej == nrej:
+            break
+        else:
+            nrej = new_nrej
+        for imask in np.where(mask)[0]:
+            # Replace with nearest neighbors
+            i0 = np.max(good[good < imask])
+            i1 = np.min(good[good > imask])
+            array[imask] = np.mean([array[i0], array[i1]])
+        ### Refit
+        fitted = signal.savgol_filter(array, window, polyorder)
+    # Return
+    return fitted
 
 
 def _global_background(image,patch_width=200) :
@@ -276,8 +326,9 @@ def get_calibration_image(cfinder,keyword,entry) :
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            overscan_per_row=False, use_overscan_row=True,
-            nodarktrail=False,remove_scattered_light=False,psf_filename=None):
+            overscan_per_row=False, use_overscan_row=False, use_savgol=None,
+            nodarktrail=False,remove_scattered_light=False,psf_filename=None,
+            bias_img=None):
 
     '''
     preprocess image using metadata in header
@@ -303,13 +354,18 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         overscan_per_row : bool,  Subtract the overscan_col values
             row by row from the data.
         use_overscan_row : bool,  Subtract off the overscan_row
-            from the data (default: True).  Requires ORSEC in
+            from the data (default: False).  Requires ORSEC in
             the Header
+        use_savgol : bool,  Specify whether to use Savitsky-Golay filter for
+            the overscan.   (default: False).  Requires use_overscan_row=True
+            to have any effect.
 
     Optional background subtraction with median filtering if bkgsub=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
     Optional disabling of dark trail correction if nodarktrail=True
+
+    Optional bias image (testing only) may be provided by bias_img=
 
     Optional tuning of cosmic ray rejection parameters:
         cosmics_nsig: number of sigma above background required
@@ -319,7 +375,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional fit and subtraction of scattered light
 
     Returns Image object with member variables:
-        image : 2D preprocessed image in units of electrons per pixel
+        pix : 2D preprocessed image in units of electrons per pixel
         ivar : 2D inverse variance of image
         mask : 2D mask of image (0=good)
         readnoise : 2D per-pixel readnoise of image
@@ -354,9 +410,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     
     cfinder = None
     
-    if ccd_calibration_filename is not False :
+    if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
-    
+
     #- TODO: Check for required keywords first
 
     #- Subtract bias image
@@ -365,7 +421,17 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- convert rawimage to float64 : this is the output format of read_image
     rawimage = rawimage.astype(np.float64)
 
-    bias = get_calibration_image(cfinder,"BIAS",bias)
+    # Savgol
+    if cfinder and cfinder.haskey("USE_ORSEC"):
+        use_overscan_row = cfinder.value("USE_ORSEC")
+    if cfinder and cfinder.haskey("SAVGOL"):
+        use_savgol = cfinder.value("SAVGOL")
+
+    # Set bias image, as desired
+    if bias_img is None:
+        bias = get_calibration_image(cfinder,"BIAS",bias)
+    else:
+        bias = bias_img
 
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
@@ -396,7 +462,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         yy, xx = parse_sec_keyword(header['CCDSEC%s'%amp])
         ny=max(ny,yy.stop)
         nx=max(nx,xx.stop)
-    image = np.zeros( (ny,nx) )
+    image = np.zeros((ny,nx))
 
     readnoise = np.zeros_like(image)
 
@@ -428,7 +494,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
 
-    for amp in amp_ids :
+    for amp in amp_ids:
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
         if 'ORSEC'+amp in header.keys():
@@ -545,9 +611,19 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data[k] -= overscan_col[k]
         # And now the rows
         if use_overscan_row:
-            #oimg_row = np.outer(np.ones(data.shape[0]), np.median(overscan_row, axis=0))
-            o,r = _overscan(overscan_row)
-            data -= o
+            # Savgol?
+            if use_savgol:
+                log.info("Using savgol")
+                collapse_oscan_row = np.zeros(overscan_row.shape[1])
+                for col in range(overscan_row.shape[1]):
+                    o, _ = _overscan(overscan_row[:,col])
+                    collapse_oscan_row[col] = o
+                oscan_row = _savgol_clipped(collapse_oscan_row, niter=0)
+                oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
+                data -= oimg_row
+            else:
+                o,r = _overscan(overscan_row)
+                data -= o
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
@@ -630,7 +706,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             raise ValueError('shape mismatch pixflat {} != image {}'.format(pixflat.shape, image.shape))
 
         almost_zero = 0.001
-        
+
         if np.all(pixflat > almost_zero ):
             image /= pixflat
             readnoise /= pixflat
@@ -666,7 +742,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             psf_filename = cfinder.findfile("PSF")
         xyset = read_xytraceset(psf_filename)
         img.pix -= model_scattered_light(img,xyset)
-        
+
     return img
 
 #-------------------------------------------------------------------------

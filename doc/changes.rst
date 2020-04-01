@@ -10,6 +10,7 @@ desispec Change Log
 * Don't mask extreme mask fiberflat >2 or <0.1 in routine autocalib_fiberflat
   because the fiberflat includes the throughput difference between
   spectrographs (push to master to address issue `#897`_).
+* Modify overscan methods.  Default is to no longer analyze the ORSEC region
 
 .. _`#897`: https://github.com/desihub/desispec/issues/897
 .. _`#917`: https://github.com/desihub/desispec/issues/917

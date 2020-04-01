@@ -40,4 +40,5 @@ from .util import (header2wave, fitsheader, native_endian, makepath,
                    healpix_subdirectory)
 
 # Why is this even here?
-from desispec.preproc import read_bias, read_pixflat, read_mask
+# Commented out by JXP as this causes a circular import on Python 3.7
+#from desispec.preproc import read_bias, read_pixflat, read_mask

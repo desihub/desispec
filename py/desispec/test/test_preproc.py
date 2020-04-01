@@ -137,7 +137,7 @@ class TestPreProc(unittest.TestCase):
             xy = parse_sec_keyword(hdr['DATASEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             self.rawimage[xy] += self.offset[amp]
-            self.rawimage[xy] += self.offset_row[amp]
+            #self.rawimage[xy] += self.offset_row[amp]
             self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
 
         #- raw data are integers, not floats
@@ -153,7 +153,7 @@ class TestPreProc(unittest.TestCase):
         for amp in ('A', 'B', 'C', 'D'):
             old_header.pop('ORSEC{}'.format(amp))
             xy = parse_sec_keyword(self.header['DATASEC'+amp])
-            old_image[xy] -= np.int32(self.offset_row[amp])
+            #old_image[xy] -= np.int32(self.offset_row[amp]) -- OR_SEC now zero
         #
         image = preproc(old_image, old_header, primary_header = self.primary_header)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
