@@ -177,7 +177,6 @@ class CalibFinder() :
         stream.close()
 
         
-        
         if not cameraid in data :
             log.error("Cannot find data for camera %s in filename %s"%(cameraid,yaml_file))
             raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,yaml_file))

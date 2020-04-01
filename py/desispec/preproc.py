@@ -97,7 +97,7 @@ def _overscan(pix, nsigma=5, niter=3):
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
     Returns:
-        overscan (float):
+        overscan (float): Mean, sigma-clipped value
         readnoise (float):
     """
     log=get_logger()
@@ -126,7 +126,7 @@ def _overscan(pix, nsigma=5, niter=3):
     return overscan, readnoise
 
 
-def _savgol_clipped(data, window=165, polyorder=5, niter=3, threshold=3.):
+def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
     """
     Simple method to iteratively do a SavGol filter
     with rejection and replacing rejected pixels by
@@ -142,6 +142,7 @@ def _savgol_clipped(data, window=165, polyorder=5, niter=3, threshold=3.):
     Returns:
 
     """
+    print("Window: {}".format(window))
 
     ### 1st estimation
     array = data.copy()
@@ -323,8 +324,9 @@ def get_calibration_image(cfinder,keyword,entry) :
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            overscan_per_row=False, use_overscan_row=True, flag_savgol=None,
-            nodarktrail=False,remove_scattered_light=False,psf_filename=None):
+            overscan_per_row=False, use_overscan_row=False, use_savgol=None,
+            nodarktrail=False,remove_scattered_light=False,psf_filename=None,
+            bias_img=None):
 
     '''
     preprocess image using metadata in header
@@ -350,16 +352,18 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         overscan_per_row : bool,  Subtract the overscan_col values
             row by row from the data.
         use_overscan_row : bool,  Subtract off the overscan_row
-            from the data (default: True).  Requires ORSEC in
+            from the data (default: False).  Requires ORSEC in
             the Header
-        flag_savgol : bool,  Specify whether to use Savitsky-Golay filter for
-            the overscan.  If not set and cfinder is not initialized, the
-            default is True.
+        use_savgol : bool,  Specify whether to use Savitsky-Golay filter for
+            the overscan.   (default: False).  Requires use_overscan_row=True
+            to have any effect.
 
     Optional background subtraction with median filtering if bkgsub=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
     Optional disabling of dark trail correction if nodarktrail=True
+
+    Optional bias image (testing only) may be provided by bias_img=
 
     Optional tuning of cosmic ray rejection parameters:
         cosmics_nsig: number of sigma above background required
@@ -369,7 +373,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional fit and subtraction of scattered light
 
     Returns Image object with member variables:
-        image : 2D preprocessed image in units of electrons per pixel
+        pix : 2D preprocessed image in units of electrons per pixel
         ivar : 2D inverse variance of image
         mask : 2D mask of image (0=good)
         readnoise : 2D per-pixel readnoise of image
@@ -416,16 +420,16 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     rawimage = rawimage.astype(np.float64)
 
     # Savgol
-    use_savgol = True
+    if cfinder and cfinder.haskey("USE_ORSEC"):
+        use_overscan_row = cfinder.value("USE_ORSEC")
     if cfinder and cfinder.haskey("SAVGOL"):
         use_savgol = cfinder.value("SAVGOL")
-    # Over-ride savgol?
-    if flag_savgol is not None:
-        use_savgol = flag_savgol
 
-    import pdb; pdb.set_trace()
-
-    bias = get_calibration_image(cfinder,"BIAS",bias)
+    # Set bias image, as desired
+    if bias_img is None:
+        bias = get_calibration_image(cfinder,"BIAS",bias)
+    else:
+        bias = bias_img
 
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
@@ -607,11 +611,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if use_overscan_row:
             # Savgol?
             if use_savgol:
+                log.info("Using savgol")
                 collapse_oscan_row = np.zeros(overscan_row.shape[1])
                 for col in range(overscan_row.shape[1]):
                     o, _ = _overscan(overscan_row[:,col])
                     collapse_oscan_row[col] = o
-                oscan_row = _savgol_clipped(collapse_oscan_row)
+                oscan_row = _savgol_clipped(collapse_oscan_row, niter=0)
                 oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
                 data -= oimg_row
             else:
