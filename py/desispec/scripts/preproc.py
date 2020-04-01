@@ -45,7 +45,7 @@ to use, but also only if a single camera is specified.
                         help = 'mask image calibration file')
     parser.add_argument('--nobias', action = 'store_true',
                         help = 'no bias subtraction')
-    parser.add_argument('--flag_savgol', type=str, default=None, required=False,
+    parser.add_argument('--use_savgol', action = 'store_true',
             help='Use Savitsky-Golay filter for the overscan (False/True)')
     parser.add_argument('--nodark', action = 'store_true',
                         help = 'no dark subtraction')
@@ -155,7 +155,7 @@ def main(args=None):
                               ccd_calibration_filename=ccd_calibration_filename,
                               nocrosstalk=args.nocrosstalk,
                               nogain=args.nogain,
-                              flag_savgol=flag_savgol,
+                              use_savgol=use_savgol,
                               nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
                               remove_scattered_light=args.scattered_light
