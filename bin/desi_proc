@@ -955,7 +955,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
             fiberflat = desispec.io.read_fiberflat(fiberflatfile)
             sky = desispec.io.read_sky(skyfile)
             apply_fiberflat(frame, fiberflat)
-            subtract_sky(frame, sky, throughput_correction=True)
+            subtract_sky(frame, sky, apply_throughput_correction=True)
             desispec.io.write_frame(sframefile, frame)
 
     if comm is not None:
@@ -1069,7 +1069,6 @@ if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcal
         cmd += " --calib {}".format(calibfile)
         cmd += " --outfile {}".format(cframefile)
         cmd += " --cosmics-nsig 6"
-        cmd += " --sky-throughput-correction"
 
         inputs = [framefile, fiberflatfile, skyfile, calibfile]
         runcmd(cmd, inputs=inputs, outputs=[cframefile,])

@@ -34,8 +34,8 @@ def parse(options=None):
                         help = 'path of DESI sky fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
-    parser.add_argument('--sky-throughput-correction', action='store_true',
-                        help = 'apply a throughput correction when subtraction the sky')
+    parser.add_argument('--no-sky-throughput-correction', action='store_true',
+                        help = 'Do NOT apply a throughput correction when subtraction the sky')
 
     args = None
     if options is None:
@@ -83,7 +83,7 @@ def main(args):
             copied_frame = copy.deepcopy(frame)
             
             # first subtract sky without throughput correction
-            subtract_sky(copied_frame, skymodel, throughput_correction = False)
+            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False)
 
             # then find cosmics
             log.info("cosmics ray 1D rejection after sky subtraction")
@@ -92,16 +92,14 @@ def main(args):
             # copy mask
             frame.mask = copied_frame.mask
             
-            if args.sky_throughput_correction :
-                # and (re-)subtract sky, but just the correction term
-                subtract_sky(frame, skymodel, throughput_correction = True)
+            # and (re-)subtract sky, but just the correction term
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction) )
 
         else :
             # subtract sky
-            subtract_sky(frame, skymodel, throughput_correction = args.sky_throughput_correction )
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction) )
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
-
 
     if args.calib!=None :
         log.info("calibrate")
