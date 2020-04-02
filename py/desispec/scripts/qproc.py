@@ -310,10 +310,8 @@ def main(args=None):
         else :
             log.error("Cannot calibrate fluxes because no FLUXCALIB keywork in calibration files")
 
-    fibers  = parse_fibers(args.fibers)
-    if fibers is None : 
-        fibers = qframe.flux.shape[0]
-    else :
+    if args.fibers is not None :
+        fibers  = parse_fibers(args.fibers)
         ii = np.arange(qframe.fibers.size)[np.in1d(qframe.fibers,fibers)]
         if ii.size == 0 :
             log.error("no such fibers in frame,")

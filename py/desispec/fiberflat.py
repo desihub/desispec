@@ -346,7 +346,14 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             w=fiberflat_ivar[fiber,:]>0
             if w.sum()<100:
                 break
-            smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
+            try :
+                smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
+            except ValueError as e :
+                print("error in spline_fit")
+                mask[fiber] += fiberflat_mask
+                fiberflat_ivar[fiber] = 0.
+                break
+                
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
             bad=np.where(chi2>nsig_for_mask**2)[0]
             if bad.size>0 :
@@ -526,7 +533,12 @@ def average_fiberflat(fiberflats):
         swf = np.zeros(fiberflats[0].meanspec.shape)
         sw  = np.zeros(fiberflats[0].meanspec.shape)
         for tmp in fiberflats :
-            w = np.sum(tmp.ivar*(tmp.mask==0),axis=0)/(tmp.meanspec*(tmp.meanspec>0)+(tmp.meanspec<=0))**2*(tmp.meanspec>0)
+            # try to use same weigths as above
+            if len(fiberflats) > 2 :
+                #w = np.sum(tmp.ivar*(tmp.mask==0),axis=0)/(tmp.meanspec*(tmp.meanspec>0)+(tmp.meanspec<=0))**2*(tmp.meanspec>0)
+                w = np.sum((tmp.ivar>0)*(tmp.mask==0),axis=0)
+            else : # was weigthed average
+                w = np.sum(tmp.ivar*(tmp.mask==0),axis=0)
             sw  += w
             swf += w*tmp.meanspec
         ok=(sw>0)
@@ -605,9 +617,14 @@ def autocalib_fiberflat(fiberflats):
         Z = []
         for i in ii :
             fflat=fiberflats[i]
-            X.append(fflat.fibermap["FIBERASSIGN_X"])
-            Y.append(fflat.fibermap["FIBERASSIGN_Y"])
-            Z.append(fflat.fiberflat)
+            # select only valid fibers here
+            nw=fflat.fiberflat.shape[1]
+            # more than half of the pixels are valid
+            jj=(np.sum((fflat.ivar>0)*(fflat.mask==0),axis=1)>nw//2)&(fflat.fibermap["FIBERSTATUS"]==0)
+            log.debug("number of valid fibers in exp {} spectro {} = {}".format(expid[i],spectro[i],np.sum(jj)))
+            X.append(fflat.fibermap["FIBERASSIGN_X"][jj])
+            Y.append(fflat.fibermap["FIBERASSIGN_Y"][jj])
+            Z.append(fflat.fiberflat[jj])
         X = np.hstack(X)
         Y = np.hstack(Y)
         Z = np.vstack(Z)
@@ -615,7 +632,8 @@ def autocalib_fiberflat(fiberflats):
         for j in range(nwave) :
             coeff, r, rank, s = np.linalg.lstsq(A, Z[:,j],rcond=-1)
             cfflat[ee][j] = coeff[0] # value at center of field of view
-
+        log.debug("median value at center of field for exp {} = {}".format(expid[i],np.median(cfflat[ee])))
+    
     # combine the fiber flat of each exposure, per spectrum
     output_fiberflats = dict()
     mflat = list()
@@ -635,7 +653,8 @@ def autocalib_fiberflat(fiberflats):
             var       += corr**2/(fiberflats[i].ivar+(fiberflats[i].ivar==0))+1e12*(fiberflats[i].ivar==0)
             mask      |=  fiberflats[i].mask
             meanspec  +=  fiberflats[i].meanspec*corr # this is quite artificial now
-            
+
+        var /= (ii.size)**2
         ivar      = (var>0)/(var+(var==0))  
         fiberflat /= ii.size
         meanspec /= ii.size
