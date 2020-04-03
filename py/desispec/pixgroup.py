@@ -181,8 +181,14 @@ class FrameLite(object):
         nspec = len(fibermap)
         night = np.tile(header['NIGHT'], nspec).astype('i4')
         expid = np.tile(header['EXPID'], nspec).astype('i4')
-        mjd = np.tile(header['MJD-OBS'], nspec).astype('f8')
         tileid = np.tile(header['TILEID'], nspec).astype('i4')
+        if 'MJD-OBS' in header:
+            mjd = np.tile(header['MJD-OBS'], nspec).astype('f8')
+        elif 'MJD' in header:
+            mjd = np.tile(header['MJD'], nspec).astype('f8')
+        else:
+            mjd = np.zeros(nspec, dtype='f8')-1
+
         fibermap = np.lib.recfunctions.append_fields(
             fibermap, ['NIGHT', 'EXPID', 'MJD', 'TILEID'],
             [night, expid, mjd, tileid],
