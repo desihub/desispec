@@ -40,6 +40,7 @@ class TestPixGroup(unittest.TestCase):
             frame.meta['NIGHT'] = night
             frame.meta['EXPID'] = expid
             frame.meta['TILEID'] = expid*10
+            frame.meta['MJD-OBS'] = 55555.0 + 0.1*expid
             for camera in ('b0', 'r0', 'z0'):
                 frame.meta['CAMERA'] = camera
                 frame.scores = scores[camera[0]]
@@ -49,6 +50,7 @@ class TestPixGroup(unittest.TestCase):
             frame.meta['NIGHT'] = night
             frame.meta['EXPID'] = expid
             frame.meta['TILEID'] = expid*10
+            frame.meta['MJD-OBS'] = 55555.0 + 0.1*expid
             for camera in ('b0', 'r0', 'z0'):
                 frame.meta['CAMERA'] = camera
                 frame.scores = scores[camera[0]]
