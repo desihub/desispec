@@ -71,8 +71,41 @@ desi_group_tileframes -i exposures/$NIGHT -o tiles
 #- Find what tiles we have0
 TILEIDS=$(ls tiles | sed 's/\///g')
 SPECTROGRAPHS=$(seq 0 9)
+CAMS="b r z"
+
+#- Create Spectra-64 files
+echo -- Spectral Grouping --
+for TILEID in $TILEIDS; do
+    dir=${DESI_SPECTRO_REDUX}/${SPECPROD}/tiles/${TILEID}/${NIGHT}
+    if [ -d $dir ]; then
+        cd $dir
+	numframes=$(ls cframe-*.fits 2>/dev/null | wc -l)
+        if [ $numframes -eq 0 ]; then
+            echo tile $TILEID spectrograph $SPECTRO: no cframes
+	else
+	    EXPIDS=$(ls cframe*.fits 2>/dev/null | grep -oE "[0-9]{8}" | sort | uniq)
+	    for EXPID in $EXPIDS; do
+		spectra=spectra-64-${EXPID}-${TILEID}-${NIGHT}.fits
+                spectralog=spectra-64-${EXPID}-${TILEID}-${NIGHT}.log
+		if [ -f $spectra ]; then
+		    echo tile $TILEID exp $EXPID: $spectra file already exists
+		else
+		    echo tile $TILEID exposure $EXPID: generating $spectra at $(date)
+		    srun -N 1 -n 1 -c 64 desi_group_spectra \
+			 --inframes cframe-[brz][0-9]-${EXPID}.fits --outfile $spectra &> $spectralog &
+		fi
+            done
+	fi
+    fi
+done
+
+#- Wait for the spectra-64 file creation to finish
+echo Waiting for spectra-64 file creation to finish at $(date)
+wait
+echo spectra-64 creation done at $(date)
 
 #- Generate coadds per-spectrograph per-tile per-night
+#- Do so for both combined brz and separate b, r, and z
 echo -- Coadds --
 for TILEID in $TILEIDS; do
     dir=${DESI_SPECTRO_REDUX}/${SPECPROD}/tiles/${TILEID}/${NIGHT}
@@ -85,12 +118,30 @@ for TILEID in $TILEIDS; do
             colog=coadd-${SPECTRO}-${TILEID}-${NIGHT}.log
             if [ $numframes -eq 0 ]; then
                 echo tile $TILEID spectrograph $SPECTRO: no cframes
-            elif [ ! -f $coadd ]; then
-                echo tile $TILEID spectrograph $SPECTRO: generating $coadd at $(date)
-                srun -N 1 -n 1 -c 64 desi_coadd_spectra \
-                        --coadd-cameras --nproc 16 \
-                        -i cframe-?${SPECTRO}-*.fits -o $coadd &> $colog &
             else
+		if [ ! -f $coadd ]; then
+                    echo tile $TILEID spectrograph $SPECTRO: generating $coadd at $(date)
+                    srun -N 1 -n 1 -c 64 desi_coadd_spectra \
+                         --coadd-cameras --nproc 16 \
+                         -i cframe-?${SPECTRO}-*.fits -o $coadd &> $colog &
+	        else
+                    echo tile $TILEID spectrograph $SPECTRO: $coadd already exists
+		fi
+		for CAM in $CAMS; do
+                    coadd=coadd-${CAM}${SPECTRO}-${TILEID}-${NIGHT}.fits
+                    colog=coadd-${CAM}${SPECTRO}-${TILEID}-${NIGHT}.log
+		    numframes=$(ls cframe-${CAM}${SPECTRO}-*.fits 2>/dev/null | wc -l)
+		    if [ $numframes -lt 2 ]; then
+			echo tile $TILEID spectrograph ${CAM}${SPECTRO}: $numframes cframes, nothing to coadd
+		    elif [ -f $coadd ]; then
+			echo tile $TILEID spectrograph ${CAM}${SPECTRO}: $coadd already exists
+                    else
+			echo tile $TILEID spectrograph ${CAM}${SPECTRO}: generating $coadd at $(date)
+			srun -N 1 -n 1 -c 64 desi_coadd_spectra --nproc 16 \
+                             -i cframe-${CAM}${SPECTRO}-*.fits -o $coadd &> $colog &
+                    fi
+		done
+
                 echo tile $TILEID spectrograph $SPECTRO: $coadd already exists
             fi
         done
