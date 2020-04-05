@@ -459,7 +459,7 @@ def frames2spectra(frames, pix=None, nside=64):
     scores = dict()
 
     #- Get the bands that exist in the input data
-    bands = np.sort(np.unique([cam[0] for night,expid,cam in frames.keys()]))
+    bands = np.sort(np.unique([cam[0] for night,expid,cam in frames.keys()])).tolist()
     for x in bands:
         #- Select just the frames for this band
         keys = sorted(frames.keys())
