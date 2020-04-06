@@ -71,7 +71,6 @@ desi_group_tileframes -i exposures/$NIGHT -o tiles
 #- Find what tiles we have0
 TILEIDS=$(ls tiles | sed 's/\///g')
 SPECTROGRAPHS=$(seq 0 9)
-CAMS="b r z"
 
 #- Create Spectra-64 files
 echo -- Spectral Grouping --
@@ -83,26 +82,26 @@ for TILEID in $TILEIDS; do
         if [ $numframes -eq 0 ]; then
             echo tile $TILEID spectrograph $SPECTRO: no cframes
 	else
-	    EXPIDS=$(ls cframe*.fits 2>/dev/null | grep -oE "[0-9]{8}" | sort | uniq)
-	    for EXPID in $EXPIDS; do
-		spectra=spectra-64-${EXPID}-${TILEID}-${NIGHT}.fits
-                spectralog=spectra-64-${EXPID}-${TILEID}-${NIGHT}.log
+	    for SPECTRO in $SPECTROGRAPHS; do
+		spectra=spectra-${SPECTRO}-${TILEID}-${NIGHT}.fits
+                spectralog=spectra-${SPECTRO}-${TILEID}-${NIGHT}.log
 		if [ -f $spectra ]; then
-		    echo tile $TILEID exp $EXPID: $spectra file already exists
+		    echo tile $TILEID spectrograph $SPECTRO: $spectra file already exists
 		else
-		    echo tile $TILEID exposure $EXPID: generating $spectra at $(date)
+		    echo tile $TILEID spectrograph $SPECTRO: generating $spectra at $(date)
 		    srun -N 1 -n 1 -c 64 desi_group_spectra \
-			 --inframes cframe-[brz][0-9]-${EXPID}.fits --outfile $spectra &> $spectralog &
+			 --inframes cframe-[brz]${SPECTRO}-*.fits \
+			 --outfile $spectra &> $spectralog &
 		fi
             done
 	fi
     fi
 done
 
-#- Wait for the spectra-64 file creation to finish
-echo Waiting for spectra-64 file creation to finish at $(date)
+#- Wait for the spectra file creation to finish
+echo Waiting for spectra file creation to finish at $(date)
 wait
-echo spectra-64 creation done at $(date)
+echo spectra creation done at $(date)
 
 #- Generate coadds per-spectrograph per-tile per-night
 #- Do so for both combined brz and separate b, r, and z
@@ -112,37 +111,21 @@ for TILEID in $TILEIDS; do
     if [ -d $dir ]; then
         cd $dir
         for SPECTRO in $SPECTROGRAPHS; do
-            #- count frames while hiding error message if there aren't any
-            numframes=$(ls cframe-[brz]${SPECTRO}-*.fits 2>/dev/null | wc -l)
+	    spectra=spectra-${SPECTRO}-${TILEID}-${NIGHT}.fits
             coadd=coadd-${SPECTRO}-${TILEID}-${NIGHT}.fits
             colog=coadd-${SPECTRO}-${TILEID}-${NIGHT}.log
-            if [ $numframes -eq 0 ]; then
-                echo tile $TILEID spectrograph $SPECTRO: no cframes
+            if [ ! -f $spectra ]; then
+                echo tile $TILEID spectrograph $SPECTRO: no spectra file
             else
 		if [ ! -f $coadd ]; then
                     echo tile $TILEID spectrograph $SPECTRO: generating $coadd at $(date)
                     srun -N 1 -n 1 -c 64 desi_coadd_spectra \
-                         --coadd-cameras --nproc 16 \
-                         -i cframe-?${SPECTRO}-*.fits -o $coadd &> $colog &
+			 --nproc 16 \
+                         -i $spectra \
+			 -o $coadd &> $colog &
 	        else
                     echo tile $TILEID spectrograph $SPECTRO: $coadd already exists
 		fi
-		for CAM in $CAMS; do
-                    coadd=coadd-${CAM}${SPECTRO}-${TILEID}-${NIGHT}.fits
-                    colog=coadd-${CAM}${SPECTRO}-${TILEID}-${NIGHT}.log
-		    numframes=$(ls cframe-${CAM}${SPECTRO}-*.fits 2>/dev/null | wc -l)
-		    if [ $numframes -lt 2 ]; then
-			echo tile $TILEID spectrograph ${CAM}${SPECTRO}: $numframes cframes, nothing to coadd
-		    elif [ -f $coadd ]; then
-			echo tile $TILEID spectrograph ${CAM}${SPECTRO}: $coadd already exists
-                    else
-			echo tile $TILEID spectrograph ${CAM}${SPECTRO}: generating $coadd at $(date)
-			srun -N 1 -n 1 -c 64 desi_coadd_spectra --nproc 16 \
-                             -i cframe-${CAM}${SPECTRO}-*.fits -o $coadd &> $colog &
-                    fi
-		done
-
-                echo tile $TILEID spectrograph $SPECTRO: $coadd already exists
             fi
         done
     fi
@@ -159,19 +142,17 @@ for TILEID in $TILEIDS; do
     if [ -d $dir ]; then
         cd $dir
         for SPECTRO in $SPECTROGRAPHS; do
-            #- count frames while hiding error message if there aren't any
-            numframes=$(ls cframe-[brz]${SPECTRO}-*.fits 2>/dev/null | wc -l)
-            coadd=coadd-${SPECTRO}-${TILEID}-${NIGHT}.fits
+	    spectra=spectra-${SPECTRO}-${TILEID}-${NIGHT}.fits
             zbest=zbest-${SPECTRO}-${TILEID}-${NIGHT}.fits
             rrlog=redrock-${SPECTRO}-${TILEID}-${NIGHT}.log
-            if [ ! -f $coadd ]; then
-                echo tile $TILEID spectrograph $SPECTRO: no coadd
+            if [ ! -f $spectra ]; then
+                echo tile $TILEID spectrograph $SPECTRO: no spectra file
             elif [ ! -f $zbest ]; then
                 echo tile $TILEID spectrograph $SPECTRO: running redrock for $zbest at $(date)
                 srun -N 1 -n 32 -c 2 rrdesi_mpi \
                     -z $zbest \
                     -o redrock-${SPECTRO}-${TILEID}-${NIGHT}.h5 \
-                    coadd-${SPECTRO}-*.fits &> $rrlog &
+                    $spectra &> $rrlog &
 
                 #- Sleep a moment to not overwhelm slurm
                 sleep 2
@@ -186,5 +167,4 @@ done
 echo Waiting for redrock commands to finish at $(date)
 wait
 echo Redrock done at $(date)
-
 echo All done at $(date)
