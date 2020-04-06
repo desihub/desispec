@@ -14,7 +14,7 @@ from desispec.maskbits import ccdmask
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute a mask using dark images",
- epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are preprocessed with ONLY gain (if available) and bias corrections and calculated per unit time. Median and IQR of the darks are calculated and cuts set in that domain to create the masks.''')
+ epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are preprocessed with ONLY gain (if available) and bias corrections and calculated per unit time. Median and IQR of the darks are calculated and cuts set in that domain to create the masks(The default values of the cuts are indicative and need to be tuned per CCD basis).''')
 
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
                     help = 'path of raws image fits files')
@@ -26,13 +26,13 @@ parser.add_argument('--camera',type = str, required = True,
 parser.add_argument('--bias', type = str, default = None, required=True,
                         help = 'bias image calibration file')
 
-parser.add_argument('--minmed', type = float, default = None, required = True,
+parser.add_argument('--minmed', type = float, default = -0.006, required = True,
                     help = 'Minimum threshold for good median')
-parser.add_argument('--maxmed', type = float, default = None, required = True,
+parser.add_argument('--maxmed', type = float, default = 0.006, required = True,
                     help = 'Maximum threshold for good median')
-parser.add_argument('--miniqr', type = float, default = None, required = True,
+parser.add_argument('--miniqr', type = float, default = 0.0, required = True,
                     help = 'Minimum threshold for good IQR')
-parser.add_argument('--maxiqr', type = float, default = None, required = True,
+parser.add_argument('--maxiqr', type = float, default = 0.018, required = True,
                     help = 'Minimum threshold for good IQR')
 parser.add_argument('--savestat', type = bool, default = False, required = False,
                     help = 'Whether to save the intermediate dark frame statistics')
