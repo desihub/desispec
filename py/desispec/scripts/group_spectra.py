@@ -69,7 +69,7 @@ def main(args=None, comm=None):
                 camera = frame.meta['CAMERA']
                 frames[(night, expid, camera)] = frame
 
-            log.info('Combining into to spectra')
+            log.info('Combining into spectra')
             spectra = frames2spectra(frames)
             log.info('Writing {}'.format(args.outfile))
             spectra.write(args.outfile)

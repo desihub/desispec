@@ -458,7 +458,8 @@ def frames2spectra(frames, pix=None, nside=64):
     fibermap = list()
     scores = dict()
 
-    bands = ['b', 'r', 'z']
+    #- Get the bands that exist in the input data
+    bands = np.sort(np.unique([cam[0] for night,expid,cam in frames.keys()])).tolist()
     for x in bands:
         #- Select just the frames for this band
         keys = sorted(frames.keys())
@@ -521,7 +522,7 @@ def frames2spectra(frames, pix=None, nside=64):
     #- Why doesn't np.vstack work for this? (says invalid type promotion)
     if len(scores[bands[0]]) > 0:
         if len(bands) == 1:
-            scores = scores(bands[0])
+            scores = scores[bands[0]]
         else:
             names = list()
             data = list()

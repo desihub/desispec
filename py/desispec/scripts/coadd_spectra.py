@@ -45,13 +45,18 @@ def main(args=None):
         args = parse()
 
     if args.lin_step is not None and args.log10_step is not None :
-        print("cannot have both linear and logarthmic bins :-), choose either --lin-step or --log10-step")
+        log.critical("cannot have both linear and logarthmic bins :-), choose either --lin-step or --log10-step")
         return 12
     if args.coadd_cameras and ( args.lin_step is not None or args.log10_step is not None ) :
-        print("cannot specify a new wavelength binning along with --coadd-cameras option")
+        log.critical("cannot specify a new wavelength binning along with --coadd-cameras option")
         return 12
 
+    if len(args.infile) == 0:
+        log.critical("You must specify input files")
+        return 12
+    
     log.info("reading spectra ...")
+        
     if len(args.infile) == 1:
         spectra = read_spectra(args.infile[0])
     else:
@@ -62,24 +67,28 @@ def main(args=None):
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
             camera = frame.meta['CAMERA']
-            cam,spec = camera[0],camera[1]
-            # Keep a list of cameras (b,r,z) for each exposure + spec
-            if (night,expid) not in cameras.keys():
-                cameras[(night,expid)] = {spec:[cam]}
-            elif spec not in cameras[(night,expid)].keys():
-                cameras[(night,expid)][spec] = [cam]
-            else:
-                cameras[(night,expid)][spec].append(cam)
             frames[(night,expid,camera)] = frame
+            if args.coadd_cameras:
+                cam,spec = camera[0],camera[1]
+                # Keep a list of cameras (b,r,z) for each exposure + spec
+                if (night,expid) not in cameras.keys():
+                    cameras[(night,expid)] = {spec:[cam]}
+                elif spec not in cameras[(night,expid)].keys():
+                    cameras[(night,expid)][spec] = [cam]
+                else:
+                    cameras[(night,expid)][spec].append(cam)
 
-        # If not all 3 cameras are available, remove the incomplete sets
-        for (night,expid), camdict in cameras.items():
-            for spec,camlist in camdict.items():
-                log.info("Found {} for SP{} on NIGHT {} EXP {}".format(camlist,spec,night,expid))
-                if len(camlist) != 3 or np.any(np.sort(camlist) != np.array(['b','r','z'])):
-                    for cam in camlist:
-                        frames.pop((night,expid,cam+spec))
-                        log.warning("Removing {}{} from Night {} EXP {}".format(cam,spec,night,expid))
+        if args.coadd_cameras:
+            # If not all 3 cameras are available, remove the incomplete sets
+            for (night,expid), camdict in cameras.items():
+                for spec,camlist in camdict.items():
+                    log.info("Found {} for SP{} on NIGHT {} EXP {}".format(camlist,spec,night,expid))
+                    if len(camlist) != 3 or np.any(np.sort(camlist) != np.array(['b','r','z'])):
+                        for cam in camlist:
+                            frames.pop((night,expid,cam+spec))
+                            log.warning("Removing {}{} from Night {} EXP {}".format(cam,spec,night,expid))
+        #import pdb
+        #pdb.set_trace()
         spectra = frames2spectra(frames)
 
         #- hacks to make SpectraLite like a Spectra
