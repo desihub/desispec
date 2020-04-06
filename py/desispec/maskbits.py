@@ -43,10 +43,11 @@ ccdmask:
     - [BAD,         0, "Pre-determined bad pixel (any reason)"]
     - [HOT,         1, "Hot pixel"]
     - [DEAD,        2, "Dead pixel"]
-    - [HIGHVAR,   3, "High variability in pixel value"]
+    - [SATURATED,   3, "Saturated pixel from object"]
     - [COSMIC,      4, "Cosmic ray"]
     - [PIXFLATZERO, 5, "pixflat is 0"]
     - [PIXFLATLOW,  6, "pixflat < 0.1"]
+    - [HIGHVAR,     7, "High variability in pixel value"]
 
 #- Mask bits that apply to an entire fiber
 fibermask:
