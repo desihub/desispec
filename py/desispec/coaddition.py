@@ -338,9 +338,12 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
         ok=(ivar_unmasked[i]>0)
         if np.sum(ok)>0 :
             rdata[i][:,ok] /= ivar_unmasked[i][ok]
-    
-    fibermap=coadd_fibermap(spectra.fibermap)
-    
+
+    if 'COADD_NUMEXP' in spectra.fibermap.colnames:
+        fibermap = spectra.fibermap
+    else:
+        fibermap = coadd_fibermap(spectra.fibermap)
+        
     bands=""
     for b in sbands :
         bands+=b
