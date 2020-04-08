@@ -156,10 +156,17 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
 
     # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
+    camname = camera.upper()[0]
+    if camname == 'B':
+        badamp_bit = maskbits.fibermask.BADAMPB
+    elif camname == 'R':
+        badamp_bit = maskbits.fibermask.BADAMPR
+    else camname == 'Z':
+        badamp_bit = maskbits.fibermask.BADAMPZ
     fibers_to_exclude = cfinder.fibers_to_exclude()
     for fiber in fibers_to_exclude:
         loc = np.where(mod_fibers==fiber)[0]
-        fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADAMP        
+        fibermap['FIBERSTATUS'][loc] |= badamp_bit        
 
     img.fibermap = fibermap
 
