@@ -395,44 +395,44 @@ def add_missing_frames(frames):
     #- Now loop through all frames, filling in any missing bands
     bands = sorted(list(wave.keys()))
     for (night, expid, camera), frame in list(frames.items()):
-        band = camera[0]
+        frameband = camera[0]
         spectro = camera[1:]
-        for x in bands:
-            if x == band:
+        for band in bands:
+            if band == frameband:
                 continue
 
-            xcam = x+spectro
-            if (night, expid, xcam) in frames:
+            bandcam = band+spectro
+            if (night, expid, bandcam) in frames:
                 continue
 
             log.warning('Creating blank data for missing frame {}'.format(
-                (night, expid, xcam)))
-            nwave = len(wave[x])
+                (night, expid, bandcam)))
+            nwave = len(wave[band])
             nspec = frame.flux.shape[0]
             flux = np.zeros((nspec, nwave), dtype='f4')
             ivar = np.zeros((nspec, nwave), dtype='f4')
             mask = np.zeros((nspec, nwave), dtype='u4') + specmask.NODATA
-            resolution_data = np.zeros((nspec, ndiag[x], nwave), dtype='f4')
+            resolution_data = np.zeros((nspec, ndiag[band], nwave), dtype='f4')
 
             #- Copy the header and correct the camera keyword
             header = fitsio.FITSHDR(frame.header)
-            header['camera'] = xcam
+            header['camera'] = bandcam
 
             #- Make new blank scores, replacing trailing band _B/R/Z
             dtype = list()
             if frame.scores is not None:
                 for name in frame.scores.dtype.names:
-                    if name.endswith('_'+band.upper()):
-                        xname = name[0:-1] + x.upper()
-                        dtype.append((xname, type(frame.scores[name][0])))
+                    if name.endswith('_'+frameband.upper()):
+                        bandname = name[0:-1] + band.upper()
+                        dtype.append((bandname, type(frame.scores[name][0])))
 
                 scores = np.zeros(nspec, dtype=dtype)
             else:
                 scores = None
 
             #- Add the blank FrameLite object
-            frames[(night,expid,xcam)] = FrameLite(
-                wave[x], flux, ivar, mask, resolution_data,
+            frames[(night,expid,bandcam)] = FrameLite(
+                wave[band], flux, ivar, mask, resolution_data,
                 frame.fibermap, header, scores)
 
 def frames2spectra(frames, pix=None, nside=64):
@@ -450,6 +450,11 @@ def frames2spectra(frames, pix=None, nside=64):
         SpectraLite object with subset of spectra from frames that are in
         the requested healpix pixel `pix`
     '''
+    #- First make sure that the given set of frames is complete
+    #- If not, fill in missing cameras so that the stack works properly
+    add_missing_frames(frames)
+
+    #- Setup data structures to fill
     wave, flux, ivar, mask = dict(), dict(), dict(), dict()
     resolution_data, scores, fmaps = dict(), dict(), dict()
     
@@ -468,9 +473,9 @@ def frames2spectra(frames, pix=None, nside=64):
             resolution_data[band] = list()
             scores[band] = list()
             wave[band] = frame.wave
-        if (cam[1],expid) not in fmaps.keys():
-            fmaps[(cam[1],expid)] = dict()
-        fmaps[(cam[1],expid)][band] = None
+        if (cam[1],night,expid) not in fmaps.keys():
+            fmaps[(cam[1],night,expid)] = dict()
+        fmaps[(cam[1],night,expid)][band] = None
         allkeys[band].append((cam[1],night,expid,cam))
 
     bands = sorted(bands)
@@ -499,7 +504,7 @@ def frames2spectra(frames, pix=None, nside=64):
             mask[band].append(bandframe.mask[ii])
             resolution_data[band].append(bandframe.resolution_data[ii])
 
-            fmaps[(spec,expid)][band] = bandframe.fibermap[ii]
+            fmaps[(spec,night,expid)][band] = bandframe.fibermap[ii]
 
             if bandframe.scores is not None:
                 scores[band].append(bandframe.scores[ii])
