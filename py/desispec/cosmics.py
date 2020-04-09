@@ -17,7 +17,12 @@ import numba
 
 from desispec.maskbits import ccdmask
 from desispec.maskbits import specmask
+from desispec.joincosmics import RepairMask
 
+
+# Module-level object for mask repair, declared here to reduce instantiation
+# overhead. Use 11x11-pixel selection elements to patch holes in the mask.
+repair_mask = RepairMask(11,11)
 
 
 def reject_cosmic_rays_1d(frame,nsig=3,psferr=0.05) :
@@ -444,6 +449,10 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.5,niter=6,dilate
             rejected[1:,:-1]  |= tmp[:-1,1:]
             rejected[:-1,1:]  |= tmp[1:,:-1]
         
+        # Apply binary closure repair defined in joincosmics.
+        log.debug('Repairing gaps in cosmic ray mask')
+        rejected = repair_mask.repair(rejected)
+
     t1=time.time()
     log.info("end : {} pixels rejected in {:3.1f} sec".format(np.sum(rejected),t1-t0))
     return rejected
