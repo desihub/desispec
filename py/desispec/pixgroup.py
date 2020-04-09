@@ -450,73 +450,68 @@ def frames2spectra(frames, pix=None, nside=64):
         SpectraLite object with subset of spectra from frames that are in
         the requested healpix pixel `pix`
     '''
-    wave = dict()
-    flux = dict()
-    ivar = dict()
-    mask = dict()
-    resolution_data = dict()
-    fibermap = list()
-    scores = dict()
-
+    wave, flux, ivar, mask = dict(), dict(), dict(), dict()
+    resolution_data, scores, fmaps = dict(), dict(), dict()
+    
     #- Get the bands that exist in the input data
-    bands = np.sort(np.unique([cam[0] for night,expid,cam in frames.keys()])).tolist()
-    for x in bands:
-        #- Select just the frames for this band
-        keys = sorted(frames.keys())
-        xframes = [frames[k] for k in keys if frames[k].meta['CAMERA'].startswith(x)]
-        assert len(xframes) != 0
+    #- identify all of the exposures for each band
+    #- and instantiate some variables for the next loop
+    bands, allkeys =  list(),  dict()
+    for (night,expid,cam),frame in frames.items():
+        band = cam[0]
+        if band not in bands:
+            bands.append(band)
+            allkeys[band] = list()
+            flux[band] = list()
+            ivar[band] = list()
+            mask[band] = list()
+            resolution_data[band] = list()
+            scores[band] = list()
+            wave[band] = frame.wave
+        if (cam[1],expid) not in fmaps.keys():
+            fmaps[(cam[1],expid)] = dict()
+        fmaps[(cam[1],expid)][band] = None
+        allkeys[band].append((cam[1],night,expid,cam))
+
+    bands = sorted(bands)
+    for band in bands:
+        assert len(allkeys[band]) != 0
+        #- Select just the frames for this band using keys collected above
+        #  Sort them so we are ordered by spectrograph, then night, then exposure
+        band_keys = sorted(allkeys[band])
 
         #- Select flux, ivar, etc. for just the spectra on this healpix
-        wave[x] = xframes[0].wave
-        flux[x] = list()
-        ivar[x] = list()
-        mask[x] = list()
-        resolution_data[x] = list()
-        scores[x] = list()
-        for xf in xframes:
+        for spec,night,expid,cam in band_keys:
+            bandframe = frames[(night,expid,cam)]
             if pix is not None:
-                ra, dec = xf.fibermap['TARGET_RA'], xf.fibermap['TARGET_DEC']
+                ra, dec = bandframe.fibermap['TARGET_RA'], bandframe.fibermap['TARGET_DEC']
                 ok = ~np.isnan(ra) & ~np.isnan(dec)
                 ra[~ok] = 0.0
                 dec[~ok] = 0.0
                 allpix = desimodel.footprint.radec2pix(nside, ra, dec)
                 ii = (allpix == pix) & ok
-
-                #- Careful: very similar code below for non-filtered appending
-                flux[x].append(xf.flux[ii])
-                ivar[x].append(xf.ivar[ii])
-                mask[x].append(xf.mask[ii])
-                resolution_data[x].append(xf.resolution_data[ii])
-
-                if x == bands[0]:
-                    fibermap.append(xf.fibermap[ii])
-
-                if xf.scores is not None:
-                    scores[x].append(xf.scores[ii])
-
             else:
-                #- Careful: very similiar code to filtered appending above
-                flux[x].append(xf.flux)
-                ivar[x].append(xf.ivar)
-                mask[x].append(xf.mask)
-                resolution_data[x].append(xf.resolution_data)
+                ii = np.ones(bandframe.flux.shape[0]).astype(bool)
+                
+            #- Careful: very similar code below for non-filtered appending
+            flux[band].append(bandframe.flux[ii])
+            ivar[band].append(bandframe.ivar[ii])
+            mask[band].append(bandframe.mask[ii])
+            resolution_data[band].append(bandframe.resolution_data[ii])
 
-                if x == bands[0]:
-                    fibermap.append(xf.fibermap)
+            fmaps[(spec,expid)][band] = bandframe.fibermap[ii]
 
-                if xf.scores is not None:
-                    scores[x].append(xf.scores)
+            if bandframe.scores is not None:
+                scores[band].append(bandframe.scores[ii])
 
-        flux[x] = np.vstack(flux[x])
 
-        ivar[x] = np.vstack(ivar[x])
-        mask[x] = np.vstack(mask[x])
-        resolution_data[x] = np.vstack(resolution_data[x])
-        if x == bands[0]:
-            fibermap = np.hstack(fibermap)
-
-        if len(scores[x]) > 0:
-            scores[x] = np.hstack(scores[x])
+        flux[band] = np.vstack(flux[band])
+        ivar[band] = np.vstack(ivar[band])
+        mask[band] = np.vstack(mask[band])
+        resolution_data[band] = np.vstack(resolution_data[band])
+        
+        if len(scores[band]) > 0:
+            scores[band] = np.hstack(scores[band])
 
     #- Combine scores into a single table
     #- Why doesn't np.vstack work for this? (says invalid type promotion)
@@ -526,16 +521,35 @@ def frames2spectra(frames, pix=None, nside=64):
         else:
             names = list()
             data = list()
-            for x in bands[1:]:
-                names.extend(scores[x].dtype.names)
-                for colname in scores[x].dtype.names:
-                    data.append(scores[x][colname])
+            for band in bands[1:]:
+                names.extend(scores[band].dtype.names)
+                for colname in scores[band].dtype.names:
+                    data.append(scores[band][colname])
 
             scores = np.lib.recfunctions.append_fields(
                     scores[bands[0]], names, data)
 
     else:
         scores = None
+
+    #- Go in order over all exposures, pick up fibermaps. When multiple, use the first
+    #- but bitwise OR the fiberstatus.
+    merged_over_cams_fmaps = list()
+    sorted_keys = sorted(list(fmaps.keys()))
+    for key in sorted_keys:
+        banddict = fmaps[key]
+        outmap = None
+        for band in bands:
+            if banddict[band] is None:
+                continue
+            if outmap is None:
+                outmap = banddict[band]
+            else:
+                outmap['FIBERSTATUS'] |= banddict[band]['FIBERSTATUS']
+        merged_over_cams_fmaps.append(outmap)
+
+    #- Combine all the individual fibermaps from the exposures and spectrographs
+    fibermap = np.hstack(merged_over_cams_fmaps)
 
     return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
 

@@ -161,8 +161,10 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         badamp_bit = maskbits.fibermask.BADAMPB
     elif camname == 'R':
         badamp_bit = maskbits.fibermask.BADAMPR
-    else camname == 'Z':
+    else:
+        #elif camname == 'Z':
         badamp_bit = maskbits.fibermask.BADAMPZ
+
     fibers_to_exclude = cfinder.fibers_to_exclude()
     for fiber in fibers_to_exclude:
         loc = np.where(mod_fibers==fiber)[0]
