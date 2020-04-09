@@ -37,8 +37,6 @@ except ImportError as e:
         out = binary_erosion(dilated, selem, out=out)
         return out
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 
 
 class LinearSelectionElement:
@@ -96,6 +94,10 @@ class LinearSelectionElement:
         fig : matplotlib.Figure
             Figure object for plotting/saving.
         """
+        #- Isolated mpl imports to work in batch with no $DISPLAY
+        import matplotlib as mpl
+        import matplotlib.pyplot as plt
+
         n, m = self.se.shape
         fig, ax = plt.subplots(1,1, figsize=(0.2*n, 0.2*m), tight_layout=True)
         ax.imshow(self.se, cmap='gray', origin='lower',
@@ -173,6 +175,10 @@ class RepairMask:
         fig : matplotlib.Figure
             Figure object for saving/writing.
         """
+        #- Isolated mpl imports to work in batch with no $DISPLAY
+        import matplotlib as mpl
+        import matplotlib.pyplot as plt
+
         # Plot the input.
         dpi = 256
         m = downsample_image(img, downsample) if downsample>1 else np.copy(img)
@@ -227,6 +233,10 @@ class RepairMask:
         fig : matplotlib.Figure
             Figure object for saving/writing.
         """
+        #- Isolated mpl imports to work in batch with no $DISPLAY
+        import matplotlib as mpl
+        import matplotlib.pyplot as plt
+
         nrow, ncol = img.shape
         erow = np.linspace(0, nrow, 9, dtype=int)
         ecol = np.linspace(0, ncol, 9, dtype=int)
