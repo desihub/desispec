@@ -4,7 +4,7 @@ Tools to regroup spectra in individual exposures by healpix on the sky
 
 from __future__ import absolute_import, division, print_function
 import glob, os, sys, time
-from collections import Counter
+from collections import Counter, OrderedDict
 
 import numpy as np
 
@@ -231,18 +231,18 @@ class SpectraLite(object):
 
         #- All bands should have the same number of spectra
         nspec = len(fibermap)
-        for x in bands:
-            assert flux[x].shape[0] == nspec
-            assert ivar[x].shape[0] == nspec
-            assert mask[x].shape[0] == nspec
-            assert resolution_data[x].shape[0] == nspec
+        for band in bands:
+            assert flux[band].shape[0] == nspec
+            assert ivar[band].shape[0] == nspec
+            assert mask[band].shape[0] == nspec
+            assert resolution_data[band].shape[0] == nspec
 
             #- Also check wavelength dimension consistency
-            nwave = len(wave[x])
-            assert flux[x].shape[1] == nwave
-            assert ivar[x].shape[1] == nwave
-            assert mask[x].shape[1] == nwave
-            assert resolution_data[x].shape[2] == nwave  #- resolution_data[x].shape[1] is ndiag
+            nwave = len(wave[band])
+            assert flux[band].shape[1] == nwave
+            assert ivar[band].shape[1] == nwave
+            assert mask[band].shape[1] == nwave
+            assert resolution_data[band].shape[2] == nwave  #- resolution_data[band].shape[1] is ndiag
 
         #- scores and fibermap should be row matched with same length
         if scores is not None:
@@ -265,8 +265,8 @@ class SpectraLite(object):
         concatenate two SpectraLite objects into one
         '''
         assert self.bands == other.bands
-        for x in self.bands:
-            assert np.all(self.wave[x] == other.wave[x])
+        for band in self.bands:
+            assert np.all(self.wave[band] == other.wave[band])
         if self.scores is not None:
             assert other.scores is not None
 
@@ -276,11 +276,11 @@ class SpectraLite(object):
         ivar = dict()
         mask = dict()
         resolution_data = dict()
-        for x in self.bands:
-            flux[x] = np.vstack([self.flux[x], other.flux[x]])
-            ivar[x] = np.vstack([self.ivar[x], other.ivar[x]])
-            mask[x] = np.vstack([self.mask[x], other.mask[x]])
-            resolution_data[x] = np.vstack([self.resolution_data[x], other.resolution_data[x]])
+        for band in self.bands:
+            flux[band] = np.vstack([self.flux[band], other.flux[band]])
+            ivar[band] = np.vstack([self.ivar[band], other.ivar[band]])
+            mask[band] = np.vstack([self.mask[band], other.mask[band]])
+            resolution_data[band] = np.vstack([self.resolution_data[band], other.resolution_data[band]])
 
         #- Note: tables use np.hstack not np.vstack
         fibermap = np.hstack([self.fibermap, other.fibermap])
@@ -322,16 +322,16 @@ class SpectraLite(object):
         #- these are written one-by-one
         if self.scores is not None:
             fitsio.write(tmpout, self.scores, extname='SCORES')
-        for x in sorted(self.bands):
-            X = x.upper()
-            fitsio.write(tmpout, self.wave[x], extname=X+'_WAVELENGTH',
+        for band in sorted(self.bands):
+            upperband = band.upper()
+            fitsio.write(tmpout, self.wave[band], extname=upperband+'_WAVELENGTH',
                     header=dict(BUNIT='Angstrom'))
-            fitsio.write(tmpout, self.flux[x], extname=X+'_FLUX',
+            fitsio.write(tmpout, self.flux[band], extname=upperband+'_FLUX',
                     header=dict(BUNIT='10**-17 erg/(s cm2 Angstrom)'))
-            fitsio.write(tmpout, self.ivar[x], extname=X+'_IVAR',
+            fitsio.write(tmpout, self.ivar[band], extname=upperband+'_IVAR',
                 header=dict(BUNIT='10**+34 (s2 cm4 Angstrom2) / erg2'))
-            fitsio.write(tmpout, self.mask[x], extname=X+'_MASK', compress='gzip')
-            fitsio.write(tmpout, self.resolution_data[x], extname=X+'_RESOLUTION')
+            fitsio.write(tmpout, self.mask[band], extname=upperband+'_MASK', compress='gzip')
+            fitsio.write(tmpout, self.resolution_data[band], extname=upperband+'_RESOLUTION')
 
         os.rename(tmpout, filename)
 
@@ -353,13 +353,13 @@ class SpectraLite(object):
                 scores = None
 
             bands = ['b', 'r', 'z']
-            for x in bands:
-                X = x.upper()
-                wave[x] = fx[X+'_WAVELENGTH'].read()
-                flux[x] = fx[X+'_FLUX'].read()
-                ivar[x] = fx[X+'_IVAR'].read()
-                mask[x] = fx[X+'_MASK'].read()
-                resolution_data[x] = fx[X+'_RESOLUTION'].read()
+            for band in bands:
+                upperband = band.upper()
+                wave[band] = fx[upperband+'_WAVELENGTH'].read()
+                flux[band] = fx[upperband+'_FLUX'].read()
+                ivar[band] = fx[upperband+'_IVAR'].read()
+                mask[band] = fx[upperband+'_MASK'].read()
+                resolution_data[band] = fx[upperband+'_RESOLUTION'].read()
 
         return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
 
@@ -415,7 +415,10 @@ def add_missing_frames(frames):
             resolution_data = np.zeros((nspec, ndiag[band], nwave), dtype='f4')
 
             #- Copy the header and correct the camera keyword
-            header = fitsio.FITSHDR(frame.header)
+            if type(frame.meta) is fits.header.Header:
+                header = fitsio.FITSHDR( OrderedDict(frame.meta) )
+            else:
+                header = fitsio.FITSHDR(frame.meta)
             header['camera'] = bandcam
 
             #- Make new blank scores, replacing trailing band _B/R/Z
