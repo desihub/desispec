@@ -35,6 +35,8 @@ parser.add_argument('--miniqr', type = float, default = 0, required = True,
                     help = 'Minimum percentile threshold for good IQR')
 parser.add_argument('--maxiqr', type = float, default = 99.999, required = True,
                     help = 'Maximum percentile threshold for good IQR')
+parser.add_argument('--mask', type = str, default = None, required = False,
+                    help = 'Path to a previous mask file. If given, the output is the bitwise OR of the input mask and the mask created by this script.')
 parser.add_argument('--savestat', type = bool, default = False, required = False,
                     help = 'Whether to save the intermediate dark frame statistics')
 parser.add_argument('--outfilestat', type = str, default = None, required = False,
@@ -117,6 +119,11 @@ mask[(med_image<minmed)|(iqr_image<miniqr)] |= ccdmask.DEAD
 #Set high variability flag (change the name in mask bits)
 mask[(iqr_image>maxiqr)] |= ccdmask.HIGHVAR
 
+#Incorporate a previously created mask using a bitwise OR
+if args.mask!=None:
+    mask_old = pyfits.open(args.mask)[0].data
+    mask = (mask | mask_old)
+    log.info("Taken bitwise OR of input mask and the generated mask")
 #Write fits file with header info
 
 hdu = pyfits.PrimaryHDU(mask)
@@ -125,7 +132,8 @@ hdu.header["MAXMED"] = (args.maxmed, 'Maximum percentile threshold for good medi
 hdu.header["MINIQR"] = (args.miniqr, 'Minimum percentile threshold for good IQR')
 hdu.header["MAXIQR"] = (args.maxiqr, 'Maximum percentile threshold for good IQR')
 hdu.header["CAMERA"] = (args.camera, 'header HDU (int or string)')
-
+hdu.header["OLDMASK"] = (args.mask, 'Path to a previous mask file taken as OR.')
+hdu.header["BIAS"] = (args.bias, 'Path to bias image calibration file')
 hdu.header["DARKS"] = (" ".join(args.image), 'paths to raw dark image fits files')
 
 
