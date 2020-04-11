@@ -14,7 +14,7 @@ from desispec.maskbits import ccdmask
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute a mask using dark images",
- epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are preprocessed with ONLY gain (if available) and bias corrections and calculated per unit time. Median and IQR of the darks are calculated and cuts set in that domain to create the masks(The default values of the cuts are indicative and need to be tuned per CCD basis).''')
+ epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are preprocessed with ONLY gain (if available) and bias corrections and calculated per unit time. Median and IQR of the darks are calculated and cuts set in that domain in terms of percentiles to create the masks.''')
 
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
                     help = 'path of raws image fits files')
@@ -26,14 +26,14 @@ parser.add_argument('--camera',type = str, required = True,
 parser.add_argument('--bias', type = str, default = None, required=True,
                         help = 'bias image calibration file')
 
-parser.add_argument('--minmed', type = float, default = -0.006, required = True,
-                    help = 'Minimum threshold for good median')
-parser.add_argument('--maxmed', type = float, default = 0.006, required = True,
-                    help = 'Maximum threshold for good median')
-parser.add_argument('--miniqr', type = float, default = 0.0, required = True,
-                    help = 'Minimum threshold for good IQR')
-parser.add_argument('--maxiqr', type = float, default = 0.018, required = True,
-                    help = 'Minimum threshold for good IQR')
+parser.add_argument('--minmed', type = float, default = 0.0001, required = True,
+                    help = 'Minimum percentile threshold for good median')
+parser.add_argument('--maxmed', type = float, default = 99.999, required = True,
+                    help = 'Maximum percentile threshold for good median')
+parser.add_argument('--miniqr', type = float, default = 0, required = True,
+                    help = 'Minimum percentile threshold for good IQR')
+parser.add_argument('--maxiqr', type = float, default = 99.999, required = True,
+                    help = 'Minimum percentile threshold for good IQR')
 parser.add_argument('--savestat', type = bool, default = False, required = False,
                     help = 'Whether to save the intermediate dark frame statistics')
 parser.add_argument('--outfilestat', type = str, default = None, required = False,
@@ -100,15 +100,19 @@ if args.savestat:
 
 
 mask   = np.zeros(shape, dtype=np.int32)
+minmed = np.percentile(med_image,args.minmed)
+maxmed = np.percentile(med_image,args.maxmed)
+miniqr = np.percentile(iqr_image,args.miniqr)
+maxiqr = np.percentile(iqr_image,args.maxiqr)
 
 log.info("writing mask bits")
 #Set the Bad flag absed on thresholds
-mask[(med_image>args.maxmed)|(med_image<args.minmed)|(iqr_image>args.maxiqr)|(iqr_image<args.miniqr)] |= ccdmask.BAD
+mask[(med_image>maxmed)|(med_image<minmed)|(iqr_image>maxiqr)|(iqr_image<miniqr)] |= ccdmask.BAD
 #Set hot pixel flag
-mask[(med_image>args.maxmed)] |= ccdmask.HOT
+mask[(med_image>maxmed)] |= ccdmask.HOT
 #Set Dead pixel Flag
-mask[(med_image<args.minmed)|(iqr_image<args.miniqr)] |= ccdmask.DEAD
+mask[(med_image<minmed)|(iqr_image<miniqr)] |= ccdmask.DEAD
 #Set high variability flag (change the name in mask bits)
-mask[(iqr_image>args.maxiqr)] |= ccdmask.HIGHVAR
+mask[(iqr_image>maxiqr)] |= ccdmask.HIGHVAR
 pyfits.writeto(args.outfile, mask, overwrite=True)
 log.info("Saved masks file")
