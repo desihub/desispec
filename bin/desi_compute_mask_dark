@@ -12,12 +12,13 @@ from desiutil.log import get_logger
 from desispec.preproc import  _parse_sec_keyword
 from desispec.maskbits import ccdmask
 
+#Parser to take arguments from command line
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute a mask using dark images",
  epilog='''Input is a list of raw dark images (Possibly with different exposure times). Raw images are preprocessed with ONLY gain (if available) and bias corrections and calculated per unit time. Median and IQR of the darks are calculated and cuts set in that domain in terms of percentiles to create the masks.''')
 
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
-                    help = 'path of raws image fits files')
+                    help = 'paths to raw dark image fits files')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'output mask filename')
 parser.add_argument('--camera',type = str, required = True,
@@ -33,7 +34,7 @@ parser.add_argument('--maxmed', type = float, default = 99.999, required = True,
 parser.add_argument('--miniqr', type = float, default = 0, required = True,
                     help = 'Minimum percentile threshold for good IQR')
 parser.add_argument('--maxiqr', type = float, default = 99.999, required = True,
-                    help = 'Minimum percentile threshold for good IQR')
+                    help = 'Maximum percentile threshold for good IQR')
 parser.add_argument('--savestat', type = bool, default = False, required = False,
                     help = 'Whether to save the intermediate dark frame statistics')
 parser.add_argument('--outfilestat', type = str, default = None, required = False,
@@ -47,6 +48,7 @@ log.info("read images ...")
 shape=None
 images=[]
 
+#Read all the dark images
 for filename in args.image :
 
     log.info(filename)
@@ -98,7 +100,7 @@ if args.savestat:
     log.info("Done writing statistics file")
     
 
-
+#Create the masks
 mask   = np.zeros(shape, dtype=np.int32)
 minmed = np.percentile(med_image,args.minmed)
 maxmed = np.percentile(med_image,args.maxmed)
@@ -114,5 +116,18 @@ mask[(med_image>maxmed)] |= ccdmask.HOT
 mask[(med_image<minmed)|(iqr_image<miniqr)] |= ccdmask.DEAD
 #Set high variability flag (change the name in mask bits)
 mask[(iqr_image>maxiqr)] |= ccdmask.HIGHVAR
-pyfits.writeto(args.outfile, mask, overwrite=True)
+
+#Write fits file with header info
+
+hdu = pyfits.PrimaryHDU(mask)
+hdu.header["MINMED"] = (args.minmed, 'Minimum percentile threshold for good median')
+hdu.header["MAXMED"] = (args.maxmed, 'Maximum percentile threshold for good median')
+hdu.header["MINIQR"] = (args.miniqr, 'Minimum percentile threshold for good IQR')
+hdu.header["MAXIQR"] = (args.maxiqr, 'Maximum percentile threshold for good IQR')
+hdu.header["CAMERA"] = (args.camera, 'header HDU (int or string)')
+
+hdu.header["DARKS"] = (" ".join(args.image), 'paths to raw dark image fits files')
+
+
+hdu.writeto(args.outfile, overwrite=True)
 log.info("Saved masks file")
