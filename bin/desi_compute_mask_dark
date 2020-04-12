@@ -6,6 +6,7 @@ import astropy.io.fits as pyfits
 import argparse
 import numpy as np
 from scipy.stats import iqr
+from scipy.ndimage.morphology import binary_closing
 
 from desispec import io
 from desiutil.log import get_logger
@@ -112,6 +113,10 @@ maxiqr = np.percentile(iqr_image,args.maxiqr)
 log.info("writing mask bits")
 #Set the Bad flag absed on thresholds
 mask[(med_image>maxmed)|(med_image<minmed)|(iqr_image>maxiqr)|(iqr_image<miniqr)] |= ccdmask.BAD
+#Close incompletely blocked regions
+closed_mask = binary_closing(mask, iterations=3, structure=np.ones([2,2]).astype(np.int32))
+mask |= closed_mask.astype(np.int32)
+
 #Set hot pixel flag
 mask[(med_image>maxmed)] |= ccdmask.HOT
 #Set Dead pixel Flag
