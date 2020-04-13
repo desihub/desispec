@@ -38,13 +38,10 @@ def get_fiberflat_from_frame(frame):
     ff = FiberFlat(frame.wave, fiberflat, ffivar)
     return ff
 
-def get_frame_data(nspec=10):
+def get_frame_data(nspec=10, wavemin=4000, wavemax=4100, nwave=100, meta={}):
     """
     Return basic test data for desispec.frame object:
     """
-    nwave = 100
-
-    wavemin, wavemax = 4000, 4100
     wave, model_flux = get_models(nspec, nwave, wavemin=wavemin, wavemax=wavemax)
     resol_data=set_resolmatrix(nspec,nwave)
 
@@ -63,7 +60,9 @@ def get_frame_data(nspec=10):
     fibermap['DESI_TARGET'] = desi_mask.QSO
     fibermap['DESI_TARGET'][0:3] = desi_mask.STD_FAINT  # For flux tests
 
-    meta = dict(EXPTIME = 1.0)
+    if "EXPTIME" not in meta.keys():
+        meta['EXPTIME'] = 1.0
+
     frame = Frame(wave, flux, ivar, mask,resol_data,fibermap=fibermap, meta=meta)
     return frame
 

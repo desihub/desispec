@@ -4,6 +4,7 @@ import numpy as np
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
 from desispec.coaddition import coadd,fast_resample_spectra,spectroperf_resample_spectra
+from desispec.maskbits import fibermask
 
 class TestCoadd(unittest.TestCase):
         
@@ -65,8 +66,8 @@ class TestCoadd(unittest.TestCase):
         s1 = _makespec(nspec, nwave)
         self.assertEqual(len(s1.fibermap), nspec)
 
-        s1.fibermap['FIBERSTATUS'][0] = 1
-        s1.fibermap['FIBERSTATUS'][1] = 2
+        s1.fibermap['FIBERSTATUS'][0] = fibermask.BROKENFIBER
+        s1.fibermap['FIBERSTATUS'][1] = fibermask.BADFIBER
  
         coadd(s1)
         self.assertEqual(len(s1.fibermap), 1)
@@ -80,12 +81,12 @@ class TestCoadd(unittest.TestCase):
         s1 = _makespec(nspec, nwave)
         self.assertEqual(len(s1.fibermap), nspec)
 
-        s1.fibermap['FIBERSTATUS'] = 1
+        s1.fibermap['FIBERSTATUS'] = fibermask.BROKENFIBER
         
         coadd(s1)
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], 0)
-        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 1)
+        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], fibermask.BROKENFIBER)
         self.assertTrue(np.all(s1.flux['x'] == 0.0))
         self.assertTrue(np.all(s1.ivar['x'] == 0.0))
 
