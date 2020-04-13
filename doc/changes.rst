@@ -45,6 +45,7 @@ Changes:
 * Implement fibermaps per camera (PR `#949`_).
 * Use desiutil.iers.freeze_iers instead of desisurvey; requires desiutil>=2.0.3
   (PR `#951`_).
+* Module file users desi_spectro_calib tag 0.1
 
 .. _`#838`: https://github.com/desihub/desispec/issues/838
 .. _`#897`: https://github.com/desihub/desispec/issues/897
