@@ -2,8 +2,20 @@
 desispec Change Log
 ===================
 
-0.33.1 (unreleased)
+0.34.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.34.0 (2020-04-13)
+-------------------
+
+Compatibility notes:
+
+  * Requires desiutil >= 2.0.3 (PR `#951`_).
+  * Backwards incompatible change to sky model format (PR `#939`_.
+
+Changes:
 
 * Refactor S/N fit for QA (PR `#917`_)
 * Speed up QA (PR `#917`_)
@@ -11,9 +23,51 @@ desispec Change Log
   because the fiberflat includes the throughput difference between
   spectrographs (push to master to address issue `#897`_).
 * Modify overscan methods.  Default is to no longer analyze the ORSEC region
+  (PR `#838`_).
+* Fix sky subtraction with ivar=0 (PR `#920`_).
+* Tweaks for logging nightly redshifts and srun (PR `#921`_).
+* Added calib config management utilities (PR `#926`_).
+* Coadd robustness when missing a camera (PR `#927`_).
+* Shorter desi_proc job names (PR `#928`_).
+* Set fiberstatus to mask fibers in bad regions of CCDs (PR `#930`_).
+* Fix code generating fits reserved keyword warnings (PR `#933`_, `#935`_).
+* Try fibermap header if primary header doesn't have RA,DEC (PR `#934`_).
+* Force assemble_fibermap for nights before or during 20200310 (PR `#936`_).
+* Don't fit traceshifts in y for dome and twilight flats (PR `#937`_).
+* Calculate sky model throughput corrections when making sky model instead
+  of while applying model.  Note: changes data model.  (PR `#939`_).
+* Improve averaging of fiberflats (PR `#940`_).
+* Fix incorrect multiple calls to bary_corr depending upon MPI parallelism,
+  and merge extract main and main_mpi (PR `#943`_).
+* Propagate MJD to spectra fibermap (PR `#944`_).
+* Generate spectra files by default and don't coadd across cameras (PR `#945`_).
+* Allow coadding across cameras of coadds (PR `#948`_).
+* Implement fibermaps per camera (PR `#949`_).
+* Use desiutil.iers.freeze_iers instead of desisurvey; requires desiutil>=2.0.3
+  (PR `#951`_).
 
+.. _`#838`: https://github.com/desihub/desispec/issues/838
 .. _`#897`: https://github.com/desihub/desispec/issues/897
 .. _`#917`: https://github.com/desihub/desispec/issues/917
+.. _`#920`: https://github.com/desihub/desispec/issues/920
+.. _`#921`: https://github.com/desihub/desispec/issues/921
+.. _`#926`: https://github.com/desihub/desispec/issues/926
+.. _`#927`: https://github.com/desihub/desispec/issues/927
+.. _`#928`: https://github.com/desihub/desispec/issues/928
+.. _`#930`: https://github.com/desihub/desispec/issues/930
+.. _`#933`: https://github.com/desihub/desispec/issues/933
+.. _`#934`: https://github.com/desihub/desispec/issues/934
+.. _`#935`: https://github.com/desihub/desispec/issues/935
+.. _`#936`: https://github.com/desihub/desispec/issues/936
+.. _`#937`: https://github.com/desihub/desispec/issues/937
+.. _`#939`: https://github.com/desihub/desispec/issues/939
+.. _`#940`: https://github.com/desihub/desispec/issues/940
+.. _`#943`: https://github.com/desihub/desispec/issues/943
+.. _`#944`: https://github.com/desihub/desispec/issues/944
+.. _`#945`: https://github.com/desihub/desispec/issues/945
+.. _`#948`: https://github.com/desihub/desispec/issues/948
+.. _`#949`: https://github.com/desihub/desispec/issues/949
+.. _`#951`: https://github.com/desihub/desispec/issues/951
 
 0.33.0 (2020-03-05)
 -------------------
