@@ -48,12 +48,6 @@ from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
 
-
-import desisurvey.utils
-
-desisurvey.utils.freeze_iers()
-
-
 parser = argparse.ArgumentParser(usage = "{prog} [options]")
 parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
 parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
@@ -83,8 +77,6 @@ parser.add_argument("-q", "--queue", type=str, default="realtime", help="batch q
 parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in minutes")
 parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
                     " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
-
-
 
 def find_most_recent(night, file_type='psfnight', n_nights=30):
     '''
@@ -118,10 +110,12 @@ def find_most_recent(night, file_type='psfnight', n_nights=30):
     return None
 
 
-
-
 args = parser.parse_args()
 log = get_logger()
+
+#- Freeze IERS after parsing args so that it doesn't bother if only --help
+import desiutil.iers
+desiutil.iers.freeze_iers()
 
 if args.mpi and not args.batch:
     from mpi4py import MPI
