@@ -23,6 +23,7 @@ from desiutil.log import get_logger
 from desispec.interpolation import resample_flux
 from desispec.spectra import Spectra
 from desispec.resolution import Resolution
+from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 
 def coadd_fibermap(fibermap) :
 
@@ -63,7 +64,13 @@ def coadd_fibermap(fibermap) :
         tfmap['FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap['FIBERSTATUS'][jj])
 
         #- Only FIBERSTATUS=0 were included in the coadd
-        tfmap['COADD_NUMEXP'][i] = np.count_nonzero(fibermap['FIBERSTATUS'][jj] == 0)
+        fiberstatus_nonamp_bits = get_all_nonamp_fiberbitmask_val()
+        fiberstatus_amp_bits = get_justamps_fiberbitmask()
+        targ_fibstatuses = fibermap['FIBERSTATUS'][jj]
+        nonamp_fiberstatus_flagged = ( (targ_fibstatuses & fiberstatus_nonamp_bits) > 0 )
+        allamps_flagged = ( (targ_fibstatuses & fiberstatus_amp_bits) == fiberstatus_amp_bits )
+        good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
+        tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
 
         for k in ['DELTA_X','DELTA_Y'] :
             if k in fibermap.colnames :
@@ -110,10 +117,11 @@ def coadd(spectra, cosmics_nsig=0.) :
         else :
             tmask=None
         trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
-        
+
+        fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
+        good_fiberstatus = ( (spectra.fibermap["FIBERSTATUS"] & fiberstatus_bits) == 0 )
         for i,tid in enumerate(targets) :
-            jj=np.where((spectra.fibermap["TARGETID"]==tid) & \
-                        (spectra.fibermap["FIBERSTATUS"]==0))[0]
+            jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 
             #- if all spectra were flagged as bad (FIBERSTATUS != 0), contine
             #- to next target, leaving tflux and tivar=0 for this target
@@ -255,10 +263,11 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
         windices=np.argmin((np.tile(wave,(spectra.wave[b].size,1))-np.tile(spectra.wave[b],(wave.size,1)).T)**2,axis=1)
 
         band_ndiag = spectra.resolution_data[b].shape[1]
-        
+
+        fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
+        good_fiberstatus = ( (spectra.fibermap["FIBERSTATUS"] & fiberstatus_bits) == 0 )
         for i,tid in enumerate(targets) :
-            jj=np.where((spectra.fibermap["TARGETID"]==tid) & \
-                        (spectra.fibermap["FIBERSTATUS"]==0))[0]
+            jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 
             #- if all spectra were flagged as bad (FIBERSTATUS != 0), contine
             #- to next target, leaving tflux and tivar=0 for this target
