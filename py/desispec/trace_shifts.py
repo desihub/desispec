@@ -724,7 +724,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
         sw= np.sum(mflux[ok]*(mflux[ok]>0))
         if sw==0 :
             continue
-        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=mivar[ok],hw=3.)
+        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=mivar[ok],hw=10.)
         bin_wave  = np.sum(mflux[ok]*(mflux[ok]>0)*wave[ok])/sw
         x,y=psf.xy(fiber_for_psf_evaluation,bin_wave)
         eps=0.1
