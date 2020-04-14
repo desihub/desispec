@@ -5,7 +5,8 @@ desispec Change Log
 0.34.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Expanded scan range for y traceshifts from +-3 to +-10 A
+  (commit 26279d8 direct to master)
 
 0.34.0 (2020-04-13)
 -------------------
