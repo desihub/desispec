@@ -116,7 +116,7 @@ log.info("writing mask bits")
 mask[(med_image>maxmed)|(med_image<minmed)|(iqr_image>maxiqr)|(iqr_image<miniqr)] |= ccdmask.BAD
 
 #Close incompletely blocked regions
-closed_mask = binary_closing(mask, iterations=3, structure=np.ones([2,2]).astype(np.int32)) #returns binary array
+closed_mask = binary_closing(mask, iterations=20, structure=np.ones([2,2]).astype(np.int32)) #returns binary array
 closed_mask[closed_mask] = ccdmask.BAD
 mask |= closed_mask
 
