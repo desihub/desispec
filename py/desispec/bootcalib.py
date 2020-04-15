@@ -611,9 +611,9 @@ def load_arcline_list(camera, vacuum=True,lamps=None):
         elif camera[0] == 'r':
             lamps = ['CdI','ArI','HgI','NeI','KrI']
         elif camera[0] == 'z':
-            lamps = ['CdI','ArI','HgI','NeI','KrI']
+            lamps = ['CdI','ArI','HgI','NeI','KrI','XeI']
         elif camera == 'all': # Used for specex
-            lamps = ['CdI','ArI','HgI','NeI','KrI']
+            lamps = ['CdI','ArI','HgI','NeI','KrI','XeI']
         else:
             log.error("Not ready for this camera")
 
