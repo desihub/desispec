@@ -468,7 +468,6 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
                     cmd += ' --sky'
                 elif args.obstype in ['ARC', 'TESTARC']:
                     cmd += ' --arc-lamps'
-                
             else :
                 cmd = "ln -s {} {}".format(inpsf,outpsf)  
             runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
@@ -501,6 +500,7 @@ if args.obstype in ['ARC', 'TESTARC']:
             cmd += " --psf {}".format(inpsf)
             cmd += " --outpsf {}".format(outpsf)
             cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
+            cmd += ' --arc-lamps'
             runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
         else :
              log.info("PSF {} exists".format(outpsf))
