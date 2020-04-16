@@ -76,6 +76,9 @@ def integration_test(night=None, nspec=5, clobber=False):
     Raises:
         RuntimeError if any script fails
     """
+    from desiutil.iers import freeze_iers()
+    freeze_iers()
+
     log = get_logger()
     #- YEARMMDD string, rolls over at noon not midnight
     #- Simulate 8 years ago, prior to start of survey
