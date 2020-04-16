@@ -82,8 +82,8 @@ def parse(options):
 
     # File I/O
     parser.add_argument('--redux-dir', type=str, help="Product directory, point to $DESI_SPECTRO_REDUX by default ")
-    parser.add_argument('--output-dir', type=str, help="output portal directory for the html pages ")
-    parser.add_argument('--output-name', type=str, help="name of the html page (to be placed in --output-dir, which defaults to your home directory).")
+    parser.add_argument('--output-dir', type=str, help="output portal directory for the html pages, which defaults to your home directory ")
+    parser.add_argument('--output-name', type=str, default='dashboard.html', help="name of the html page (to be placed in --output-dir).")
     parser.add_argument('--specprod',type=str, help="overwrite the environment keyword for $SPECPROD")
     parser.add_argument("-e", "--skip-expid-file", type=str, required=False,
                         help="Relative pathname for file containing expid's to skip. "+\
@@ -100,8 +100,12 @@ def parse(options):
                                                                                           "comma separated list of YYYYMMDD, or"+
                                                                                           "a number specifying the previous n nights to show"+
                                                                                           " (counting in reverse chronological order).")
-
-
+    parser.add_argument('--start-night', type=str, default = None, required = False, help="This specifies the first night" + \
+                                                                                           " to include in the dashboard. Default is the earliest night available.")
+    parser.add_argument('--end-night', type=str, default = None, required = False, help="This specifies the last night (inclusive)"+\
+                                                                                           " to include in the dashboard. Default is today.")
+    parser.add_argument('--include-short-scis',  action="store_true",  help="Include sci exps < 60s rather than treating as  null/zeros")
+    
     # Read in command line and return
     args = None
     if options is None:
@@ -128,23 +132,30 @@ def main(args):
     if 'DESI_SPECTRO_REDUX' not in os.environ.keys(): # these are not set by default in cronjob mode.
         os.environ['DESI_SPECTRO_REDUX']='/global/cfs/cdirs/desi/spectro/redux/'
         os.environ['DESI_SPECTRO_DATA']='/global/cfs/cdirs/desi/spectro/data/'
+
+    if 'SPECPROD' not in os.environ.keys() and args.specprod is None:
         os.environ['SPECPROD']='daily'
+    elif args.specprod is None:
+        args.specprod = os.getenv("SPECPROD")
+    else:
+        os.environ['SPECPROD'] = args.specprod
 
     if args.redux_dir is None:
         args.redux_dir = os.getenv('DESI_SPECTRO_REDUX')
     else:
         os.environ['DESI_SPECTRO_REDUX'] = args.redux_dir
 
-    if args.specprod is None:
-        args.specprod = os.getenv("SPECPROD")
-    else:
-        os.environ['SPECPROD'] = args.specprod
 
-    if args.output_dir is None:
+    if 'DESI_DASHBOARD' not in os.environ.keys() and args.output_dir is None:
+        os.environ['DESI_DASHBOARD']=os.getenv("HOME")
+        args.output_dir = os.getenv("DESI_DASHBOARD")
+    elif args.output_dir is None:
         args.output_dir = os.getenv("DESI_DASHBOARD")
     else:
         os.environ['DESI_DASHBOARD'] = args.output_dir
+        
     args.prod_dir = os.path.join(args.redux_dir,args.specprod)
+    
     ############
     ## Input ###
     ############
@@ -153,7 +164,7 @@ def main(args):
     else:
         skipd_expids = set()
         
-    if args.nights=='all' or ',' not in args.nights:
+    if args.nights is None or args.nights=='all' or ',' not in args.nights:
         nights = list()
         for n in listdir(os.getenv('DESI_SPECTRO_DATA')):
             #- nights are 20YYMMDD
@@ -167,10 +178,20 @@ def main(args):
         nights.append(str(tonight))
     nights.sort(reverse=True)
 
-    if args.nights.isnumeric():
-        print("Only showing the most recent {} days".format(int(args.nights)))
-        nights = nights[:int(args.nights)]
+    nights = np.array(nights)
 
+    if args.start_night is not None:
+        nights = nights[np.where(int(args.start_night)<=nights.astype(int))[0]]
+    if args.end_night is not None:
+        nights = nights[np.where(int(args.end_night)>=nights.astype(int))[0]]
+
+    if args.nights is not None and args.nights.isnumeric() and len(nights) >= int(args.nights):
+        if args.end_night is None or args.start_night is not None:
+            print("Only showing the most recent {} days".format(int(args.nights)))
+            nights = nights[:int(args.nights)]
+        else:
+            nights = nights[-1*int(args.nights):]
+            
     nights_dict = OrderedDict()
     for night in nights:
         month = night[:6]
@@ -211,7 +232,7 @@ def main(args):
             ####################################
             ### Table for individual night ####
             ####################################
-            nightly_tables.append(nightly_table(night,skipd_expids,show_null=args.show_null))
+            nightly_tables.append(nightly_table(night,skipd_expids,show_null=args.show_null,use_short_sci=args.include_short_scis))
         strTable += monthly_table(nightly_tables,month)
 
     #strTable += js_import_str(os.getenv('DESI_DASHBOARD'))
@@ -254,20 +275,21 @@ def monthly_table(tables,month):
 
     return month_table_str
 
-def nightly_table(night,skipd_expids=set(),show_null=True):
+def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
     """
     Add a collapsible and extendable table to the html file for one specific night
     Input
     night: like 20200131
     output: The string to be added to the html file
     """
-    night_info = calculate_one_night(night)
+    night_info = calculate_one_night(night,use_short_sci)
 
     ngood,ninter,nbad,nnull,nover,n_notnull = 0,0,0,0,0,0
     main_body = ""
     for expid,row_info in night_info.items():
         if int(expid) in skipd_expids:
             continue
+
         table_row = _table_row(row_info[1:],idlabel=row_info[0])
 
         if not show_null and 'NULL' in table_row:
@@ -308,7 +330,7 @@ def nightly_table(night,skipd_expids=set(),show_null=True):
     return nightly_table_str
 
 
-def calculate_one_night(night):
+def calculate_one_night(night, use_short_sci=False):
     """
     For a given night, return the file counts and other other information for each exposure taken on that night
     input: night
@@ -348,7 +370,7 @@ def calculate_one_night(night):
         cmd="fix_permissions.sh -a {}".format(logpath)
         os.system(cmd)
 
-    webpage = os.path.join(os.getenv('DESI_DASHBOARD'),'links',night[:-2])
+    webpage = os.getenv('DESI_DASHBOARD')
     logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}')
     logfiletemplate = os.path.join(logpath,'{}-{}-{}-{}{}.{}')
 
@@ -365,12 +387,12 @@ def calculate_one_night(night):
             if keyword in h1.keys():
                 header_info[keyword] = h1[keyword]
 
-        file_psf = glob.glob(fileglob.format(zfild_expid, 'psf*.fits'))
-        file_fit_psf = glob.glob(fileglob.format(zfild_expid, 'fit-psf*.fits'))
-        file_fiberflat = glob.glob(fileglob.format(zfild_expid, 'fiberflat*.fits'))
-        file_frame = glob.glob(fileglob.format(zfild_expid, 'frame*.fits'))
-        file_sframe = glob.glob(fileglob.format(zfild_expid, 'sframe*.fits'))
-        file_cframe = glob.glob(fileglob.format(zfild_expid, 'cframe*.fits'))
+        file_psf = glob.glob(fileglob.format(zfild_expid, 'psf-[brz]?-????????.fits'))
+        file_fit_psf = glob.glob(fileglob.format(zfild_expid, 'fit-psf-[brz]?-????????.fits'))
+        file_fiberflat = glob.glob(fileglob.format(zfild_expid, 'fiberflat-[brz]?-????????.fits'))
+        file_frame = glob.glob(fileglob.format(zfild_expid, 'frame-??-????????.fits'))
+        file_sframe = glob.glob(fileglob.format(zfild_expid, 'sframe-??-????????.fits'))
+        file_cframe = glob.glob(fileglob.format(zfild_expid, 'cframe-??-????????.fits'))
         file_sky = glob.glob(fileglob.format(zfild_expid, 'sky*.fits'))
 
         obstype = str(header_info['OBSTYPE']).upper().strip()
@@ -400,6 +422,8 @@ def calculate_one_night(night):
             
         if n_tots['psf'] == 0:
             row_color = 'NULL'
+        elif not use_short_sci and obstype.upper() == 'SCIENCE' and float(header_info['EXPTIME'])< 60.:
+            row_color = 'NULL'
         elif nfiles == 0:
             row_color = 'BAD'
         elif nfiles < n_tot_spgrphs:
@@ -409,10 +433,13 @@ def calculate_one_night(night):
         else:
             row_color = 'OVERFUL'
 
+        hlink1 = '----'
+        hlink2 = '----'
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
             lognames = glob.glob(logfileglob.format(obstype.lower(), night,zfild_expid,'log'))
             newest_jobid = '00000000'
             spectrographs = ''
+
             for log in lognames:
                 jobid = log[-12:-4]
                 if int(jobid) > int(newest_jobid):
@@ -425,22 +452,18 @@ def calculate_one_night(night):
                 slurmname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'','slurm')
                 slurmname_only = slurmname.split('/')[-1]
 
-                if not os.path.exists(os.path.join(webpage,logname_only)):
-                    cmd = "ln -s {} {}".format(logname,os.path.join(webpage,logname_only))
+                relpath_log = os.path.join('links',night[:-2],logname_only)
+                relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
+                
+                if not os.path.exists(os.path.join(webpage,relpath_log)):
+                    cmd = "ln -s {} {}".format(logname,os.path.join(webpage,relpath_log))
                     os.system(cmd)
-                if not os.path.exists(os.path.join(webpage, slurmname_only)):
-                    cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, slurmname_only))
+                if not os.path.exists(os.path.join(webpage, relpath_slurm)):
+                    cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, relpath_slurm))
                     os.system(cmd)
 
-                hlink1 = _hyperlink(os.path.join('links',night[:-2],slurmname_only), 'Slurm')
-                hlink2 = _hyperlink(os.path.join('links',night[:-2],logname_only), 'Log')
-            else:
-                hlink1 = '----'
-                hlink2 = '----'
-                    
-        else:
-            hlink1 = '----'
-            hlink2 = '----'
+                hlink1 = _hyperlink(relpath_slurm, 'Slurm')
+                hlink2 = _hyperlink(relpath_log, 'Log')
 
         output[str(expid)] = [row_color, \
                               expid, \
@@ -547,7 +570,7 @@ def _table_element(elem):
     return '<td>{}</td>'.format(elem)
 
 def _hyperlink(rel_path,displayname):
-    hlink =  '<a href="{}">{}</a>'.format(rel_path,displayname)
+    hlink =  '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>'.format(rel_path,displayname)
     return hlink
 
 def _str_frac(numerator,denominator):
