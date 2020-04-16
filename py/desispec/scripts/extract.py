@@ -18,8 +18,10 @@ import specter
 from specter.psf import load_psf
 from specter.extract import ex2d
 
-from desispec import io
 from desiutil.log import get_logger
+from desiutil.iers import freeze_iers
+
+from desispec import io
 from desispec.frame import Frame
 from desispec.maskbits import specmask
 
@@ -132,6 +134,7 @@ def main(args):
     
 
 def main_mpi(args, comm=None, timing=None):
+    freeze_iers()
     nproc = 1
     rank = 0
     if comm is not None:

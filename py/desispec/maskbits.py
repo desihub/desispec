@@ -40,14 +40,15 @@ from desiutil.bitmask import BitMask
 _bitdefs = yaml.safe_load("""
 #- CCD pixel mask
 ccdmask:
-    - [BAD,         0, "Pre-determined bad pixel (any reason)"]
-    - [HOT,         1, "Hot pixel"]
-    - [DEAD,        2, "Dead pixel"]
-    - [SATURATED,   3, "Saturated pixel from object"]
-    - [COSMIC,      4, "Cosmic ray"]
-    - [PIXFLATZERO, 5, "pixflat is 0"]
-    - [PIXFLATLOW,  6, "pixflat < 0.1"]
-    - [HIGHVAR,     7, "High variability in pixel value"]
+    - [BAD,             0, "Pre-determined bad pixel (any reason)"]
+    - [HOT,             1, "Hot pixel"]
+    - [DEAD,            2, "Dead pixel"]
+    - [SATURATED,       3, "Saturated pixel from object"]
+    - [COSMIC,          4, "Cosmic ray"]
+    - [PIXFLATZERO,     5, "pixflat is 0"]
+    - [PIXFLATLOW,      6, "pixflat < 0.1"]
+    - [HIGHVAR,         7, "High variability in pixel value"]
+    - [BADREADNOISE,    8, "Very high CCD amplifier read noise"]
 
 #- Mask bits that apply to an entire fiber
 fibermask:
