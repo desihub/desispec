@@ -5,8 +5,6 @@ desispec.xytraceset
 Lightweight wrapper class for trace coordinates and wavelength solution, to be returned by :func:`~desispec.io.xytraceset.read_xytraceset`.
 """
 
-from specter.util.traceset import TraceSet 
-
 class XYTraceSet(object):
     def __init__(self, xcoef, ycoef, wavemin, wavemax, npix_y, xsigcoef = None, ysigcoef = None, meta = None) :
         """
@@ -20,6 +18,8 @@ class XYTraceSet(object):
             wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
         used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
         """
+        from specter.util.traceset import TraceSet 
+
         assert(xcoef.shape[0] == ycoef.shape[0])
         if xsigcoef is not None :
             assert(xcoef.shape[0] == xsigcoef.shape[0]) 

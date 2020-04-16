@@ -14,9 +14,13 @@ desispec Change Log
   (commit 26279d8 direct to master)
 * Improved traceshift robusteness for very large shifts of arcs (PR `#954`).
 * Added scripts for creating bad pixels masks from darks (PR `#946`_).
+* etc/desispec.module use desi_spectro_calib tag 0.1.1 (PR `#955`_).
+* import specter only if needed to run, not requiring it just to
+  import desispec.io (PR `#955`_).
 
 .. _`#946`: https://github.com/desihub/desispec/issues/946
 .. _`#954`: https://github.com/desihub/desispec/issues/954
+.. _`#955`: https://github.com/desihub/desispec/issues/955
 
 0.34.0 (2020-04-13)
 -------------------
