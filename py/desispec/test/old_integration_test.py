@@ -76,7 +76,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     Raises:
         RuntimeError if any script fails
     """
-    from desiutil.iers import freeze_iers()
+    from desiutil.iers import freeze_iers
     freeze_iers()
 
     log = get_logger()
