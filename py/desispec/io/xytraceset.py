@@ -12,7 +12,6 @@ from astropy.io import fits
 
 from ..xytraceset import XYTraceSet
 from desiutil.log import get_logger
-from specter.util.traceset import TraceSet,fit_traces
 from .util import makepath
 
 def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
@@ -81,6 +80,9 @@ def read_xytraceset(filename) :
          XYTraceSet object
     
     """
+    #- specter import isolated within function so specter only loaded if
+    #- really needed
+    from specter.util.traceset import TraceSet,fit_traces
 
     log=get_logger()
 
