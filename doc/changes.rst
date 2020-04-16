@@ -5,7 +5,7 @@ desispec Change Log
 0.34.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Include `data/spec-arc-lamps.dat` with installed data.
 
 0.34.1 (2020-04-15)
 -------------------
@@ -17,6 +17,10 @@ desispec Change Log
 * etc/desispec.module use desi_spectro_calib tag 0.1.1 (PR `#955`_).
 * import specter only if needed to run, not requiring it just to
   import desispec.io (PR `#955`_).
+
+Note: `python setup.py install` of this version incorrectly doesn't copy
+`data/spec-arc-lamps.dat` into the final installed data directory;
+that is fixed in next version, and was fixed by hand in NERSC 0.34.1 install.
 
 .. _`#946`: https://github.com/desihub/desispec/issues/946
 .. _`#954`: https://github.com/desihub/desispec/issues/954

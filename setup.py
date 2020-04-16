@@ -69,7 +69,7 @@ setup_keywords['package_data'] = {'desispec': ['data/arc_lines/*',
                                                'data/db/*',
                                                'data/params/*',
                                                'data/quicklook/*',
-                                               'data/spec-sky.dat',],
+                                               'data/*.dat',],
                                   'desispec.test': ['data/ql/*',]}
 #
 # Run setup command.
