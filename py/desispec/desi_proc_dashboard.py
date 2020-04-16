@@ -139,6 +139,11 @@ def main(args):
         args.specprod = os.getenv("SPECPROD")
     else:
         os.environ['SPECPROD'] = args.specprod
+
+    if args.output_dir is None:
+        args.output_dir = os.getenv("DESI_DASHBOARD")
+    else:
+        os.environ['DESI_DASHBOARD'] = args.output_dir
     args.prod_dir = os.path.join(args.redux_dir,args.specprod)
     ############
     ## Input ###
@@ -196,7 +201,7 @@ def main(args):
     strTable += '\n\n'
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month,nights_in_month))
-        webpage = os.path.join(os.getenv('DESI_WWW'), 'collab', 'dailyproc', 'links', month)
+        webpage = os.path.join(os.getenv('DESI_DASHBOARD'), 'links', month)
         if not os.path.exists(webpage):
             os.makedirs(webpage)
         cmd = "fix_permissions.sh -a {}".format(webpage)
@@ -209,16 +214,16 @@ def main(args):
             nightly_tables.append(nightly_table(night,skipd_expids,show_null=args.show_null))
         strTable += monthly_table(nightly_tables,month)
 
-    #strTable += js_import_str(args.output_dir)
+    #strTable += js_import_str(os.getenv('DESI_DASHBOARD'))
     strTable += js_str()
     strTable += _closing_str()
-    with open(os.path.join(args.output_dir,args.output_name),'w') as hs:
+    with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name),'w') as hs:
         hs.write(strTable)
 
     ##########################
     #### Fix Permission ######
     ##########################
-    cmd="fix_permissions.sh -a {}".format(args.output_dir)
+    cmd="fix_permissions.sh -a {}".format(os.getenv('DESI_DASHBOARD'))
     os.system(cmd)
 
 
@@ -343,7 +348,7 @@ def calculate_one_night(night):
         cmd="fix_permissions.sh -a {}".format(logpath)
         os.system(cmd)
 
-    webpage = os.path.join(os.getenv('DESI_WWW'),'collab','dailyproc','links',night[:-2])
+    webpage = os.path.join(os.getenv('DESI_DASHBOARD'),'links',night[:-2])
     logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}')
     logfiletemplate = os.path.join(logpath,'{}-{}-{}-{}{}.{}')
 

@@ -213,7 +213,12 @@ def main(args):
     ##################################
     ### Run until something breaks ###
     ##################################
-    while True:
+    # While loop should run while new exposures are being found and processed
+    new_exposures_run = True
+    while new_exposures_run:
+        # if we're skipping today, theres no chance of new data appearing,
+        # set new exposures run to False if skipping today is True
+        new_exposures_run = (not args.skip_today)
         for night in get_nights(catchup_filename,args):
             print('{} Checking for new files on {}'.format(time.asctime(), night))
             fileglob = '{}/{}/*/desi-*.fits.fz'.format(
@@ -221,6 +226,8 @@ def main(args):
 
             newexp = find_newexp(night, fileglob, known_exposures)
             if len(newexp) > 0:
+                ## If we're still processing new exposures, continue to run while loop
+                new_exposures_run = True
                 print('{}  {} new files found'.format(time.asctime(), len(newexp)))
                 if args.dry_run:
                     print("\n\n\n\tDry run, nothing submitted.")
