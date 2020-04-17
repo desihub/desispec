@@ -5,7 +5,9 @@ desispec Change Log
 0.34.3 (unreleased)
 -------------------
 
-* No changes yet.
+* Run desi_proc arc and flat jobs on 10 nodes instead of 5 (PR `#958`_).
+
+.. _`#958`: https://github.com/desihub/desispec/issues/958
 
 0.34.2 (2020-04-16)
 -------------------
