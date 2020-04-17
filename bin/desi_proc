@@ -624,7 +624,8 @@ if args.obstype in ['ARC', 'TESTARC']:
 #-------------------------------------------------------------------------
 #- Merge PSF of night if applicable
 
-if args.obstype in ['ARC']:
+#if args.obstype in ['ARC']:
+if False:
     if rank == 0:
         for camera in args.cameras :
             psfnightfile = findfile('psfnight', args.night, args.expid, camera)
@@ -751,7 +752,8 @@ if args.obstype in ['FLAT', 'TESTFLAT'] :
 #-------------------------------------------------------------------------
 #- Average and auto-calib fiberflats of night if applicable
 
-if args.obstype in ['FLAT']:
+#if args.obstype in ['FLAT']:
+if False
     if rank == 0:
         fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, args.cameras[0])
         fiberflatdirname=os.path.dirname(fiberflatnightfile)
