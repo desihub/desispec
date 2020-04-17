@@ -2,10 +2,18 @@
 desispec Change Log
 ===================
 
-0.34.2 (unreleased)
+0.34.3 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.34.2 (2020-04-16)
 -------------------
 
 * Include `data/spec-arc-lamps.dat` with installed data.
+* Mask high readnoise CCD amps (PR `#957`_).
+
+.. _`#957`: https://github.com/desihub/desispec/issues/957
 
 0.34.1 (2020-04-15)
 -------------------
