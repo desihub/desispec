@@ -2,10 +2,16 @@
 desispec Change Log
 ===================
 
-0.34.4 (unreleased)
+0.34.5 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.34.4 (2020-04-21)
+-------------------
+
+* Add `desi_proc --batch-opts ...` option for specifying extras like
+  queue reservation (direct push to master).
 
 0.34.3 (2020-04-17)
 -------------------
