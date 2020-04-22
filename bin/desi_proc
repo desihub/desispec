@@ -278,7 +278,13 @@ if args.batch:
 
         fx.write('\n')
 
-        cmd = ' '.join(sys.argv)
+        inparams = list(sys.argv).copy()
+        if '-q' in sys.argv:
+            loc = np.where(np.array(sys.argv)=='-q')[0][0]
+            inparams.pop(loc)
+            inparams.pop(loc)
+            
+        cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
 
         if not args.mpi:
