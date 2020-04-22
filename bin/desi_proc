@@ -74,6 +74,7 @@ parser.add_argument("--extra-variance", action='store_true',
 parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
 parser.add_argument("--nosubmit", action="store_true", help="Create batch script but don't submit")
 parser.add_argument("-q", "--queue", type=str, default="realtime", help="batch queue to use")
+parser.add_argument("--batch-opts", type=str, default=None, help="additional batch commands")
 parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in minutes")
 parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
                     " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
@@ -127,6 +128,9 @@ else:
     rank = 0
     size = 1
 
+if args.batch_opts is not None:
+    args.batch_opts = args.batch_opts.strip('"\'')
+    
 #- Prevent MPI from killing off spawned processes
 if 'PMI_MMAP_SYNC_WAIT_TIME' not in os.environ:
     os.environ['PMI_MMAP_SYNC_WAIT_TIME'] = '3600'
@@ -266,6 +270,8 @@ if args.batch:
         fx.write('#SBATCH -N {}\n'.format(nodes))
         fx.write('#SBATCH -n {}\n'.format(ncores))
         fx.write('#SBATCH --qos {}\n'.format(args.queue))
+        if args.batch_opts is not None:
+            fx.write('#SBATCH {}\n'.format(args.batch_opts))
         fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
@@ -279,10 +285,13 @@ if args.batch:
         fx.write('\n')
 
         inparams = list(sys.argv).copy()
-        if '-q' in sys.argv:
-            loc = np.where(np.array(sys.argv)=='-q')[0][0]
-            inparams.pop(loc)
-            inparams.pop(loc)
+        for parameter in ['-q','--queue','--batch-opts']:
+            if parameter in inparams:
+                loc = np.where(np.array(inparams)==parameter)[0][0]
+                # Remove the command
+                inparams.pop(loc)
+                # Remove the argument of the command (now in the command location after pop)
+                inparams.pop(loc)
             
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
