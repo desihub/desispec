@@ -1,29 +1,37 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# -*- coding: utf-8 -*-
 """
 desispec.io.download
 ====================
 
 Download files from DESI repository.
 """
-from __future__ import absolute_import, division, print_function
 from os import environ, makedirs, stat, utime
 from os.path import dirname, exists, join
 from calendar import timegm
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
 from netrc import netrc
+from requests import get
+from requests.auth import HTTPDigestAuth
 from .meta import specprod_root
 
+_auth_cache = dict()
 
-def _auth(machine='portal.nersc.gov'):
+def _auth(machine='data.desi.lbl.gov'):
     """Get authentication credentials.
     """
-    from netrc import netrc
-    from requests.auth import HTTPDigestAuth
-    n = netrc()
-    u,foo,p = n.authenticators(machine)
-    return HTTPDigestAuth(u,p)
+    try:
+        r = _auth_cache[machine]
+    except KeyError:
+        n = netrc()
+        u, foo, p = n.authenticators(machine)
+        r = _auth_cache[machine] = HTTPDigestAuth(u, p)
+    return r
 
-def filepath2url(path,baseurl='https://portal.nersc.gov/project/desi',release='collab',specprod=None):
+
+def filepath2url(path, baseurl='https://data.desi.lbl.gov/desi',
+                 release='', specprod=None):
     """Convert a fully-qualified file path to a URL.
 
     Args:
@@ -34,13 +42,18 @@ def filepath2url(path,baseurl='https://portal.nersc.gov/project/desi',release='c
     """
     if specprod is None:
         specprod = specprod_root()
-    if release != 'collab':
+    if release:
         if not release.startswith('release'):
-            release = join('release',release)
-    return path.replace(specprod,join(baseurl,release,'spectro','redux',environ['SPECPROD']))
+            release = join('release', release)
+    return path.replace(specprod,
+                        join(baseurl, release, 'spectro', 'redux', environ['SPECPROD']))
 
-def download(filenames,single_thread=False,workers=None):
+
+def download(filenames, single_thread=False, workers=None):
     """Download files from the DESI repository.
+
+    This function will try to create any directories that don't already
+    exist, using the exact paths specified in `filenames`.
 
     Args:
         filenames: string or list-like object containing filenames.
@@ -79,7 +92,6 @@ def download(filenames,single_thread=False,workers=None):
 def _map_download(map_tuple):
     """Wrapper function to pass to multiprocess.Pool.map().
     """
-    from requests import get
     filename, httpname, auth = map_tuple
     download_success = False
     if exists(filename):
@@ -88,7 +100,7 @@ def _map_download(map_tuple):
         if auth is None:
             r = get(httpname)
         else:
-            r = get(httpname,auth=auth)
+            r = get(httpname, auth=auth)
         if r.status_code != 200:
             return None
         if not exists(dirname(filename)):
