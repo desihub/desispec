@@ -115,8 +115,13 @@ def barycentric_correction_multiplicative_factor(header) :
     else :
         raise KeyError("no MJD-OBS nor MJD in header")
 
-    val = barycentric_velocity_multiplicative_corr(ra, dec, mjd)
-
+    if "EXPTIME" in header:
+        exptime = header["EXPTIME"]
+    else:
+        exptime = 0
+    mjd_center = mjd + exptime /2. / 3600. / 24.
+    # compute the mjd of the center of the exposure
+    val = barycentric_velocity_multiplicative_corr(ra, dec, mjd_center)
     log = get_logger()
     log.debug("Barycentric correction factor = {}".format(val))
 
