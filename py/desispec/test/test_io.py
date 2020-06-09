@@ -29,12 +29,14 @@ class TestIO(unittest.TestCase):
         cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
         # cls.testbrfile appears to be unused by this class.
         cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
-        cls.origEnv = {'SPECPROD':None,
-            "DESI_SPECTRO_DATA":None,
-            "DESI_SPECTRO_REDUX":None}
+        cls.origEnv = {'SPECPROD': None,
+                       "DESI_ROOT": None,
+                       "DESI_SPECTRO_DATA": None,
+                       "DESI_SPECTRO_REDUX": None}
         cls.testEnv = {'SPECPROD':'dailytest',
-            "DESI_SPECTRO_DATA":os.path.join(cls.testDir,'spectro','data'),
-            "DESI_SPECTRO_REDUX":os.path.join(cls.testDir,'spectro','redux')}
+                       "DESI_ROOT": cls.testDir,
+                       "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
+                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux')}
         cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
         cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
                                     cls.testEnv['SPECPROD'])
