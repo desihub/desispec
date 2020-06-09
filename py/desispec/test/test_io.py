@@ -626,7 +626,7 @@ class TestIO(unittest.TestCase):
         del os.environ['DESI_SPECTRO_DATA']
         x = findfile('spectra', groupname=123)
         self.assertTrue(x is not None)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(KeyError):
             x = findfile('fibermap', night='20150101', expid=123)
         os.environ['DESI_SPECTRO_DATA'] = self.testEnv['DESI_SPECTRO_DATA']
 
@@ -634,7 +634,7 @@ class TestIO(unittest.TestCase):
         del os.environ['DESI_SPECTRO_REDUX']
         x = findfile('fibermap', night='20150101', expid=123)
         self.assertTrue(x is not None)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(KeyError):
             x = findfile('spectra', groupname=123)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
@@ -662,6 +662,18 @@ class TestIO(unittest.TestCase):
             a = findfile('cframe', night=20200317, expid=18, camera='X7')
         with self.assertRaises(ValueError):
             a = findfile('cframe', night=20200317, expid=18, camera='Hasselblad')
+
+        # Test healpix versus tiles
+        a = findfile('spectra', groupname='5286')
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'spectra-64', '52', '5286',
+                         'spectra-64-5286.fits')
+        self.assertEqual(a, b)
+        a = findfile('spectra', tile=68000, night='20200314', spectrograph=2)
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'tiles', '68000', '20200314'
+                         'spectra-2-68000-20200314.fits')
+        self.assertEqual(a, b)
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.

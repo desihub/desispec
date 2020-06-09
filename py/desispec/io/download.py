@@ -14,9 +14,14 @@ from multiprocessing import Pool, cpu_count
 from netrc import netrc
 from requests import get
 from requests.auth import HTTPDigestAuth
+
+from desutil.log import get_logger()
+
 from .meta import specprod_root
 
+
 _auth_cache = dict()
+
 
 def _auth(machine='data.desi.lbl.gov'):
     """Get authentication credentials.
