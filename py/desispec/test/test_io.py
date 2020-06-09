@@ -592,7 +592,7 @@ class TestIO(unittest.TestCase):
         """Test desispec.io.meta.findfile and desispec.io.download.filepath2url.
         """
         from ..io.meta import findfile
-        from ..io.download import filepath2url
+        # from ..io.download import filepath2url
 
         kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
         file1 = findfile('sky', **kwargs)
@@ -603,7 +603,8 @@ class TestIO(unittest.TestCase):
 
         self.assertEqual(file1, file2)
 
-        url1 = filepath2url(file1)
+        # url1 = filepath2url(file1)
+        url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
         url2 = os.path.join('https://data.desi.lbl.gov/desi',
                             'spectro', 'redux', os.environ['SPECPROD'], 'exposures',
                             str(kwargs['night']),'{expid:08d}'.format(**kwargs),

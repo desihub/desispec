@@ -12,7 +12,7 @@ from datetime import datetime
 from multiprocessing import Pool, cpu_count
 from netrc import netrc
 from requests import get
-from requests.auth import HTTPDigestAuth
+from requests.auth import HTTPBasicAuth
 
 from desiutil.log import get_logger
 
@@ -30,31 +30,12 @@ def _auth(machine='data.desi.lbl.gov'):
     except KeyError:
         n = netrc()
         u, foo, p = n.authenticators(machine)
-        r = _auth_cache[machine] = HTTPDigestAuth(u, p)
+        r = _auth_cache[machine] = HTTPBasicAuth(u, p)
     return r
 
 
-def filepath2url(path, baseurl='https://data.desi.lbl.gov/desi',
-                 release='', specprod=None):
-    """Convert a fully-qualified file path to a URL.
-
-    Args:
-        path: string containing full path to a filename
-        baseurl: (optional) string containing the URL of the top-level DESI directory.
-        release: (optional) Release version.
-        specprod: (optional) String that can be used to override the output of specprod_root().
-    """
-    if specprod is None:
-        specprod = specprod_root()
-    if release:
-        if not release.startswith('release'):
-            release = os.path.join('release', release)
-    return path.replace(specprod,
-                        os.path.join(baseurl, release, 'spectro', 'redux',
-                                     os.environ['SPECPROD']))
-
-
-def download(filenames, single_thread=False, workers=None):
+def download(filenames, single_thread=False, workers=None,
+             baseurl='https://data.desi.lbl.gov/desi'):
     """Download files from the DESI repository.
 
     This function will try to create any directories that don't already
@@ -66,23 +47,32 @@ def download(filenames, single_thread=False, workers=None):
             download files.
         workers: (optional) integer indicating the number of worker
             processes to create.
+        baseurl: (optional) string containing the URL of the top-level DESI directory.
 
     Returns:
         Full, local path to the file(s) downloaded.
     """
+    log = get_logger()
     if isinstance(filenames,str):
         file_list = [ filenames ]
         single_thread = True
     else:
         file_list = filenames
-    http_list = [ filepath2url(f) for f in file_list ]
-    machine = http_list[0].split('/')[2]
-    # local_cache = specprod_root()
+    error_list = [None]*len(file_list)
+    try:
+        http_list = [ f.replace(os.environ['DESI_ROOT'], baseurl) for f in file_list ]
+    except KeyError:
+        log.error("DESI_ROOT is not defined in the environment!")
+        return error_list
+    machine = baseurl.split('/')[2]
     try:
         a = _auth(machine)
-    except IOError:
-        log.error("Authorization data not found for %s!", machine)
-        return [None for f in file_list]
+    except FileNotFoundError:
+        log.error("Authorization data (~/.netrc) not found!")
+        return error_list
+    except TypeError:
+        log.error("Authorization data for %s not found in ~/.netrc!", machine)
+        return error_list
     if single_thread:
         downloaded_list = list()
         for k,f in enumerate(file_list):
@@ -95,6 +85,7 @@ def download(filenames, single_thread=False, workers=None):
         downloaded_list = p.map(_map_download,zip(file_list,http_list,[a]*len(file_list)))
     return downloaded_list
 
+
 def _map_download(map_tuple):
     """Wrapper function to pass to multiprocess.Pool.map().
     """
@@ -106,8 +97,10 @@ def _map_download(map_tuple):
         return filename
     else:
         if auth is None:
+            log.debug("get('%s')", httpname)
             r = get(httpname)
         else:
+            log.debug("get('%s', auth=auth)", httpname)
             r = get(httpname, auth=auth)
         if r.status_code != 200:
             log.error("Download failure, status_code = %d!", r.status_code)
