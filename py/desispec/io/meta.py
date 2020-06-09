@@ -18,7 +18,7 @@ from desiutil.log import get_logger
 from .util import healpix_subdirectory
 
 
-def findfile(filetype, night=None, expid=None, tile=None, camera=None, groupname=None,
+def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname=None,
     nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
     download=False, outdir=None, qaprod_dir=None):
     """Returns location where file should be
@@ -29,8 +29,8 @@ def findfile(filetype, night=None, expid=None, tile=None, camera=None, groupname
     Args depending upon filetype:
         night : YEARMMDD string
         expid : integer exposure id
-        tile : integer tile (pointing) number
         camera : 'b0' 'r1' .. 'z9'
+        tile : integer tile (pointing) number
         groupname : spectral grouping name (brick name or healpix pixel)
         nside : healpix nside
         band : one of 'b','r','z' identifying the camera band

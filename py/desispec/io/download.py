@@ -15,7 +15,7 @@ from netrc import netrc
 from requests import get
 from requests.auth import HTTPDigestAuth
 
-from desutil.log import get_logger()
+from desutil.log import get_logger
 
 from .meta import specprod_root
 
