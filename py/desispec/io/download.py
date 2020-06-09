@@ -6,8 +6,7 @@ desispec.io.download
 
 Download files from DESI repository.
 """
-from os import environ, makedirs, stat, utime
-from os.path import dirname, exists, join
+import os
 from calendar import timegm
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
@@ -49,9 +48,10 @@ def filepath2url(path, baseurl='https://data.desi.lbl.gov/desi',
         specprod = specprod_root()
     if release:
         if not release.startswith('release'):
-            release = join('release', release)
+            release = os.path.join('release', release)
     return path.replace(specprod,
-                        join(baseurl, release, 'spectro', 'redux', environ['SPECPROD']))
+                        os.path.join(baseurl, release, 'spectro', 'redux',
+                                     os.environ['SPECPROD']))
 
 
 def download(filenames, single_thread=False, workers=None):
@@ -81,6 +81,7 @@ def download(filenames, single_thread=False, workers=None):
     try:
         a = _auth(machine)
     except IOError:
+        log.error("Authorization data not found for %s!", machine)
         return [None for f in file_list]
     if single_thread:
         downloaded_list = list()
@@ -98,8 +99,10 @@ def _map_download(map_tuple):
     """Wrapper function to pass to multiprocess.Pool.map().
     """
     filename, httpname, auth = map_tuple
+    log = get_logger()
     download_success = False
-    if exists(filename):
+    if os.path.exists(filename):
+        log.debug("%s already exists.", filename)
         return filename
     else:
         if auth is None:
@@ -107,14 +110,17 @@ def _map_download(map_tuple):
         else:
             r = get(httpname, auth=auth)
         if r.status_code != 200:
+            log.error("Download failure, status_code = %d!", r.status_code)
             return None
-        if not exists(dirname(filename)):
-            makedirs(dirname(filename))
+        if not os.path.exists(os.path.dirname(filename)):
+            log.debug("os.makedirs(os.path.dirname('%s'))", filename)
+            os.makedirs(os.path.dirname(filename))
         with open(filename, 'wb') as d:
             d.write(r.content)
-        atime = stat(filename).st_atime
-        mtime = timegm(datetime.strptime(r.headers['last-modified'],'%a, %d %b %Y %H:%M:%S %Z').utctimetuple())
-        utime(filename,(atime,mtime))
+        atime = os.stat(filename).st_atime
+        mtime = timegm(datetime.strptime(r.headers['last-modified'], '%a, %d %b %Y %H:%M:%S %Z').utctimetuple())
+        log.debug("os.utime('%s', (%d, %d))", filename, atime, mtime)
+        os.utime(filename, (atime, mtime))
         download_success = True
     if download_success:
         return filename
