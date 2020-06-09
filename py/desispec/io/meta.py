@@ -42,6 +42,10 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
+
+    Raises:
+        ValueError: for invalid file types, and other invalid input
+        KeyError: for missing environment variables
     """
     log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
@@ -112,7 +116,7 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
     location['desi'] = location['raw']
 
     if tile is not None:
-        log.info("Tile-based files selected; Healpix-based files and input will be ignored.")
+        log.info("Tile-based files selected; healpix-based files and input will be ignored.")
         location['coadd'] = '{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits'
         location['redrock'] = '{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5'
         location['spectra'] = '{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits'
@@ -120,23 +124,27 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
 
     if groupname is not None:
         hpix = int(groupname)
+        log.debug('healpix_subdirectory(%d, %d)', nside, hpix)
         hpixdir = healpix_subdirectory(nside, hpix)
     else:
         #- set to anything so later logic will trip on groupname not hpixdir
         hpixdir = 'hpix'
+    log.debug("hpixdir = '%s'", hpixdir)
 
     #- Do we know about this kind of file?
     if filetype not in location:
         raise ValueError("Unknown filetype {}; known types are {}".format(filetype, list(location.keys())))
 
-    #- Check for missing inputs
-    required_inputs = [i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}',location[filetype])]
+    #- Check for missing inputs, deduplicate via frozenset()
+    required_inputs = frozenset([i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}', location[filetype])])
 
     if rawdata_dir is None and 'rawdata_dir' in required_inputs:
         rawdata_dir = rawdata_root()
+        log.debug("rawdata_dir = '%s'", rawdata_dir)
 
     if specprod_dir is None and 'specprod_dir' in required_inputs and outdir is None :
         specprod_dir = specprod_root()
+        log.debug("specprod_dir = '%s'", specprod_dir)
     elif outdir is not None :
         # if outdir is set, we will replace specprod_dir anyway
         # but we may need the variable to be set in the meantime
@@ -147,7 +155,7 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
 
     if 'specprod' in required_inputs and outdir is None :
         #- Replace / with _ in $SPECPROD so we can use it in a filename
-        specprod = os.getenv('SPECPROD').replace('/', '_')
+        specprod = os.environ['SPECPROD'].replace('/', '_')
     else:
         specprod = None
 
@@ -185,7 +193,8 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
 
     if download:
         from .download import download
-        filepath = download(filepath,single_thread=True)[0]
+        log.debug("download('%s', single_thread=True)", filepath)
+        filepath = download(filepath, single_thread=True)[0]
 
     return filepath
 
