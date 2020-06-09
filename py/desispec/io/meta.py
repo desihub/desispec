@@ -113,10 +113,10 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
 
     if tile is not None:
         log.info("Tile-based files selected; Healpix-based files and input will be ignored.")
-        location['coadd'] = '{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits',
-        location['redrock'] = '{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5',
-        location['spectra'] = '{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits',
-        location['zbest'] = '{specprod_dir}/tiles/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-{night}.fits',
+        location['coadd'] = '{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits'
+        location['redrock'] = '{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5'
+        location['spectra'] = '{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits'
+        location['zbest'] = '{specprod_dir}/tiles/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-{night}.fits'
 
     if groupname is not None:
         hpix = int(groupname)
