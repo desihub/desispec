@@ -58,34 +58,38 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         #
         # preproc/
+        # Note: fibermap files will eventually move to preproc.
         #
-        # fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',  # found in andes but not 20.4
+        # fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         #
         # exposures/
+        # Note: calib has been renamed to fluxcalib, but that has not propagated fully through the pipeline.
+        # Note: psfboot has been deprecated, but not ready to be removed yet.
         #
-        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',  # found in 20.4 but not andes
+        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',
         cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
-        # fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits',  # not found in recent reductions
+        fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits',
         fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
         frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
         psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
-        # qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',  # not found in recent reductions
+        qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',
         sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits',
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
-        # psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',  # not found in recent reductions
+        psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
         #
         # calibnight/
         #
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
-        psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',  # found in andes but not 20.4
+        psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
         #
-        # spectra
+        # spectra-{nside}/
+        # Note: coadd naming convention and location needs to be resolved, path may change.
         #
         zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
-        coadd = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',  # not found in 20.4
+        coadd = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',
         redrock = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/redrock-{nside:d}-{groupname}.h5',
         spectra = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/spectra-{nside:d}-{groupname}.fits',
         zbest = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/zbest-{nside:d}-{groupname}.fits',
