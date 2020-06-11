@@ -95,8 +95,8 @@ matrix:
     allow_failures:
         - os: osx
         - os: linux
-          env: PYTHON_VERSION=3.6 SETUP_CMD='test'
-               ASTROPY_VERSION=3.0
+          env: PYTHON_VERSION=3.7 SETUP_CMD='test'
+               NUMPY_VERSION=1.18.1 ASTROPY_VERSION=stable
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
@@ -120,13 +120,14 @@ matrix:
 
         # Standard tests.
         - os: linux
-          env: PYTHON_VERSION=3.6 SETUP_CMD='test'
+          env: PYTHON_VERSION=3.7 SETUP_CMD='test'
+               NUMPY_VERSION=1.16.6
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         - os: linux
-          env: PYTHON_VERSION=3.6 SETUP_CMD='test'
-               ASTROPY_VERSION=3.0
+          env: PYTHON_VERSION=3.7 SETUP_CMD='test'
+               NUMPY_VERSION=1.18.1 ASTROPY_VERSION=stable
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 

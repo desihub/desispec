@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 """Test desispec.io.
 """
-from __future__ import absolute_import, division
-# The line above will help with 2to3 support.
 import unittest
+from unittest.mock import patch, MagicMock
 import os
 import sys
 import tempfile
@@ -16,12 +15,6 @@ from astropy.io import fits
 from astropy.table import Table
 from ..frame import Frame
 
-skipMock = False
-try:
-    from unittest.mock import patch
-except ImportError:
-    # Python 2
-    skipMock = True
 
 class TestIO(unittest.TestCase):
     """Test desispec.io.
@@ -36,12 +29,14 @@ class TestIO(unittest.TestCase):
         cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
         # cls.testbrfile appears to be unused by this class.
         cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
-        cls.origEnv = {'SPECPROD':None,
-            "DESI_SPECTRO_DATA":None,
-            "DESI_SPECTRO_REDUX":None}
+        cls.origEnv = {'SPECPROD': None,
+                       "DESI_ROOT": None,
+                       "DESI_SPECTRO_DATA": None,
+                       "DESI_SPECTRO_REDUX": None}
         cls.testEnv = {'SPECPROD':'dailytest',
-            "DESI_SPECTRO_DATA":os.path.join(cls.testDir,'spectro','data'),
-            "DESI_SPECTRO_REDUX":os.path.join(cls.testDir,'spectro','redux')}
+                       "DESI_ROOT": cls.testDir,
+                       "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
+                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux')}
         cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
         cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
                                     cls.testEnv['SPECPROD'])
@@ -207,7 +202,6 @@ class TestIO(unittest.TestCase):
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.
     @unittest.skipIf(sys.platform == 'darwin', "Skipping memmap test on Mac.")
-    @unittest.skipIf(skipMock, "Skipping test that requires unittest.mock.")
     def test_supports_memmap(self):
         """Test utility to detect when memory-mapping is not possible.
         """
@@ -600,7 +594,7 @@ class TestIO(unittest.TestCase):
         """Test desispec.io.meta.findfile and desispec.io.download.filepath2url.
         """
         from ..io.meta import findfile
-        from ..io.download import filepath2url
+        # from ..io.download import filepath2url
 
         kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
         file1 = findfile('sky', **kwargs)
@@ -611,11 +605,12 @@ class TestIO(unittest.TestCase):
 
         self.assertEqual(file1, file2)
 
-        url1 = filepath2url(file1)
-        url2 = os.path.join('https://portal.nersc.gov/project/desi',
-            'collab','spectro','redux',os.environ['SPECPROD'],'exposures',
-            str(kwargs['night']),'{expid:08d}'.format(**kwargs),
-            os.path.basename(file1))
+        # url1 = filepath2url(file1)
+        url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+        url2 = os.path.join('https://data.desi.lbl.gov/desi',
+                            'spectro', 'redux', os.environ['SPECPROD'], 'exposures',
+                            str(kwargs['night']),'{expid:08d}'.format(**kwargs),
+                            os.path.basename(file1))
         self.assertEqual(url1, url2)
 
         #
@@ -634,7 +629,7 @@ class TestIO(unittest.TestCase):
         del os.environ['DESI_SPECTRO_DATA']
         x = findfile('spectra', groupname=123)
         self.assertTrue(x is not None)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(KeyError):
             x = findfile('fibermap', night='20150101', expid=123)
         os.environ['DESI_SPECTRO_DATA'] = self.testEnv['DESI_SPECTRO_DATA']
 
@@ -642,7 +637,7 @@ class TestIO(unittest.TestCase):
         del os.environ['DESI_SPECTRO_REDUX']
         x = findfile('fibermap', night='20150101', expid=123)
         self.assertTrue(x is not None)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(KeyError):
             x = findfile('spectra', groupname=123)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
@@ -670,6 +665,18 @@ class TestIO(unittest.TestCase):
             a = findfile('cframe', night=20200317, expid=18, camera='X7')
         with self.assertRaises(ValueError):
             a = findfile('cframe', night=20200317, expid=18, camera='Hasselblad')
+
+        # Test healpix versus tiles
+        a = findfile('spectra', groupname='5286')
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'spectra-64', '52', '5286',
+                         'spectra-64-5286.fits')
+        self.assertEqual(a, b)
+        a = findfile('spectra', tile=68000, night='20200314', spectrograph=2)
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'tiles', '68000', '20200314',
+                         'spectra-2-68000-20200314.fits')
+        self.assertEqual(a, b)
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
@@ -766,31 +773,51 @@ class TestIO(unittest.TestCase):
         night1 = find_exposure_night(150)
         self.assertEqual(night1, '20150102')
 
-    @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
-    @unittest.skipIf(True, "NERSC is out; download will fail")
-    def test_download(self):
+    # @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'], '.netrc')), "No ~/.netrc file detected.")
+    @patch('desispec.io.download.get')
+    @patch('desispec.io.download.netrc')
+    def test_download(self, mock_netrc, mock_get):
         """Test desiutil.io.download.
         """
+        n = mock_netrc()
+        n.authenticators.return_value = ('desi', 'foo', 'not-a-real-password')
+        r = MagicMock()
+        r.status_code = 200
+        r.content = b'This is a fake file.'
+        r.headers = {'last-modified': 'Sun, 10 May 2015 11:45:22 GMT'}
+        mock_get.return_value = r
+        self.assertEqual(datetime(2015, 5, 10, 11, 45, 22).strftime('%a, %d %b %Y %H:%M:%S'),
+                         'Sun, 10 May 2015 11:45:22')
         #
         # Test by downloading a single file.  This sidesteps any issues
         # with running multiprocessing within the unittest environment.
         #
         from ..io.meta import findfile
-        from ..io.download import download
-        filename = findfile('sky',expid=2,night='20150510',camera='b0',spectrograph=0)
+        from ..io.download import download, _auth_cache
+        filename = findfile('sky', expid=2, night='20150510', camera='b0', spectrograph=0)
         paths = download(filename)
-        self.assertEqual(paths[0],filename)
+        self.assertEqual(paths[0], filename)
         self.assertTrue(os.path.exists(paths[0]))
+        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits',
+                                         auth=_auth_cache['data.desi.lbl.gov'])
+        n.authenticators.assert_called_once_with('data.desi.lbl.gov')
         #
         # Deliberately test a non-existent file.
         #
-        filename = findfile('sky',expid=2,night='20150510',camera='b9',spectrograph=9)
+        r.status_code = 404
+        filename = findfile('sky', expid=2, night='20150510', camera='b9', spectrograph=9)
         paths = download(filename)
         self.assertIsNone(paths[0])
-        # self.assertFalse(os.path.exists(paths[0]))
+        self.assertFalse(os.path.exists(filename))
+        #
+        # Simulate a file that already exists.
+        #
+        filename = findfile('sky', expid=2, night='20150510', camera='b0', spectrograph=0)
+        paths = download(filename)
+        self.assertEqual(paths[0], filename)
 
     def test_create_camword(self):
-        """ Test desispec.io.create_camword                                                                  
+        """ Test desispec.io.create_camword
         """
         from ..io.util import create_camword
         # Create some lists to convert
@@ -816,7 +843,7 @@ class TestIO(unittest.TestCase):
         """ Test desispec.io.decode_camword
         """
         from ..io.util import decode_camword
-        # Create some lists to convert                                                                    
+        # Create some lists to convert
         cameras1 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
                     'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
                     'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8', 'z9']
@@ -830,13 +857,13 @@ class TestIO(unittest.TestCase):
         camword1 = 'a0123456789'
         camword2 = 'a01234567b89r89'
         camword3 = 'a01235679b8r48z4'
-            
+
         for cameras,camword in zip([cameras1,cameras2,cameras3],\
                                    [camword1,camword2,camword3]):
             decoded = decode_camword(camword)
             for ii in range(len(decoded)):
                 self.assertEqual(str(decoded[ii]),str(cameras[ii]))
-        
+
 def test_suite():
     """Allows testing of only this module with the command::
 
