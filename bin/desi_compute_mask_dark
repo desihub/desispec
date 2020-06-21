@@ -166,6 +166,7 @@ hdu.header["MINIQR"] = (args.miniqr, 'Minimum percentile threshold for good IQR'
 hdu.header["MAXIQR"] = (args.maxiqr, 'Maximum percentile threshold for good IQR')
 hdu.header["COLFRAC"] = (args.colfrac, 'Bad pixel fraction for blocked column in amp')
 hdu.header["CAMERA"] = (args.camera, 'header HDU (int or string)')
+hdu.header["CLOSEITER"] = (args.closeiter, 'binary cloing iterations')
 hdu.header["MASKFRAC"] = (mask_percent, 'Percent of pixels blocked')
 hdu.header["BIAS"] = (args.bias, 'Path to bias image')
 hdu.header["OLDMASK"] = (args.mask, 'Path to input mask')
