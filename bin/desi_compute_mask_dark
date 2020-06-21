@@ -25,8 +25,8 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 parser.add_argument('--camera',type = str, required = True,
                     help = 'header HDU (int or string)')
 
-parser.add_argument('--bias', type = str, default = None, required=True,
-                        help = 'bias image calibration file')
+parser.add_argument('--bias', type = str, default = None, required=False,
+                        help = 'path to bias image calibration file for the CCD')
 
 parser.add_argument('--minmed', type = float, default = 0.0001, required = True,
                     help = 'Minimum percentile threshold for good median')
@@ -36,7 +36,9 @@ parser.add_argument('--miniqr', type = float, default = 0, required = True,
                     help = 'Minimum percentile threshold for good IQR')
 parser.add_argument('--maxiqr', type = float, default = 99.999, required = True,
                     help = 'Maximum percentile threshold for good IQR')
-parser.add_argument('--colfrac', type = float, default=0.4, required=False,                       help='If more than this fraction of pixels are blocked in a column, the whole column in that amplifier is blocked.')
+parser.add_argument('--colfrac', type = float, default=0.4, required=False, help='If more than this fraction of pixels are blocked in a column, the whole column in that amplifier is blocked.')
+parser.add_argument('--closeiter', type = int, default=20, required=False, help='Number of iterations for the binary closing operation')
+
 parser.add_argument('--mask', type = str, default = None, required = False,
                     help = 'Path to a previous mask file. If given, the output is the bitwise OR of the input mask and the mask created by this script.')
 parser.add_argument('--savestat', type = bool, default = False, required = False,
@@ -58,16 +60,25 @@ for filename in args.image :
     log.info(filename)
 
     # collect exposure times
-    fitsfile=pyfits.open(filename)
+    fitsfile = pyfits.open(filename)
     primary_header = fitsfile[0].header
     if not "EXPTIME" in primary_header :
         primary_header = fitsfile[1].header
     exptime = primary_header["EXPTIME"]
     fitsfile.close()
-
+    
+    # Get the bias
+    if args.bias is not None:
+        biasfile = pyfits.open(args.bias)
+        bias_img = biasfile[0].data
+        log.info("read given bias image file")
+    else:
+        log.info("No bias image given, will try to find one automatically")
+        
     # read raw data and preprocess them
     img = io.read_raw(filename, args.camera,
-                      bias=args.bias,
+                      bias_img = bias_img,
+                      bias=True,
                       nogain=False,
                       nocosmic=True,
                       mask=False,
@@ -116,7 +127,7 @@ log.info("writing mask bits")
 mask[(med_image>maxmed)|(med_image<minmed)|(iqr_image>maxiqr)|(iqr_image<miniqr)] |= ccdmask.BAD
 
 #Close incompletely blocked regions
-closed_mask = binary_closing(mask, iterations=20, structure=np.ones([2,2]).astype(np.int32)) #returns binary array
+closed_mask = binary_closing(mask, iterations=args.closeiter, structure=np.ones([2,2]).astype(np.int32)) #returns binary array
 closed_mask[closed_mask] = ccdmask.BAD
 mask |= closed_mask
 
