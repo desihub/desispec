@@ -287,8 +287,11 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     log.info("done")
     return bkg
 
-def get_calibration_image(cfinder,keyword,entry) :
+def get_calibration_image(cfinder,keyword,entry,header=None) :
     """Please provide documentation for this function!
+    Optional input header is implemented on 20200625 to implement the exptime-dependent bias+dark. 
+                        It is set to None for data taken before the specific time to activate this function. This time is set in preproc when reading bias.  
+                        It is set to the header for retrieving the exptime and possible further extension after the activation date specified.  
     """
     log=get_logger()
 
@@ -313,7 +316,11 @@ def get_calibration_image(cfinder,keyword,entry) :
 
     log.info("Using %s %s"%(keyword,filename))
     if keyword == "BIAS" :
-        return read_bias(filename=filename)
+        if header is not None:
+            log.info('Use bias+dark file: '+filename)
+            return read_bias_plus_dark(filename=filename,exptime=int(header['EXPTIME']))
+        else:
+            return read_bias(filename=filename)
     elif keyword == "MASK" :
         return read_mask(filename=filename)
     elif keyword == "DARK" :
@@ -432,7 +439,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     # Set bias image, as desired
     if bias_img is None:
-        bias = get_calibration_image(cfinder,"BIAS",bias)
+        bias_info=cfinder.data['BIAS'].lower().replace('/','-').replace('_','-').split('-')
+        if ('bias' in bias_info) and ('dark' in bias_info): # Using new master bias+dark image, input header to retrieve exptime
+            dark=False  # Disable dark subtraction because the dark is included. 
+            bias = get_calibration_image(cfinder,"BIAS",bias,header=header)
+        else: # Old bias-only subtraction
+            bias = get_calibration_image(cfinder,"BIAS",bias)
     else:
         bias = bias_img
 
@@ -839,6 +851,161 @@ def read_bias(filename=None, camera=None, dateobs=None):
         raise NotImplementedError
     else:
         return fits.getdata(filename, 0)
+
+def bwperim(bw, n=4):
+    """
+    perim = bwperim(bw, n=4)
+    Find the perimeter of objects in binary images.
+    A pixel is part of an object perimeter if its value is one and there
+    is at least one zero-valued pixel in its neighborhood.
+    By default the neighborhood of a pixel is 4 nearest pixels, but
+    if `n` is set to 8 the 8 nearest pixels will be considered.
+    Parameters
+    ----------
+      bw : A black-and-white image
+      n : Connectivity. Must be 4 or 8 (default: 8)
+    Returns
+    -------
+      perim : A boolean image
+
+    From Mahotas: http://nullege.com/codes/search/mahotas.bwperim
+    """
+
+    if n not in (4,8):
+        raise ValueError('mahotas.bwperim: n must be 4 or 8')
+    rows,cols = bw.shape
+
+    # Translate image by one pixel in all directions
+    north = np.zeros((rows,cols))
+    south = np.zeros((rows,cols))
+    west = np.zeros((rows,cols))
+    east = np.zeros((rows,cols))
+
+    north[:-1,:] = bw[1:,:]
+    south[1:,:]  = bw[:-1,:]
+    west[:,:-1]  = bw[:,1:]
+    east[:,1:]   = bw[:,:-1]
+    idx = (north == bw) & \
+          (south == bw) & \
+          (west  == bw) & \
+          (east  == bw)
+    if n == 8:
+        north_east = np.zeros((rows, cols))
+        north_west = np.zeros((rows, cols))
+        south_east = np.zeros((rows, cols))
+        south_west = np.zeros((rows, cols))
+        north_east[:-1, 1:]   = bw[1:, :-1]
+        north_west[:-1, :-1] = bw[1:, 1:]
+        south_east[1:, 1:]     = bw[:-1, :-1]
+        south_west[1:, :-1]   = bw[:-1, 1:]
+        idx &= (north_east == bw) & \
+               (south_east == bw) & \
+               (south_west == bw) & \
+               (north_west == bw)
+    return ~idx * bw
+
+def signed_bwdist(im):
+    '''
+    Find perim and return masked image (signed/reversed)
+    '''    
+    im = -bwdist(bwperim(im))*np.logical_not(im) + bwdist(bwperim(im))*im
+    return im
+
+def bwdist(im):
+    '''
+    Find distance map of image
+    '''
+    from scipy.ndimage.morphology import distance_transform_edt
+    dist_im = distance_transform_edt(1-im)
+    return dist_im
+
+def interp_shape(top, bottom, precision):
+    '''
+    Interpolate between two contours
+
+    Input: top 
+            [X,Y] - Image of top contour (mask)
+           bottom
+            [X,Y] - Image of bottom contour (mask)
+           precision
+             float  - % between the images to interpolate 
+                Ex: num=0.5 - Interpolate the middle image between top and bottom image
+    Output: out
+            [X,Y] - Interpolated image at num (%) between top and bottom
+
+    '''
+    from scipy.interpolate import interpn
+    if precision>1:
+        print("Error: Precision must be between 0 and 1 (float)")
+
+    top = signed_bwdist(top)
+    bottom = signed_bwdist(bottom)
+
+    # row,cols definition
+    r, c = top.shape
+
+    # Reverse % indexing
+    precision = 1+precision
+
+    # rejoin top, bottom into a single array of shape (2, r, c)
+    top_and_bottom = np.stack((top, bottom))
+
+    # create ndgrids 
+    points = (np.r_[0, 2], np.arange(r), np.arange(c))
+    xi = np.rollaxis(np.mgrid[:r, :c], 0, 3).reshape((r*c, 2))
+    xi = np.c_[np.full((r*c),precision), xi]
+
+    # Interpolate for new plane
+    out = interpn(points, top_and_bottom, xi)
+    out = out.reshape((r, c))
+
+    return out
+
+def read_bias_plus_dark(filename=None, exptime=0):
+
+    '''
+    Return calibration bias+dark image for camera on dateobs or night
+
+    Options:
+        filename : input filename to read
+        exptime : the exposure time of the image
+    Notes:
+        must provide filename
+    '''
+    from astropy.io import fits
+    log=get_logger()
+    if filename is None:
+        #- use camera and dateobs to derive what bias file should be used
+        raise NotImplementedError
+    else:
+        hdus = fits.open(filename)
+        if not str(exptime).isnumeric(): # if the exptime is not a number, use exptime=0 for default
+            exptime=0
+        exptime_arr=[]
+        for hdu in hdus:
+            exptime_arr.append(int(hdu.header['EXTNAME']))
+        if int(exptime) in exptime_arr:
+            log.info('Using bias+dark at exptime='+str(int(exptime)))
+            return hdus[str(int(exptime))].data
+        elif int(exptime)> max(exptime_arr):
+            log.info('Using bias+dark at exptime='+str(max(exptime_arr)))
+            return hdus[str(max(exptime_arr))].data
+        elif int(exptime)< min(exptime_arr):
+            log.info('Using bias+dark at exptime='+str(min(exptime_arr)))
+            return hdus[str(min(exptime_arr))].data
+        else:
+            # Interpolate
+            exptime_arr=np.sort(np.array(exptime_arr))
+            ind=np.where(exptime_arr>int(exptime))
+            ind1=ind[0][0]-1
+            ind2=ind[0][0]
+            log.info('Interpolate between '+str(exptime_arr[ind1])+' and '+str(exptime_arr[ind2]))
+            precision=(float(exptime)-exptime_arr[ind1])/(exptime_arr[ind2]-exptime_arr[ind1])
+            # Run interpolation
+            return interp_shape(hdus[str(exptime_arr[ind1])].data,hdus[str(exptime_arr[ind2])].data,precision)
+
+
+        
 
 def read_pixflat(filename=None, camera=None, dateobs=None):
     '''
