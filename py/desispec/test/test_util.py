@@ -5,7 +5,7 @@ Test desispec.util.*
 import os
 import unittest
 from uuid import uuid4
-import imp
+import importlib
 
 import numpy as np
 
@@ -172,13 +172,13 @@ class TestRunCmd(unittest.TestCase):
         n = 4
         tmp = os.getenv('SLURM_CPUS_PER_TASK')
         os.environ['SLURM_CPUS_PER_TASK'] = str(n)
-        imp.reload(dpl)
+        importlib.reload(dpl)
         self.assertEqual(dpl.default_nproc, n)
         os.environ['SLURM_CPUS_PER_TASK'] = str(2*n)
-        imp.reload(dpl)
+        importlib.reload(dpl)
         self.assertEqual(dpl.default_nproc, 2*n)
         del os.environ['SLURM_CPUS_PER_TASK']
-        imp.reload(dpl)
+        importlib.reload(dpl)
         import multiprocessing
         self.assertEqual(dpl.default_nproc, multiprocessing.cpu_count()//2)
 
