@@ -47,7 +47,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
 
     # add coefficients
-    if "COEFF" in data :
+    if "COEFF" in data.dtype.names :
         hdulist.append(fits.ImageHDU(data["COEFF"],name="COEFF"))
 
     tmpfile = norm_modelfile+".tmp"
