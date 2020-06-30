@@ -481,7 +481,20 @@ class TestIO(unittest.TestCase):
         data['TEMPLATEID'] = np.arange(nstd)
         data['CHI2DOF'] = np.ones(nstd)
         data['REDSHIFT'] = np.zeros(nstd)
+
+        #- Write with data as Table, array, and dict
         write_stdstar_models(self.testfile, flux, wave, fibers, data)
+        write_stdstar_models(self.testfile, flux, wave, fibers, np.asarray(data))
+
+        datadict = dict()
+        for colname in data.colnames:
+            datadict[colname] = data[colname]
+
+        write_stdstar_models(self.testfile, flux, wave, fibers, datadict)
+
+        #- Now write with coefficients too
+        datadict['COEFF'] = np.zeros((nstd, 3))
+        write_stdstar_models(self.testfile, flux, wave, fibers, datadict)
 
         fx, wx, fibx, metadata = read_stdstar_models(self.testfile)
         self.assertTrue(np.all(fx == flux.astype('f4').astype('f8')))
