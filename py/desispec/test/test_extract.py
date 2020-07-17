@@ -138,12 +138,6 @@ class TestExtract(unittest.TestCase):
         self.assertTrue(np.all(frame1.chi2pix == frame2.chi2pix), errmsg)
         self.assertTrue(np.all(frame1.resolution_data == frame2.resolution_data),errmsg)
 
-        # self.assertTrue(np.all(frame1.flux[0:nspec] == frame2.flux[specmin:specmin+nspec]))
-        # self.assertTrue(np.all(frame1.ivar[0:nspec] == frame2.ivar[specmin:specmin+nspec]))
-        # self.assertTrue(np.all(frame1.mask[0:nspec] == frame2.mask[specmin:specmin+nspec]))
-        # self.assertTrue(np.all(frame1.chi2pix[0:nspec] == frame2.chi2pix[specmin:specmin+nspec]))
-        # self.assertTrue(np.all(frame1.resolution_data[0:nspec] == frame2.resolution_data[specmin:specmin+nspec]))
-
         #- pixel model isn't valid for small bundles that actually overlap; don't test
         # self.assertTrue(np.allclose(model1, model2, rtol=1e-15, atol=1e-15))
 
