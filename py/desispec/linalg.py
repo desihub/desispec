@@ -48,7 +48,7 @@ def cholesky_solve_and_invert(A,B,overwrite=False,lower=False) :
     """
     UorL,lower = scipy.linalg.cho_factor(A, overwrite_a=overwrite)
     X   = scipy.linalg.cho_solve((UorL,lower),B)
-    inv = scipy.linalg.cho_solve((UorL,lower),scipy.eye(A.shape[0]))
+    inv = scipy.linalg.cho_solve((UorL,lower),np.eye(A.shape[0]))
     return X,inv
 
 def cholesky_invert(A) :
@@ -62,7 +62,7 @@ def cholesky_invert(A) :
          cov : 2D positive definite matrix, inverse of A (numpy.ndarray)
     """
     UorL,lower = scipy.linalg.cho_factor(A,overwrite_a=False)
-    inv = scipy.linalg.cho_solve((UorL,lower),scipy.eye(A.shape[0]))
+    inv = scipy.linalg.cho_solve((UorL,lower),np.eye(A.shape[0]))
     return inv
 
 

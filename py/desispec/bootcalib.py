@@ -14,7 +14,6 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 import copy
 import pdb
-import imp
 import yaml
 import glob
 import math
@@ -29,6 +28,13 @@ from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
 from astropy.table import Table, Column, vstack
 from astropy.io import fits
+
+#- support astropy 2.x sigma_clip syntax with `iters` instead of `maxiters`
+import astropy
+if astropy.__version__.startswith('2.'):
+    astropy_sigma_clip = sigma_clip
+    def sigma_clip(data, sigma=None, maxiters=5):
+        return astropy_sigma_clip(data, sigma=sigma, iters=maxiters)
 
 from desispec.util import set_backend
 set_backend()
@@ -137,7 +143,7 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     """
     # Threshold criterion
     npix = spec.size
-    spec_mask = sigma_clip(spec, sigma=4., iters=5)
+    spec_mask = sigma_clip(spec, sigma=4., maxiters=5)
     rms = np.std(spec_mask)
     thresh = rms*rms_thresh
     #print("thresh = {:g}".format(thresh))
@@ -1024,7 +1030,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         while iterate & (niter < max_iter):
             # Clip
             resid = parm(fdimg) - fnimg
-            resid_mask = sigma_clip(resid, sigma=4., iters=5)
+            resid_mask = sigma_clip(resid, sigma=4., maxiters=5)
             # Fit
             gdp = ~resid_mask.mask
             parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
@@ -1091,7 +1097,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False,thresh=None) :
         log.info("Threshold: {:f}".format(thresh))
         pixels_below_threshold=np.where(cut<thresh)[0]
         if pixels_below_threshold.size>2 :
-            values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,iters=200)
+            values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,maxiters=200)
             if values_below_threshold.size>2 :
                 rms=np.std(values_below_threshold)
                 nsig=7

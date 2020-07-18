@@ -7,6 +7,7 @@ IO routines for flux calibration.
 from __future__ import absolute_import, print_function
 import os
 from astropy.io import fits
+from astropy.table import Table
 import numpy,scipy
 
 from desiutil.depend import add_dependencies
@@ -26,6 +27,9 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     hdr = fitsheader(header)
     add_dependencies(hdr)
 
+    #- support input Table, np.array, and dict
+    data = Table(data)
+
     hdr['EXTNAME'] = ('FLUX', '[10**-17 erg/(s cm2 Angstrom)]')
     hdr['BUNIT'] = ('10**-17 erg/(s cm2 Angstrom)', 'Flux units')
     hdu1=fits.PrimaryHDU(normalizedFlux.astype('f4'), header=hdr)
@@ -39,7 +43,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     # metadata
     from astropy.io.fits import Column
     cols=[]
-    for k in data.keys() :
+    for k in data.colnames:
         if len(data[k].shape)==1 :
             cols.append(Column(name=k,format='D',array=data[k]))
     tbhdu=fits.BinTableHDU.from_columns(fits.ColDefs(cols), name='METADATA')
@@ -47,7 +51,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
 
     # add coefficients
-    if "COEFF" in data :
+    if "COEFF" in data.colnames:
         hdulist.append(fits.ImageHDU(data["COEFF"],name="COEFF"))
 
     tmpfile = norm_modelfile+".tmp"
@@ -70,8 +74,7 @@ def read_stdstar_models(filename):
         fibers = native_endian(fx['FIBERS'].data)
         metadata = fx['METADATA'].data
 
-
-    return flux, wave, fibers , metadata
+    return flux, wave, fibers, metadata
 
 
 def write_flux_calibration(outfile, fluxcalib, header=None):
