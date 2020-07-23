@@ -69,7 +69,10 @@ def write_spectra(outfile, spec, units=None):
     # Next is the fibermap
     fmap = spec.fibermap.copy()
     fmap.meta["EXTNAME"] = "FIBERMAP"
-    hdu = fits.convenience.table_to_hdu(fmap)
+    with warnings.catch_warnings():
+        #- nanomaggies aren't an official IAU unit but don't complain
+        warnings.filterwarnings('ignore', '.*nanomaggies.*')
+        hdu = fits.convenience.table_to_hdu(fmap)
 
     # Add comments for fibermap columns.
     for i, colname in enumerate(fmap.dtype.names):

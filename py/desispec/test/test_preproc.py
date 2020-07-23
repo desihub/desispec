@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import unittest
 import os
 import os.path
+import warnings
 from astropy.io import fits
 import numpy as np
 import shutil
@@ -31,6 +32,8 @@ class TestPreProc(unittest.TestCase):
             shutil.rmtree(self.calibdir) 
 
     def setUp(self):
+        #- catch specific warnings so that we can find and fix
+        # warnings.filterwarnings("error", ".*did not parse as fits unit.*")
         
         #- Create temporary calib directory
         self.calibdir  = os.path.join(os.environ['HOME'], 'preproc_unit_test')
@@ -384,7 +387,7 @@ class TestPreProc(unittest.TestCase):
         args = ['--infile', self.rawfile, '--cameras', 'b0',
                 '--outfile', self.pixfile]
         if os.path.exists(self.pixfile):
-            os.remove(self.pixfile)            
+            os.remove(self.pixfile)
         desispec.scripts.preproc.main(args)
         img = io.read_image(self.pixfile)
         self.assertEqual(img.pix.shape, (2*self.ny, 2*self.nx))

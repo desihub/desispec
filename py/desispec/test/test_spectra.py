@@ -7,6 +7,7 @@ import unittest
 import shutil
 import time
 import copy
+import warnings
 
 import numpy as np
 import numpy.testing as nt
@@ -24,6 +25,10 @@ from desispec.io.spectra import *
 class TestSpectra(unittest.TestCase):
 
     def setUp(self):
+        #- catch specific warnings so that we can find and fix
+        # warnings.filterwarnings("error", ".*did not parse as fits unit.*")
+
+        #- Test data and files to work with
         self.fileio = "test_spectra.fits"
         self.fileappend = "test_spectra_append.fits"
         self.filebuild = "test_spectra_build.fits"
