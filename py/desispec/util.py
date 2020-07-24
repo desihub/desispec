@@ -83,7 +83,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
                 print("   ", x)
 
     #- run command
-    if isinstance(cmd, collections.Callable):
+    if isinstance(cmd, collections.abc.Callable):
         if args is None:
             return cmd()
         else:

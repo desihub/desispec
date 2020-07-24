@@ -6,6 +6,7 @@ I/O routines for Image objects
 """
 
 import os
+import warnings
 import numpy as np
 
 from desispec.image import Image
@@ -61,7 +62,10 @@ def write_image(outfile, image, meta=None):
 
     if hasattr(image, 'fibermap'):
         if isinstance(image.fibermap, Table):
-            fmhdu = fits.convenience.table_to_hdu(image.fibermap)
+            with warnings.catch_warnings():
+                #- nanomaggies aren't an official IAU unit but don't complain
+                warnings.filterwarnings('ignore', ".*nanomaggies.*")
+                fmhdu = fits.convenience.table_to_hdu(image.fibermap)
             fmhdu.name = 'FIBERMAP'
         else:
             fmhdu = fits.BinTableHDU(image.fibermap, name='FIBERMAP')

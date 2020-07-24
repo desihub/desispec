@@ -50,7 +50,7 @@ def read_qa_data(filename):
         qa_data = yaml.safe_load(infile)
     # Convert expid to int
     for night in qa_data.keys():
-        for expid in qa_data[night].keys():
+        for expid in list(qa_data[night].keys()):
             if isinstance(expid,str):
                 qa_data[night][int(expid)] = qa_data[night][expid].copy()
                 qa_data[night].pop(expid)
