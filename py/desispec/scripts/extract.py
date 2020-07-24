@@ -65,6 +65,8 @@ def parse(options=None):
     # parser.add_argument("--fibermap-index", type=int, default=None, required=False,
     #                     help="start at this index in the fibermap table instead of using the spectro id from the camera")
     parser.add_argument("--barycentric-correction", action="store_true", help="apply barycentric correction to wavelength")
+    parser.add_argument("--gpu-specter", action="store_true", help="use gpu_specter instead of specter")
+    parser.add_argument("--gpu", action="store_true", help="use gpu device for extraction when using gpu_specter")
     
     args = None
     if options is None:
@@ -131,13 +133,167 @@ def barycentric_correction_multiplicative_factor(header) :
 
 def main(args):
 
+    if args.gpu_specter:
+        return main_gpu_specter(args)
+
     if args.mpi:
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         return main_mpi(args, comm)
     else:
         return main_mpi(args, comm=None)
+
+def gpu_specter_check_input_options(args):
+    """
+    Perform pre-flight checks on input options
+
+    returns ok(True/False), message
+    """
+    if args.bundlesize % args.nsubbundles != 0:
+        msg = 'bundlesize ({}) must be evenly divisible by nsubbundles ({})'.format(
+            args.bundlesize, args.nsubbundles)
+        return False, msg
+
+    if args.nspec % args.bundlesize != 0:
+        msg = 'nspec ({}) must be evenly divisible by bundlesize ({})'.format(
+            args.nspec, args.bundlesize)
+        return False, msg
+
+    if args.specmin % args.bundlesize != 0:
+        msg = 'specmin ({}) must begin at a bundle boundary'.format(args.specmin)
+        return False, msg
+
+    if args.gpu:
+        try:
+            import cupy as cp
+        except ImportError:
+            return False, 'cannot import module cupy'
+        if not cp.is_available():
+            return False, 'gpu is not available'
+        if cp.cuda.runtime.getDeviceCount() > 1 and not args.mpi:
+            return False, 'mpi is required to run with multiple gpu devices'
+
+    if args.fibermap:
+        msg = "--fibermap not implemented with --gpu-specter"
+        return False, msg
+
+    if args.model:
+        msg = "--model not implemented with --gpu-specter"
+        return False, msg
+
+    if args.regularize:
+        msg = "--regularize not implemented with --gpu-specter"
+        return False, msg
+
+    if args.decorrelate_fibers:
+        msg = "--decorrelate-fibers not implemented with --gpu-specter"
+        return False, msg
+
+    if not args.no_scores:
+        msg = "--no-scores is required with --gpu-specter"
+        return False, msg
+
+    if args.psferr:
+        msg = "--psferr not implemented with --gpu-specter"
+        return False, msg
+
+    # if args.fibermap_index:
+    #     msg = "--fibermap-index not implemented with --gpu-specter"
+    #     return False, msg
+
+    return True, 'OK'
+
+def main_gpu_specter(args):
+
+    log = get_logger()
+
+    #- Preflight checks on input arguments
+    ok, message = gpu_specter_check_input_options(args)
+    if not ok:
+        log.critical(message)
+        raise ValueError(message)
+
+    import gpu_specter.io
+    import gpu_specter.core
+
+    #- Load MPI only if requested
+    if args.mpi:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank, size = comm.rank, comm.size
+    else:
+        comm = None
+        rank, size = 0, 1
+
+    #- Load inputs
+    img = psf = None
+    corrected_wavelength = None
+    if rank == 0:
+        img = gpu_specter.io.read_img(args.input)
+        psf = gpu_specter.io.read_psf(args.psf)
+
+        #- Configure wavelength range
+        if args.wavelength is not None:
+            wmin, wmax, dw = map(float, args.wavelength.split(','))
+        else:
+            wmin, wmax = psf['PSF'].meta['WAVEMIN'], psf['PSF'].meta['WAVEMAX']
+            dw = 0.8
+
+        if rank == 0:
+            log.info(f'Extracting wavelengths {wmin},{wmax},{dw}')
+
+        #- Wave includes boundaries wmin, wmax
+        wave = np.arange(wmin, wmax + 0.5*dw, dw)
+
+        if args.barycentric_correction:
+            freeze_iers()
+            if ('RA' in img['imagehdr']) or ('TARGTRA' in img['imagehdr']):
+                barycentric_correction_factor = \
+                        barycentric_correction_multiplicative_factor(img['imagehdr'])
+            #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
+            # elif fibermap is not None and \
+            #         (('RA' in fibermap.meta) or ('TARGTRA' in fibermap.meta)):
+            #     barycentric_correction_factor = \
+            #             barycentric_correction_multiplicative_factor(fibermap.meta)
+            else:
+                msg = 'Barycentric corr requires (TARGT)RA in HDU 0 or fibermap'
+                log.critical(msg)
+                raise KeyError(msg)
+        else :
+            barycentric_correction_factor = 1.
+
+        log.info('Applying barycentric_correction_factor: {}'.format(barycentric_correction_factor))
     
+        #- Explictly define the correct wavelength values to avoid confusion of reference frame
+        #- If correction applied, otherwise divide by 1 and use the same raw values
+        corrected_wmin = wmin/barycentric_correction_factor
+        corrected_wmax = wmax/barycentric_correction_factor
+        corrected_dw = dw/barycentric_correction_factor
+
+        #- Reconstruct wavelength string using corrected values
+        corrected_wavelength = ','.join(map(str, (corrected_wmin, corrected_wmax, corrected_dw)))
+
+    if comm is not None:
+        corrected_wavelength = comm.bcast(corrected_wavelength, root=0)
+
+    #- Perform extraction
+    frame = gpu_specter.core.extract_frame(
+        img, psf, args.bundlesize,         # input data
+        args.specmin, args.nspec,          # spectra to extract (specmin, specmin + nspec)
+        corrected_wavelength,              # wavelength range to extract
+        args.nwavestep, args.nsubbundles,  # extraction algorithm parameters
+        comm, rank, size,                  # mpi parameters
+        args.gpu,                          # gpu parameters
+    )
+
+    #- Write output
+    if rank == 0:
+        #- Use the uncorrected wave for output
+        frame['wave'] = wave
+
+        log.info("Writing {}".format(args.output))
+        gpu_specter.io.write_frame(args.output, frame)
+
 
 def main_mpi(args, comm=None, timing=None):
     freeze_iers()
