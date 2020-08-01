@@ -14,9 +14,9 @@ import argparse
 import numpy as np
 from astropy.io import fits
 
-import specter
-from specter.psf import load_psf
-from specter.extract import ex2d
+# import specter
+# from specter.psf import load_psf
+# from specter.extract import ex2d
 
 from desiutil.log import get_logger
 from desiutil.iers import freeze_iers
@@ -154,6 +154,9 @@ def gpu_specter_check_input_options(args):
             args.bundlesize, args.nsubbundles)
         return False, msg
 
+    if args.nspec is None:
+        args.nspec = 500
+
     if args.nspec % args.bundlesize != 0:
         msg = 'nspec ({}) must be evenly divisible by bundlesize ({})'.format(
             args.nspec, args.bundlesize)
@@ -177,24 +180,8 @@ def gpu_specter_check_input_options(args):
         msg = "--fibermap not implemented with --gpu-specter"
         return False, msg
 
-    if args.model:
-        msg = "--model not implemented with --gpu-specter"
-        return False, msg
-
-    if args.regularize:
-        msg = "--regularize not implemented with --gpu-specter"
-        return False, msg
-
     if args.decorrelate_fibers:
         msg = "--decorrelate-fibers not implemented with --gpu-specter"
-        return False, msg
-
-    if not args.no_scores:
-        msg = "--no-scores is required with --gpu-specter"
-        return False, msg
-
-    if args.psferr:
-        msg = "--psferr not implemented with --gpu-specter"
         return False, msg
 
     # if args.fibermap_index:
@@ -226,11 +213,17 @@ def main_gpu_specter(args):
         rank, size = 0, 1
 
     #- Load inputs
-    img = psf = None
+    image = psf = None
     corrected_wavelength = None
     if rank == 0:
-        img = gpu_specter.io.read_img(args.input)
+        img = io.read_image(args.input)
+        image = {
+            'image': img.pix,
+            'ivar': img.ivar*(img.mask==0)
+        }
         psf = gpu_specter.io.read_psf(args.psf)
+
+        fibermap = io.read_fibermap(args.input)
 
         #- Configure wavelength range
         if args.wavelength is not None:
@@ -247,14 +240,14 @@ def main_gpu_specter(args):
 
         if args.barycentric_correction:
             freeze_iers()
-            if ('RA' in img['imagehdr']) or ('TARGTRA' in img['imagehdr']):
+            if ('RA' in img.meta) or ('TARGTRA' in img.meta):
                 barycentric_correction_factor = \
-                        barycentric_correction_multiplicative_factor(img['imagehdr'])
+                        barycentric_correction_multiplicative_factor(img.meta)
             #- Early commissioning has RA/TARGTRA in fibermap but not HDU 0
-            # elif fibermap is not None and \
-            #         (('RA' in fibermap.meta) or ('TARGTRA' in fibermap.meta)):
-            #     barycentric_correction_factor = \
-            #             barycentric_correction_multiplicative_factor(fibermap.meta)
+            elif fibermap is not None and \
+                    (('RA' in fibermap.meta) or ('TARGTRA' in fibermap.meta)):
+                barycentric_correction_factor = \
+                        barycentric_correction_multiplicative_factor(fibermap.meta)
             else:
                 msg = 'Barycentric corr requires (TARGT)RA in HDU 0 or fibermap'
                 log.critical(msg)
@@ -262,8 +255,6 @@ def main_gpu_specter(args):
         else :
             barycentric_correction_factor = 1.
 
-        log.info('Applying barycentric_correction_factor: {}'.format(barycentric_correction_factor))
-    
         #- Explictly define the correct wavelength values to avoid confusion of reference frame
         #- If correction applied, otherwise divide by 1 and use the same raw values
         corrected_wmin = wmin/barycentric_correction_factor
@@ -273,26 +264,90 @@ def main_gpu_specter(args):
         #- Reconstruct wavelength string using corrected values
         corrected_wavelength = ','.join(map(str, (corrected_wmin, corrected_wmax, corrected_dw)))
 
+        log.info('Applying barycentric_correction_factor: {}'.format(barycentric_correction_factor))
+
+        #- Print parameters                                                                                    
+        log.info("extract:  input = {}".format(args.input))
+        log.info("extract:  psf = {}".format(args.psf))
+        log.info("extract:  specmin = {}".format(args.specmin))
+        log.info("extract:  nspec = {}".format(args.nspec))
+        log.info("extract:  wavelength = {},{},{}".format(wmin, wmax, dw))
+        log.info("extract:  nwavestep = {}".format(args.nwavestep))
+        log.info("extract:  regularize = {}".format(args.regularize))
+    
+        if barycentric_correction_factor != 1. :
+            img.meta['HELIOCOR']   = barycentric_correction_factor
+
+        #- Augment input image header for output                                
+        img.meta['NSPEC']   = (args.nspec, 'Number of spectra')
+        img.meta['WAVEMIN'] = (wmin, 'First wavelength [Angstroms]')
+        img.meta['WAVEMAX'] = (wmax, 'Last wavelength [Angstroms]')
+        img.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
+        img.meta['SPECTER'] = ('dev', 'https://github.com/sbailey/gpu_specter')
+        img.meta['IN_PSF']  = (_trim(args.psf), 'Input spectral PSF')
+        img.meta['IN_IMG']  = (_trim(args.input), 'Input image')
+
     if comm is not None:
         corrected_wavelength = comm.bcast(corrected_wavelength, root=0)
 
     #- Perform extraction
-    frame = gpu_specter.core.extract_frame(
-        img, psf, args.bundlesize,         # input data
+    result = gpu_specter.core.extract_frame(
+        image, psf, args.bundlesize,       # input data
         args.specmin, args.nspec,          # spectra to extract (specmin, specmin + nspec)
         corrected_wavelength,              # wavelength range to extract
         args.nwavestep, args.nsubbundles,  # extraction algorithm parameters
+        args.model,
+        args.regularize,
+        args.psferr,
         comm, rank, size,                  # mpi parameters
         args.gpu,                          # gpu parameters
     )
 
     #- Write output
     if rank == 0:
-        #- Use the uncorrected wave for output
-        frame['wave'] = wave
+        flux = result['specflux']
+        ivar = result['specivar']
+        mask = result['specmask']
+        Rdiags = result['Rdiags']
+        pixmask_fraction = result['pixmask_fraction']
+        chi2pix = result['chi2pix']
 
-        log.info("Writing {}".format(args.output))
-        gpu_specter.io.write_frame(args.output, frame)
+        #- Compute the output mask
+        mask = np.zeros(flux.shape, dtype=np.uint32)
+        mask[pixmask_fraction > 0.5] |= specmask.SOMEBADPIX
+        mask[pixmask_fraction == 1.0] |= specmask.ALLBADPIX
+        mask[chi2pix > 100.0] |= specmask.BAD2DFIT
+
+        fibers = np.arange(args.specmin, args.specmin+args.nspec)
+        fibermap = fibermap[args.specmin:args.specmin+args.nspec]
+        # print(fibermap['FIBER'])
+
+        #- Use the uncorrected wave for output
+        frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdiags,
+                  fibers=fibers, meta=img.meta, fibermap=fibermap,
+                  chi2pix=chi2pix)
+
+        #- Add unit
+        #   In specter.extract.ex2d one has flux /= dwave
+        #   to convert the measured total number of electrons per
+        #   wavelength node to an electron 'density'
+        frame.meta['BUNIT'] = 'count/Angstrom'
+
+        #- Add scores to frame                                                               
+        if not args.no_scores:
+            log.info('Computing scores and appending to frame')
+            compute_and_append_frame_scores(frame, suffix="RAW")
+
+        #- Write it out
+        log.info("Writing frame {}".format(args.output))
+        # desispec.io
+        io.write_frame(args.output, frame)
+
+        if args.model is not None:
+            modelimage = result['modelimage']
+            log.info("Writing model {}".format(args.output))
+            fits.writeto(args.model+'.tmp', modelimage, header=frame.meta, overwrite=True, checksum=True)
+            os.rename(args.model+'.tmp', args.model)
 
 
 def main_mpi(args, comm=None, timing=None):
