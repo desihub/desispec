@@ -14,9 +14,9 @@ import argparse
 import numpy as np
 from astropy.io import fits
 
-# import specter
-# from specter.psf import load_psf
-# from specter.extract import ex2d
+import specter
+from specter.psf import load_psf
+from specter.extract import ex2d
 
 from desiutil.log import get_logger
 from desiutil.iers import freeze_iers
