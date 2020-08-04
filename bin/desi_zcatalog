@@ -37,22 +37,43 @@ def match(table1,table2,key="TARGETID") :
     Returns joined table
     """
     
+    log=get_logger()
     k1=table1[key]
     k2=table2[key]
+    log.debug(f'Mapping {key} between tables')
     d2  =  {v : i for i,v in enumerate(k2)}
     i21 = np.array([d2.get(v,-1) for v in k1]) # not always a match
     ok=(i21>=0)
+
+    #- lists of columns to add
+    colnames = list()
+    coldata = list()
+
+    log.debug('Identifying columns to add')
     for k in table2.dtype.names :
-        if k in table1.dtype.names : continue # do not duplicate columns
+        if k in table1.dtype.names :
+            log.debug(f'Skipping {k} already in table1')
+            continue # do not duplicate columns
 
         #- Special cases of known 2D columns that will fail append_fields
         if k == 'DCHISQ':
-            log=get_logger()
             log.warning('Dropping 2D column {}'.format(k))
             continue
 
-        table1=append_fields(table1,k,np.zeros(k1.size).astype(table2[k].dtype)) 
+        # log.debug(f'Appending {k} to table1')
+        colnames.append(k)
+        coldata.append(np.zeros(k1.size, dtype=table2[k].dtype))
+
+    numnewcol = len(colnames)
+    numrows1 = len(table1)
+    log.debug(f"Adding {numnewcol} columns x {numrows1} rows to table1")
+    table1=append_fields(table1, colnames, coldata)
+
+    log.debug('Filling in data from table2')
+    for k in colnames:
         table1[k][ok]=table2[k][i21[ok]] # unmatched values are set the 0 value corresponding to the dtype
+
+    log.debug(f'Done with matching tables on {key}')
     return table1
     
 
