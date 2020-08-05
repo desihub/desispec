@@ -2,10 +2,27 @@
 desispec Change Log
 ===================
 
-0.34.5 (unreleased)
+0.34.6 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.34.5 (2020-08-04)
+-------------------
+
+* Faster desi_zcatalog merging with target table (PR `#994`_).
+* Python 3.8 support (PR `#990`_).
+* Astropy 4.x support (PR `#989`_).
+* Update CCD mask generation code (PR `#987`_).
+* Update desispec.io.download to use data.desi.lbl.gov (PR `#972`_).
+* Use middle of exposure for barycentric correction time (PR `#971`_).
+
+.. _`#994`: https://github.com/desihub/desispec/issues/994
+.. _`#990`: https://github.com/desihub/desispec/issues/990
+.. _`#989`: https://github.com/desihub/desispec/issues/989
+.. _`#987`: https://github.com/desihub/desispec/issues/987
+.. _`#972`: https://github.com/desihub/desispec/issues/972
+.. _`#971`: https://github.com/desihub/desispec/issues/971
 
 0.34.4 (2020-04-21)
 -------------------
