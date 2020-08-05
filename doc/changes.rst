@@ -2,10 +2,15 @@
 desispec Change Log
 ===================
 
-0.34.6 (unreleased)
+0.34.7 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.34.6 (2020-08-04)
+-------------------
+
+* Extend runtime limit for spectra regrouping task (hotfix to master).
 
 0.34.5 (2020-08-04)
 -------------------
