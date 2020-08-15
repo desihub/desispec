@@ -133,15 +133,16 @@ def barycentric_correction_multiplicative_factor(header) :
 
 def main(args):
 
-    if args.gpu_specter:
-        return main_gpu_specter(args)
-
     if args.mpi:
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
-        return main_mpi(args, comm)
     else:
-        return main_mpi(args, comm=None)
+        comm = None
+
+    if args.gpu_specter:
+        return main_gpu_specter(args, comm)
+    else:
+        return main_mpi(args, comm)
 
 def gpu_specter_check_input_options(args):
     """
@@ -190,7 +191,10 @@ def gpu_specter_check_input_options(args):
 
     return True, 'OK'
 
-def main_gpu_specter(args):
+def main_gpu_specter(args, comm=None):
+    freeze_iers()
+
+    time_start = time.time()
 
     log = get_logger()
 
@@ -204,9 +208,7 @@ def main_gpu_specter(args):
     import gpu_specter.core
 
     #- Load MPI only if requested
-    if args.mpi:
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
+    if comm is not None:
         rank, size = comm.rank, comm.size
     else:
         comm = None
@@ -239,7 +241,6 @@ def main_gpu_specter(args):
         wave = np.arange(wmin, wmax + 0.5*dw, dw)
 
         if args.barycentric_correction:
-            freeze_iers()
             if ('RA' in img.meta) or ('TARGTRA' in img.meta):
                 barycentric_correction_factor = \
                         barycentric_correction_multiplicative_factor(img.meta)
@@ -290,6 +291,8 @@ def main_gpu_specter(args):
     if comm is not None:
         corrected_wavelength = comm.bcast(corrected_wavelength, root=0)
 
+    time_setup = time.time()
+
     #- Perform extraction
     result = gpu_specter.core.extract_frame(
         image, psf, args.bundlesize,       # input data
@@ -302,6 +305,8 @@ def main_gpu_specter(args):
         comm, rank, size,                  # mpi parameters
         args.gpu,                          # gpu parameters
     )
+
+    time_extract = time.time()
 
     #- Write output
     if rank == 0:
@@ -318,8 +323,9 @@ def main_gpu_specter(args):
         mask[pixmask_fraction == 1.0] |= specmask.ALLBADPIX
         mask[chi2pix > 100.0] |= specmask.BAD2DFIT
 
-        fibers = np.arange(args.specmin, args.specmin+args.nspec)
+        #- TODO: what should this be?
         fibermap = fibermap[args.specmin:args.specmin+args.nspec]
+        fibers = fibermap['FIBER']
         # print(fibermap['FIBER'])
 
         #- Use the uncorrected wave for output
@@ -348,6 +354,13 @@ def main_gpu_specter(args):
             log.info("Writing model {}".format(args.output))
             fits.writeto(args.model+'.tmp', modelimage, header=frame.meta, overwrite=True, checksum=True)
             os.rename(args.model+'.tmp', args.model)
+
+        time_write = time.time()
+
+        name = os.path.basename(args.output)
+        log.info(f"{name} setup-time: {time_setup - time_start:0.2f}")
+        log.info(f"{name} extract-time: {time_extract - time_setup:0.2f}")
+        log.info(f"{name} write-time: {time_write - time_extract:0.2f}")
 
 
 def main_mpi(args, comm=None, timing=None):
