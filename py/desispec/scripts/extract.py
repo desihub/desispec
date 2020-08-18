@@ -191,7 +191,7 @@ def gpu_specter_check_input_options(args):
 
     return True, 'OK'
 
-def main_gpu_specter(args, comm=None):
+def main_gpu_specter(args, comm=None, timing=None):
     freeze_iers()
 
     time_start = time.time()
@@ -294,6 +294,7 @@ def main_gpu_specter(args, comm=None):
     time_setup = time.time()
 
     #- Perform extraction
+    core_timing = dict()
     result = gpu_specter.core.extract_frame(
         image, psf, args.bundlesize,       # input data
         args.specmin, args.nspec,          # spectra to extract (specmin, specmin + nspec)
@@ -304,6 +305,8 @@ def main_gpu_specter(args, comm=None):
         args.psferr,
         comm, rank, size,                  # mpi parameters
         args.gpu,                          # gpu parameters
+        loglevel=None,
+        timing=core_timing,
     )
 
     time_extract = time.time()
@@ -326,7 +329,6 @@ def main_gpu_specter(args, comm=None):
         #- TODO: what should this be?
         fibermap = fibermap[args.specmin:args.specmin+args.nspec]
         fibers = fibermap['FIBER']
-        # print(fibermap['FIBER'])
 
         #- Use the uncorrected wave for output
         frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdiags,
@@ -355,8 +357,16 @@ def main_gpu_specter(args, comm=None):
             fits.writeto(args.model+'.tmp', modelimage, header=frame.meta, overwrite=True, checksum=True)
             os.rename(args.model+'.tmp', args.model)
 
-        time_write = time.time()
+    time_write = time.time()
 
+    if isinstance(timing, dict):
+        timing["frame-start"] = time_start
+        timing["frame-setup"] = time_setup
+        timing.update(core_timing)
+        timing["frame-extract"] = time_extract
+        timing["frame-write"] = time_write
+
+    if rank == 0:
         name = os.path.basename(args.output)
         log.info(f"{name} setup-time: {time_setup - time_start:0.2f}")
         log.info(f"{name} extract-time: {time_extract - time_setup:0.2f}")
