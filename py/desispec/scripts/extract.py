@@ -223,9 +223,13 @@ def main_gpu_specter(args, comm=None, timing=None):
             'image': img.pix,
             'ivar': img.ivar*(img.mask==0)
         }
+        #- TODO: check compatibility with specter.psf.load_psf
         psf = gpu_specter.io.read_psf(args.psf)
 
-        fibermap = io.read_fibermap(args.input)
+        try:
+            fibermap = io.read_fibermap(args.input)
+        except:
+            fibermap = None
 
         #- Configure wavelength range
         if args.wavelength is not None:
@@ -327,8 +331,11 @@ def main_gpu_specter(args, comm=None, timing=None):
         mask[chi2pix > 100.0] |= specmask.BAD2DFIT
 
         #- TODO: what should this be?
-        fibermap = fibermap[args.specmin:args.specmin+args.nspec]
-        fibers = fibermap['FIBER']
+        if fibermap is not None:
+            fibermap = fibermap[args.specmin:args.specmin+args.nspec]
+            fibers = fibermap['FIBER']
+        else:
+            fibers = np.arange(args.specmin, args.specmin+args.nspec)
 
         #- Use the uncorrected wave for output
         frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdiags,
