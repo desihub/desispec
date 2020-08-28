@@ -5,7 +5,10 @@ desispec Change Log
 0.34.7 (unreleased)
 -------------------
 
-* No changes yet.
+* Switch desi_proc to use fitsio instead of astropy.io.fits to work around
+  incompatibility between mpi4py and astropy 4 (PR `#996`_).
+
+.. _`#996`: https://github.com/desihub/desispec/issues/996
 
 0.34.6 (2020-08-04)
 -------------------
