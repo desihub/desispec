@@ -154,11 +154,11 @@ else:
     #- Fill in values from raw data header if not overridden by command line
     fx = fitsio.FITS(args.input)
     if 'SPEC' in fx:                                #- 20200225 onwards
-        hdr = fits.getheader(args.input, 'SPEC')
-        #hdr = fx['SPEC'].read_header()
+        #hdr = fits.getheader(args.input, 'SPEC')
+        hdr = fx['SPEC'].read_header()
     elif 'SPS' in fx:                               #- 20200224 and before
-        hdr = fits.getheader(args.input, 'SPS')
-        #hdr = fx['SPS'].read_header()
+        #hdr = fits.getheader(args.input, 'SPS')
+        hdr = fx['SPS'].read_header()
     else:
         #hdr = fits.getheader(args.input, 0)
         hdr = fx[0].read_header()
