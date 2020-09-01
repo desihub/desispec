@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.34.7 (unreleased)
+0.34.8 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.34.7 (2020-09-01)
 -------------------
 
 * Switch desi_proc to use fitsio instead of astropy.io.fits to work around
