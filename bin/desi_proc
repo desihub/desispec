@@ -66,6 +66,7 @@ def get_desi_proc_parser():
     parser.add_argument("--traceshift", action="store_true", help="Do shift traces")
     parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
     parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
+    parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard star")
     parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
     parser.add_argument('--maxstdstars', type=int, default=None, \
                         help='Maximum number of stdstars to include')
@@ -689,26 +690,6 @@ if args.obstype in ['ARC', 'TESTARC']:
 
         
 #-------------------------------------------------------------------------
-#- Merge PSF of night if applicable
-
-#if args.obstype in ['ARC']:
-if False:
-    if rank == 0:
-        for camera in args.cameras :
-            psfnightfile = findfile('psfnight', args.night, args.expid, camera)
-            if not os.path.isfile(psfnightfile) : # we still don't have a psf night, see if we can compute it ...
-                psfs = glob.glob(findfile('psf', args.night, args.expid, camera).replace("psf","fit-psf").replace(str(args.expid),"*"))
-                log.info("Number of PSF for night={} camera={} = {}".format(args.night,camera,len(psfs)))
-                if len(psfs)>4 : # lets do it!
-                    log.info("Computing psfnight ...")
-                    dirname=os.path.dirname(psfnightfile)
-                    if not os.path.isdir(dirname) :
-                        os.makedirs(dirname)
-                    desispec.scripts.specex.mean_psf(psfs,psfnightfile)
-            if os.path.isfile(psfnightfile) : # now use this one
-                input_psf[camera] = psfnightfile
-
-#-------------------------------------------------------------------------
 #- Extract
 #- This is MPI parallel so handle a bit differently
 
@@ -815,72 +796,6 @@ if args.obstype in ['FLAT', 'TESTFLAT'] :
 
     if rank == 0:
         progress['fiberflat'] = time.asctime()
-
-#-------------------------------------------------------------------------
-#- Average and auto-calib fiberflats of night if applicable
-
-#if args.obstype in ['FLAT']:
-if False:
-    if rank == 0:
-        fiberflatnightfile = findfile('fiberflatnight', args.night, args.expid, args.cameras[0])
-        fiberflatdirname=os.path.dirname(fiberflatnightfile)
-        if not os.path.isfile(fiberflatnightfile) and len(args.cameras)>=6 : # we still don't have them, see if we can compute them, but need at least 2 spectros ...
-            flats = glob.glob(findfile('fiberflat', args.night, args.expid, "b0").replace(str(args.expid),"*").replace("b0","*"))
-            log.info("Number of fiberflat for night {} = {}".format(args.night,len(flats)))
-            if len(flats)>=3*4*len(args.cameras) : # lets do it! (3 exposures x 4 lamps x N cameras)
-                log.info("Computing fiberflatnight per lamp and camera ...")
-                tmpdir=os.path.join(fiberflatdirname,"tmp")
-                if not os.path.isdir(tmpdir) :
-                    os.makedirs(tmpdir)
-
-                log.info("First average measurements per camera and per lamp")
-                average_flats=dict()
-                for camera in args.cameras :
-                    # list of flats for this camera
-                    flats_for_this_camera=[]
-                    for flat in flats :
-                        if flat.find(camera)>=0 :
-                            flats_for_this_camera.append(flat)
-                    #log.info("For camera {} , flats = {}".format(camera,flats_for_this_camera))
-                    #sys.exit(12)
-                            
-                    # average per lamp (and camera)
-                    average_flats[camera] = list()
-                    for lampbox in range(4) :
-                        ofile=os.path.join(tmpdir,"fiberflatnight-camera-{}-lamp-{}.fits".format(camera,lampbox))
-                        if not os.path.isfile(ofile) : 
-                            log.info("Average flat for camera {} and lamp box #{}".format(camera,lampbox))
-                            pg="CALIB DESI-CALIB-0{} LEDs only".format(lampbox)
-                        
-                            cmd="desi_average_fiberflat --program '{}' --outfile {} -i ".format(pg,ofile)
-                            for flat in flats_for_this_camera :
-                                cmd += " {} ".format(flat)
-                            runcmd(cmd, inputs=flats_for_this_camera, outputs=[ofile,])
-                            if os.path.isfile(ofile) :
-                                average_flats[camera].append(ofile)
-                        else :
-                            log.info("Will use existing {}".format(ofile))
-                            average_flats[camera].append(ofile)
-
-                log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
-                for camera_arm in ["b","r","z"] :
-                    cameras_for_this_arm = []
-                    flats_for_this_arm = []
-                    for camera in args.cameras :
-                        if camera[0].lower() == camera_arm :
-                            cameras_for_this_arm.append(camera)
-                            if camera in average_flats :
-                                 for flat in average_flats[camera] :
-                                     flats_for_this_arm.append(flat)
-                    cmd="desi_autocalib_fiberflat --night {} --arm {} -i ".format(args.night,camera_arm)
-                    for flat in flats_for_this_arm :
-                        cmd += " {} ".format(flat)
-                    runcmd(cmd, inputs=flats_for_this_arm, outputs=[])
-                log.info("Done with fiber flats per night")
-
-
-    if comm is not None:
-        comm.barrier()
 
 #-------------------------------------------------------------------------
 #- Get input fiberflat
@@ -1037,14 +952,14 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
         progress['sky'] = time.asctime()
 
 #-------------------------------------------------------------------------
-#- Flux calibration
+#- Standard Star Fitting
 
 if args.obstype in ['SCIENCE',] and \
         (not args.noskysub ) and \
-        (not args.nofluxcalib) :
+        (not args.nostdstarfit ) :
 
     if rank == 0:
-        log.info('Starting flux calibration at {}'.format(time.asctime()))
+        log.info('Starting standard star fitting at {}'.format(time.asctime()))
 
     #- Group inputs by spectrograph
     framefiles = dict()
@@ -1087,6 +1002,16 @@ if args.obstype in ['SCIENCE',] and \
 
     if comm is not None:
         comm.barrier()
+
+#-------------------------------------------------------------------------                                             
+#- Flux calibration
+
+if args.obstype in ['SCIENCE',] and \
+        (not args.noskysub ) and \
+        (not args.nofluxcalib) :
+
+    if rank == 0:
+        log.info('Starting flux calibration at {}'.format(time.asctime()))
 
     #- Compute flux calibration vectors per camera
     for camera in args.cameras[rank::size]:
