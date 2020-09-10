@@ -398,3 +398,35 @@ def decode_camword(camword):
                 camlist.append(key+searchstr[0])
             searchstr = searchstr[1:]
     return np.sort(camlist)
+
+
+def find_most_recent(night, file_type='psfnight', n_nights=30):
+    '''                                                                                                                             
+       Searches back in time for either psfnight or fiberflatnight (or anything supported by                                        
+       desispec.calibfinder.findcalibfile.                                                                                          
+                                                                                                                                    
+       Inputs:                                                                                                                      
+         night : str YYYMMDD   night to look back from                                                                              
+         file_type : str psfnight or fiberflatnight                                                                                 
+         n_nights : int  number of nights to step back before giving up                                                             
+                                                                                                                                    
+      returns:                                                                                                                      
+         nightfile : str Full pathname to calibration file of interest.                                                             
+                     If none found, None is returned.                                                                               
+                                                                                                                                    
+    '''
+    # Set the time as Noon on the day in question                                                                                   
+    today = time.strptime('{} 12'.format(night),'%Y%m%d %H')
+    one_day = 60*60*24 # seconds                                                                              \                     
+
+    test_night_struct = today
+
+    # Search a month in the past                                                                                                    
+    for daysback in range(n_nights) :
+        test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
+        test_night_str = time.strftime('%Y%m%d', test_night_struct)
+        nightfile = findfile(file_type, test_night_str, '00000000', camera)
+        if os.path.isfile(nightfile) :
+            return nightfile
+
+    return None
