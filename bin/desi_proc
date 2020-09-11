@@ -64,9 +64,11 @@ def get_desi_proc_parser():
     parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
     parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
     parser.add_argument("--traceshift", action="store_true", help="Do shift traces")
+    parser.add_argument("--noprestdstarfit", action="store_true", help="Do not do any science reductions prior to stdstar fitting")
     parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
-    parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
-    parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard star")
+    parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky. Also skips stdstar fit and flux calib")
+    parser.add_argument("--noprestdstarfit", action="store_true", help="Do not do any science reductions prior to stdstar fitting")
+    parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard stars")
     parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
     parser.add_argument('--maxstdstars', type=int, default=None, \
                         help='Maximum number of stdstars to include')
@@ -418,7 +420,7 @@ if rank == 0:
 
 #-------------------------------------------------------------------------
 #- Preproc
-#- All obstypes get preprocessed
+#- All obstypes get preprocessed (unless noprestdstarfit)
 
 if rank == 0:
     log.info('Starting preproc at {}'.format(time.asctime()))
@@ -464,24 +466,25 @@ if args.obstype == 'SCIENCE' and not fibermap_ok:
 if comm is not None:
     fibermap = comm.bcast(fibermap, root=0)
 
-for i in range(rank, len(args.cameras), size):
-    camera = args.cameras[i]
-    outfile = findfile('preproc', args.night, args.expid, camera)
-    outdir = os.path.dirname(outfile)
-    cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
-        args.input, outfile, outdir, camera)
-    if args.scattered_light :
-        cmd += " --scattered-light"
-    if fibermap is not None:
-        cmd += " --fibermap {}".format(fibermap)
+if not (args.obstype in ['SCIENCE',] and args.noprestdstarfit):
+    for i in range(rank, len(args.cameras), size):
+        camera = args.cameras[i]
+        outfile = findfile('preproc', args.night, args.expid, camera)
+        outdir = os.path.dirname(outfile)
+        cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
+            args.input, outfile, outdir, camera)
+        if args.scattered_light :
+            cmd += " --scattered-light"
+        if fibermap is not None:
+            cmd += " --fibermap {}".format(fibermap)
 
-    runcmd(cmd, inputs=[args.input], outputs=[outfile])
+        runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
-if comm is not None:
-    comm.barrier()
+    if comm is not None:
+        comm.barrier()
 
-if rank == 0:
-    progress['preproc'] = time.asctime()
+    if rank == 0:
+        progress['preproc'] = time.asctime()
 
 #-------------------------------------------------------------------------
 #- Get input PSFs
@@ -518,8 +521,8 @@ if comm is not None:
 #-------------------------------------------------------------------------
 #- Traceshift
 
-if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
-
+if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or
+   ( args.obstype in ['SCIENCE',] and (not args.noprestdstarfit) ):
     if rank == 0 and args.traceshift :
         log.info('Starting traceshift at {}'.format(time.asctime()))
 
@@ -694,8 +697,8 @@ if args.obstype in ['ARC', 'TESTARC']:
 #- This is MPI parallel so handle a bit differently
 
 # maybe add ARC and TESTARC too
-if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
-
+if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or
+   ( args.obstype in ['SCIENCE',] and (not args.noprestdstarfit) ):
     if rank == 0:
         log.info('Starting extractions at {}'.format(time.asctime()))
 
@@ -835,7 +838,10 @@ if comm is not None:
 #-------------------------------------------------------------------------
 #- Apply fiberflat and write fframe file
 
-if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat ) :
+if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat ):
+    if args.obstype in ['SCIENCE',] and args.noprestdstarfit:
+        pass
+    
     if rank == 0:
         log.info('Applying fiberflat at {}'.format(time.asctime()))
 
@@ -866,7 +872,10 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
 #- TODO: move this to a function somewhere
 #- TODO: this assigns different sky fibers to each frame of same spectrograph
 
-if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
+if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub):
+    if args.obstype in ['SCIENCE',] and args.noprestdstarfit:
+        pass
+    
     if rank == 0:
         log.info('Picking sky fibers at {}'.format(time.asctime()))
 
@@ -909,7 +918,7 @@ if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
 
 #-------------------------------------------------------------------------
 #- Sky subtraction
-if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
+if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.noprestdstarfit):
     if rank == 0:
         log.info('Starting sky subtraction at {}'.format(time.asctime()))
 
