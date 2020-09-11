@@ -183,13 +183,13 @@ def determine_resources(ncameras,obstype,queue,forced_runtime=None):
         obstype: str, type of data being processed
         queue: str, the queue at NERSC to be submitted to. 'realtime' will force 
                     restrictions on number of nodes.
-        force_runtime: int, the amount of runtime to allow for the script. Should be left
+        force_runtime: int, the amount of runtime in minutes to allow for the script. Should be left
                             to default heuristics unless needed for some reason.
 
     Returns:
         ncores: int, number of cores (actually 2xphysical cores) that should be submitted via "-n {ncores}"
         nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // 32 + 1
-        runtime: int, the max time requested for the script  in seconds for the processing.
+        runtime: int, the max time requested for the script in minutes for the processing.
     """    
     nspectro = (ncameras-1)//3 + 1
     if obstype in ('ARC', 'TESTARC'):
@@ -298,6 +298,10 @@ def create_desi_proc_batch_script(args,batchdir=None,jobname=None):
 
         fx.write('echo Starting at $(date)\n')
 
+
+        ################################## Note ############################
+        ## Needs to be refactored to write the correct thing given flags ###
+        ####################################################################
 	fx.write('\n# Do steps through skysub at full MPI parallelism\n')
         srun = 'srun -N {} -n {} -c 2 {} --nofluxcalib'.format(
                 nodes, ncores, cmd)
@@ -466,7 +470,7 @@ if args.obstype == 'SCIENCE' and not fibermap_ok:
 if comm is not None:
     fibermap = comm.bcast(fibermap, root=0)
 
-if not (args.obstype in ['SCIENCE',] and args.noprestdstarfit):
+if not (args.obstype in ['SCIENCE'] and args.noprestdstarfit):
     for i in range(rank, len(args.cameras), size):
         camera = args.cameras[i]
         outfile = findfile('preproc', args.night, args.expid, camera)
@@ -522,7 +526,7 @@ if comm is not None:
 #- Traceshift
 
 if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or
-   ( args.obstype in ['SCIENCE',] and (not args.noprestdstarfit) ):
+   ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
     if rank == 0 and args.traceshift :
         log.info('Starting traceshift at {}'.format(time.asctime()))
 
@@ -698,7 +702,7 @@ if args.obstype in ['ARC', 'TESTARC']:
 
 # maybe add ARC and TESTARC too
 if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or
-   ( args.obstype in ['SCIENCE',] and (not args.noprestdstarfit) ):
+   ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
     if rank == 0:
         log.info('Starting extractions at {}'.format(time.asctime()))
 
@@ -839,7 +843,7 @@ if comm is not None:
 #- Apply fiberflat and write fframe file
 
 if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat ):
-    if args.obstype in ['SCIENCE',] and args.noprestdstarfit:
+    if args.obstype in ['SCIENCE'] and args.noprestdstarfit:
         pass
     
     if rank == 0:
@@ -873,7 +877,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
 #- TODO: this assigns different sky fibers to each frame of same spectrograph
 
 if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub):
-    if args.obstype in ['SCIENCE',] and args.noprestdstarfit:
+    if args.obstype in ['SCIENCE'] and args.noprestdstarfit:
         pass
     
     if rank == 0:
@@ -963,7 +967,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.nop
 #-------------------------------------------------------------------------
 #- Standard Star Fitting
 
-if args.obstype in ['SCIENCE',] and \
+if args.obstype in ['SCIENCE'] and \
         (not args.noskysub ) and \
         (not args.nostdstarfit ) :
 
@@ -1015,7 +1019,7 @@ if args.obstype in ['SCIENCE',] and \
 #-------------------------------------------------------------------------                                             
 #- Flux calibration
 
-if args.obstype in ['SCIENCE',] and \
+if args.obstype in ['SCIENCE'] and \
         (not args.noskysub ) and \
         (not args.nofluxcalib) :
 
@@ -1048,10 +1052,11 @@ if args.obstype in ['SCIENCE',] and \
 
     if rank == 0:
         progress['fluxcalib'] = time.asctime()
+        
 #-------------------------------------------------------------------------
 #- Applying flux calibration
 
-if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcalib) :
+if args.obstype in ['SCIENCE'] and (not args.noskysub ) and (not args.nofluxcalib) :
 
     night, expid = args.night, args.expid #- shorter
 
