@@ -7,6 +7,27 @@ Examples at NERSC:
 
 # ARC: 18 min on 2 nodes
 time srun -N 2 -n 60 -C haswell -t 25:00 --qos realtime desi_proc --mpi -n 20191029 -e 22486
+import time
+from collections import OrderedDict
+
+progress = OrderedDict(start=time.asctime())
+
+import sys, os, argparse, re, time, collections
+import subprocess
+from copy import deepcopy
+
+import numpy as np
+import fitsio
+from astropy.io import fits
+import glob
+import desispec.io
+from desispec.io import findfile
+from desispec.io.util import create_camword, find_most_recent
+from desispec.calibfinder import findcalibfile,CalibFinder
+from desispec.fiberflat import apply_fiberflat
+from desispec.sky import subtract_sky
+from desispec.util import runcmd
+import desispec.scripts.extract
 
 # FLAT: 13 min
 time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191029 -e 22487
@@ -48,23 +69,28 @@ from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
 
-def get_desi_proc_parser():
+def get_desi_proc_parser(joint=False):
     """
     Create an argparser object to use to generate arguments from input data.
     """
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
-    parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
-    parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
+    if joint:
+        parser.add_argument("-n", "--nights", type=str,  help="YEARMMDD nights")
+        parser.add_argument("-e", "--expids", type=str,  help="Exposure IDs")
+        parser.add_argument("-i", "--inputs", type=str,  help="input raw data files")
+    else:
+        parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
+        parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
+        parser.add_argument("-i", "--input", type=str,  help="input raw data file")
+        
     parser.add_argument("--obstype", type=str,  help="science, arc, flat, dark, zero, ...")
     parser.add_argument("--cameras", type=str,  help="Explicitly define the spectrographs for which you want"+
                                                      " to reduce the data. Should be a comma separated list."+
                                                      " Numbers only assumes you want to reduce R, B, and Z "+
                                                      "for that spectrograph. Otherwise specify separately [BRZ|brz][0-9].")
-    parser.add_argument("-i", "--input", type=str,  help="input raw data file")
     parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
     parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
     parser.add_argument("--traceshift", action="store_true", help="Do shift traces")
-    parser.add_argument("--noprestdstarfit", action="store_true", help="Do not do any science reductions prior to stdstar fitting")
     parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
     parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky. Also skips stdstar fit and flux calib")
     parser.add_argument("--noprestdstarfit", action="store_true", help="Do not do any science reductions prior to stdstar fitting")
@@ -247,10 +273,13 @@ def create_desi_proc_batch_script(args,batchdir=None,jobname=None):
     if batchdir is None:
        reduxdir = desispec.io.specprod_root()
        batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(args.night))
+
     os.makedirs(batchdir, exist_ok=True)
+
     if jobname is None:
         camword = create_camword(args.cameras)
         jobname = '{}-{}-{:08d}-{}'.format(args.obstype.lower(), args.night, args.expid, camword)
+
     scriptfile = os.path.join(batchdir, jobname+'.slurm')
 
     ncameras = len(args.cameras)
@@ -289,27 +318,26 @@ def create_desi_proc_batch_script(args,batchdir=None,jobname=None):
 
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
-
+        
         if not args.mpi:
             cmd += ' --mpi'
-
+            
         fx.write(f'# {args.obstype} exposure with {ncameras} cameras\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
 
-
-        ################################## Note ############################
-        ## Needs to be refactored to write the correct thing given flags ###
-        ####################################################################
-	fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-        srun = 'srun -N {} -n {} -c 2 {} --nofluxcalib'.format(
-                nodes, ncores, cmd)
-        fx.write('echo Running {}\n'.format(srun))
-        fx.write('{}\n'.format(srun))
-
-	if args.obstype == 'SCIENCE':
-            fx.write('\n# Then switch to less MPI parallelism for fluxcalib MP parallelism\n')
+        if args.obstype != 'SCIENCE' or not args.noprestdstarfit:
+            ################################## Note ############################
+            ## Needs to be refactored to write the correct thing given flags ###
+            ####################################################################
+            fx.write('\n# Do steps through skysub at full MPI parallelism\n')
+            srun = 'srun -N {} -n {} -c 2 {} --nofluxcalib'.format(nodes, ncores, cmd)
+            fx.write('echo Running {}\n'.format(srun))
+            fx.write('{}\n'.format(srun))
+        
+        if args.obstype == 'SCIENCE' and not (args.nostdstarfit and args.nofluxcalib):
+            fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
             fx.write('# This should quickly skip over the steps already done\n')
             srun = 'srun -N {} -n {} -c 32 {} '.format(nodes, nodes*2, cmd)
             fx.write('if [ $? -eq 0 ]; then\n')
@@ -319,17 +347,17 @@ def create_desi_proc_batch_script(args,batchdir=None,jobname=None):
             fx.write('  echo FAILED: done at $(date)\n')
             fx.write('  exit 1\n')
             fx.write('fi\n')
-
+            
         fx.write('\nif [ $? -eq 0 ]; then\n')
         fx.write('  echo SUCCESS: done at $(date)\n')
         fx.write('else\n')
         fx.write('  echo FAILED: done at $(date)\n')
         fx.write('  exit 1\n')
         fx.write('fi\n')
-
+        
     print('Wrote {}'.format(scriptfile))
     print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
-
+    
     return scriptfile
 
 
@@ -342,6 +370,7 @@ def create_desi_proc_batch_script(args,batchdir=None,jobname=None):
 
 parser = get_desi_proc_parser()
 args = parser.parse_args()
+print("\n\n\n\nParsed Args: ",args)
 log = get_logger()
 
 #- Freeze IERS after parsing args so that it doesn't bother if only --help
@@ -374,7 +403,13 @@ else:
         args.batch_opts = args.batch_opts.strip('"\'')
     args.cameras = sorted(args.cameras)
     args.obstype = args.obstype.upper()
-    
+
+print("\n\n\n\nUpdated args: ", args)
+print("\nBy Line:")
+for arg in args.__dict__.items():
+    print(arg)
+print("\n")
+
 if comm is not None:
     args = comm.bcast(args, root=0)
     hdr = comm.bcast(hdr, root=0)
@@ -525,7 +560,7 @@ if comm is not None:
 #-------------------------------------------------------------------------
 #- Traceshift
 
-if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or
+if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
    ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
     if rank == 0 and args.traceshift :
         log.info('Starting traceshift at {}'.format(time.asctime()))
@@ -701,7 +736,7 @@ if args.obstype in ['ARC', 'TESTARC']:
 #- This is MPI parallel so handle a bit differently
 
 # maybe add ARC and TESTARC too
-if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or
+if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
    ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
     if rank == 0:
         log.info('Starting extractions at {}'.format(time.asctime()))
