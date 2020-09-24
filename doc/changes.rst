@@ -5,7 +5,9 @@ desispec Change Log
 0.34.8 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix dark CCD calibration corrections (PR `#1002`_).
+
+.. _`#1002`: https://github.com/desihub/desispec/issues/1002
 
 0.34.7 (2020-09-01)
 -------------------
