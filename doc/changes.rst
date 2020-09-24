@@ -2,10 +2,20 @@
 desispec Change Log
 ===================
 
-0.34.7 (unreleased)
+0.34.8 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix dark CCD calibration corrections (PR `#1002`_).
+
+.. _`#1002`: https://github.com/desihub/desispec/issues/1002
+
+0.34.7 (2020-09-01)
+-------------------
+
+* Switch desi_proc to use fitsio instead of astropy.io.fits to work around
+  incompatibility between mpi4py and astropy 4 (PR `#996`_).
+
+.. _`#996`: https://github.com/desihub/desispec/issues/996
 
 0.34.6 (2020-08-04)
 -------------------
