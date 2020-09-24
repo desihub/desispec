@@ -407,9 +407,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     log=get_logger()
 
     header = header.copy()
-    
+
     cfinder = None
-    
+
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
 
@@ -581,7 +581,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             gain_message    = 'gain not applied to image'
         header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message)
         header['GAIN'+amp] = (gain,gain_message)
-        
+
         #- Warn/error if measured readnoise is very different from expected if exists
         if 'RDNOISE'+amp in header:
             expected_readnoise = header['RDNOISE'+amp]
@@ -629,11 +629,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         saturated = (rawimage[jj]>=saturlev)
         mask[kk][saturated] |= ccdmask.SATURATED
 
-        #- subtract dark prior to multiplication by gain
-        if dark is not False  :
-            log.info("subtracting dark for amp %s"%amp)
-            data -= dark[kk]
-
+        #- ADC to electrons
         image[kk] = data*gain
 
     if not nocrosstalk :
@@ -689,6 +685,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 image[ii2] -= a12flux
                 # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
 
+    #- Poisson noise variance (prior to dark subtraction and prior to pixel flat field)
+    #- This is biasing, but that's what we have for now
+    poisson_var = image.clip(0)
+
+    #- subtract dark after multiplication by gain
+    if dark is not False  :
+        log.info("subtracting dark for amp %s"%amp)
+        image -= dark
+
     #- Correct for dark trails if any
     if not nodarktrail and cfinder is not None :
         for amp in amp_ids :
@@ -710,10 +715,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if np.all(pixflat > almost_zero ):
             image /= pixflat
             readnoise /= pixflat
+            poisson_var /= pixflat**2
         else:
             good = (pixflat > almost_zero )
             image[good] /= pixflat[good]
             readnoise[good] /= pixflat[good]
+            poisson_var[good] /= pixflat[good]**2
             mask[~good] |= ccdmask.PIXFLATZERO
 
         lowpixflat = (0 < pixflat) & (pixflat < 0.1)
@@ -721,7 +728,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             mask[lowpixflat] |= ccdmask.PIXFLATLOW
 
     #- Inverse variance, estimated directly from the data (BEWARE: biased!)
-    var = image.clip(0) + readnoise**2
+    var = poisson_var + readnoise**2
     ivar = np.zeros(var.shape)
     ivar[var>0] = 1.0 / var[var>0]
 
