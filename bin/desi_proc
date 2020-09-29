@@ -24,21 +24,15 @@ time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191
 import time
 start_imports = time.time()
 
-from collections import OrderedDict
-import sys, os, argparse, re, time, collections
+import sys, os, argparse, re
 import subprocess
 from copy import deepcopy
-import glob
-import json
 
 import numpy as np
 import fitsio
 from astropy.io import fits
-
-from desiutil.log import get_logger, DEBUG, INFO
+import glob
 import desiutil.timer
-from desitarget.targetmask import desi_mask
-
 import desispec.io
 from desispec.io import findfile
 from desispec.io.util import create_camword
@@ -48,6 +42,10 @@ from desispec.sky import subtract_sky
 from desispec.util import runcmd
 import desispec.scripts.extract
 import desispec.scripts.specex
+
+from desitarget.targetmask import desi_mask
+
+from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
 parser = argparse.ArgumentParser(usage = "{prog} [options]")
@@ -314,7 +312,10 @@ if args.batch:
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
 
-        timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+        if args.timingfile is None:
+            timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+        else:
+            timingfile = args.timingfile
 
         if not args.mpi:
             cmd += ' --mpi'
