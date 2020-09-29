@@ -15,7 +15,7 @@ from pkg_resources import resource_exists, resource_filename
 Code to calcuate the Hartmann shift given a pair of left/right hartmann exposures. 
 
 Example
-python3 hartmann_shift.py -r_d /project/projectdirs/desi/spectro/data/20191030/ -c B3 -p /project/projectdirs/desi/users/jguy/kpno/sm4-bootcalib/psfboot-b3.fits -l 22754 -r 22757 -d 0. -rd False -dp False 
+desi_hartmann -r_d /project/projectdirs/desi/spectro/data/20191030/ -c B3 -p /project/projectdirs/desi/users/jguy/kpno/sm4-bootcalib/psfboot-b3.fits -l 22754 -r 22757 -d 0. -rd False -dp False 
 """
 
 def parse(options=None):
