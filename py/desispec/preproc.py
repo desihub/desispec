@@ -893,16 +893,17 @@ def interp_shape(top, bottom, precision):
 
     return out
 
-def recover_2d_bias_dark(hdus,exptime):
+def recover_2d_bias_dark(hdus,exptime,extname):
+    log=get_logger()
+    #log.info('exptime=',exptime,' extname=',extname)
     nx=len(hdus[0].data) #4162
     ny=len(hdus[0].data[0]) #4232
-    profileLeft=hdus[str(int(exptime))].data[0]
-    profileRight=hdus[str(int(exptime))].data[1]
+    profileLeft=hdus[extname].data[0]
+    profileRight=hdus[extname].data[1]
     profile_2d_Left=np.transpose(np.tile(profileLeft,(int(ny/2),1)))
     profile_2d_Right=np.transpose(np.tile(profileRight,(int(ny/2),1)))
     profile_2d=np.concatenate((profile_2d_Left,profile_2d_Right),axis=1)
-    #import pdb;pdb.set_trace()
-    image=hdus['0'].data+profile_2d+hdus['DARK'].data*float(exptime)
+    image=hdus['ZERO'].data+profile_2d+hdus['DARK'].data*float(exptime)
     return image
 
 
@@ -927,18 +928,27 @@ def read_bias_plus_dark(filename=None, exptime=0):
         if not str(exptime).isnumeric(): # if the exptime is not a number, use exptime=0 for default
             exptime=0
         exptime_arr=[]
+        ext_arr={}
         for hdu in hdus:
-            if hdu.header['EXTNAME'] != 'DARK':
-                exptime_arr.append(int(hdu.header['EXTNAME']))
+            if hdu.header['EXTNAME'] == 'DARK':
+                pass
+            elif hdu.header['EXTNAME'] == 'ZERO':
+                ext_arr['0']=hdu.header['EXTNAME']
+                exptime_arr.append(0)
+            else:
+                ext_arr[hdu.header['EXTNAME'][1:]]=hdu.header['EXTNAME']
+                exptime_arr.append(int(hdu.header['EXTNAME'][1:]))
+        #log.info('ext_arr',ext_arr)
+        #log.info('exptime_arr',exptime_arr)
         if int(exptime) in exptime_arr:
             log.info('Using bias+dark at exptime='+str(int(exptime)))
-            return recover_2d_bias_dark(hdus,exptime)  #hdus[str(int(exptime))].data
+            return recover_2d_bias_dark(hdus,exptime,ext_arr[str(int(exptime))])  #hdus[str(int(exptime))].data
         elif int(exptime)> max(exptime_arr):
             log.info('Using bias+dark at exptime='+str(max(exptime_arr)))
-            return recover_2d_bias_dark(hdus,max(exptime_arr))  #hdus[str(max(exptime_arr))].data
+            return recover_2d_bias_dark(hdus,max(exptime_arr),ext_arr[str(int(max(exptime_arr)))])  #hdus[str(max(exptime_arr))].data
         elif int(exptime)< min(exptime_arr):
             log.info('Using bias+dark at exptime='+str(min(exptime_arr)))
-            return recover_2d_bias_dark(hdus,min(exptime_arr))  #hdus[str(min(exptime_arr))].data
+            return recover_2d_bias_dark(hdus,min(exptime_arr),ext_arr[str(int(min(exptime_arr)))])  #hdus[str(min(exptime_arr))].data
         else:
             # Interpolate
             exptime_arr=np.sort(np.array(exptime_arr))
@@ -948,9 +958,11 @@ def read_bias_plus_dark(filename=None, exptime=0):
             log.info('Interpolate between '+str(exptime_arr[ind1])+' and '+str(exptime_arr[ind2]))
             precision=(float(exptime)-exptime_arr[ind1])/(exptime_arr[ind2]-exptime_arr[ind1])
             # Run interpolation
-            image1=recover_2d_bias_dark(hdus,exptime_arr[ind1])
-            image2=recover_2d_bias_dark(hdus,exptime_arr[ind2])
-            return interp_shape(image1,image2,precision)
+            image1=recover_2d_bias_dark(hdus,exptime_arr[ind1],ext_arr[str(int(exptime_arr[ind1]))])
+            image2=recover_2d_bias_dark(hdus,exptime_arr[ind2],ext_arr[str(int(exptime_arr[ind2]))])
+            img=image1*precision+image2*(1-precision) #interp_shape(image1,image2,precision)
+
+            return img
 
 
         
