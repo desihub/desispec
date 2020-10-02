@@ -78,6 +78,7 @@ parser.add_argument("--batch-opts", type=str, default=None, help="additional bat
 parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in minutes")
 parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
                     " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
+parser.add_argument("--variance-model", action="store_true", help="Use variance model in preprocessing")
 
 def find_most_recent(night, file_type='psfnight', n_nights=30):
     '''
@@ -421,7 +422,8 @@ for i in range(rank, len(args.cameras), size):
         cmd += " --scattered-light"
     if fibermap is not None:
         cmd += " --fibermap {}".format(fibermap)
-
+    if args.variance_model :
+        cmd += " --variance-model"
     runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
 if comm is not None:
