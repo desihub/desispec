@@ -757,12 +757,25 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     if use_variance_model  :
 
+        psf = None
         if psf_filename is None :
             psf_filename = cfinder.findfile("PSF")
         xyset = read_xytraceset(psf_filename)
 
+        """
+        # use the actual PSF model for 1D projection
+        # this is too slow for now
+        import fitsio
+        import specter.psf
+        head  = fitsio.read_header(psf_filename)
+        if "PSFTYPE" in head :
+            psftype=head["PSFTYPE"].strip()
+            if psftype=="GAUSS-HERMITE" :
+                psf = specter.psf.GaussHermitePSF(psf_filename)
+            elif psftype=="SPOTGRID" :
+                psf = specter.psf.SpotGridPSF(psf_filename)
+        """
         fiberflat = None
-
         with_spectral_smoothing=True
         with_sky_model = True
 
@@ -773,17 +786,19 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 fiberflat = read_fiberflat(fiberflat_filename)
 
         log.info("compute an image model after dark correction and pixel flat")
-
+        nsig = 5.
         mimage = compute_image_model(img, xyset, fiberflat=fiberflat,
-                                     with_spectral_smoothing=with_spectral_smoothing, with_sky_model=with_sky_model)
-
+                                     with_spectral_smoothing=with_spectral_smoothing, 
+                                     with_sky_model=with_sky_model,
+                                     spectral_smoothing_nsig=nsig, psf=psf)
+        
         # here we bring back original image for large outliers
         # this allows to have a correct ivar for cosmic rays and bright sources
-        nsig = 4.
-        out = ((ivar*(image-mimage)**2)>nsig**2)
+        eps = 0.1
+        out = (((ivar>0)*(image-mimage)**2/(1./(ivar+(ivar==0))+(0.1*mimage)**2))>nsig**2)
         # out &= (image>mimage) # could request this to be conservative on the variance ... but this could cause other issues
         mimage[out] = image[out]
-
+        
         log.info("use image model to compute variance")
         if bkgsub :
             mimage += bkg
