@@ -17,6 +17,7 @@ from ctypes.util import find_library
 from astropy.io import fits
 
 from desiutil.log import get_logger
+import specex as spx
 
 modext = "so"
 if sys.platform == "darwin":
@@ -117,7 +118,8 @@ def main(args, comm=None):
     specmin = int(args.specmin)
     nspec = int(args.nspec)
     bundlesize = int(args.bundlesize)
-
+    print(bundlesize)
+    return 
     specmax = specmin + nspec
 
     # Now we divide our spectra into bundles
@@ -212,8 +214,10 @@ def main(args, comm=None):
             map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
-        retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
-
+        retval=0
+        #retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
+        retval = spx.specex_desi_psf_fit_main(com)
+        
         if retval != 0:
             comstr = " ".join(com)
             log.error("desi_psf_fit on process {} failed with return "
@@ -233,6 +237,7 @@ def main(args, comm=None):
 
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
+        args.disable_merge=True
         if args.disable_merge :
             log.info("don't merge")
         else :
