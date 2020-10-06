@@ -37,7 +37,8 @@ def numba_proj(image,x,sigma,flux) :
 
 
 
-def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spectral_smoothing=True,with_sky_model=True):
+def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spectral_smoothing=True,with_sky_model=True,\
+                        spectral_smoothing_sigma_length=10.,spectral_smoothing_nsig=4.,psf=None):
     '''
     Returns a model of the input image, using a fast extraction, a processing of
     spectra with a common sky model and a smoothing, followed by a reprojection
@@ -51,7 +52,9 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
        fiberflat: a desispec.fiberflat.FiberFlat object
        with_spectral_smoothing: try and smooth the spectra to reduce noise (and eventualy reduce variance correlation)
        with_sky_model: use a sky model as part of the spectral modeling to reduce the noise (requires a fiberflat)
-
+       spectral_smoothing_sigma_length: sigma of Gaussian smoothing along wavelength in A
+       spectral_smoothing_nsig: number of sigma rejection threshold to fall back to the original extracted spectrum instead of the smooth one
+       psf: specter.psf.GaussHermitePSF object to be used for the 1D projection (slow, by default=None, in which case a Gaussian profile is used)
     returns:
        a 2D np.array of same shape as image.pix
     '''
@@ -81,12 +84,13 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
     if with_spectral_smoothing :
 
         log.info("spectral smoothing")
-        sigma = 20.
+        sigma = spectral_smoothing_sigma_length/np.mean(np.gradient(qframe.wave[qframe.nspec//2]))
+        log.debug("smoothing sigma in flux bin units = {}".format(sigma))
         hw=int(3*sigma)
         u=(np.arange(2*hw+1)-hw)
         kernel=np.exp(-u**2/sigma**2/2.)
         kernel/=np.sum(kernel)
-        nsig=3.
+        nsig=5
 
         y=np.arange(qframe.flux.shape[1])
         for s in range(qframe.nspec) :
@@ -100,7 +104,7 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
                 fflux=qframe.flux[s]
                 fivar=qframe.ivar[s]
             sfflux=scipy.signal.fftconvolve(fflux,kernel,"same")
-            good=((fivar*(fflux-sfflux)**2)<(nsig**2))
+            good=((fivar*(fflux-sfflux)**2)<(spectral_smoothing_nsig**2))
             out=~good
             nout=np.sum(out)
             if nout>0 :
@@ -135,13 +139,18 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
     qframe.flux *= (qframe.flux>0.)
 
     model=np.zeros(image.pix.shape)
-    for s in range(qframe.nspec) :
-        x=xytraceset.x_vs_y(s,y)
-        numba_proj(model,x,xsig[s],qframe.flux[s])
 
-    #import astropy.io.fits as pyfits
-    #pyfits.writeto("model.fits",model,overwrite=True)
-    #log.warning("WRITING A DEBUG FILE model.fits")
+    if psf is None : # use simple Gaussian
+        for s in range(qframe.nspec) :
+            x=xytraceset.x_vs_y(s,y)
+            numba_proj(model,x,xsig[s],qframe.flux[s])
+    else :
+        log.debug("Use PSF for projection, but in 1D")
+        psf._polyparams['HSIZEY']=0
+        psf._polyparams['GHDEGY']=0
+        # still very slow
+        model = psf.project(qframe.wave, qframe.flux, xyrange=(0,image.pix.shape[1],0,image.pix.shape[0]))
+        log.debug("done projecting")
 
     log.info("done")
     return model
