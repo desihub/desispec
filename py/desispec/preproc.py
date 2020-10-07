@@ -940,7 +940,9 @@ def read_bias_plus_dark(filename=None, exptime=0):
                 exptime_arr.append(int(hdu.header['EXTNAME'][1:]))
         #log.info('ext_arr',ext_arr)
         #log.info('exptime_arr',exptime_arr)
-        if int(exptime) in exptime_arr:
+        if int(exptime)==0:
+            return hdus['ZERO'].data
+        elif int(exptime) in exptime_arr:
             log.info('Using bias+dark at exptime='+str(int(exptime)))
             return recover_2d_bias_dark(hdus,exptime,ext_arr[str(int(exptime))])  #hdus[str(int(exptime))].data
         elif int(exptime)> max(exptime_arr):
