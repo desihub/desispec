@@ -87,7 +87,7 @@ def parse(options=None):
                         help="comma separated list of broken fibers")
     parser.add_argument("--disable-merge", action = 'store_true',
                         help="disable merging fiber bundles")
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -353,7 +353,7 @@ def mean_psf(inputs, output):
     nbundles=None
     nfibers_per_bundle=None
 
-    
+
     for input in inputs :
         log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
@@ -454,11 +454,12 @@ def mean_psf(inputs, output):
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
 
-            if ok.size>=2 : # use median
-                log.debug("bundle #{} : use median".format(bundle))
+            if ok.size>=2 : # use mean
+                log.debug("bundle #{} : use mean".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
-                    output_coeff[f]=np.median(coeff[ok,f],axis=0)
-                output_rchi2[bundle]=np.median(bundle_rchi2[ok,bundle])
+                    output_coeff[f]=np.mean(coeff[ok,f],axis=0)
+                output_rchi2[bundle]=np.mean(bundle_rchi2[ok,bundle])
+
             elif ok.size==1 : # copy
                 log.debug("bundle #{} : use only one psf ".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
@@ -499,8 +500,8 @@ def mean_psf(inputs, output):
                     val = legval(iu,ytrace[f])
                     ytrace[f] = legfit(ou,val,deg=npar-1)
 
-            hdulist["xtrace"].data = np.median(np.array(xtrace),axis=0)
-            hdulist["ytrace"].data = np.median(np.array(ytrace),axis=0)
+            hdulist["xtrace"].data = np.mean(np.array(xtrace),axis=0)
+            hdulist["ytrace"].data = np.mean(np.array(ytrace),axis=0)
 
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
@@ -509,7 +510,7 @@ def mean_psf(inputs, output):
         if hdu in hdulist :
             for input in inputs :
                 hdulist[hdu].header["comment"] = "inc {}".format(input)
-        
+
     # save output PSF
     hdulist.writeto(output, overwrite=True)
     log.info("wrote {}".format(output))
