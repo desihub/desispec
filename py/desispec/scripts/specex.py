@@ -118,8 +118,6 @@ def main(args, comm=None):
     specmin = int(args.specmin)
     nspec = int(args.nspec)
     bundlesize = int(args.bundlesize)
-    print(bundlesize)
-    return 
     specmax = specmin + nspec
 
     # Now we divide our spectra into bundles
@@ -214,10 +212,25 @@ def main(args, comm=None):
             map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
-        retval=0
-        #retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
-        retval = spx.specex_desi_psf_fit_main(com)
+        # old way 
+        # retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
+
+        # new way
+        opts = spx.PyOptions() # input options
+        pyio = spx.PyIO()      # IO options and methods
+        pypr = spx.PyPrior()   # Gaussian priors
+        pymg = spx.PyImage()   # image data
+        pyps = spx.PyPSF()     # psf data
         
+        opts.parse(com)                    # com is list of args
+        pyio.check_input_psf(opts)         # set booleans for input psf 
+        pypr.deal_with_priors(opts)        # set Gaussian priors
+        pyio.read_img_data(opts,pymg)      # read image data
+        pyio.read_psf_data(opts,pyps,pyio) # read psf data
+        
+        retval = spx.specex_desi_psf_fit_main(opts,pyio,pypr,pymg,pyps)
+
+        # check for success
         if retval != 0:
             comstr = " ".join(com)
             log.error("desi_psf_fit on process {} failed with return "
