@@ -487,7 +487,7 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
                 if args.obstype in ['FLAT', 'TESTFLAT', 'TWILIGHT'] :
                     cmd += " --continuum"
                 else :
-                    cmd += " --degyx 2 --degyy 0"
+                    cmd += " --degyx 0 --degyy 3"
                 if args.obstype in ['SCIENCE', 'SKY']:
                     cmd += ' --sky'
                 elif args.obstype in ['ARC', 'TESTARC']:
