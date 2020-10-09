@@ -553,7 +553,10 @@ if args.obstype in ['ARC', 'TESTARC']:
             cmd += ' --input-image {}'.format(preprocfile)
             cmd += ' --input-psf {}'.format(inpsf)
             cmd += ' --output-psf {}'.format(outpsf)
+<<<<<<< HEAD
 
+=======
+>>>>>>> skysub-sept2020
             # look for fiber blacklist
             cfinder = CalibFinder([hdr, camhdr[camera]])
             blacklistkey="FIBERBLACKLIST"

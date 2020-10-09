@@ -20,6 +20,7 @@ import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberbitmasked_frame
 import scipy.ndimage
+from desispec.maskbits import specmask
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,adjust_wavelength=False) :
     """Compute a sky model.
@@ -101,9 +102,10 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
     tmp   = np.zeros(frame.wave.size)
     tmp   = (msky[1:-1]>msky[2:])*(msky[1:-1]>msky[:-2])*(msky[1:-1]>0.1*np.max(msky))
     peaks = np.where(tmp)[0]+1
-    dpix  = int(np.ceil(3/dwave)) # +- n Angstrom around each peak
+    dpix  = 1
 
-    skyvar = 1./(cskyivar+(cskyivar==0))
+    input_skyvar = 1./(cskyivar+(cskyivar==0))
+    skyvar = input_skyvar + 0.
 
     # loop on peaks
     for peak in peaks :
@@ -113,20 +115,23 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
         mndata = np.mean(ndata[b:e]) # mean number of fibers contributing
 
         # sky model variance = sigma_flat * msky  + sigma_wave * dmskydw
-        sigma_flat=0.000 # the fiber flat error is already included in the flux ivar
+        sigma_flat=0.005 # the fiber flat error is already included in the flux ivar, but empirical evidence we need an extra term
         sigma_wave=0.005 # A, minimum value
         res2=(frame.flux[skyfibers,b:e]-cskyflux[skyfibers,b:e])**2
         var=1./(tivar[:,b:e]+(tivar[:,b:e]==0))
         nd=np.sum(tivar[:,b:e]>0)
         while(sigma_wave<2) :
-            pivar=1./(var+(sigma_flat*msky[b:e])**2+(sigma_wave*dskydw[b:e])**2)
-            pchi2=np.sum(pivar*res2)/nd
-            if pchi2<=1 :
+            pivar=(tivar[:,b:e]>0)/(var+(sigma_flat*msky[b:e])**2+(sigma_wave*dskydw[b:e])**2)
+            chi2_of_sky_fibers=np.sum(pivar*res2,axis=1)/np.sum(tivar[:,b:e]>0,axis=1)
+            log.debug("sky fibers chi2= {} for sigma_flat= {} and sigma_wave= {}".format(chi2_of_sky_fibers,sigma_flat,sigma_wave))
+            median_chi2=np.median(chi2_of_sky_fibers)
+            if median_chi2<=1 :
                 log.info("peak at {}A : sigma_wave={}".format(int(frame.wave[peak]),sigma_wave))
-                skyvar[:,b:e] += ( (sigma_flat*msky[b:e])**2 + (sigma_wave*dskydw[b:e])**2 )
+                skyvar[:,b:e] = input_skyvar[:,b:e] + (sigma_flat*msky[b:e])**2 + (sigma_wave*dskydw[b:e])**2
                 break
             sigma_wave += 0.005
     return (cskyivar>0)/(skyvar+(skyvar==0))
+
 
 
 
@@ -786,6 +791,8 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     nfibers=len(skyfibers)
 
     current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+    current_ivar *= ((frame.mask&maskout)==0)
+
     current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
@@ -1101,7 +1108,7 @@ class SkyModel(object):
         self.stat_ivar = stat_ivar
         self.throughput_corrections = throughput_corrections
 
-def subtract_sky(frame, skymodel, apply_throughput_correction = True) :
+def subtract_sky(frame, skymodel, apply_throughput_correction = True, zero_ivar=True) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 
     Args:
@@ -1111,15 +1118,17 @@ def subtract_sky(frame, skymodel, apply_throughput_correction = True) :
     Option:
         apply_throughput_correction : if True, fit for an achromatic throughput correction.
                                       This is to absorb variations of Focal Ratio Degradation with fiber flexure.
+
+        zero_ivar : if True , set ivar=0 for masked pixels
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
 
     log=get_logger()
-    log.info("starting")
+    log.info("starting with apply_throughput_correction = {} and zero_ivar = {}".format(apply_throughput_correction, zero_ivar))
 
     # Set fibermask flagged spectra to have 0 flux and variance
-    frame = get_fiberbitmasked_frame(frame,bitmask='sky',ivar_framemask=True)
+    frame = get_fiberbitmasked_frame(frame,bitmask='sky',ivar_framemask=zero_ivar)
 
     # check same wavelength, die if not the case
     if not np.allclose(frame.wave, skymodel.wave):
@@ -1264,25 +1273,8 @@ def calculate_throughput_corrections(frame,skymodel):
 
 
         log.info("fiber #%03d throughput corr = %5.4f +- %5.4f (mean fiber flux=%f)"%(fiber,mcoef,mcoeferr,np.median(frame.flux[fiber])))
-        '''
-        if np.abs(mcoef)>0.01 :
-            print(fiber,"mean coef=",mcoef,"all coef=",coef)
-            print(fiber,"all err=",np.sqrt(var))
-            print(fiber,"mean coef=",mcoef,"selected coef=",coef[ivar>0])
-            print(fiber,"select err=",np.sqrt(var[ivar>0]))
-            import matplotlib.pyplot as plt
-            x=np.arange(coef.size)
-            plt.errorbar(x,coef,np.sqrt(var),fmt="o")
-            plt.errorbar(x[ivar>0],coef[ivar>0],np.sqrt(var[ivar>0]),fmt="o")
-            plt.axhline(0.)
-            plt.axhline(mcoef)
-            plt.ylim(-0.11,0.11)
-            plt.grid()
-            plt.show()
-        '''
-        if mcoeferr>np.abs(mcoef-1) :
-            log.warning("throughput corr error = %5.4f is too large compared to the correction value = %5.4f for fiber #%03d, do not apply correction"\
-%(mcoeferr,(mcoef-1),fiber))
+        if mcoeferr>0.1 :
+            log.warning("throughput corr error = %5.4f > 0.1 is too large for fiber %d, do not apply correction"%(mcoeferr,fiber))
         else :
             corrections[fiber] = mcoef
 
