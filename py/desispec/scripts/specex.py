@@ -196,6 +196,7 @@ def main(args, comm=None):
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
         com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
+        com.extend(['--legendre-deg-wave', "{}".format(1)])
         if args.broken_fibers :
             com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
         if args.debug :
@@ -239,9 +240,9 @@ def main(args, comm=None):
             #- Empirically it appears that files written by one rank sometimes
             #- aren't fully buffer-flushed and closed before getting here,
             #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
-            log.info('HACK: taking a 20 sec pause before merging')
+            log.info('5 sec pause before merging')
             sys.stdout.flush()
-            time.sleep(20.)
+            time.sleep(5.)
 
             merge_psf(inputs,outfits)
 
