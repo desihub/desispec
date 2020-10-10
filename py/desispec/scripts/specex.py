@@ -213,7 +213,7 @@ def main(args, comm=None):
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
         # old way 
-        # retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
+        # rval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
 
         # new way
         opts = spx.PyOptions() # input options
@@ -221,21 +221,25 @@ def main(args, comm=None):
         pypr = spx.PyPrior()   # Gaussian priors
         pymg = spx.PyImage()   # image data
         pyps = spx.PyPSF()     # psf data
+        pyft = spx.PyFitting() # psf fitting
         
-        opts.parse(com)                    # com is list of args
-        pyio.check_input_psf(opts)         # set booleans for input psf 
-        pypr.deal_with_priors(opts)        # set Gaussian priors
-        pyio.read_img_data(opts,pymg)      # read image data
-        pyio.read_psf_data(opts,pyps,pyio) # read psf data
+        rval = opts.parse(com)                        # com is list of args
+        rval = pyio.check_input_psf(opts)             # set booleans for input psf 
+        rval = pypr.deal_with_priors(opts)            # set Gaussian priors
+        rval = pyio.read_img_data(opts,pymg)          # read image 
+        rval = pyio.read_psf_data(opts,pyps)          # read psf 
+        rval = pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf
         
-        retval = spx.specex_desi_psf_fit_main(opts,pyio,pypr,pymg,pyps)
-
-        # check for success
-        if retval != 0:
+        # check for fit_psf success
+        if rval != 0:
             comstr = " ".join(com)
-            log.error("desi_psf_fit on process {} failed with return "
-                "value {} running {}".format(rank, retval, comstr))
+            log.error("fit_psf on process {} failed with return "
+                "value {} running {}".format(rank, rval, comstr))
             failcount += 1
+
+        rval = pyio.write_psf_data(opts,pyps)         # write psf 
+        rval = pyio.write_spots(opts,pyps)            # write spots
+        
 
     if comm is not None:
         from mpi4py import MPI
