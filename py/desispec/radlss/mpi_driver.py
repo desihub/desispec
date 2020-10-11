@@ -7,10 +7,11 @@
 #- Initialize MPI ASAP before proceeding with other imports.
 import multiprocessing
 
-from   mpi4py                   import  MPI
+from   mpi4py                    import  MPI
 
 
 nproc = multiprocessing.cpu_count() // 2
+
 comm  = MPI.COMM_WORLD
 rank  = comm.Get_rank()
 size  = comm.Get_size()
@@ -60,8 +61,13 @@ from   desispec.parallel         import  stdouterr_redirected
 andes     = '/global/cfs/cdirs/desi/spectro/redux/andes'
 
 def get_expids(night, andes='/global/cfs/cdirs/desi/spectro/redux/andes'):
-    return  np.sort(np.array([x.split('/')[-1] for x in glob.glob(andes + '/exposures/{}/*'.format(night))]).astype(np.int))
+    tiles  = np.unique(np.array([x.split('/')[-3] for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
 
+    # np.sort(np.array([x.split('/')[-1] for x in glob.glob(andes + '/exposures/{}/*'.format(night))]).astype(np.int))  
+    expids = np.unique(np.array([x.split('/')[-1].split('-')[2].replace('.fits','') for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int)) 
+    
+    return  expids, tiles
+    
 def is_processed(logfile):
     processed     = False
 
@@ -79,13 +85,12 @@ nmax      = 1
 night     = '20200315'
 tracers   = ['ELG']
 
-expids    = get_expids(night)
+expids, tiles = get_expids(night)
 
-blacklist = np.array([55556]) # 55556, 55557, 55587, 55592, 55668, 55670, 55672, 55674, 55676, 55678, 55680, 55682, 55684, 55686, 55688, 55690, 55692, 55705, 55706, 55707, 55708, 55709, 55713, 55714, 55715, 55716, 55717])
+#- Blacklist exposures.
+blacklist = np.array([]) # 55556, 55557, 55587, 55592, 55668, 55670, 55672, 55674, 55676, 55678, 55680, 55682, 55684, 55686, 55688, 55690, 55692, 55705, 55706, 55707, 55708, 55709, 55713, 55714, 55715, 55716, 55717])
 is_black  = np.isin(expids, blacklist)
-
 expids    = expids[~is_black]
-
 blacklist = blacklist.tolist()
 
 cameras   = ['b6', 'r6', 'z6']
@@ -107,10 +112,10 @@ sys.stdout.flush()
 
 comm.barrier()
 
-if len(rankexp) > 0:
-  start   = time.perf_counter()
-    
+if len(rankexp) > 0:    
   for nexp, expid in enumerate(rankexp):
+    start      = time.perf_counter()
+      
     if expid not in blacklist:
       logdir   = '/global/cscratch1/sd/mjwilson/radlss/logs/{:08d}/'.format(expid)
       logfile  = logdir + '/{:08d}.log'.format(expid) 
@@ -123,7 +128,7 @@ if len(rankexp) > 0:
           print('Rank {}:  Writing log for {:08d} to {}.'.format(rank, expid, logfile))
       
           with stdouterr_redirected(to=logfile):
-              print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(expids)))
+              print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
               rads = RadLSS(night, expid, cameras=None, rank=rank)
           
@@ -133,7 +138,10 @@ if len(rankexp) > 0:
               #    break
 
               print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
-      
+
+              # Close all figures (to suppress warning). 
+              plt.close('all')
+              
               del rads
 
               #blacklist.append(expid)
@@ -143,4 +151,4 @@ if len(rankexp) > 0:
               sys.stdout.flush()
 
       else:
-          print('EXPID {} previously processed successfully.'.format(expid))
+          print('Rank {}:  EXPID {} previously processed successfully.'.format(rank, expid))
