@@ -2,10 +2,10 @@
 #- Initialize MPI ASAP before proceeding with other imports.
 import multiprocessing
 
+from   mpi4py                   import  MPI
+
+
 nproc = multiprocessing.cpu_count() // 2
-
-from mpi4py import MPI
-
 comm  = MPI.COMM_WORLD
 rank  = comm.Get_rank()
 size  = comm.Get_size()
@@ -14,6 +14,7 @@ size  = comm.Get_size()
 
 import os
 import sys
+import time
 import glob
 import fitsio
 
@@ -47,6 +48,7 @@ from   scipy                     import  stats
 from   pathlib                   import  Path
 from   templateSNR               import	 templateSNR
 from   RadLSS                    import  RadLSS
+from   desispec.parallel         import  stdouterr_redirected
 
 
 andes     = '/global/cfs/cdirs/desi/spectro/redux/andes'
@@ -60,12 +62,14 @@ tracers   = ['ELG']
 
 expids    = get_expids(night)
 
-blacklist = np.array([55556, 55557, 55592, 55668, 55670, 55672, 55674, 55676, 55678, 55680, 55682, 55684, 55686, 55688, 55690, 55692, 55705, 55706, 55707, 55708, 55709, 55713, 55714, 55715, 55716, 55717])
+blacklist = np.array([55556]) # 55556, 55557, 55587, 55592, 55668, 55670, 55672, 55674, 55676, 55678, 55680, 55682, 55684, 55686, 55688, 55690, 55692, 55705, 55706, 55707, 55708, 55709, 55713, 55714, 55715, 55716, 55717])
 is_black  = np.isin(expids, blacklist)
 
 expids    = expids[~is_black]
 
-camera    = ['b5', 'r5', 'z5']
+blacklist = blacklist.tolist()
+
+cameras   = ['b6', 'r6', 'z6']
 
 comm.barrier()
 
@@ -85,25 +89,33 @@ sys.stdout.flush()
 comm.barrier()
 
 if len(rankexp) > 0:
-  for nexp, expid in enumerate(rankexp):
-    if expid not in blacklist:    
-      print('Rank {}: Solving for EXPID {:08d}'.format(rank, expid))
-        
-      try:
-        rads = RadLSS(night, expid, cameras=None, rank=rank)
+  start   = time.perf_counter()
     
-        # rads.compute(tracers=tracers)
+  for nexp, expid in enumerate(rankexp):
+    if expid not in blacklist:
+      logdir   = '/global/cscratch1/sd/mjwilson/radlss/logs/{:08d}/'.format(expid)
+      logfile  = logdir + '/{:08d}.log'.format(expid) 
 
-        #  if nexp == nmax:
-        #    break
+      Path(logdir).mkdir(parents=True, exist_ok=True)
 
-        del rads
+      print('Rank {}:  Writing log for {:08d} to {}.'.format(rank, expid, logfile))
+      
+      with stdouterr_redirected(to=logfile):
+          print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(expids)))
+        
+          rads = RadLSS(night, expid, cameras=None, rank=rank)
+    
+          rads.compute(templates=True)
 
-      except:
-        blacklist.append(expid)
+          #  if nexp == nmax:
+          #    break
 
-        print('Rank {} blacklisted {} {}'.format(rank, expid, andes + '/exposures/{}/{:08d}/'.format(night, expid)))
+          print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
+      
+          del rads
+
+          #blacklist.append(expid)
+
+          #print('Rank {} blacklisted {} {}'.format(rank, expid, andes + '/exposures/{}/{:08d}/'.format(night, expid)))
           
-    sys.stdout.flush()
-          
-print(rank, blacklist)
+          sys.stdout.flush()
