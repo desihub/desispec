@@ -97,7 +97,7 @@ class RadLSS(object):
           '''
 
           #  Don't write to original andes.                                                                                                                                                                                                 
-          self.outdir           = '{}/radlss/tiles/{}/{}/'.format(outdir, self.tileid, self.night)
+          self.outdir           = '{}/tiles/{}/{}/'.format(outdir, self.tileid, self.night)
           self.qadir            = self.outdir + '/QA/{:08d}/'.format(self.expid)
 
           Path(self.outdir).mkdir(parents=True, exist_ok=True)

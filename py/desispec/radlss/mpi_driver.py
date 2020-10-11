@@ -16,6 +16,7 @@ import os
 import sys
 import time
 import glob
+import path
 import fitsio
 
 import itertools
@@ -55,6 +56,19 @@ andes     = '/global/cfs/cdirs/desi/spectro/redux/andes'
 
 def get_expids(night, andes='/global/cfs/cdirs/desi/spectro/redux/andes'):
     return  np.sort(np.array([x.split('/')[-1] for x in glob.glob(andes + '/exposures/{}/*'.format(night))]).astype(np.int))
+
+def is_processed(logfile):
+    processed     = False
+
+    if path.exists(logfile):
+      f           = open(logfile)
+        
+      if 'SUCCESS' in f.read():
+        processed = True
+
+      f.close()
+    
+    return  processed
 
 nmax      = 1
 night     = '20200315'
@@ -96,26 +110,32 @@ if len(rankexp) > 0:
       logdir   = '/global/cscratch1/sd/mjwilson/radlss/logs/{:08d}/'.format(expid)
       logfile  = logdir + '/{:08d}.log'.format(expid) 
 
-      Path(logdir).mkdir(parents=True, exist_ok=True)
+      done     = is_processed(logfile)
 
-      print('Rank {}:  Writing log for {:08d} to {}.'.format(rank, expid, logfile))
+      if not done:      
+          Path(logdir).mkdir(parents=True, exist_ok=True)
+
+          print('Rank {}:  Writing log for {:08d} to {}.'.format(rank, expid, logfile))
       
-      with stdouterr_redirected(to=logfile):
-          print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(expids)))
+          with stdouterr_redirected(to=logfile):
+              print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(expids)))
         
-          rads = RadLSS(night, expid, cameras=None, rank=rank)
-    
-          rads.compute(templates=True)
-
-          #  if nexp == nmax:
-          #    break
-
-          print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
-      
-          del rads
-
-          #blacklist.append(expid)
-
-          #print('Rank {} blacklisted {} {}'.format(rank, expid, andes + '/exposures/{}/{:08d}/'.format(night, expid)))
+              rads = RadLSS(night, expid, cameras=None, rank=rank)
           
-          sys.stdout.flush()
+              rads.compute(templates=True)
+
+              #  if nexp == nmax:
+              #    break
+
+              print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
+      
+              del rads
+
+              #blacklist.append(expid)
+
+              #print('Rank {} blacklisted {} {}'.format(rank, expid, andes + '/exposures/{}/{:08d}/'.format(night, expid)))
+          
+              sys.stdout.flush()
+
+      else:
+          print('EXPID {} previously processed successfully.'.format(expid))
