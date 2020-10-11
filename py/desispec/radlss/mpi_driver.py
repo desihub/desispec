@@ -1,4 +1,9 @@
-#- srun -n 2 python mpi_driver.py 
+#- salloc -N 6 -C haswell -q interactive -t 02:00:00
+#- srun -N 6 -n 24 -c 4 python mpi_driver.py
+#-
+#- 24 mins. per exposure (all ten petals, brz).
+#- 45 exposures to process for 20200315.
+#-
 #- Initialize MPI ASAP before proceeding with other imports.
 import multiprocessing
 
@@ -16,7 +21,6 @@ import os
 import sys
 import time
 import glob
-import path
 import fitsio
 
 import itertools
@@ -32,6 +36,7 @@ import desispec.io
 import redrock.templates
 import matplotlib.pyplot         as      plt
 
+from   os                        import  path
 from   astropy.convolution       import  convolve, Box1DKernel
 from   desispec.spectra          import  Spectra
 from   desispec.frame            import  Frame
