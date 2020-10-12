@@ -362,6 +362,10 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         peaks = peaks[(peaks>10)&(peaks<meansky.size-10)]
         peak_wave=frame.wave[peaks]
 
+        log.info("Number of peaks: {}".format(peaks.size))
+        if  peaks.size < 10 :
+            log.info("Wavelength of peaks: {}".format(peak_wave))
+
         # define area around each sky line to adjust
         dwave = np.mean(np.gradient(frame.wave))
         dpix = int(3//dwave)+1
@@ -389,7 +393,9 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             for j,peak in enumerate(peaks) :
                 b=peak-dpix
                 e=peak+dpix+1
-                if b<0 : continue
+                if b<0 :
+                    log.warning("skip peak on edge of spectrum with b={} e={}".format(b,e))
+                    continue
                 AA*=0
                 BB*=0
                 M=np.zeros((nparam,e-b))
@@ -411,7 +417,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
             # for each fiber, select valid peaks and interpolate
             ok=(peak_dw_err[i]<0.1)&(peak_chi2pdf[i]<2)
-            if np.sum(ok)>10 :
+            if np.sum(ok)>0 :
                 interpolated_sky_scale[i]=np.interp(frame.wave,peak_wave[ok],peak_scale[i,ok])
                 interpolated_sky_dwave[i]=np.interp(frame.wave,peak_wave[ok],peak_dw[i,ok])
                 log.info("fiber #{:03d} scale mean={:4.3f} rms={:4.3f} dlambda mean={:4.3f} rms={:4.3f}".format(i,np.mean(interpolated_sky_scale[i]),np.std(interpolated_sky_scale[i]),np.mean(interpolated_sky_dwave[i]),np.std(interpolated_sky_dwave[i])))
