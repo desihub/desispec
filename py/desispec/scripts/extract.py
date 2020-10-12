@@ -169,6 +169,8 @@ def gpu_specter_check_input_options(args):
 
     if args.gpu:
         try:
+            import numba.cuda
+            numba.cuda.is_available()
             import cupy as cp
         except ImportError:
             return False, 'cannot import module cupy'
