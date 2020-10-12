@@ -106,7 +106,6 @@ class RadLSS(object):
           self.outdir           = '{}/tiles/{}/{}/'.format(outdir, self.tileid, self.night)
           self.qadir            = self.outdir + '/QA/{:08d}/'.format(self.expid)
 
-          Path(self.ensemble_dir).mkdir(parents=True, exist_ok=True)
           Path(self.outdir).mkdir(parents=True, exist_ok=True)
           
         else:
@@ -626,26 +625,25 @@ class RadLSS(object):
         '''
         def tracer_maker(wave, tracer='ELG', nmodel=10):
             if tracer == 'ELG':
-                maker = desisim.templates.ELG(wave=wave)
+	        maker = desisim.templates.ELG(wave=wave)
 
             elif tracer == 'QSO':
                 maker = desisim.templates.QSO(wave=wave)
 
             elif tracer == 'LRG':
-                maker = desisim.templates.LRG(wave=wave)
+	         maker = desisim.templates.LRG(wave=wave)
 
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
 
-            flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel)
+	    flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel)
 
             return  wave, flux, meta, objmeta
 
         ## 
         start_genensemble      = time.perf_counter()
 
-        if path.exists(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower())):
-          try:
+        if path.exists(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower()))
             with open(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower()), 'rb') as handle:
                 self.ensemble_flux = pickle.load(handle)
 
@@ -655,20 +653,6 @@ class RadLSS(object):
             with open(self.ensemble_dir + '/template-{}-ensemble-objmeta.fits'.format(tracer.lower()), 'rb') as handle:
                 self.ensemble_objmeta = pickle.load(handle)                    
 
-            self.nmodel               = len(self.ensemble_flux[tracer]['r'])
-            self.ensemble_tracers.append(tracer)
-
-            print('Rank {}:  Successfully retrieved pre-written ensemble files at: {}.'.format(self.rank, self.ensemble_dir))
-
-            end_genensemble = time.perf_counter()
-
-            print('Rank {}:  Template ensemble in {:.3f} mins.'.format(self.rank, (end_genensemble - start_genensemble) / 60.))
-            
-            return  
-
-          except:
-              print('Rank {}:  Failed to retrieve pre-written ensemble files.  Regenerating.'.format(self.rank))
-        
         keys                           = set([key for key in self.cframes.keys() if key[0] in ['b','r','z']])
         keys                           = np.array(list(keys))
 
@@ -740,9 +724,7 @@ class RadLSS(object):
 
         with open(self.ensemble_dir + '/template-{}-ensemble-objmeta.fits'.format(tracer.lower()), 'wb') as handle:
             pickle.dump(self.ensemble_objmeta, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        end_genensemble = time.perf_counter()
-            
+       
         print('Rank {}:  Template ensemble in {:.3f} mins.'.format(self.rank, (end_genensemble - start_genensemble) / 60.))
                 
     def calc_templatesnrs(self, tracer='ELG'):
@@ -805,7 +787,7 @@ class RadLSS(object):
                 self.template_snrs[tracer][coadd][tsnr_type]    += self.template_snrs[tracer][cam][tsnr_type]
 
         end_templatesnr = time.perf_counter()
-                
+              	
         print('Rank {}:  Solved for template snrs in {:.3f} mins.'.format(self.rank, (end_templatesnr - start_templatesnr) / 60.))
                 
     def run_ensemble_redrock(self, output_dir='/global/scratch/mjwilson/', tracer='ELG'):

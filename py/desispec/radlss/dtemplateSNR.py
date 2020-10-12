@@ -33,13 +33,13 @@ from   astropy.utils.exceptions  import  AstropyWarning
 from   scipy                     import  stats
 from   pathlib                   import  Path
 
-
-def templateSNR(template_flux, sky_flux=None, flux_calib=None, fiberflat=None, readnoise=None, npix=None, angstroms_per_pixel=None, fiberloss=None, flux_ivar=None):
+@jit
+def templateSNR(dtemplate_flux, sky_flux=None, flux_calib=None, fiberflat=None, readnoise=None, npix=None, angstroms_per_pixel=None, fiberloss=None, flux_ivar=None):
     """
     Calculate template SNR, given either a model IVAR or cframe ivar.
         
     Args:
-        template_flux: ergs/s/cm2/A 
+        template_flux: Original - 100A smoothed spectrum [ergs/s/cm2/A]. 
         sky_flux: electrons/A
         flux_calib: 
         readnoise:electrons/pixel
@@ -55,9 +55,7 @@ def templateSNR(template_flux, sky_flux=None, flux_calib=None, fiberflat=None, r
         template S/N per camera.
     """
 
-    # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125. 
-    sflux = convolve(template_flux, Box1DKernel(125))
-    dflux = template_flux - sflux
+    dflux = dtemplate_flux
     
     if flux_ivar is not None:
         # Work in calibrated flux units.

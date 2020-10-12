@@ -97,6 +97,9 @@ cameras   = ['b6', 'r6', 'z6']
 
 comm.barrier()
 
+# ----  Test  ----
+expids    = expids[1:3]
+
 expids    = comm.bcast(expids, root=0)
 
 if rank == 0:
@@ -117,7 +120,7 @@ if len(rankexp) > 0:
     start      = time.perf_counter()
       
     if expid not in blacklist:
-      logdir   = '/global/cscratch1/sd/mjwilson/radlss/logs/{:08d}/'.format(expid)
+      logdir   = '/global/cscratch1/sd/mjwilson/radlss/test/logs/{:08d}/'.format(expid)
       logfile  = logdir + '/{:08d}.log'.format(expid) 
 
       done     = is_processed(logfile)
@@ -130,7 +133,7 @@ if len(rankexp) > 0:
           with stdouterr_redirected(to=logfile):
               print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
-              rads = RadLSS(night, expid, cameras=None, rank=rank)
+              rads = RadLSS(night, expid, cameras=cameras, rank=rank)
           
               rads.compute(templates=True)
 
