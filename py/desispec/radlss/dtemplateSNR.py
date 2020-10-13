@@ -34,7 +34,7 @@ from   scipy                     import  stats
 from   pathlib                   import  Path
 
 @jit
-def templateSNR(dtemplate_flux, sky_flux=None, flux_calib=None, fiberflat=None, readnoise=None, npix=None, angstroms_per_pixel=None, fiberloss=None, flux_ivar=None):
+def dtemplateSNR(dtemplate_flux, flux_ivar):
     """
     Calculate template SNR, given either a model IVAR or cframe ivar.
         
@@ -57,26 +57,46 @@ def templateSNR(dtemplate_flux, sky_flux=None, flux_calib=None, fiberflat=None, 
 
     dflux = dtemplate_flux
     
-    if flux_ivar is not None:
-        # Work in calibrated flux units.
-        # Assumes Poisson Variance from source is negligible.
-        return  np.sum(flux_ivar * dflux ** 2.)
+    # Work in calibrated flux units.
+    # Assumes Poisson Variance from source is negligible.
+    return  np.sum(flux_ivar * dflux ** 2.)
 
-    else: 
-        # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
-        dflux  *= flux_calib    # [e/A]
+@jit
+def dtemplateSNR_modelivar(dtemplate_flux, sky_flux, flux_calib, fiberflat, readnoise, npix, angstroms_per_pixel):
+    """                                                                                                                                                                                                         
+    Calculate template SNR, given either a model IVAR or cframe ivar.                                                                                                                                                                                                                                                                                                                                                           
+    Args:                                                                                                                                                                                                       
+        template_flux: Original - 100A smoothed spectrum [ergs/s/cm2/A].                                                                                                                                        
+        sky_flux: electrons/A                                                                                                                                                                                   
+        flux_calib:                                                                                                                                                                                             
+        readnoise:electrons/pixel                                                                                                                                                                               
+        npix:                                                                                                                                                                                                   
+        angstroms_per_pixel: in the wavelength direction.                                                                                                                                                       
+        fiberloss:                                                                                                                                                                                              
+        flux_ivar: Equivalent to calibrated flux [ergs/s/cm2/A].                                                                                                                                                
+                                                                                                                                                                                                                
+    Optional inputs:                                                                                                                                                                                          
+        ...                                                                                                                                                                                                                                                                                                                                                                                              
+    Returns:                                                                                                                                                                                                    
+        template S/N per camera.                                                                                                                                                                                
+    """
+
+    dflux   = dtemplate_flux
+
+    # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
+    dflux  *= flux_calib    # [e/A]
  
-        # Wavelength dependent fiber flat;  Multiply or divide - check with Julien. 
-        result  = dflux * fiberflat
-        result  = result**2.
+    # Wavelength dependent fiber flat;  Multiply or divide - check with Julien. 
+    result  = dflux * fiberflat
+    result  = result**2.
     
-        if fiberloss is not None:
-          lossless_fluxcalib = flux_calib / fiberloss
+    # if fiberloss is not None:
+    #   lossless_fluxcalib = flux_calib / fiberloss
     
-        # RDNOISE & NPIX assumed wavelength independent.
-        denom   = readnoise**2 * npix / angstroms_per_pixel + fiberflat * sky_flux
+    # RDNOISE & NPIX assumed wavelength independent.
+    denom   = readnoise**2 * npix / angstroms_per_pixel + fiberflat * sky_flux
         
-        result /= denom
+    result /= denom
         
-        # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
-        return  np.sum(result)
+    # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
+    return  np.sum(result)

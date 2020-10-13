@@ -37,7 +37,7 @@ from   templateSNR               import  templateSNR
 from   bitarray                  import  bitarray
 from   astropy.convolution       import  convolve, Box1DKernel
 from   os                        import  path
-
+from   dtemplateSNR              import  dtemplateSNR, dtemplateSNR_modelivar
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -91,7 +91,7 @@ class RadLSS(object):
         if (not self.fail) and (self.flavor == 'science'):
           self.get_gfas()
   
-          '''                                                                                                                                                                                                                                
+          '''                                                                                                                                                                                                                              
           try:                                                                                                                                                                                                                                  
           self.get_data()                                                                                                                                                                                                                   
                                                                                                                                                                                                                                           
@@ -658,7 +658,7 @@ class RadLSS(object):
             self.nmodel               = len(self.ensemble_flux[tracer]['r'])
             self.ensemble_tracers.append(tracer)
 
-            print('Rank {}:  Successfully retrieved pre-written ensemble files at: {}.'.format(self.rank, self.ensemble_dir))
+            print('Rank {}:  Successfully retrieved pre-written ensemble files at: {}'.format(self.rank, self.ensemble_dir))
 
             end_genensemble = time.perf_counter()
 
@@ -782,11 +782,10 @@ class RadLSS(object):
                     npix                = self.cframes[cam].fibermap['NEA'][j]  
                     angstroms_per_pixel = self.cframes[cam].fibermap['ANGSTROMPERPIXEL'][j]  
                 
-                    self.template_snrs[tracer][cam]['TSNR'][ifiber, j]           = templateSNR(template_flux, flux_ivar=flux_ivar)
-                    self.template_snrs[tracer][cam]['TSNR_MODELIVAR'][ifiber, j] = templateSNR(template_flux, sky_flux=sky_flux, flux_calib=flux_calib,
-                                                                                               fiberflat=fiberflat, readnoise=readnoise, npix=npix,
-                                                                                               angstroms_per_pixel=angstroms_per_pixel, fiberloss=None,
-                                                                                               flux_ivar=None)
+                    self.template_snrs[tracer][cam]['TSNR'][ifiber, j]           = dtemplateSNR(template_flux, flux_ivar)
+                    self.template_snrs[tracer][cam]['TSNR_MODELIVAR'][ifiber, j] = dtemplateSNR_modelivar(template_flux, sky_flux=sky_flux, flux_calib=flux_calib,
+                                                                                                          fiberflat=fiberflat, readnoise=readnoise, npix=npix,
+                                                                                                          angstroms_per_pixel=angstroms_per_pixel)
 
         self.template_snrs[tracer]['brz'] = {}
             
@@ -1076,7 +1075,7 @@ class RadLSS(object):
               # -------------  Templates  --------------- 
               if templates:  
                 for tracer in tracers:  
-                  self.gen_template_ensemble(tracer=tracer)
+                  self.gen_template_ensemble(tracer=tracer, dflux=True)
              
                   self.calc_templatesnrs(tracer=tracer)
 
