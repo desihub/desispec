@@ -750,7 +750,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- update img.mask to mask cosmic rays
     if not nocosmic :
         cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
-
+        mask = img.mask
 
 
     xyset = None
@@ -788,17 +788,17 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("compute an image model after dark correction and pixel flat")
         nsig = 5.
         mimage = compute_image_model(img, xyset, fiberflat=fiberflat,
-                                     with_spectral_smoothing=with_spectral_smoothing, 
+                                     with_spectral_smoothing=with_spectral_smoothing,
                                      with_sky_model=with_sky_model,
                                      spectral_smoothing_nsig=nsig, psf=psf)
-        
+
         # here we bring back original image for large outliers
         # this allows to have a correct ivar for cosmic rays and bright sources
         eps = 0.1
         out = (((ivar>0)*(image-mimage)**2/(1./(ivar+(ivar==0))+(0.1*mimage)**2))>nsig**2)
         # out &= (image>mimage) # could request this to be conservative on the variance ... but this could cause other issues
         mimage[out] = image[out]
-        
+
         log.info("use image model to compute variance")
         if bkgsub :
             mimage += bkg
