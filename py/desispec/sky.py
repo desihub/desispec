@@ -444,7 +444,12 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                     for p in range(k+1) :
                         AA[k,p] = np.sum(frame.ivar[i,b:e]*M[k]*M[p])
                         if p!=k : AA[p,k]=AA[k,p]
-                AAi=np.linalg.inv(AA)
+                try :
+                    AAi=np.linalg.inv(AA)
+                except np.linalg.LinAlgError as e :
+                    log.warning(str(e))
+                    continue
+
                 X=AAi.dot(BB)
                 index=1
                 peak_scale[i,j]=X[index]
