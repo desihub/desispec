@@ -619,7 +619,7 @@ class RadLSS(object):
             #  for i in range(nspec):
             #    model[i] = Resolution(R1[i]).dot(influx[i])
     
-    def gen_template_ensemble(self, tracer='ELG', nmodel=50, dflux=False):  
+    def gen_template_ensemble(self, tracer='ELG', nmodel=50, dflux=False, cached=True):  
         '''
         Generate an ensemble of templates to sample tSNR for a range of points in
         (z, m, OII, etc.) space.
@@ -644,7 +644,7 @@ class RadLSS(object):
         ## 
         start_genensemble      = time.perf_counter()
 
-        if path.exists(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower())):
+        if cached and path.exists(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower())):
           try:
             with open(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower()), 'rb') as handle:
                 self.ensemble_flux = pickle.load(handle)
@@ -686,7 +686,7 @@ class RadLSS(object):
             # Retain only spectral features < 100. Angstroms.
             # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.                                                                                                                              
             for i, ff in enumerate(flux):
-                sflux                  = convolve(ff, Box1DKernel(125))
+                sflux                  = convolve(ff, Box1DKernel(125), boundary='extend')
                 dflux                  = ff - sflux
 
                 flux[i,:]              = dflux
@@ -837,7 +837,7 @@ class RadLSS(object):
         
         self.template_zbests[tracer] = Table.read(self.zbest_file, 'ZBEST')
         
-    def write_radweights(self, output_dir='/global/scratch/mjwilson/'):
+    def write_radweights(self, output_dir='/global/scratch/mjwilson/', vadd_fibermap=False):
         '''
         Each camera, each fiber, a template SNR (redshift efficiency) as a function of redshift &
         target magnitude, per target class.  This could be for instance in the form of fits images in 3D
@@ -846,27 +846,30 @@ class RadLSS(object):
 
         start_writeweights = time.perf_counter()
 
-        for cam in self.cameras:            
-          hdr             = fits.open(findfile('cframe', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))[0].header
+        for petal in self.petals:            
+          hdr             = fits.open(findfile('cframe', night=self.night, expid=self.expid, camera=self.cameras[0], specprod_dir=self.andes))[0].header
 
           hdr['EXTNAME']  = 'RADWEIGHT'
 
           primary         = fits.PrimaryHDU(header=hdr)
-          
-          hdu_list        = [primary] + [fits.ImageHDU(self.template_snrs[tracer][cam]['TSNR_MODELIVAR'], name=tracer) for tracer in self.ensemble_tracers]  
+
+          hdu_list        = [primary] + [fits.ImageHDU(self.template_snrs[tracer]['brz{}'.format(petal)]['TSNR'], name=tracer) for tracer in self.ensemble_tracers]  
  
           all_hdus        = fits.HDUList(hdu_list)
 
-          all_hdus.writeto(self.outdir + '/radweights-{}-{:08d}.fits'.format(cam, self.expid), overwrite=True)
+          all_hdus.writeto(self.outdir + '/radweights-{}-{:08d}.fits'.format(petal, self.expid), overwrite=True)
 
-          #  Derived fibermap info.
-          derived_cols    = [x for x in list(self.cframes[cam].fibermap.dtype.names) if x not in self._ofibermapcols]
+
+        if vadd_fibermap:
+          for cam in self.cameras:
+              #  Derived fibermap info.
+              derived_cols    = [x for x in list(self.cframes[cam].fibermap.dtype.names) if x not in self._ofibermapcols]
  
-          self.cframes[cam].fibermap[derived_cols].write(self.outdir + '/vadd-fibermap-{}-{:08d}.fits'.format(cam, self.expid), overwrite=True)
-
+              self.cframes[cam].fibermap[derived_cols].write(self.outdir + '/vadd-fibermap-{}-{:08d}.fits'.format(cam, self.expid), overwrite=True)
+ 
         end_writeweights  = time.perf_counter()
 
-        print('Rank {}:  Written rad. weights in {:.3f} mins.'.format(self.rank, (end_writeweights - start_writeweights) / 60.))
+        print('Rank {}:  Written rad. weights (and value added fibermap) in {:.3f} mins.'.format(self.rank, (end_writeweights - start_writeweights) / 60.))
           
     def qa_plots(self, plots_dir=None):
         '''
