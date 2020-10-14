@@ -38,6 +38,8 @@ def parse(options=None):
                         help = 'wavelength degree for chromatic x angular variation. If -1, use independent focal plane polynomial corrections for each wavelength (i.e. many more parameters)')
     parser.add_argument('--adjust-wavelength', action='store_true',
                         help = 'adjust wavelength calibration of sky model on sky lines to improve sky subtraction for all fibers')
+    parser.add_argument('--adjust-lsf', action='store_true',
+                        help = 'adjust LSF width of sky model on sky lines to improve sky subtraction for all fibers')
 
     args = None
     if options is None:
@@ -70,7 +72,8 @@ def main(args) :
     skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),\
                            angular_variation_deg=args.angular_variation_deg,\
                            chromatic_variation_deg=args.chromatic_variation_deg,\
-                           adjust_wavelength=args.adjust_wavelength)
+                           adjust_wavelength=args.adjust_wavelength,\
+                           adjust_lsf=args.adjust_lsf)
 
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
