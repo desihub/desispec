@@ -857,7 +857,7 @@ def compute_non_uniform_sky(frame, nsig_clipping=4.,max_iterations=10,model_ivar
     nfibers=len(skyfibers)
 
     current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
-    current_ivar *= ((frame.mask&maskout)==0)
+    current_ivar *= (frame.mask==0)
 
     current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
