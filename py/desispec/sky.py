@@ -106,7 +106,8 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
     tmp   = np.zeros(frame.wave.size)
     tmp   = (msky[1:-1]>msky[2:])*(msky[1:-1]>msky[:-2])*(msky[1:-1]>0.1*np.max(msky))
     peaks = np.where(tmp)[0]+1
-    dpix  = 1
+    dpix  = 2 #eval error range
+    dpix2  = 3 # scale error range (larger)
 
     input_skyvar = 1./(cskyivar+(cskyivar==0))
     skyvar = input_skyvar + 0.
@@ -115,6 +116,8 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
     for peak in peaks :
         b=peak-dpix
         e=peak+dpix+1
+        b2=peak-dpix2
+        e2=peak+dpix2+1
         mchi2  = np.mean(chi2[b:e]) # mean reduced chi2 around peak
         mndata = np.mean(ndata[b:e]) # mean number of fibers contributing
 
@@ -131,7 +134,7 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
             median_chi2=np.median(chi2_of_sky_fibers)/0.7888 # normalization from median to mean for chi2 with 3 d.o.f.
             if median_chi2<=1 :
                 log.info("peak at {}A : sigma_wave={}".format(int(frame.wave[peak]),sigma_wave))
-                skyvar[:,b:e] = input_skyvar[:,b:e] + (sigma_flat*msky[b:e])**2 + (sigma_wave*dskydw[b:e])**2
+                skyvar[:,b2:e2] = input_skyvar[:,b2:e2] + (sigma_flat*msky[b2:e2])**2 + (sigma_wave*dskydw[b2:e2])**2
                 break
             sigma_wave += 0.005
     return (cskyivar>0)/(skyvar+(skyvar==0))
