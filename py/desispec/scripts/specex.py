@@ -243,6 +243,8 @@ def main(args, comm=None):
 
     if rank == 0:
         # Print parameters
+        log.info("specex:  io_refactor")
+        time.sleep(5)
         log.info("specex:  using {} processes".format(nproc))
         log.info("specex:  input image = {}".format(imgfile))
         log.info("specex:  input PSF = {}".format(inpsffile))
