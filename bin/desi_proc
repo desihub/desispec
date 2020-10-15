@@ -131,6 +131,18 @@ else:
 if 'PMI_MMAP_SYNC_WAIT_TIME' not in os.environ:
     os.environ['PMI_MMAP_SYNC_WAIT_TIME'] = '3600'
 
+#- Double check env for MPI+multiprocessing at NERSC
+if 'MPICH_GNI_FORK_MODE' not in os.environ:
+    os.environ['MPICH_GNI_FORK_MODE'] = 'FULLCOPY'
+    if rank == 0:
+        log.info('Setting MPICH_GNI_FORK_MODE=FULLCOPY for MPI+multiprocessing')
+elif os.environ['MPICH_GNI_FORK_MODE'] != 'FULLCOPY':
+    gnifork = os.environ['MPICH_GNI_FORK_MODE']
+    if rank == 0:
+        log.error(f'MPICH_GNI_FORK_MODE={gnifork} is not "FULLCOPY"; this might not work with MPI+multiprocessing, but not overriding')
+elif rank == 0:
+    log.debug('MPICH_GNI_FORK_MODE={}'.format(os.environ['MPICH_GNI_FORK_MODE']))
+
 #- Start timer; only print log messages from rank 0 (others are silent)
 timer = desiutil.timer.Timer(silent=(rank>0))
 if args.starttime is not None:
