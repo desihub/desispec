@@ -33,7 +33,7 @@ from   astropy.utils.exceptions  import  AstropyWarning
 from   scipy                     import  stats
 from   pathlib                   import  Path
 
-@jit
+# @jit
 def dtemplateSNR(dtemplate_flux, flux_ivar):
     """
     Calculate template SNR, given either a model IVAR or cframe ivar.
@@ -59,9 +59,9 @@ def dtemplateSNR(dtemplate_flux, flux_ivar):
     
     # Work in calibrated flux units.
     # Assumes Poisson Variance from source is negligible.
-    return  np.sum(flux_ivar * dflux ** 2.)
+    return  np.sum(flux_ivar * dflux ** 2.)  
 
-@jit
+# @jit
 def dtemplateSNR_modelivar(dtemplate_flux, sky_flux, flux_calib, fiberflat, readnoise, npix, angstroms_per_pixel):
     """                                                                                                                                                                                                         
     Calculate template SNR, given either a model IVAR or cframe ivar.                                                                                                                                                                                                                                                                                                                                                           
@@ -81,7 +81,7 @@ def dtemplateSNR_modelivar(dtemplate_flux, sky_flux, flux_calib, fiberflat, read
         template S/N per camera.                                                                                                                                                                                
     """
 
-    dflux   = dtemplate_flux
+    dflux   = np.array(dtemplate_flux, copy=True)
 
     # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
     dflux  *= flux_calib    # [e/A]

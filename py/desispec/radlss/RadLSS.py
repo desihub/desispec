@@ -82,6 +82,7 @@ class RadLSS(object):
         self.nmodel           =  0
         self.ensemble_tracers = []
         self.ensemble_flux    = {}
+        self.ensemble_dflux   = {}
         self.ensemble_meta    = {}
         self.ensemble_objmeta = {}
         self.template_snrs    = {}
@@ -201,7 +202,7 @@ class RadLSS(object):
         # End the clock.                                                                                                                                                                                     
         end_getdata    = time.perf_counter()
 
-        print('Rank {}:  Retreived pipeline data in {:.3f} mins.'.format(self.rank, (end_getdata - start_getdata) / 60.))
+        print('Rank {}:  Retrieved pipeline data in {:.3f} mins.'.format(self.rank, (end_getdata - start_getdata) / 60.))
         
     def get_gfas(self, printit=False, root='/global/scratch/mjwilson', survey='SV0'):
       '''                                                                                                                                                                                                  
@@ -619,7 +620,7 @@ class RadLSS(object):
             #  for i in range(nspec):
             #    model[i] = Resolution(R1[i]).dot(influx[i])
     
-    def gen_template_ensemble(self, tracer='ELG', nmodel=50, dflux=False, cached=True):  
+    def gen_template_ensemble(self, tracer='ELG', nmodel=250, cached=True, sort=True):  
         '''
         Generate an ensemble of templates to sample tSNR for a range of points in
         (z, m, OII, etc.) space.
@@ -642,27 +643,34 @@ class RadLSS(object):
             return  wave, flux, meta, objmeta
 
         ## 
-        start_genensemble      = time.perf_counter()
+        start_genensemble = time.perf_counter()
 
         if cached and path.exists(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower())):
           try:
             with open(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower()), 'rb') as handle:
                 self.ensemble_flux = pickle.load(handle)
 
+            with open(self.ensemble_dir + '/template-{}-ensemble-dflux.fits'.format(tracer.lower()), 'rb') as handle:
+                self.ensemble_dflux = pickle.load(handle)
+                
             with open(self.ensemble_dir + '/template-{}-ensemble-meta.fits'.format(tracer.lower()), 'rb') as handle:
                 self.ensemble_meta = pickle.load(handle)
 
             with open(self.ensemble_dir + '/template-{}-ensemble-objmeta.fits'.format(tracer.lower()), 'rb') as handle:
                 self.ensemble_objmeta = pickle.load(handle)                    
 
-            self.nmodel               = len(self.ensemble_flux[tracer]['r'])
+            self.nmodel               = len(self.ensemble_flux[tracer][self.cameras[0][0]])
             self.ensemble_tracers.append(tracer)
 
-            print('Rank {}:  Successfully retrieved pre-written ensemble files at: {}'.format(self.rank, self.ensemble_dir))
+            if self.nmodel != nmodel:
+                # Pass to below.
+                raise ValueError('Retrieved ensemble had erroneous model numbers.')
+            
+            print('Rank {}:  Successfully retrieved pre-written ensemble files at: {} (nmodel: {}, {})'.format(self.rank, self.ensemble_dir, nmodel, self.nmodel))
 
             end_genensemble = time.perf_counter()
 
-            print('Rank {}:  Template ensemble in {:.3f} mins.'.format(self.rank, (end_genensemble - start_genensemble) / 60.))
+            print('Rank {}:  Template ensemble (nmodel: {}) in {:.3f} mins.'.format(self.rank, self.nmodel, (end_genensemble - start_genensemble) / 60.))
             
             return  
 
@@ -681,17 +689,7 @@ class RadLSS(object):
                 
         wave                           = np.unique(wave) # sorted.
         wave, flux, meta, objmeta      = tracer_maker(wave=wave, tracer=tracer, nmodel=nmodel)
-
-        if dflux:
-            # Retain only spectral features < 100. Angstroms.
-            # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.                                                                                                                              
-            for i, ff in enumerate(flux):
-                sflux                  = convolve(ff, Box1DKernel(125), boundary='extend')
-                dflux                  = ff - sflux
-
-                flux[i,:]              = dflux
-
-        ## 
+        
         meta['MAG_G']                  = 22.5 - 2.5 * np.log10(meta['FLUX_G'])
         meta['MAG_R']                  = 22.5 - 2.5 * np.log10(meta['FLUX_R'])
         meta['MAG_Z']                  = 22.5 - 2.5 * np.log10(meta['FLUX_Z'])
@@ -706,35 +704,50 @@ class RadLSS(object):
             self.ensemble_tracers.append(tracer)
 
         self.ensemble_flux[tracer]     = {}
+        self.ensemble_dflux[tracer]    = {}
         self.ensemble_meta[tracer]     = meta
         self.ensemble_objmeta[tracer]  = objmeta
 
         # Generate template fluxes for brz bands. 
         for band in ['b', 'r', 'z']:
-            band_key                         = [x[0] == band for x in keys]
-            band_key                         = keys[band_key][0]
+            band_key                          = [x[0] == band for x in keys]
+            band_key                          = keys[band_key][0]
                                             
-            band_wave                        = self.cframes[band_key].wave
+            band_wave                         = self.cframes[band_key].wave
                     
-            in_band                          = np.isin(wave, band_wave)
+            in_band                           = np.isin(wave, band_wave)
                     
-            self.ensemble_flux[tracer][band] = flux[:, in_band] 
-                        
-        if tracer == 'ELG':
+            self.ensemble_flux[tracer][band]  = flux[:, in_band] 
+
+            dflux                             = np.zeros_like(self.ensemble_flux[tracer][band])
+            
+            # Retain only spectral features < 100. Angstroms.
+            # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.
+            for i, ff in enumerate(self.ensemble_flux[tracer][band]):
+                sflux                         = convolve(ff, Box1DKernel(125), boundary='extend')
+                dflux[i,:]                    = ff - sflux
+            
+            self.ensemble_dflux[tracer][band] = dflux
+            
+        if sort and (tracer == 'ELG'):
             # Sort tracers for SOM-style plots.
-            indx   = np.argsort(self.ensemble_meta[tracer], order=['REDSHIFT', 'OIIFLUX', 'MAG'])
+            indx                                 = np.argsort(self.ensemble_meta[tracer], order=['REDSHIFT', 'OIIFLUX', 'MAG'])
 
             self.ensemble_meta[tracer]           = self.ensemble_meta[tracer][indx]
             self.ensemble_objmeta[tracer]        = self.ensemble_objmeta[tracer][indx]        
             
             for band in ['b', 'r', 'z']:
-                self.ensemble_flux[tracer][band] = self.ensemble_flux[tracer][band][indx]
-
+                self.ensemble_flux[tracer][band]  = self.ensemble_flux[tracer][band][indx]
+                self.ensemble_dflux[tracer][band] = self.ensemble_dflux[tracer][band][indx]
+                
         end_genensemble = time.perf_counter()
 
         with open(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower()), 'wb') as handle:
             pickle.dump(self.ensemble_flux, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        with open(self.ensemble_dir + '/template-{}-ensemble-dflux.fits'.format(tracer.lower()), 'wb') as handle:
+            pickle.dump(self.ensemble_dflux, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            
         with open(self.ensemble_dir + '/template-{}-ensemble-meta.fits'.format(tracer.lower()), 'wb') as handle:
             pickle.dump(self.ensemble_meta, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -743,7 +756,7 @@ class RadLSS(object):
 
         end_genensemble = time.perf_counter()
             
-        print('Rank {}:  Template ensemble in {:.3f} mins.'.format(self.rank, (end_genensemble - start_genensemble) / 60.))
+        print('Rank {}:  Template ensemble (nmode; {}) in {:.3f} mins.'.format(self.rank, self.nmodel, (end_genensemble - start_genensemble) / 60.))
                 
     def calc_templatesnrs(self, tracer='ELG'):
         '''
@@ -756,7 +769,7 @@ class RadLSS(object):
 
         start_templatesnr           = time.perf_counter()
 
-        if  len(self.ensemble_flux.keys()) == 0:
+        if len(self.ensemble_flux.keys()) == 0:
             self.gen_template_ensemble(tracer=tracer)
         
         self.template_snrs[tracer]  = {}
@@ -773,17 +786,17 @@ class RadLSS(object):
             self.template_snrs[tracer][cam]['TSNR_MODELIVAR'] = np.zeros((nfiber, nmodel)) 
             
             for ifiber, fiberid in enumerate(self.fibermaps[cam]['FIBER']):
-                for j, template_flux in enumerate(self.ensemble_flux[tracer][band]):
+                for j, template_dflux in enumerate(self.ensemble_dflux[tracer][band]):
                     sky_flux            = self.skies[cam].flux[ifiber,:]
                     flux_calib          = self.fluxcalibs[cam].calib[ifiber,:]
-                    flux_ivar           = self.cframes[cam].ivar[ifiber, :]    
-                    fiberflat           = self.fiberflats[cam].fiberflat[j,:] 
-                    readnoise           = self.cframes[cam].fibermap['RDNOISE'][j]  
-                    npix                = self.cframes[cam].fibermap['NEA'][j]  
-                    angstroms_per_pixel = self.cframes[cam].fibermap['ANGSTROMPERPIXEL'][j]  
+                    flux_ivar           = self.cframes[cam].ivar[ifiber, :]
+                    fiberflat           = self.fiberflats[cam].fiberflat[ifiber,:] 
+                    readnoise           = self.cframes[cam].fibermap['RDNOISE'][ifiber]  
+                    npix                = self.cframes[cam].fibermap['NEA'][ifiber]  
+                    angstroms_per_pixel = self.cframes[cam].fibermap['ANGSTROMPERPIXEL'][ifiber]  
                 
-                    self.template_snrs[tracer][cam]['TSNR'][ifiber, j]           = dtemplateSNR(template_flux, flux_ivar)
-                    self.template_snrs[tracer][cam]['TSNR_MODELIVAR'][ifiber, j] = dtemplateSNR_modelivar(template_flux, sky_flux=sky_flux, flux_calib=flux_calib,
+                    self.template_snrs[tracer][cam]['TSNR'][ifiber, j]           = dtemplateSNR(template_dflux, flux_ivar)
+                    self.template_snrs[tracer][cam]['TSNR_MODELIVAR'][ifiber, j] = dtemplateSNR_modelivar(template_dflux, sky_flux=sky_flux, flux_calib=flux_calib,
                                                                                                           fiberflat=fiberflat, readnoise=readnoise, npix=npix,
                                                                                                           angstroms_per_pixel=angstroms_per_pixel)
 
@@ -952,7 +965,9 @@ class RadLSS(object):
           Path(plots_dir + '/readnoise/').mkdir(parents=True, exist_ok=True)
             
           pl.savefig(plots_dir + '/readnoise/readnoise.pdf'.format(cam))
-            
+
+          plt.close(fig)
+          
           # --------------- Template meta  ---------------
           # fig, axes = plt.subplots(1, 3, figsize=(20, 5))
   
@@ -1009,7 +1024,9 @@ class RadLSS(object):
             ax.set_title('EXPID: {:08d}'.format(self.expid))
   
           pl.savefig(plots_dir + '/redrock/redrock-data-tsnr-{}.pdf'.format(cam))            
-            
+
+          plt.close(fig)
+          
           # --------------- Template meta  ---------------
           # fig, axes = plt.subplots(1, 3, figsize=(20, 5))
   
@@ -1054,6 +1071,8 @@ class RadLSS(object):
            
             pl.savefig(plots_dir + '/TSNRs/tsnr-{}-ensemble-meta-{}.pdf'.format(tracer, petal))        
 
+            plt.close(fig)
+            
         end_plotqa  = time.perf_counter()
 
         print('Rank {}:  Created QA plots in {:.3f} mins.'.format(self.rank, (end_plotqa - start_plotqa) / 60.))
@@ -1078,7 +1097,7 @@ class RadLSS(object):
               # -------------  Templates  --------------- 
               if templates:  
                 for tracer in tracers:  
-                  self.gen_template_ensemble(tracer=tracer, dflux=True)
+                  self.gen_template_ensemble(tracer=tracer)
              
                   self.calc_templatesnrs(tracer=tracer)
 
