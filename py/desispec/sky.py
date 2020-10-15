@@ -128,7 +128,7 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
             pivar=(tivar[:,b:e]>0)/(var+(sigma_flat*msky[b:e])**2+(sigma_wave*dskydw[b:e])**2)
             chi2_of_sky_fibers=np.sum(pivar*res2,axis=1)/np.sum(tivar[:,b:e]>0,axis=1)
             log.debug("sky fibers chi2= {} for sigma_flat= {} and sigma_wave= {}".format(chi2_of_sky_fibers,sigma_flat,sigma_wave))
-            median_chi2=np.median(chi2_of_sky_fibers)
+            median_chi2=np.median(chi2_of_sky_fibers)/0.7888 # normalization from median to mean for chi2 with 3 d.o.f.
             if median_chi2<=1 :
                 log.info("peak at {}A : sigma_wave={}".format(int(frame.wave[peak]),sigma_wave))
                 skyvar[:,b:e] = input_skyvar[:,b:e] + (sigma_flat*msky[b:e])**2 + (sigma_wave*dskydw[b:e])**2
@@ -468,20 +468,35 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             # for each fiber, select valid peaks and interpolate
             ok=(peak_chi2pdf[i]<2)
             if adjust_wavelength :
-                ok &= (peak_dw_err[i]<0.1)
+                ok &= (peak_dw_err[i]>0.)&(peak_dw_err[i]<0.1)
             if adjust_lsf :
-                ok &= (peak_dlsf_err[i]<10.)
-
+                ok &= (peak_dlsf_err[i]>0.)&(peak_dlsf_err[i]<1.)
             if np.sum(ok)>0 :
                 interpolated_sky_scale[i]=np.interp(frame.wave,peak_wave[ok],peak_scale[i,ok])
-                if adjust_wavelength : interpolated_sky_dwave[i]=np.interp(frame.wave,peak_wave[ok],peak_dw[i,ok])
-                if adjust_lsf : interpolated_sky_dlsf[i]=np.interp(frame.wave,peak_wave[ok],peak_dlsf[i,ok])
+                if adjust_wavelength :
+                    #deg=2
+                    #if np.sum(ok)>deg :
+                    #    c=np.polyfit(peak_wave[ok],peak_dw[i,ok],2,w=1./peak_dw_err[i,ok]**2)
+                    #    interpolated_sky_dwave[i]=np.poly1d(c)(frame.wave)
+                    #else :
+                    interpolated_sky_dwave[i]=np.interp(frame.wave,peak_wave[ok],peak_dw[i,ok])
+                if adjust_lsf :
+                    #deg=4
+                    #if np.sum(ok)>deg :
+                    #    c=np.polyfit(peak_wave[ok],peak_dlsf[i,ok],2,w=1./peak_dlsf_err[i,ok]**2)
+                    #    interpolated_sky_dlsf[i]=np.poly1d(c)(frame.wave)
+                    #else :
+                    interpolated_sky_dlsf[i]=np.interp(frame.wave,peak_wave[ok],peak_dlsf[i,ok])
+
                 line="fiber #{:03d} scale mean={:4.3f} rms={:4.3f}".format(i,np.mean(interpolated_sky_scale[i]),np.std(interpolated_sky_scale[i]))
                 if adjust_wavelength :
                     line += " dlambda mean={:4.3f} rms={:4.3f}".format(np.mean(interpolated_sky_dwave[i]),np.std(interpolated_sky_dwave[i]))
                 if adjust_lsf :
                     line += " dlsf mean={:4.3f} rms={:4.3f}".format(np.mean(interpolated_sky_dlsf[i]),np.std(interpolated_sky_dlsf[i]))
                 print(line)
+
+
+
 
         # now median filtering across fibers to remove the effect of the target fluxes
         # (because the wavelength calib errors are localized in the CCD)
@@ -495,6 +510,20 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         if adjust_lsf :
             interpolated_sky_dlsf = scipy.ndimage.filters.median_filter(interpolated_sky_dlsf,(nfibers_for_filter,1))
             cskyflux += interpolated_sky_dlsf*dskydlsf
+
+        """
+        import sys
+        import fitsio
+        fitsio.write("peak_dw.fits",peak_dw,clobber=True)
+        fitsio.write("peak_dw_err.fits",peak_dw_err,clobber=True)
+        fitsio.write("peak_dlsf.fits",peak_dlsf,clobber=True)
+        fitsio.write("peak_dlsf_err.fits",peak_dlsf_err,clobber=True)
+        fitsio.write("interpolated_sky_scale.fits",interpolated_sky_scale,clobber=True)
+        fitsio.write("interpolated_sky_dwave.fits",interpolated_sky_dwave,clobber=True)
+        fitsio.write("interpolated_sky_dlsf.fits",interpolated_sky_dlsf,clobber=True)
+        print("wrote a bunch of images")
+        sys.exit(12)
+        """
 
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
