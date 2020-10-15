@@ -63,6 +63,89 @@ if libspecex is not None:
         ct.POINTER(ct.POINTER(ct.c_char))
     ]
 
+#########################################
+# TEMPORARY SPECEX-DESISPEC I/O FUNCTIONS
+
+def meta2header(meta):
+    header = spx.MapStringString()
+
+    for key in meta:
+        mkey = meta[key]
+        if type(mkey) == bool:
+            header[key]='F'
+            if mkey: header[key]='T'
+        elif type(mkey) == str: 
+            mstr = mkey
+            if len(mstr) < 8: mstr = mstr.ljust(8, ' ')
+            header[key]="\'"+mstr+"\'"
+        else:
+            mstr = str(mkey)
+            if len(mstr) > 1:
+                if mstr[-2:]=='.0': mstr=mstr[:-1]
+            header[key]=mstr
+
+    return header
+
+def read_desi_ppimage_spx(opts):
+    import desispec.io.image
+
+    # read images from fits file
+    dsmg = desispec.io.image.read_image(opts.arc_image_filename)
+
+    # set ivar=0 to pixels with mask!=0
+    dsmg.ivar[dsmg.mask!=0] = 0.0
+
+    # convert from astropy.io.fits.header.Header dict-like object to
+    # std::map<std::string,std::string> object via meta2header
+    # function above, changing formatting to match current use in
+    # specex
+    hdr  = meta2header(dsmg.meta)
+
+    # instantiate new specex::PyImage object with arrays and header
+    # from the preproc fits file. this object will be passed to the
+    # specex::PyFitting::fit_psf routine 
+    pymg = spx.PyImage(dsmg.pix, dsmg.ivar,
+                       dsmg.mask,dsmg.readnoise,
+                       hdr)
+
+    return pymg
+
+def compheaders(header1,header2):
+    if len(header1) != len(header2):
+        print('lengths not same')
+        return 1
+
+    for key in header1:
+        if header1[key] != header2[key]:
+            print('values for key ',key,' are ',header1[key],' ',header2[key])
+            return 1
+
+    return 0
+
+def comparrs(arr1,arr2,tag):
+
+    if np.array_equal(arr1,arr2): return 0
+    
+    if len(arr1) != len(arr2):
+        print(tag,' array length are different')
+        return 1
+    
+    diff = np.abs(arr1-arr2)
+    print(tag,' arrays are different')
+    print('  min diff',diff.min())
+    print('  max diff',diff.max())
+    print('  avg diff',diff.mean())
+    print('  arr1 avg',arr1.mean())
+    print('  arr2 avg',arr2.mean())
+    print(np.shape(arr1))
+    print(len(diff[diff>0]))
+    print(arr1[diff>0],'\n')
+    print(arr2[diff>0],'\n')
+
+    return 1
+
+# END TEMPORARY I/O SUPPORT FUNCTIONS
+#########################################
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
@@ -216,17 +299,25 @@ def main(args, comm=None):
         # rval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
 
         # new way
+        specex_image_io = False
+
         opts = spx.PyOptions() # input options
         pyio = spx.PyIO()      # IO options and methods
         pypr = spx.PyPrior()   # Gaussian priors
-        pymg = spx.PyImage()   # image data
         pyps = spx.PyPSF()     # psf data
         pyft = spx.PyFitting() # psf fitting
         
         rval = opts.parse(com)                        # com is list of args
-        rval = pyio.check_input_psf(opts)             # set booleans for input psf 
+        rval = pyio.check_input_psf(opts)             # set input psf bools
         rval = pypr.deal_with_priors(opts)            # set Gaussian priors
-        rval = pyio.read_img_data(opts,pymg)          # read image 
+
+        if specex_image_io:
+            # read preproc images into pymg with specex (harp)
+            rval = pyio.read_img_data(opts,pymg)
+        else:
+            # read preproc images into pymg with desispec (astropy.io.fits)
+            pymg = read_desi_ppimage_spx(opts)
+
         rval = pyio.read_psf_data(opts,pyps)          # read psf 
         rval = pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf
         
@@ -240,7 +331,6 @@ def main(args, comm=None):
         rval = pyio.write_psf_data(opts,pyps)         # write psf 
         rval = pyio.write_spots(opts,pyps)            # write spots
         
-
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
