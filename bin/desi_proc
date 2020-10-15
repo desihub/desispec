@@ -22,18 +22,18 @@ time srun -n 20 -N 1 -C haswell -t 15:00 --qos realtime desi_proc --mpi -n 20191
 """
 
 import time
-from collections import OrderedDict
+start_imports = time.time()
 
-progress = OrderedDict(start=time.asctime())
-
-import sys, os, argparse, re, time, collections
+import sys, os, argparse, re
 import subprocess
 from copy import deepcopy
+import json
 
 import numpy as np
 import fitsio
 from astropy.io import fits
 import glob
+import desiutil.timer
 import desispec.io
 from desispec.io import findfile
 from desispec.io.util import create_camword
@@ -47,6 +47,7 @@ import desispec.scripts.specex
 from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
+stop_imports = time.time()
 
 parser = argparse.ArgumentParser(usage = "{prog} [options]")
 parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
@@ -79,6 +80,9 @@ parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in
 parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
                     " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
 parser.add_argument("--variance-model", action="store_true", help="Use variance model in preprocessing")
+parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
+parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
+
 
 def find_most_recent(night, file_type='psfnight', n_nights=30):
     '''
@@ -97,7 +101,7 @@ def find_most_recent(night, file_type='psfnight', n_nights=30):
     '''
     # Set the time as Noon on the day in question
     today = time.strptime('{} 12'.format(night),'%Y%m%d %H')
-    one_day = 60*60*24 # seconds                                                                              \
+    one_day = 60*60*24 # seconds
 
     test_night_struct = today
 
@@ -114,10 +118,6 @@ def find_most_recent(night, file_type='psfnight', n_nights=30):
 
 args = parser.parse_args()
 log = get_logger()
-
-#- Freeze IERS after parsing args so that it doesn't bother if only --help
-import desiutil.iers
-desiutil.iers.freeze_iers()
 
 if args.mpi and not args.batch:
     from mpi4py import MPI
@@ -136,7 +136,38 @@ if args.batch_opts is not None:
 if 'PMI_MMAP_SYNC_WAIT_TIME' not in os.environ:
     os.environ['PMI_MMAP_SYNC_WAIT_TIME'] = '3600'
 
+#- Double check env for MPI+multiprocessing at NERSC
+if 'MPICH_GNI_FORK_MODE' not in os.environ:
+    os.environ['MPICH_GNI_FORK_MODE'] = 'FULLCOPY'
+    if rank == 0:
+        log.info('Setting MPICH_GNI_FORK_MODE=FULLCOPY for MPI+multiprocessing')
+elif os.environ['MPICH_GNI_FORK_MODE'] != 'FULLCOPY':
+    gnifork = os.environ['MPICH_GNI_FORK_MODE']
+    if rank == 0:
+        log.error(f'MPICH_GNI_FORK_MODE={gnifork} is not "FULLCOPY"; this might not work with MPI+multiprocessing, but not overriding')
+elif rank == 0:
+    log.debug('MPICH_GNI_FORK_MODE={}'.format(os.environ['MPICH_GNI_FORK_MODE']))
+
+#- Start timer; only print log messages from rank 0 (others are silent)
+timer = desiutil.timer.Timer(silent=(rank>0))
+if args.starttime is not None:
+    timer.start('startup', starttime=args.starttime)
+    timer.stop('startup', stoptime=start_imports)
+
+timer.start('imports', starttime=start_imports)
+timer.stop('imports', stoptime=stop_imports)
+
+#- Freeze IERS after parsing args so that it doesn't bother if only --help
+timer.start('freeze_iers')
+import desiutil.iers
+desiutil.iers.freeze_iers()
+timer.stop('freeze_iers')
+
+if args.batch_opts is not None:
+    args.batch_opts = args.batch_opts.strip('"\'')
+
 #- Preflight checks
+timer.start('preflight')
 if rank > 0:
     #- Let rank 0 fetch these, and then broadcast
     hdr = None
@@ -220,6 +251,8 @@ known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
 if args.obstype not in known_obstype:
     raise RuntimeError('obstype {} not in {}'.format(args.obstype, known_obstype))
 
+timer.stop('preflight')
+
 #-------------------------------------------------------------------------
 #- Create and submit a batch job if requested
 
@@ -297,6 +330,11 @@ if args.batch:
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
 
+        if args.timingfile is None:
+            timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+        else:
+            timingfile = args.timingfile
+
         if not args.mpi:
             cmd += ' --mpi'
 
@@ -304,17 +342,21 @@ if args.batch:
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
 
         fx.write('echo Starting at $(date)\n')
+        fx.write(f'cd {batchdir}\n')
 
         fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-        srun = 'srun -N {} -n {} -c 2 {} --nofluxcalib'.format(
-                nodes, ncores, cmd)
+        srun = f'srun -N {nodes} -n {ncores} -c 2 {cmd} --nofluxcalib'
+        srun += f' --starttime $(date +%s)'
+        srun += f' --timingfile {timingfile}'
         fx.write('echo Running {}\n'.format(srun))
         fx.write('{}\n'.format(srun))
 
         if args.obstype == 'SCIENCE':
             fx.write('\n# Then switch to less MPI parallelism for fluxcalib MP parallelism\n')
             fx.write('# This should quickly skip over the steps already done\n')
-            srun = 'srun -N {} -n {} -c 32 {} '.format(nodes, nodes*2, cmd)
+            srun = f'srun -N {nodes} -n {nodes*2} -c 32 {cmd}'
+            srun += f' --starttime $(date +%s)'
+            srun += f' --timingfile {timingfile}'
             fx.write('if [ $? -eq 0 ]; then\n')
             fx.write('  echo Running {}\n'.format(srun))
             fx.write('  {}\n'.format(srun))
@@ -361,15 +403,11 @@ if rank == 0:
 if comm is not None:
     comm.barrier()
 
-if rank == 0:
-    progress['init'] = time.asctime()
-
 #-------------------------------------------------------------------------
 #- Preproc
 #- All obstypes get preprocessed
 
-if rank == 0:
-    log.info('Starting preproc at {}'.format(time.asctime()))
+timer.start('preproc')
 
 #- Assemble fibermap for science exposures
 fibermap = None
@@ -426,14 +464,13 @@ for i in range(rank, len(args.cameras), size):
         cmd += " --variance-model"
     runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
+timer.stop('preproc')
 if comm is not None:
     comm.barrier()
 
-if rank == 0:
-    progress['preproc'] = time.asctime()
-
 #-------------------------------------------------------------------------
 #- Get input PSFs
+timer.start('findpsf')
 input_psf = dict()
 if rank == 0:
     for camera in args.cameras :
@@ -464,10 +501,14 @@ if rank == 0:
 if comm is not None:
     input_psf = comm.bcast(input_psf, root=0)
 
+timer.stop('findpsf')
+
 #-------------------------------------------------------------------------
 #- Traceshift
 
 if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
+
+    timer.start('traceshift')
 
     if rank == 0 and args.traceshift :
         log.info('Starting traceshift at {}'.format(time.asctime()))
@@ -498,17 +539,17 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
         else :
             log.info("PSF {} exists".format(outpsf))
 
+    timer.stop('traceshift')
     if comm is not None:
         comm.barrier()
-
-    if rank == 0:
-        progress['traceshift'] = time.asctime()
 
 #-------------------------------------------------------------------------
 #- PSF
 #- MPI parallelize this step
 
 if args.obstype in ['ARC', 'TESTARC']:
+
+    timer.start('arc_traceshift')
 
     if rank == 0:
         log.info('Starting traceshift before specex PSF fit at {}'.format(time.asctime()))
@@ -529,8 +570,11 @@ if args.obstype in ['ARC', 'TESTARC']:
         else :
              log.info("PSF {} exists".format(outpsf))
 
+    timer.stop('arc_traceshift')
     if comm is not None:
         comm.barrier()
+
+    timer.start('psf')
 
     if rank == 0:
         log.info('Starting specex PSF fitting at {}'.format(time.asctime()))
@@ -634,9 +678,7 @@ if args.obstype in ['ARC', 'TESTARC']:
                         os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-blacklisted-fix"))
                         subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
 
-    if rank == 0:
-        progress['psf'] = time.asctime()
-
+    timer.stop('psf')
 
 #-------------------------------------------------------------------------
 #- Merge PSF of night if applicable
@@ -665,6 +707,7 @@ if False:
 # maybe add ARC and TESTARC too
 if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
 
+    timer.start('extract')
     if rank == 0:
         log.info('Starting extractions at {}'.format(time.asctime()))
 
@@ -738,16 +781,15 @@ if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
             if camera in cmds:
                 runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
 
+    timer.stop('extract')
     if comm is not None:
         comm.barrier()
-
-    if rank == 0:
-        progress['extract'] = time.asctime()
 
 #-------------------------------------------------------------------------
 #- Fiberflat
 
 if args.obstype in ['FLAT', 'TESTFLAT'] :
+    timer.start('fiberflat')
     if rank == 0:
         log.info('Starting fiberflats at {}'.format(time.asctime()))
 
@@ -760,11 +802,9 @@ if args.obstype in ['FLAT', 'TESTFLAT'] :
         cmd += " -o {}".format(fiberflatfile)
         runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
 
+    timer.stop('fiberflat')
     if comm is not None:
         comm.barrier()
-
-    if rank == 0:
-        progress['fiberflat'] = time.asctime()
 
 #-------------------------------------------------------------------------
 #- Average and auto-calib fiberflats of night if applicable
@@ -834,6 +874,7 @@ if False:
 
 #-------------------------------------------------------------------------
 #- Get input fiberflat
+timer.start('find_fiberflat')
 input_fiberflat = dict()
 if rank == 0:
     for camera in args.cameras :
@@ -867,10 +908,13 @@ if rank == 0:
 if comm is not None:
     input_fiberflat = comm.bcast(input_fiberflat, root=0)
 
+timer.stop('find_fiberflat')
+
 #-------------------------------------------------------------------------
 #- Apply fiberflat and write fframe file
 
 if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat ) :
+    timer.start('apply_fiberflat')
     if rank == 0:
         log.info('Applying fiberflat at {}'.format(time.asctime()))
 
@@ -890,11 +934,9 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
             else :
                 log.warning("Missing fiberflat for camera {}".format(camera))
 
+    timer.stop('apply_fiberflat')
     if comm is not None:
         comm.barrier()
-
-    if rank == 0:
-        progress['fframe'] = time.asctime()
 
 #-------------------------------------------------------------------------
 #- Select random sky fibers (inplace update of frame file)
@@ -902,6 +944,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
 #- TODO: this assigns different sky fibers to each frame of same spectrograph
 
 if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
+    timer.start('picksky')
     if rank == 0:
         log.info('Picking sky fibers at {}'.format(time.asctime()))
 
@@ -936,15 +979,14 @@ if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
 
         desispec.io.write_frame(framefile, orig_frame)
 
+    timer.stop('picksky')
     if comm is not None:
         comm.barrier()
-
-    if rank == 0:
-        progress['picksky'] = time.asctime()
 
 #-------------------------------------------------------------------------
 #- Sky subtraction
 if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
+    timer.start('skysub')
     if rank == 0:
         log.info('Starting sky subtraction at {}'.format(time.asctime()))
 
@@ -982,11 +1024,9 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
             subtract_sky(frame, sky, apply_throughput_correction=True)
             desispec.io.write_frame(sframefile, frame)
 
+    timer.stop('skysub')
     if comm is not None:
         comm.barrier()
-
-    if rank == 0:
-        progress['sky'] = time.asctime()
 
 #-------------------------------------------------------------------------
 #- Flux calibration
@@ -995,6 +1035,7 @@ if args.obstype in ['SCIENCE',] and \
         (not args.noskysub ) and \
         (not args.nofluxcalib) :
 
+    timer.start('fluxcalib')
     if rank == 0:
         log.info('Starting flux calibration at {}'.format(time.asctime()))
 
@@ -1062,11 +1103,10 @@ if args.obstype in ['SCIENCE',] and \
         inputs = [framefile, skyfile, fiberflatfile, stdfile]
         runcmd(cmd, inputs=inputs, outputs=[calibfile,])
 
+    timer.stop('fluxcalib')
     if comm is not None:
         comm.barrier()
 
-    if rank == 0:
-        progress['fluxcalib'] = time.asctime()
 #-------------------------------------------------------------------------
 #- Applying flux calibration
 
@@ -1074,6 +1114,7 @@ if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcal
 
     night, expid = args.night, args.expid #- shorter
 
+    timer.start('applycalib')
     if rank == 0:
         log.info('Starting cframe file creation at {}'.format(time.asctime()))
 
@@ -1101,13 +1142,22 @@ if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcal
     if comm is not None:
         comm.barrier()
 
-    if rank == 0:
-        progress['applycalib'] = time.asctime()
+    timer.stop('applycalib')
 
 #-------------------------------------------------------------------------
 #- Wrap up
 
+# if rank == 0:
+#     report = timer.report()
+#     log.info('Rank 0 timing report:\n' + report)
+
+if comm is not None:
+    timers = comm.gather(timer, root=0)
+else:
+    timers = [timer,]
+
 if rank == 0:
+
     progress['done'] = time.asctime()
 
     t0 = None
@@ -1121,3 +1171,26 @@ if rank == 0:
             dt = (t1-t0)/60.0
             t0 = t1
             print('  {:10s} {} ({:.1f} min)'.format(key, value, dt))
+
+    stats = desiutil.timer.compute_stats(timers)
+    log.info('Timing summary statistics:\n' + json.dumps(stats, indent=2))
+
+    if args.timingfile:
+        if os.path.exists(args.timingfile):
+            with open(args.timingfile) as fx:
+                previous_stats = json.load(fx)
+
+            #- augment previous_stats with new entries, but don't overwrite old
+            for name in stats:
+                if name not in previous_stats:
+                    previous_stats[name] = stats[name]
+
+            stats = previous_stats
+
+        tmpfile = args.timingfile + '.tmp'
+        with open(tmpfile, 'w') as fx:
+            json.dump(stats, fx, indent=2)
+        os.rename(tmpfile, args.timingfile)
+
+if rank == 0:
+    log.info('All done at {}'.format(time.asctime))

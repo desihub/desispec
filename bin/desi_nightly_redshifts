@@ -150,10 +150,10 @@ for TILEID in $TILEIDS; do
             elif [ ! -f $zbest ]; then
                 echo tile $TILEID spectrograph $SPECTRO: running redrock for $zbest at $(date)
                 srun -N 1 -n 32 -c 2 rrdesi_mpi \
-                    -z $zbest \
-                    -o redrock-${SPECTRO}-${TILEID}-${NIGHT}.h5 \
-                    $spectra &> $rrlog &
-
+                     -z $zbest \
+                     -o redrock-${SPECTRO}-${TILEID}-${NIGHT}.h5 \
+                     $spectra &> $rrlog &
+		#--archetypes /global/common/software/desi/users/jguy/redrock-archetypes \
                 #- Sleep a moment to not overwhelm slurm
                 sleep 2
             else
