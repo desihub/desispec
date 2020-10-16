@@ -1,5 +1,6 @@
 #- salloc -N 6 -C haswell -q interactive -t 02:00:00
 #- srun -N 6 -n 24 -c 4 python mpi_driver.py
+#- srun -N 6 -n 32 -c 2 python mpi_driver.py (spectra & redrock).
 #-
 #- 24 mins. per exposure (all ten petals, brz).
 #- 45 exposures to process for 20200315.
@@ -98,7 +99,7 @@ cameras   = ['b6', 'r6', 'z6']
 comm.barrier()
 
 # ----  Test  ----
-expids    = expids[1:3]
+# expids  = expids[1:3]
 
 expids    = comm.bcast(expids, root=0)
 
@@ -133,9 +134,9 @@ if len(rankexp) > 0:
           with stdouterr_redirected(to=logfile):
               print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
-              rads = RadLSS(night, expid, cameras=None, rank=rank)
+              rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=True)
           
-              rads.compute(templates=True)
+              rads.compute()
 
               #  if nexp == nmax:
               #    break

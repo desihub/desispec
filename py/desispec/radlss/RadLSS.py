@@ -42,7 +42,7 @@ from   dtemplateSNR              import  dtemplateSNR, dtemplateSNR_modelivar
 warnings.simplefilter('ignore', category=AstropyWarning)
 
 class RadLSS(object):
-    def __init__(self, night, expid, cameras=None, andes='/global/cfs/cdirs/desi/spectro/redux/andes/', outdir='/global/cscratch1/sd/mjwilson/radlss/test/', rank=0):
+    def __init__(self, night, expid, cameras=None, shallow=False, andes='/global/cfs/cdirs/desi/spectro/redux/andes/', outdir='/global/cscratch1/sd/mjwilson/radlss/test/', rank=0):
         """
         Creates a spectroscopic rad(ial) weights instance.
         
@@ -87,10 +87,11 @@ class RadLSS(object):
         self.ensemble_objmeta = {}
         self.template_snrs    = {}
 
-        self.get_data()
+        self.get_data(shallow=shallow)
  
         if (not self.fail) and (self.flavor == 'science'):
-          self.get_gfas()
+          if not shallow:
+            self.get_gfas()
   
           '''                                                                                                                                                                                                                              
           try:                                                                                                                                                                                                                                  
@@ -104,6 +105,7 @@ class RadLSS(object):
           #  Don't write to original andes.
 
           self.ensemble_dir     = '{}/ensemble/'.format(outdir) 
+          self.expdir           = '{}/exposures/{}/{:08d}/'.format(outdir, self.night, self.expid)
           self.outdir           = '{}/tiles/{}/{}/'.format(outdir, self.tileid, self.night)
           self.qadir            = self.outdir + '/QA/{:08d}/'.format(self.expid)
 
@@ -115,7 +117,7 @@ class RadLSS(object):
 
           print('Non-science exposure')  
                
-    def get_data(self):    
+    def get_data(self, shallow=False):    
         '''
         Grab the raw and reduced data for a given (SV0) expid.
         Bundle by camera (band, petal) for each exposure instance.
@@ -160,7 +162,7 @@ class RadLSS(object):
         self.petals              = np.unique(np.array([x[1] for x in self.cameras]))
 
         # print(reduced_cameras, bit_mask, self.cameras)
-        
+
         for cam in self.cameras:
             print('Rank {}:  Grabbing camera {}'.format(self.rank, cam))
             
@@ -171,6 +173,11 @@ class RadLSS(object):
             self.mjd             = self.cframes[cam].meta['MJD-OBS']
             self.tileid          = self.cframes[cam].meta['TILEID']
             self.flavor          = self.cframes[cam].meta['FLAVOR']
+
+            if shallow:
+                del self.cframes[cam]
+
+                continue
             
             self.fibermaps[cam]  = self.cframes[cam].fibermap
                 
@@ -575,7 +582,66 @@ class RadLSS(object):
         end_rrcframe = time.perf_counter()
 
         print('Rank {}:  Calculated redrock cframe in {:.3f} mins.'.format(self.rank, (end_rrcframe - start_rrcframe) / 60.))
-            
+
+    def per_exp_redshifts(self, cleanslate=False):
+        from desispec.pixgroup import FrameLite, SpectraLite, frames2spectra
+
+        start_perexpzs = time.perf_counter()
+
+        Path(self.expdir).mkdir(parents=True, exist_ok=True)
+        
+        for petal in self.petals:
+          # https://desi.lbl.gov/trac/wiki/Pipeline/HowTo/ProcessOneExposure. b0-00055656.fits
+          in_files = self.andes  + '/exposures/{}/{:08d}/cframe-*{}-{:08d}.fits'.format(self.night, self.expid, petal, self.expid)
+
+          out_file = self.expdir + '/spectra-{}-{:08d}.fits'.format(petal, self.expid)
+          rr_file  = self.expdir + '/redrock-{}-{:08d}.fits'.format(petal, self.expid)
+          zb_file  = self.expdir + '/zbest-{}-{:08d}.fits'.format(petal, self.expid)
+          
+          if cleanslate:
+            for ff in [out_file, rr_file, zb_file]:
+              os.system('rm {}'.format(ff))
+              
+          if not path.exists(out_file):              
+              print('Rank {}:  Creating spectra file.'.format(self.rank))
+
+              # cmd  = 'desi_group_spectra --inframes {} --outfile {}'.format(in_files, out_file) 
+              # print(cmd)
+              # os.system(cmd)
+
+              inframes = glob.glob(in_files)
+
+              frames   = dict()
+              
+              for filename in inframes:
+                # https://github.com/michaelJwilson/desispec/blob/e478220eef710055995c16b3afb8d8222d7db976/py/desispec/scripts/group_spectra.py#L65 
+                frame  = FrameLite.read(filename)
+
+                night  = frame.meta['NIGHT']
+                expid  = frame.meta['EXPID']
+                camera = frame.meta['CAMERA']
+
+                frames[(night, expid, camera)] = frame
+
+              spectra  = frames2spectra(frames)
+
+              spectra.write(out_file)
+
+              print('Rank {}:  Finished spectra file for cframes in this exposure and petal ({}).'.format(self.rank, out_file))
+              
+          if not path.exists(rr_file):
+              cmd  = 'rrdesi {} -o {} -z {}'.format(out_file, rr_file, zb_file)
+              
+              print('Rank {}:  Running per exp. redrock, {}'.format(self.rank, cmd))
+              
+              os.system(cmd)
+
+              print('Rank {}:  Finished redrock for cframes in this exposure and petal.'.format(self.rank))
+
+        end_perexpzs = time.perf_counter()
+
+        print('Rank {}:  Generated redrock for this exposure in {:.3f} mins.'.format(self.rank, (end_perexpzs - start_perexpzs) / 60.))
+          
     def ext_redrock_2Dframes(self, extract=False):
         from specter.extract.ex2d import ex2d
         
@@ -1077,20 +1143,23 @@ class RadLSS(object):
 
         print('Rank {}:  Created QA plots in {:.3f} mins.'.format(self.rank, (end_plotqa - start_plotqa) / 60.))
             
-    def compute(self, templates=True, tracers=['ELG']):
+    def compute(self, templates=False, tracers=['ELG']):
         #  Process only science exposures.
         if self.flavor == 'science':        
           if (not self.fail):
               # try:
-              self.calc_nea()
+              # self.calc_nea()
              
-              self.calc_readnoise()
+              # self.calc_readnoise()
             
               # self.calc_skycontinuum()
 
               # self.calc_fiberlosses()
-            
-              self.rec_redrock_cframes()
+
+              self.per_exp_redshifts()
+              
+              # Per night. 
+              # self.rec_redrock_cframes()
             
               # self.ext_redrock_2Dframes()  
 
@@ -1107,7 +1176,7 @@ class RadLSS(object):
                 self.write_radweights()
                     
               # -------------  QA  -------------            
-              self.qa_plots()
+              # self.qa_plots()
               
               # except:
               # print('Failed to compute for expid {} and cameras {}'.format(expid, self.cameras))
