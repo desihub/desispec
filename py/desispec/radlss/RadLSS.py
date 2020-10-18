@@ -173,7 +173,8 @@ class RadLSS(object):
             self.mjd             = self.cframes[cam].meta['MJD-OBS']
             self.tileid          = self.cframes[cam].meta['TILEID']
             self.flavor          = self.cframes[cam].meta['FLAVOR']
-
+            self.program         = self.cframes[cam].meta['PROGRAM']
+            
             if shallow:
                 del self.cframes[cam]
 
@@ -586,6 +587,7 @@ class RadLSS(object):
     def per_exp_redshifts(self, cleanslate=False):
         from desispec.pixgroup import FrameLite, SpectraLite, frames2spectra
 
+        
         start_perexpzs = time.perf_counter()
 
         Path(self.expdir).mkdir(parents=True, exist_ok=True)
@@ -710,7 +712,7 @@ class RadLSS(object):
 
         ## 
         start_genensemble = time.perf_counter()
-
+        
         if cached and path.exists(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower())):
           try:
             with open(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower()), 'rb') as handle:
@@ -746,7 +748,7 @@ class RadLSS(object):
         keys                           = set([key for key in self.cframes.keys() if key[0] in ['b','r','z']])
         keys                           = np.array(list(keys))
 
-        # TODO:  where are brz extraction wavelengths defined?
+        # TODO:  where are brz extraction wavelengths defined?  https://github.com/desihub/desispec/issues/1006.
         wave                           = self.cframes[keys[0]].wave
                                 
         if len(keys) > 1:
@@ -754,6 +756,8 @@ class RadLSS(object):
                 wave                   = np.concatenate((wave, self.cframes[key].wave))
                 
         wave                           = np.unique(wave) # sorted.
+
+        ##  ---------------------  Sim  ---------------------
         wave, flux, meta, objmeta      = tracer_maker(wave=wave, tracer=tracer, nmodel=nmodel)
         
         meta['MAG_G']                  = 22.5 - 2.5 * np.log10(meta['FLUX_G'])
@@ -765,10 +769,6 @@ class RadLSS(object):
                 
         self.nmodel                    = nmodel
                 
-        # List of tracers computed.
-        if tracer not in self.ensemble_tracers:
-            self.ensemble_tracers.append(tracer)
-
         self.ensemble_flux[tracer]     = {}
         self.ensemble_dflux[tracer]    = {}
         self.ensemble_meta[tracer]     = meta
@@ -806,8 +806,6 @@ class RadLSS(object):
                 self.ensemble_flux[tracer][band]  = self.ensemble_flux[tracer][band][indx]
                 self.ensemble_dflux[tracer][band] = self.ensemble_dflux[tracer][band][indx]
                 
-        end_genensemble = time.perf_counter()
-
         with open(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower()), 'wb') as handle:
             pickle.dump(self.ensemble_flux, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -819,11 +817,187 @@ class RadLSS(object):
 
         with open(self.ensemble_dir + '/template-{}-ensemble-objmeta.fits'.format(tracer.lower()), 'wb') as handle:
             pickle.dump(self.ensemble_objmeta, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+        # List of tracers computed.                                                                                                                                                                                                           
+        if tracer not in self.ensemble_tracers:
+            self.ensemble_tracers.append(tracer)
 
         end_genensemble = time.perf_counter()
             
         print('Rank {}:  Template ensemble (nmode; {}) in {:.3f} mins.'.format(self.rank, self.nmodel, (end_genensemble - start_genensemble) / 60.))
+            
+    def grab_deepfield_ensemble(self, tracer='ELG', cached=True, sort=True):
+        import pandas as  pd
+
+        from   astropy.table       import vstack
+        from   desispec.io.spectra import read_spectra
+
+        
+        start_deepfield = time.perf_counter()
+
+        # https://desi.lbl.gov/trac/wiki/TargetSelectionWG/SV0                                                                                                                                                                                
+        deepfield_tileid               = '67230'
+
+        # https://desi.lbl.gov/trac/wiki/SurveyValidation/TruthTables.                                                                                                                                                                        
+        # Tile 67230 and night 20200315 (incomplete - 950/2932 targets).
+        
+        vi_truthtable                  = '/global/cfs/cdirs/desi/sv/vi/TruthTables/truth_table_ELG_v1.2.csv'
+
+        self.nmodel                    =  0
+
+        self.df_ensemble_coadds        = {}
+        self.df_ensemble_zbests        = {}
+        
+        if cached and path.exists(self.ensemble_dir + '/deepfield-{}-ensemble-flux.fits'.format(tracer.lower())):
+          try:
+            with open(self.ensemble_dir + '/deepfield-{}-ensemble-flux.fits'.format(tracer.lower()), 'rb') as handle:
+                self.ensemble_flux = pickle.load(handle)
+
+            with open(self.ensemble_dir + '/deepfield-{}-ensemble-dflux.fits'.format(tracer.lower()), 'rb') as handle:
+                self.ensemble_dflux = pickle.load(handle)
+
+            with open(self.ensemble_dir + '/deepfield-{}-ensemble-meta.fits'.format(tracer.lower()), 'rb') as handle:
+                self.ensemble_meta = pickle.load(handle)
+
+            with open(self.ensemble_dir + '/deepfield-{}-ensemble-objmeta.fits'.format(tracer.lower()), 'rb') as handle:
+                self.ensemble_objmeta = pickle.load(handle)
+
+            self.nmodel               = len(self.ensemble_flux[tracer][self.cameras[0][0]])
+            self.ensemble_tracers.append(tracer)
+
+            print('Rank {}:  Successfully retrieved pre-written ensemble files at: {} (nmodel: {})'.format(self.rank, self.ensemble_dir, self.nmodel))
+
+            end_deepfield = time.perf_counter()
+
+            print('Rank {}:  Grabbed deepfield ensemble (nmodel: {}) in {:.3f} mins.'.format(self.rank, self.nmodel, (end_deepfield - start_deepfield) / 60.))
+
+            return
+
+          except:
+            print('Rank {}:  Failed to retrieve pre-written ensemble files.  Regenerating.'.format(self.rank))
+
+        # https://desi.lbl.gov/trac/wiki/TargetSelectionWG/SV0
+        deepfield_tileid               = '67230'
+
+        # https://desi.lbl.gov/trac/wiki/SurveyValidation/TruthTables.
+        # Tile 67230 and night 20200315 (incomplete - 950/2932 targets).
+        vi_truthtable                  = '/global/cfs/cdirs/desi/sv/vi/TruthTables/truth_table_ELG_v1.2.csv'
+
+        self.df_nmodel                 = 0
+        
+        self.df_ensemble_coadds        = {}
+        self.df_ensemble_zbests        = {}
+
+        self.ensemble_flux[tracer]     = {}
+        self.ensemble_dflux[tracer]    = {}
+
+        self.ensemble_meta[tracer]     = Table()
+        self.ensemble_objmeta[tracer]  = Table()
+
+        keys = []
+
+        for key in self.cframes.keys():
+            if key[0] == 'b':
+                keys.append(key)
+                break
+            
+        for key in self.cframes.keys():
+            if key[0] == 'r':
+                keys.append(key)
+                break
+
+        for key in self.cframes.keys():
+            if key[0] == 'z':
+                keys.append(key)
+                break
+
+        for band in ['b', 'r', 'z']:           
+            self.ensemble_flux[tracer][band]  = None
+            self.ensemble_dflux[tracer][band] = None
+        
+        #  First, get the truth table.
+        df                             = pd.read_csv(vi_truthtable)
+        names                          = [x.upper() for x in df.columns]
+
+        truth                          = Table(df.to_numpy(), names=names)
+        truth.sort('TARGETID')
+
+        self._df_vitable               = truth
+
+        for petal in self.petals:
+            # E.g. /global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/redux/andes/tiles/67230/20200314                                                                                                                             
+            deepfield_zbest_file                          = os.path.join(self.andes, 'tiles', deepfield_tileid, str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
+            deepfield_coadd_file                          = os.path.join(self.andes, 'tiles', deepfield_tileid, str(self.night), 'coadd-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
+
+            self.df_ensemble_coadds[petal]                = read_spectra(deepfield_coadd_file)            
+            self.df_ensemble_zbests[petal]                = Table.read(deepfield_zbest_file, 'ZBEST')
+
+            # Quality cuts.
+            self.df_ensemble_zbests[petal]['IN_ENSEMBLE'] = (self.df_ensemble_zbests[petal]['ZWARN'] == 0) & (self.df_ensemble_coadds[petal].fibermap['FIBERSTATUS'] == 0)
+
+            # VI Quality cuts. 
+            # in_vi                                       = np.isin(self._df_vitable['TARGETID'], self.df_ensemble_zbests[petal])            
+            # vi_confirmed                                = self._df_vitable['BEST QUALITY'] >= 2.5
+
+            self.ensemble_meta[tracer]                    = vstack((self.ensemble_meta[tracer], self.df_ensemble_zbests[petal]['Z', 'ZERR', 'DELTACHI2', 'NCOEFF', 'COEFF'][self.df_ensemble_zbests[petal]['IN_ENSEMBLE']]))
+
+            for key in keys:
+                band                                      = key[0]
+
+                if self.ensemble_flux[tracer][band] is None:
+                    self.ensemble_flux[tracer][band]      = self.df_ensemble_coadds[petal].flux[band][self.df_ensemble_zbests[petal]['IN_ENSEMBLE'], :]
+
+                else:
+                    self.ensemble_flux[tracer][band]      = np.vstack((self.ensemble_flux[tracer][band], self.df_ensemble_coadds[petal].flux[band][self.df_ensemble_zbests[petal]['IN_ENSEMBLE'], :]))
+
+            self.nmodel += np.count_nonzero(self.df_ensemble_zbests[petal]['IN_ENSEMBLE'])
+
+        for band in ['b', 'r', 'z']:
+            dflux = np.zeros_like(self.ensemble_flux[tracer][band])
+
+            # Retain only spectral features < 100. Angstroms.                                                                                                                                                                            
+            # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.                                                                                                                                                                   
+            for i, ff in enumerate(self.ensemble_flux[tracer][band]):
+                sflux      = convolve(ff, Box1DKernel(125), boundary='extend')
+                dflux[i,:] = ff - sflux
+
+            self.ensemble_dflux[tracer][band] = dflux
+                    
+        if sort and (tracer == 'ELG'):
+            # Sort tracers for SOM-style plots.                                                                                                                                                                                            
+            indx                                  = np.argsort(self.ensemble_meta[tracer], order=['Z'])
+
+            self.ensemble_meta[tracer]            = self.ensemble_meta[tracer][indx]
+            self.ensemble_objmeta[tracer]         = self.ensemble_objmeta[tracer][indx]
+
+            for band in ['b', 'r', 'z']:
+                self.ensemble_flux[tracer][band]  = self.ensemble_flux[tracer][band][indx]
+                # self.ensemble_dflux[tracer][band] = self.ensemble_dflux[tracer][band][indx]
+
+        ##  HACK:
+        self.ensemble_meta[tracer]['OIIFLUX']     = np.zeros(len(self.ensemble_meta[tracer]))
                 
+        ## 
+        with open(self.ensemble_dir + '/deepfield-{}-ensemble-flux.fits'.format(tracer.lower()), 'wb') as handle:
+            pickle.dump(self.ensemble_flux, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        with open(self.ensemble_dir + '/deepfield-{}-ensemble-dflux.fits'.format(tracer.lower()), 'wb') as handle:
+            pickle.dump(self.ensemble_dflux, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        with open(self.ensemble_dir + '/deepfield-{}-ensemble-meta.fits'.format(tracer.lower()), 'wb') as handle:
+            pickle.dump(self.ensemble_meta, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        with open(self.ensemble_dir + '/deepfield-{}-ensemble-objmeta.fits'.format(tracer.lower()), 'wb') as handle:
+            pickle.dump(self.ensemble_objmeta, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # List of tracers computed.                                                                                                                                                                                                          
+        if tracer not in self.ensemble_tracers:
+            self.ensemble_tracers.append(tracer)
+
+        end_deepfield = time.perf_counter()
+
+        print('Rank {}:  Deepfield ensemble (nmodel: {}) in {:.3f} mins.'.format(self.rank, self.nmodel, (end_deepfield - start_deepfield) / 60.))
+            
     def calc_templatesnrs(self, tracer='ELG'):
         '''
         Calculate template SNRs for the ensemble. 
@@ -1156,13 +1330,16 @@ class RadLSS(object):
 
               # self.calc_fiberlosses()
 
-              self.per_exp_redshifts()
+              # self.per_exp_redshifts()
               
               # Per night. 
               # self.rec_redrock_cframes()
             
               # self.ext_redrock_2Dframes()  
 
+              # -------------  Deep Field  ---------------              
+              self.grab_deepfield_ensemble()
+              
               # -------------  Templates  --------------- 
               if templates:  
                 for tracer in tracers:  
