@@ -826,10 +826,10 @@ class RadLSS(object):
             
         print('Rank {}:  Template ensemble (nmode; {}) in {:.3f} mins.'.format(self.rank, self.nmodel, (end_genensemble - start_genensemble) / 60.))
             
-    def grab_deepfield_ensemble(self, tracer='ELG', cached=True, sort=True):
+    def grab_deepfield_ensemble(self, tracer='ELG', cached=False, sort=True):
         import pandas as  pd
 
-        from   astropy.table       import vstack
+        from   astropy.table       import vstack, join
         from   desispec.io.spectra import read_spectra
 
         
@@ -920,6 +920,9 @@ class RadLSS(object):
         names                          = [x.upper() for x in df.columns]
 
         truth                          = Table(df.to_numpy(), names=names)
+        truth['TARGETID']              = np.array(truth['TARGETID']).astype(np.int64)
+        truth['BEST QUALITY']          = np.array(truth['BEST QUALITY']).astype(np.int64)
+        
         truth.sort('TARGETID')
 
         self._df_vitable               = truth
@@ -932,14 +935,17 @@ class RadLSS(object):
             self.df_ensemble_coadds[petal]                = read_spectra(deepfield_coadd_file)            
             self.df_ensemble_zbests[petal]                = Table.read(deepfield_zbest_file, 'ZBEST')
 
-            # Quality cuts.
+            self.df_ensemble_zbests[petal]                = join(self.df_ensemble_zbests[petal], truth['TARGETID', 'BEST QUALITY'], join_type='left', keys='TARGETID')
+            
             self.df_ensemble_zbests[petal]['IN_ENSEMBLE'] = (self.df_ensemble_zbests[petal]['ZWARN'] == 0) & (self.df_ensemble_coadds[petal].fibermap['FIBERSTATUS'] == 0)
+            self.df_ensemble_zbests[petal]['IN_ENSEMBLE'] =  self.df_ensemble_zbests[petal]['IN_ENSEMBLE']  & (self.df_ensemble_zbests[petal]['DELTACHI2'] > 80.)
 
-            # VI Quality cuts. 
-            # in_vi                                       = np.isin(self._df_vitable['TARGETID'], self.df_ensemble_zbests[petal])            
-            # vi_confirmed                                = self._df_vitable['BEST QUALITY'] >= 2.5
-
-            self.ensemble_meta[tracer]                    = vstack((self.ensemble_meta[tracer], self.df_ensemble_zbests[petal]['Z', 'ZERR', 'DELTACHI2', 'NCOEFF', 'COEFF'][self.df_ensemble_zbests[petal]['IN_ENSEMBLE']]))
+            # TARGETIDs not in the truth table have masked elements in array. 
+            unmasked                                      = ~self.df_ensemble_zbests['5']['BEST QUALITY'].mask
+            
+            self.df_ensemble_zbests[petal]['IN_ENSEMBLE'][unmasked] =  self.df_ensemble_zbests[petal]['IN_ENSEMBLE'][unmasked]  & (self.df_ensemble_zbests[petal]['BEST QUALITY'][unmasked] >= 2.5)
+            
+            self.ensemble_meta[tracer]                    = vstack((self.ensemble_meta[tracer], self.df_ensemble_zbests[petal]['TARGETID', 'Z', 'ZERR', 'DELTACHI2', 'NCOEFF', 'COEFF'][self.df_ensemble_zbests[petal]['IN_ENSEMBLE']]))
 
             for key in keys:
                 band                                      = key[0]
