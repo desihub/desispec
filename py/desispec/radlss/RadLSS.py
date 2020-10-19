@@ -711,7 +711,9 @@ class RadLSS(object):
             return  wave, flux, meta, objmeta
 
         ## 
-        start_genensemble = time.perf_counter()
+        start_genensemble  = time.perf_counter()
+
+        self.ensemble_type = 'DESISIM'
         
         if cached and path.exists(self.ensemble_dir + '/template-{}-ensemble-flux.fits'.format(tracer.lower())):
           try:
@@ -827,18 +829,20 @@ class RadLSS(object):
         print('Rank {}:  Template ensemble (nmode; {}) in {:.3f} mins.'.format(self.rank, self.nmodel, (end_genensemble - start_genensemble) / 60.))
             
     def grab_deepfield_ensemble(self, tracer='ELG', cached=False, sort=True):
-        import pandas as  pd
+        import pandas              as     pd
 
         from   astropy.table       import vstack, join
         from   desispec.io.spectra import read_spectra
 
         
-        start_deepfield = time.perf_counter()
+        start_deepfield                = time.perf_counter()
 
-        # https://desi.lbl.gov/trac/wiki/TargetSelectionWG/SV0                                                                                                                                                                                
+        self.ensemble_type             = 'SV0'
+        
+        # https://desi.lbl.gov/trac/wiki/TargetSelectionWG/SV0                                                                                                                                                                             
         deepfield_tileid               = '67230'
-
-        # https://desi.lbl.gov/trac/wiki/SurveyValidation/TruthTables.                                                                                                                                                                        
+        
+        # https://desi.lbl.gov/trac/wiki/SurveyValidation/TruthTables.
         # Tile 67230 and night 20200315 (incomplete - 950/2932 targets).
         
         vi_truthtable                  = '/global/cfs/cdirs/desi/sv/vi/TruthTables/truth_table_ELG_v1.2.csv'
@@ -927,7 +931,7 @@ class RadLSS(object):
 
         self._df_vitable               = truth
 
-        for petal in self.petals:
+        for petal in np.arange(10).astype(np.str):
             # E.g. /global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/redux/andes/tiles/67230/20200314                                                                                                                             
             deepfield_zbest_file                          = os.path.join(self.andes, 'tiles', deepfield_tileid, str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
             deepfield_coadd_file                          = os.path.join(self.andes, 'tiles', deepfield_tileid, str(self.night), 'coadd-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
@@ -935,17 +939,21 @@ class RadLSS(object):
             self.df_ensemble_coadds[petal]                = read_spectra(deepfield_coadd_file)            
             self.df_ensemble_zbests[petal]                = Table.read(deepfield_zbest_file, 'ZBEST')
 
+            self.df_ensemble_zbests[petal]['FLUX_G']      = self.df_ensemble_coadds[petal].fibermap['FLUX_G']
+            self.df_ensemble_zbests[petal]['FLUX_R']      = self.df_ensemble_coadds[petal].fibermap['FLUX_R']
+            self.df_ensemble_zbests[petal]['FLUX_Z']      = self.df_ensemble_coadds[petal].fibermap['FLUX_Z']
+
             self.df_ensemble_zbests[petal]                = join(self.df_ensemble_zbests[petal], truth['TARGETID', 'BEST QUALITY'], join_type='left', keys='TARGETID')
             
             self.df_ensemble_zbests[petal]['IN_ENSEMBLE'] = (self.df_ensemble_zbests[petal]['ZWARN'] == 0) & (self.df_ensemble_coadds[petal].fibermap['FIBERSTATUS'] == 0)
             self.df_ensemble_zbests[petal]['IN_ENSEMBLE'] =  self.df_ensemble_zbests[petal]['IN_ENSEMBLE']  & (self.df_ensemble_zbests[petal]['DELTACHI2'] > 80.)
 
             # TARGETIDs not in the truth table have masked elements in array. 
-            unmasked                                      = ~self.df_ensemble_zbests['5']['BEST QUALITY'].mask
+            unmasked                                      = ~self.df_ensemble_zbests[petal]['BEST QUALITY'].mask
             
             self.df_ensemble_zbests[petal]['IN_ENSEMBLE'][unmasked] =  self.df_ensemble_zbests[petal]['IN_ENSEMBLE'][unmasked]  & (self.df_ensemble_zbests[petal]['BEST QUALITY'][unmasked] >= 2.5)
             
-            self.ensemble_meta[tracer]                    = vstack((self.ensemble_meta[tracer], self.df_ensemble_zbests[petal]['TARGETID', 'Z', 'ZERR', 'DELTACHI2', 'NCOEFF', 'COEFF'][self.df_ensemble_zbests[petal]['IN_ENSEMBLE']]))
+            self.ensemble_meta[tracer]                    = vstack((self.ensemble_meta[tracer], self.df_ensemble_zbests[petal]['TARGETID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'Z', 'ZERR', 'DELTACHI2', 'NCOEFF', 'COEFF'][self.df_ensemble_zbests[petal]['IN_ENSEMBLE']]))
 
             for key in keys:
                 band                                      = key[0]
@@ -968,7 +976,16 @@ class RadLSS(object):
                 dflux[i,:] = ff - sflux
 
             self.ensemble_dflux[tracer][band] = dflux
-                    
+
+        self.ensemble_meta[tracer]['MAG_G']       = 22.5 - 2.5 * np.log10(self.ensemble_meta[tracer]['FLUX_G'])
+        self.ensemble_meta[tracer]['MAG_R']       = 22.5 - 2.5 * np.log10(self.ensemble_meta[tracer]['FLUX_R'])
+        self.ensemble_meta[tracer]['MAG_Z']       = 22.5 - 2.5 * np.log10(self.ensemble_meta[tracer]['FLUX_Z'])
+
+        self.ensemble_meta[tracer]['REDSHIFT']    = self.ensemble_meta[tracer]['Z']
+        
+        ##  HACK:
+        self.ensemble_objmeta[tracer]['OIIFLUX']  = np.zeros(len(self.ensemble_meta[tracer]))
+            
         if sort and (tracer == 'ELG'):
             # Sort tracers for SOM-style plots.                                                                                                                                                                                            
             indx                                  = np.argsort(self.ensemble_meta[tracer], order=['Z'])
@@ -978,12 +995,8 @@ class RadLSS(object):
 
             for band in ['b', 'r', 'z']:
                 self.ensemble_flux[tracer][band]  = self.ensemble_flux[tracer][band][indx]
-                # self.ensemble_dflux[tracer][band] = self.ensemble_dflux[tracer][band][indx]
-
-        ##  HACK:
-        self.ensemble_meta[tracer]['OIIFLUX']     = np.zeros(len(self.ensemble_meta[tracer]))
-                
-        ## 
+                # self.ensemble_dflux[tracer][band] = self.ensemble_dflux[tracer][band][indx]                
+         
         with open(self.ensemble_dir + '/deepfield-{}-ensemble-flux.fits'.format(tracer.lower()), 'wb') as handle:
             pickle.dump(self.ensemble_flux, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -1301,12 +1314,12 @@ class RadLSS(object):
             axes[0].imshow(np.log10(self.template_snrs[tracer]['brz{}'.format(petal)]['TSNR']), aspect='auto')  
          
             axes[1].imshow(np.broadcast_to(self.ensemble_meta[tracer]['REDSHIFT'],   (500, self.nmodel)), aspect='auto')
-            axes[2].imshow(np.broadcast_to(self.ensemble_meta[tracer]['MAG'],        (500, self.nmodel)), aspect='auto')    
+            axes[2].imshow(np.broadcast_to(self.ensemble_meta[tracer]['MAG_G'],      (500, self.nmodel)), aspect='auto')    
             axes[3].imshow(np.broadcast_to(self.ensemble_objmeta[tracer]['OIIFLUX'], (500, self.nmodel)), aspect='auto')  
 
             axes[0].set_title('$\log_{10}$TSNR')
             axes[1].set_title('REDSHIFT')
-            axes[2].set_title('MAG')
+            axes[2].set_title(r'$g_{\rm AB}$')
             axes[3].set_title('OIIFLUX')
         
             for ax in axes: 
@@ -1321,16 +1334,16 @@ class RadLSS(object):
             
         end_plotqa  = time.perf_counter()
 
-        print('Rank {}:  Created QA plots in {:.3f} mins.'.format(self.rank, (end_plotqa - start_plotqa) / 60.))
+        print('Rank {}:  Created QA plots ({}) in {:.3f} mins.'.format(self.rank, plots_dir, (end_plotqa - start_plotqa) / 60.))
             
-    def compute(self, templates=False, tracers=['ELG']):
+    def compute(self, templates=True, tracers=['ELG']):
         #  Process only science exposures.
         if self.flavor == 'science':        
           if (not self.fail):
               # try:
-              # self.calc_nea()
+              self.calc_nea()
              
-              # self.calc_readnoise()
+              self.calc_readnoise()
             
               # self.calc_skycontinuum()
 
@@ -1339,7 +1352,7 @@ class RadLSS(object):
               # self.per_exp_redshifts()
               
               # Per night. 
-              # self.rec_redrock_cframes()
+              self.rec_redrock_cframes()
             
               # self.ext_redrock_2Dframes()  
 
@@ -1349,7 +1362,7 @@ class RadLSS(object):
               # -------------  Templates  --------------- 
               if templates:  
                 for tracer in tracers:  
-                  self.gen_template_ensemble(tracer=tracer)
+                  # self.gen_template_ensemble(tracer=tracer)
              
                   self.calc_templatesnrs(tracer=tracer)
 
@@ -1359,7 +1372,7 @@ class RadLSS(object):
                 self.write_radweights()
                     
               # -------------  QA  -------------            
-              # self.qa_plots()
+              self.qa_plots()
               
               # except:
               # print('Failed to compute for expid {} and cameras {}'.format(expid, self.cameras))
