@@ -131,16 +131,29 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
     # cross dispersion profile
     xsig=1.*np.ones((qframe.nspec,image.pix.shape[0]))
     if xytraceset.xsig_vs_wave_traceset :
+        log.info("use traceset in PSF for xsig")
         for s in range(xytraceset.nspec) :
             wave = xytraceset.wave_vs_y(s,y)
             xsig[s] = xytraceset.xsig_vs_wave(s,wave)
-
+    else :
+        log.info("use default xsig={}".format(np.mean(xsig)))
     # keep only positive flux
     qframe.flux *= (qframe.flux>0.)
+
+    # convert counts per A to counts per pixel
+    dwave = np.gradient(qframe.wave,axis=1)
+    qframe.flux *= dwave
+
+    # because true profile is not Gaussian and we do not integrate the
+    # profile in pixels, we have to apply an adjustment
+    empirical_scale = 1.1
+    log.info("empirical adjustment of xsig by {:4.2f}".format(empirical_scale))
+    xsig *= empirical_scale
 
     model=np.zeros(image.pix.shape)
 
     if psf is None : # use simple Gaussian
+        log.info("use Gaussian sigma of average = {:4.2f}".format(np.mean(xsig)))
         for s in range(qframe.nspec) :
             x=xytraceset.x_vs_y(s,y)
             numba_proj(model,x,xsig[s],qframe.flux[s])
