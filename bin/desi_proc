@@ -1157,21 +1157,6 @@ else:
     timers = [timer,]
 
 if rank == 0:
-
-    progress['done'] = time.asctime()
-
-    t0 = None
-    print('\nSummary of completion times:')
-    for key, value in progress.items():
-        if t0 is None:
-            print('  {:10s} {}'.format(key, value))
-            t0 = time.mktime(time.strptime(value))
-        else:
-            t1 = time.mktime(time.strptime(value))
-            dt = (t1-t0)/60.0
-            t0 = t1
-            print('  {:10s} {} ({:.1f} min)'.format(key, value, dt))
-
     stats = desiutil.timer.compute_stats(timers)
     log.info('Timing summary statistics:\n' + json.dumps(stats, indent=2))
 
