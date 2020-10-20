@@ -1228,14 +1228,16 @@ class RadLSS(object):
           plt.close(fig)
           
           # --------------- Template meta  ---------------
-          # fig, axes = plt.subplots(1, 3, figsize=(20, 5))
-  
-          # for i, (band, color) in enumerate(zip(['MAG_G', 'MAG_R', 'MAG_Z'], ['b', 'g', 'r'])):
-          #    axes[i].plot(meta[band], meta['REDSHIFT'], marker='.', c=color, lw=0.0)
+          Path(plots_dir + '/ensemble/').mkdir(parents=True, exist_ok=True)
 
-          #    axes[i].set_xlabel('$REDSHIFT$')
-          #    axes[i].set_ylabel('$' + band + '$')  
-           
+          fig, axes = plt.subplots(1, 3, figsize=(20, 5))
+
+          axes[0].hist(self.ensemble_meta['ELG']['REDSHIFT'], bins=50)
+          axes[0].set_xlim(-0.05, 2.5)
+          axes[0].set_xlabel('redshift')
+          
+          plt.close(fig)
+          
           # --------------- Redrock:  Template Ensemble  ---------------  
           # pl.plot(self.ensemble_meta['REDSHIFT'], zbest['Z'], marker='.', lw=0.0)
 
