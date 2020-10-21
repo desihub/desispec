@@ -354,12 +354,9 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     for i in range(frame.nspec):
         cskyflux[i] = frame.R[i].dot(deconvolved_sky)
 
-
-
-    # See if we can improve the sky model by readjusting the wavelength on sky lines
+    # See if we can improve the sky model by readjusting the wavelength and/or the width of sky lines
     if adjust_wavelength or adjust_lsf :
         log.info("adjust the wavelength of sky spectrum on sky lines to improve sky subtraction ...")
-
 
         if adjust_wavelength :
             # compute derivative of sky w.r.t. wavelength
@@ -370,19 +367,17 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         if adjust_lsf :
             # compute derivative of sky w.r.t. lsf width
             dwave = np.mean(np.gradient(frame.wave))
-            dsigma = 0.3/dwave # consider this extra width for the PSF (sigma' = sqrt(sigma**2+dsigma**2))
-            hw=int(4*dsigma)+1
+            dsigma_A   = 0.3 #A
+            dsigma_bin = dsigma_A/dwave # consider this extra width for the PSF (sigma' = sqrt(sigma**2+dsigma**2))
+            hw=int(4*dsigma_bin)+1
             x=np.arange(-hw,hw+1)
-            k=np.zeros((3,x.size))
+            k=np.zeros((3,x.size)) # a Gaussian kernel
             k[1]=np.exp(-x**2/dsigma**2/2.)
             k/=np.sum(k)
             tmp = fftconvolve(cskyflux,k,mode="same")
-            dskydlsf = tmp-cskyflux
+            dskydlsf = (tmp-cskyflux)/dsigma_A # variation of line shape with width
         else :
             dskydlsf = None
-
-
-
 
         # detect peaks in mean sky spectrum
         # peaks = local maximum larger than 10% of max peak
@@ -426,7 +421,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         interpolated_sky_dwave=np.zeros(frame.flux.shape)
         interpolated_sky_dlsf=np.zeros(frame.flux.shape)
 
-        # loop on fibers and then on peaks
+        # loop on fibers and then on sky spectrum peaks
         for i in range(frame.nspec) :
             for j,peak in enumerate(peaks) :
                 b=peak-dpix
@@ -447,12 +442,13 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                     for p in range(k+1) :
                         AA[k,p] = np.sum(frame.ivar[i,b:e]*M[k]*M[p])
                         if p!=k : AA[p,k]=AA[k,p]
+                # solve linear system
                 try :
                     AAi=np.linalg.inv(AA)
                 except np.linalg.LinAlgError as e :
                     log.warning(str(e))
                     continue
-
+                # save best fit parameter and errors
                 X=AAi.dot(BB)
                 index=1
                 peak_scale[i,j]=X[index]
@@ -466,67 +462,43 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                     peak_dlsf[i,j]=X[index]
                     peak_dlsf_err[i,j]=np.sqrt(AAi[index,index]*(AAi[index,index]>0))
                     index += 1
+                # also record the chi2/ndf
                 peak_chi2pdf[i,j]=np.sum((frame.ivar[i,b:e]>0)/(1./(frame.ivar[i,b:e]+(frame.ivar[i,b:e]==0))+(0.05*M[1])**2)*(frame.flux[i,b:e]-(X[0]+X[1]*M[1]+X[2]*M[2]))**2)/(e-b-nparam)
 
             # for each fiber, select valid peaks and interpolate
             ok=(peak_chi2pdf[i]<2)
             if adjust_wavelength :
-                ok &= (peak_dw_err[i]>0.)&(peak_dw_err[i]<0.1)
+                ok &= (peak_dw_err[i]>0.)&(peak_dw_err[i]<0.1) # error on wavelength shift
             if adjust_lsf :
-                ok &= (peak_dlsf_err[i]>0.)&(peak_dlsf_err[i]<1.)
+                ok &= (peak_dlsf_err[i]>0.)&(peak_dlsf_err[i]<0.3) # error on line width (quadratic, so 0.3 mean a change of width of 0.3**2/2~5%)
+            # piece-wise linear interpolate across the whole spectrum between the sky line peaks
+            # this interpolation will be used to alter the whole sky spectrum
             if np.sum(ok)>0 :
                 interpolated_sky_scale[i]=np.interp(frame.wave,peak_wave[ok],peak_scale[i,ok])
                 if adjust_wavelength :
-                    #deg=2
-                    #if np.sum(ok)>deg :
-                    #    c=np.polyfit(peak_wave[ok],peak_dw[i,ok],2,w=1./peak_dw_err[i,ok]**2)
-                    #    interpolated_sky_dwave[i]=np.poly1d(c)(frame.wave)
-                    #else :
                     interpolated_sky_dwave[i]=np.interp(frame.wave,peak_wave[ok],peak_dw[i,ok])
                 if adjust_lsf :
-                    #deg=4
-                    #if np.sum(ok)>deg :
-                    #    c=np.polyfit(peak_wave[ok],peak_dlsf[i,ok],2,w=1./peak_dlsf_err[i,ok]**2)
-                    #    interpolated_sky_dlsf[i]=np.poly1d(c)(frame.wave)
-                    #else :
                     interpolated_sky_dlsf[i]=np.interp(frame.wave,peak_wave[ok],peak_dlsf[i,ok])
 
                 line="fiber #{:03d} scale mean={:4.3f} rms={:4.3f}".format(i,np.mean(interpolated_sky_scale[i]),np.std(interpolated_sky_scale[i]))
                 if adjust_wavelength :
-                    line += " dlambda mean={:4.3f} rms={:4.3f}".format(np.mean(interpolated_sky_dwave[i]),np.std(interpolated_sky_dwave[i]))
+                    line += " dlambda mean={:4.3f} rms={:4.3f} A".format(np.mean(interpolated_sky_dwave[i]),np.std(interpolated_sky_dwave[i]))
                 if adjust_lsf :
-                    line += " dlsf mean={:4.3f} rms={:4.3f}".format(np.mean(interpolated_sky_dlsf[i]),np.std(interpolated_sky_dlsf[i]))
+                    line += " dlsf mean={:4.3f} rms={:4.3f} A".format(np.mean(interpolated_sky_dlsf[i]),np.std(interpolated_sky_dlsf[i]))
                 print(line)
 
-
-
-
-        # now median filtering across fibers to remove the effect of the target fluxes
-        # (because the wavelength calib errors are localized in the CCD)
-        nfibers_for_filter=10
+        # now median filtering across fibers to mitigate the bias induced by the target fluxes
+        # (the systematic effect to correct is preserved because it is localized in the CCD and correlated between neighboring fibers)
+        nfibers_for_filter=10 # this number is a bit arbitrary/empirical.
         interpolated_sky_scale = scipy.ndimage.filters.median_filter(interpolated_sky_scale,(nfibers_for_filter,1))
         cskyflux = interpolated_sky_scale*cskyflux
-
+        # the actual median filtering
         if adjust_wavelength :
             interpolated_sky_dwave = scipy.ndimage.filters.median_filter(interpolated_sky_dwave,(nfibers_for_filter,1))
             cskyflux += interpolated_sky_dwave*dskydwave
         if adjust_lsf :
             interpolated_sky_dlsf = scipy.ndimage.filters.median_filter(interpolated_sky_dlsf,(nfibers_for_filter,1))
             cskyflux += interpolated_sky_dlsf*dskydlsf
-
-        """
-        import sys
-        import fitsio
-        fitsio.write("peak_dw.fits",peak_dw,clobber=True)
-        fitsio.write("peak_dw_err.fits",peak_dw_err,clobber=True)
-        fitsio.write("peak_dlsf.fits",peak_dlsf,clobber=True)
-        fitsio.write("peak_dlsf_err.fits",peak_dlsf_err,clobber=True)
-        fitsio.write("interpolated_sky_scale.fits",interpolated_sky_scale,clobber=True)
-        fitsio.write("interpolated_sky_dwave.fits",interpolated_sky_dwave,clobber=True)
-        fitsio.write("interpolated_sky_dlsf.fits",interpolated_sky_dlsf,clobber=True)
-        print("wrote a bunch of images")
-        sys.exit(12)
-        """
 
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
