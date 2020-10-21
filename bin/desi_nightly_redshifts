@@ -153,7 +153,6 @@ for TILEID in $TILEIDS; do
                      -z $zbest \
                      -o redrock-${SPECTRO}-${TILEID}-${NIGHT}.h5 \
                      $spectra &> $rrlog &
-		#--archetypes /global/common/software/desi/users/jguy/redrock-archetypes \
                 #- Sleep a moment to not overwhelm slurm
                 sleep 2
             else
