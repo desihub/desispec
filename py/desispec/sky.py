@@ -372,7 +372,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             hw=int(4*dsigma_bin)+1
             x=np.arange(-hw,hw+1)
             k=np.zeros((3,x.size)) # a Gaussian kernel
-            k[1]=np.exp(-x**2/dsigma**2/2.)
+            k[1]=np.exp(-x**2/dsigma_bin**2/2.)
             k/=np.sum(k)
             tmp = fftconvolve(cskyflux,k,mode="same")
             dskydlsf = (tmp-cskyflux)/dsigma_A # variation of line shape with width
