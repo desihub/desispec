@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+## Import some helper functions, you can see their definitions by uncomenting the bash shell command
+from desispec.workflow.create_processing_table import create_processing_table
+
+
+parser = argparse.ArgumentParser(usage = "{prog} [options]")
+parser.add_argument("-n", "--nights", type=str,  help="nights as comma separated string")
+parser.add_argument("-p", "--prodname", type=str, help="name of the production run")
+parser.add_argument("-i", "--exp-table-path", type=str, default=None, help="input data path")
+parser.add_argument("-o","--proc-table-path", type=str, default=None,  help="path to save processing tables")
+parser.add_argument("--science-types", type=str, default=None, help="comma separated list of exposure types to include in "+\
+                                                       "exposure table, e.g. science,arc,flat,dark,zero, ...")
+parser.add_argument("--overwrite-files", action="store_true", help="overwrite existing exposure tables")
+parser.add_argument("--verbose", action="store_true", help="print verbose output")
+parser.add_argument("--joinsymb", type=str, default='|', help="String that separates entries in the HEADERR column")
+
+
+args = parser.parse_args()
+
+args.nights = args.nights.strip("\n\t ")
+if args.nights != 'all':
+    args.nights = [ int(val) for val in args.nights.strip("\n\t ").split(",") ]
+
+if args.science_types is not None:
+    args.science_types = [ val.strip('\t ') for val in args.science_types.split(",") ]
+
+
+create_processing_table(**args.__dict__)

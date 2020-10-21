@@ -1,0 +1,89 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+import socket
+import sys
+from desispec.workflow.helper_funcs import during_operating_hours, check_running
+from desispec.workflow.daily_processing import daily_processing_manager
+
+def parse_args(options=None):
+    parser = argparse.ArgumentParser(description="Perform daily processing of spectral" +
+                                                 "data using the pipeline.")
+    # Runtime params
+    # parser.add_argument("-t", "--pausetime", type=int, default=5, required=False,
+    #                     help="Number of minutes to pause after 'nsubmit' " +
+    #                          "submissions or after completing all known files.")
+    # parser.add_argument("-n", "--nsubmits", type=int, required=False, default=10,
+    #                     help="Number of submissions to make to cori at a time." +
+    #                          "After 'nsubmits,' the script will wait 'pausetime'" +
+    #                          "minutes before submitting another 'nsubmits.'")
+
+    # parser.add_argument("--cameras", type=str, required=False,
+    #                     help="Explicitly define the spectrographs for which you want" +
+    #                          " to reduce the data. Should be a comma separated list." +
+    #                          " Numbers only assumes you want to reduce R, B, and Z " +
+    #                          "for that camera. Otherwise specify separately [BRZ|brz][0-9].")
+    parser.add_argument("--science-types", type=str, default=None, required=False,
+                        help="Number of minutes to pause after 'nsubmit' " +
+                             "submissions or after completing all known files.")
+
+    # File and dir defs
+    parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
+                        help="Directory name where the output files should be saved.")
+    parser.add_argument("--exp-table-path", type=str, required=False, default=None,
+                        help="Directory name where the output files should be saved.")
+    parser.add_argument("--proc-table-path", type=str, required=False, default=None,
+                        help="Directory name where the output files should be saved.")
+    parser.add_argument("--raw-data-path", type=str, required=False, default=None,
+                        help="Directory name where the output files should be saved.")
+    parser.add_argument("--table-file-type", type=str, required=False, default=None,
+                        help="Directory name where the output files should be saved.")
+    # parser.add_argument("-r", "--reduxdir", type=str, required=False,
+    #                     help="Main reduction dir where specprod dir will reside.")
+
+    # Code Flags
+    parser.add_argument("--ignore-instances", action="store_true",
+                        help="Allow script to run even if another instance is " +
+                             "running. Use with care.")
+    parser.add_argument("--ignore-cori-node", action="store_true",
+                        help="Allow script to run on nodes other than cori21")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Perform a dry run where no jobs are actually submitted.")
+    # parser.add_argument("--force-specprod", action="store_true",
+    #                     help="Force the files to be written to custom SPECPROD " +
+    #                          "even if user is desi.")
+    # parser.add_argument("--scattered-light", action="store_true",
+    #                     help="Pass scattered light command to desi_proc. Fits and removes scattered light.")
+    # parser.add_argument("--most-recent-calib", action="store_true",
+    #                     help="Look backward in time for the most recent night with good calibration files." + \
+    #                          " If not set the defaults in DESI_SPECTRO_CALIB are used.")
+
+    # Read in command line and return
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+
+    return args
+
+
+if __name__ == '__main__':
+    args = parse_args(options=None)
+    if not during_operating_hours(dry_run=args.dry_run):
+        sys.exit(1)
+
+    if not args.ignore_cori_node and socket.gethostname() != 'cori21':
+        print('This should only run on cori21')
+        sys.exit(1)
+
+    if not args.ignore_instances:
+        running = check_running(proc_name='daily_processing_manager')
+        if not running:
+            print('OK to run')
+        else:
+            sys.exit(1)
+
+    daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
+                             proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
+                             scitypes=args.science_types, dry_run=args.dry_run, tab_filetype=args.table_file_type)
