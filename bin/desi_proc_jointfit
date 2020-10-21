@@ -75,8 +75,11 @@ else:
         args.cameras = cameras
 
     args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
+    args.nights = np.array(args.nights.strip(' \t').split(',')).astype(int)
+    if len(args.expids) > len(args.nights) and len(args.nights) == 1:
+        args.nights = np.array( [args.nights[0]]*len(args.expids) ).astype(int)
     
-    #- Update args to be in consistent format                                                                                                                                                            
+    #- Update args to be in consistent format                        
     if args.batch_opts is not None:
         args.batch_opts = args.batch_opts.strip('"\'')
     args.cameras = sorted(args.cameras)
