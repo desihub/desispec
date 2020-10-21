@@ -19,6 +19,7 @@ from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qsky import qproc_sky_subtraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat
 
+# projects a Gaussian cross-dispersion profile on a CCD image
 @numba.jit
 def numba_proj(image,x,sigma,flux) :
     n0=image.shape[0]
@@ -108,7 +109,6 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
             out=~good
             nout=np.sum(out)
             if nout>0 :
-                #if nout>50: log.warning("for spectrum={} number of pixels not modeled for variance={}".format(s,np.sum(out)))
                 # recompute sflux while masking outliers
                 tflux = fflux.copy()
                 tflux[out] = np.interp(y[out],y[good],fflux[good])
@@ -157,11 +157,10 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
         for s in range(qframe.nspec) :
             x=xytraceset.x_vs_y(s,y)
             numba_proj(model,x,xsig[s],qframe.flux[s])
-    else :
+    else : # this takes a lot of time
         log.debug("Use PSF for projection, but in 1D")
         psf._polyparams['HSIZEY']=0
         psf._polyparams['GHDEGY']=0
-        # still very slow
         model = psf.project(qframe.wave, qframe.flux, xyrange=(0,image.pix.shape[1],0,image.pix.shape[0]))
         log.debug("done projecting")
 
