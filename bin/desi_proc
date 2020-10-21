@@ -80,6 +80,8 @@ parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in
 parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
                     " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
 parser.add_argument("--variance-model", action="store_true", help="Use variance model in preprocessing")
+parser.add_argument("--adjust-sky-wavelength", action="store_true", help="Adjust wavelength of sky lines")
+parser.add_argument("--adjust-sky-lsf", action="store_true", help="Adjust width of sky lines")
 parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
 parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
 
@@ -128,9 +130,6 @@ else:
     comm = None
     rank = 0
     size = 1
-
-if args.batch_opts is not None:
-    args.batch_opts = args.batch_opts.strip('"\'')
 
 #- Prevent MPI from killing off spawned processes
 if 'PMI_MMAP_SYNC_WAIT_TIME' not in os.environ:
@@ -1006,8 +1005,8 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
         cmd += " --o {}".format(skyfile)
         if not args.extra_variance :
             cmd += " --no-extra-variance"
-        cmd += " --adjust-wavelength"
-        cmd += " --adjust-lsf"
+        if args.adjust_sky_wavelength : cmd += " --adjust-wavelength"
+        if args.adjust_sky_lsf : cmd += " --adjust-lsf"
 
         runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
 
