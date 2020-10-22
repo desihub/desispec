@@ -305,10 +305,10 @@ def create_desi_proc_batch_script(args, batchdir=None, jobname=None):
                 # Remove the argument of the command (now in the command location after pop)
                 inparams.pop(loc)
 
-        cmd += f' --timingfile {timingfile}'
+
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
-
+        cmd += f' --timingfile {timingfile}'
 
         if not args.mpi:
             cmd += ' --mpi'
@@ -1091,7 +1091,6 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.nop
 
 if args.obstype in ['SCIENCE',] and \
         (not args.noskysub ) and \
-        (not args.nofluxcalib) and \
         (not args.nostdstarfit ):
 
     timer.start('fluxcalib')
