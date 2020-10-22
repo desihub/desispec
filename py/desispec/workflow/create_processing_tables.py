@@ -13,10 +13,13 @@ from desispec.workflow.helper_funcs import opj, listpath, night_to_month, define
 from desispec.workflow.create_exposure_tables import get_exposure_table_path, get_exposure_table_name, default_exptypes_for_exptable
 
 
-def create_processing_table(nights, prodname, exp_table_path=None, proc_table_path=None,
+def create_processing_tables(nights=None, prodname=None, exp_table_path=None, proc_table_path=None,
                             science_types=None, overwrite_files=False, verbose=False,
                             exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
     from desispec.workflow.helper_funcs import write_table, load_table
+    if nights is None:
+        print("Need to provide nights to create processing tables for. If you want all nights, use 'all'")
+        
     ## Define where to find the data
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path()
@@ -27,9 +30,7 @@ def create_processing_table(nights, prodname, exp_table_path=None, proc_table_pa
 
     ## Define where to save the data
     if proc_table_path is None:
-        proc_table_path = define_variable_from_environment(env_name='DESI_SPECTRO_REDUX',
-                                                           var_descr="The processing table path")
-        proc_table_path = opj(proc_table_path, prodname)
+        proc_table_path = get_processing_table_path()
 
     if type(nights) is str and nights == 'all':
         exptables = []
@@ -92,11 +93,12 @@ def create_processing_table(nights, prodname, exp_table_path=None, proc_table_pa
                                                                 joinsymb=joinsymb)
 
     ## Save the tables
-    proc_name = get_proctab_pathname(proc_table_path, prodname, extension=prod_filetype)
+    proc_name = get_processing_table_name(extension=prod_filetype)
     unproc_name = proc_name.replace('processing', 'unprocessed')
     for tab, name in zip([processing_table, unprocessed_table], [proc_name, unproc_name]):
         if len(tab) > 0:
-            write_table(tab, name, overwrite=overwrite_files)
+            pathname = opj(proc_table_path, name)
+            write_table(tab, pathname, overwrite=overwrite_files)
             print(f'Wrote file: {name}')
 
 
@@ -157,7 +159,7 @@ def exptable_to_proctable(input_exptable, science_types=None, addtnl_colnames=No
     return processing_table, unprocessed_table
 
 
-def create_processing_table(colnames=None, coldtypes=None):
+def instantiate_processing_table(colnames=None, coldtypes=None):
     ## Define the column names for the exposure table and their respective datatypes
     if colnames is None:
         colnames, coldtypes = get_internal_production_table_column_defs()

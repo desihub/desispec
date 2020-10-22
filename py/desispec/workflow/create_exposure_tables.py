@@ -35,7 +35,7 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, scien
     ## Create an astropy table for each night. Define the columns and datatypes, but leave each with 0 rows
     # colnames, coldtypes = get_exposure_table_column_defs()
     # nightly_tabs = { night : Table(names=colnames,dtype=coldtypes) for night in nights }
-    nightly_tabs = { night : create_exposure_table() for night in nights }
+    nightly_tabs = { night : instantiate_exposure_table() for night in nights }
 
     ## Loop over nights
     survey_def = get_survey_definitions()
@@ -80,10 +80,10 @@ def get_exposure_table_path(night=None):
     user = define_variable_from_environment(env_name='USER',
                                                           var_descr="Username for unique exposure table directories")
     if night is None:
-        return opj(spectro_redux,user,'exposure_tables')
+        return opj(spec_redux,user,'exposure_tables')
     else:
         month = night_to_month(night)
-        path = opj(spectro_redux,user,'exposure_tables',month)
+        path = opj(spec_redux,user,'exposure_tables',month)
         return path
 
 def get_exposure_table_pathname(night=None, extension='csv'):#base_path,prodname
@@ -113,7 +113,7 @@ def default_exptypes_for_exptable():
     ## Define the science types to be included in the exposure table (case insensitive)
     return ['arc','flat','twilight','science','sci','dither']
 
-def create_exposure_table(rows=None):
+def instantiate_exposure_table(rows=None):
     colnames, coldtypes = get_exposure_table_column_defs()
     outtab = Table(names=colnames,dtype=coldtypes)
     if rows is not None:

@@ -14,8 +14,8 @@ from desispec.workflow.helper_funcs import get_surveynum, nersc_start_time, ners
 from desispec.workflow.helper_funcs import load_tables, load_table, write_table, write_tables, get_type_and_tile
 from desispec.workflow.helper_funcs import create_and_submit_exposure, update_and_recurvsively_submit, continue_looping, update_from_queue
 from desispec.workflow.helper_funcs import science_joint_fit, arc_joint_fit, flat_joint_fit, define_and_assign_dependency,verify_variable_with_environment
-from desispec.workflow.create_exposure_tables import create_exposure_table, summarize_exposure, default_exptypes_for_exptable
-from desispec.workflow.create_processing_tables import create_processing_table, erow_to_irow
+from desispec.workflow.create_exposure_tables import instantiate_exposure_table, summarize_exposure, default_exptypes_for_exptable
+from desispec.workflow.create_processing_tables import instantiate_processing_table, erow_to_irow
 from desispec.workflow.create_exposure_tables import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
 from desispec.workflow.create_processing_tables import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
 
@@ -108,9 +108,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             last_not_dither = True
 
     else:
-        etable = create_exposure_table()
+        etable = instantiate_exposure_table()
         unproc_table = etable.copy()
-        itable = create_processing_table()
+        itable = instantiate_processing_table()
         internal_id = night_to_starting_iid(night)
         last_not_dither = True
 
