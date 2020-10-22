@@ -114,6 +114,7 @@ def create_exposure_table(rows=None):
 
 
 def summarize_exposure(raw_data_dir, night, exp, scitypes, surveynum, colnames, verbosely=False):
+    night, exp = str(night), str(exp)
     def give_details(verbose_output, non_verbose_output=None):
         give_relevant_details(verbose_output, non_verbose_output, verbosely=verbosely)
 
