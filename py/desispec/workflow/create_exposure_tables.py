@@ -56,7 +56,10 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, scien
                 nightly_tabs[night].add_row(rowdict)
 
         if len(nightly_tabs[night]) > 0:
-            exptab_name = get_exptab_pathname(exptable_base_path, night)
+            exptab_path = opj(exp_table_path,night_to_month(night=night))
+            os.makedirs(exptab_path,exist_ok=True)
+            exptab_name = get_exposure_table_name(night)
+            exptab_name = opj(exptab_path, exptab_name)
             write_table(nightly_tabs[night], exptab_name, overwrite=overwrite_files)
         else:
             print('No rows to write to a file.')
