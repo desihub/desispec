@@ -16,13 +16,11 @@ import subprocess
 import sys
 from subprocess import check_output as subprocess_check_output
 from subprocess import STDOUT as subprocess_STDOUT
-from desispec.workflow.create_exposure_tables import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
-from desispec.workflow.create_processing_table import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
 
 # from desispec.io.util import create_camword, decode_camword
 # import desispec.io.util.create_camword as create_camword
 # import desispec.io.util.decode_camword as decode_camword
-from create_processing_table import erow_to_irow, get_internal_production_table_column_defs
+#from create_processing_table import erow_to_irow, get_internal_production_table_column_defs
 
 
 class get_logger:
@@ -165,6 +163,8 @@ def write_table(origtable, tablename=None, table_type=None, joinsymb='|', overwr
 
 
 def translate_type_to_pathname(table_type):
+    from desispec.workflow.create_exposure_tables import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
+    from desispec.workflow.create_processing_table import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
     if table_type.lower() in ['exp', 'exposure', 'etable']:
         tablename = get_exposure_table_pathname()
     elif table_type.lower() in ['proc', 'processing', 'int', 'itable', 'interal']:
@@ -665,8 +665,6 @@ def update_from_queue(table, qtable=None, dry_run=False, start_time=None, end_ti
 
 def recursive_submit_failed(rown, int_table, submits, id_to_row_map, itab_name=None,
                             resubmission_states=None, dry_run=False):
-    if itab_name is None:
-        itab_name = get_processing_table_name()
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = split_str(int_table['INT_DEP_IDS'][rown], joinsymb='|')

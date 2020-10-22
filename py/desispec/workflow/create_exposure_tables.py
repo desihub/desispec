@@ -9,12 +9,13 @@ from astropy.io import fits
 from desispec.workflow.helper_funcs import opj, listpath, get_json_dict
 from desispec.workflow.helper_funcs import define_variable_from_environment, night_to_month
 from desispec.workflow.helper_funcs import get_survey_definitions, get_surveynum
-from desispec.workflow.helper_funcs import write_table, get_night_banner, give_relevant_details
+from desispec.workflow.helper_funcs import get_night_banner, give_relevant_details
 
 
 
 def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, science_types=None, \
                            verbose=False, overwrite_files=False):
+    from desispec.workflow.helper_funcs import write_table
     ## Define where to find the data
     if path_to_data is None:
         path_to_data = define_variable_from_environment(env_name='DESI_SPECTRO_DATA',
