@@ -10,13 +10,13 @@ from collections import OrderedDict
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.helper_funcs import opj, listpath, define_variable_from_environment
-from desispec.workflow.helper_funcs import write_table, load_table
 from desispec.workflow.create_exposure_tables import get_exptab_pathname, default_exptypes_for_exptable
 
 
 def create_processing_table(nights, prodname, exp_table_path=None, proc_table_path=None,
                             science_types=None, overwrite_files=False, verbose=False,
                             exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
+    from desispec.workflow.helper_funcs import write_table, load_table
     ## Define where to find the data
     if exp_table_path is None:
         exp_table_path = define_variable_from_environment(env_name='DESI_SPECTRO_REDUX',

@@ -49,7 +49,7 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, scien
 
         ## Loop through all exposures on disk
         for exp in listpath(path_to_data,str(night)):
-            rowdict = summarize_exposure(night_path,exp=exp,scitypes=science_types,surveynum=survey_num,\
+            rowdict = summarize_exposure(night_path,night=night, exp=exp,scitypes=science_types,surveynum=survey_num,\
                                          colnames=nightly_tabs[night].colnames,verbosely=verbose)
             if rowdict is not None:
                 ## Add the dictionary of column values as a new row
