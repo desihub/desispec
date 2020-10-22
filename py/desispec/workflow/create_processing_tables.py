@@ -9,8 +9,8 @@ from astropy.table import Table, vstack
 from collections import OrderedDict
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.helper_funcs import opj, listpath, define_variable_from_environment
-from desispec.workflow.create_exposure_tables import get_exptab_pathname, default_exptypes_for_exptable
+from desispec.workflow.helper_funcs import opj, listpath, night_to_month, define_variable_from_environment
+from desispec.workflow.create_exposure_tables import get_exposure_table_path, get_exposure_table_name, default_exptypes_for_exptable
 
 
 def create_processing_table(nights, prodname, exp_table_path=None, proc_table_path=None,
@@ -19,9 +19,7 @@ def create_processing_table(nights, prodname, exp_table_path=None, proc_table_pa
     from desispec.workflow.helper_funcs import write_table, load_table
     ## Define where to find the data
     if exp_table_path is None:
-        exp_table_path = define_variable_from_environment(env_name='DESI_SPECTRO_REDUX',
-                                                          var_descr="The exposure table path")
-        exp_table_path = opj(exp_table_path, 'exposure_tables')
+        exp_table_path = get_exposure_table_path()
 
     if prodname is None:
         prodname = define_variable_from_environment(env_name='SPECPROD',
@@ -59,7 +57,8 @@ def create_processing_table(nights, prodname, exp_table_path=None, proc_table_pa
     for night in nights:
         if verbose:
             print(f'Processing {night}')
-        exptab_name = get_exptab_pathname(exp_table_path, night=night, extension=exp_filetype)
+        month = night_to_month(night)
+        exptab_name = opj(exp_table_path, month, get_exposure_table_name(night=night, extension=exp_filetype))
         exptable = load_table(exptab_name, process_mixins=False)
 
         if night == nights[0]:

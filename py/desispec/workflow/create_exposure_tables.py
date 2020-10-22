@@ -75,10 +75,16 @@ def get_exposure_table_name(night=None, extension='csv'):
 def get_exposure_table_path(night=None):
     # if night is None and 'PROD_NIGHT' in os.environ:
     #     night = os.environp['PROD_NIGHT']
-
-    month = night_to_month(night)
-    path = opj(os.environ['DESI_SPECTRO_REDUX'],'exposure_tables',month)
-    return path
+    spec_redux = define_variable_from_environment(env_name='DESI_SPECTRO_REDUX',
+                                                          var_descr="The exposure table path")
+    user = define_variable_from_environment(env_name='USER',
+                                                          var_descr="Username for unique exposure table directories")
+    if night is None:
+        return opj(spectro_redux,user,'exposure_tables')
+    else:
+        month = night_to_month(night)
+        path = opj(spectro_redux,user,'exposure_tables',month)
+        return path
 
 def get_exposure_table_pathname(night=None, extension='csv'):#base_path,prodname
     # if night is None and 'PROD_NIGHT' in os.environ:

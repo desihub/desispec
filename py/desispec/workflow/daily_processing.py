@@ -15,9 +15,9 @@ from desispec.workflow.helper_funcs import load_tables, load_table, write_table,
 from desispec.workflow.helper_funcs import create_and_submit_exposure, update_and_recurvsively_submit, continue_looping, update_from_queue
 from desispec.workflow.helper_funcs import science_joint_fit, arc_joint_fit, flat_joint_fit, define_and_assign_dependency,verify_variable_with_environment
 from desispec.workflow.create_exposure_tables import create_exposure_table, summarize_exposure, default_exptypes_for_exptable
-from desispec.workflow.create_processing_table import create_processing_table, erow_to_irow
+from desispec.workflow.create_processing_tables import create_processing_table, erow_to_irow
 from desispec.workflow.create_exposure_tables import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
-from desispec.workflow.create_processing_table import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
+from desispec.workflow.create_processing_tables import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
 
 log = get_logger()
 
