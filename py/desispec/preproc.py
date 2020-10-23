@@ -443,6 +443,31 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else:
         bias = bias_img
 
+    #- Load dark
+    dark_info=cfinder.data['DARK'].lower().replace('/','-').replace('_','-').split('-')
+    if ('master' in dark_info) and ('dark' in dark_info): # Using new master bias+dark image, input header to retrieve exptime
+        dark = get_calibration_image(cfinder,"DARK",dark,header=header)
+        bias = bias + dark # The new dark image is the same as the bias image by definition thus added to the bias image, then jump the dark subtraction step in the old code 
+        dark = False
+    else: # Old dark
+        dark = get_calibration_image(cfinder,"DARK",dark)
+
+        if dark is not False :
+            if dark.shape != image.shape :
+                log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+                raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+
+
+            if cfinder and cfinder.haskey("EXPTIMEKEY") :
+                exptime_key=cfinder.value("EXPTIMEKEY")
+                log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
+            else :
+                exptime_key="EXPTIME"
+            exptime =  primary_header[exptime_key]
+
+            log.info("Multiplying dark by exptime %f"%(exptime))
+            dark *= exptime
+
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
             log.info("subtracting bias")
@@ -484,29 +509,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else :
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
-
-    #- Load dark
-    dark_info=cfinder.data['DARK'].lower().replace('/','-').replace('_','-').split('-')
-    if ('master' in dark_info) and ('dark' in dark_info): # Using new master bias+dark image, input header to retrieve exptime
-        dark = get_calibration_image(cfinder,"DARK",dark,header=header)
-    else: # Old dark
-        dark = get_calibration_image(cfinder,"DARK",dark)
-
-        if dark is not False :
-            if dark.shape != image.shape :
-                log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-                raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-
-
-            if cfinder and cfinder.haskey("EXPTIMEKEY") :
-                exptime_key=cfinder.value("EXPTIMEKEY")
-                log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
-            else :
-                exptime_key="EXPTIME"
-            exptime =  primary_header[exptime_key]
-
-            log.info("Multiplying dark by exptime %f"%(exptime))
-            dark *= exptime
 
     for amp in amp_ids:
         # Grab the sections
