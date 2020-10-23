@@ -8,7 +8,19 @@ from desispec.qproc.qframe import QFrame
 from desispec.fiberflat import FiberFlat
 
 def qproc_apply_fiberflat(qframe,fiberflat,return_flat=False) :
+    """
+    Apply a fiber flat to a qframe.
 
+    Inputs:
+       qframe: desispec.qproc.qframe.QFrame object which will be modified
+       fiberflat: desispec.fiberflat.FiberFlat object with the flat to apply
+
+    Optional:
+       return_flat : if True, returns the flat field that has been applied
+
+    Returns nothing or the flat that has been applied.
+
+    """
     log = get_logger()
 
     if return_flat :
