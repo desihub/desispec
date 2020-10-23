@@ -330,7 +330,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
-            bias_img=None,use_variance_model=False):
+            bias_img=None,model_variance=False):
 
     '''
     preprocess image using metadata in header
@@ -362,7 +362,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             the overscan.   (default: False).  Requires use_overscan_row=True
             to have any effect.
 
-    Optional variance model if use_variance_model=True
+    Optional variance model if model_variance=True
     Optional background subtraction with median filtering if bkgsub=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
@@ -755,7 +755,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     xyset = None
 
-    if use_variance_model  :
+    if model_variance  :
 
         psf = None
         if psf_filename is None :

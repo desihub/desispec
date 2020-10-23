@@ -80,7 +80,7 @@ to use, but also only if a single camera is specified.
     parser.add_argument('--fill-header', type = str, default = None,  nargs ='*', help="fill camera header with contents of those of other hdus")
     parser.add_argument('--scattered-light', action="store_true", help="fit and remove scattered light")
     parser.add_argument('--psf', type = str, required=False, default=None, help="psf file to remove scattered light or to compute the variance model")
-    parser.add_argument('--variance-model', action="store_true", help="compute a model of the CCD image to derive the Poisson noise")
+    parser.add_argument('--model-variance', action="store_true", help="compute a model of the CCD image to derive the Poisson noise")
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -156,7 +156,7 @@ def main(args=None):
                               fill_header=args.fill_header,
                               remove_scattered_light=args.scattered_light,
                               psf_filename=args.psf,
-                              use_variance_model=args.variance_model
+                              model_variance=args.model_variance
             )
         except IOError:
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
