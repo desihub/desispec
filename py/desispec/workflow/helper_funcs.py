@@ -562,7 +562,7 @@ def submit_batch_script(submission, dry_run=False):
     print(dependencies,type(dependencies))
     dep_list, dep_str = '', ''
     if dependencies is not None:
-        dep_str = ' --dependency=afterok:'
+        dep_str = '--dependency=afterok:'
         if np.isscalar(dependencies):
             dep_list = str(dependencies).strip(' \t')
             if dep_list == '':

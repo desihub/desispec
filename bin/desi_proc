@@ -1095,7 +1095,7 @@ if args.obstype in ['SCIENCE',] and \
         (not args.noskysub ) and \
         (not args.nostdstarfit ):
 
-    timer.start('fluxcalib')
+    timer.start('stdstarfit')
     if rank == 0:
         log.info('Starting flux calibration at {}'.format(time.asctime()))
 
@@ -1138,6 +1138,7 @@ if args.obstype in ['SCIENCE',] and \
         inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
         runcmd(cmd, inputs=inputs, outputs=[stdfile])
 
+    timer.start('stdstarfit')
     if comm is not None:
         comm.barrier()
 
@@ -1147,6 +1148,7 @@ if args.obstype in ['SCIENCE',] and \
 if args.obstype in ['SCIENCE'] and \
         (not args.noskysub) and \
         (not args.nofluxcalib):
+    timer.start('fluxcalib')
     #- Compute flux calibration vectors per camera
     for camera in args.cameras[rank::size]:
         framefile = findfile('frame', night, expid, camera)
