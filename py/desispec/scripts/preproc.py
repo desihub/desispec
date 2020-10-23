@@ -58,9 +58,9 @@ to use, but also only if a single camera is specified.
     parser.add_argument('--nocosmic', action='store_true',
                         help = 'do not try and reject cosmic rays')
     parser.add_argument('--nogain', action='store_true',
-                        help = 'do not apply gain correction') 
+                        help = 'do not apply gain correction')
     parser.add_argument('--nodarktrail', action='store_true',
-                        help = 'do not correct for dark trails if any') 
+                        help = 'do not correct for dark trails if any')
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
@@ -70,7 +70,7 @@ to use, but also only if a single camera is specified.
 
     parser.add_argument('--bkgsub', action='store_true',
                         help = 'do a background subtraction prior to cosmic ray rejection')
-    
+
     parser.add_argument('--zero-masked', action='store_true',
                         help = 'set to zero the flux of masked pixels (for convenience to display images, no impact on analysis)')
     parser.add_argument('--no-ccd-calib-filename', action='store_true',
@@ -79,8 +79,9 @@ to use, but also only if a single camera is specified.
                         help = 'specify a difference ccd calibration filename (for dev. purpose), default is in desispec/data/ccd')
     parser.add_argument('--fill-header', type = str, default = None,  nargs ='*', help="fill camera header with contents of those of other hdus")
     parser.add_argument('--scattered-light', action="store_true", help="fit and remove scattered light")
-    parser.add_argument('--psf', type = str, required=False, default=None, help="psf file to remove scattered light")
-    
+    parser.add_argument('--psf', type = str, required=False, default=None, help="psf file to remove scattered light or to compute the variance model")
+    parser.add_argument('--model-variance', action="store_true", help="compute a model of the CCD image to derive the Poisson noise")
+
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
 
@@ -143,7 +144,7 @@ def main(args=None):
             img = io.read_raw(args.infile, camera,
                               fibermapfile=args.fibermap,
                               bias=bias, dark=dark, pixflat=pixflat, mask=mask, bkgsub=args.bkgsub,
-                              nocosmic=args.nocosmic,                              
+                              nocosmic=args.nocosmic,
                               cosmics_nsig=args.cosmics_nsig,
                               cosmics_cfudge=args.cosmics_cfudge,
                               cosmics_c2fudge=args.cosmics_c2fudge,
@@ -153,7 +154,9 @@ def main(args=None):
                               use_savgol=args.use_savgol,
                               nodarktrail=args.nodarktrail,
                               fill_header=args.fill_header,
-                              remove_scattered_light=args.scattered_light
+                              remove_scattered_light=args.scattered_light,
+                              psf_filename=args.psf,
+                              model_variance=args.model_variance
             )
         except IOError:
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
