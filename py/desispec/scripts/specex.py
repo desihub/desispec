@@ -455,6 +455,15 @@ def mean_psf(inputs, output):
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
 
+            # We finally resorted to use a mean instead of a median here for two reasons.
+            # First, there is already a vetting of PSF bundles with good chi2 above
+            # that protects us from bad fits (we only expect outliers because of bad fits because of cosmic rays,
+            # not a glitch in hardware). Second, some of the PSF parameters have large correlations,
+            # which mean that two pairs of parameter values, like (p_a_i,p_b_i) and (p_a_j,p_b_j) (with a,b param
+            # indexes and i,j exposure indices) may give similar PSFs despite large noise in individual parameters
+            # but a median could decide to select a pair like (p_a_i,p_b_j) that could lead to a PSF inconsistent
+            # with data. Using a mean instead of a median protects us from this situation.
+
             if ok.size>=2 : # use mean
                 log.debug("bundle #{} : use mean".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
@@ -501,8 +510,8 @@ def mean_psf(inputs, output):
                     val = legval(iu,ytrace[f])
                     ytrace[f] = legfit(ou,val,deg=npar-1)
 
-            hdulist["xtrace"].data = np.mean(np.array(xtrace),axis=0)
-            hdulist["ytrace"].data = np.mean(np.array(ytrace),axis=0)
+            hdulist["xtrace"].data = np.mean(xtrace,axis=0)
+            hdulist["ytrace"].data = np.mean(ytrace,axis=0)
 
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
