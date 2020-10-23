@@ -79,9 +79,9 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
     sqframe = None
     ratio = None
     if fiberflat is not None :
-       log.info("fiberflat")
-       fqframe = copy.deepcopy(qframe)
-       flat=qproc_apply_fiberflat(fqframe,fiberflat=fiberflat,return_flat=True)
+        log.info("fiberflat")
+        fqframe = copy.deepcopy(qframe)
+        flat=qproc_apply_fiberflat(fqframe,fiberflat=fiberflat,return_flat=True)
     if with_sky_model :
         if fiberflat is None :
             log.warning("cannot compute and use a sky model without a fiberflat")
