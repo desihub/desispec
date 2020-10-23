@@ -94,8 +94,10 @@ def get_desi_proc_parser(joint=False):
     parser.add_argument("-q", "--queue", type=str, default="realtime", help="batch queue to use")
     parser.add_argument("--batch-opts", type=str, default=None, help="additional batch commands")
     parser.add_argument("--runtime", type=int, default=None, help="batch runtime in minutes")
-    parser.add_argument("--most-recent-calib", action="store_true", help="If no calibrations exist for the night," + \
-                                                                         " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
+    parser.add_argument("--most-recent-calib", action="store_true", help="If no calibrations exist for the night," +
+                        " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
+    parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
+    parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')                                              
     return parser
 
 

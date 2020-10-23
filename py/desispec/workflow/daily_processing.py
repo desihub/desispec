@@ -27,28 +27,30 @@ log = get_logger()
 
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None, scitypes=None,
-                             dry_run=False, tab_filetype='csv'):
+                             dry_run=False, tab_filetype='csv',override_night=None):
     ## Check this in running script. This allows the function to be used manually in interactive mode
     # if not during_operating_hours(mock=mock) :
     #     exit(0)
 
-    night = what_night_is_it()
+    true_night = what_night_is_it()
+    if override_night is not None and dry_run:
+        night = int(override_night)
+    else:
+        night = true_night
     surveynum = get_surveynum(night)
-    nersc_start = nersc_start_time(obsnight=night)
-    nersc_end = nersc_end_time(obsnight=night)
+    nersc_start = nersc_start_time(obsnight=true_night)
+    nersc_end = nersc_end_time(obsnight=true_night)
 
     if scitypes is None:
         scitypes = default_exptypes_for_exptable()
 
     ## Define where to find the data
-    path_to_data = verify_variable_with_environment(var=path_to_data,var_name='path_to_data',
-                                                    env_name='DESI_SPECTRO_DATA', output_mechanism=log.warning)
+    path_to_data = verify_variable_with_environment(var=path_to_data,var_name='path_to_data', env_name='DESI_SPECTRO_DATA')
 
     # night = verify_variable_with_environment(var=night,var_name='night',env_name='PROD_NIGHT',
     #                                             output_mechanism=log.warning)
 
-    specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD',
-                                                output_mechanism=log.warning)
+    specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD')
 
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path(night=night)
@@ -66,12 +68,16 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     unproc_table_pathname = opj(proc_table_path,name.replace('processing', 'unprocessed'))
 
-
+    speed_modifier = 1
+    if dry_run:
+        speed_modifier = 0.1
+        
     arcs, flats, sciences = [], [], []
     arcjob, flatjob = None, None
     curtype,lasttype = None,None
     curtile,lasttile = None,None
     if os.path.isfile(proc_table_pathname):
+        print(f"Found tables: {proc_table_pathname}")
         etable,itable,unproc_table = load_tables([exp_table_pathname,proc_table_pathname,unproc_table_pathname])
         if len(itable) > 0:
             irow = itable[-1]
@@ -108,6 +114,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             last_not_dither = True
 
     else:
+        print("Creating new tables for this production")
         etable = instantiate_exposure_table()
         unproc_table = etable.copy()
         itable = instantiate_processing_table()
@@ -115,11 +122,20 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         last_not_dither = True
 
     all_exps = set(etable['EXPID'])
-    while what_night_is_it() == night and during_operating_hours(dry_run=dry_run) :
+    if override_night is not None and dry_run:
+        current_night = night
+    else:
+        current_night = what_night_is_it()
+    while current_night == night and during_operating_hours(dry_run=dry_run) :
+        print(f"Known exposures: {all_exps}")
+        print(path_to_data,str(night))
         located_exps = set( np.array(listpath(path_to_data,str(night))).astype(int) )
-        newexps = located_exps.difference(all_exps)
-        for exp in newexps:
+        new_exps = located_exps.difference(all_exps)
+        all_exps = new_exps.union(all_exps)
+        print(f"New exposures: {new_exps}")
+        for exp in new_exps:
             erow = summarize_exposure(path_to_data,night,exp,scitypes,surveynum,etable.colnames,verbosely=False)
+            print(f"Found: {erow}")
             if erow is None:
                 continue
             elif type(erow) is str:
@@ -153,10 +169,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                         internal_id += 1
 
                 irow = erow_to_irow(erow)
+                if irow is None:
+                    import pdb
+                    pdb.set_trace()
                 irow['INTID'] = internal_id
                 internal_id += 1
                 irow = define_and_assign_dependency(irow, arcjob, flatjob)
-
+                print(f"Processing: {irow}")
                 irow = create_and_submit_exposure(irow)
                 itable.add_row(irow)
 
@@ -175,15 +194,19 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             write_tables([etable, itable, unproc_table],
                          fullpathnames=[exp_table_pathname,proc_table_pathname,unproc_table_pathname])
 
-        time.sleep(300)
+        time.sleep(300*speed_modifier)
 
-        itable = update_and_recurvsively_submit(itable,start_time=nersc_start,end_time=nersc_end,
-                                                itab_name=proc_table_pathname)
+        if len(itable) > 0:
+            itable = update_and_recurvsively_submit(itable,start_time=nersc_start,end_time=nersc_end,
+                                                    itab_name=proc_table_pathname)
 
-        ## Exposure table doesn't change in the interim, so no need to re-write it to disk
-        write_table(itable, tablename=proc_table_pathname)
-        time.sleep(300)
+            ## Exposure table doesn't change in the interim, so no need to re-write it to disk
+            write_table(itable, tablename=proc_table_pathname)
+            time.sleep(300*speed_modifier)
 
+        if override_night is None and not dry_run:
+            current_night = what_night_is_it()
+        
     ## No more data coming in, so do bottleneck steps if any apply
     if lasttype == 'science' and last_not_dither:
         etable, itable, tilejob = science_joint_fit(etable, itable, sciences, internal_id)
@@ -207,8 +230,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         itable, nsubmits = update_and_recurvsively_submit(itable,start_time=nersc_start,end_time=nersc_end,
                                                           itab_name=proc_table_pathname, dry_run=dry_run)
         write_table(itable, tablename=proc_table_pathname)
-        if not dry_run and continue_looping(itable['STATUS']):
-            time.sleep(1800)
+        if continue_looping(itable['STATUS']):
+            time.sleep(1800*speed_modifier)
 
         itable = update_from_queue(itable,start_time=nersc_start,end_time=nersc_end)
         write_table(itable, tablename=proc_table_pathname)

@@ -14,8 +14,9 @@ from os import listdir
 from collections import OrderedDict
 import subprocess
 import sys
-from subprocess import check_output as subprocess_check_output
-from subprocess import STDOUT as subprocess_STDOUT
+#from subprocess import check_output as subprocess_check_output
+#from subprocess import STDOUT as subprocess_STDOUT
+#from desispec.io.util import decode_camword
 
 # from desispec.io.util import create_camword, decode_camword
 # import desispec.io.util.create_camword as create_camword
@@ -124,8 +125,11 @@ def write_table(origtable, tablename=None, table_type=None, joinsymb='|', overwr
     if tablename is None:
         tablename = translate_type_to_pathname(table_type)
 
+    print("In write table",tablename,'\n',table_type)
+    print(origtable[0:2])
     basename, ext = os.path.splitext(tablename)
     temp_name = f'{basename}.temp{ext}'
+    print(ext,temp_name)
     table = origtable.copy()
     if ext in ['.csv', '.ecsv']:
         if verbose:
@@ -186,9 +190,11 @@ def load_table(tablename=None, table_type=None, joinsymb='|', verbose=False, pro
         if verbose:
             print("Raw loaded table: ", table.info)
         # replace_cols = {}
-        if process_mixins:
+        if process_mixins and len(table)>0:
             for nam in table.colnames:
-                if type(table[nam]) is Table.MaskedColumn:
+                if type(table[nam]) is Table.MaskedColumn and np.sum(~table[nam].mask)==0:
+                    continue
+                elif type(table[nam]) is Table.MaskedColumn:
                     first = table[nam][np.bitwise_not(table[nam].mask)][0]
                 else:
                     first = table[nam][0]
@@ -224,10 +230,12 @@ def write_tables(tables, fullpathnames=None, table_types=None):
         print("Need to define either fullpathnames or the table types in write_tables")
     elif fullpathnames is None:
         for tabl, tabltyp in zip(tables, table_types):
-            write_table(tabl, table_type=tabltyp)
+            if len(tabl) > 0:
+                write_table(tabl, table_type=tabltyp)
     else:
         for tabl, tablname in zip(tables, fullpathnames):
-            write_table(tabl, tablename=tablname)
+            if len(tabl) > 0:
+                write_table(tabl, tablename=tablname)
 
 
 def load_tables(fullpathnames=None, tabtypes=None):
@@ -446,11 +454,11 @@ def get_batch_dir(night):
 def batch_script_name(irow):
     batchdir = get_batch_dir(str(irow['NIGHT']))
     camword = irow['CAMWORD']
-    if irow['EXPID'] in [list, np.array]:
-        expid_str = '-'.join([str(exp) for exp in irow['EXPID']])
+    if type(irow['EXPID']) in [list, np.array]:
+        expid_str = '-'.join(['{:08d}'.format(int(exp)) for exp in irow['EXPID']])
     else:
-        expid_str = str(irow['EXPID'])
-    jobname = '{}-{}-{:08d}-{}'.format(str(irow['OBSTYPE']).lower(), str(irow['NIGHT']), expid_str, camword)
+        expid_str = '{:08d}'.format(int(irow['EXPID']))
+    jobname = '{}-{}-{}-{}'.format(str(irow['OBSTYPE']).lower(), str(irow['NIGHT']), expid_str, camword)
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
     return scriptfile
 
@@ -458,11 +466,11 @@ def batch_script_name(irow):
 def joint_batch_script_name(irow):
     batchdir = get_batch_dir(str(irow['NIGHT']))
     camword = irow['CAMWORD']
-    if irow['EXPID'] in [list, np.array]:
-        expid_str = '-'.join([str(exp) for exp in irow['EXPID']])
+    if type(irow['EXPID']) in [list, np.array]:
+        expid_str = '-'.join(['{:08d}'.format(int(exp)) for exp in irow['EXPID']])
     else:
-        expid_str = str(irow['EXPID'])
-    jobname = '{}-{}-{:08d}-{}'.format(str(irow['OBSTYPE']).lower(), str(irow['NIGHT']), expid_str, camword)
+        expid_str = '{:08d}'.format(int(irow['EXPID']))
+    jobname = '{}-{}-{}-{}'.format(str(irow['OBSTYPE']).lower(), str(irow['NIGHT']), expid_str, camword)
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
     return scriptfile
 
@@ -474,12 +482,18 @@ def create_and_submit_joint(irow, queue=None, dry_run=False):
 
 
 def create_and_submit_exposure(irow, queue=None, dry_run=False):
+    if irow is None:
+        import pdb
+        pdb.set_trace()
     irow = create_batch_script(irow, queue=queue, dry_run=dry_run)
     irow = submit_batch_script(irow, dry_run=dry_run)
     return irow
 
 
 def create_batch_script(irow, queue=None, dry_run=False):
+    if irow is None:
+        import pdb
+        pdb.set_trace()
     cmd = 'desi_proc'
     cmd += ' --batch'
     cmd += ' --nosubmit'
@@ -491,7 +505,8 @@ def create_batch_script(irow, queue=None, dry_run=False):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif irow['JOBDESC'] == 'poststd':
             cmd += ' --noprestdstarfit --nostdstarfit'
-    cmd += ' --cameras {} -n {night} -e {exp}'.format(irow['CAMWORD'], irow['NIGHT'], irow['EXPID'])
+    specs = ','.join(str(irow['CAMWORD'])[1:])
+    cmd += ' --cameras={} -n {} -e {}'.format(specs, irow['NIGHT'], irow['EXPID'])
 
     print(cmd)
     scriptpathname = batch_script_name(irow)
@@ -509,7 +524,7 @@ def create_batch_script(irow, queue=None, dry_run=False):
 
 
 def create_joint_batch_script(irow, descriptor=None, queue=None, dry_run=False):
-    cmd = 'desi_proc_jointfit'
+    cmd = 'desi_proc_joint_fit'
     cmd += ' --batch'
     cmd += ' --nosubmit'
     cmd += ' --traceshift'
@@ -519,12 +534,12 @@ def create_joint_batch_script(irow, descriptor=None, queue=None, dry_run=False):
         descriptor = irow['OBSTYPE'].lower()
 
     night = irow['NIGHT']
-    specs = irow['CAMWORD']
+    specs = ','.join(str(irow['CAMWORD'])[1:])
     expids = irow['EXPID']
-    expid_str = ','.join(expids)
+    expid_str = ','.join([str(eid) for eid in expids])
 
     cmd += f' --obstype {descriptor}'
-    cmd += ' --cameras {} -n {} -e {}'.format(specs, night, expid_str)
+    cmd += ' --cameras={} -n {} -e {}'.format(specs, night, expid_str)
 
     print(cmd)
     scriptpathname = joint_batch_script_name(irow)
@@ -544,15 +559,22 @@ def create_joint_batch_script(irow, descriptor=None, queue=None, dry_run=False):
 def submit_batch_script(submission, dry_run=False):
     jobname = batch_script_name(submission)
     dependencies = submission['LATEST_DEP_QID']
+    print(dependencies,type(dependencies))
     dep_list, dep_str = '', ''
     if dependencies is not None:
         dep_str = ' --dependency=afterok:'
         if np.isscalar(dependencies):
-            dep_list = str(dependencies)
-            dep_str += dep_list
+            dep_list = str(dependencies).strip(' \t')
+            if dep_list == '':
+                dep_str = ''
+            else:
+                dep_str += dep_list
         else:
-            dep_list = ','.join(np.array(dependencies).astype(str))
-            dep_str += dep_list
+            if len(dependencies)>0:
+                dep_list = ','.join(np.array(dependencies).astype(str))
+                dep_str += dep_list
+            else:
+                dep_str = ''
 
     ## True function will actually submit to SLURM
     if dry_run:
@@ -562,9 +584,13 @@ def submit_batch_script(submission, dry_run=False):
         # script_path = opj(batchdir, script)
         batchdir = get_batch_dir(submission['NIGHT'])
         script_path = opj(batchdir, jobname)
-        current_qid = subprocess_check_output(['sbatch', f'--parsable{dep_str} {script_path}'],
-                                              stderr=subprocess_STDOUT, text=True)
-        current_qid = int(current_qid.strip(' \t'))
+        if dep_str == '':
+            current_qid = subprocess.check_output(['sbatch', '--parsable', f'{script_path}'],
+                                                  stderr=subprocess.STDOUT, text=True)
+        else:
+            current_qid = subprocess.check_output(['sbatch', '--parsable',f'{dep_str}',f'{script_path}'],
+                                                  stderr=subprocess.STDOUT, text=True)
+        current_qid = int(current_qid.strip(' \t\n'))
 
     print(f'Submitted {jobname}.slurm\t\t with dependencies {dep_list}. Returned qid: {current_qid}')
 
@@ -587,7 +613,7 @@ def night_to_starting_iid(night):
 ###############################
 #####   Mock Functions   ######
 ###############################
-def refresh_queue_info_table(start_time=None, end_time=None, user='desi', \
+def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
                              columns='jobid,state,submit,eligible,start,end,jobname', dry_run=False):
     # global queue_info_table
     if dry_run:
@@ -615,6 +641,8 @@ def refresh_queue_info_table(start_time=None, end_time=None, user='desi', \
         #     TO TIMEOUT Job terminated upon reaching its time limit.
         #
         # other format columns: jobid,state,submit,eligible,start,end,elapsed,suspended,exitcode,derivedexitcode,reason,priority,jobname
+        if user is None:
+            user = os.environ['USER']
         if start_time is None:
             start_time = '2020-04-26T00:00'
         if end_time is None:
@@ -625,7 +653,7 @@ def refresh_queue_info_table(start_time=None, end_time=None, user='desi', \
                        '-u', user, \
                        f'--format={columns}']
 
-    queue_info_table = Table.read(subprocess_check_output(cmd_as_list, stderr=subprocess_STDOUT, text=True),
+    queue_info_table = Table.read(subprocess.check_output(cmd_as_list, stderr=subprocess.STDOUT, text=True),
                                   format='ascii.csv')
     for col in queue_info_table.colnames:
         queue_info_table.rename_column(col, col.upper())
@@ -817,7 +845,7 @@ def make_joint_irow(irows, descriptor, initid):
     irow['JOBDESC'] = descriptor
 
     if type(irows) in [list, np.array]:
-        ids, qids, expids = [], []
+        ids, qids, expids = [], [], []
         for currow in irows:
             ids.append(currow['INTID'])
             qids.append(currow['LATEST_QID'])
@@ -845,7 +873,7 @@ def define_and_assign_dependency(irow, arcjob, flatjob):
     if irow['OBSTYPE'] in ['science', 'twiflat']:
         dependency = flatjob
         irow['JOBDESC'] = 'prestd'
-    elif irow['OBSTYPE'] is 'flat':
+    elif irow['OBSTYPE'] == 'flat':
         dependency = arcjob
     else:
         dependency = None
@@ -867,7 +895,7 @@ def assign_dependency(irow, dependency):
         else:
             irow['DEP_ID'] = dependency['INTID']
             irow['LATEST_DEP_QID'] = dependency['LATEST_QID']
-    return dependency
+    return irow
 
 
 def get_type_and_tile(erow):

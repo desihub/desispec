@@ -37,7 +37,7 @@ def parse_args(options=None):
                         help="Directory name where the output files should be saved.")
     parser.add_argument("--raw-data-path", type=str, required=False, default=None,
                         help="Directory name where the output files should be saved.")
-    parser.add_argument("--table-file-type", type=str, required=False, default=None,
+    parser.add_argument("--table-file-type", type=str, required=False, default='csv',
                         help="Directory name where the output files should be saved.")
     # parser.add_argument("-r", "--reduxdir", type=str, required=False,
     #                     help="Main reduction dir where specprod dir will reside.")
@@ -50,6 +50,8 @@ def parse_args(options=None):
                         help="Allow script to run on nodes other than cori21")
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually submitted.")
+    parser.add_argument("--override-night", type=str,default=None,
+                        help="Specifiy the night to run on. Overrides the current day. Only works with --dry-run.")
     # parser.add_argument("--force-specprod", action="store_true",
     #                     help="Force the files to be written to custom SPECPROD " +
     #                          "even if user is desi.")
@@ -86,4 +88,5 @@ if __name__ == '__main__':
 
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
-                             scitypes=args.science_types, dry_run=args.dry_run, tab_filetype=args.table_file_type)
+                             scitypes=args.science_types, dry_run=args.dry_run, tab_filetype=args.table_file_type,
+                             override_night=args.override_night)
