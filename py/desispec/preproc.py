@@ -762,19 +762,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             psf_filename = cfinder.findfile("PSF")
         xyset = read_xytraceset(psf_filename)
 
-        """
-        # use the actual PSF model for 1D projection
-        # this is too slow for now
-        import fitsio
-        import specter.psf
-        head  = fitsio.read_header(psf_filename)
-        if "PSFTYPE" in head :
-            psftype=head["PSFTYPE"].strip()
-            if psftype=="GAUSS-HERMITE" :
-                psf = specter.psf.GaussHermitePSF(psf_filename)
-            elif psftype=="SPOTGRID" :
-                psf = specter.psf.SpotGridPSF(psf_filename)
-        """
         fiberflat = None
         with_spectral_smoothing=True
         with_sky_model = True
