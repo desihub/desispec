@@ -19,9 +19,18 @@ from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qsky import qproc_sky_subtraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat
 
-# projects a Gaussian cross-dispersion profile on a CCD image
+
 @numba.jit
 def numba_proj(image,x,sigma,flux) :
+    '''
+    Add a spectrum to a model of the pixel values in a CCD image assuming a Gaussian cross-dispersion profile.
+
+    Inputs:
+       image: 2D numpy array , this array will be modified
+       x: 1D numpy array of size image.shape[0], coordinate of center of cross-dispersion profile of spectral trace, in pixel units, for each CCD row
+       sigma : 1D numpy array of size image.shape[0], sigma of cross-dispersion profile of spectral trace, in pixel units, for each CCD row
+       flux : 1D numpy array of size image.shape[0], quantity to project (for design usage: electrons per pixel) for each CCD row
+    '''
     n0=image.shape[0]
     n1=image.shape[1]
     hw=3
