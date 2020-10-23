@@ -401,9 +401,6 @@ import desiutil.iers
 desiutil.iers.freeze_iers()
 timer.stop('freeze_iers')
 
-if args.batch_opts is not None:
-    args.batch_opts = args.batch_opts.strip('"\'')
-
 #- Preflight checks
 timer.start('preflight')
 if rank > 0:
@@ -417,7 +414,6 @@ else:
     args.cameras = sorted(args.cameras)
     args.obstype = args.obstype.upper()
 
-args.obstype = args.obstype.upper()
 if comm is not None:
     args = comm.bcast(args, root=0)
     hdr = comm.bcast(hdr, root=0)
