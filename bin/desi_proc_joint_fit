@@ -28,6 +28,7 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
+from desispec.workflow.desi_proc_funcs import get_desi_proc_parser, create_desi_proc_batch_script
 
 parser = get_desi_proc_parser(joint=True)
 args = parser.parse_args()

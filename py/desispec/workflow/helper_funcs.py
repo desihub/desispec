@@ -592,7 +592,7 @@ def submit_batch_script(submission, dry_run=False):
                                                   stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
 
-    print(f'Submitted {jobname}.slurm\t\t with dependencies {dep_list}. Returned qid: {current_qid}')
+    print(f'Submitted {jobname}\t\t with dependencies {dep_list}. Returned qid: {current_qid}')
 
     submission['LATEST_QID'] = current_qid
     submission['STATUS'] = 'SU'
