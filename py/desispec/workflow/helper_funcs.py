@@ -458,7 +458,7 @@ def batch_script_name(irow):
         expid_str = '-'.join(['{:08d}'.format(int(exp)) for exp in irow['EXPID']])
     else:
         expid_str = '{:08d}'.format(int(irow['EXPID']))
-    jobname = '{}-{}-{}-{}'.format(str(irow['OBSTYPE']).lower(), str(irow['NIGHT']), expid_str, camword)
+    jobname = '{}-{}-{}-{}'.format(str(irow['JOBDESC']).lower(), str(irow['NIGHT']), expid_str, camword)
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
     return scriptfile
 
@@ -501,9 +501,9 @@ def create_batch_script(irow, queue=None, dry_run=False):
     if queue is not None:
         cmd += f' -q {queue}'
     if irow['OBSTYPE'].lower() == 'science':
-        if irow['JOBDESC'] == 'prestd':
+        if irow['JOBDESC'] == 'prestdstar':
             cmd += ' --nostdstarfit --nofluxcalib'
-        elif irow['JOBDESC'] == 'poststd':
+        elif irow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
     specs = ','.join(str(irow['CAMWORD'])[1:])
     cmd += ' --cameras={} -n {} -e {}'.format(specs, irow['NIGHT'], irow['EXPID'])
@@ -779,12 +779,19 @@ def joint_fit(etable, itable, irows, internal_id, descriptor=None):
         return etable, itable, None
 
     joint_irow = make_joint_irow(irows, descriptor=descriptor, initid=internal_id)
+    print("\n\n",joint_irow)
     joint_irow = create_and_submit_joint(joint_irow)
-    itable.add_row(joint_irow)
-
+    print(joint_irow)
+    print(itable)
+    try:
+        itable.add_row(joint_irow)
+    except:
+        import pdb
+        pdb.set_trace()
+        
     if descriptor == 'stdstarfit':
         for row in irows:
-            row['JOBDESC'] = 'poststd'
+            row['JOBDESC'] = 'poststdstar'
             row['INTID'] = internal_id
             internal_id += 1
             row = assign_dependency(row, joint_irow)
@@ -872,7 +879,7 @@ def define_and_assign_dependency(irow, arcjob, flatjob):
     irow['JOBDESC'] = irow['OBSTYPE']
     if irow['OBSTYPE'] in ['science', 'twiflat']:
         dependency = flatjob
-        irow['JOBDESC'] = 'prestd'
+        irow['JOBDESC'] = 'prestdstar'
     elif irow['OBSTYPE'] == 'flat':
         dependency = arcjob
     else:

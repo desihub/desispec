@@ -131,7 +131,18 @@ timer.stop('preflight')
 #- Create and submit a batch job if requested
 
 if args.batch:
-    scriptfile = create_desi_proc_batch_script(args)
+    exp_str = '{:08d}'.format(args.expid)
+    jobdesc = args.obstype.lower()
+    if args.obstype.lower() == 'science':
+        if args.noprestdstarfit and args.nostdstarfit and (not args.nofluxcalib):
+            jobdesc = 'poststdstar'
+        elif (not args.noprestdstarfit) and args.nostdstarfit and args.nofluxcalib:
+            jobdesc = 'prestdstar'
+        #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):              
+        #    jobdesc = 'science'       
+    scriptfile = create_desi_proc_batch_script(night=args.night, expstr=exp_str, cameras=args.cameras,\
+                                               jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
+                                               batch_opts=args.batch_opts, timingfile=args.timingfile)
     err = 0
     if not args.nosubmit:
         err = subprocess.call(['sbatch', scriptfile])

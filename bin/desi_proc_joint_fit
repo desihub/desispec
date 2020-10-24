@@ -29,6 +29,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
 from desispec.workflow.desi_proc_funcs import get_desi_proc_parser, create_desi_proc_batch_script
+from desispec.workflow.desi_proc_funcs import update_args_with_headers
 
 parser = get_desi_proc_parser(joint=True)
 args = parser.parse_args()
@@ -125,7 +126,19 @@ timer.stop('preflight')
 # - Create and submit a batch job if requested
 
 if args.batch:
-    scriptfile = create_desi_proc_batch_script(args)
+    #camword = create_camword(args.cameras)
+    exp_str = '-'.join('{:08d}'.format(expid) for expid in args.expids)
+    if args.obstype.lower() == 'science':
+        jobdesc = 'stdstarfit'
+    elif args.obstype.lower() == 'arc':
+        jobdesc = 'psfnight'
+    elif args.obstype.lower() == 'flat':
+        jobdesc = 'nightlyflat'
+    else:
+        jobdesc = args.obstype.lower()
+    scriptfile = create_desi_proc_batch_script(night=args.nights[0], expstr=exp_str, cameras=args.cameras,\
+                                               jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
+                                               batch_opts=args.batch_opts, timingfile=args.timingfile)
     err = 0
     if not args.nosubmit:
         err = subprocess.call(['sbatch', scriptfile])
@@ -256,7 +269,29 @@ if args.obstype in ['FLAT']:
 ##################### Note #############################
 ### Still for single exposure. Needs to be re-factored #
 ########################################################
+
 if args.obstype in ['SCIENCE']:
+    inputfile = findfile('raw', night=args.nights[0], expid=args.expids[0])
+    if not os.path.isfile(inputfile):
+        raise IOError('Missing input file: {}'.format(inputfile))
+    # - Fill in values from raw data header if not overridden by command line                
+    fx = fitsio.FITS(inputfile)
+    if 'SPEC' in fx:  # - 20200225 onwards                                            
+        # hdr = fits.getheader(args.input, 'SPEC')                                         
+        hdr = fx['SPEC'].read_header()
+    elif 'SPS' in fx:  # - 20200224 and before                                                  
+        # hdr = fits.getheader(args.input, 'SPS')                                                  
+        hdr = fx['SPS'].read_header()
+    else:
+        # hdr = fits.getheader(args.input, 0)                                                                   
+        hdr = fx[0].read_header()
+        
+    camhdr = dict()
+    for cam in args.cameras:
+        camhdr[cam] = fx[cam].read_header()
+
+    fx.close()
+
     timer.start('stdstarfit')
     if rank == 0:
         log.info('Starting stdstar fitting at {}'.format(time.asctime()))
@@ -290,8 +325,7 @@ if args.obstype in ['SCIENCE']:
                 else:
                     input_fiberflat[camera] = nightfile
             else:
-                input_fiberflat[camera] = findcalibfile(
-                    [hdr, camhdr[camera]], 'FIBERFLAT')
+                input_fiberflat[camera] = findcalibfile([hdr, camhdr[camera]], 'FIBERFLAT')
         log.info("Will use input FIBERFLAT: {}".format(input_fiberflat[camera]))
 
     if comm is not None:
@@ -301,7 +335,6 @@ if args.obstype in ['SCIENCE']:
     framefiles = dict()
     skyfiles = dict()
     fiberflatfiles = dict()
-    night = args.night
     for camera in args.cameras:
         sp = int(camera[1])
         if sp not in framefiles:
@@ -325,6 +358,7 @@ if args.obstype in ['SCIENCE']:
         sp = spectro_nums[i]
         # - NOTE: Saving the joint fit file with only the name of the first exposure
         stdfile = findfile('stdstars', args.nights[0], args.expids[0], spectrograph=sp)
+        stdfile.replace('{:08d}'.format(args.expids[0]),'-'.join(['{:08d}'.format(eid) for eid in args.expids]))
         cmd = "desi_fit_stdstars"
         cmd += " --frames {}".format(' '.join(framefiles[sp]))
         cmd += " --skymodels {}".format(' '.join(skyfiles[sp]))
