@@ -443,6 +443,32 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else:
         bias = bias_img
 
+    #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
+    amp_ids = get_amp_ids(header)
+    #- Double check that we have the necessary keywords
+    missing_keywords = list()
+    for prefix in ['CCDSEC', 'BIASSEC']:
+        for amp in amp_ids :
+            key = prefix+amp
+            if not key in header :
+                log.error('No {} keyword in header'.format(key))
+                missing_keywords.append(key)
+
+    if len(missing_keywords) > 0:
+        raise KeyError("Missing keywords {}".format(' '.join(missing_keywords)))
+
+
+    #- Output arrays
+    ny=0
+    nx=0
+    for amp in amp_ids :
+        yy, xx = parse_sec_keyword(header['CCDSEC%s'%amp])
+        ny=max(ny,yy.stop)
+        nx=max(nx,xx.stop)
+    image = np.zeros((ny,nx))
+
+    readnoise = np.zeros_like(image)
+
     #- Load dark
     dark_info=cfinder.data['DARK'].lower().replace('/','-').replace('_','-').split('-')
     if ('master' in dark_info) and ('dark' in dark_info): # Using new master bias+dark image, input header to retrieve exptime
@@ -474,32 +500,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             rawimage = rawimage - bias
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
-
-    #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
-    amp_ids = get_amp_ids(header)
-
-    #- Double check that we have the necessary keywords
-    missing_keywords = list()
-    for prefix in ['CCDSEC', 'BIASSEC']:
-        for amp in amp_ids :
-            key = prefix+amp
-            if not key in header :
-                log.error('No {} keyword in header'.format(key))
-                missing_keywords.append(key)
-
-    if len(missing_keywords) > 0:
-        raise KeyError("Missing keywords {}".format(' '.join(missing_keywords)))
-
-    #- Output arrays
-    ny=0
-    nx=0
-    for amp in amp_ids :
-        yy, xx = parse_sec_keyword(header['CCDSEC%s'%amp])
-        ny=max(ny,yy.stop)
-        nx=max(nx,xx.stop)
-    image = np.zeros((ny,nx))
-
-    readnoise = np.zeros_like(image)
 
     #- Load mask
     mask = get_calibration_image(cfinder,"MASK",mask)
