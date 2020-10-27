@@ -3,7 +3,7 @@
 
 import time
 
-import sys, os, argparse
+import sys, os, argparse, re
 
 import numpy as np
 import fitsio

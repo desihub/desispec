@@ -140,7 +140,7 @@ if args.batch:
             jobdesc = 'prestdstar'
         #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):              
         #    jobdesc = 'science'       
-    scriptfile = create_desi_proc_batch_script(night=args.night, expstr=args.expid, cameras=args.cameras,\
+    scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,\
                                                jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
                                                batch_opts=args.batch_opts, timingfile=args.timingfile)
     err = 0
@@ -867,7 +867,7 @@ if args.obstype in ['SCIENCE',] and \
 if args.obstype in ['SCIENCE'] and \
             (not args.noskysub) and \
             (not args.nofluxcalib):
-        timer.start('fluxcalib')
+    timer.start('fluxcalib')
     #- Compute flux calibration vectors per camera
     for camera in args.cameras[rank::size]:
         framefile = findfile('frame', night, expid, camera)
