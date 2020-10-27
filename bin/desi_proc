@@ -49,75 +49,15 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
-parser = argparse.ArgumentParser(usage = "{prog} [options]")
-parser.add_argument("-n", "--night", type=int,  help="YEARMMDD night")
-parser.add_argument("-e", "--expid", type=int,  help="Exposure ID")
-parser.add_argument("--obstype", type=str,  help="science, arc, flat, dark, zero, ...")
-parser.add_argument("--cameras", type=str,  help="Explicitly define the spectrographs for which you want"+
-                                                 " to reduce the data. Should be a comma separated list."+
-                                                 " Numbers only assumes you want to reduce R, B, and Z "+
-                                                 "for that spectrograph. Otherwise specify separately [BRZ|brz][0-9].")
-parser.add_argument("-i", "--input", type=str,  help="input raw data file")
-parser.add_argument("--mpi", action="store_true", help="Use MPI parallelism")
-parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
-parser.add_argument("--traceshift", action="store_true", help="Do shift traces")
-parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
-parser.add_argument("--noskysub", action="store_true", help="Do not subtract the sky")
-parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
-parser.add_argument('--maxstdstars', type=int, default=None, \
-        help='Maximum number of stdstars to include')
-parser.add_argument("--psf",type=str,required=False,default=None, help="use this input psf (trace shifts will still be computed)")
-parser.add_argument("--fiberflat",type=str,required=False,default=None, help="use this fiberflat")
-parser.add_argument("--calibnight",type=int,required=False,default=None, help="use this night to find nightly PSF and fiberflats")
-parser.add_argument("--scattered-light",action='store_true',help="fit and remove scattered light")
-parser.add_argument("--extra-variance", action='store_true',
-                    help = 'increase sky model variance based on chi2 on sky lines')
-parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
-parser.add_argument("--nosubmit", action="store_true", help="Create batch script but don't submit")
-parser.add_argument("-q", "--queue", type=str, default="realtime", help="batch queue to use")
-parser.add_argument("--batch-opts", type=str, default=None, help="additional batch commands")
-parser.add_argument("--runtime", type=int, default=None,  help="batch runtime in minutes")
-parser.add_argument("--most-recent-calib",action="store_true",help="If no calibrations exist for the night,"+\
-                    " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
-parser.add_argument("--model-pixel-variance", action="store_true", help="Use a model of the variance in preprocessing")
-parser.add_argument("--adjust-sky-wavelength", action="store_true", help="Adjust wavelength of sky lines")
-parser.add_argument("--adjust-sky-lsf", action="store_true", help="Adjust width of sky lines")
-parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
-parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
+from desispec.workflow.desi_proc_funcs import get_desi_proc_parser, update_args_with_headers
+from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
 
 
-def find_most_recent(night, file_type='psfnight', n_nights=30):
-    '''
-       Searches back in time for either psfnight or fiberflatnight (or anything supported by
-       desispec.calibfinder.findcalibfile.
 
-       Inputs:
-         night : str YYYMMDD   night to look back from
-         file_type : str psfnight or fiberflatnight
-         n_nights : int  number of nights to step back before giving up
-
-      returns:
-         nightfile : str Full pathname to calibration file of interest.
-                     If none found, None is returned.
-
-    '''
-    # Set the time as Noon on the day in question
-    today = time.strptime('{} 12'.format(night),'%Y%m%d %H')
-    one_day = 60*60*24 # seconds
-
-    test_night_struct = today
-
-    # Search a month in the past
-    for daysback in range(n_nights) :
-        test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
-        test_night_str = time.strftime('%Y%m%d', test_night_struct)
-        nightfile = findfile(file_type, test_night_str, '00000000', camera)
-        if os.path.isfile(nightfile) :
-            return nightfile
-
-    return None
-
-
+#########################################
+######## Begin Body of the Code #########
+#########################################
+parser = get_desi_proc_parser()
 args = parser.parse_args()
 log = get_logger()
 
@@ -162,89 +102,24 @@ import desiutil.iers
 desiutil.iers.freeze_iers()
 timer.stop('freeze_iers')
 
-if args.batch_opts is not None:
-    args.batch_opts = args.batch_opts.strip('"\'')
-
 #- Preflight checks
 timer.start('preflight')
 if rank > 0:
     #- Let rank 0 fetch these, and then broadcast
-    hdr = None
-    camhdr = None
-    args = None
+    args, hdr, camhdr = None, None, None
 else:
-    if args.input is None:
-        if args.night is None or args.expid is None:
-            raise RuntimeError('Must specify --input or --night AND --expid')
-
-        args.input = findfile('raw', night=args.night, expid=args.expid)
-
-    if not os.path.isfile(args.input):
-        raise IOError('Missing input file: {}'.format(args.input))
-
-    #- Fill in values from raw data header if not overridden by command line
-    fx = fitsio.FITS(args.input)
-    if 'SPEC' in fx:                                #- 20200225 onwards
-        #hdr = fits.getheader(args.input, 'SPEC')
-        hdr = fx['SPEC'].read_header()
-    elif 'SPS' in fx:                               #- 20200224 and before
-        #hdr = fits.getheader(args.input, 'SPS')
-        hdr = fx['SPS'].read_header()
-    else:
-        #hdr = fits.getheader(args.input, 0)
-        hdr = fx[0].read_header()
-
-    if args.expid is None:
-        args.expid = int(hdr['EXPID'])
-
-    if args.night is None:
-        args.night = int(hdr['NIGHT'])
-
-    if args.obstype is None:
-        if 'OBSTYPE' in hdr:
-            args.obstype = hdr['OBSTYPE'].strip()
-        elif 'FLAVOR' in hdr:
-            args.obstype = hdr['FLAVOR'].strip()
-            log.warning('Using OBSTYPE={} from FLAVOR keyword'.format(args.obstype))
-        else:
-            raise RuntimeError('Need --obstype or OBSTYPE or FLAVOR header keywords')
-
-    if args.cameras is None:
-        recam = re.compile('^[brzBRZ][\d]$')
-        cameras = list()
-        for hdu in fx.hdu_list:
-            if recam.match(hdu.get_extname()):
-                cameras.append(hdu.get_extname().lower())
-
-        if len(cameras) == 0:
-            raise RuntimeError("No [BRZ][0-9] camera HDUs found in {}".format(args.input))
-
-        args.cameras = cameras
-        cameras = None
-    else:
-        cam_str = args.cameras.strip(' \t').lower()
-        cameras = cam_str.split(',')
-        if cam_str[0] not in ['b','r','z'] and cameras[0].isnumeric():
-            args.cameras = []
-            for camnum in cameras:
-                for ccd in ['b','r','z']:
-                    args.cameras.append('{}{}'.format(ccd,camnum))
-        else:
-            args.cameras = cameras
-
-    args.cameras = sorted(args.cameras)  #- just because...
-    camhdr = dict()
-    for cam in args.cameras:
-        camhdr[cam] = fx[cam].read_header()
-
-    fx.close()
+    args, hdr, camhdr = update_args_with_headers(args)
+    #- Update args to be in consistent format
+    if args.batch_opts is not None:
+        args.batch_opts = args.batch_opts.strip('"\'')
+    args.cameras = sorted(args.cameras)
+    args.obstype = args.obstype.upper()
 
 if comm is not None:
     args = comm.bcast(args, root=0)
     hdr = comm.bcast(hdr, root=0)
     camhdr = comm.bcast(camhdr, root=0)
 
-args.obstype = args.obstype.upper()
 known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
     'TESTARC', 'TESTFLAT', 'PIXFLAT', 'SKY', 'TWILIGHT', 'OTHER']
 if args.obstype not in known_obstype:
@@ -256,123 +131,22 @@ timer.stop('preflight')
 #- Create and submit a batch job if requested
 
 if args.batch:
-    reduxdir = desispec.io.specprod_root()
-    batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(args.night))
-    os.makedirs(batchdir, exist_ok=True)
-    camword = create_camword(args.cameras)
-    jobname = '{}-{}-{:08d}-{}'.format(args.obstype.lower(), args.night, args.expid, camword)
-    scriptfile = os.path.join(batchdir, jobname+'.slurm')
-
-    ncameras = len(args.cameras)
-    nspectro = (ncameras-1)//3 + 1
-    if args.obstype in ('ARC', 'TESTARC'):
-        ncores, runtime = 20*ncameras, 35
-    elif args.obstype in ('FLAT', 'TESTFLAT'):
-        ncores, runtime = 20*nspectro, 15
-    elif args.obstype in ('SKY', 'TWILIGHT', 'SCIENCE'):
-        ncores, runtime = 20*nspectro, 30
-    elif args.obstype in ('ZERO', 'DARK'):
-        ncores, runtime = ncameras, 5
-    else:
-        print('ERROR: unknown obstype={}'.format(args.obstype))
-        sys.exit(1)
-
-    if args.runtime is not None:
-        runtime = args.runtime
-
-    nodes = (ncores-1) // 32 + 1
-
-    #- Arcs and flats make good use of full nodes, but throttle science
-    #- exposures to 5 nodes to enable two to run together in the 10-node
-    #- realtime queue, since their wallclock is dominated by less
-    #- efficient sky and fluxcalib steps
-    if args.obstype in ('ARC', 'TESTARC', 'FLAT', 'TESTFLAT'):
-        max_realtime_nodes = 10
-    else:
-        max_realtime_nodes = 5
-
-    if (args.queue == 'realtime') and (nodes > max_realtime_nodes):
-        nodes = max_realtime_nodes
-        ncores = 32*nodes
-
-    assert runtime <= 60
-
-    with open(scriptfile, 'w') as fx:
-        fx.write('#!/bin/bash -l\n\n')
-        fx.write('#SBATCH -C haswell\n')
-        fx.write('#SBATCH -N {}\n'.format(nodes))
-        fx.write('#SBATCH -n {}\n'.format(ncores))
-        fx.write('#SBATCH --qos {}\n'.format(args.queue))
-        if args.batch_opts is not None:
-            fx.write('#SBATCH {}\n'.format(args.batch_opts))
-        fx.write('#SBATCH --account desi\n')
-        fx.write('#SBATCH --job-name {}\n'.format(jobname))
-        fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
-        fx.write('#SBATCH --time=00:{:02d}:00\n'.format(runtime))
-
-        #- If we are asking for more than half the node, ask for all of it
-        #- to avoid memory problems with other people's jobs
-        if ncores > 16:
-            fx.write('#SBATCH --exclusive\n')
-
-        fx.write('\n')
-
-        inparams = list(sys.argv).copy()
-        for parameter in ['-q','--queue','--batch-opts']:
-            if parameter in inparams:
-                loc = np.where(np.array(inparams)==parameter)[0][0]
-                # Remove the command
-                inparams.pop(loc)
-                # Remove the argument of the command (now in the command location after pop)
-                inparams.pop(loc)
-
-        cmd = ' '.join(inparams)
-        cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
-
-        if args.timingfile is None:
-            timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
-        else:
-            timingfile = args.timingfile
-
-        if not args.mpi:
-            cmd += ' --mpi'
-
-        fx.write(f'# {args.obstype} exposure with {ncameras} cameras\n')
-        fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
-
-        fx.write('echo Starting at $(date)\n')
-        fx.write(f'cd {batchdir}\n')
-
-        fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-        srun = f'srun -N {nodes} -n {ncores} -c 2 {cmd} --nofluxcalib'
-        srun += f' --starttime $(date +%s)'
-        srun += f' --timingfile {timingfile}'
-        fx.write('echo Running {}\n'.format(srun))
-        fx.write('{}\n'.format(srun))
-
-        if args.obstype == 'SCIENCE':
-            fx.write('\n# Then switch to less MPI parallelism for fluxcalib MP parallelism\n')
-            fx.write('# This should quickly skip over the steps already done\n')
-            srun = f'srun -N {nodes} -n {nodes*2} -c 32 {cmd}'
-            srun += f' --starttime $(date +%s)'
-            srun += f' --timingfile {timingfile}'
-            fx.write('if [ $? -eq 0 ]; then\n')
-            fx.write('  echo Running {}\n'.format(srun))
-            fx.write('  {}\n'.format(srun))
-            fx.write('else\n')
-            fx.write('  echo FAILED: done at $(date)\n')
-            fx.write('  exit 1\n')
-            fx.write('fi\n')
-
-        fx.write('\nif [ $? -eq 0 ]; then\n')
-        fx.write('  echo SUCCESS: done at $(date)\n')
-        fx.write('else\n')
-        fx.write('  echo FAILED: done at $(date)\n')
-        fx.write('  exit 1\n')
-        fx.write('fi\n')
-
-    print('Wrote {}'.format(scriptfile))
-    print('logfile will be {}/{}-JOBID.log\n'.format(batchdir, jobname))
+    #exp_str = '{:08d}'.format(args.expid)
+    jobdesc = args.obstype.lower()
+    if args.obstype.lower() == 'science':
+        # if not doing pre-stdstar fitting or stdstar fitting and if there is
+        # no flag stopping flux calibration, set job to poststdstar
+        if args.noprestdstarfit and args.nostdstarfit and (not args.nofluxcalib):
+            jobdesc = 'poststdstar'
+        # elif told not to do std or post stdstar but the flag for prestdstar isn't set,
+        # then perform prestdstar
+        elif (not args.noprestdstarfit) and args.nostdstarfit and args.nofluxcalib:
+            jobdesc = 'prestdstar'
+        #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):
+        #    jobdesc = 'science'
+    scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,\
+                                               jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
+                                               batch_opts=args.batch_opts, timingfile=args.timingfile)
     err = 0
     if not args.nosubmit:
         err = subprocess.call(['sbatch', scriptfile])
@@ -406,7 +180,7 @@ if comm is not None:
 #- Preproc
 #- All obstypes get preprocessed
 
-timer.start('preproc')
+timer.start('fibermap')
 
 #- Assemble fibermap for science exposures
 fibermap = None
@@ -449,23 +223,29 @@ if args.obstype == 'SCIENCE' and not fibermap_ok:
 if comm is not None:
     fibermap = comm.bcast(fibermap, root=0)
 
-for i in range(rank, len(args.cameras), size):
-    camera = args.cameras[i]
-    outfile = findfile('preproc', args.night, args.expid, camera)
-    outdir = os.path.dirname(outfile)
-    cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
-        args.input, outfile, outdir, camera)
-    if args.scattered_light :
-        cmd += " --scattered-light"
-    if fibermap is not None:
-        cmd += " --fibermap {}".format(fibermap)
-    if args.model_pixel_variance :
-        cmd += " --model-variance"
-    runcmd(cmd, inputs=[args.input], outputs=[outfile])
+timer.stop('fibermap')
 
-timer.stop('preproc')
-if comm is not None:
-    comm.barrier()
+if not (args.obstype in ['SCIENCE'] and args.noprestdstarfit):
+    timer.start('preproc')
+    for i in range(rank, len(args.cameras), size):
+        camera = args.cameras[i]
+        outfile = findfile('preproc', args.night, args.expid, camera)
+        outdir = os.path.dirname(outfile)
+        cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
+            args.input, outfile, outdir, camera)
+        if args.scattered_light :
+            cmd += " --scattered-light"
+        if fibermap is not None:
+            cmd += " --fibermap {}".format(fibermap)
+        if args.model_pixel_variance :
+            cmd += " --model-variance"
+        runcmd(cmd, inputs=[args.input], outputs=[outfile])
+
+    timer.stop('preproc')
+    if comm is not None:
+        comm.barrier()
+
+
 
 #-------------------------------------------------------------------------
 #- Get input PSFs
@@ -505,7 +285,8 @@ timer.stop('findpsf')
 #-------------------------------------------------------------------------
 #- Traceshift
 
-if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT'] :
+if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
+   ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
 
     timer.start('traceshift')
 
@@ -704,7 +485,8 @@ if False:
 #- This is MPI parallel so handle a bit differently
 
 # maybe add ARC and TESTARC too
-if args.obstype in ['SCIENCE', 'FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']:
+if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
+   ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
 
     timer.start('extract')
     if rank == 0:
@@ -912,7 +694,8 @@ timer.stop('find_fiberflat')
 #-------------------------------------------------------------------------
 #- Apply fiberflat and write fframe file
 
-if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat ) :
+if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and \
+   ( not args.nofiberflat ) and (not args.noprestdstarfit):
     timer.start('apply_fiberflat')
     if rank == 0:
         log.info('Applying fiberflat at {}'.format(time.asctime()))
@@ -942,7 +725,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and ( not args.nofiberflat
 #- TODO: move this to a function somewhere
 #- TODO: this assigns different sky fibers to each frame of same spectrograph
 
-if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
+if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) and (not args.noprestdstarfit):
     timer.start('picksky')
     if rank == 0:
         log.info('Picking sky fibers at {}'.format(time.asctime()))
@@ -984,7 +767,7 @@ if (args.obstype in ['SKY', 'SCIENCE']) and (not args.noskysub) :
 
 #-------------------------------------------------------------------------
 #- Sky subtraction
-if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
+if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.noprestdstarfit):
     timer.start('skysub')
     if rank == 0:
         log.info('Starting sky subtraction at {}'.format(time.asctime()))
@@ -1032,9 +815,9 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) :
 
 if args.obstype in ['SCIENCE',] and \
         (not args.noskysub ) and \
-        (not args.nofluxcalib) :
+        (not args.nostdstarfit) :
 
-    timer.start('fluxcalib')
+    timer.start('stdstarfit')
     if rank == 0:
         log.info('Starting flux calibration at {}'.format(time.asctime()))
 
@@ -1078,9 +861,19 @@ if args.obstype in ['SCIENCE',] and \
         inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
         runcmd(cmd, inputs=inputs, outputs=[stdfile])
 
+    timer.stop('stdstarfit')
     if comm is not None:
         comm.barrier()
 
+# -------------------------------------------------------------------------
+# - Flux calibration
+
+if args.obstype in ['SCIENCE'] and \
+            (not args.noskysub) and \
+            (not args.nofluxcalib):
+    timer.start('fluxcalib')
+
+    night, expid = args.night, args.expid #- shorter  
     #- Compute flux calibration vectors per camera
     for camera in args.cameras[rank::size]:
         framefile = findfile('frame', night, expid, camera)
