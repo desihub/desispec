@@ -13,7 +13,7 @@ from desispec.io.util import create_camword
 # from desispec.calibfinder import findcalibfile
 
 def get_desi_proc_parser():
-    """                                                                                                                     
+    """
     Create an argparser object for use with desi_proc based on arguments from sys.argv
     """
     parser = get_shared_desi_proc_parser()
@@ -21,7 +21,7 @@ def get_desi_proc_parser():
     return parser
 
 def get_desi_proc_joint_fit_parser():
-    """                                                                                                                                                   
+    """
     Create an argparser object for use with desi_proc_joint_fit based on arguments from sys.argv
     """
     parser = get_shared_desi_proc_parser()
@@ -29,7 +29,7 @@ def get_desi_proc_joint_fit_parser():
     return parser
 
 def get_shared_desi_proc_parser():
-    """                                                                                                                                      
+    """
     Create an argparser object for use with desi_proc AND desi_proc_joint_fit based on arguments from sys.argv
     """
     parser = argparse.ArgumentParser(usage="{prog} [options]")
@@ -69,10 +69,10 @@ def get_shared_desi_proc_parser():
     return parser
 
 def add_desi_proc_singular_terms(parser):
-    """                                                                                                                                            
+    """
     Add parameters to the argument parser that are only used by desi_proc
     """
-    #parser.add_argument("-n", "--night", type=int, help="YEARMMDD night")                                                                            
+    #parser.add_argument("-n", "--night", type=int, help="YEARMMDD night")
     parser.add_argument("-e", "--expid", type=int, help="Exposure ID")
     parser.add_argument("-i", "--input", type=str, help="input raw data file")
 
@@ -344,9 +344,9 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         fx.write('echo Starting at $(date)\n')
 
         if jobdesc.lower() not in ['science','prestdstar','poststdstar']:
-            ################################## Note ############################                             
-            ## Needs to be refactored to write the correct thing given flags ###                                 
-            ####################################################################                                 
+            ################################## Note ############################
+            ## Needs to be refactored to write the correct thing given flags ###
+            ####################################################################
             fx.write('\n# Do steps through skysub at full MPI parallelism\n')
             srun = 'srun -N {} -n {} -c 2 {}'.format(nodes, ncores, cmd)
             fx.write('echo Running {}\n'.format(srun))
