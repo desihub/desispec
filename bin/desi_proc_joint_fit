@@ -28,10 +28,10 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
-from desispec.workflow.desi_proc_funcs import get_desi_proc_parser, create_desi_proc_batch_script
+from desispec.workflow.desi_proc_funcs import get_desi_proc_joint_fit_parser, create_desi_proc_batch_script
 from desispec.workflow.desi_proc_funcs import update_args_with_headers
 
-parser = get_desi_proc_parser(joint=True)
+parser = get_desi_proc_joint_fit_parser()
 args = parser.parse_args()
 log = get_logger()
 
@@ -101,9 +101,10 @@ else:
         args.cameras = cameras
 
     args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
-    args.nights = np.array(args.nights.strip(' \t').split(',')).astype(int)
-    if len(args.expids) > len(args.nights) and len(args.nights) == 1:
-        args.nights = np.array([args.nights[0]] * len(args.expids)).astype(int)
+    #args.nights = np.array(args.nights.strip(' \t').split(',')).astype(int)
+    args.night = int(args.night)
+    #if len(args.expids) > len(args.nights) and len(args.nights) == 1:
+    #    args.nights = np.array([args.nights[0]] * len(args.expids)).astype(int)
 
     # - Update args to be in consistent format
     if args.batch_opts is not None:
@@ -127,7 +128,7 @@ timer.stop('preflight')
 
 if args.batch:
     #camword = create_camword(args.cameras)
-    exp_str = '-'.join('{:08d}'.format(expid) for expid in args.expids)
+    #exp_str = '-'.join('{:08d}'.format(expid) for expid in args.expids)
     if args.obstype.lower() == 'science':
         jobdesc = 'stdstarfit'
     elif args.obstype.lower() == 'arc':
@@ -136,7 +137,7 @@ if args.batch:
         jobdesc = 'nightlyflat'
     else:
         jobdesc = args.obstype.lower()
-    scriptfile = create_desi_proc_batch_script(night=args.nights[0], expstr=exp_str, cameras=args.cameras,\
+    scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expids, cameras=args.cameras,\
                                                jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
                                                batch_opts=args.batch_opts, timingfile=args.timingfile)
     err = 0
@@ -151,7 +152,7 @@ if args.batch:
 if rank == 0:
     log.info('----------')
     log.info('Input {}'.format(args.inputs))
-    log.info('Night {} expids {}'.format(args.nights, args.expids))
+    log.info('Night {} expids {}'.format(args.night, args.expids))
     log.info('Obstype {}'.format(args.obstype))
     log.info('Cameras {}'.format(args.cameras))
     log.info('Output root {}'.format(desispec.io.specprod_root()))
@@ -170,8 +171,7 @@ if args.obstype in ['ARC']:
         for camera in args.cameras:
             psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
             if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
-                psfs = [findfile('psf', night, expid, camera).replace("psf", "fit-psf") for night, expid in zip(
-                        args.nights, args.expids)]
+                psfs = [findfile('psf', args.night, expid, camera).replace("psf", "fit-psf") for expid in args.expids]
                 log.info("Number of PSF for night={} camera={} = {}".format(args.night, camera, len(psfs)))
                 if len(psfs) > 4:  # lets do it!
                     log.info("Computing psfnight ...")
@@ -193,7 +193,7 @@ if args.obstype in ['ARC']:
 if args.obstype in ['FLAT']:
     timer.start('fiberflatnight')
     if rank == 0:
-        fiberflatnightfile = findfile('fiberflatnight', args.nights[0], args.expids[0], args.cameras[0])
+        fiberflatnightfile = findfile('fiberflatnight', args.night, args.expids[0], args.cameras[0])
         fiberflatdirname = os.path.dirname(fiberflatnightfile)
         if os.path.isfile(fiberflatnightfile):
             log.info("Fiberflatnight already exists. Exitting ...")
@@ -203,8 +203,8 @@ if args.obstype in ['FLAT']:
         else:
             flats = []
             for camera in args.cameras:
-                for night, expid in zip(args.nights, args.expids):
-                    flats.append(findfile('fiberflat', night, expid, camera))
+                for expid in args.expids:
+                    flats.append(findfile('fiberflat', args.night, expid, camera))
             log.info("Number of fiberflat for night {} = {}".format(args.night, len(flats)))
             if len(flats) < 3 * 4 * len(args.cameras):
                 log.info("Fewer than 3 exposures with 4 lamps were available. Can't perform joint fit. Exiting...")
@@ -271,7 +271,7 @@ if args.obstype in ['FLAT']:
 ########################################################
 
 if args.obstype in ['SCIENCE']:
-    inputfile = findfile('raw', night=args.nights[0], expid=args.expids[0])
+    inputfile = findfile('raw', night=args.night, expid=args.expids[0])
     if not os.path.isfile(inputfile):
         raise IOError('Missing input file: {}'.format(inputfile))
     # - Fill in values from raw data header if not overridden by command line                
@@ -314,12 +314,12 @@ if args.obstype in ['SCIENCE']:
             else:
                 # look for a fiberflatnight fiberflat
                 fiberflatnightfile = findfile('fiberflatnight',
-                                              args.nights[0], args.expids[0], camera)
+                                              args.night, args.expids[0], camera)
             if os.path.isfile(fiberflatnightfile):
                     input_fiberflat[camera] = fiberflatnightfile
             elif args.most_recent_calib:
                 # -- NOTE: Finding most recent only with respect to the first night
-                nightfile = find_most_recent(args.nights[0], file_type='fiberflatnight')
+                nightfile = find_most_recent(args.night, file_type='fiberflatnight')
                 if nightfile is None:
                     input_fiberflat[camera] = findcalibfile([hdr, camhdr[camera]], 'FIBERFLAT')
                 else:
@@ -342,9 +342,9 @@ if args.obstype in ['SCIENCE']:
             skyfiles[sp] = list()
             fiberflatfiles[sp] = list()
 
-        for night, expid in zip(args.nights, args.expids):
-            framefiles[sp].append(findfile('frame', night, expid, camera))
-            skyfiles[sp].append(findfile('sky', night, expid, camera))
+        for expid in args.expids:
+            framefiles[sp].append(findfile('frame', args.night, expid, camera))
+            skyfiles[sp].append(findfile('sky', args.night, expid, camera))
             fiberflatfiles[sp].append(input_fiberflat[camera])
 
     # - Hardcoded stdstar model version
@@ -357,7 +357,7 @@ if args.obstype in ['SCIENCE']:
     for i in range(rank, len(spectro_nums), size):
         sp = spectro_nums[i]
         # - NOTE: Saving the joint fit file with only the name of the first exposure
-        stdfile = findfile('stdstars', args.nights[0], args.expids[0], spectrograph=sp)
+        stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
         stdfile.replace('{:08d}'.format(args.expids[0]),'-'.join(['{:08d}'.format(eid) for eid in args.expids]))
         cmd = "desi_fit_stdstars"
         cmd += " --frames {}".format(' '.join(framefiles[sp]))
