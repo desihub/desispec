@@ -134,12 +134,16 @@ if args.batch:
     #exp_str = '{:08d}'.format(args.expid)
     jobdesc = args.obstype.lower()
     if args.obstype.lower() == 'science':
+        # if not doing pre-stdstar fitting or stdstar fitting and if there is
+        # no flag stopping flux calibration, set job to poststdstar
         if args.noprestdstarfit and args.nostdstarfit and (not args.nofluxcalib):
             jobdesc = 'poststdstar'
+        # elif told not to do std or post stdstar but the flag for prestdstar isn't set,
+        # then perform prestdstar
         elif (not args.noprestdstarfit) and args.nostdstarfit and args.nofluxcalib:
             jobdesc = 'prestdstar'
-        #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):              
-        #    jobdesc = 'science'       
+        #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):
+        #    jobdesc = 'science'
     scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,\
                                                jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
                                                batch_opts=args.batch_opts, timingfile=args.timingfile)

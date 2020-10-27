@@ -245,7 +245,11 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         night: str or int. The night the data was acquired
         exp: str, int, or list of ints. The exposure id(s) for the data.
         cameras: list of str. List of cameras to include in the processing.
-        jobdesc: str. Description of the job to be performed. Options include:
+        jobdesc: str. Description of the job to be performed. Used to determine requested resources
+                      and whether to operate in a more mpi parallelism (all except poststdstar) or less (only poststdstar).
+                      Directly relate to the obstype, with science exposures being split into two (pre, post)-stdstar,
+                         and adding joint fit categories stdstarfit, psfnight, and nightlyflat.
+                      Options include:
                      'prestdstar', 'poststdstar', 'stdstarfit', 'arc', 'flat', 'psfnight', 'nightlyflat'
         queue: str. Queue to be used.
         runtime: str. Timeout wall clock time.
