@@ -872,6 +872,8 @@ if args.obstype in ['SCIENCE'] and \
             (not args.noskysub) and \
             (not args.nofluxcalib):
     timer.start('fluxcalib')
+
+    night, expid = args.night, args.expid #- shorter  
     #- Compute flux calibration vectors per camera
     for camera in args.cameras[rank::size]:
         framefile = findfile('frame', night, expid, camera)
