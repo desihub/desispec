@@ -467,29 +467,41 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     readnoise = np.zeros_like(image)
 
     #- Load dark
-    dark_info=cfinder.data['DARK'].lower().replace('/','-').replace('_','-').split('-')
-    if ('master' in dark_info) and ('dark' in dark_info): # Using new master bias+dark image, input header to retrieve exptime
-        dark = get_calibration_image(cfinder,"DARK",dark,header=header)
-        bias = bias + dark # The new dark image is the same as the bias image by definition thus added to the bias image, then jump the dark subtraction step in the old code 
-        dark = False
-    else: # Old dark
-        dark = get_calibration_image(cfinder,"DARK",dark)
+    if cfinder and cfinder.haskey("DARK") :
+        if cfinder.haskey("DARKNL"):
+            print(cfinder.value("DARKNL"))
+            if cfinder.value("DARKNL"): # Using new master bias+dark image, input header to retrieve exptime
+                way='new' # Has DARKNL=True
+            else:
+                way='old' # Has DARKNL=False 
+        else:
+            way='old' # No DARKNL keyword, use old way
+        print(way)
+        if way=='new':                
+            dark = get_calibration_image(cfinder,"DARK",dark,header=header)
+            bias = bias + dark # The new dark image is the same as the bias image by definition thus added to the bias image, then jump the dark subtraction step in the old code 
+            dark = False
+        else: # Old dark
+            dark = get_calibration_image(cfinder,"DARK",dark)
 
-        if dark is not False :
-            if dark.shape != image.shape :
-                log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-                raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+            if dark is not False :
+                if dark.shape != image.shape :
+                    log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+                    raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
 
 
-            if cfinder and cfinder.haskey("EXPTIMEKEY") :
-                exptime_key=cfinder.value("EXPTIMEKEY")
-                log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
-            else :
-                exptime_key="EXPTIME"
-            exptime =  primary_header[exptime_key]
+                if cfinder and cfinder.haskey("EXPTIMEKEY") :
+                    exptime_key=cfinder.value("EXPTIMEKEY")
+                    log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
+                else :
+                    exptime_key="EXPTIME"
+                exptime =  primary_header[exptime_key]
 
-            log.info("Multiplying dark by exptime %f"%(exptime))
-            dark *= exptime
+                log.info("Multiplying dark by exptime %f"%(exptime))
+                dark *= exptime
+    else:
+        dark=False
+
 
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
@@ -592,7 +604,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         else :
             rdnoise_message = 'ADUs (gain not applied)'
             gain_message    = 'gain not applied to image'
-        header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message)
+        header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message) # from OBSRDN to OVSRDN 
         header['GAIN'+amp] = (gain,gain_message)
         
         #- Warn/error if measured readnoise is very different from expected if exists
@@ -854,7 +866,7 @@ def read_2d_dark(filename=None, exptime=0):
             # Run interpolation
             image1=recover_2d_bias_dark(hdus,exptime_arr[ind1],ext_arr[str(int(exptime_arr[ind1]))])
             image2=recover_2d_bias_dark(hdus,exptime_arr[ind2],ext_arr[str(int(exptime_arr[ind2]))])
-            img=image1*precision+image2*(1-precision) #interp_shape(image1,image2,precision)
+            img=image1*(1-precision)+image2*precision #interp_shape(image1,image2,precision)
 
             return img
 
