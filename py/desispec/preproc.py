@@ -18,9 +18,7 @@ from desispec.calibfinder import CalibFinder
 from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
-from desispec.io import read_fiberflat
 from desispec.maskedmedian import masked_median
-from desispec.image_model import compute_image_model
 
 # log = get_logger()
 
@@ -337,7 +335,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
-            bias_img=None,model_variance=False):
+            bias_img=None):
 
     '''
     preprocess image using metadata in header
@@ -369,7 +367,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             the overscan.   (default: False).  Requires use_overscan_row=True
             to have any effect.
 
-    Optional variance model if model_variance=True
     Optional background subtraction with median filtering if bkgsub=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
@@ -417,9 +414,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     log=get_logger()
 
     header = header.copy()
-
+    
     cfinder = None
-
+    
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
 
@@ -609,7 +606,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             gain_message    = 'gain not applied to image'
         header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message) # from OBSRDN to OVSRDN 
         header['GAIN'+amp] = (gain,gain_message)
-
+        
         #- Warn/error if measured readnoise is very different from expected if exists
         if 'RDNOISE'+amp in header:
             expected_readnoise = header['RDNOISE'+amp]
@@ -657,7 +654,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         saturated = (rawimage[jj]>=saturlev)
         mask[kk][saturated] |= ccdmask.SATURATED
 
-        #- ADC to electrons
+        #- subtract dark prior to multiplication by gain
+        if dark is not False  :
+            log.info("subtracting dark for amp %s"%amp)
+            data -= dark[kk]
+
         image[kk] = data*gain
 
     if not nocrosstalk :
@@ -713,15 +714,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 image[ii2] -= a12flux
                 # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
 
-    #- Poisson noise variance (prior to dark subtraction and prior to pixel flat field)
-    #- This is biasing, but that's what we have for now
-    poisson_var = image.clip(0)
-
-    #- subtract dark after multiplication by gain
-    if dark is not False  :
-        log.info("subtracting dark for amp %s"%amp)
-        image -= dark
-
     #- Correct for dark trails if any
     if not nodarktrail and cfinder is not None :
         for amp in amp_ids :
@@ -743,23 +735,18 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if np.all(pixflat > almost_zero ):
             image /= pixflat
             readnoise /= pixflat
-            poisson_var /= pixflat**2
         else:
             good = (pixflat > almost_zero )
             image[good] /= pixflat[good]
             readnoise[good] /= pixflat[good]
-            poisson_var[good] /= pixflat[good]**2
             mask[~good] |= ccdmask.PIXFLATZERO
 
         lowpixflat = (0 < pixflat) & (pixflat < 0.1)
         if np.any(lowpixflat):
             mask[lowpixflat] |= ccdmask.PIXFLATLOW
 
-
-
-
     #- Inverse variance, estimated directly from the data (BEWARE: biased!)
-    var = poisson_var + readnoise**2
+    var = image.clip(0) + readnoise**2
     ivar = np.zeros(var.shape)
     ivar[var>0] = 1.0 / var[var>0]
 
@@ -770,73 +757,18 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         bkg = _background(image,header)
         image -= bkg
 
+
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
+
     if not nocosmic :
         cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
-        mask = img.mask
 
-
-    xyset = None
-
-    if model_variance  :
-
-        psf = None
+    if remove_scattered_light :
         if psf_filename is None :
             psf_filename = cfinder.findfile("PSF")
         xyset = read_xytraceset(psf_filename)
-
-        fiberflat = None
-        with_spectral_smoothing=True
-        with_sky_model = True
-
-        if with_sky_model :
-            log.debug("Will use a sky model to model the spectra")
-            fiberflat_filename = cfinder.findfile("FIBERFLAT")
-            if fiberflat_filename is not None :
-                fiberflat = read_fiberflat(fiberflat_filename)
-
-        log.info("compute an image model after dark correction and pixel flat")
-        nsig = 5.
-        mimage = compute_image_model(img, xyset, fiberflat=fiberflat,
-                                     with_spectral_smoothing=with_spectral_smoothing,
-                                     with_sky_model=with_sky_model,
-                                     spectral_smoothing_nsig=nsig, psf=psf)
-
-        # here we bring back original image for large outliers
-        # this allows to have a correct ivar for cosmic rays and bright sources
-        eps = 0.1
-        out = (((ivar>0)*(image-mimage)**2/(1./(ivar+(ivar==0))+(0.1*mimage)**2))>nsig**2)
-        # out &= (image>mimage) # could request this to be conservative on the variance ... but this could cause other issues
-        mimage[out] = image[out]
-
-        log.info("use image model to compute variance")
-        if bkgsub :
-            mimage += bkg
-        if pixflat is not False :
-            # undo pixflat
-            mimage *= pixflat
-        if dark is not False  :
-            mimage  += dark
-        poisson_var = mimage.clip(0)
-        if pixflat is not False :
-            if np.all(pixflat > almost_zero ):
-                poisson_var /= pixflat**2
-            else:
-                poisson_var[good] /= pixflat[good]**2
-        var = poisson_var + readnoise**2
-        ivar[var>0] = 1.0 / var[var>0]
-
-        # regenerate img object
-        img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
-
-
-    if remove_scattered_light :
-        if xyset is None :
-            if psf_filename is None :
-                psf_filename = cfinder.findfile("PSF")
-            xyset = read_xytraceset(psf_filename)
         img.pix -= model_scattered_light(img,xyset)
 
     return img
