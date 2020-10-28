@@ -502,7 +502,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else:
         dark=False
 
-
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
             log.info("subtracting bias")
@@ -866,7 +865,11 @@ def read_2d_dark(filename=None, exptime=0):
             # Run interpolation
             image1=recover_2d_bias_dark(hdus,exptime_arr[ind1],ext_arr[str(int(exptime_arr[ind1]))])
             image2=recover_2d_bias_dark(hdus,exptime_arr[ind2],ext_arr[str(int(exptime_arr[ind2]))])
+<<<<<<< HEAD
             img=image1*(1-precision)+image2*precision #interp_shape(image1,image2,precision)
+=======
+            img=image1*precision+image2*(1-precision) #interp_shape(image1,image2,precision)
+>>>>>>> 982963f14803cdf61f63c407e0760a88fabd0e72
 
             return img
 
