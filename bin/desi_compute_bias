@@ -88,6 +88,6 @@ meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
 meanimage=meanimage.reshape(shape)
 
 log.info("write result in %s ..."%args.outfile)
-pyfits.writeto(args.outfile,meanimage,overwrite="True")
+pyfits.writeto(args.outfile,meanimage,image_header,overwrite="True")
 
 log.info("done")
