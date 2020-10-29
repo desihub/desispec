@@ -903,7 +903,8 @@ def read_2d_dark(filename=None, exptime=0):
 
     Options:
         filename : input filename to read
-        exptime : the exposure time of the image
+        exptime : the exposure time of the image in seconds
+
     Notes:
         must provide filename
     '''
