@@ -88,7 +88,7 @@ timer.start('preflight')
 # - Preflight checks
 if rank > 0:
     # - Let rank 0 fetch these, and then broadcast
-    args = None
+    args, hdr, camhdr = None, None, None
 else:
     if args.inputs is None:
         if args.night is None or args.expids is None:
@@ -125,6 +125,10 @@ else:
     args.input = args.inputs[0]
 
     args, hdr, camhdr = update_args_with_headers(args)
+    args.obstype = args.obstype.upper()
+    if args.obstype != 'SCIENCE':
+        hdr, camhdr = None, None
+        
     args.night = int(args.night)
 
     # - Update args to be in consistent format
@@ -132,16 +136,11 @@ else:
         args.batch_opts = args.batch_opts.strip('"\'')
     args.cameras = sorted(args.cameras)
     args.obstype = args.obstype.upper()
-    if args.obstype != 'SCIENCE':
-        del hdr, camhdr
     
 if comm is not None:
-    if args.obstype == 'SCIENCE':
-        args = comm.bcast(args, root=0)
-        hdr = comm.bcast(hdr, root=0)
-        camhdr = comm.bcast(camhdr, root=0)
-    else:
-        args = comm.bcast(args, root=0)
+    args = comm.bcast(args, root=0)
+    hdr = comm.bcast(hdr, root=0)
+    camhdr = comm.bcast(camhdr, root=0)
 
 known_obstype = ['SCIENCE', 'ARC', 'FLAT']
 if args.obstype not in known_obstype:
