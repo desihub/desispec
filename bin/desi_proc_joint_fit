@@ -90,30 +90,60 @@ if rank > 0:
     # - Let rank 0 fetch these, and then broadcast
     args = None
 else:
-    cam_str = args.cameras.strip(' \t').lower()
-    cameras = cam_str.split(',')
-    if cam_str[0] not in ['b', 'r', 'z'] and cameras[0].isnumeric():
-        args.cameras = []
-        for camnum in cameras:
-            for ccd in ['b', 'r', 'z']:
-                args.cameras.append('{}{}'.format(ccd, camnum))
+    if args.night is None or args.expids is None:
+        if args.inputs is None:
+            raise RuntimeError('Must specify --inputs or --night AND --expids')
+        else:
+            args.inputs = np.array(args.inputs.strip(' \t').split(','))
+            #- args.night will be defined in update_args_with_headers,
+            #- but let's define the expids here
+            args.expids = []
+            for infile in args.inputs:
+                # - Fill in values from raw data header if not overridden by command line
+                fx = fitsio.FITS(infile)
+                if 'SPEC' in fx:  # - 20200225 onwards
+                    hdr = fx['SPEC'].read_header()
+                elif 'SPS' in fx:  # - 20200224 and before
+                    hdr = fx['SPS'].read_header()
+                else:
+                    hdr = fx[0].read_header()
+                args.expids.append(int(hdr['EXPID']))
+                fx.close()
     else:
-        args.cameras = cameras
+        args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
+        if args.inputs is None:
+            args.inputs = []
+            for	expid in args.expids:
+                infile = findfile('raw', night=args.night, expid=expid)
+                args.inputs.append(infile)
+                if not os.path.isfile(infile):
+                    raise IOError('Missing input file: {}'.format(infile))
 
-    args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
-    #args.nights = np.array(args.nights.strip(' \t').split(',')).astype(int)
+    args.expids = np.array(args.expids)
+    args.inputs = np.array(args.inputs)
+    args.expid = args.expids[0]
+    args.input = args.inputs[0]
+
+    args, hdr, camhdr = update_args_with_headers(args)
     args.night = int(args.night)
-    #if len(args.expids) > len(args.nights) and len(args.nights) == 1:
-    #    args.nights = np.array([args.nights[0]] * len(args.expids)).astype(int)
 
     # - Update args to be in consistent format
     if args.batch_opts is not None:
         args.batch_opts = args.batch_opts.strip('"\'')
     args.cameras = sorted(args.cameras)
     args.obstype = args.obstype.upper()
+    if args.obstype != 'SCIENCE':
+        del hdr, camhdr
 
+    print(args)
+    
 if comm is not None:
-    args = comm.bcast(args, root=0)
+    if args.obstype == 'SCIENCE':
+        args = comm.bcast(args, root=0)
+        hdr = comm.bcast(hdr, root=0)
+        camhdr = comm.bcast(camhdr, root=0)
+    else:
+        args = comm.bcast(args, root=0)
 
 known_obstype = ['SCIENCE', 'ARC', 'FLAT']
 if args.obstype not in known_obstype:
@@ -271,26 +301,26 @@ if args.obstype in ['FLAT']:
 ########################################################
 
 if args.obstype in ['SCIENCE']:
-    inputfile = findfile('raw', night=args.night, expid=args.expids[0])
-    if not os.path.isfile(inputfile):
-        raise IOError('Missing input file: {}'.format(inputfile))
-    # - Fill in values from raw data header if not overridden by command line                
-    fx = fitsio.FITS(inputfile)
-    if 'SPEC' in fx:  # - 20200225 onwards                                            
-        # hdr = fits.getheader(args.input, 'SPEC')                                         
-        hdr = fx['SPEC'].read_header()
-    elif 'SPS' in fx:  # - 20200224 and before                                                  
-        # hdr = fits.getheader(args.input, 'SPS')                                                  
-        hdr = fx['SPS'].read_header()
-    else:
-        # hdr = fits.getheader(args.input, 0)                                                                   
-        hdr = fx[0].read_header()
-        
-    camhdr = dict()
-    for cam in args.cameras:
-        camhdr[cam] = fx[cam].read_header()
+    #inputfile = findfile('raw', night=args.night, expid=args.expids[0])
+    #if not os.path.isfile(inputfile):
+    #    raise IOError('Missing input file: {}'.format(inputfile))
+    ## - Fill in values from raw data header if not overridden by command line                
+    #fx = fitsio.FITS(inputfile)
+    #if 'SPEC' in fx:  # - 20200225 onwards                                            
+    #    # hdr = fits.getheader(args.input, 'SPEC')                                         
+    #    hdr = fx['SPEC'].read_header()
+    #elif 'SPS' in fx:  # - 20200224 and before                                                  
+    #    # hdr = fits.getheader(args.input, 'SPS')                                                  
+    #    hdr = fx['SPS'].read_header()
+    #else:
+    #    # hdr = fits.getheader(args.input, 0)                                                                   
+    #    hdr = fx[0].read_header()
+    #    
+    #camhdr = dict()
+    #for cam in args.cameras:
+    #    camhdr[cam] = fx[cam].read_header()
 
-    fx.close()
+    #fx.close()
 
     timer.start('stdstarfit')
     if rank == 0:
