@@ -90,34 +90,34 @@ if rank > 0:
     # - Let rank 0 fetch these, and then broadcast
     args = None
 else:
-    if args.night is None or args.expids is None:
-        if args.inputs is None:
+    if args.inputs is None:
+        if args.night is None or args.expids is None:
             raise RuntimeError('Must specify --inputs or --night AND --expids')
         else:
-            args.inputs = np.array(args.inputs.strip(' \t').split(','))
-            #- args.night will be defined in update_args_with_headers,
-            #- but let's define the expids here
-            args.expids = []
-            for infile in args.inputs:
-                # - Fill in values from raw data header if not overridden by command line
-                fx = fitsio.FITS(infile)
-                if 'SPEC' in fx:  # - 20200225 onwards
-                    hdr = fx['SPEC'].read_header()
-                elif 'SPS' in fx:  # - 20200224 and before
-                    hdr = fx['SPS'].read_header()
-                else:
-                    hdr = fx[0].read_header()
-                args.expids.append(int(hdr['EXPID']))
-                fx.close()
-    else:
-        args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
-        if args.inputs is None:
+            args.expids = np.array(args.expids.strip(' \t').split(',')).astype(int)
             args.inputs = []
-            for	expid in args.expids:
+            for expid in args.expids:
                 infile = findfile('raw', night=args.night, expid=expid)
                 args.inputs.append(infile)
                 if not os.path.isfile(infile):
                     raise IOError('Missing input file: {}'.format(infile))
+    else:
+        args.inputs = np.array(args.inputs.strip(' \t').split(','))
+        #- args.night will be defined in update_args_with_headers,
+        #- but let's define the expids here
+        #- NOTE: inputs has priority. Overwriting expids if they existed.
+        args.expids = []
+        for infile in args.inputs:
+            # - Fill in values from raw data header if not overridden by command line
+            fx = fitsio.FITS(infile)
+            if 'SPEC' in fx:  # - 20200225 onwards
+                hdr = fx['SPEC'].read_header()
+            elif 'SPS' in fx:  # - 20200224 and before
+                hdr = fx['SPS'].read_header()
+            else:
+                hdr = fx[0].read_header()
+            args.expids.append(int(hdr['EXPID']))
+            fx.close()
 
     args.expids = np.array(args.expids)
     args.inputs = np.array(args.inputs)
@@ -134,8 +134,6 @@ else:
     args.obstype = args.obstype.upper()
     if args.obstype != 'SCIENCE':
         del hdr, camhdr
-
-    print(args)
     
 if comm is not None:
     if args.obstype == 'SCIENCE':
