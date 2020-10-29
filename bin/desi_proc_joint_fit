@@ -342,10 +342,10 @@ if args.obstype in ['SCIENCE']:
             skyfiles[sp] = list()
             fiberflatfiles[sp] = list()
 
+        fiberflatfiles[sp].append(input_fiberflat[camera])
         for expid in args.expids:
             framefiles[sp].append(findfile('frame', args.night, expid, camera))
             skyfiles[sp].append(findfile('sky', args.night, expid, camera))
-            fiberflatfiles[sp].append(input_fiberflat[camera])
 
     # - Hardcoded stdstar model version
     starmodels = os.path.join(
@@ -358,7 +358,7 @@ if args.obstype in ['SCIENCE']:
         sp = spectro_nums[i]
         # - NOTE: Saving the joint fit file with only the name of the first exposure
         stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
-        stdfile.replace('{:08d}'.format(args.expids[0]),'-'.join(['{:08d}'.format(eid) for eid in args.expids]))
+        #stdfile.replace('{:08d}'.format(args.expids[0]),'-'.join(['{:08d}'.format(eid) for eid in args.expids]))
         cmd = "desi_fit_stdstars"
         cmd += " --frames {}".format(' '.join(framefiles[sp]))
         cmd += " --skymodels {}".format(' '.join(skyfiles[sp]))
@@ -375,6 +375,14 @@ if args.obstype in ['SCIENCE']:
     if comm is not None:
         comm.barrier()
 
+    if rank==0 and len(args.expids) > 1:
+        for sp in spectro_nums:
+            saved_stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
+            for expid in args.expids[1:]:
+                new_stdfile = findfile('stdstars', args.night, expid, spectrograph=sp)
+                cmd = f'ln -s {saved_stdfile} {new_stdfile}'
+                log.info(f'Sym Linking jointly fitted stdstar file: {saved_stdfile}  to  {new_stdfile}')
+                runcmd(cmd, inputs=[saved_stdfile], outputs=[new_stdfile])
 # -------------------------------------------------------------------------
 # - Wrap up
 

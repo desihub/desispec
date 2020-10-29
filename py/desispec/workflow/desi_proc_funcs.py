@@ -181,7 +181,7 @@ def update_args_with_headers(args):
     fx.close()
     return args, hdr, camhdr
 
-def determine_resources(ncameras, jobdesc, queue, forced_runtime=None):
+def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     """
     Determine the resources that should be assigned to the batch script given what
     desi_proc needs for the given input information.
@@ -208,10 +208,12 @@ def determine_resources(ncameras, jobdesc, queue, forced_runtime=None):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('ZERO', 'DARK'):
         ncores, runtime = 2, 5
-    elif jobdesc in ('PSFNIGHT','NIGHTLYFLAT'):
-        ncores, runtime = ncameras, 5
+    elif jobdesc == 'PSFNIGHT':
+        ncores, runtime = 20 * nspectro, 5 #ncameras, 5
+    elif jobdesc == 'NIGHTLYFLAT':
+        ncores, runtime = 20 * nspectro, 20 #ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
-        ncores, runtime = ncameras, 10
+        ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
     else:
         print('ERROR: unknown jobdesc={}'.format(jobdesc))
         sys.exit(1)
@@ -294,7 +296,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
     ncameras = len(cameras)
-    ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue, runtime)
+    nexps = 1
+    if not np.isscalar(exp) and type(exp) is not str:
+        nexps = len(exp)
+    ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps, forced_runtime=runtime)
 
     assert runtime <= 60
 
@@ -343,11 +348,11 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         fx.write('echo Starting at $(date)\n')
 
-        if jobdesc.lower() not in ['science','prestdstar','poststdstar']:
+        if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             ################################## Note ############################
             ## Needs to be refactored to write the correct thing given flags ###
             ####################################################################
-            fx.write('\n# Do steps through skysub at full MPI parallelism\n')
+            fx.write('\n# Do steps at full MPI parallelism\n')
             srun = 'srun -N {} -n {} -c 2 {}'.format(nodes, ncores, cmd)
             fx.write('echo Running {}\n'.format(srun))
             fx.write('{}\n'.format(srun))
@@ -360,7 +365,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 srun = 'srun -N {} -n {} -c 2 {} --nofluxcalib'.format(nodes, ncores, cmd)
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
-            if jobdesc.lower() in ['science','poststdstar']:
+            if jobdesc.lower() in ['science', 'stdstarfit', 'poststdstar']:
                 fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
                 fx.write('# This should quickly skip over the steps already done\n')
                 srun = 'srun -N {} -n {} -c 32 {} '.format(nodes, nodes * 2, cmd)
