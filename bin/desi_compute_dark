@@ -16,7 +16,8 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
                                  description="Compute a master dark",
                                  epilog='''
                                  Input is a list of raw dark images, possibly with various exposure times.
-                                 Raw images are preprocessed without dark,mask,gain correction and without cosmic-ray masking.
+                                 Raw images are preprocessed without dark,mask correction and without cosmic-ray masking.
+                                 However gains are applied so the output is in electrons/sec.
                                  Only an optional bias correction is applied.
                                  The result is the median of the preprocessed images divided by their exposure time.
                                  We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.                                 ''')
