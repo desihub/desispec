@@ -935,11 +935,11 @@ def read_dark(filename=None, camera=None, dateobs=None, exptime=None):
         exptime_arr=[]
         ext_arr={}
         for hdu in hdus:
-            if hdu.header['EXTNAME'] == 'DARK':
+            if hdu.header['EXTNAME'] == 'DARK' or hdu.header['EXTNAME'] == 'ZERO':
                 pass
-            elif hdu.header['EXTNAME'] == 'ZERO':
-                ext_arr['0']=hdu.header['EXTNAME']
-                exptime_arr.append(0)
+            #elif hdu.header['EXTNAME'] == 'ZERO':
+            #    ext_arr['0']=hdu.header['EXTNAME']
+            #    exptime_arr.append(0)
             else:
                 ext_arr[hdu.header['EXTNAME'][1:]]=hdu.header['EXTNAME']
                 exptime_arr.append(float(hdu.header['EXTNAME'][1:]))
@@ -948,12 +948,14 @@ def read_dark(filename=None, camera=None, dateobs=None, exptime=None):
         min_exptime = np.min(exptime_arr)
         max_exptime = np.max(exptime_arr)
 
-        if exptime < min_exptime :
+        if exptime==0.:
+            profile_2d=0.
+        elif exptime< min_exptime :
             log.warning("Use 2D dark profile at min. exptime={}".format(min_exptime))
             profile_2d = recover_2d_dark(hdus,min_exptime,ext_arr[str(int(min_exptime))])
         elif exptime > max_exptime :
             log.warning("Use 2D dark profile at max. exptime={}".format(max_exptime))
-            profile_2d = recover_2d_dark(hdus,max_exptime_arr,ext_arr[str(int(max_exptime_arr))])
+            profile_2d = recover_2d_dark(hdus,max_exptime,ext_arr[str(int(max_exptime_arr))])
         else: # Interpolate
             exptime_arr=np.sort(exptime_arr)
             ind=np.where(exptime_arr>exptime)
