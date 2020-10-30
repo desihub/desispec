@@ -1,0 +1,48 @@
+# This file used by SPECLINEFIT procedure for emission line fitting.
+#
+# The [O_II] lines were updated from Peter van Hoof's web site at:
+#  http://www.pa.uky.edu/~peter/atomic/
+#
+# typedef struct {
+#  double lambda;      # Wavelength in air for >=2000 Ang, vacuum for < 2000 Ang
+#  char name[40];     # Name of line
+#  char zindex[20];   # Entries w/ same zindex constrained to have same redshift
+#  char windex[20];   # Entries w/ same windex constrained to have same width
+#  char findex[20];   # Entries w/ same findex have constrained flux ratios
+#  float fvalue;      # Relative scale factor for entries w/ same findex
+# } emlineid;
+#
+# Do not constrain the redshift, width, or flux level of Lyman-alpha
+# to agree with any other lines.
+ emlineid  1215.67    "Ly_alpha"      z_lya      w_ly_a     f1215  1
+ emlineid  1240.81    "N_V 1240"      zemission  w_n_v      f1240  1
+ emlineid  1549.48    "C_IV 1549"     zemission  wemission  f1549  1
+ emlineid  1640.42    "He_II 1640"    zemission  wemission  f1640  1
+ emlineid  1908.734   "C_III] 1908"   zemission  wemission  f1908  1
+ emlineid  2799.49    "Mg_II 2799"    zemission  wemission  f2799  1
+ emlineid  3726.032   "[O_II] 3725"   zemission  wemission  f3725  1 # 4So-2Do
+ emlineid  3728.815   "[O_II] 3727"   zemission  wemission  f3727  1 # 4So-2Do
+ emlineid  3868.76    "[Ne_III] 3868" zemission  wemission  f3868  1
+ emlineid  3889.049   "H_epsilon"     zemission  w_balmer   f3889  1
+ emlineid  3970.00    "[Ne_III] 3970" zemission  wemission  f3970  1
+ emlineid  4101.734   "H_delta"       zemission  w_balmer   f4101  1
+ emlineid  4340.464   "H_gamma"       zemission  w_balmer   f4340  1
+ emlineid  4363.209   "[O_III] 4363"  zemission  wemission  f4363  1
+ emlineid  4685.68    "He_II 4685"    zemission  wemission  f4685  1
+ emlineid  4861.325   "H_beta"        zemission  w_balmer   f4861  1
+ emlineid  4958.911   "[O_III] 4959"  zemission  wemission  f5007  1.0
+ emlineid  5006.843   "[O_III] 5007"  zemission  wemission  f5007  3.0
+ emlineid  5411.52    "He_II 5411"    zemission  wemission  f5411  1
+ emlineid  5577.339   "[O_I] 5577"    zemission  wemission  f5577  1
+ emlineid  5754.59    "[N_II] 5755"   zemission  wemission  f5755  1
+ emlineid  5875.68    "He_I 5876"     zemission  wemission  f5876  1 # blend
+ emlineid  6300.304   "[O_I] 6300"    zemission  wemission  f6300  1
+ emlineid  6312.06    "[S_III] 6312"  zemission  wemission  f7312  1
+ emlineid  6363.776   "[O_I] 6363"    zemission  wemission  f6363  1
+ emlineid  6548.05    "[N_II] 6548"   zemission  wemission  f6548  1.0
+ emlineid  6562.801   "H_alpha"       zemission  w_balmer   f6563  1
+ emlineid  6583.45    "[N_II] 6583"   zemission  wemission  f6583  3.0
+ emlineid  6716.44    "[S_II] 6716"   zemission  wemission  f6716  1
+ emlineid  6730.82    "[S_II] 6730"   zemission  wemission  f6730  1
+ emlineid  7135.790   "[Ar_III] 7135" zemission  wemission  f7315  1
+
