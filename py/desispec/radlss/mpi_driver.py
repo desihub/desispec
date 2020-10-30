@@ -73,12 +73,12 @@ def is_processed(logfile):
     processed     = False
 
     if path.exists(logfile):
-      f           = open(logfile)
+        f           = open(logfile)
         
-      if 'SUCCESS' in f.read():
-        processed = True
+        if 'SUCCESS' in f.read():
+            processed = True
 
-      f.close()
+        f.close()
     
     return  processed
 
@@ -87,12 +87,6 @@ night     = '20200315'
 tracers   = ['ELG']
 
 expids, tiles = get_expids(night)
-
-#- Blacklist exposures.
-blacklist = np.array([]) # 55556, 55557, 55587, 55592, 55668, 55670, 55672, 55674, 55676, 55678, 55680, 55682, 55684, 55686, 55688, 55690, 55692, 55705, 55706, 55707, 55708, 55709, 55713, 55714, 55715, 55716, 55717])
-is_black  = np.isin(expids, blacklist)
-expids    = expids[~is_black]
-blacklist = blacklist.tolist()
 
 cameras   = ['b6', 'r6', 'z6']
 
@@ -104,7 +98,7 @@ comm.barrier()
 expids    = comm.bcast(expids, root=0)
 
 if rank == 0:
-  print('Number of exposures to process: {}'.format(len(expids)))
+    print('Number of exposures to process: {}'.format(len(expids)))
 
 # https://github.com/desihub/desitarget/blob/master/bin/mpi_select_mock_targets
 iexp      = np.linspace(0, len(expids), size+1, dtype=int)
@@ -117,42 +111,41 @@ sys.stdout.flush()
 comm.barrier()
 
 if len(rankexp) > 0:    
-  for nexp, expid in enumerate(rankexp):
-    start      = time.perf_counter()
+    for nexp, expid in enumerate(rankexp):
+        start    = time.perf_counter()
       
-    if expid not in blacklist:
-      logdir   = '/global/cscratch1/sd/mjwilson/radlss/test/logs/{:08d}/'.format(expid)
-      logfile  = logdir + '/{:08d}.log'.format(expid) 
+        logdir   = '/global/cscratch1/sd/mjwilson/radlss/test/logs/{:08d}/'.format(expid)
+        logfile  = logdir + '/{:08d}.log'.format(expid) 
 
-      done     = is_processed(logfile)
+        done     = is_processed(logfile)
 
-      if not done:      
-          Path(logdir).mkdir(parents=True, exist_ok=True)
+        if not done:      
+            Path(logdir).mkdir(parents=True, exist_ok=True)
 
-          print('Rank {}:  Writing log for {:08d} to {}.'.format(rank, expid, logfile))
+            print('Rank {}:  Writing log for {:08d} to {}.'.format(rank, expid, logfile))
       
-          with stdouterr_redirected(to=logfile):
-              print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
+            with stdouterr_redirected(to=logfile):
+                print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
-              rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=True)
-          
-              rads.compute()
+                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=True)
+                
+                rads.compute()
 
-              #  if nexp == nmax:
-              #    break
+                #  if nexp == nmax:
+                #    break
 
-              print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
+                print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
 
-              # Close all figures (to suppress warning). 
-              plt.close('all')
+                # Close all figures (to suppress warning). 
+                plt.close('all')
               
-              del rads
+                del rads
 
-              #blacklist.append(expid)
+                #blacklist.append(expid)
 
-              #print('Rank {} blacklisted {} {}'.format(rank, expid, andes + '/exposures/{}/{:08d}/'.format(night, expid)))
-          
-              sys.stdout.flush()
-
-      else:
-          print('Rank {}:  EXPID {} previously processed successfully.'.format(rank, expid))
+                #print('Rank {} blacklisted {} {}'.format(rank, expid, andes + '/exposures/{}/{:08d}/'.format(night, expid)))
+                
+                sys.stdout.flush()
+                
+        else:
+            print('Rank {}:  EXPID {} previously processed successfully.'.format(rank, expid))
