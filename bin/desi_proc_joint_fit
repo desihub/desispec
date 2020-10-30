@@ -28,41 +28,15 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
-from desispec.workflow.desi_proc_funcs import get_desi_proc_joint_fit_parser, create_desi_proc_batch_script
-from desispec.workflow.desi_proc_funcs import update_args_with_headers
+from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_joint_fit_parser, create_desi_proc_batch_script
+from desispec.workflow.desi_proc_funcs import load_raw_data_header, update_args_with_headers
 
 parser = get_desi_proc_joint_fit_parser()
 args = parser.parse_args()
 log = get_logger()
 
-
-
-if args.mpi and not args.batch:
-    from mpi4py import MPI
-
-    comm = MPI.COMM_WORLD
-    rank = comm.rank
-    size = comm.size
-else:
-    comm = None
-    rank = 0
-    size = 1
-
-#- Prevent MPI from killing off spawned processes
-if 'PMI_MMAP_SYNC_WAIT_TIME' not in os.environ:
-    os.environ['PMI_MMAP_SYNC_WAIT_TIME'] = '3600'
-
-#- Double check env for MPI+multiprocessing at NERSC
-if 'MPICH_GNI_FORK_MODE' not in os.environ:
-    os.environ['MPICH_GNI_FORK_MODE'] = 'FULLCOPY'
-    if rank == 0:
-        log.info('Setting MPICH_GNI_FORK_MODE=FULLCOPY for MPI+multiprocessing')
-elif os.environ['MPICH_GNI_FORK_MODE'] != 'FULLCOPY':
-    gnifork = os.environ['MPICH_GNI_FORK_MODE']
-    if rank == 0:
-        log.error(f'MPICH_GNI_FORK_MODE={gnifork} is not "FULLCOPY"; this might not work with MPI+multiprocessing, but not overriding')
-elif rank == 0:
-    log.debug('MPICH_GNI_FORK_MODE={}'.format(os.environ['MPICH_GNI_FORK_MODE']))
+#- Check MPI flags and determine the comm, rank, and size given the arguments
+comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
 
 #- Start timer; only print log messages from rank 0 (others are silent)
 timer = desiutil.timer.Timer(silent=(rank>0))
@@ -108,14 +82,7 @@ else:
         #- NOTE: inputs has priority. Overwriting expids if they existed.
         args.expids = []
         for infile in args.inputs:
-            # - Fill in values from raw data header if not overridden by command line
-            fx = fitsio.FITS(infile)
-            if 'SPEC' in fx:  # - 20200225 onwards
-                hdr = fx['SPEC'].read_header()
-            elif 'SPS' in fx:  # - 20200224 and before
-                hdr = fx['SPS'].read_header()
-            else:
-                hdr = fx[0].read_header()
+            hdr = load_raw_data_header(pathname=infile, return_filehandle=False)
             args.expids.append(int(hdr['EXPID']))
             fx.close()
 
@@ -124,18 +91,13 @@ else:
     args.expid = args.expids[0]
     args.input = args.inputs[0]
 
+    #- Use header information to fill in missing information in the arguments object
     args, hdr, camhdr = update_args_with_headers(args)
-    args.obstype = args.obstype.upper()
+
+    #- If not a science observation, we don't need the hdr or camhdr objects,
+    #- So let's not broadcast them to all the ranks
     if args.obstype != 'SCIENCE':
         hdr, camhdr = None, None
-        
-    args.night = int(args.night)
-
-    # - Update args to be in consistent format
-    if args.batch_opts is not None:
-        args.batch_opts = args.batch_opts.strip('"\'')
-    args.cameras = sorted(args.cameras)
-    args.obstype = args.obstype.upper()
     
 if comm is not None:
     args = comm.bcast(args, root=0)

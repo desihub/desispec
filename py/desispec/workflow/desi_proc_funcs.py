@@ -97,6 +97,82 @@ def add_desi_proc_joint_fit_terms(parser):
 
     return parser
 
+def assign_mpi(do_mpi, do_batch, log):
+    """
+    Based on whether the mpi flag is set and whether the batch flag is set, assign the appropriate
+    MPI values for the communicator, rank, and number of ranks. Also verify that environment 
+    variables are set and provide useful information via the log
+
+    Args:
+        do_mpi: bool, whether to use mpi or not
+        do_batch: bool, whether the script is meant to write a batch script and exit or not.
+        log: desi log object for reporting
+
+    Returns:
+        comm: MPI communicator object
+        rank: int, the numeric number assigned to the currenct MPI rank
+        size: int, the total number of MPI ranks
+    """
+    if do_mpi and not do_batch:
+        from mpi4py import MPI
+
+        comm = MPI.COMM_WORLD
+        rank = comm.rank
+        size = comm.size
+    else:
+        comm = None
+        rank = 0
+        size = 1
+
+    #- Prevent MPI from killing off spawned processes
+    if 'PMI_MMAP_SYNC_WAIT_TIME' not in os.environ:
+        os.environ['PMI_MMAP_SYNC_WAIT_TIME'] = '3600'
+
+    #- Double check env for MPI+multiprocessing at NERSC
+    if 'MPICH_GNI_FORK_MODE' not in os.environ:
+        os.environ['MPICH_GNI_FORK_MODE'] = 'FULLCOPY'
+        if rank == 0:
+            log.info('Setting MPICH_GNI_FORK_MODE=FULLCOPY for MPI+multiprocessing')
+    elif os.environ['MPICH_GNI_FORK_MODE'] != 'FULLCOPY':
+        gnifork = os.environ['MPICH_GNI_FORK_MODE']
+        if rank == 0:
+            log.error(f'MPICH_GNI_FORK_MODE={gnifork} is not "FULLCOPY"; this might not work with MPI+multiprocessing, but not overriding')
+    elif rank == 0:
+        log.debug('MPICH_GNI_FORK_MODE={}'.format(os.environ['MPICH_GNI_FORK_MODE']))
+        
+    return comm, rank, size
+
+def load_raw_data_header(pathname, return_filehandle=False):
+    """
+    Open raw desi data file given at pathname and return the spectrograph header,
+    which varied in name over time
+
+    Args:
+        pathname: str, the full path to the raw data file
+        return_filehandle: bool, whether to return the open file handle or to close
+                                 it and only return the header. Default is False.
+    Returns:
+        hdr: fitsio header object from the file at pathname
+        fx:  optional, fitsio file object returned only if return_filehandle is True 
+    """
+    # - Fill in values from raw data header if not overridden by command line
+    fx = fitsio.FITS(pathname)
+    if 'SPEC' in fx:  # - 20200225 onwards
+        # hdr = fits.getheader(args.input, 'SPEC')
+        hdr = fx['SPEC'].read_header()
+    elif 'SPS' in fx:  # - 20200224 and before
+        # hdr = fits.getheader(args.input, 'SPS')
+        hdr = fx['SPS'].read_header()
+    else:
+        # hdr = fits.getheader(args.input, 0)
+        hdr = fx[0].read_header()
+
+    if return_filehandle:
+        return hdr, fx
+    else:
+        fx.close()
+        return hdr
+    
 def update_args_with_headers(args):
     """
     Update input argparse object with values from header if the argparse values are uninformative defaults (generally
@@ -124,17 +200,7 @@ def update_args_with_headers(args):
     if not os.path.isfile(args.input):
         raise IOError('Missing input file: {}'.format(args.input))
 
-    # - Fill in values from raw data header if not overridden by command line
-    fx = fitsio.FITS(args.input)
-    if 'SPEC' in fx:  # - 20200225 onwards
-        # hdr = fits.getheader(args.input, 'SPEC')
-        hdr = fx['SPEC'].read_header()
-    elif 'SPS' in fx:  # - 20200224 and before
-        # hdr = fits.getheader(args.input, 'SPS')
-        hdr = fx['SPS'].read_header()
-    else:
-        # hdr = fits.getheader(args.input, 0)
-        hdr = fx[0].read_header()
+    hdr, fx = load_raw_data_header(pathname=args.input, return_filehandle=True)
 
     if args.expid is None:
         args.expid = int(hdr['EXPID'])
@@ -173,6 +239,13 @@ def update_args_with_headers(args):
                     args.cameras.append('{}{}'.format(ccd, camnum))
         else:
             args.cameras = cameras
+
+    # - Update args to be in consistent format
+    args.cameras = sorted(args.cameras)
+    args.obstype = args.obstype.upper()
+    args.night = int(args.night)
+    if args.batch_opts is not None:
+        args.batch_opts = args.batch_opts.strip('"\'')
 
     camhdr = dict()
     for cam in args.cameras:
