@@ -889,17 +889,15 @@ def read_pixflat(filename=None, camera=None, dateobs=None):
 
 def recover_2d_dark(hdus,exptime,extname):
     log=get_logger()
-    #log.info('exptime=',exptime,' extname=',extname)
-    nx=len(hdus[0].data) #4162
-    ny=len(hdus[0].data[0]) #4232
+    shape=hdus[0].data.shape
+    nx=shape[0]
+    ny=shape[1]
     profileLeft=hdus[extname].data[0]
     profileRight=hdus[extname].data[1]
     profile_2d_Left=np.transpose(np.tile(profileLeft,(int(ny/2),1)))
     profile_2d_Right=np.transpose(np.tile(profileRight,(int(ny/2),1)))
     profile_2d=np.concatenate((profile_2d_Left,profile_2d_Right),axis=1)
-    image=profile_2d+hdus['DARK'].data*float(exptime) # Note no zero is added
-    return image
-
+    return profile_2d
 
 def read_dark(filename=None, camera=None, dateobs=None, exptime=None):
 
@@ -944,32 +942,31 @@ def read_dark(filename=None, camera=None, dateobs=None, exptime=None):
                 exptime_arr.append(0)
             else:
                 ext_arr[hdu.header['EXTNAME'][1:]]=hdu.header['EXTNAME']
-                exptime_arr.append(int(hdu.header['EXTNAME'][1:]))
+                exptime_arr.append(float(hdu.header['EXTNAME'][1:]))
 
-        if int(exptime)==0:
-            return hdus['DARK'].data*0.# No dark, return a zero array
-        elif int(exptime) in exptime_arr:
-            log.info('Using dark at exptime='+str(int(exptime)))
-            return recover_2d_dark(hdus,exptime,ext_arr[str(int(exptime))])  #hdus[str(int(exptime))].data
-        elif int(exptime)> max(exptime_arr):
-            log.info('Using dark at exptime='+str(max(exptime_arr)))
-            return recover_2d_dark(hdus,max(exptime_arr),ext_arr[str(int(max(exptime_arr)))])  #hdus[str(max(exptime_arr))].data
-        elif int(exptime)< min(exptime_arr):
-            log.info('Using dark at exptime='+str(min(exptime_arr)))
-            return recover_2d_dark(hdus,min(exptime_arr),ext_arr[str(int(min(exptime_arr)))])  #hdus[str(min(exptime_arr))].data
-        else:
-            # Interpolate
-            exptime_arr=np.sort(np.array(exptime_arr))
-            ind=np.where(exptime_arr>int(exptime))
+        exptime_arr = np.array(exptime_arr)
+        min_exptime = np.min(exptime_arr)
+        max_exptime = np.max(exptime_arr)
+
+        if exptime < min_exptime :
+            log.warning("Use 2D dark profile at min. exptime={}".format(min_exptime))
+            profile_2d = recover_2d_dark(hdus,min_exptime,ext_arr[str(int(min_exptime))])
+        elif exptime > max_exptime :
+            log.warning("Use 2D dark profile at max. exptime={}".format(max_exptime))
+            profile_2d = recover_2d_dark(hdus,max_exptime_arr,ext_arr[str(int(max_exptime_arr))])
+        else: # Interpolate
+            exptime_arr=np.sort(exptime_arr)
+            ind=np.where(exptime_arr>exptime)
             ind1=ind[0][0]-1
             ind2=ind[0][0]
             log.info('Interpolate between '+str(exptime_arr[ind1])+' and '+str(exptime_arr[ind2]))
-            precision=(float(exptime)-exptime_arr[ind1])/(exptime_arr[ind2]-exptime_arr[ind1])
+            precision=(exptime-exptime_arr[ind1])/(exptime_arr[ind2]-exptime_arr[ind1])
             # Run interpolation
-            image1=recover_2d_bias_dark(hdus,exptime_arr[ind1],ext_arr[str(int(exptime_arr[ind1]))])
-            image2=recover_2d_bias_dark(hdus,exptime_arr[ind2],ext_arr[str(int(exptime_arr[ind2]))])
-            img=image1*(1-precision)+image2*precision #interp_shape(image1,image2,precision)
-            return img
+            image1=recover_2d_dark(hdus,exptime_arr[ind1],ext_arr[str(int(exptime_arr[ind1]))])
+            image2=recover_2d_dark(hdus,exptime_arr[ind2],ext_arr[str(int(exptime_arr[ind2]))])
+            profile_2d = image1*(1-precision)+image2*precision
+
+        return profile_2d + exptime * hdus['DARK'].data
 
 def read_mask(filename=None, camera=None, dateobs=None):
     '''
