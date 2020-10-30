@@ -33,3 +33,22 @@ qa:
        FIDSNR_WARN_RANGE: [6.0, 8.0]
        FIDMAG: 22.
 
+preproc:
+  rdnoise:
+    PARAMS:
+       OBSRDNA_B: '[250:750,10:69]' # CCD amplifier A regions for estimating readnoise,select region[ with [a:b,c:d] 
+       OBSRDNB_B: '[250:750,4026:4086]' # nx=4096, ny=4096 CCD amplifier B regions for estimating readnoise
+       OBSRDNC_B: '[3297:3797,4026:4086]' # CCD amplifier C regions for estimating readnoise
+       OBSRDND_B: '[3297:3797,10:69]' # CCD amplifier D regions for estimating readnoise
+       OBSRDNA_R: '[250:750,10:69]' # nx=4114, ny=4128 CCD amplifier A regions for estimating readnoise,select region[ with [a:b,c:d] 
+       OBSRDNB_R: '[250:750,4044:4104]' # CCD amplifier B regions for estimating readnoise
+       OBSRDNC_R: '[3313:3813,4044:4104]' # CCD amplifier C regions for estimating readnoise
+       OBSRDND_R: '[3313:3813,10:69]' # CCD amplifier D regions for estimating readnoise
+       OBSRDNA_Z: '[250:750,10:69]' # nx=4114, ny=4128 CCD amplifier A regions for estimating readnoise,select region[ with [a:b,c:d] 
+       OBSRDNB_Z: '[250:750,4044:4104]' # CCD amplifier B regions for estimating readnoise
+       OBSRDNC_Z: '[3313:3813,4044:4104]' # CCD amplifier C regions for estimating readnoise
+       OBSRDND_Z: '[3313:3813,10:69]' # CCD amplifier D regions for estimating readnoise
+
+
+
+               
