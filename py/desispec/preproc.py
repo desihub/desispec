@@ -19,6 +19,7 @@ from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_fiberflat
+from desispec.io import params
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 
