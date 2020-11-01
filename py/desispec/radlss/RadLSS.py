@@ -33,11 +33,11 @@ from   desispec.calibfinder      import  CalibFinder
 from   astropy.utils.exceptions  import  AstropyWarning
 from   scipy                     import  stats
 from   pathlib                   import  Path
-from   .templateSNR              import  templateSNR
+from   templateSNR               import  templateSNR
 from   bitarray                  import  bitarray
 from   astropy.convolution       import  convolve, Box1DKernel
 from   os                        import  path
-from   .dtemplateSNR             import  dtemplateSNR, dtemplateSNR_modelivar
+from   dtemplateSNR              import  dtemplateSNR, dtemplateSNR_modelivar
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -108,10 +108,10 @@ class RadLSS(object):
             Path(self.ensemble_dir).mkdir(parents=True, exist_ok=True)
             Path(self.outdir).mkdir(parents=True, exist_ok=True)
           
-            else:
-                self.fail         = True
+        else:
+            self.fail         = True
 
-                print('Non-science exposure')  
+            print('Non-science exposure')  
                
     def get_data(self, shallow=False):    
         '''
@@ -406,6 +406,15 @@ class RadLSS(object):
         # pl.title('Sky continuum ({}A median filter)'.format(kernel_N * 0.8))
         raise  NotImplementedError()
 
+    def line_fit(self):
+        start_linefit = time.perf_counter()
+        
+        end_linefit = time.perf_counter()
+
+        print('Rank {}:  Calculated line fluxes in {:.3f} mins.'.format(self.rank, (end_linefit - start_linefit) / 60.))
+
+        raise  NotImplementedError()
+        
     def calc_fiberlosses(self):
         '''
         Calculate the fiberloss for each fiber of a given 
