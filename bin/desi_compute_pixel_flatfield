@@ -736,7 +736,7 @@ flat=flat*(mask0==0)+(mask0!=0)
 fivar*=(mask0==0)
 
 h=pyfits.HDUList([pyfits.PrimaryHDU(flat),pyfits.ImageHDU(fivar,name="IVAR")])
-h[0].header["BUNIT"]=("","adimensional quantity to be divided to flatfield an image")
+h[0].header["BUNIT"]=("","adimensional quantity to divide to flatfield an image")
 h["IVAR"].header["BUNIT"]=("","inverse variance, adimensional")
 h.writeto(args.outfile,overwrite="True")
 log.info("wrote {}".format(args.outfile))
