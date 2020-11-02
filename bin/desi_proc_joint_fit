@@ -86,8 +86,8 @@ else:
             args.expids.append(int(hdr['EXPID']))
             fx.close()
 
-    args.expids = np.array(args.expids)
-    args.inputs = np.array(args.inputs)
+    args.expids = np.sort(args.expids)
+    args.inputs = np.sort(args.inputs)
     args.expid = args.expids[0]
     args.input = args.inputs[0]
 
