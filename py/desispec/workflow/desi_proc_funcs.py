@@ -358,7 +358,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             if np.isscalar(exp):
                 expstr = '{:08d}'.format(exp)
             else:
-                expstr = '-'.join(['{:08d}'.format(curexp) for curexp in exp])
+                #expstr = '-'.join(['{:08d}'.format(curexp) for curexp in exp])
+                expstr = '{:08d}'.format(exp[0])
         else:
             expstr = exp
         jobname = '{}-{}-{}-{}'.format(jobdesc.lower(), night, expstr, camword)
