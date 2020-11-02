@@ -139,7 +139,7 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # epsilon=1.4901161193847656e-08; norm=-np.inf
 
     # method='CG'
-    result         = scipy.optimize.minimize(mlogpos, x0, method='Nelder-Mead', options = {'disp': True, 'maxiter': 500}, tol=1e-4)
+    result         = scipy.optimize.minimize(mlogpos, x0, method='Nelder-Mead', options = {'disp': True, 'maxiter': 5000}, tol=1e-5)
     bestfit        = result.x
 
     print(bestfit)

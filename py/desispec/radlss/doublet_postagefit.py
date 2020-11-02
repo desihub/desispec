@@ -57,7 +57,7 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
     
     return  wave, rflux, result, line_flux
 
-def doublet_fit(x0, rrz, rrzerr, postages, lineida=None, lineidb=None, plot=False):
+def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     '''
     Passed a postage stamp, find the best fit Gaussian (doublet).
     '''
