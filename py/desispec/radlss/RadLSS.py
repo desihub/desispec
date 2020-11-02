@@ -406,14 +406,33 @@ class RadLSS(object):
         # pl.title('Sky continuum ({}A median filter)'.format(kernel_N * 0.8))
         raise  NotImplementedError()
 
-    def line_fit(self):
-        start_linefit = time.perf_counter()
+    def line_fit(self, petal='5', fiber=8, plot=True):
+        from cframe_postage    import cframe_postage
+        from postage_seriesfit import series_fit
+        from postage_seriesfit import plot_postages
         
-        end_linefit = time.perf_counter()
+        
+        start_linefit      = time.perf_counter()
+
+        self.petal_cframes = {key: value for key, value in self.cframes.items() if key[1] == petal}
+        
+        self.postages      = cframe_postage(self.petal_cframes, fiber, self.zbests[petal]['Z'][fiber])
+
+        groups             = list(self.postages.keys())
+
+        mpostages          = {}
+        
+        for group in groups:
+            self.linefit_result, self.mpostages = series_fit(self.zbests[petal]['Z'][fiber], self.zbests[petal]['ZERR'][fiber], self.postages, group=group, mpostages=mpostages)
+
+        self.linefit_fig   = plot_postages(rads.postages, rads.mpostages, '5', 9, rads.zbests['5']['Z'][9])
+
+        if plot:
+            self.linefit_fig.savefig('scrap.pdf')
+        
+        end_linefit        = time.perf_counter()
 
         print('Rank {}:  Calculated line fluxes in {:.3f} mins.'.format(self.rank, (end_linefit - start_linefit) / 60.))
-
-        raise  NotImplementedError()
         
     def calc_fiberlosses(self):
         '''
@@ -1383,8 +1402,8 @@ class RadLSS(object):
                         # tSNRs & derived fibermap info., e.g. NEA, RDNOISE, etc ... 
                         self.write_radweights()
                     
-                # -------------  QA  -------------            
-                self.qa_plots()
+                        # -------------  QA  -------------            
+                        self.qa_plots()
               
                 # except:
                 # print('Failed to compute for expid {} and cameras {}'.format(expid, self.cameras))

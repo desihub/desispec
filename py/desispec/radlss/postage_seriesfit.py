@@ -17,7 +17,7 @@ from   doublet_postagefit import doublet_obs, doublet_chi2, doublet_fit
 from   desispec.frame import Spectrum
 from   autograd import grad
 
-def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
+def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     '''
     '''
 
@@ -31,11 +31,13 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     nsinglet         = len(singlets)
     ndoublet         = np.int(len(doublets) / 2)
 
+    '''
     if len(singlets) > 0:
         print(singlets)
 
     if len(doublets) > 0:
         print(doublets)
+    '''
     
     def _X2(x):  
         z             = x[0]
@@ -121,13 +123,13 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
         return  grad
         
     # x0: [z, v, [ln(line flux) fxor all singlets], [[ln(line flux), line ratio] for all doublets]]                                                                                                                                         
-    print('\n\nBeginning optimisation for line group {}.'.format(group))
+    # print('\n\nBeginning optimisation for line group {}.'.format(group))
 
     for sig0, r0, lnA0 in zip([50.0, 50.0, 100.], [0.7, 0.7, 0.9], [5.0, 4.0, 5.0]):
         x0 = [rrz, sig0] + [lnA0] * nsinglet + [lnA0, r0] * ndoublet
         x0 = np.array(x0)
 
-        print('{} \t {} \t {:.6e} \t {:.6e}'.format(x0, gradient(x0), mlogpos(x0), _X2(x0)))
+        # print('{} \t {} \t {:.6e} \t {:.6e}'.format(x0, gradient(x0), mlogpos(x0), _X2(x0)))
 
         break
     
@@ -152,7 +154,7 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     bestfit      = result[0]
     # ihess      = result[3]
 
-    print(bestfit)
+    # print(bestfit)
     
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
     # Note:  marginal errors.
@@ -222,7 +224,36 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             mpostages[group][lineidb][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
             
     return  result, mpostages
+
+def plot_postages(postages, mpostages, petal, fiber, rrz):
+    import matplotlib.pyplot as plt
+
+    ncol      = 23
+    fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
+
+    colors    = {'b': 'b', 'r': 'g', 'z': 'r'}
     
+    for u in list(mpostages.keys()):
+        index = 0
+
+        for i, x in enumerate(list(postages[u].keys())):
+            for cam in postages[u][x]:
+                if lines['MASKED'][x] == 1:
+                    continue
+
+                axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
+                axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
+                axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
+                axes[u,index].set_title(lines['NAME'][x])
+
+                index += 1
+
+    fig.suptitle('Fiber {} of petal {} with redshift {:2f}'.format(fiber, petal, rrz), y=1.02)
+
+    plt.tight_layout()
+
+    return  fig 
+
 
 if __name__ == '__main__':
     import os
@@ -275,8 +306,13 @@ if __name__ == '__main__':
     groups            = list(postages.keys())
     
     for group in groups:
-        result, mpostages = emission_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
+        result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
+
+    fig       = postages_plot(postages, mpostages, petal, fiber, rrz)
+
+    pl.savefig('postages.pdf')  
     
+    '''
     ncol      = 23
     fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
 
@@ -302,5 +338,6 @@ if __name__ == '__main__':
     plt.tight_layout()
 
     pl.savefig('postages.pdf')
-        
+    ''' 
+
     print('\n\nDone.\n\n')

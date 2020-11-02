@@ -1,11 +1,15 @@
 import numpy as np
 import pandas as pd
 
-from astropy.table import Table
+from   astropy.table import Table
+from   pkg_resources import resource_exists, resource_filename
 
+
+
+fname                = resource_filename('desispec', 'data/emlines.par')
 
 ##  http://www.sdss3.org/svn//repo/idlspec2d/trunk/etc/emlines.par
-lines                = pd.read_csv('../data/emlines.par', sep='\s+', skiprows=16, names=['LINEID', 'WAVELENGTH', 'NAME', 'REDSHIFT GROUP', 'WIDTH GROUP', 'FLUX GROUP', 'SCALE FACTOR'], comment='#')
+lines                = pd.read_csv(fname, sep='\s+', skiprows=16, names=['LINEID', 'WAVELENGTH', 'NAME', 'REDSHIFT GROUP', 'WIDTH GROUP', 'FLUX GROUP', 'SCALE FACTOR'], comment='#')
 lines['INDEX']       = np.arange(len(lines))
 lines['GROUP']       = lines.groupby(['REDSHIFT GROUP', 'WIDTH GROUP']).ngroup()
 lines['DOUBLET']     = np.zeros(len(lines), dtype=np.int) - 99

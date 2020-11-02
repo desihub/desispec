@@ -127,7 +127,7 @@ if len(rankexp) > 0:
             with stdouterr_redirected(to=logfile):
                 print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
-                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=True)
+                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=True, templates=False)
                 
                 rads.compute()
 
