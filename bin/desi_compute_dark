@@ -44,7 +44,7 @@ log.info("read images ...")
 
 shape=None
 images=[]
-
+first_image_header = None
 if args.nocosmic :
     masks=None
 else :
@@ -64,6 +64,11 @@ for filename in args.image :
         log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
     else :
         exptime = primary_header["EXPTIME"]
+
+
+    if first_image_header is None :
+        first_image_header = fitsfile[args.camera].header
+
     fitsfile.close()
 
     # read raw data and preprocess them
@@ -73,7 +78,8 @@ for filename in args.image :
     pixflat=False
     mask=False
 
-    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=args.nocosmic,mask=mask,dark=dark,pixflat=pixflat,ccd_calibration_filename=False)
+    img = io.read_raw(filename, args.camera,bias=bias,nocosmic=args.nocosmic,mask=mask,dark=dark,pixflat=pixflat,ccd_calibration_filename=False)
+
     if shape is None :
         shape=img.pix.shape
     log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
@@ -117,6 +123,14 @@ else :
 
 log.info("write result in %s ..."%args.outfile)
 hdulist=pyfits.HDUList([pyfits.PrimaryHDU(meanimage)])
+
+# copy some keywords
+for key in ["TELESCOP","INSTRUME","SPECGRPH","SPECID","DETECTOR","CAMERA","CCDNAME","CCDPREP","CCDSIZE","CCDTEMP","CPUTEMP","CASETEMP","CCDTMING","CCDCFG","SETTINGS","VESSEL","FEEVER","FEEBOX","PRESECA","PRRSECA","DATASECA","TRIMSECA","BIASSECA","ORSECA","CCDSECA","DETSECA","AMPSECA","PRESECB","PRRSECB","DATASECB","TRIMSECB","BIASSECB","ORSECB","CCDSECB","DETSECB","AMPSECB","PRESECC","PRRSECC","DATASECC","TRIMSECC","BIASSECC","ORSECC","CCDSECC","DETSECC","AMPSECC","PRESECD","PRRSECD","DATASECD","TRIMSECD","BIASSECD","ORSECD","CCDSECD","DETSECD","AMPSECD","DAC0","DAC1","DAC2","DAC3","DAC4","DAC5","DAC6","DAC7","DAC8","DAC9","DAC10","DAC11","DAC12","DAC13","DAC14","DAC15","DAC16","DAC17","CLOCK0","CLOCK1","CLOCK2","CLOCK3","CLOCK4","CLOCK5","CLOCK6","CLOCK7","CLOCK8","CLOCK9","CLOCK10","CLOCK11","CLOCK12","CLOCK13","CLOCK14","CLOCK15","CLOCK16","CLOCK17","CLOCK18","OFFSET0","OFFSET1","OFFSET2","OFFSET3","OFFSET4","OFFSET5","OFFSET6","OFFSET7","DELAYS","CDSPARMS","PGAGAIN","OCSVER","DOSVER","CONSTVER"] :
+    if key in first_image_header :
+        hdulist[0].header[key] = (first_image_header[key],first_image_header.comments[key])
+
+hdulist[0].header["BUNIT"] = "electron/s"
+
 i=0
 for filename in args.image :
     hdulist[0].header["INPUT%03d"%i]=filename
