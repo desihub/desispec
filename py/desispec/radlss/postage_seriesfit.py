@@ -15,7 +15,7 @@ from   cframe_postage import cframe_postage
 from   lines import lines, ugroups
 from   doublet_postagefit import doublet_obs, doublet_chi2, doublet_fit
 from   desispec.frame import Spectrum
-
+from   autograd import grad
 
 def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     '''
@@ -108,23 +108,28 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
         return  mloglike(x) + mlogprior(x, rrz, rrzerr)
 
     def gradient(x):
-        # eps = 1.e-8
-        eps   = np.array([1.e-6, 10.] + [0.1] * nsinglet + [0.1, 0.025] * ndoublet)
-        
-        return  optimize.approx_fprime(x, mlogpos, eps)
+        eps    = np.array([rrzerr / 1.e2, 1.] + [1.0] * nsinglet + [0.2, 0.05] * ndoublet)
+        # grad = optimize.approx_fprime(x, mlogpos, epsilon=eps)
 
+        grad   = np.zeros_like(x)
+
+        for i, element in enumerate(x):
+            step     = np.zeros_like(x)
+            step[i]  = eps[i]
+            grad[i]  = (mlogpos(x + step) - mlogpos(x - step)) / (2. * eps[i])
+        
+        return  grad
+        
     # x0: [z, v, [ln(line flux) fxor all singlets], [[ln(line flux), line ratio] for all doublets]]                                                                                                                                         
     print('\n\nBeginning optimisation for line group {}.'.format(group))
 
     for sig0, r0, lnA0 in zip([50.0, 50.0, 100.], [0.7, 0.7, 0.9], [5.0, 4.0, 5.0]):
-        x0 = [rrz + 5.e-4, sig0] + [lnA0] * nsinglet + [lnA0, r0] * ndoublet
+        x0 = [rrz, sig0] + [lnA0] * nsinglet + [lnA0, r0] * ndoublet
         x0 = np.array(x0)
 
-        # print('{} \t {:.6e} \t {:.6e}'.format(gradient(x0), mlogpos(x0), _X2(x0)))
+        print('{} \t {} \t {:.6e} \t {:.6e}'.format(x0, gradient(x0), mlogpos(x0), _X2(x0)))
 
         break
-
-    print(x0)
     
     # Parameters which minimize f, i.e., f(xopt) == fopt.
     # Minimum value.
@@ -139,15 +144,16 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # epsilon=1.4901161193847656e-08; norm=-np.inf
 
     # method='CG'
-    result         = scipy.optimize.minimize(mlogpos, x0, method='Nelder-Mead', options = {'disp': True, 'maxiter': 5000}, tol=1e-5)
-    bestfit        = result.x
+    # result     = scipy.optimize.minimize(mlogpos, x0, method='Nelder-Mead', options = {'disp': True, 'maxiter': 5000}, tol=1e-5)
+    # bestfit    = result.x
+
+    # fprime=gradient
+    result       = scipy.optimize.fmin_bfgs(mlogpos, x0, gtol=1e-08, maxiter=100, full_output=True)
+    bestfit      = result[0]
+    # ihess      = result[3]
 
     print(bestfit)
     
-    # result       = scipy.optimize.fmin_bfgs(mlogpos, x0, fprime=gradient, gtol=1e-08, maxiter=100, full_output=True)
-    # bestfit      = result[0]
-    # ihess        = result[3]
-
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
     # Note:  marginal errors.
     # merr         = np.sqrt(np.diag(ihess))
@@ -270,7 +276,7 @@ if __name__ == '__main__':
     
     for group in groups:
         result, mpostages = emission_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
-
+    
     ncol      = 23
     fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
 
@@ -296,5 +302,5 @@ if __name__ == '__main__':
     plt.tight_layout()
 
     pl.savefig('postages.pdf')
-    
+        
     print('\n\nDone.\n\n')

@@ -27,7 +27,10 @@ def mlogprior(x, rrz, rrzerr):
     v     = x[1]
     r     = x[2]
     lnA   = x[3]
+
+    return  0.5 * (z - rrz)**2. / rrzerr**2.
     
+    '''
     # prior on the parameter space.
     p     = doublet_prior(z, v, r, lnA, rrz, rrzerr)
     
@@ -38,7 +41,7 @@ def mlogprior(x, rrz, rrzerr):
       except FloatingPointError:
         # Divide by zero caused by log(0.0);
         return  1.e99
-
+    '''
 
 if __name__ == '__main__':
     x = jeffreys_prior(1.0, 2.0)

@@ -18,8 +18,8 @@ for i, x in enumerate([[6, 7], [16, 17], [25, 27]]):
 
 lines['MASKED']        = np.zeros(len(lines), dtype=np.int)
 
-# Ignored in chi sq. and not plotted.
-for x in [4, 5, 8, 13, 14]:
+# Ignored in chi sq. and not plotted; 4, 5, 8, 13, 14.
+for x in [8, 13, 14]:
     lines['MASKED'][x] = 1
 
 # Balmer.
