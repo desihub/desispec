@@ -5,7 +5,7 @@ from astropy.table import Table
 
 
 ##  http://www.sdss3.org/svn//repo/idlspec2d/trunk/etc/emlines.par
-lines                = pd.read_csv('../data/emlines.par', sep='\s+', skiprows=16, names=['LINEID', 'WAVELENGTH', 'NAME', 'REDSHIFT GROUP', 'WIDTH GROUP', 'FLUX GROUP', 'SCALE FACTOR'])
+lines                = pd.read_csv('../data/emlines.par', sep='\s+', skiprows=16, names=['LINEID', 'WAVELENGTH', 'NAME', 'REDSHIFT GROUP', 'WIDTH GROUP', 'FLUX GROUP', 'SCALE FACTOR'], comment='#')
 lines['INDEX']       = np.arange(len(lines))
 lines['GROUP']       = lines.groupby(['REDSHIFT GROUP', 'WIDTH GROUP']).ngroup()
 lines['DOUBLET']     = np.zeros(len(lines), dtype=np.int) - 99
@@ -16,7 +16,17 @@ for i, x in enumerate([[6, 7], [16, 17], [25, 27]]):
     for y in x:
         lines['DOUBLET'][y] = i
 
-ugroups              = np.array(np.unique(lines['GROUP']))
+lines['MASKED']        = np.zeros(len(lines), dtype=np.int)
+
+# Ignored in chi sq. and not plotted.
+for x in [4, 5, 8, 13, 14]:
+    lines['MASKED'][x] = 1
+
+# Balmer.
+# for x in [11, 12, 15]:
+#    lines['MASKED'][x] = 1
+    
+ugroups                = np.array(np.unique(lines['GROUP']))
 
 ##  ----  OII wavelengths  ----
 ##  lines.loc[6,'WAVELENGTH'] 

@@ -18,13 +18,12 @@ def doublet(z, sigmav=10., r=0.1, lineida=6, lineidb=7, _twave=None):
       lineb      = lines['WAVELENGTH'][lineidb]
       
       lightspeed = const.c.to('km/s').value
-      sigma_lam  = sigmav * (1. + z) * linea / lightspeed    
+      sigma_lam  = sigmav * (1. + z) * lineb / lightspeed    
         
       # Line flux of 1 erg/s/cm2/Angstrom, sigma is the width of the line, z is the redshift and r is the relative amplitudes of the lines in the doublet. 
       result     = 1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam * (r * np.exp(- ((_twave - linea * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.) + np.exp(- ((_twave - lineb * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.))
 
-      # print(z, sigmav, r, linea, lineb, np.sum(result))
-      
+      # print(z, sigmav, r, linea, lineb, np.sum(result))      
       return  _twave, result
 
 

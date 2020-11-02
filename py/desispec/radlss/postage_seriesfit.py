@@ -31,8 +31,11 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     nsinglet         = len(singlets)
     ndoublet         = np.int(len(doublets) / 2)
 
-    print(singlets)
-    print(doublets)
+    if len(singlets) > 0:
+        print(singlets)
+
+    if len(doublets) > 0:
+        print(doublets)
     
     def _X2(x):  
         z             = x[0]
@@ -40,10 +43,11 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
         result        = 0.0
 
-        # import pylab as pl
-        
         for i, singlet in enumerate(singlets):
             lineidb   = singlet['INDEX']
+
+            if singlet['MASKED'] == 1:
+                continue
             
             postage   = postages[lineidb]
             cams      = list(postage.keys())
@@ -62,25 +66,14 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
                 # lineida irrelevant when line ratio, r, is zero.
                 _, rflux, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=0.0, line_flux=line_flux, lineida=0, lineidb=lineidb)
-
-                '''
-                import pylab as pl
-                
-                pl.plot(wave, flux, label='Data')
-                pl.plot(wave, rflux, label='Model')
-                pl.legend()
-                pl.show()
-                '''
-                
-                # print(lineidb, cam, z, v, line_flux, X2)
-                # print(flux)
-                # print(mask)
-                # print(rflux)
                 
                 result += X2
-
+        
         for i in np.arange(ndoublet):
             doublet   = doublets[doublets['DOUBLET'] == i] 
+
+            if doublet['MASKED'][0] == 1:
+                continue
             
             lineida   = doublet['INDEX'][0]
             lineidb   = doublet['INDEX'][1]
@@ -102,6 +95,8 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
                 _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, lineida=lineida, lineidb=lineidb)
 
+                # print(lineidb, cam, z, v, r, line_flux, X2)
+                
                 result += X2
             
         return  result
@@ -110,18 +105,18 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
         return  _X2(x) / 2.
 
     def mlogpos(x):
-        return  mloglike(x) # + mlogprior(x, rrz, rrzerr)
+        return  mloglike(x) + mlogprior(x, rrz, rrzerr)
 
     def gradient(x):
         # eps = 1.e-8
-        eps   = np.array([1.e-4, 10.] + [0.1] * nsinglet + [0.1, 0.025] * ndoublet)
+        eps   = np.array([1.e-6, 10.] + [0.1] * nsinglet + [0.1, 0.025] * ndoublet)
         
         return  optimize.approx_fprime(x, mlogpos, eps)
 
     # x0: [z, v, [ln(line flux) fxor all singlets], [[ln(line flux), line ratio] for all doublets]]                                                                                                                                         
     print('\n\nBeginning optimisation for line group {}.'.format(group))
 
-    for sig0, r0, lnA0 in zip([150.0, 50.0, 100.], [0.5, 0.7, 0.9], [3.5, 4.0, 5.0]):
+    for sig0, r0, lnA0 in zip([50.0, 50.0, 100.], [0.7, 0.7, 0.9], [5.0, 4.0, 5.0]):
         x0 = [rrz + 5.e-4, sig0] + [lnA0] * nsinglet + [lnA0, r0] * ndoublet
         x0 = np.array(x0)
 
@@ -141,15 +136,22 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # The value of xopt at each iteration. Only returned if retall is True.
     
     # See:  https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fmin_bfgs.html
-    result         = scipy.optimize.fmin_bfgs(mlogpos, x0, fprime=gradient, gtol=1e-05, norm=-np.inf, epsilon=1.4901161193847656e-08, maxiter=None, full_output=True, disp=1, retall=1, callback=None)    
+    # epsilon=1.4901161193847656e-08; norm=-np.inf
 
-    bestfit        = result[0]
-    ihess          = result[3]
+    # method='CG'
+    result         = scipy.optimize.minimize(mlogpos, x0, method='Nelder-Mead', options = {'disp': True, 'maxiter': 500}, tol=1e-4)
+    bestfit        = result.x
+
+    print(bestfit)
+    
+    # result       = scipy.optimize.fmin_bfgs(mlogpos, x0, fprime=gradient, gtol=1e-08, maxiter=100, full_output=True)
+    # bestfit      = result[0]
+    # ihess        = result[3]
 
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
     # Note:  marginal errors.
-    merr           = np.sqrt(np.diag(ihess))
-
+    # merr         = np.sqrt(np.diag(ihess))
+    
     ##
     if mpostages is None:
         mpostages  = {}
@@ -197,7 +199,8 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
         line_flux = np.exp(lnA)
 
         r         = bestfit[2 * i + 3 + nsinglet]
-
+        
+        mpostages[group][lineida] = {}
         mpostages[group][lineidb] = {}
         
         for cam in cams:
@@ -209,8 +212,9 @@ def emission_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, wave, res, continuum=0.0, sigmav=bestfit_v, r=r, lineida=lineida, lineidb=lineidb)
             mpostages[group][lineidb][cam] *= np.exp(lnA)
 
+            mpostages[group][lineida][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
             mpostages[group][lineidb][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
-    
+            
     return  result, mpostages
     
 
@@ -259,31 +263,33 @@ if __name__ == '__main__':
     # [Group][Line Index][Camera].
     postages          = cframe_postage(cframes, fiber, rrz)
 
-
+    
     mpostages         = {}
 
-    for group in list(postages.keys()):
+    groups            = list(postages.keys())
+    
+    for group in groups:
         result, mpostages = emission_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
 
-        break
+    ncol      = 23
+    fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
 
-    
-    ## 
-    ncol   = 23
+    for u in list(mpostages.keys()):
+        index = 0
 
-    for toplot in [postages, mpostages]:    
-        fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
+        for i, x in enumerate(list(postages[u].keys())):            
+            for cam in postages[u][x]:
+                if lines['MASKED'][x] == 1:
+                    continue
+                
+                axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
+                    
+                axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
+                axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
+                                
+                axes[u,index].set_title(lines['NAME'][x])
 
-        for u in list(toplot.keys()):
-            index = 0
-
-            for i, x in enumerate(toplot[u]):
-                for cam in toplot[u][x]:
-                    axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
-                    axes[u,index].plot(toplot[u][x][cam].wave, toplot[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
-                    axes[u,index].set_title(lines['NAME'][x])
-
-                    index += 1
+                index += 1
                 
     fig.suptitle('Fiber {} of petal {} with redshift {:2f}'.format(fiber, petal, rrz), y=1.02)
 
