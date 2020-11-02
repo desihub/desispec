@@ -15,7 +15,7 @@ from   desispec.frame import Spectrum
 from   lines import lines, ugroups
 
 
-def cframe_postage(petal_cframes, fiber, redshift):    
+def cframe_postage(petal_cframes, fiber, redshift, printit=False):    
     '''
     Given a redshift, cframe (extracted wave, res, flux, ivar) return 
     chi sq. for a doublet line model of given parameters, e.g. line flux.
@@ -32,7 +32,7 @@ def cframe_postage(petal_cframes, fiber, redshift):
         limits = (1. + redshift) * line + np.array([-50., 50.])
         group  = lines['GROUP'][i]
 
-        postages[group][lines['INDEX'][i]]  = {}
+        postages[group][lines['INDEX'][i]] = {}
         
         for cam in petal_cframes.keys():        
             res    = petal_cframes[cam].resolution_data[fiber,:,:]
@@ -44,13 +44,24 @@ def cframe_postage(petal_cframes, fiber, redshift):
             inwave = (wave > limits[0]) & (wave < limits[1])
 
             if np.count_nonzero(inwave):
-                print('Reduced LINEID {:2d}:  {:16s} for {} at redshift {:.2f} ({:.3f} to {:.3f}).'.format(lines['INDEX'][i], lines['NAME'][i], cam, redshift, limits[0], limits[1]))
-    
+                if printit:
+                    print('Reduced LINEID {:2d}:  {:16s} for {} at redshift {:.2f} ({:.3f} to {:.3f}).'.format(lines['INDEX'][i], lines['NAME'][i], cam, redshift, limits[0], limits[1]))
+                    
                 continuum = (wave > limits[0]) & (wave < limits[1]) & ((wave < (limits[0] + 30.)) | (wave > (limits[1] - 30.)))
                 continuum = np.median(flux[continuum])
                             
                 postages[group][lines['INDEX'][i]][cam] = Spectrum(wave[inwave], flux[inwave] - continuum, ivar[inwave], mask=mask[inwave], R=res[:,inwave])
-                
+
+    for u in ugroups:
+        keys = list(postages[u].keys())
+        
+        for i in keys:
+            if not bool(postages[u][i]):
+                del postages[u][i]
+
+        if not bool(postages[u]):
+            del postages[u]
+
     return  postages
 
 
@@ -84,17 +95,17 @@ if __name__ == '__main__':
     ##  Plot.
     fig, axes = plt.subplots(len(ugroups), 14, figsize=(25,10))
 
-    for u in ugroups:
+    for u in np.unique(list(postages.keys())):
         index = 0
-        
-        for i, x in enumerate(postages[u]):
+
+        for _, x in enumerate(list(postages[u].keys())):
             for cam in postages[u][x]:
                 axes[u,index].axvline((1. + redshift) * lines['WAVELENGTH'][x], c='k', lw=0.5)
                 axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
                 axes[u,index].set_title(lines['NAME'][x])
 
                 index += 1
-                
+        
     fig.suptitle('Fiber {} of petal {} with redshift {:2f}'.format(fiber, petal, redshift), y=1.02)
 
     plt.tight_layout()

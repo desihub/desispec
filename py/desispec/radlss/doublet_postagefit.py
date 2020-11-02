@@ -35,7 +35,7 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
     if _twave is None:
         _twave      = np.arange(3100., 10400., 0.1)
             
-    rflux           = doublet_obs(z, wave, res, continuum=0.0, sigmav=sigmav, r=r, lineida=6, lineidb=7, _twave=None)
+    rflux           = doublet_obs(z, wave, res, continuum=0.0, sigmav=sigmav, r=r, lineida=lineida, lineidb=lineidb, _twave=None)
     
     if line_flux is None:
         ##  Solve for the best fit line_flux given the observed flux.
@@ -46,6 +46,8 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
         line_flux_err = np.sum(rflux * rflux * ivar)
         line_flux_err = 1. / np.sqrt(line_flux_err)
 
+    # print(rflux, line_flux)
+        
     rflux          *= line_flux
     # rflux        += continuum
 
@@ -161,6 +163,7 @@ if __name__ == '__main__':
     
     from   astropy.table import Table
 
+    
     petal    =   '5'
     fiber    =  11
     night    = '20200315'
@@ -187,7 +190,7 @@ if __name__ == '__main__':
     for band in ['b', 'r', 'z']:
         cam    = band + petal
 
-        # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits                                                                                                                                                                    
+        # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits                                                                                                                                                                   
         cframes[cam]               = read_frame(findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))        
         cframes[cam].flux[fiber,:] = flux[band][115]
         

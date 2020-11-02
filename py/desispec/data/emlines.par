@@ -12,7 +12,7 @@
 #  float fvalue;      # Relative scale factor for entries w/ same findex
 # } emlineid;
 #
-# Do not constrain the redshift, width, or flux level of Lyman-alpha
+# Do not constrain the redshift, width, or flux level of Lyman-alpha.
 # to agree with any other lines.
  emlineid  1215.67    "Ly_alpha"      z_lya      w_ly_a     f1215  1
  emlineid  1240.81    "N_V 1240"      zemission  w_n_v      f1240  1
