@@ -429,7 +429,7 @@ class RadLSS(object):
         for group in groups:
             self.linefit_result, self.mpostages = series_fit(self.zbests[petal]['Z'][fiber], self.zbests[petal]['ZERR'][fiber], self.postages, group=group, mpostages=mpostages)
 
-        self.linefit_fig   = plot_postages(self.postages, self.mpostages, petal, fiber, self.zbests[petal]['Z'][fiber])
+        self.linefit_fig   = plot_postages(self.postages, self.mpostages, petal, fiber, self.zbests[petal]['Z'][fiber], tid)
 
         if plot:
             self.linefit_fig.savefig('scrap.pdf')

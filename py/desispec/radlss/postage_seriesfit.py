@@ -149,8 +149,8 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # result     = scipy.optimize.minimize(mlogpos, x0, method='Nelder-Mead', options = {'disp': True, 'maxiter': 5000}, tol=1e-5)
     # bestfit    = result.x
 
-    # fprime=gradient
-    result       = scipy.optimize.fmin_bfgs(mlogpos, x0, gtol=1e-08, maxiter=100, full_output=True)
+    # fprime=gradient;  gtol=1e-08, maxiter=500
+    result       = scipy.optimize.fmin_bfgs(mlogpos, x0, gtol=1e-3, maxiter=500, full_output=True)
     bestfit      = result[0]
     # ihess      = result[3]
 
@@ -225,12 +225,13 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             
     return  result, mpostages
 
-def plot_postages(postages, mpostages, petal, fiber, rrz):
+def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
     import matplotlib.pyplot as plt
 
-    ncol      = 23
-    fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
-
+    
+    ncol      = 10
+    fig, axes = plt.subplots(len(ugroups), ncol, figsize=(20,10))
+    
     colors    = {'b': 'b', 'r': 'g', 'z': 'r'}
     
     for u in list(mpostages.keys()):
@@ -248,9 +249,9 @@ def plot_postages(postages, mpostages, petal, fiber, rrz):
 
                 index += 1
 
-    fig.suptitle('Fiber {} of petal {} with redshift {:2f}'.format(fiber, petal, rrz), y=1.02)
+    fig.suptitle('Fiber {} of petal {}: targetid {} with redshift {:2f}'.format(fiber, petal, tid, rrz), y=0.925)
 
-    plt.tight_layout()
+    plt.subplots_adjust(hspace=0.5, wspace=0.3)
 
     return  fig 
 
@@ -273,9 +274,10 @@ if __name__ == '__main__':
         
     ## 
     zbest    = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', tileid, night, 'zbest-{}-{}-{}.fits'.format(petal, tileid, night)), 'ZBEST')
+    tid      = zbest['TARGETID'][fiber]
     rrz      = zbest['Z'][fiber]
     rrzerr   = zbest['ZERR'][fiber]
-
+    
     cframes  = {}
     colors   = {'b': 'b', 'r': 'g', 'z': 'r'}
 
@@ -295,7 +297,7 @@ if __name__ == '__main__':
         cframes[cam]               = read_frame(findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))        
         cframes[cam].flux[fiber,:] = flux[band][115]
         
-    rrz = meta['REDSHIFT'][115]
+    rrz               = meta['REDSHIFT'][115]
             
     # [Group][Line Index][Camera].
     postages          = cframe_postage(cframes, fiber, rrz)
@@ -308,36 +310,8 @@ if __name__ == '__main__':
     for group in groups:
         result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
 
-    fig       = postages_plot(postages, mpostages, petal, fiber, rrz)
+    fig       = plot_postages(postages, mpostages, petal, fiber, rrz, tid)
 
-    pl.savefig('postages.pdf')  
-    
-    '''
-    ncol      = 23
-    fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
-
-    for u in list(mpostages.keys()):
-        index = 0
-
-        for i, x in enumerate(list(postages[u].keys())):            
-            for cam in postages[u][x]:
-                if lines['MASKED'][x] == 1:
-                    continue
-                
-                axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
-                    
-                axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
-                axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
-                                
-                axes[u,index].set_title(lines['NAME'][x])
-
-                index += 1
-                
-    fig.suptitle('Fiber {} of petal {} with redshift {:2f}'.format(fiber, petal, rrz), y=1.02)
-
-    plt.tight_layout()
-
-    pl.savefig('postages.pdf')
-    ''' 
+    fig.savefig('postages.pdf', bbox_inches='tight')  
 
     print('\n\nDone.\n\n')
