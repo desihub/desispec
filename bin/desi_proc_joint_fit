@@ -349,6 +349,7 @@ if args.obstype in ['SCIENCE']:
         stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
         #stdfile.replace('{:08d}'.format(args.expids[0]),'-'.join(['{:08d}'.format(eid) for eid in args.expids]))
         cmd = "desi_fit_stdstars"
+        cmd += " --delta-color 0.1"
         cmd += " --frames {}".format(' '.join(framefiles[sp]))
         cmd += " --skymodels {}".format(' '.join(skyfiles[sp]))
         cmd += " --fiberflats {}".format(' '.join(fiberflatfiles[sp]))

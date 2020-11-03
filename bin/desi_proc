@@ -783,7 +783,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.nop
         comm.barrier()
 
 #-------------------------------------------------------------------------
-#- Flux calibration
+#- Standard Star Fitting
 
 if args.obstype in ['SCIENCE',] and \
         (not args.noskysub ) and \
