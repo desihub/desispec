@@ -25,7 +25,7 @@ from   desispec.resolution       import  Resolution
 from   desispec.io.meta          import  findfile
 from   desispec.io               import  read_frame, read_fiberflat, read_flux_calibration, read_sky, read_fibermap 
 from   desispec.interpolation    import  resample_flux
-from   astropy.table             import  Table
+from   astropy.table             import  Table, join
 from   desispec.io.image         import  read_image
 from   specter.psf.gausshermite  import  GaussHermitePSF
 from   scipy.signal              import  medfilt
@@ -415,6 +415,10 @@ class RadLSS(object):
         start_linefit      = time.perf_counter()
 
         self.petal_cframes = {key: value for key, value in self.cframes.items() if key[1] == petal}
+
+        ##
+        tid                = self.zbests_fib[petal][self.zbests_fib[petal]['EXPID'] == self.expid]['TARGETID'][fiber]
+        rrz                = self.zbests[petal]['Z'][self.zbests[petal]['TARGETID'] == tid]
         
         self.postages      = cframe_postage(self.petal_cframes, fiber, self.zbests[petal]['Z'][fiber])
 
@@ -425,7 +429,7 @@ class RadLSS(object):
         for group in groups:
             self.linefit_result, self.mpostages = series_fit(self.zbests[petal]['Z'][fiber], self.zbests[petal]['ZERR'][fiber], self.postages, group=group, mpostages=mpostages)
 
-        self.linefit_fig   = plot_postages(rads.postages, rads.mpostages, '5', 9, rads.zbests['5']['Z'][9])
+        self.linefit_fig   = plot_postages(self.postages, self.mpostages, petal, fiber, self.zbests[petal]['Z'][fiber])
 
         if plot:
             self.linefit_fig.savefig('scrap.pdf')
@@ -516,15 +520,23 @@ class RadLSS(object):
     
         self.rr_cframes = {}
         self.zbests     = {}
-            
+        self.zbests_fib = {}
+        
         for cam in self.cameras:
             petal      = cam[1] 
             
             # E.g. /global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/redux/andes/tiles/67230/20200314
-            data_zbest_file = os.path.join(self.andes, 'tiles', str(self.tileid), str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, self.tileid, self.night))
+            self.data_zbest_file   = os.path.join(self.andes, 'tiles', str(self.tileid), str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, self.tileid, self.night))
              
-            self.zbests[petal] = zbest = Table.read(data_zbest_file, 'ZBEST')
-                          
+            self.zbests[petal]     = zbest = Table.read(self.data_zbest_file, 'ZBEST')
+            self.zbests_fib[petal] = Table.read(self.data_zbest_file, 'FIBERMAP')
+            self.zbests_fib[petal] = self.zbests_fib[petal][self.zbests_fib[petal]['EXPID'] == self.expid]
+            self.zbests_fib[petal].sort('TARGETID')
+
+            # Sorting by zbest-style TARGETID to fibermap-style FIBER.                                                                                                                                                                     
+            indx       = np.argsort(self.zbests_fib[petal]['FIBER'].data)
+            
+            # Sorted by TARGETID. 
             rr_z       = zbest['Z']
             
             spectype   = [x.strip() for x in zbest['SPECTYPE']]
@@ -535,14 +547,19 @@ class RadLSS(object):
             ncoeff     = [templates[ft].flux.shape[0] for ft in fulltype]
  
             coeff      = [x[0:y] for (x,y) in zip(zbest['COEFF'], ncoeff)]
-          
-            tfluxs     = [templates[ft].flux.T.dot(cf)   for (ft, cf) in zip(fulltype, coeff)]
-            twaves     = [templates[ft].wave * (1. + rz) for (ft, rz) in zip(fulltype, rr_z)]  
 
+            # Each list does not have the same length. 
+            tfluxs     = [templates[ft].flux.T.dot(cf).tolist()     for (ft, cf) in zip(fulltype, coeff)]
+            twaves     = [(templates[ft].wave * (1. + rz)).tolist() for (ft, rz) in zip(fulltype, rr_z)]  
+
+            # Sort by FIBER rather than TARGETID.
+            tfluxs     = [tfluxs[ind] for ind in indx]
+            twaves     = [twaves[ind] for ind in indx]
+            
             Rs         = [Resolution(x) for x in self.cframes[cam].resolution_data]
-            txfluxs    = [R.dot(resample_flux(self.cframes[cam].wave, twave, tflux)).tolist() for (R, twave, tflux) in zip(Rs, twaves, tfluxs)]
+            txfluxs    = [R.dot(resample_flux(self.cframes[cam].wave, twave, tflux)) for (R, twave, tflux) in zip(Rs, twaves, tfluxs)]
             txfluxs    =  np.array(txfluxs)
-          
+                        
             # txflux  *= self.fluxcalibs[cam].calib     # [e/A].
             # txflux  /= self.fiberflats[cam].fiberflat # [e/A] (Instrumental).   
 
@@ -1388,7 +1405,7 @@ class RadLSS(object):
                 # self.ext_redrock_2Dframes()  
 
                 # -------------  Deep Field  ---------------              
-                self.grab_deepfield_ensemble()
+                # self.grab_deepfield_ensemble()
               
                 # -------------  Templates  --------------- 
                 if templates:  
