@@ -23,9 +23,9 @@ args        = parser.parse_args()
 camera_arr=['b0','b1','b2','b3','b4','b5','b6','b7','b8','b9','r0','r1','r2','r3','r4','r5','r6','r7','r8','r9','z0','z1','z2','z3','z4','z5','z6','z7','z8','z9']
 
 prefix="master-bias-dark-"
-plot = args.plot 
+plot = args.plot
+exp_arr=args.exp
 #exp_arr=[int(t) for t in args.exp]
-import pdb;pdb.set_trace()
 
 def calculate_dark(exp_arr,image_arr):
     n_images=len(image_arr)
@@ -62,6 +62,7 @@ for camera in camera_arr:
     try:
         hdu_this = fits.open(filename)
     except:
+        print('Can not find file:'+filename)
         continue
     nx=len(hdu_this[0].data) #4162
     ny=len(hdu_this[0].data[0]) #4232
@@ -75,13 +76,9 @@ for camera in camera_arr:
     for exp in exp_arr:
         image_arr.append(hdu_this[str(exp)].data)
 
-    if poly:
-        dark=calculate_dark_fast(exp_arr,image_arr)
-    else:
-        dark=calculate_dark(exp_arr,image_arr)
+    dark=calculate_dark(exp_arr,image_arr)
 
     hdr_dark = fits.Header()
-    hdr_dark['RES']=str(res)
     dataHDU = fits.ImageHDU(dark,header=hdr_dark, name='dark')
     hdu_this.append(dataHDU)
     #import pdb;pdb.set_trace()
