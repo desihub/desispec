@@ -522,6 +522,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
+    #- Load desispec params
+    desispec_params=params.read_params()
+
     for amp in amp_ids:
         # Grab the sections
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
@@ -607,7 +610,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         else :
             rdnoise_message = 'ADUs (gain not applied)'
             gain_message    = 'gain not applied to image'
-        header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message)
+
+        if 'preproc' in desispec_params:
+            header['OVSRDN'+amp] = (median_rdnoise,rdnoise_message)
+            ind=desispec_params['preproc']['rdnoise']['PARAMS']['OBSRDN'+amp+'_'+camera.upper()[0]]
+            ind_sec = parse_sec_keyword(ind)
+            header['OBSRDN'+amp]=(gain*(np.percentile(rawimage[ind_sec],84)-np.percentile(rawimage[ind_sec],16))/2.,rdnoise_message)
+        else:
+            header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message)
+
         header['GAIN'+amp] = (gain,gain_message)
 
         #- Warn/error if measured readnoise is very different from expected if exists
