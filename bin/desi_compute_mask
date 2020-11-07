@@ -128,7 +128,7 @@ if not only_rows_or_columns :
 
 
 #chi2=ivar*flux**2
-pyfits.writeto(args.out, mask, overwrite=True)
+pyfits.writeto(args.out, mask.astype("int16"), overwrite=True)
 
 
 #plt.show()
