@@ -699,6 +699,9 @@ flat[flat<0]=0.
 flat=flat*(mask0==0)+(mask0!=0)
 fivar*=(mask0==0)
 
-h=pyfits.HDUList([pyfits.PrimaryHDU(flat),pyfits.ImageHDU(fivar,name="IVAR")])
+h=pyfits.HDUList([pyfits.PrimaryHDU(flat.astype('float32')),pyfits.ImageHDU(fivar.astype('float32'),name="IVAR")])
+h[0].header["BUNIT"]=("","adimensional quantify to divide to flat field a CCD frame")
+h[0].header["EXTNAME"]="PIXFLAT"
+h[1].header["BUNIT"]=("","adimensional quantify, inverse variance")
 h.writeto(args.outfile,overwrite="True")
 log.info("wrote {}".format(args.outfile))
