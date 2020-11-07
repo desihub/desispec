@@ -97,5 +97,6 @@ flat[-20:]=1
 h=pyfits.HDUList([pyfits.PrimaryHDU(flat.astype('float32'))])
 h[0].header["BUNIT"]=("","adimensional quantify to divide to flat field a CCD frame")
 h[0].header["INPUT"]=(args.infile,"input file")
+h[0].header["EXTNAME"]="PIXFLAT"
 h.writeto(args.outfile,overwrite=True)
 print("wrote",args.outfile)
