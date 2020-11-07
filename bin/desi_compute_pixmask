@@ -93,5 +93,6 @@ ndead=np.sum(pixmask&ccdmask.DEAD>0)
 hdulist[0].header["NDEAD"]=ndead
 log.info("number of DEAD pixels =  {}".format(ndead))
 hdulist[0].header["BUNIT"]=("","bitmask, see definition of bits in desispec/maskbits.py")
+hdulist[0].header["EXTNAME"]="MASK"
 hdulist.writeto(args.outfile, overwrite=True)
 log.info("wrote {}".format(args.outfile))
