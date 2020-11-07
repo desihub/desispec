@@ -98,6 +98,7 @@ for key in ["TELESCOP","INSTRUME","SPECGRPH","SPECID","DETECTOR","CAMERA","CCDNA
         hdus[0].header[key] = (first_image_header[key],first_image_header.comments[key])
 
 hdus[0].header["BUNIT"] = "adu"
+hdus[0].header["EXTNAME"] = "BIAS"
 for filename in args.image :
     hdus[0].header["COMMENT"] = "Inc. {}".format(os.path.basename(filename))
 hdus.writeto(args.outfile,overwrite="True")

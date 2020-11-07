@@ -130,6 +130,7 @@ for key in ["TELESCOP","INSTRUME","SPECGRPH","SPECID","DETECTOR","CAMERA","CCDNA
         hdulist[0].header[key] = (first_image_header[key],first_image_header.comments[key])
 
 hdulist[0].header["BUNIT"] = "electron/s"
+hdulist[0].header["EXTNAME"] = "DARK"
 
 i=0
 for filename in args.image :
