@@ -171,7 +171,8 @@ hdu.header["MASKFRAC"] = (mask_percent, 'Percent of pixels blocked')
 hdu.header["BIAS"] = (args.bias, 'Path to bias image')
 hdu.header["OLDMASK"] = (args.mask, 'Path to input mask')
 hdu.header["DARKS"] = (" ".join(args.image), 'paths to raw darks')
-
+hdu.header["EXTNAME"] = "MASK"
+hdu.header["BUNIT"] = ""
 
 hdu.writeto(args.outfile, overwrite=True)
 log.info("Saved masks file")
