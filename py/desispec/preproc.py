@@ -611,11 +611,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             rdnoise_message = 'ADUs (gain not applied)'
             gain_message    = 'gain not applied to image'
 
-        if 'preproc' in desispec_params:
+        if 'preproc' in desispec_params and len(rawimage)>4000: # There are 1100*900 b0 image in the test script
             header['OVSRDN'+amp] = (median_rdnoise,rdnoise_message)
             ind=desispec_params['preproc']['rdnoise']['PARAMS']['OBSRDN'+amp+'_'+camera.upper()[0]]
             ind_sec = parse_sec_keyword(ind)
-            header['OBSRDN'+amp]=(gain*(np.percentile(rawimage[ind_sec],84)-np.percentile(rawimage[ind_sec],16))/2.,rdnoise_message)
+            d=rawimage[ind_sec]
+            d = d[~np.isnan(d)].ravel()
+            header['OBSRDN'+amp]=(gain*(np.percentile(d,84)-np.percentile(d,16))/2.,rdnoise_message)
         else:
             header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message)
 

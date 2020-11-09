@@ -48,6 +48,18 @@ preproc:
        OBSRDNB_Z: '[4186:4246,250:750]' # CCD amplifier B regions for estimating readnoise
        OBSRDNC_Z: '[4186:4246,3379:3879]' # CCD amplifier C regions for estimating readnoise
        OBSRDND_Z: '[10:69,3379:3879]' # CCD amplifier D regions for estimating readnoise
+       OBSRDN1_B: '[10:69,250:750]' # CCD amplifier A regions for estimating readnoise,select region[ with [a:b,c:d] 
+       OBSRDN2_B: '[4162:4222,250:750]' # nx=4232, ny=4162 CCD amplifier B regions for estimating readnoise
+       OBSRDN3_B: '[4162:4222,3363:3862]' # CCD amplifier C regions for estimating readnoise
+       OBSRDN4_B: '[10:69,3363:3862]' # CCD amplifier D regions for estimating readnoise
+       OBSRDN1_R: '[10:69,250:750]' # nx=4256, ny=4194 CCD amplifier A regions for estimating readnoise,select region[ with [a:b,c:d] 
+       OBSRDN2_R: '[4186:4246,250:750]' # CCD amplifier B regions for estimating readnoise
+       OBSRDN3_R: '[4186:4246,3379:3879]' # CCD amplifier C regions for estimating readnoise
+       OBSRDN4_R: '[10:69,3379:3879]' # CCD amplifier D regions for estimating readnoise
+       OBSRDN1_Z: '[10:69,250:750]' # nx=4256, ny=4194 CCD amplifier A regions for estimating readnoise,select region[ with [a:b,c:d] 
+       OBSRDN2_Z: '[4186:4246,250:750]' # CCD amplifier B regions for estimating readnoise
+       OBSRDN3_Z: '[4186:4246,3379:3879]' # CCD amplifier C regions for estimating readnoise
+       OBSRDN4_Z: '[10:69,3379:3879]' # CCD amplifier D regions for estimating readnoise
 
 
 
