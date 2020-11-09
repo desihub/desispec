@@ -20,55 +20,63 @@ def dsigdz(v, lineb):
     return v * lineb / lightspeed
 
 # Obs. model = Resolution * [exp(\tilde A) * \tilde M].
-def dMdlnA(z, v, r, lnA, linea=3726.032, lineb=3728.815, tflux=None):
+def dMdlnA(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
     if tflux is None:
         _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
 
     return tflux
 
-def dMdr(z, v, r, lnA, linea=3726.032, lineb=3728.815, tflux=None):
-    result  = r / (1. + r)
-    result /= np.sqrt(2. * np.pi)
-    result /= v**2.
-    result *= np.exp(-((twave  - linea * (1. + z)) / np.sqrt(2.) / v)**2.)
+def dMdr(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
+    result    = r / (1. + r)**2.
+    result   /= np.sqrt(2. * np.pi)
 
+    sigma_lam = v * (1. + z) * lineb / lightspeed
+
+    result   /= sigma_lam**2.
+
+    # Only defined for doublets, retain linea. 
+    result   *= np.exp(-((twave  - linea * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.)
+
+    # Identically zero if r is zero. 
     return result
 
-def dMdz(z, v, r, lnA, linea=3726.032, lineb=3728.815, tflux=None):
+def dMdz(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
     if tflux is None:
         _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
+
+    sigma_lam = v * (1. + z) * lineb / lightspeed
         
-    result  = -2. * tflux / v
+    result  = -2. * tflux / sigma_lam
     result *= dsigdz(v, lineb=lineb) 
     
-    def dA1dz(z, v, r, lnA, lineb=lineb, tflux=tflux):
-        y   = twave - lineb * (1. + z) / np.sqrt(2.) / v   
+    def dA1dz(z, v, r, lineb=lineb, tflux=tflux):
+        y   = twave - lineb * (1. + z) / np.sqrt(2.) / sigma_lam
 
-        def dydz(z, v, r, lnA, lineb=lineb):
-            return -1. * dsigdz(v, lineb=lineb) * ((twave - lineb) / np.sqrt(2) / v / v - z * lineb / np.sqrt(2.) / v / v)  - lineb / np.sqrt(2.) / v
+        def dydz(z, v, r, lineb=lineb):
+            return -1. * dsigdz(v, lineb=lineb) * ((twave - lineb) / np.sqrt(2) / sigma_lam / sigma_lam - z * lineb / np.sqrt(2.) / sigma_lam / sigma_lam)  - lineb / np.sqrt(2.) / sigma_lam
         
-        return -2. * y * np.exp(- y * y) * dydz(z, v, r, lnA, lineb=lineb) 
+        return -2. * y * np.exp(- y * y) * dydz(z, v, r, lineb=lineb) 
         
-    result += ((1. / (1. + r)) / np.sqrt(2. * np.pi) / v / v) * (r * dA1dz(z, v, r, lnA, lineb=linea, tflux=tflux) + dA1dz(z, v, r, lnA, lineb=lineb, tflux=tflux))
+    result += ((1. / (1. + r)) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam) * (r * dA1dz(z, v, r, lineb=linea, tflux=tflux) + dA1dz(z, v, r, lineb=lineb, tflux=tflux))
 
     return  result
 
-def dMdv(z, v, r, lnA, linea=3726.032, lineb=3728.815, tflux=None):
+def dMdv(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
     if tflux is None:
         _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
 
-    def dA1dv(z, v, r, lnA, lineb=lineb, tflux=tflux):
+    def dA1dv(z, v, r, lineb=lineb, tflux=tflux):
         y   = twave - lineb * (1. + z) / np.sqrt(2.) / v
 
-        def dydv(z, v, r, lnA, lineb=lineb):
+        def dydv(z, v, r, lineb=lineb):
             return  - dsigdz(v, lineb) * (twave - lineb * (1. + z)) / np.sqrt(2.) / v / v
 
-        return  -2. * y * np.exp(-y * y) * dydv(z, v, r, lnA, lineb=lineb) 
+        return  -2. * y * np.exp(-y * y) * dydv(z, v, r, lineb=lineb) 
 
     result  = -2. * tflux / v
     result *=  dsigdz(v, lineb=lineb)
 
-    toadd   = ((1. / (1. + r)) / np.sqrt(2. * np.pi) / v / v) * (r * dA1dv(z, v, r, lnA, lineb=linea, tflux=tflux) + dA1dv(z, v, r, lnA, lineb=lineb, tflux=tflux))
+    toadd   = ((1. / (1. + r)) / np.sqrt(2. * np.pi) / v / v) * (r * dA1dv(z, v, r, lineb=linea, tflux=tflux) + dA1dv(z, v, r, lineb=lineb, tflux=tflux))
     result += toadd
     
     return result
@@ -91,7 +99,7 @@ def doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., 
     grad          = np.zeros(4)
 
     for i, fdMdtheta in enumerate([dMdz, dMdv, dMdr, dMdlnA]):
-        dMdtheta  = fdMdtheta(z, v, r, lnA, linea=linea, lineb=lineb, tflux=tflux)
+        dMdtheta  = fdMdtheta(z, v, r, linea=linea, lineb=lineb, tflux=tflux)
         dMdtheta  = resample_flux(wave, twave, dMdtheta)
         dMdtheta  = res.dot(dMdtheta)
         dMdtheta *= line_flux
@@ -219,10 +227,10 @@ if __name__ == '__main__':
             
         return  grad
         
-    x0     = np.array([rrz + .5e-3, 52., 0.7, 6.0])        
-    grad   = approx_fprime(x0, _X2, 1.e-8)
+    x0    = np.array([rrz, 52., 0.7, 6.0])        
 
-    agrad  = _agrad(x0)
+    grad  = approx_fprime(x0, _X2, 1.e-8)
+    agrad = _agrad(x0)
     
     print(grad)
     print(agrad)

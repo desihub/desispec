@@ -21,7 +21,7 @@ def doublet(z, twave, sigmav=10., r=0.1, linea=3726.032, lineb=3728.815):
       sigma_lam    = sigmav * (1. + z) * lineb / lightspeed
       
       # Line flux of 1 erg/s/cm2/Angstrom, sigma is the width of the line, z is the redshift and r is the relative amplitudes of the lines in the doublet. 
-      result       = 1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam * (r * np.exp(- ((twave - linea * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.) + np.exp(- ((twave - lineb * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.))
+      result       = 1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam * (r * np.exp(- ((twave - linea * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.) + np.exp(- ((twave - lineb * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.))
 
       # print(z, sigmav, r, linea, lineb, np.sum(result))      
       return  twave, result

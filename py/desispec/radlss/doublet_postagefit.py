@@ -29,7 +29,7 @@ def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, l
 
     return  res.dot(tflux)
 
-def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=6, lineb=7):    
+def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=3726.032, lineb=3728.815):    
     '''
     Given a redshift, cframe (extracted wave, res, flux, ivar) return 
     chi sq. for a doublet line model of given parameters, e.g. line flux.
@@ -47,8 +47,6 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
     
         line_flux_err = np.sum(rflux * rflux * ivar)
         line_flux_err = 1. / np.sqrt(line_flux_err)
-
-    # print(rflux, line_flux)
         
     rflux          *= line_flux
         
