@@ -1,11 +1,18 @@
+import time
+import numba
 import numpy as np
 import scipy
 
 from   scipy             import optimize
 from   scipy.optimize    import approx_fprime, minimize, Bounds
 from   scipy.stats       import multivariate_normal
+from   jax               import grad, jit, vmap, hessian, jacfwd, jacrev
+from   jax.experimental  import optimizers
+from   scipy.optimize    import leastsq
 
-from   desispec.interpolation import resample_flux
+# from   desispec.interpolation import resample_flux
+from   resample_flux import resample_flux
+
 from   doublet import doublet
 from   desispec.io import read_frame
 from   desispec.io.meta import findfile
@@ -13,29 +20,24 @@ from   desispec.resolution import Resolution
 from   doublet_priors import mlogprior
 from   cframe_postage import cframe_postage
 from   lines import lines, ugroups
+from   twave import twave
 
 
-def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, lineida=6, lineidb=7, _twave=None):
-    if _twave is None:
-        _twave = np.arange(3100., 10400., 0.1)
-
-    _, _tflux  = doublet(z=z, sigmav=sigmav, r=r, lineida=lineida, lineidb=lineidb, _twave=_twave)
-    tflux      = resample_flux(wave, _twave, _tflux)
+def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, lineb=3728.815):
+    _, tflux = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
+    tflux    = resample_flux(wave, twave, tflux)
 
     return  res.dot(tflux)
-    
-def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, lineida=6, lineidb=7, _twave=None):    
+
+def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=6, lineb=7):    
     '''
     Given a redshift, cframe (extracted wave, res, flux, ivar) return 
     chi sq. for a doublet line model of given parameters, e.g. line flux.
 
     If line flux is None, estimate it first. 
     '''
-
-    if _twave is None:
-        _twave      = np.arange(3100., 10400., 0.1)
-            
-    rflux           = doublet_obs(z, wave, res, continuum=0.0, sigmav=sigmav, r=r, lineida=lineida, lineidb=lineidb, _twave=None)
+    
+    rflux             = doublet_obs(z, wave, res, continuum=0.0, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
     
     if line_flux is None:
         ##  Solve for the best fit line_flux given the observed flux.
@@ -49,8 +51,7 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
     # print(rflux, line_flux)
         
     rflux          *= line_flux
-    # rflux        += continuum
-
+        
     X2              = (flux - rflux)**2. * ivar
 
     result          = np.sum(X2[mask == 0])
@@ -64,6 +65,9 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     
     postage         = postages[lineidb]
     cams            = list(postage.keys())
+
+    linea           = lines['WAVELENGTH'][lineida]
+    lineb           = lines['WAVELENGTH'][lineidb]
     
     def _X2(x):  
         z           = x[0]
@@ -82,7 +86,7 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
             ivar = postage[cam].ivar
             mask = postage[cam].mask
             
-            _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, lineida=lineida, lineidb=lineidb)
+            _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
 
             result += X2
             
@@ -94,13 +98,47 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     def mlogpos(x):
         return  mloglike(x) # + mlogprior(x, rrz, rrzerr)
 
-    def gradient(x):
+    def scipy_gradient(x):
         eps = 1.e-8
         
         return optimize.approx_fprime(x, mlogpos, eps)
 
-    # print('{} \t {:.6e} \t {:.6e}'.format(gradient(x0), mlogpos(x0), _X2(x0)))
+    '''
+    _jax_gradient_mlogpos =  grad(mlogpos)
+    _jax_hessian_mlogpos  = jacfwd(jacrev(mlogpos))
+
+    def hvp(f, x, v):
+        return grad(lambda x: jnp.vdot(grad(f)(x), v))(x)
     
+    def jax_gradient(x):
+        return  _jax_gradient_mlogpos(x)
+    
+    def jax_hessian(x):
+        return _jax_hessian_mlogpos(x)
+
+    def jax_hessian_vec_prod(x, p):
+        return  grad(lambda x: np.vdot(grad(mlogpos)(x), p))(x)
+    
+    
+    opt_init, opt_update, get_params = optimizers.momentum(step_size=1e-3, mass=0.9)
+
+    # @jit
+    def step(i, opt_state):
+        params = get_params(opt_state)
+        g      = jax_gradient(params)
+        
+        return  opt_update(i, g, opt_state)
+
+    opt_state      = opt_init(x0)
+
+    for i in range(10):
+        opt_state  = step(i, opt_state)
+        net_params = get_params(opt_state)
+
+    print(net_params)
+    '''
+    # print('{} \t {:.6e} \t {:.6e}'.format(gradient(x0), mlogpos(x0), _X2(x0)))
+    '''
     # Parameters which minimize f, i.e., f(xopt) == fopt.
     # Minimum value.
     # Value of gradient at minimum, fprime(xopt), which should be near 0.
@@ -111,7 +149,8 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     # The value of xopt at each iteration. Only returned if retall is True.
     #
     # See:  https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fmin_bfgs.html
-    result         = scipy.optimize.fmin_bfgs(mlogpos, x0, fprime=gradient, gtol=1e-05, norm=-np.inf, epsilon=1.4901161193847656e-08, maxiter=None, full_output=True, disp=1, retall=1, callback=None)    
+    
+    result         = scipy.optimize.fmin_bfgs(mlogpos, x0, fprime=jax_gradient, gtol=1e-05, norm=-np.inf, epsilon=1.4901161193847656e-08, maxiter=None, full_output=True, disp=1, retall=1, callback=None)    
     [z, v, r, lnA] = result[0]
 
     ihess          = result[3]
@@ -119,17 +158,26 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
     # Note:  marginal errors.
     merr           = np.sqrt(np.diag(ihess))
+    '''
+
+    # 'L-BFGS-B'; hess=jax_hessian; hessp=jax_hessian_vec_prod; 'maxiter': 10, 'maxfev': 50; 'xtol': 1.e-0; 'gtol': 1e-6
+    methods        = ['Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG', 'trust-ncg']
+    result         = scipy.optimize.minimize(mlogpos, x0, method=methods[3], jac=scipy_gradient, options={'disp': True, 'return_all': True, 'ftol': 0.25})
+    
+    [z, v, r, lnA] = result.x
 
     ##
     rflux          = {}
-    
+
+    '''    
     for cam in cams:
         wave        = postage[cam].wave
         res         = Resolution(postage[cam].R)
     
-        rflux[cam]  = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, lineida=lineida, lineidb=lineidb)
+        rflux[cam]  = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
         rflux[cam] *= np.exp(lnA)
-
+    '''
+    
     if plot:
         import pylab as pl
 
@@ -153,7 +201,6 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     
     return  result, rflux
 
-
 if __name__ == '__main__':
     import os
     import pickle
@@ -164,7 +211,7 @@ if __name__ == '__main__':
     from   astropy.table import Table
 
     
-    petal    =   '5'
+    petal    =  '5'
     fiber    =  11
     night    = '20200315'
     expid    = 55589
@@ -190,21 +237,28 @@ if __name__ == '__main__':
     for band in ['b', 'r', 'z']:
         cam    = band + petal
 
-        # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits                                                                                                                                                                   
+        # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits                                                                                                                                                             
         cframes[cam]               = read_frame(findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))        
         cframes[cam].flux[fiber,:] = flux[band][115]
         
     rrz = meta['REDSHIFT'][115]
-            
-    # [Group][Line Index][Camera].
-    postages = cframe_postage(cframes, fiber, rrz)
 
-    ncol = 23
+    start = time.time()
     
-    ##  Plot.                                                                                                                                                                                                                                 
+    for i in np.arange(5000):
+        # [Group][Line Index][Camera].
+        postages = cframe_postage(cframes, fiber, rrz)
+
+    print(time.time() - start)
+        
+    ncol = 23
+    '''
+    ##  Plot.                                                                                                                                                                                                                              
     fig, axes = plt.subplots(len(ugroups), ncol, figsize=(50,10))
 
-    for u in ugroups:
+    groups    = list(postages.keys())
+    
+    for u in groups:
         index = 0
 
         for i, x in enumerate(postages[u]):
@@ -222,11 +276,16 @@ if __name__ == '__main__':
     pl.savefig('postages.pdf')
 
     pl.clf()
+    '''
+
+    start = time.time()
     
     # Starting guess: [z, v, r, lnA]
     x0            = np.array([rrz + .5e-3, 52., 0.7, 6.0])
-    result, rflux = doublet_fit(x0, rrz, rrzerr, postages[3], lineida=6, lineidb=7, plot=True)
+    result, rflux = doublet_fit(x0, rrz, rrzerr, postages[3], lineida=6, lineidb=7, plot=False)
 
-    print(result[0])
+    # print(result[0])
+
+    print(time.time() - start)
     
     print('\n\nDone.\n\n')
