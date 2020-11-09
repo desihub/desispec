@@ -316,9 +316,9 @@ def main(args, comm=None):
         pyps = spx.PyPSF()     # psf data
         pyft = spx.PyFitting() # psf fitting
         
-        rval = opts.parse(com)                        # com is list of args
-        rval = pyio.check_input_psf(opts)             # set input psf bools
-        rval = pypr.deal_with_priors(opts)            # set Gaussian priors
+        opts.parse(com)                        # com is list of args
+        pyio.check_input_psf(opts)             # set input psf bools
+        pypr.deal_with_priors(opts)            # set Gaussian priors
 
         fiberkeys = spx.VectorInt()
         wavekeys  = spx.VectorDouble()
@@ -330,34 +330,7 @@ def main(args, comm=None):
             # read preproc images into pymg with desispec (astropy.io.fits)
             pymg = read_desi_ppimage_spx(opts)
 
-        rval = pyio.read_psf_data(opts,pyps)          # read psf (specex-py)
-        
-        ####################################
-        # BEGIN TEST PSF I/O
-        
-        #spps = specter.psf.GaussHermitePSF(
-         #   opts.input_psf_filename)                  # read psf (specter)
-
-        #rval = pyio.write_psf_data(opts,pyps)         # dummy write psf 
-        #print(spx.get_pyps_image(pymg,pyps))
-        #print(len(spx.get_pyps_image(pymg,pyps)))
-
-        #return
-
-        #print(spx.get_pyps_image(pyps))
-        #return
-        # sxps = spx.GaussHermitePSF()               # new PSF object (specex)
-
-        #print(opts.output_fits_filename)
-        #opts.output_fits_filename=opts.output_fits_filename[:-5]+'_cp.fits'
-        #print(opts.output_fits_filename)
-        #print('writing psf')
-        #rval = pyio.write_psf_data(opts,pyps)         # write psf 
-        #compare_psfs(spps,pyps,sxps)
-        #return
-
-        # END TEST PSF I/O
-        ####################################
+        pyio.read_psf_data(opts,pyps)          # read psf (specex-py)
 
         rval = pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf
 
