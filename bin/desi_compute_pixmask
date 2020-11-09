@@ -69,7 +69,7 @@ for amp in "ABCD" :
     if args.debug :
         meanbad[xyslice]=tmp
         orbad[xyslice]=tmp2
-    
+
     # we mask pixels of the same column in the readout direction if more than 30% of pixels downstream are bad
     bad[xyslice] += (bad[xyslice]==0)*((tmp>0.3)*(tmp2)).astype(int)
 
@@ -78,7 +78,7 @@ if args.debug :
     pyfits.writeto("bad.fits",bad,overwrite=True) ; print("wrote bad.fits")
     pyfits.writeto("meanbad.fits",meanbad,overwrite=True) ; print("wrote meanbad.fits")
     pyfits.writeto("orbad.fits",orbad,overwrite=True) ; print("wrote orbad.fits")
-    
+
 
 pixmask=np.zeros(bad.shape,dtype=np.int16)
 pixmask[bad>0]=ccdmask.DEAD
@@ -92,6 +92,7 @@ for filename in args.infile :
 ndead=np.sum(pixmask&ccdmask.DEAD>0)
 hdulist[0].header["NDEAD"]=ndead
 log.info("number of DEAD pixels =  {}".format(ndead))
-
+hdulist[0].header["BUNIT"]=("","bitmask, see definition of bits in desispec/maskbits.py")
+hdulist[0].header["EXTNAME"]="MASK"
 hdulist.writeto(args.outfile, overwrite=True)
 log.info("wrote {}".format(args.outfile))
