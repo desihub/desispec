@@ -17,7 +17,9 @@ from ctypes.util import find_library
 from astropy.io import fits
 
 from desiutil.log import get_logger
+
 import specex as spx
+import specter.psf
 
 modext = "so"
 if sys.platform == "darwin":
@@ -65,6 +67,11 @@ if libspecex is not None:
 
 #########################################
 # TEMPORARY SPECEX-DESISPEC I/O FUNCTIONS
+
+def compare_psfs(specter_psf, specexpy_psf, specex_psf):
+    print('specter nspec',specter_psf.nspec)
+    print('specex deg   ',specex_psf.Degree())
+    return
 
 def meta2header(meta):
     header = spx.MapStringString()
@@ -313,6 +320,9 @@ def main(args, comm=None):
         rval = pyio.check_input_psf(opts)             # set input psf bools
         rval = pypr.deal_with_priors(opts)            # set Gaussian priors
 
+        fiberkeys = spx.VectorInt()
+        wavekeys  = spx.VectorDouble()
+        
         if specex_image_io:
             # read preproc images into pymg with specex (harp)
             rval = pyio.read_img_data(opts,pymg)
@@ -320,9 +330,37 @@ def main(args, comm=None):
             # read preproc images into pymg with desispec (astropy.io.fits)
             pymg = read_desi_ppimage_spx(opts)
 
-        rval = pyio.read_psf_data(opts,pyps)          # read psf 
-        rval = pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf
+        rval = pyio.read_psf_data(opts,pyps)          # read psf (specex-py)
         
+        ####################################
+        # BEGIN TEST PSF I/O
+        
+        #spps = specter.psf.GaussHermitePSF(
+         #   opts.input_psf_filename)                  # read psf (specter)
+
+        #rval = pyio.write_psf_data(opts,pyps)         # dummy write psf 
+        #print(spx.get_pyps_image(pymg,pyps))
+        #print(len(spx.get_pyps_image(pymg,pyps)))
+
+        #return
+
+        #print(spx.get_pyps_image(pyps))
+        #return
+        # sxps = spx.GaussHermitePSF()               # new PSF object (specex)
+
+        #print(opts.output_fits_filename)
+        #opts.output_fits_filename=opts.output_fits_filename[:-5]+'_cp.fits'
+        #print(opts.output_fits_filename)
+        #print('writing psf')
+        #rval = pyio.write_psf_data(opts,pyps)         # write psf 
+        #compare_psfs(spps,pyps,sxps)
+        #return
+
+        # END TEST PSF I/O
+        ####################################
+
+        rval = pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf
+
         # check for fit_psf success
         if rval != 0:
             comstr = " ".join(com)
@@ -330,8 +368,19 @@ def main(args, comm=None):
                 "value {} running {}".format(rank, rval, comstr))
             failcount += 1
 
-        rval = pyio.write_psf_data(opts,pyps)         # write psf 
+        rval = pyio.write_psf_data(opts,pyps)         # write psf
         rval = pyio.write_spots(opts,pyps)            # write spots
+
+        xtrace=spx.get_trace(pyps,'x')
+        ytrace=spx.get_trace(pyps,'y')
+
+        fiberkeys = spx.VectorInt()
+        wavekeys  = spx.VectorDouble()
+        spx.get_tracekeys(pyps,fiberkeys,wavekeys)
+        
+        print('first x entry',xtrace[0])
+        print('first y entry',ytrace[0])
+        print(fiberkeys,wavekeys)
         
     if comm is not None:
         from mpi4py import MPI
