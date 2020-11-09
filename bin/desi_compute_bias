@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 
 from desiutil.log import get_logger
-from desispec.preproc import _parse_sec_keyword, _overscan
+from desispec.preproc import parse_sec_keyword, _overscan
 from desispec.calibfinder import CalibFinder
 
 
@@ -54,7 +54,7 @@ for filename in args.image :
     n1=image.shape[1]//2
 
     for a,amp in enumerate(amp_ids) :
-        ii = _parse_sec_keyword(image_header['BIASSEC'+amp])
+        ii = parse_sec_keyword(image_header['BIASSEC'+amp])
         overscan_image = image[ii].copy()
         overscan,rdnoise = _overscan(overscan_image)
         log.info("amp {} overscan = {}".format(amp,overscan))
