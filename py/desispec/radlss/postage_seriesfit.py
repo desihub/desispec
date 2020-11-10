@@ -256,8 +256,6 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     result       = scipy.optimize.least_squares(_res, x0, verbose=0, ftol=1.e-8, max_nfev=25)
     bestfit      = result.x
 
-    print(bestfit)
-
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
     # Note:  marginal errors.
     # merr         = np.sqrt(np.diag(ihess))

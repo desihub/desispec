@@ -123,8 +123,9 @@ if len(rankexp) > 0:
         logdir   = '/global/cscratch1/sd/mjwilson/radlss/test/logs/{:08d}/'.format(expid)
         logfile  = logdir + '/{:08d}.log'.format(expid) 
 
-        done     = is_processed(logfile)
-
+        # done   = is_processed(logfile)
+        done     = 0
+        
         if not done:      
             Path(logdir).mkdir(parents=True, exist_ok=True)
 
@@ -133,9 +134,9 @@ if len(rankexp) > 0:
             with stdouterr_redirected(to=logfile):
                 print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
-                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=True, templates=False)
+                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=False)
                 
-                rads.compute()
+                rads.compute(templates=False)
 
                 #  if nexp == nmax:
                 #    break
