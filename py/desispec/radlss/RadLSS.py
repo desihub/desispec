@@ -408,6 +408,7 @@ class RadLSS(object):
 
     def line_fit(self, petal='5', fiber=8, plot=True):
         from cframe_postage    import cframe_postage
+
         from postage_seriesfit import series_fit
         from postage_seriesfit import plot_postages
         
@@ -416,27 +417,27 @@ class RadLSS(object):
 
         self.petal_cframes = {key: value for key, value in self.cframes.items() if key[1] == petal}
 
-        ##
-        tid                = self.zbests_fib[petal][self.zbests_fib[petal]['EXPID'] == self.expid]['TARGETID'][fiber]
-        rrz                = self.zbests[petal]['Z'][self.zbests[petal]['TARGETID'] == tid]
+        for i in np.arange(500):
+            tid                = self.zbests_fib[petal][self.zbests_fib[petal]['EXPID'] == self.expid]['TARGETID'][fiber]
+            rrz                = self.zbests[petal]['Z'][self.zbests[petal]['TARGETID'] == tid]
+            
+            self.postages      = cframe_postage(self.petal_cframes, fiber, self.zbests[petal]['Z'][fiber])
+
+            groups             = list(self.postages.keys())
+
+            mpostages          = {}
         
-        self.postages      = cframe_postage(self.petal_cframes, fiber, self.zbests[petal]['Z'][fiber])
+            for group in groups:
+                self.linefit_result, self.mpostages = series_fit(self.zbests[petal]['Z'][fiber], self.zbests[petal]['ZERR'][fiber], self.postages, group=group, mpostages=mpostages)
+            
+        end_linefit        = time.perf_counter()
 
-        groups             = list(self.postages.keys())
-
-        mpostages          = {}
-        
-        for group in groups:
-            self.linefit_result, self.mpostages = series_fit(self.zbests[petal]['Z'][fiber], self.zbests[petal]['ZERR'][fiber], self.postages, group=group, mpostages=mpostages)
-
+        print('Rank {}:  Calculated line fluxes in {:.3f} mins.'.format(self.rank, (end_linefit - start_linefit) / 60.))
+           
         self.linefit_fig   = plot_postages(self.postages, self.mpostages, petal, fiber, self.zbests[petal]['Z'][fiber], tid)
 
         if plot:
             self.linefit_fig.savefig('scrap.pdf')
-        
-        end_linefit        = time.perf_counter()
-
-        print('Rank {}:  Calculated line fluxes in {:.3f} mins.'.format(self.rank, (end_linefit - start_linefit) / 60.))
         
     def calc_fiberlosses(self):
         '''

@@ -16,6 +16,8 @@ from   lines import lines, ugroups
 from   doublet_postagefit import doublet_obs, doublet_chi2, doublet_fit
 from   desispec.frame import Spectrum
 from   autograd import grad
+from   twave import twave
+
 
 def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     '''
@@ -67,8 +69,10 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
                 ivar  = postage[cam].ivar
                 mask  = postage[cam].mask
 
+                tw    = twave(wave.min(), wave.max())
+                
                 # lineida irrelevant when line ratio, r, is zero.
-                _, rflux, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=0.0, line_flux=line_flux, linea=0.0, lineb=lineb)
+                _, rflux, X2, _ = doublet_chi2(z, tw, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=0.0, line_flux=line_flux, linea=0.0, lineb=lineb)
                 
                 result += X2
         
@@ -98,7 +102,9 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
                 ivar  = postage[cam].ivar
                 mask  = postage[cam].mask
 
-                _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
+                tw    = twave(wave.min(), wave.max())
+
+                _, _, X2, _ = doublet_chi2(z, tw, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
 
                 # print(lineidb, cam, z, v, r, line_flux, X2)
                 
@@ -136,8 +142,10 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
                 ivar  = postage[cam].ivar
                 mask  = postage[cam].mask == 0
 
+                tw    = twave(wave.min(), wave.max())
+
                 # lineida irrelevant when line ratio, r, is zero.
-                rflux      = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=0.0, linea=0.0, lineb=lineb)
+                rflux      = doublet_obs(z, tw, wave, res, continuum=0.0, sigmav=v, r=0.0, linea=0.0, lineb=lineb)
                 rflux     *= line_flux
 
                 res        = np.sqrt(ivar[mask]) * (flux[mask] - rflux[mask])
@@ -168,11 +176,13 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
                 res   = Resolution(postage[cam].R)
                 flux  = postage[cam].flux
                 ivar  = postage[cam].ivar
-                mask  = postage[cam].mask == 0 
+                mask  = postage[cam].mask == 0
+
+                tw    = twave(wave.min(), wave.max())
 
 		# print(lineidb, cam, z, v, r, line_flux, X2)
 
-                rflux      = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
+                rflux      = doublet_obs(z, tw, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
                 rflux     *= line_flux
 
                 res        = np.sqrt(ivar[mask]) * (flux[mask] - rflux[mask])
@@ -272,9 +282,11 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             res   = Resolution(postage[cam].R)
             ivar  = postage[cam].ivar
             mask  = postage[cam].mask
+
+            tw    = twave(wave.min(), wave.max())
             
             # lineida irrelevant when line ratio, r, is zero. 
-            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, wave, res, continuum=0.0, sigmav=bestfit_v, r=0.0, linea=0.0, lineb=lineb)
+            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, tw, wave, res, continuum=0.0, sigmav=bestfit_v, r=0.0, linea=0.0, lineb=lineb)
             mpostages[group][lineidb][cam] *= np.exp(lnA)
             mpostages[group][lineidb][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
     
@@ -304,7 +316,9 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             ivar  = postage[cam].ivar
             mask  = postage[cam].mask
 
-            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, wave, res, continuum=0.0, sigmav=bestfit_v, r=r, linea=linea, lineb=lineb)
+            tw    = twave(wave.min(), wave.max())
+
+            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, tw, wave, res, continuum=0.0, sigmav=bestfit_v, r=r, linea=linea, lineb=lineb)
             mpostages[group][lineidb][cam] *= np.exp(lnA)
 
             mpostages[group][lineida][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
@@ -316,7 +330,7 @@ def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
     import matplotlib.pyplot as plt
 
     
-    ncol      = 10
+    ncol      = 8
     fig, axes = plt.subplots(len(ugroups), ncol, figsize=(20,10))
     
     colors    = {'b': 'b', 'r': 'g', 'z': 'r'}
@@ -388,7 +402,6 @@ if __name__ == '__main__':
             
     # [Group][Line Index][Camera].
     postages          = cframe_postage(cframes, fiber, rrz)
-
     
     mpostages         = {}
 

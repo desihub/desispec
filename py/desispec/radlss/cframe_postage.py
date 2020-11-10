@@ -1,3 +1,4 @@
+import time 
 import numpy as np
 import scipy
 
@@ -14,12 +15,13 @@ from   desispec.frame import Spectrum
 from   lines import lines, ugroups
 
 
+width  = 50.
+cwidth = 25.
+
 def cframe_postage(petal_cframes, fiber, redshift, printit=False):    
     '''
     Given a redshift, cframe (extracted wave, res, flux, ivar) return 
     chi sq. for a doublet line model of given parameters, e.g. line flux.
-
-    If line flux is None, estimate it first. 
     '''
 
     postages = {}
@@ -28,25 +30,25 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
         postages[u] = {}
 
     for i, line in enumerate(lines['WAVELENGTH']):
-        limits = (1. + redshift) * line + np.array([-50., 50.])
+        limits = (1. + redshift) * line + np.array([-width, width])
         group  = lines['GROUP'][i]
 
         postages[group][lines['INDEX'][i]] = {}
         
         for cam in petal_cframes.keys():        
-            res    = petal_cframes[cam].resolution_data[fiber,:,:]
-            flux   = petal_cframes[cam].flux[fiber,:]
-            ivar   = petal_cframes[cam].ivar[fiber,:]
-            mask   = petal_cframes[cam].mask[fiber,:]
             wave   = petal_cframes[cam].wave
-
             inwave = (wave > limits[0]) & (wave < limits[1])
 
             if np.count_nonzero(inwave):
                 if printit:
                     print('Reduced LINEID {:2d}:  {:16s} for {} at redshift {:.2f} ({:.3f} to {:.3f}).'.format(lines['INDEX'][i], lines['NAME'][i], cam, redshift, limits[0], limits[1]))
+
+                res       = petal_cframes[cam].resolution_data[fiber,:,:]
+                flux      = petal_cframes[cam].flux[fiber,:]
+                ivar      = petal_cframes[cam].ivar[fiber,:]
+                mask      = petal_cframes[cam].mask[fiber,:]
                     
-                continuum = (wave > limits[0]) & (wave < limits[1]) & ((wave < (limits[0] + 30.)) | (wave > (limits[1] - 30.)))
+                continuum = (wave > limits[0]) & (wave < limits[1]) & ((wave < (limits[0] + cwidth)) | (wave > (limits[1] - cwidth)))
                 continuum = np.median(flux[continuum])
                             
                 postages[group][lines['INDEX'][i]][cam] = Spectrum(wave[inwave], flux[inwave] - continuum, ivar[inwave], mask=mask[inwave], R=res[:,inwave])
@@ -88,9 +90,16 @@ if __name__ == '__main__':
       cframes[cam] = read_frame(findfile('cframe', night=20200315, expid=55642, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))
       
     zbest     = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', str(67142), str(20200315), 'zbest-{}-{}-{}.fits'.format(petal, 67142, 20200315)), 'ZBEST')
-      
+
+    start    = time.time()
+    
     postages  = cframe_postage(cframes, fiber, redshift)
 
+    end       = time.time()
+
+    print(end - start)
+
+    '''
     ##  Plot.
     fig, axes = plt.subplots(len(ugroups), 14, figsize=(25,10))
 
@@ -110,5 +119,5 @@ if __name__ == '__main__':
     plt.tight_layout()
     
     pl.show()
-    
+    '''
     print('\n\nDone.\n\n')

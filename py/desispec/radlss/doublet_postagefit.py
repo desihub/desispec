@@ -24,13 +24,13 @@ from   lines import lines, ugroups
 from   twave import twave
 
 
-def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, lineb=3728.815):
+def doublet_obs(z, twave, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, lineb=3728.815):
     _, tflux = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
     tflux    = resample_flux(wave, twave, tflux)
 
     return  res.dot(tflux)
 
-def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=3726.032, lineb=3728.815):    
+def doublet_chi2(z, twave, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=3726.032, lineb=3728.815):    
     '''
     Given a redshift, cframe (extracted wave, res, flux, ivar) return 
     chi sq. for a doublet line model of given parameters, e.g. line flux.
@@ -38,7 +38,7 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
     If line flux is None, estimate it first. 
     '''
     
-    rflux             = doublet_obs(z, wave, res, continuum=0.0, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
+    rflux             = doublet_obs(z, twave, wave, res, continuum=0.0, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
     '''
     if line_flux is None:
         ##  Solve for the best fit line_flux given the observed flux.
@@ -86,8 +86,10 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
             flux    = postage[cam].flux
             ivar    = postage[cam].ivar
             mask    = postage[cam].mask
-            
-            _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
+
+            tw      = twave(wave.min(), wave.max())
+
+            _, _, X2, _ = doublet_chi2(z, tw, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
 
             result += X2
             
@@ -110,7 +112,9 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
             ivar    = postage[cam].ivar
             mask    = postage[cam].mask == 0
 
-            rflux   = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
+            tw      = twave(wave.min(), wave.max())
+            
+            rflux   = doublet_obs(z, tw, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
             rflux  *= line_flux
 
             res     = np.sqrt(ivar[mask]) * (flux[mask] - rflux[mask])
@@ -207,8 +211,10 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     for cam in cams:
         wave        = postage[cam].wave
         res         = Resolution(postage[cam].R)
-    
-        rflux[cam]  = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
+
+        tw          = twave(wave.min(), wave.max())
+        
+        rflux[cam]  = doublet_obs(z, tw, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
         rflux[cam] *= np.exp(lnA)
         
     if plot:

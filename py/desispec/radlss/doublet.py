@@ -1,7 +1,7 @@
 import time
 import numba
-import numpy             as np 
-import astropy.constants as const
+import numpy             as     np 
+import astropy.constants as     const
 
 from   lines             import lines
 from   numba             import jit
@@ -42,11 +42,13 @@ if __name__ == '__main__':
       
       linea      = lines['WAVELENGTH'][lineida]
       lineb      = lines['WAVELENGTH'][lineidb]
+      
+      start      = time.time()
 
+      oii        = (1. + redshift) * lineb
+      twave      = twave(oii, oii, dtwave=0.2)
       
-      start = time.time()
-      
-      wave, flux = doublet(z=redshift, twave=twave, sigmav=10., r=0.0, linea=linea, lineb=lineb)
+      wave, flux = doublet(z=redshift, twave=twave, sigmav=75., r=0.7, linea=linea, lineb=lineb)
 
       end = time.time()
 
@@ -54,18 +56,16 @@ if __name__ == '__main__':
 
       start = time.time()
 
-      wave, flux = doublet(z=redshift, twave=twave, sigmav=10., r=0.0, linea=linea, lineb=lineb)
+      wave, flux = doublet(z=redshift, twave=twave, sigmav=75., r=0.7, linea=linea, lineb=lineb)
 
       end = time.time()
 
       print("Elapsed (after compilation) = %s" % (end - start))
       
-      oii        = (1. + redshift) * lines['WAVELENGTH'][6]
-      
-      # pl.plot(wave, flux)
+      pl.plot(wave, flux)
 
-      # pl.xlim(oii - 25., oii + 25.)
+      pl.xlim(oii - 25., oii + 25.)
 
-      # pl.show()
+      pl.show()
       
       print('\n\nDone.\n\n')
