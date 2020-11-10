@@ -92,7 +92,7 @@ def doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, v=5., r=0.7
     model         = resample_flux(wave, twave, tflux)
 
     # Unit amplitude.
-    model         = model # res.dot(model)
+    model         = res.dot(model)
 
     chi_sq        = ivar * (flux - line_flux * model)**2.
     chi_sq        = np.sum(chi_sq[mask == 0])
@@ -103,7 +103,7 @@ def doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, v=5., r=0.7
     for i, fdMdtheta in enumerate([dMdz, dMdv, dMdr, dMdlnA]):
         dMdtheta  = fdMdtheta(z=z, v=v, r=r, tflux=tflux, linea=linea, lineb=lineb)
         dMdtheta  = resample_flux(wave, twave, dMdtheta)
-        # dMdtheta = res.dot(dMdtheta)
+        dMdtheta  = res.dot(dMdtheta)
                 
         grad[i]   = -2. * np.sum((flux[mask == 0] - line_flux * model[mask == 0]) * ivar[mask == 0] * line_flux * dMdtheta[mask == 0])
         

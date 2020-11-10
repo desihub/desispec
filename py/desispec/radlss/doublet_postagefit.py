@@ -9,6 +9,7 @@ from   scipy.stats       import multivariate_normal
 from   jax               import grad, jit, vmap, hessian, jacfwd, jacrev
 from   jax.experimental  import optimizers
 from   scipy.optimize    import leastsq
+from   numba             import jit
 
 # from   desispec.interpolation import resample_flux
 from   resample_flux import resample_flux
@@ -23,11 +24,12 @@ from   lines import lines, ugroups
 from   twave import twave
 
 
+#@jit(nopython=True) 
 def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, lineb=3728.815):
     _, tflux = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
     tflux    = resample_flux(wave, twave, tflux)
 
-    return  tflux # res.dot(tflux)
+    return  res.dot(tflux)
 
 def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=3726.032, lineb=3728.815):    
     '''
@@ -60,6 +62,8 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     '''
     Passed a postage stamp, find the best fit Gaussian (doublet).
     '''
+
+    start           = time.time()
     
     postage         = postages[lineidb]
     cams            = list(postage.keys())
@@ -90,6 +94,34 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
             
         return  result
 
+    def _res(x):
+        z           = x[0]
+        v           = x[1]
+        r           = x[2]
+        lnA         = x[3]
+
+        line_flux   = np.exp(lnA)
+
+        residuals   = []
+
+        for cam in cams:
+            wave    = postage[cam].wave
+            res     = Resolution(postage[cam].R)
+            flux    = postage[cam].flux
+            ivar    = postage[cam].ivar
+            mask    = postage[cam].mask == 0
+
+            rflux   = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
+            rflux  *= line_flux
+
+            res     = np.sqrt(ivar[mask]) * (flux[mask] - rflux[mask])
+
+            residuals += res.tolist()
+
+        residuals   = np.array(residuals) 
+            
+        return  residuals
+        
     def mloglike(x):
         return  _X2(x) / 2.
 
@@ -159,23 +191,27 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
     '''
 
     # 'L-BFGS-B'; hess=jax_hessian; hessp=jax_hessian_vec_prod; 'maxiter': 10, 'maxfev': 50; 'xtol': 1.e-0; 'gtol': 1e-6
-    methods        = ['Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG', 'trust-ncg']
-    result         = scipy.optimize.minimize(mlogpos, x0, method=methods[3], jac=scipy_gradient, options={'disp': True, 'return_all': True, 'ftol': 0.25})
-    
+    # methods        = ['Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG', 'trust-ncg']
+    # result         = scipy.optimize.minimize(mlogpos, x0, method=methods[3], jac=scipy_gradient, options={'disp': True, 'return_all': True, 'ftol': 0.25})
+    # [z, v, r, lnA] = result.x
+    # print([z, v, r, lnA])
+
+    # method='lm'
+    result         = scipy.optimize.least_squares(_res, x0, verbose=1, ftol=0.25, max_nfev=6)
     [z, v, r, lnA] = result.x
 
+    print(time.time() - start)
+    
     ##
     rflux          = {}
-
-    '''    
+    
     for cam in cams:
         wave        = postage[cam].wave
         res         = Resolution(postage[cam].R)
     
         rflux[cam]  = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
         rflux[cam] *= np.exp(lnA)
-    '''
-    
+        
     if plot:
         import pylab as pl
 
@@ -243,9 +279,9 @@ if __name__ == '__main__':
 
     start = time.time()
     
-    for i in np.arange(5000):
-        # [Group][Line Index][Camera].
-        postages = cframe_postage(cframes, fiber, rrz)
+    # for i in np.arange(5000):
+    # [Group][Line Index][Camera].
+    postages = cframe_postage(cframes, fiber, rrz)
 
     print(time.time() - start)
         
@@ -276,14 +312,14 @@ if __name__ == '__main__':
     pl.clf()
     '''
 
-    start = time.time()
+    x0            = np.array([rrz, 100., 0.7, 6.0])
     
+    # Force compilation.
+    doublet_fit(x0, rrz, rrzerr, postages[3], lineida=6, lineidb=7, plot=False)
+        
     # Starting guess: [z, v, r, lnA]
-    x0            = np.array([rrz + .5e-3, 52., 0.7, 6.0])
-    result, rflux = doublet_fit(x0, rrz, rrzerr, postages[3], lineida=6, lineidb=7, plot=False)
+    x0            = np.array([rrz, 52., 0.7, 6.0])
 
-    # print(result[0])
-
-    print(time.time() - start)
+    result, rflux = doublet_fit(x0, rrz, rrzerr, postages[3], lineida=6, lineidb=7, plot=True)
     
     print('\n\nDone.\n\n')
