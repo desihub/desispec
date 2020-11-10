@@ -406,38 +406,52 @@ class RadLSS(object):
         # pl.title('Sky continuum ({}A median filter)'.format(kernel_N * 0.8))
         raise  NotImplementedError()
 
-    def line_fit(self, petal='5', fiber=8, plot=True):
+    def line_fit(self, petal='5', plot=True):
         from cframe_postage    import cframe_postage
 
         from postage_seriesfit import series_fit
         from postage_seriesfit import plot_postages
         
         
-        start_linefit      = time.perf_counter()
+        start_linefit          = time.perf_counter()
 
-        self.petal_cframes = {key: value for key, value in self.cframes.items() if key[1] == petal}
+        # Construct cframes dict limited to this petal. 
+        self.petal_cframes     = {key: value for key, value in self.cframes.items() if key[1] == petal}
 
-        for i in np.arange(500):
-            tid                = self.zbests_fib[petal][self.zbests_fib[petal]['EXPID'] == self.expid]['TARGETID'][fiber]
-            rrz                = self.zbests[petal]['Z'][self.zbests[petal]['TARGETID'] == tid]
+        Path(self.qadir + '/line_fits/{}/'.format(petal)).mkdir(parents=True, exist_ok=True)
+
+        zbests_fib             = self.zbests_fib[petal][self.zbests_fib[petal]['EXPID'] == self.expid]
+        
+        # Fiber order, i.e. row by row of cframe.flux.
+        for fiber in np.arange(len(zbests_fib)):
+            tid                = zbests_fib['TARGETID'][fiber]
+            fid                = zbests_fib['FIBER'][fiber]
             
-            self.postages      = cframe_postage(self.petal_cframes, fiber, self.zbests[petal]['Z'][fiber])
+            rrz                = self.zbests[petal]['Z'][self.zbests[petal]['TARGETID'] == tid][0]
+            rrzerr             = self.zbests[petal]['ZERR'][self.zbests[petal]['TARGETID'] == tid][0]
+            
+            self.postages      = cframe_postage(self.petal_cframes, fiber, rrz)
 
             groups             = list(self.postages.keys())
 
             mpostages          = {}
-        
-            for group in groups:
-                self.linefit_result, self.mpostages = series_fit(self.zbests[petal]['Z'][fiber], self.zbests[petal]['ZERR'][fiber], self.postages, group=group, mpostages=mpostages)
+
+            print(self.qadir + '/line_fits/{}/line-fit-{:d}.pdf'.format(petal, fiber))
             
-        end_linefit        = time.perf_counter()
+            #try:
+            for group in groups:
+                self.linefit_result, self.mpostages = series_fit(rrz, rrzerr, self.postages, group=group, mpostages=mpostages)
+                
+            if plot:
+                self.linefit_fig = plot_postages(self.postages, self.mpostages, petal, fid, rrz, tid)
+                self.linefit_fig.savefig(self.qadir + '/line_fits/{}/line-fit-{:d}.pdf'.format(petal, fiber))
+                    
+            #except:
+            #    print('Line fit failure for fiber {:d}.'.format(fiber))
+                
+        end_linefit = time.perf_counter()
 
-        print('Rank {}:  Calculated line fluxes in {:.3f} mins.'.format(self.rank, (end_linefit - start_linefit) / 60.))
-           
-        self.linefit_fig   = plot_postages(self.postages, self.mpostages, petal, fiber, self.zbests[petal]['Z'][fiber], tid)
-
-        if plot:
-            self.linefit_fig.savefig('scrap.pdf')
+        print('Rank {}:  Calculated line fluxes for petal {} in {:.3f} mins.'.format(self.rank, petal, (end_linefit - start_linefit) / 60.))
         
     def calc_fiberlosses(self):
         '''

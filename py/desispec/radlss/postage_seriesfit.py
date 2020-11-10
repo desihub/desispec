@@ -245,7 +245,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # ihess      = result[3]
     # print(bestfit)
 
-    result       = scipy.optimize.least_squares(_res, x0, verbose=1, ftol=1.e-8, max_nfev=50)
+    result       = scipy.optimize.least_squares(_res, x0, verbose=0, ftol=1.e-8, max_nfev=25)
     bestfit      = result.x
     print(bestfit)
 
@@ -334,22 +334,29 @@ def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
     fig, axes = plt.subplots(len(ugroups), ncol, figsize=(20,10))
     
     colors    = {'b': 'b', 'r': 'g', 'z': 'r'}
+
+    stop      = False
     
     for u in list(mpostages.keys()):
         index = 0
 
         for i, x in enumerate(list(postages[u].keys())):
-            for cam in postages[u][x]:
-                if lines['MASKED'][x] == 1:
-                    continue
+            if not stop:
+                for cam in postages[u][x]:
+                    if lines['MASKED'][x] == 1:
+                        continue
 
-                axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
-                axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
-                axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
-                axes[u,index].set_title(lines['NAME'][x])
+                    if not stop:                    
+                        axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
+                        axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
+                        axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
+                        axes[u,index].set_title(lines['NAME'][x])
 
-                index += 1
+                        index += 1
 
+                if index == (ncol - 1):
+                    stop = True
+                
     fig.suptitle('Fiber {} of petal {}: targetid {} with redshift {:2f}'.format(fiber, petal, tid, rrz), y=0.925)
 
     plt.subplots_adjust(hspace=0.5, wspace=0.3)

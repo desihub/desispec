@@ -312,7 +312,7 @@ if __name__ == '__main__':
 
     plt.tight_layout()
 
-    pl.savefig('postages.pdf')
+    pl.savefig('plots/postages.pdf')
 
     pl.clf()
     '''
