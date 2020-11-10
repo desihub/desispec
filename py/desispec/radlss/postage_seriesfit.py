@@ -17,6 +17,7 @@ from   doublet_postagefit import doublet_obs, doublet_chi2, doublet_fit
 from   desispec.frame import Spectrum
 from   autograd import grad
 from   twave import twave
+from   astropy.table import Table, vstack  
 
 
 def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
@@ -26,13 +27,20 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     postages         = postages[group]
     
     lineids          = list(postages.keys())
-    
+
     singlets         = lines[lineids][lines['DOUBLET'][lineids] == -99]
     doublets         = lines[lineids][lines['DOUBLET'][lineids] >=   0]
 
+    # If only one line is present in the doublet, treat as a singlet.
+    udoublets, cnts  = np.unique(doublets['DOUBLET'], return_counts=True)
+
+    for udub, cnt in zip(udoublets, cnts):
+        if cnt == 1:
+            singlets = vstack([singlets, doublets[doublets['DOUBLET'] == udub]])
+            doublets = doublets[doublets['DOUBLET'] != udub]
+             
     nsinglet         = len(singlets)
     ndoublet         = np.int(len(doublets) / 2)
-
     '''
     if len(singlets) > 0:
         print(singlets)
@@ -40,7 +48,6 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     if len(doublets) > 0:
         print(doublets)
     '''
-    
     def _X2(x):  
         z             = x[0]
         v             = x[1]
@@ -79,9 +86,10 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
         for i in np.arange(ndoublet):
             doublet   = doublets[doublets['DOUBLET'] == i] 
 
-            if doublet['MASKED'][0] == 1:
+            if (doublet['MASKED'][0] == 1) | (doublet['MASKED'][1] == 1):
                 continue
 
+            lineida   = doublet['INDEX'][0]
             lineidb   = doublet['INDEX'][1] 
             
             linea     = doublet['WAVELENGTH'][0]
@@ -244,9 +252,10 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # bestfit    = result[0]
     # ihess      = result[3]
     # print(bestfit)
-
+    
     result       = scipy.optimize.least_squares(_res, x0, verbose=0, ftol=1.e-8, max_nfev=25)
     bestfit      = result.x
+
     print(bestfit)
 
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
@@ -258,7 +267,6 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
         mpostages  = {}
 
     mpostages[group] = {}
-
 
     bestfit_z     = bestfit[0]
     bestfit_v     = bestfit[1]
@@ -322,7 +330,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             mpostages[group][lineidb][cam] *= np.exp(lnA)
 
             mpostages[group][lineida][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
-            mpostages[group][lineidb][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
+            mpostages[group][lineidb][cam]  = mpostages[group][lineida][cam]
             
     return  result, mpostages
 
@@ -337,22 +345,21 @@ def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
 
     stop      = False
     
-    for u in list(mpostages.keys()):
+    for u in list(postages.keys()):
         index = 0
 
         for i, x in enumerate(list(postages[u].keys())):
-            if not stop:
-                for cam in postages[u][x]:
-                    if lines['MASKED'][x] == 1:
-                        continue
+            for cam in postages[u][x]:
+                if lines['MASKED'][x] == 1:
+                    continue
 
-                    if not stop:                    
-                        axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
-                        axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
-                        axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
-                        axes[u,index].set_title(lines['NAME'][x])
+                if not stop:                    
+                    axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
+                    axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
+                    axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
+                    axes[u,index].set_title(lines['NAME'][x])
 
-                        index += 1
+                    index += 1
 
                 if index == (ncol - 1):
                     stop = True

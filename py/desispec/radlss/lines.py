@@ -37,7 +37,16 @@ ugroups                = np.array(np.unique(lines['GROUP']))
 ##  lines.loc[7,'WAVELENGTH']
 
 if __name__ == '__main__':
-    print(lines)
+    lineids          = np.arange(len(lines))
 
+    singlets         = lines[lineids][lines['DOUBLET'][lineids] == -99]
+    doublets         = lines[lineids][lines['DOUBLET'][lineids] >=   0]
 
-    print(ugroups)
+    nsinglet         = len(singlets)
+    ndoublet         = np.int(len(doublets) / 2)
+
+    
+    print(nsinglet, ndoublet)
+
+    print(singlets)
+    print(doublets)

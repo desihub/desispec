@@ -442,7 +442,7 @@ class RadLSS(object):
             for group in groups:
                 self.linefit_result, self.mpostages = series_fit(rrz, rrzerr, self.postages, group=group, mpostages=mpostages)
                 
-            if plot:
+            if plot & self.linefit_result.success:
                 self.linefit_fig = plot_postages(self.postages, self.mpostages, petal, fid, rrz, tid)
                 self.linefit_fig.savefig(self.qadir + '/line_fits/{}/line-fit-{:d}.pdf'.format(petal, fiber))
                     
