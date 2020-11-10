@@ -24,7 +24,6 @@ from   lines import lines, ugroups
 from   twave import twave
 
 
-#@jit(nopython=True) 
 def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, lineb=3728.815):
     _, tflux = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
     tflux    = resample_flux(wave, twave, tflux)

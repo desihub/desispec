@@ -17,23 +17,23 @@ from   resample_flux       import resample_flux
 
 lightspeed = const.c.to('km/s').value
 
-# @jit(nopython=True)
+@jit(nopython=True)
 def sig_lambda(z, sigmav, lineb):
-      return  sigmav * (1. + z) * lineb / lightspeed
+    return  sigmav * (1. + z) * lineb / lightspeed
 
-# @jit(nopython=True)
+@jit(nopython=True)
 def dsigdz(v, lineb):
     return v * lineb / lightspeed
 
-# @jit(nopython=True)
+@jit(nopython=True)
 def dsigdv(z, lineb):
     return (1. + z) * lineb / lightspeed
 
-# @jit(nopython=True)
+@jit(nopython=True)
 def dMdlnA(z, v, r, tflux, linea=3726.032, lineb=3728.815):
     return tflux
 
-# @jit(nopython=True)
+@jit(nopython=True)
 def dMdr(z, v, r, tflux, linea=3726.032, lineb=3728.815):
     # if tflux is None:
     #    _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
@@ -53,17 +53,19 @@ def dMdz(z, v, r, tflux, linea=3726.032, lineb=3728.815):
     sigma_lam = sig_lambda(z=z, sigmav=v, lineb=lineb)
         
     result    = -2. * tflux * dsigdz(v=v, lineb=lineb) / sigma_lam
-    
+
     def dA1dz(z=z, v=v, r=r, line=lineb):
         def dydz(z=z, v=v, r=r, line=line):
-            return - dsigdz(v=v, lineb=line) * twave / np.sqrt(2.) / sigma_lam / sigma_lam - (line / np.sqrt(2.) / sigma_lam) * (1. - (1. + z) * dsigdz(v=v, lineb=line) / sigma_lam)
+            _dsigdz = dsigdz(v=v, lineb=line)
+              
+            return - _dsigdz * twave / np.sqrt(2.) / sigma_lam / sigma_lam - (line / np.sqrt(2.) / sigma_lam) * (1. - (1. + z) * _dsigdz / sigma_lam)
             
         y       = (twave - line * (1. + z)) / np.sqrt(2.) / sigma_lam
         interim = -2. * y * np.exp(- y * y) * dydz(z=z, v=v, r=r, line=line)
         
         return interim
         
-    result += (1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam) * (r * dA1dz(z=z, v=v, r=r, line=linea) + dA1dz(z=z, v=v, r=r, line=lineb))
+    result += (1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam**2.) * (r * dA1dz(z=z, v=v, r=r, line=linea) + dA1dz(z=z, v=v, r=r, line=lineb))
 
     return  result
 
@@ -287,7 +289,7 @@ if __name__ == '__main__':
     print(chisq, _X2(x0))
     print()
     print(agrad)
-    print(start - end)
+    print(end - start)
 
     # print(_fdgrad(x0)[0])
 
@@ -301,7 +303,7 @@ if __name__ == '__main__':
 
     print()
     print(grad)
-    print(start - end)
+    print(end - start)
     
     # print(dMdz(x0[0], x0[1], x0[2], linea=3726.032, lineb=3728.815, tflux=None)[5514])
     # print(dMdr(x0[0], x0[1], x0[2], linea=3726.032, lineb=3728.815, tflux=None)[5514])
