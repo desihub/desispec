@@ -54,17 +54,16 @@ def dMdz(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
         
     result    = -2. * tflux * dsigdz(v=v, lineb=lineb) / sigma_lam
     
-    def dA1dz(z=z, v=v, r=r, lineb=lineb):
-        y   = (twave - lineb * (1. + z)) / np.sqrt(2.) / sigma_lam
-        
-        def dydz(z=z, v=v, r=r, lineb=lineb):
-            return ((twave - lineb) / np.sqrt(2.) / sigma_lam) - dsigdz(v=v, lineb=lineb) * (1. + z) * (twave - lineb) / np.sqrt(2) / sigma_lam / sigma_lam
-
-        interim = -2. * y * np.exp(- y * y) * dydz(z=z, v=v, r=r, lineb=lineb)
+    def dA1dz(z=z, v=v, r=r, line=lineb):
+        def dydz(z=z, v=v, r=r, line=line):
+            return - dsigdz(v=v, lineb=line) * twave / np.sqrt(2.) / sigma_lam / sigma_lam - (line / np.sqrt(2.) / sigma_lam) * (1. - (1. + z) * dsigdz(v=v, lineb=line) / sigma_lam)
+            
+        y       = (twave - line * (1. + z)) / np.sqrt(2.) / sigma_lam
+        interim = -2. * y * np.exp(- y * y) * dydz(z=z, v=v, r=r, line=line)
         
         return interim
         
-    result += (1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam) * (r * dA1dz(z=z, v=v, r=r, lineb=linea) + dA1dz(z=z, v=v, r=r, lineb=lineb))
+    result += (1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam) * (r * dA1dz(z=z, v=v, r=r, line=linea) + dA1dz(z=z, v=v, r=r, line=lineb))
 
     return  result
 
@@ -280,7 +279,9 @@ if __name__ == '__main__':
     agrad, chisq = _agrad(x0)
     
     print(chisq, _X2(x0))
+    print()
     print(agrad)
+    print()
     print(_fdgrad(x0)[0])
         
     for eps in [1.e-10, 1.e-8, 1.e-7, 1.e-6, 1.e-5]:
