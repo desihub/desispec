@@ -47,6 +47,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
         for i, singlet in enumerate(singlets):
             lineidb   = singlet['INDEX']
+            lineb     = singlet['WAVELENGTH']
 
             if singlet['MASKED'] == 1:
                 continue
@@ -67,7 +68,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
                 mask  = postage[cam].mask
 
                 # lineida irrelevant when line ratio, r, is zero.
-                _, rflux, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=0.0, line_flux=line_flux, lineida=0, lineidb=lineidb)
+                _, rflux, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=0.0, line_flux=line_flux, linea=0.0, lineb=lineb)
                 
                 result += X2
         
@@ -76,9 +77,11 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
             if doublet['MASKED'][0] == 1:
                 continue
+
+            lineidb   = doublet['INDEX'][1] 
             
-            lineida   = doublet['INDEX'][0]
-            lineidb   = doublet['INDEX'][1]
+            linea     = doublet['WAVELENGTH'][0]
+            lineb     = doublet['WAVELENGTH'][1]
 
             postage   = postages[lineidb]
             cams      = list(postage.keys())
@@ -95,13 +98,90 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
                 ivar  = postage[cam].ivar
                 mask  = postage[cam].mask
 
-                _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, lineida=lineida, lineidb=lineidb)
+                _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
 
                 # print(lineidb, cam, z, v, r, line_flux, X2)
                 
                 result += X2
             
         return  result
+
+    def _res(x):
+        z             = x[0]
+        v             = x[1]
+
+        result        = 0.0
+
+        residuals     = []
+
+        for i, singlet in enumerate(singlets):
+            lineidb   = singlet['INDEX']
+            lineb     = singlet['WAVELENGTH']
+            
+            if singlet['MASKED'] == 1:
+                continue
+
+            postage   = postages[lineidb]
+            cams      = list(postage.keys())
+
+            lnA       = x[i + 2]
+            line_flux = np.exp(lnA)
+
+            # print(lineidb, cams)
+
+            for cam in cams:
+                wave  = postage[cam].wave
+                res   = Resolution(postage[cam].R)
+                flux  = postage[cam].flux
+                ivar  = postage[cam].ivar
+                mask  = postage[cam].mask == 0
+
+                # lineida irrelevant when line ratio, r, is zero.
+                rflux      = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=0.0, linea=0.0, lineb=lineb)
+                rflux     *= line_flux
+
+                res        = np.sqrt(ivar[mask]) * (flux[mask] - rflux[mask])
+                
+                residuals += res.tolist()
+
+        for i in np.arange(ndoublet):
+            doublet   = doublets[doublets['DOUBLET'] == i]
+
+            if doublet['MASKED'][0] == 1:
+                continue
+
+            linea     = doublet['WAVELENGTH'][0]
+            lineb     = doublet['WAVELENGTH'][1]
+
+            lineidb   = doublet['INDEX'][1]
+            
+            postage   = postages[lineidb]
+            cams      = list(postage.keys())
+
+            lnA       = x[2 * i + 2 + nsinglet]
+            line_flux = np.exp(lnA)
+
+            r         = x[2 * i + 3 + nsinglet]
+
+            for cam in cams:
+                wave  = postage[cam].wave
+                res   = Resolution(postage[cam].R)
+                flux  = postage[cam].flux
+                ivar  = postage[cam].ivar
+                mask  = postage[cam].mask == 0 
+
+		# print(lineidb, cam, z, v, r, line_flux, X2)
+
+                rflux      = doublet_obs(z, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
+                rflux     *= line_flux
+
+                res        = np.sqrt(ivar[mask]) * (flux[mask] - rflux[mask])
+		
+                residuals += res.tolist()
+
+        residuals = np.array(residuals)
+
+        return  residuals
 
     def mloglike(x):
         return  _X2(x) / 2.
@@ -150,12 +230,15 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # bestfit    = result.x
 
     # fprime=gradient;  gtol=1e-08, maxiter=500
-    result       = scipy.optimize.fmin_bfgs(mlogpos, x0, gtol=1e-3, maxiter=500, full_output=True)
-    bestfit      = result[0]
+    # result     = scipy.optimize.fmin_bfgs(mlogpos, x0, gtol=1e-3, maxiter=500, full_output=True)
+    # bestfit    = result[0]
     # ihess      = result[3]
-
     # print(bestfit)
-    
+
+    result       = scipy.optimize.least_squares(_res, x0, verbose=1, ftol=1.e-8, max_nfev=50)
+    bestfit      = result.x
+    print(bestfit)
+
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
     # Note:  marginal errors.
     # merr         = np.sqrt(np.diag(ihess))
@@ -174,6 +257,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     
     for i, singlet in enumerate(singlets):
         lineidb   = singlet['INDEX']
+        lineb     = singlet['WAVELENGTH']
         
         postage   = postages[lineidb]
         cams      = list(postage.keys())
@@ -190,7 +274,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             mask  = postage[cam].mask
             
             # lineida irrelevant when line ratio, r, is zero. 
-            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, wave, res, continuum=0.0, sigmav=bestfit_v, r=0.0, lineida=0, lineidb=lineidb)
+            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, wave, res, continuum=0.0, sigmav=bestfit_v, r=0.0, linea=0.0, lineb=lineb)
             mpostages[group][lineidb][cam] *= np.exp(lnA)
             mpostages[group][lineidb][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
     
@@ -199,6 +283,9 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
         lineida   = doublet['INDEX'][0]
         lineidb   = doublet['INDEX'][1]
+
+        linea     = doublet['WAVELENGTH'][0]
+        lineb     = doublet['WAVELENGTH'][1]
         
         postage   = postages[lineidb]
         cams      = list(postage.keys())
@@ -217,7 +304,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             ivar  = postage[cam].ivar
             mask  = postage[cam].mask
 
-            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, wave, res, continuum=0.0, sigmav=bestfit_v, r=r, lineida=lineida, lineidb=lineidb)
+            mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, wave, res, continuum=0.0, sigmav=bestfit_v, r=r, linea=linea, lineb=lineb)
             mpostages[group][lineidb][cam] *= np.exp(lnA)
 
             mpostages[group][lineida][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
