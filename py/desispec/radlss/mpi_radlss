@@ -1,3 +1,10 @@
+#!/usr/bin/env python                                                                                                                                                                                                                 
+#                                                                                                                                                                                                                                      
+# See top-level LICENSE.rst file for Copyright information                                                                                                                                                                            
+#                                                                                                                                                                                                                                     
+# -*- coding: utf-8 -*- 
+
+#  ----  Calling  ----
 #- salloc -N 6 -C haswell -q interactive -t 02:00:00
 #- srun -N 6 -n 24 -c 4 python mpi_driver.py
 #- srun -N 6 -n 32 -c 2 python mpi_driver.py (spectra & redrock).
@@ -5,7 +12,6 @@
 #- 24 mins. per exposure (all ten petals, brz).
 #- 45 exposures to process for 20200315.
 #-
-#- Initialize MPI ASAP before proceeding with other imports.
 import multiprocessing
 
 from   mpi4py                    import  MPI
