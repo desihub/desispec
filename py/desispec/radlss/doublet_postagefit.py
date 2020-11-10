@@ -10,8 +10,8 @@ from   jax               import grad, jit, vmap, hessian, jacfwd, jacrev
 from   jax.experimental  import optimizers
 from   scipy.optimize    import leastsq
 
-# from   desispec.interpolation import resample_flux
-from   resample_flux import resample_flux
+from   desispec.interpolation import resample_flux
+# from   resample_flux import resample_flux
 
 from   doublet import doublet
 from   desispec.io import read_frame
@@ -27,7 +27,7 @@ def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, l
     _, tflux = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
     tflux    = resample_flux(wave, twave, tflux)
 
-    return  res.dot(tflux)
+    return  tflux # res.dot(tflux)
 
 def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=3726.032, lineb=3728.815):    
     '''
@@ -38,7 +38,7 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
     '''
     
     rflux             = doublet_obs(z, wave, res, continuum=0.0, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
-    
+    '''
     if line_flux is None:
         ##  Solve for the best fit line_flux given the observed flux.
         ##  Eqn. (12) of https://arxiv.org/pdf/2007.14484.pdf
@@ -47,12 +47,12 @@ def doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1
     
         line_flux_err = np.sum(rflux * rflux * ivar)
         line_flux_err = 1. / np.sqrt(line_flux_err)
+     ''' 
+    rflux            *= line_flux
         
-    rflux          *= line_flux
-        
-    X2              = (flux - rflux)**2. * ivar
+    X2                = ivar * (flux - rflux)**2.
 
-    result          = np.sum(X2[mask == 0])
+    result            = np.sum(X2[mask == 0])
     
     return  wave, rflux, result, line_flux
 
@@ -78,11 +78,11 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
         result      = 0.0
         
         for cam in cams:
-            wave = postage[cam].wave
-            res  = Resolution(postage[cam].R)
-            flux = postage[cam].flux
-            ivar = postage[cam].ivar
-            mask = postage[cam].mask
+            wave    = postage[cam].wave
+            res     = Resolution(postage[cam].R)
+            flux    = postage[cam].flux
+            ivar    = postage[cam].ivar
+            mask    = postage[cam].mask
             
             _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
 

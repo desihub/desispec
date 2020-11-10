@@ -7,17 +7,23 @@ from   lines               import lines
 from   numba               import jit
 from   doublet             import doublet
 from   twave               import twave
-from   doublet_postagefit  import doublet_obs
 from   desispec.io.meta    import findfile
 from   desispec.resolution import Resolution
 from   doublet_postagefit  import doublet_chi2
-from   resample_flux       import resample_flux
+
+# from   resample_flux        import resample_flux
+from   desispec.interpolation import resample_flux
+
+from   doublet                import sig_lambda
 
 
 lightspeed = const.c.to('km/s').value
 
 def dsigdz(v, lineb):
     return v * lineb / lightspeed
+
+def dsigdv(z, lineb):
+    return (1. + z) * lineb / lightspeed
 
 # Obs. model = Resolution * [exp(\tilde A) * \tilde M].
 def dMdlnA(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
@@ -27,37 +33,38 @@ def dMdlnA(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
     return tflux
 
 def dMdr(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
-    result    = r / (1. + r)**2.
-    result   /= np.sqrt(2. * np.pi)
-
-    sigma_lam = v * (1. + z) * lineb / lightspeed
-
-    result   /= sigma_lam**2.
-
-    # Only defined for doublets, retain linea. 
-    result   *= np.exp(-((twave  - linea * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.)
-
-    # Identically zero if r is zero. 
-    return result
-
-def dMdz(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
     if tflux is None:
         _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
 
-    sigma_lam = v * (1. + z) * lineb / lightspeed
-        
-    result  = -2. * tflux / sigma_lam
-    result *= dsigdz(v, lineb=lineb) 
-    
-    def dA1dz(z, v, r, lineb=lineb, tflux=tflux):
-        y   = twave - lineb * (1. + z) / np.sqrt(2.) / sigma_lam
+    sigma_lam = sig_lambda(z=z, sigmav=v, lineb=lineb)
 
-        def dydz(z, v, r, lineb=lineb):
-            return -1. * dsigdz(v, lineb=lineb) * ((twave - lineb) / np.sqrt(2) / sigma_lam / sigma_lam - z * lineb / np.sqrt(2.) / sigma_lam / sigma_lam)  - lineb / np.sqrt(2.) / sigma_lam
+    result    = -tflux / (1. + r) 
+
+    # Only defined for doublets, retain linea. 
+    result   += np.exp(-((twave  - linea * (1. + z)) / np.sqrt(2.) / sigma_lam)**2.) / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam
+
+    # Identically zero if r is zero. 
+    return  result
+
+def dMdz(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
+    if tflux is None:
+        _, tflux = doublet(z=z, twave=twave, sigmav=v, r=r, linea=linea, lineb=lineb)
+
+    sigma_lam = sig_lambda(z=z, sigmav=v, lineb=lineb)
         
-        return -2. * y * np.exp(- y * y) * dydz(z, v, r, lineb=lineb) 
+    result    = -2. * tflux * dsigdz(v=v, lineb=lineb) / sigma_lam
+    
+    def dA1dz(z=z, v=v, r=r, lineb=lineb):
+        y   = (twave - lineb * (1. + z)) / np.sqrt(2.) / sigma_lam
         
-    result += ((1. / (1. + r)) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam) * (r * dA1dz(z, v, r, lineb=linea, tflux=tflux) + dA1dz(z, v, r, lineb=lineb, tflux=tflux))
+        def dydz(z=z, v=v, r=r, lineb=lineb):
+            return ((twave - lineb) / np.sqrt(2.) / sigma_lam) - dsigdz(v=v, lineb=lineb) * (1. + z) * (twave - lineb) / np.sqrt(2) / sigma_lam / sigma_lam
+
+        interim = -2. * y * np.exp(- y * y) * dydz(z=z, v=v, r=r, lineb=lineb)
+        
+        return interim
+        
+    result += (1. / (1. + r) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam) * (r * dA1dz(z=z, v=v, r=r, lineb=linea) + dA1dz(z=z, v=v, r=r, lineb=lineb))
 
     return  result
 
@@ -65,48 +72,45 @@ def dMdv(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
     if tflux is None:
         _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
 
+    sigma_lam = sig_lambda(z=z, sigmav=v, lineb=lineb)
+        
     def dA1dv(z, v, r, lineb=lineb, tflux=tflux):
-        y   = twave - lineb * (1. + z) / np.sqrt(2.) / v
+        y   = (twave - lineb * (1. + z)) / np.sqrt(2.) / sigma_lam
 
         def dydv(z, v, r, lineb=lineb):
-            return  - dsigdz(v, lineb) * (twave - lineb * (1. + z)) / np.sqrt(2.) / v / v
+            return  - dsigdv(z, lineb) * (twave - lineb * (1. + z)) / np.sqrt(2.) / sigma_lam / sigma_lam
 
         return  -2. * y * np.exp(-y * y) * dydv(z, v, r, lineb=lineb) 
 
-    result  = -2. * tflux / v
-    result *=  dsigdz(v, lineb=lineb)
+    result  = -2. * tflux / sigma_lam
+    result *=  dsigdv(z, lineb)
 
-    toadd   = ((1. / (1. + r)) / np.sqrt(2. * np.pi) / v / v) * (r * dA1dv(z, v, r, lineb=linea, tflux=tflux) + dA1dv(z, v, r, lineb=lineb, tflux=tflux))
-    result += toadd
+    result += ((1. / (1. + r)) / np.sqrt(2. * np.pi) / sigma_lam / sigma_lam) * (r * dA1dv(z, v, r, lineb=linea, tflux=tflux) + dA1dv(z, v, r, lineb=lineb, tflux=tflux))
     
     return result
 
-def doublet_obs(z, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, lineb=3728.815):
-    _, tflux = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
-    tflux    = resample_flux(wave, twave, tflux)
-
-    return  res.dot(tflux)
-
-def doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=3726.032, lineb=3728.815):
-    _, tflux      = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
+def doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, v=5., r=0.7, line_flux=None, linea=3726.032, lineb=3728.815):
+    _, tflux      = doublet(z=z, twave=twave, sigmav=v, r=r, linea=linea, lineb=lineb)
 
     model         = resample_flux(wave, twave, tflux)
 
     # Unit amplitude.
-    model         = res.dot(model)
-    
+    model         = model # res.dot(model)
+
+    chi_sq        = ivar * (flux - line_flux * model)**2.
+    chi_sq        = np.sum(chi_sq[mask == 0])
+        
     # dMdtheta    = [z, v, r, lnA].
     grad          = np.zeros(4)
 
     for i, fdMdtheta in enumerate([dMdz, dMdv, dMdr, dMdlnA]):
-        dMdtheta  = fdMdtheta(z, v, r, linea=linea, lineb=lineb, tflux=tflux)
+        dMdtheta  = fdMdtheta(z=z, v=v, r=r, linea=linea, lineb=lineb, tflux=None)
         dMdtheta  = resample_flux(wave, twave, dMdtheta)
-        dMdtheta  = res.dot(dMdtheta)
-        dMdtheta *= line_flux
+        # dMdtheta = res.dot(dMdtheta)
+                
+        grad[i]   = -2. * np.sum((flux[mask == 0] - line_flux * model[mask == 0]) * ivar[mask == 0] * line_flux * dMdtheta[mask == 0])
         
-        grad[i]   = -2. * np.sum((flux[mask == 0] - line_flux * model[mask == 0]) * ivar[mask == 0] * dMdtheta[mask == 0])
-    
-    return  grad
+    return  grad, chi_sq
 
 
 if __name__ == '__main__':
@@ -195,44 +199,99 @@ if __name__ == '__main__':
             mask = postage[cam].mask
 
             _, _, X2, _ = doublet_chi2(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
-
-            result     += X2
+            # X2   = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb, index=5514)
+            
+            result += X2
 
             break
             
         return  result
 
-    def _agrad(x):
-        z           = x[0]
-        v           = x[1]
-        r           = x[2]
-        lnA         = x[3]
+    def _fdgrad(x):
+        z             = x[0]
+        v             = x[1]
+        r             = x[2]
+        lnA           = x[3]
 
-        line_flux   = np.exp(lnA)
+        line_flux     = np.exp(lnA)
 
-        result      = 0.0
+        result        = 0.0
 
-        grad        = np.zeros(4)
+        chisq         = 0.0
+        grad          = np.zeros(4)
+
+        eps           = np.sqrt(np.finfo(float).eps)
         
         for cam in cams:
-            wave    = postage[cam].wave
-            res     = Resolution(postage[cam].R)
-            flux    = postage[cam].flux
-            ivar    = postage[cam].ivar
-            mask    = postage[cam].mask
+            wave      = postage[cam].wave
+            res       = Resolution(postage[cam].R)
+            flux      = postage[cam].flux
+            ivar      = postage[cam].ivar
+            mask      = postage[cam].mask
 
-            grad   += doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
+            for i in np.arange(4):
+                hi            = np.array(x, copy=True)
+                lo            = np.array(x, copy=True) 
+
+                lo[i]        -= eps
+                hi[i]        += eps
+                
+                _, _, hiX2, _ = doublet_chi2(hi[0], wave, res, flux, ivar, mask, continuum=0.0, sigmav=hi[1], r=hi[2], line_flux=np.exp(hi[3]), linea=linea, lineb=lineb)
+                _, _, loX2, _ = doublet_chi2(lo[0], wave, res, flux, ivar, mask, continuum=0.0, sigmav=lo[1], r=lo[2], line_flux=np.exp(lo[3]), linea=linea, lineb=lineb)
+
+                grad[i]      += (hiX2 - loX2) / 2. / eps
 
             break
-            
-        return  grad
-        
-    x0    = np.array([rrz, 52., 0.7, 6.0])        
 
-    grad  = approx_fprime(x0, _X2, 1.e-8)
-    agrad = _agrad(x0)
+        return  grad, -99.
     
-    print(grad)
+    def _agrad(x):
+        z             = x[0]
+        v             = x[1]
+        r             = x[2]
+        lnA           = x[3]
+
+        line_flux     = np.exp(lnA)
+
+        result        = 0.0
+
+        chisq         = 0.0
+        grad          = np.zeros(4)
+        
+        for cam in cams:
+            wave      = postage[cam].wave
+            res       = Resolution(postage[cam].R)
+            flux      = postage[cam].flux
+            ivar      = postage[cam].ivar
+            mask      = postage[cam].mask
+
+            _grad, X2 = doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, v=v, r=r, line_flux=line_flux, linea=linea, lineb=lineb)
+
+            grad     += _grad
+            chisq    += X2
+            
+            break
+            
+        return  grad, chisq
+
+    ## 
+    x0           = np.array([rrz, 52., 0.7, 0.0])        
+    
+    agrad, chisq = _agrad(x0)
+    
+    print(chisq, _X2(x0))
     print(agrad)
+    print(_fdgrad(x0)[0])
+        
+    for eps in [1.e-10, 1.e-8, 1.e-7, 1.e-6, 1.e-5]:
+        grad         = approx_fprime(x0, _X2, eps)
+
+        print(grad)
+
+    # print(dMdz(x0[0], x0[1], x0[2], linea=3726.032, lineb=3728.815, tflux=None)[5514])
+    # print(dMdr(x0[0], x0[1], x0[2], linea=3726.032, lineb=3728.815, tflux=None)[5514])
+
+    # print(rrz, 3728.815 * (1. + rrz))
+    # print(postage['r5'].wave)
     
     print('\n\nDone.\n\n')
