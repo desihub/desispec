@@ -10,8 +10,8 @@ from   jax               import grad, jit, vmap, hessian, jacfwd, jacrev
 from   jax.experimental  import optimizers
 from   scipy.optimize    import leastsq
 
-from   desispec.interpolation import resample_flux
-# from   resample_flux import resample_flux
+# from   desispec.interpolation import resample_flux
+from   resample_flux import resample_flux
 
 from   doublet import doublet
 from   desispec.io import read_frame

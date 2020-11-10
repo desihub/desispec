@@ -5,7 +5,6 @@ from   scipy             import optimize
 from   scipy.optimize    import approx_fprime, minimize, Bounds
 from   scipy.stats       import multivariate_normal
 
-from   desispec.interpolation import resample_flux
 from   doublet import doublet
 from   desispec.io import read_frame
 from   desispec.io.meta import findfile

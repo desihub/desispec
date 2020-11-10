@@ -11,30 +11,32 @@ from   desispec.io.meta    import findfile
 from   desispec.resolution import Resolution
 from   doublet_postagefit  import doublet_chi2
 
-# from   resample_flux        import resample_flux
-from   desispec.interpolation import resample_flux
-
-from   doublet                import sig_lambda
+from   resample_flux       import resample_flux
+# from   desispec.interpolation import resample_flux
 
 
 lightspeed = const.c.to('km/s').value
 
+# @jit(nopython=True)
+def sig_lambda(z, sigmav, lineb):
+      return  sigmav * (1. + z) * lineb / lightspeed
+
+# @jit(nopython=True)
 def dsigdz(v, lineb):
     return v * lineb / lightspeed
 
+# @jit(nopython=True)
 def dsigdv(z, lineb):
     return (1. + z) * lineb / lightspeed
 
-# Obs. model = Resolution * [exp(\tilde A) * \tilde M].
-def dMdlnA(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
-    if tflux is None:
-        _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
-
+# @jit(nopython=True)
+def dMdlnA(z, v, r, tflux, linea=3726.032, lineb=3728.815):
     return tflux
 
-def dMdr(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
-    if tflux is None:
-        _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
+# @jit(nopython=True)
+def dMdr(z, v, r, tflux, linea=3726.032, lineb=3728.815):
+    # if tflux is None:
+    #    _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
 
     sigma_lam = sig_lambda(z=z, sigmav=v, lineb=lineb)
 
@@ -46,10 +48,8 @@ def dMdr(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
     # Identically zero if r is zero. 
     return  result
 
-def dMdz(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
-    if tflux is None:
-        _, tflux = doublet(z=z, twave=twave, sigmav=v, r=r, linea=linea, lineb=lineb)
-
+# @jit(nopython=True)
+def dMdz(z, v, r, tflux, linea=3726.032, lineb=3728.815):
     sigma_lam = sig_lambda(z=z, sigmav=v, lineb=lineb)
         
     result    = -2. * tflux * dsigdz(v=v, lineb=lineb) / sigma_lam
@@ -67,10 +67,8 @@ def dMdz(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
 
     return  result
 
-def dMdv(z, v, r, linea=3726.032, lineb=3728.815, tflux=None):
-    if tflux is None:
-        _, tflux = doublet(z, twave, sigmav=v, r=r, linea=linea, lineb=lineb)
-
+# @jit(nopython=True)
+def dMdv(z, v, r, tflux, linea=3726.032, lineb=3728.815):
     sigma_lam = sig_lambda(z=z, sigmav=v, lineb=lineb)
         
     def dA1dv(z, v, r, lineb=lineb, tflux=tflux):
@@ -103,7 +101,7 @@ def doublet_chi2_grad(z, wave, res, flux, ivar, mask, continuum=0.0, v=5., r=0.7
     grad          = np.zeros(4)
 
     for i, fdMdtheta in enumerate([dMdz, dMdv, dMdr, dMdlnA]):
-        dMdtheta  = fdMdtheta(z=z, v=v, r=r, linea=linea, lineb=lineb, tflux=None)
+        dMdtheta  = fdMdtheta(z=z, v=v, r=r, tflux=tflux, linea=linea, lineb=lineb)
         dMdtheta  = resample_flux(wave, twave, dMdtheta)
         # dMdtheta = res.dot(dMdtheta)
                 
@@ -275,20 +273,36 @@ if __name__ == '__main__':
 
     ## 
     x0           = np.array([rrz, 52., 0.7, 0.0])        
+
+    ##  Force jit compilation.
+    _agrad(x0)
     
-    agrad, chisq = _agrad(x0)
-    
+    start        = time.time()
+
+    for i in np.arange(30):
+        agrad, chisq = _agrad(x0)
+
+    end          = time.time()
+        
     print(chisq, _X2(x0))
     print()
     print(agrad)
+    print(start - end)
+
+    # print(_fdgrad(x0)[0])
+
+    start       = time.time()
+    
+    for i in np.arange(30):
+        eps     = 1.e-8
+        grad    = approx_fprime(x0, _X2, eps)
+
+    end         = time.time()
+
     print()
-    print(_fdgrad(x0)[0])
-        
-    for eps in [1.e-10, 1.e-8, 1.e-7, 1.e-6, 1.e-5]:
-        grad         = approx_fprime(x0, _X2, eps)
-
-        print(grad)
-
+    print(grad)
+    print(start - end)
+    
     # print(dMdz(x0[0], x0[1], x0[2], linea=3726.032, lineb=3728.815, tflux=None)[5514])
     # print(dMdr(x0[0], x0[1], x0[2], linea=3726.032, lineb=3728.815, tflux=None)[5514])
 
