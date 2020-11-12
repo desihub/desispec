@@ -1,0 +1,582 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script analyzes focus scans
+"""
+
+import sys,os
+import fitsio
+import argparse
+import numpy as np
+
+from scipy.signal import fftconvolve
+from scipy.special import erf
+from scipy.spatial import cKDTree as KDTree
+
+from astropy.table import Table,vstack
+import matplotlib.pyplot as plt
+
+from desispec.io import read_image,write_image,read_raw
+from desiutil.log import get_logger
+
+def fit_centroid_barycenter(stamp):
+    """
+    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+    """
+
+    hw=stamp.shape[0]//2
+    x1d=np.arange(-hw,hw+1)
+
+    # for the moment it's a simplistic barycenter
+    # one can do much better than this
+    norm=np.sum(stamp)
+    if norm <= 0:
+        raise RuntimeError("sum of flux in stamp = {}".format(norm))
+
+    xc=np.sum(x1d*np.sum(stamp,axis=0))/norm
+    yc=np.sum(x1d*np.sum(stamp,axis=1))/norm
+
+    # uncertainties, made up for now ...
+    xe=1.
+    ye=1.
+
+    return xc,yc,xe,ye,norm
+
+
+def psf(i0,i1,xc,yc,sigma):
+    a=1/(np.sqrt(2)*sigma)
+    return 0.25*(erf(a*(i1+0.5-xc))-erf(a*(i1-0.5-xc)))*(erf(a*(i0+0.5-yc))-erf(a*(i0-0.5-yc)))
+
+def dpsfdxc(i0,i1,xc,yc,sigma):
+    a=1/(np.sqrt(2)*sigma)
+    return -a*0.25*2/np.sqrt(np.pi)*(np.exp(-(a*(i1+0.5-xc))**2)-np.exp(-(a*(i1-0.5-xc))**2))*(erf(a*(i0+0.5-yc))-erf(a*(i0-0.5-yc)))
+
+def dpsfdyc(i0,i1,xc,yc,sigma):
+    a=1/(np.sqrt(2)*sigma)
+    return -a*0.25*2/np.sqrt(np.pi)*(erf(a*(i1+0.5-xc))-erf(a*(i1-0.5-xc)))*(np.exp(-(a*(i0+0.5-yc))**2)-np.exp(-(a*(i0-0.5-yc))**2))
+
+def fit_centroid_gaussian(stamp,sigma=1.,noise=10.):
+    """
+    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+    """
+    # iterative gauss-newton fit
+    n0=stamp.shape[0]
+    n1=stamp.shape[1]
+    xc=float(n1//2)
+    yc=float(n0//2)
+    flux=np.sum(stamp)
+    #print(flux,xc,yc)
+    mod    = np.zeros(stamp.shape)
+    dmoddx = np.zeros(stamp.shape)
+    dmoddy = np.zeros(stamp.shape)
+    # pixel indices (in 2D)
+    ii0 = np.tile(np.arange(n0),(n1,1)).T
+    ii1 = np.tile(np.arange(n1),(n0,1))
+
+    for _ in range(5):
+        mod    = psf(ii0,ii1,xc,yc,sigma)
+        dmoddx = dpsfdxc(ii0,ii1,xc,yc,sigma)
+        dmoddy = dpsfdyc(ii0,ii1,xc,yc,sigma)
+        H=np.array([mod,flux*dmoddx,flux*dmoddy]).reshape(3,n0*n1)
+        B=((stamp-flux*mod).reshape(n0*n1)*H).sum(axis=1)
+        A=H.dot(H.T)
+        Ai=np.linalg.inv(A)
+        delta=Ai.dot(B)
+        val=np.max(np.abs(delta[1:]))
+        if val>0.2:
+            delta *= (0.2/val) # limiting range
+
+        flux += delta[0]
+        xc += delta[1]
+        yc += delta[2]
+        #print(loop,delta,[flux,xc,yc])
+        if np.abs(delta[1])<0.001 and np.abs(delta[2])<0.001: break
+
+    # coordinates should be zero at center of stamp
+    xc -= float(n1//2)
+    yc -= float(n0//2)
+
+    xe = noise * np.sqrt(Ai[1,1])
+    ye = noise * np.sqrt(Ai[2,2])
+
+    return xc,yc,xe,ye,flux
+    #sys.exit(12)
+
+
+def fit_centroid(stamp,noise=10.):
+    """
+    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+    """
+
+    #return fit_centroid_gaussian(stamp,sigma=1,noise=noise)
+    return fit_centroid_barycenter(stamp)
+
+def fit_gaussian_sigma(stamp,sigma=1.0,xc=0.,yc=0.) :
+    """
+    fit gaussian sigma
+    """
+
+    assert(stamp.shape[0]%2==1) # odd
+    assert(stamp.shape[0]==stamp.shape[1]) # a square
+
+    hw=stamp.shape[0]//2
+    nw=2*hw+1
+    x = np.tile(np.linspace(-hw,hw,nw),(nw,1))
+    y = x.T
+    kern = np.exp(-x**2/2/sigma**2-y**2/2/sigma**2)
+    kern /= np.sum(kern)
+    sq2 = np.sqrt(2.)
+    for i in range(20) :
+        psf  = np.exp(-(x-xc)**2/2/sigma**2-(y-yc)**2/2/sigma**2)
+        norme = np.sum(stamp*psf)
+        xsig = sq2*np.sqrt(np.sum((x-xc)**2*stamp*psf)/norme)
+        ysig = sq2*np.sqrt(np.sum((y-yc)**2*stamp*psf)/norme)
+        nsigma = np.sqrt((xsig**2+ysig**2)/2.) # quadratic mean
+        if abs(nsigma-sigma) < 0.001 :
+            break
+        sigma = nsigma
+    return sigma
+
+
+
+def piston_and_tilt_to_gauge_offsets(camera_spectro,focus_plane_coefficients) :
+
+    c=camera_spectro[0].upper()
+    if c=="B" :
+        camera="BLUE"
+    elif c=="R" :
+        camera="RED"
+    elif c=="Z" :
+        camera="NIR"
+    else :
+        raise ValueError("unexpected camera = '{}' (expect r4,b2,z7 ...,)".format(camera_spectro))
+
+    log=get_logger()
+
+
+
+    # from outil_tilt.ppt , email from Sandrine on 2020/11/12
+    x_plate_gauge={}
+    y_plate_gauge={}
+    x_plate_gauge["TOP"]=328/2*np.sin(9*np.pi/180)
+    y_plate_gauge["TOP"]=328/2*np.cos(9*np.pi/180)
+    x_plate_gauge["LEFT"]=-328/2*np.cos(39*np.pi/180)
+    y_plate_gauge["LEFT"]=-328/2*np.sin(39*np.pi/180)
+    x_plate_gauge["RIGHT"]=328/2*np.cos(39*np.pi/180)
+    y_plate_gauge["RIGHT"]=-328/2*np.sin(39*np.pi/180)
+    log.debug("X_PLATE_GAUGE={}".format(x_plate_gauge))
+    log.debug("Y_PLATE_GAUGE={}".format(y_plate_gauge))
+
+    x_pix_gauge={}
+    y_pix_gauge={}
+    for k in ["TOP","LEFT","RIGHT"] :
+        x_pix_gauge[k] = -y_plate_gauge[k]/0.015+2048
+        if camera.upper() == "BLUE" or  camera.upper() == "NIR" :
+            y_pix_gauge[k] = -x_plate_gauge[k]/0.015+2048
+        elif camera.upper() == "RED" :
+            y_pix_gauge[k] = x_plate_gauge[k]/0.015+2048
+        else :
+            raise ValueError("don't know camera "+camera)
+    log.debug("X_PIX_GAUGE={}",format(x_pix_gauge))
+    log.debug("Y_PIX_GAUGE={}",format(y_pix_gauge))
+
+    best_focus_gauge_offset = {}
+    for k in ["TOP","LEFT","RIGHT"] :
+        best_focus_gauge_offset[k] = focus_plane_coefficients[0]/1000. + focus_plane_coefficients[1]*(x_pix_gauge[k]/2048-1)/1000.+ focus_plane_coefficients[2]*(y_pix_gauge[k]/2048-1)/1000.
+    log.info("Best focus gauge offsets = {} mm".format(best_focus_gauge_offset))
+    return best_focus_gauge_offset
+
+
+
+
+
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                 description="Compute a master dark",
+                                 epilog='''
+                                 Input is a list of raw dark images, possibly with various exposure times.
+                                 Raw images are preprocessed without dark,mask correction and without cosmic-ray masking.
+                                 However gains are applied so the output is in electrons/sec.
+                                 Only an optional bias correction is applied.
+                                 The result is the median of the preprocessed images divided by their exposure time.
+                                 We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.                                 ''')
+
+
+parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
+                    help = 'path to raw or preprocessed image fits files')
+parser.add_argument('-o','--outdir', type = str, default = None, required = True,
+                    help = 'output directory')
+parser.add_argument('--nsig', type = float, default = 10., required = False,
+                    help = 'S/N threshold for spots detection')
+parser.add_argument('--minflux', type = float, default = 1000, required = False,
+                    help = 'flux threshold for spots detection')
+parser.add_argument('--sigma', type = float, default = 1.5, required = False,
+                    help = 'PSF sigma in pixels used for spots detection')
+parser.add_argument('--plot', action = 'store_true',
+                    help = 'plot results')
+parser.add_argument('--overwrite', action = 'store_true',
+                    help = 'rerun the measurements of spots even if a output table exists')
+parser.add_argument('--offsets', type = str, default = "-150,-100,-50,0,50,100,150", required = True,
+                    help = 'comma separated list of focus offsets, like --offsets=-150,-100,-50,0,50,100,150')
+parser.add_argument('--gauges', type = str, default = "60,60,60", required = False,
+                    help = 'Gauges values for offset=0 (3 numbers, comma separated)')
+parser.add_argument('--camera', type = str, default = None, required = True,
+                    help = 'camera (r2,b4 ..), required to preprocess raw images')
+
+
+args = parser.parse_args()
+log  = get_logger()
+
+# gaussian convolution kernel
+sigma = 1.5
+hw=int(3*args.sigma)
+nw=2*hw+1
+x = np.tile(np.linspace(-hw,hw,nw),(nw,1))
+y = x.T
+kern = np.exp(-x**2/2/sigma**2-y**2/2/sigma**2)
+kern /= np.sum(kern)
+
+vals=args.offsets.split(",")
+if len(vals) != len(args.infile) :
+    log.error("number of offsets ({}) != number of exposure files ({})".format(len(vals),len(args.infile)))
+    log.error("offsets argument has to be a coma separated list of values, like --offsets=-150,-100,-50,0,50,100,150")
+    sys.exit(12)
+
+offsets=np.zeros(len(vals))
+for i,val in enumerate(vals) :
+    offsets[i]=float(val)
+    log.info("{} : offset = {}".format(args.infile[i],offsets[i]))
+
+zero_offset_gauges = np.array([float(v) for v in args.gauges.split(",")])
+log.info("Gauges values for zero offset : {}".format(zero_offset_gauges))
+
+table=None
+n0=None
+n1=None
+
+for ifile,offset in zip(args.infile,offsets) :
+
+    log.info("read {}".format(ifile))
+
+    head = fitsio.read_header(ifile)
+    if head["NAXIS"] == 0 :
+        log.info("raw data")
+        head = fitsio.read_header(ifile,1)
+        expid  = head["EXPID"]
+        preproc_filename = os.path.join(args.outdir,"preproc-{}-{:08d}.fits".format(args.camera.lower(),expid))
+        if os.path.isfile(preproc_filename) :
+            log.info("use existing {}".format(preproc_filename))
+        else :
+            log.info("preprocess image ...")
+            img = read_raw(ifile,camera=args.camera)
+            write_image(preproc_filename,img)
+        ifile = preproc_filename
+        head  = fitsio.read_header(ifile)
+    else :
+        cam = head["CAMERA"]
+        if cam.lower() != args.camera.lower() :
+            log.error("incompatible cameras between script argument ({}) and preproc image header value ({})".format(args.camera.lower(),cam.lower()))
+            sys.exit(12)
+
+
+    expid  = head["EXPID"]
+    log.info("EXPID={}".format(expid))
+
+    log.info("CAMERA={}".format(args.camera))
+    log.info("OFFSET={}".format(offset))
+
+    if n0 is None :
+        n0 = head["NAXIS2"] #n0 in python = y = axis2 in fits
+        n1 = head["NAXIS1"] #n1 in python = x = axis1 in fits
+
+
+    outfile = os.path.join(args.outdir,"focus-{}-{:08d}.csv".format(args.camera,expid))
+
+    if os.path.isfile(outfile) and not args.overwrite :
+        if table is None :
+            table = Table.read(outfile)
+        else :
+            tmp = Table.read(outfile)
+            table = vstack([table,tmp])
+        log.info("read existing table {}".format(outfile))
+        continue
+
+    preproc = read_image(ifile)
+
+    good = (preproc.ivar>0)*(preproc.mask==0)
+    img = preproc.pix*good
+    n0 = img.shape[0]
+    n1 = img.shape[1]
+
+    log.info("gaussian convolution of image")
+    cimg = fftconvolve(img,kern,"same")
+
+    log.info("measure pedestal and rms")
+    # look the values of a random subsample of the image
+    nrand=20000
+    ii0=(np.random.uniform(size=nrand)*n0).astype(int)
+    ii1=(np.random.uniform(size=nrand)*n1).astype(int)
+    vals=cimg[ii0,ii1].ravel()
+    mval=np.median(vals)
+
+    #- normalized median absolute deviation as robust version of RMS
+    #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
+    rms=1.4826*np.median(np.abs(vals-mval))
+    ok=np.abs(vals-mval)<4*rms
+    cmval=np.mean(vals[ok])
+    # rms of convolved images
+    crms=np.std(vals[ok])
+    log.info("convolved image pedestal={:4.2f} rms={:4.2f}".format(cmval,crms))
+    # remove mean
+    cimg -= cmval
+
+    # rms of original image
+    vals=img[ii0,ii1].ravel()
+    mval=np.median(vals)
+    rms=1.4826*np.median(np.abs(vals-mval))
+    ok=np.abs(vals-mval)<4*rms
+    rms=np.std(vals[ok])
+    log.info("original image pedestal={:4.2f} rms={:4.2f}".format(mval,rms))
+
+    log.info("detecting spots")
+    threshold = args.nsig*crms
+    peaks=np.zeros((n0,n1))
+    peaks[1:-1,1:-1] = ((cimg[1:-1, 1:-1] > cimg[:-2, 1:-1]) *
+                        (cimg[1:-1, 1:-1] > cimg[2:,  1:-1]) *
+                        (cimg[1:-1,1:-1]  > cimg[1:-1,:-2]) *
+                        (cimg[1:-1,1:-1]  > cimg[1:-1,2:]) *
+                        (cimg[1:-1,1:-1]>threshold))
+    # loop on peaks
+    peakindices=np.where(peaks.ravel()>0)[0]
+    npeak=len(peakindices)
+    if npeak == 0:
+        log.error("no spot found")
+        raise RuntimeError("no spot found")
+    else:
+        log.info("found {} peaks".format(npeak))
+        if npeak>10000:
+            log.error("this is far too many, is the room/dome light on??")
+            raise RuntimeError("too many spots")
+
+    xpix=np.zeros(npeak)
+    ypix=np.zeros(npeak)
+    xerr=np.zeros(npeak)
+    yerr=np.zeros(npeak)
+    counts=np.zeros(npeak)
+    sig=np.zeros(npeak)
+    hw=3
+
+    for j,index in enumerate(peakindices):
+        i0=index//n1
+        i1=index%n1
+
+        nbad=np.sum(good[i0-hw:i0+hw+1,i1-hw:i1+hw+1]==0)
+        if nbad>0 :
+            log.warning("ignore spot {} with {} bad pixels in stamp".format(j,nbad))
+            continue
+
+
+        x,y,ex,ey,c=fit_centroid(img[i0-hw:i0+hw+1,i1-hw:i1+hw+1],noise=rms)
+        xpix[j] = x + i1 #  x is along axis=1 in python
+        ypix[j] = y + i0 #  y is along axis=0 in python
+        xerr[j] = ex
+        yerr[j] = ey
+        counts[j] = c
+        sig[j] = fit_gaussian_sigma(img[i0-hw:i0+hw+1,i1-hw:i1+hw+1],sigma=1.0,xc=x,yc=y)
+
+        log.debug("{} x={} y={} counts={} sig={}".format(j,xpix[j],ypix[j],counts[j],sig[j]))
+
+
+    good = (counts>=args.minflux)&(sig>0.1)&(sig<10.)
+    xpix=xpix[good]
+    ypix=ypix[good]
+    xerr=xerr[good]
+    yerr=yerr[good]
+    counts=counts[good]
+    sig=sig[good]
+
+    for _ in range(100) :
+        # iterate, removing duplicates
+        xy=np.array([xpix,ypix]).T
+        tree = KDTree(xy)
+        distances,indices = tree.query(xy,k=2) # go up to 4 bad detections
+        distances=distances[:,1] # discard same
+        indices=indices[:,1] # discard same
+        bad=np.where(distances<args.sigma)[0] # at least 1 duplicate
+        if bad.size>0 :
+            bad=bad[0]
+            index_to_remove = indices[bad]
+            #log.warning("remove one duplicated detection of spot at x,y={:5.3f},{:5.3f} and {:5.3f},{:5.3f} at distance={}".format(xpix[bad],ypix[bad],xpix[index_to_remove],ypix[index_to_remove],distances[bad]))
+            if counts[bad]<counts[index_to_remove] : index_to_remove=bad # remove the faintest
+            xpix = np.delete(xpix,index_to_remove)
+            ypix = np.delete(ypix,index_to_remove)
+            xerr = np.delete(xerr,index_to_remove)
+            yerr = np.delete(yerr,index_to_remove)
+            counts = np.delete(counts,index_to_remove)
+            sig = np.delete(sig,index_to_remove)
+        else :
+            break #exit
+
+    log.info("keep {} spots after flux selection and removal of duplicates".format(len(xpix)))
+
+    current_table = Table([xpix,ypix,xerr,yerr,counts,sig],names=("XPIX","YPIX","XERR","YERR","COUNTS","SIGMA"))
+    current_table["EXPID"] = np.repeat(expid,len(xpix))
+    current_table["CAMERA"] = np.repeat(args.camera,len(xpix))
+    current_table["OFFSET"] = np.repeat(offset,len(xpix))
+
+    median_sig = np.median(sig)
+    rms_sig = 1.48*np.median(np.abs(sig-median_sig))
+    log.info("PSF sigma = {:4.3f} pixels , rms = {:4.3f} pixels".format(median_sig,rms_sig))
+
+    current_table.write(outfile,overwrite=True)
+    log.info("wrote {}".format(outfile))
+
+    if table is None :
+        table = current_table
+    else :
+        table = vstack([table,current_table])
+
+    if args.plot :
+        fig = plt.figure("sigma-{}".format(expid))
+        a = plt.subplot(111,title="sigma")
+
+        vmin = min(median_sig-3*rms_sig,median_sig-0.1)
+        vmax = max(median_sig+3*rms_sig,median_sig+0.1)
+
+        plt.scatter(current_table["XPIX"],current_table["YPIX"],c=current_table["SIGMA"],vmin=vmin,vmax=vmax)
+
+        cb=plt.colorbar()
+        cb.set_label("sigma (pixels)")
+        a.set_xlabel("xccd")
+        a.set_xlabel("yccd")
+
+
+expids = np.unique(table["EXPID"])
+offsets = np.unique(table["OFFSET"])
+sigma = np.zeros(expids.size)
+rms = np.zeros(expids.size)
+for j,expid in enumerate(expids) :
+    ii=(table["EXPID"]==expid)
+    sig=table["SIGMA"][ii]
+    sigma[j] = np.median(sig)
+    rms[j] = 1.48*np.median(np.abs(sig-sigma[j]))
+
+# compute best focus
+i=np.argmin(sigma)
+log.info("exposure with best focus = {}".format(expids[i]))
+ii=np.array([i-2,i-1,i,i+1,i+2])
+ii=np.array([i-1,i,i+1])
+ii=ii[(ii>=0)&(ii<sigma.size)]
+
+coef=np.polyfit(offsets[ii],sigma[ii],2)
+focuspol=np.poly1d(coef)
+best_focus_offset_microns = -coef[1]/2/coef[0]
+log.info("best focus offset (average piston) = {:4.3f} um".format(best_focus_offset_microns))
+
+if args.plot :
+    plt.figure("best-exposure-{}".format(expids[i]))
+    selection = (table["EXPID"]==expids[i])
+    a=plt.subplot(211)
+    a.plot(table["XPIX"][selection],table["SIGMA"][selection],".")
+    a.grid()
+    a.set_xlabel("xccd")
+    a=plt.subplot(212)
+    a.plot(table["YPIX"][selection],table["SIGMA"][selection],".")
+    a.set_xlabel("yccd")
+    a.grid()
+
+if args.plot :
+    plt.figure("focus-scan")
+    plt.errorbar(offsets,sigma,rms,fmt="o")
+    x=np.linspace(offsets[ii[0]],offsets[ii[-1]],10)
+    plt.plot(x,focuspol(x))
+    plt.axvline(best_focus_offset_microns,linestyle="--")
+    plt.xlabel("focus offset")
+    plt.ylabel("median PSF sigma (pixels)")
+    plt.grid()
+
+
+# stack on a grid
+nbins1d=8
+xbins=np.linspace(0,3700,nbins1d+1) # 3700 instead of n1 because of detached test fibers
+ybins=np.linspace(0,n0,nbins1d+1)
+dx=(xbins[1]-xbins[0])
+dy=(ybins[1]-ybins[0])
+x=table["XPIX"]
+y=table["YPIX"]
+sig=table["SIGMA"]
+xindex = x//dx
+yindex = y//dy
+index=xindex*nbins1d+yindex
+
+log.info("fitting best plane ...")
+x_of_bin = []
+y_of_bin = []
+best_focus_offset_of_bin=[]
+for i in range(nbins1d**2) :
+    selection=(index==i)
+    if np.sum(selection&(table["EXPID"]==expids[0]))<3 : # less than 3 spots
+        continue
+    xb = np.mean(x[selection&(table["EXPID"]==expids[0])])
+    yb = np.mean(y[selection&(table["EXPID"]==expids[0])])
+    sigb = np.zeros(expids.size)
+    sigerrb = np.zeros(expids.size)
+    for j,expid in enumerate(expids) :
+        kk=selection&(table["EXPID"]==expid)
+        sigb[j] = np.median(sig[kk])
+        sigerrb[j] = 1.48*np.median(np.abs(sig[kk]))/np.sqrt(kk.size)
+    k=np.argmin(sigb)
+    kk=np.array([k-1,k,k+1])
+    if kk[0]<0 or kk[-1]>=sigb.size : continue
+    coef=np.polyfit(offsets[kk],sigb[kk],2)
+    fb = -coef[1]/2/coef[0]
+    if abs(fb)<150:
+        x_of_bin.append(xb)
+        y_of_bin.append(yb)
+        best_focus_offset_of_bin.append(fb)
+
+x_of_bin = np.array(x_of_bin)
+y_of_bin = np.array(y_of_bin)
+best_focus_offset_of_bin = np.array(best_focus_offset_of_bin)
+
+rx_of_bin = x_of_bin/2048. -1
+ry_of_bin = y_of_bin/2048. -1
+h=np.vstack([np.ones(rx_of_bin.size),rx_of_bin,ry_of_bin])
+a=h.dot(h.T)
+b=h.dot(best_focus_offset_of_bin)
+ai=np.linalg.inv(a)
+focus_plane_coefficients=ai.dot(b)
+
+best_focus_gauge_offsets = piston_and_tilt_to_gauge_offsets(args.camera,focus_plane_coefficients)
+names=["TOP","LEFT","RIGHT"]
+best_focus_gauges = zero_offset_gauges + np.array([best_focus_gauge_offsets[k] for k in names])
+log.info("best focus gauges ({},{},{}) = {:5.3f} {:5.3f} {:5.3f} mm".format(names[0],names[1],names[2],best_focus_gauges[0],best_focus_gauges[1],best_focus_gauges[2]))
+
+if args.plot :
+    plt.figure("best-focus-plane")
+    best_plane_at_bin=h.T.dot(focus_plane_coefficients)
+    a=plt.subplot(211)
+    a.plot(x_of_bin,best_focus_offset_of_bin,"o")
+    a.plot(x_of_bin,best_plane_at_bin,".")
+    a.grid()
+    a.axhline(best_focus_offset_microns,linestyle="--")
+    a.set_xlabel("xccd")
+    a.set_ylabel("best focus")
+    a=plt.subplot(212)
+    a.plot(y_of_bin,best_focus_offset_of_bin,"o")
+    a.plot(y_of_bin,best_plane_at_bin,".")
+    a.set_xlabel("yccd")
+    a.set_ylabel("best focus")
+    a.axhline(best_focus_offset_microns,linestyle="--")
+    a.grid()
+
+
+if args.plot :
+    plt.show()
