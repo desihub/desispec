@@ -27,8 +27,16 @@ RPIXSCALE=2048.
 
 def fit_centroid_barycenter(stamp):
     """
-    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    Fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
     in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+
+    Args:
+       stamp: 2D numpy array image centered on a spot
+
+    Returns:
+       xc: float, center of spot x coordinate (axis=1 for numpy 2D arrays)
+       yc: float, center of spot y coordinate (axis=0 for numpy 2D arrays)
+       flux: float, counts in stamp
     """
 
     hw=stamp.shape[0]//2
@@ -43,29 +51,74 @@ def fit_centroid_barycenter(stamp):
     xc=np.sum(x1d*np.sum(stamp,axis=0))/norm
     yc=np.sum(x1d*np.sum(stamp,axis=1))/norm
 
-    # uncertainties, made up for now ...
-    xe=1.
-    ye=1.
-
-    return xc,yc,xe,ye,norm
+    return xc,yc,norm
 
 
 def psf(i0,i1,xc,yc,sigma):
+    """
+    Returns the integral of a Gaussian PSF in a pixel
+
+    Args:
+       i0: pixel index along axis=0 (y)
+       i1: pixel index along axis=1 (x)
+       xc: float, center of spot x coordinate (axis=1 for numpy 2D arrays)
+       yc: float, center of spot y coordinate (axis=0 for numpy 2D arrays)
+       sigma: float, sigma of Gaussian in units of pixel
+
+    Returns:
+       float, integral of a Gaussian PSF in the pixel
+    """
     a=1/(np.sqrt(2)*sigma)
     return 0.25*(erf(a*(i1+0.5-xc))-erf(a*(i1-0.5-xc)))*(erf(a*(i0+0.5-yc))-erf(a*(i0-0.5-yc)))
 
 def dpsfdxc(i0,i1,xc,yc,sigma):
+    """
+    Returns the derivative of the integral of a Gaussian PSF in a pixel with respect to xc
+
+    Args:
+       i0: pixel index along axis=0 (y)
+       i1: pixel index along axis=1 (x)
+       xc: float, center of spot x coordinate (axis=1 for numpy 2D arrays)
+       yc: float, center of spot y coordinate (axis=0 for numpy 2D arrays)
+       sigma: float, sigma of Gaussian in units of pixel
+
+    Returns:
+       float, derivative integral of a Gaussian PSF in the pixel with respect to xc
+    """
     a=1/(np.sqrt(2)*sigma)
     return -a*0.25*2/np.sqrt(np.pi)*(np.exp(-(a*(i1+0.5-xc))**2)-np.exp(-(a*(i1-0.5-xc))**2))*(erf(a*(i0+0.5-yc))-erf(a*(i0-0.5-yc)))
 
 def dpsfdyc(i0,i1,xc,yc,sigma):
+    """
+    Returns the derivative of the integral of a Gaussian PSF in a pixel with respect to yc
+
+    Args:
+       i0: pixel index along axis=0 (y)
+       i1: pixel index along axis=1 (x)
+       xc: float, center of spot x coordinate (axis=1 for numpy 2D arrays)
+       yc: float, center of spot y coordinate (axis=0 for numpy 2D arrays)
+       sigma: float, sigma of Gaussian in units of pixel
+
+    Returns:
+       float, derivative integral of a Gaussian PSF in the pixel with respect to yc
+    """
     a=1/(np.sqrt(2)*sigma)
     return -a*0.25*2/np.sqrt(np.pi)*(erf(a*(i1+0.5-xc))-erf(a*(i1-0.5-xc)))*(np.exp(-(a*(i0+0.5-yc))**2)-np.exp(-(a*(i0-0.5-yc))**2))
 
 def fit_centroid_gaussian(stamp,sigma=1.,noise=10.):
     """
-    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    Fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
     in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+
+    Args:
+       stamp: 2D numpy array image centered on a spot
+       sigma: float, sigma value for 2D Gaussian
+       noise: rms of noise in pixels (same unit as values in stamp)
+
+    Returns:
+       xc: float, center of spot x coordinate (axis=1 for numpy 2D arrays)
+       yc: float, center of spot y coordinate (axis=0 for numpy 2D arrays)
+       flux: float, counts in stamp
     """
     # iterative gauss-newton fit
     n0=stamp.shape[0]
@@ -102,15 +155,22 @@ def fit_centroid_gaussian(stamp,sigma=1.,noise=10.):
     xc -= float(n1//2)
     yc -= float(n0//2)
 
-    xe = noise * np.sqrt(Ai[1,1])
-    ye = noise * np.sqrt(Ai[2,2])
-
-    return xc,yc,xe,ye,flux
+    return xc,yc,flux
 
 def fit_centroid(stamp,noise=10.):
     """
-    fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
+    Fit the centroid of a 2D image square stamp of size (2*hw+1,2*hw+1)
     in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
+
+    Args:
+       stamp: 2D numpy array image centered on a spot
+       sigma: float, sigma value for 2D Gaussian
+       noise: rms of noise in pixels (same unit as values in stamp)
+
+    Returns:
+       xc: float, center of spot x coordinate (axis=1 for numpy 2D arrays)
+       yc: float, center of spot y coordinate (axis=0 for numpy 2D arrays)
+       flux: float, counts in stamp
     """
 
     #return fit_centroid_gaussian(stamp,sigma=1.2,noise=noise)
@@ -118,7 +178,16 @@ def fit_centroid(stamp,noise=10.):
 
 def fit_gaussian_sigma(stamp,sigma=1.0,xc=0.,yc=0.) :
     """
-    fit gaussian sigma
+    Fit Gaussian sigma
+
+    Args:
+       stamp: 2D numpy array image centered on a spot
+       sigma: float, initial sigma value used to initialize the fit
+       xc: float, center of spot x coordinate (axis=1 for numpy 2D arrays)
+       yc: float, center of spot y coordinate (axis=0 for numpy 2D arrays)
+
+    Returns:
+       float, best fit sigma value
     """
 
     assert(stamp.shape[0]%2==1) # odd
@@ -144,6 +213,17 @@ def fit_gaussian_sigma(stamp,sigma=1.0,xc=0.,yc=0.) :
 
 
 def piston_and_tilt_to_gauge_offsets(camera_spectro,focus_plane_coefficients) :
+    """
+    Computes gauge offsets to apply for a given best focus plane as a function of xccd and yccd
+
+    Args:
+       camera_spectro: str, camera identifier starting with b, r or z for NIR
+       focus_plane_coefficients: array with 3 values (c0,c1,c2), defining the best focus plane offsets: c0+c1*(xccd/2048-1)+c2*(yccd/2048-1) in microns
+
+    Returns:
+       dictionnary of offsets to apply, in mm, for the "TOP","LEFT" and "RIGHT" gauge
+    """
+
 
     c=camera_spectro[0].upper()
     if c=="B" :
@@ -191,7 +271,10 @@ def piston_and_tilt_to_gauge_offsets(camera_spectro,focus_plane_coefficients) :
     return best_focus_gauge_offset
 
 def test_gauge_offsets() :
-     # copied from DESI-5084 https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=5084;filename=DESI_doc_5084_Spectrographs_Tests_Summary_Mayall.xlsx;version=1
+    """
+    Test function
+    """
+    # copied from DESI-5084 https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=5084;filename=DESI_doc_5084_Spectrographs_Tests_Summary_Mayall.xlsx;version=1
 
     # BLUE     RED	NIR
     # piston (mm)	tilt/X(deg)	tilt/Y(deg)	piston (mm)	tilt/X(deg)	tilt/Y(deg)	piston (mm)	tilt/X(deg)	tilt/Y(deg)
@@ -257,14 +340,14 @@ def test_gauge_offsets() :
 
 def match_same_system(x1,y1,x2,y2,remove_duplicates=True) :
     """
-    match two catalogs, assuming the coordinates are in the same coordinate system (no transfo)
+    Match two catalogs, assuming the coordinates are in the same coordinate system (no transfo)
     Args:
         x1 : float numpy array of coordinates along first axis of cartesian coordinate system
         y1 : float numpy array of coordinates along second axis in same system
         x2 : float numpy array of coordinates along first axis in same system
         y2 : float numpy array of coordinates along second axis in same system
 
-    returns:
+    Returns:
         indices_2 : integer numpy array. if ii is a index array for entries in the first catalog,
                             indices_2[ii] is the index array of best matching entries in the second catalog.
                             (one should compare x1[ii] with x2[indices_2[ii]])
