@@ -73,7 +73,6 @@ def fit_centroid_gaussian(stamp,sigma=1.,noise=10.):
     xc=float(n1//2)
     yc=float(n0//2)
     flux=np.sum(stamp)
-    #print(flux,xc,yc)
     mod    = np.zeros(stamp.shape)
     dmoddx = np.zeros(stamp.shape)
     dmoddy = np.zeros(stamp.shape)
@@ -97,7 +96,6 @@ def fit_centroid_gaussian(stamp,sigma=1.,noise=10.):
         flux += delta[0]
         xc += delta[1]
         yc += delta[2]
-        #print(loop,delta,[flux,xc,yc])
         if np.abs(delta[1])<0.001 and np.abs(delta[2])<0.001: break
 
     # coordinates should be zero at center of stamp
@@ -108,8 +106,6 @@ def fit_centroid_gaussian(stamp,sigma=1.,noise=10.):
     ye = noise * np.sqrt(Ai[2,2])
 
     return xc,yc,xe,ye,flux
-    #sys.exit(12)
-
 
 def fit_centroid(stamp,noise=10.):
     """
@@ -514,7 +510,6 @@ for ifile,offset in zip(args.infile,offsets) :
         if bad.size>0 :
             bad=bad[0]
             index_to_remove = indices[bad]
-            #log.warning("remove one duplicated detection of spot at x,y={:5.3f},{:5.3f} and {:5.3f},{:5.3f} at distance={}".format(xpix[bad],ypix[bad],xpix[index_to_remove],ypix[index_to_remove],distances[bad]))
             if counts[bad]<counts[index_to_remove] : index_to_remove=bad # remove the faintest
             xpix = np.delete(xpix,index_to_remove)
             ypix = np.delete(ypix,index_to_remove)
@@ -523,7 +518,7 @@ for ifile,offset in zip(args.infile,offsets) :
             counts = np.delete(counts,index_to_remove)
             sig = np.delete(sig,index_to_remove)
         else :
-            break #exit
+            break
 
     log.info("keep {} spots after flux selection and removal of duplicates".format(len(xpix)))
 
