@@ -115,7 +115,7 @@ def fit_centroid(stamp,noise=10.):
     in a coordinate system centered on the stamp, i.e. the central pixel has coordinates = (0,0)
     """
 
-    #return fit_centroid_gaussian(stamp,sigma=1,noise=noise)
+    #return fit_centroid_gaussian(stamp,sigma=1.2,noise=noise)
     return fit_centroid_barycenter(stamp)
 
 def fit_gaussian_sigma(stamp,sigma=1.0,xc=0.,yc=0.) :
@@ -195,18 +195,48 @@ def piston_and_tilt_to_gauge_offsets(camera_spectro,focus_plane_coefficients) :
 
 
 
+def match_same_system(x1,y1,x2,y2,remove_duplicates=True) :
+    """
+    match two catalogs, assuming the coordinates are in the same coordinate system (no transfo)
+    Args:
+        x1 : float numpy array of coordinates along first axis of cartesian coordinate system
+        y1 : float numpy array of coordinates along second axis in same system
+        x2 : float numpy array of coordinates along first axis in same system
+        y2 : float numpy array of coordinates along second axis in same system
+
+    returns:
+        indices_2 : integer numpy array. if ii is a index array for entries in the first catalog,
+                            indices_2[ii] is the index array of best matching entries in the second catalog.
+                            (one should compare x1[ii] with x2[indices_2[ii]])
+                            negative indices_2 indicate unmatched entries
+        distances : distances between pairs. It can be used to discard bad matches
+
+    """
+    xy1=np.array([x1,y1]).T
+    xy2=np.array([x2,y2]).T
+    tree2 = KDTree(xy2)
+    distances,indices_2 = tree2.query(xy1,k=1)
+
+    if remove_duplicates :
+        unique_indices_2 = np.unique(indices_2)
+        n_duplicates = np.sum(indices_2>=0)-np.sum(unique_indices_2>=0)
+        if n_duplicates > 0 :
+            for i2 in unique_indices_2 :
+                jj=np.where(indices_2==i2)[0]
+                if jj.size>1 :
+                    kk=np.argsort(distances[jj])
+                    indices_2[jj[kk[1:]]] = -1
+
+    distances[indices_2<0] = np.inf
+    return indices_2,distances
 
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                 description="Compute a master dark",
+                                 description="Script to analyze a sequence of cryostat focus scan. Inputs are images, camera, offsets, gauges values for offset=0. Output are the best focus gauge values.",
                                  epilog='''
-                                 Input is a list of raw dark images, possibly with various exposure times.
-                                 Raw images are preprocessed without dark,mask correction and without cosmic-ray masking.
-                                 However gains are applied so the output is in electrons/sec.
-                                 Only an optional bias correction is applied.
-                                 The result is the median of the preprocessed images divided by their exposure time.
-                                 We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.                                 ''')
+                                 example:
+                                 desi_focus -i $DESI_SPECTRO_DATA/20200107/000{38939,38941,38942,38944,38946,38947,38948}/desi-000*.fits.fz -o . --cam r5 --offsets=-150,-100,-50,0,50,100,150 --gauges=60.873,61.009,61.185  --plot''')
 
 
 parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
@@ -229,7 +259,9 @@ parser.add_argument('--gauges', type = str, default = "60,60,60", required = Fal
                     help = 'Gauges values for offset=0 (3 numbers, comma separated)')
 parser.add_argument('--camera', type = str, default = None, required = True,
                     help = 'camera (r2,b4 ..), required to preprocess raw images')
-
+parser.add_argument('--nbins', type = int, default = 0, required = False,
+                    help = 'group the spots in nbins x nbins bins along xccd and yccd before fitting the focus offset')
+parser.add_argument('--testslit',action='store_true',help='discard some fibers')
 
 args = parser.parse_args()
 log  = get_logger()
@@ -469,19 +501,18 @@ for j,expid in enumerate(expids) :
     rms[j] = 1.48*np.median(np.abs(sig-sigma[j]))
 
 # compute best focus
-i=np.argmin(sigma)
-log.info("exposure with best focus = {}".format(expids[i]))
-ii=np.array([i-2,i-1,i,i+1,i+2])
-ii=np.array([i-1,i,i+1])
-ii=ii[(ii>=0)&(ii<sigma.size)]
-
-coef=np.polyfit(offsets[ii],sigma[ii],2)
+k=np.argmin(sigma)
+bestexpid=expids[k]
+log.info("exposure with best focus = {}".format(bestexpid))
+kk=np.array([k-2,k-1,k,k+1,k+2])
+kk=kk[(kk>=0)&(kk<sigma.size)]
+coef=np.polyfit(offsets[kk],sigma[kk],2)
 focuspol=np.poly1d(coef)
 best_focus_offset_microns = -coef[1]/2/coef[0]
 log.info("best focus offset (average piston) = {:4.3f} um".format(best_focus_offset_microns))
 
 if args.plot :
-    plt.figure("best-exposure-{}".format(expids[i]))
+    plt.figure("best-exposure-{}".format(bestexpid))
     selection = (table["EXPID"]==expids[i])
     a=plt.subplot(211)
     a.plot(table["XPIX"][selection],table["SIGMA"][selection],".")
@@ -495,59 +526,122 @@ if args.plot :
 if args.plot :
     plt.figure("focus-scan")
     plt.errorbar(offsets,sigma,rms,fmt="o")
-    x=np.linspace(offsets[ii[0]],offsets[ii[-1]],10)
-    plt.plot(x,focuspol(x))
-    plt.axvline(best_focus_offset_microns,linestyle="--")
+    x=np.linspace(offsets[kk[0]],offsets[kk[-1]],20)
+    plt.plot(x,focuspol(x),color="C1")
+    plt.axvline(best_focus_offset_microns,linestyle="--",color="C1")
     plt.xlabel("focus offset")
     plt.ylabel("median PSF sigma (pixels)")
     plt.grid()
 
 
 # stack on a grid
-nbins1d=8
-xbins=np.linspace(0,3700,nbins1d+1) # 3700 instead of n1 because of detached test fibers
-ybins=np.linspace(0,n0,nbins1d+1)
-dx=(xbins[1]-xbins[0])
-dy=(ybins[1]-ybins[0])
 x=table["XPIX"]
 y=table["YPIX"]
 sig=table["SIGMA"]
-xindex = x//dx
-yindex = y//dy
-index=xindex*nbins1d+yindex
 
 log.info("fitting best plane ...")
-x_of_bin = []
-y_of_bin = []
-best_focus_offset_of_bin=[]
-for i in range(nbins1d**2) :
-    selection=(index==i)
-    if np.sum(selection&(table["EXPID"]==expids[0]))<3 : # less than 3 spots
-        continue
-    xb = np.mean(x[selection&(table["EXPID"]==expids[0])])
-    yb = np.mean(y[selection&(table["EXPID"]==expids[0])])
-    sigb = np.zeros(expids.size)
-    sigerrb = np.zeros(expids.size)
-    for j,expid in enumerate(expids) :
-        kk=selection&(table["EXPID"]==expid)
-        sigb[j] = np.median(sig[kk])
-        sigerrb[j] = 1.48*np.median(np.abs(sig[kk]))/np.sqrt(kk.size)
-    k=np.argmin(sigb)
-    kk=np.array([k-1,k,k+1])
-    if kk[0]<0 or kk[-1]>=sigb.size : continue
-    coef=np.polyfit(offsets[kk],sigb[kk],2)
-    fb = -coef[1]/2/coef[0]
-    if abs(fb)<150:
-        x_of_bin.append(xb)
-        y_of_bin.append(yb)
-        best_focus_offset_of_bin.append(fb)
 
-x_of_bin = np.array(x_of_bin)
-y_of_bin = np.array(y_of_bin)
-best_focus_offset_of_bin = np.array(best_focus_offset_of_bin)
+if args.nbins>0 : # use bins of x and y
+
+    nbins1d = args.nbins
+
+    xbins=np.linspace(0,3700,nbins1d+1) # 3700 instead of n1 because of detached test fibers
+    ybins=np.linspace(0,n0,nbins1d+1)
+    dx=(xbins[1]-xbins[0])
+    dy=(ybins[1]-ybins[0])
+    xindex = x//dx
+    yindex = y//dy
+    index=xindex*nbins1d+yindex
+
+
+
+    x_of_bin = []
+    y_of_bin = []
+    best_focus_offset_of_bin=[]
+    for i in range(nbins1d**2) :
+        selection=(index==i)
+        if np.sum(selection&(table["EXPID"]==expids[0]))<3 : # less than 3 spots
+            continue
+        xb = np.mean(x[selection&(table["EXPID"]==expids[0])])
+        yb = np.mean(y[selection&(table["EXPID"]==expids[0])])
+        sigb = np.zeros(expids.size)
+        sigerrb = np.zeros(expids.size)
+        for j,expid in enumerate(expids) :
+            kk=selection&(table["EXPID"]==expid)
+            sigb[j] = np.median(sig[kk])
+            sigerrb[j] = 1.48*np.median(np.abs(sig[kk]))/np.sqrt(kk.size)
+        k=np.argmin(sigb)
+        kk=np.array([k-2,k-1,k,k+1,k+2])
+        kk=kk[(kk>=0)&(kk<expids.size)]
+        coef=np.polyfit(offsets[kk],sigb[kk],2)
+        fb = -coef[1]/2/coef[0]
+        if abs(fb)<150:
+            x_of_bin.append(xb)
+            y_of_bin.append(yb)
+            best_focus_offset_of_bin.append(fb)
+
+    x_of_bin = np.array(x_of_bin)
+    y_of_bin = np.array(y_of_bin)
+    best_focus_offset_of_bin = np.array(best_focus_offset_of_bin)
+
+else : # method 2 matching x y for each line fiber (prefered)
+
+    x_of_spot = x[table["EXPID"]==bestexpid]
+    y_of_spot = y[table["EXPID"]==bestexpid]
+    sig_of_spot = np.zeros((x_of_spot.size,expids.size))
+    xverif_of_spot = np.zeros((x_of_spot.size,expids.size))
+    yverif_of_spot = np.zeros((y_of_spot.size,expids.size))
+
+    for e,expid in enumerate(expids) :
+        xe=x[table["EXPID"]==expid]
+        ye=y[table["EXPID"]==expid]
+        sige=sig[table["EXPID"]==expid]
+        ie,distances = match_same_system(x_of_spot,y_of_spot,xe,ye,remove_duplicates=True)
+        selection=(ie>=0)&(distances<5.)
+        sig_of_spot[selection,e] = sige[ie[selection]]
+        xverif_of_spot[selection,e] = xe[ie[selection]]
+        yverif_of_spot[selection,e] = ye[ie[selection]]
+        log.info("matching {} to {} nmatch={}".format(expid,bestexpid,np.sum(selection)))
+
+
+    ok=np.where(np.sum(sig_of_spot>0,axis=1)==expids.size)[0] # detected in all images
+    x_of_spot=x_of_spot[ok]
+    y_of_spot=y_of_spot[ok]
+    sig_of_spot=sig_of_spot[ok]
+    xverif_of_spot=xverif_of_spot[ok]
+    yverif_of_spot=yverif_of_spot[ok]
+
+    best_focus_of_spot = np.zeros(x_of_spot.size)
+    for s in range(x_of_spot.size) :
+        k=np.argmin(sig_of_spot[s])
+        kk=np.array([k-2,k-1,k,k+1,k+2])
+        kk=kk[(kk>=0)&(kk<expids.size)]
+        if len(kk)<3 : continue
+        coef=np.polyfit(offsets[kk],sig_of_spot[s,kk],2)
+        best_focus_of_spot[s] = -coef[1]/2/coef[0]
+
+    x_of_bin = x_of_spot
+    y_of_bin = y_of_spot
+    best_focus_offset_of_bin = best_focus_of_spot
+
+
+ok=(best_focus_offset_of_bin!=0)&(np.abs(best_focus_offset_of_bin)<150)
+
+if args.testslit :
+    ok &= np.abs(x_of_bin-2610)>20
+    ok &= np.abs(x_of_bin-2775)>20
+
+    ok &= np.abs(x_of_bin<3600)
+
+
+x_of_bin=x_of_bin[ok]
+y_of_bin=y_of_bin[ok]
+best_focus_offset_of_bin=best_focus_offset_of_bin[ok]
 
 rx_of_bin = x_of_bin/2048. -1
 ry_of_bin = y_of_bin/2048. -1
+
+
 h=np.vstack([np.ones(rx_of_bin.size),rx_of_bin,ry_of_bin])
 a=h.dot(h.T)
 b=h.dot(best_focus_offset_of_bin)
@@ -562,19 +656,24 @@ log.info("best focus gauges ({},{},{}) = {:5.3f} {:5.3f} {:5.3f} mm".format(name
 if args.plot :
     plt.figure("best-focus-plane")
     best_plane_at_bin=h.T.dot(focus_plane_coefficients)
-    a=plt.subplot(211)
+    a0=plt.subplot(121)
+    toto = a0.scatter(x_of_bin,y_of_bin,c=best_focus_offset_of_bin)
+    plt.colorbar(toto)
+    a0.set_xlabel("xccd")
+    a0.set_ylabel("yccd")
+    a=plt.subplot(222)
     a.plot(x_of_bin,best_focus_offset_of_bin,"o")
-    a.plot(x_of_bin,best_plane_at_bin,".")
+    a.plot(x_of_bin,best_plane_at_bin,".",color="C1")
     a.grid()
-    a.axhline(best_focus_offset_microns,linestyle="--")
+    a.axhline(best_focus_offset_microns,linestyle="--",color="C1")
     a.set_xlabel("xccd")
-    a.set_ylabel("best focus")
-    a=plt.subplot(212)
+    a.set_ylabel("best focus (um)")
+    a=plt.subplot(224)
     a.plot(y_of_bin,best_focus_offset_of_bin,"o")
-    a.plot(y_of_bin,best_plane_at_bin,".")
+    a.plot(y_of_bin,best_plane_at_bin,".",color="C1")
     a.set_xlabel("yccd")
-    a.set_ylabel("best focus")
-    a.axhline(best_focus_offset_microns,linestyle="--")
+    a.set_ylabel("best focus (um)")
+    a.axhline(best_focus_offset_microns,linestyle="--",color="C1")
     a.grid()
 
 
