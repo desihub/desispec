@@ -366,6 +366,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     if timingfile is None:
         timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
+        timingfile = os.path.join(batchdir, timingfile)
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
