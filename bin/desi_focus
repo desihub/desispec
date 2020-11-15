@@ -541,21 +541,22 @@ for ifile,offset in zip(args.infile,offsets) :
         raise RuntimeError("no spot found")
     else:
         log.info("found {} peaks".format(npeak))
-        if npeak>10000:
+        if npeak>100000:
             log.error("this is far too many, is the room/dome light on??")
             raise RuntimeError("too many spots")
 
     xpix=np.zeros(npeak)
     ypix=np.zeros(npeak)
-    xerr=np.zeros(npeak)
-    yerr=np.zeros(npeak)
     counts=np.zeros(npeak)
     sig=np.zeros(npeak)
     hw=3
-
+    margin=40
     for j,index in enumerate(peakindices):
         i0=index//n1
         i1=index%n1
+
+        if i0<margin or i0 >= n0-margin : continue
+        if i1<margin or i1 >= n1-margin : continue
 
         nbad=np.sum(good[i0-hw:i0+hw+1,i1-hw:i1+hw+1]==0)
         if nbad>0 :
@@ -563,11 +564,9 @@ for ifile,offset in zip(args.infile,offsets) :
             continue
 
 
-        x,y,ex,ey,c=fit_centroid(img[i0-hw:i0+hw+1,i1-hw:i1+hw+1],noise=rms)
+        x,y,c=fit_centroid(img[i0-hw:i0+hw+1,i1-hw:i1+hw+1],noise=rms)
         xpix[j] = x + i1 #  x is along axis=1 in python
         ypix[j] = y + i0 #  y is along axis=0 in python
-        xerr[j] = ex
-        yerr[j] = ey
         counts[j] = c
         sig[j] = fit_gaussian_sigma(img[i0-hw:i0+hw+1,i1-hw:i1+hw+1],sigma=1.0,xc=x,yc=y)
 
@@ -577,8 +576,6 @@ for ifile,offset in zip(args.infile,offsets) :
     good = (counts>=args.minflux)&(sig>0.1)&(sig<10.)
     xpix=xpix[good]
     ypix=ypix[good]
-    xerr=xerr[good]
-    yerr=yerr[good]
     counts=counts[good]
     sig=sig[good]
 
@@ -596,8 +593,6 @@ for ifile,offset in zip(args.infile,offsets) :
             if counts[bad]<counts[index_to_remove] : index_to_remove=bad # remove the faintest
             xpix = np.delete(xpix,index_to_remove)
             ypix = np.delete(ypix,index_to_remove)
-            xerr = np.delete(xerr,index_to_remove)
-            yerr = np.delete(yerr,index_to_remove)
             counts = np.delete(counts,index_to_remove)
             sig = np.delete(sig,index_to_remove)
         else :
@@ -605,7 +600,7 @@ for ifile,offset in zip(args.infile,offsets) :
 
     log.info("keep {} spots after flux selection and removal of duplicates".format(len(xpix)))
 
-    current_table = Table([xpix,ypix,xerr,yerr,counts,sig],names=("XPIX","YPIX","XERR","YERR","COUNTS","SIGMA"))
+    current_table = Table([xpix,ypix,counts,sig],names=("XPIX","YPIX","COUNTS","SIGMA"))
     current_table["EXPID"] = np.repeat(expid,len(xpix))
     current_table["CAMERA"] = np.repeat(args.camera,len(xpix))
     current_table["OFFSET"] = np.repeat(offset,len(xpix))
@@ -623,8 +618,8 @@ for ifile,offset in zip(args.infile,offsets) :
         table = vstack([table,current_table])
 
     if args.plot :
-        fig = plt.figure("sigma-{}".format(expid))
-        a = plt.subplot(111,title="sigma")
+        fig = plt.figure("sigma-{}-{:08d}".format(args.camera,expid))
+        a = plt.subplot(111,title="sigma-{}-{:08d}".format(args.camera,expid))
         vmin = min(median_sig-3*rms_sig,median_sig-0.1)
         vmax = max(median_sig+3*rms_sig,median_sig+0.1)
 
@@ -662,20 +657,22 @@ else :
    log.info("exposure with best focus = {}".format(bestexpid))
 
 if args.plot :
-    plt.figure("best-exposure-{}".format(bestexpid))
+    plt.figure("best-exposure-{}-{:08d}".format(args.camera,bestexpid))
     selection = (table["EXPID"]==expids[i])
     a=plt.subplot(211)
     a.plot(table["XPIX"][selection],table["SIGMA"][selection],".")
     a.grid()
     a.set_xlabel("xccd")
+    a.set_ylabel("PSF sigma (pix)")
     a=plt.subplot(212)
     a.plot(table["YPIX"][selection],table["SIGMA"][selection],".")
     a.set_xlabel("yccd")
+    a.set_ylabel("PSF sigma (pix)")
     a.grid()
 
 if nexp>1 :
     if args.plot :
-        plt.figure("focus-scan")
+        plt.figure("focus-scan-{}".format(args.camera))
         plt.errorbar(offsets,sigma,rms,fmt="o")
         plt.xlabel("focus offset")
         plt.ylabel("median PSF sigma (pixels)")
@@ -824,7 +821,7 @@ best_focus_gauges = zero_offset_gauges + np.array([best_focus_gauge_offsets[k] f
 log.info("best focus gauges ({},{},{}) = {:5.3f} {:5.3f} {:5.3f} mm".format(names[0],names[1],names[2],best_focus_gauges[0],best_focus_gauges[1],best_focus_gauges[2]))
 
 if args.plot :
-    plt.figure("best-focus-plane")
+    plt.figure("best-focus-plane-{}".format(args.camera))
     best_plane_at_bin=h.T.dot(focus_plane_coefficients)
     a0=plt.subplot(121)
     toto = a0.scatter(x_of_bin,y_of_bin,c=best_focus_offset_of_bin)
