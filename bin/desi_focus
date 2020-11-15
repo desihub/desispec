@@ -646,16 +646,20 @@ for j,expid in enumerate(expids) :
     sigma[j] = np.median(sig)
     rms[j] = 1.48*np.median(np.abs(sig-sigma[j]))
 
+nexp=len(expids)
+
+if nexp==0 :
+    print("no valid exposure")
+    sys.exit(1)
+
 # compute best focus
-k=np.argmin(sigma)
-bestexpid=expids[k]
-log.info("exposure with best focus = {}".format(bestexpid))
-kk=np.array([k-2,k-1,k,k+1,k+2])
-kk=kk[(kk>=0)&(kk<sigma.size)]
-coef=np.polyfit(offsets[kk],sigma[kk],2)
-focuspol=np.poly1d(coef)
-best_focus_offset_microns = -coef[1]/2/coef[0]
-log.info("best focus offset (average piston) = {:4.3f} um".format(best_focus_offset_microns))
+if nexp==1 :
+    k=0
+    bestexpid=expids[0]
+else :
+   k=np.argmin(sigma)
+   bestexpid=expids[k]
+   log.info("exposure with best focus = {}".format(bestexpid))
 
 if args.plot :
     plt.figure("best-exposure-{}".format(bestexpid))
@@ -669,9 +673,29 @@ if args.plot :
     a.set_xlabel("yccd")
     a.grid()
 
+if nexp>1 :
+    if args.plot :
+        plt.figure("focus-scan")
+        plt.errorbar(offsets,sigma,rms,fmt="o")
+        plt.xlabel("focus offset")
+        plt.ylabel("median PSF sigma (pixels)")
+        plt.grid()
+
+if nexp<3 :
+    if args.plot :
+        plt.show()
+    # nothing else we can do for now
+    sys.exit(0)
+
+kk=np.array([k-2,k-1,k,k+1,k+2])
+kk=kk[(kk>=0)&(kk<sigma.size)]
+coef=np.polyfit(offsets[kk],sigma[kk],2)
+focuspol=np.poly1d(coef)
+best_focus_offset_microns = -coef[1]/2/coef[0]
+log.info("best focus offset (average piston) = {:4.3f} um".format(best_focus_offset_microns))
+
 if args.plot :
     plt.figure("focus-scan")
-    plt.errorbar(offsets,sigma,rms,fmt="o")
     x=np.linspace(offsets[kk[0]],offsets[kk[-1]],20)
     plt.plot(x,focuspol(x),color="C1")
     plt.axvline(best_focus_offset_microns,linestyle="--",color="C1")
