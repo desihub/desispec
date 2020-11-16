@@ -20,6 +20,7 @@ from desiutil.log import get_logger
 
 import specex as spx
 import specter.psf
+from . import psfio
 
 modext = "so"
 if sys.platform == "darwin":
@@ -189,6 +190,10 @@ def parse(options=None):
 
 def main(args, comm=None):
 
+    #pyps = opts= 0
+    #psfio.write_psf(pyps,opts)
+    #return
+
     log = get_logger()
 
     imgfile = args.input_image
@@ -315,7 +320,7 @@ def main(args, comm=None):
         pypr = spx.PyPrior()   # Gaussian priors
         pyps = spx.PyPSF()     # psf data
         pyft = spx.PyFitting() # psf fitting
-        
+    
         opts.parse(com)                        # com is list of args
         pyio.check_input_psf(opts)             # set input psf bools
         pypr.deal_with_priors(opts)            # set Gaussian priors
@@ -344,17 +349,9 @@ def main(args, comm=None):
         rval = pyio.write_psf_data(opts,pyps)         # write psf
         rval = pyio.write_spots(opts,pyps)            # write spots
 
-        xtrace=spx.get_trace(pyps,'x')
-        ytrace=spx.get_trace(pyps,'y')
-
-        fiberkeys = spx.VectorInt()
-        wavekeys  = spx.VectorDouble()
-        spx.get_tracekeys(pyps,fiberkeys,wavekeys)
-        
-        print('first x entry',xtrace[0])
-        print('first y entry',ytrace[0])
-        print(fiberkeys,wavekeys)
-        
+        psfio.write_psf(pyps,opts)
+        return
+    
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
