@@ -1,9 +1,9 @@
 import os,sys
 import datetime
-import astropy.io.fits as pyfits
-import argparse
-import numpy as np
+import subprocess
 
+import astropy.io.fits as pyfits
+import numpy as np
 from scipy.signal import savgol_filter
 
 from desispec import io
@@ -368,9 +368,11 @@ def make_dark_scripts(days, outdir, cameras=None,
     """
     TODO: document
     """
+    log = get_logger()
 
     if tempdir is None:
         tempdir = os.path.join(outdir, 'temp')
+        log.info(f'using tempdir {tempdir}')
 
     if not os.path.isdir(tempdir):
         os.makedirs(tempdir)
@@ -398,6 +400,16 @@ def make_dark_scripts(days, outdir, cameras=None,
         darkfile = f'dark-{key}.fits.gz'
         biasfile = f'bias-{key}.fits.gz'
 
+        cmd = f"desi_compute_dark_nonlinear --days {days}"
+        cmd += f" \\\n    --camera {camera}"
+        cmd += f" \\\n    --tempdir {tempdir}"
+        cmd += f" \\\n    --darkfile {darkfile}"
+        cmd += f" \\\n    --biasfile {biasfile}"
+        if linexptime is not None:
+            cmd += f" \\\n    --linexptime {linexptime}"
+        if nskip_zeros is not None:
+            cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
+
         with open(batchfile, 'w') as fx:
             fx.write(f'''#!/bin/bash -l
 
@@ -411,12 +423,15 @@ def make_dark_scripts(days, outdir, cameras=None,
 #SBATCH --exclusive
 
 cd {outdir}
-time desi_compute_dark_nonlinear --days {days} --camera {camera} \\
-    --tempdir {tempdir} \\
-    --darkfile {darkfile} \\
-    --biasfile {biasfile}
+time {cmd}
 ''')
 
-
-
+        if not nosubmit:
+            err = subprocess.call(['sbatch', batchfile])
+            if err == 0:
+                log.info(f'Submitted {batchfile}')
+            else:
+                log.error(f'Error {err} submitting {batchfile}')
+        else:
+            log.info(f"Generated but didn't submit {batchfile}")
 
