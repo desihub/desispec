@@ -473,7 +473,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     readnoise = np.zeros_like(image)
 
     #- Load dark
-    if cfinder and cfinder.haskey("DARK") :
+    if cfinder and cfinder.haskey("DARK") and (dark is not False):
 
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
@@ -485,6 +485,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("Use exptime = {} sec to compute the dark current".format(exptime))
 
         dark_filename = cfinder.findfile("DARK")
+        log.info(f'Using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
         dark = read_dark(filename=dark_filename,exptime=exptime)
 
@@ -544,6 +545,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                     gain = 1.0
                     log.warning('Missing keyword GAIN{} in header and nothing in calib data; using {}'.format(amp,gain))
 
+        #- Record what gain value was actually used
+        header['GAIN'+amp] = gain
 
         #- Add saturation level
         if 'SATURLEV'+amp in header:
