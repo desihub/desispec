@@ -1,7 +1,5 @@
-import sys
-import os
-import re
 from astropy.io import fits
+import pdb
 import matplotlib.pyplot as plt
 import numpy as np
 import copy
@@ -14,12 +12,13 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 description="Search all bias and dark images for a series of night, Compute a master bias from a set of raw images, and combine them according to exptime",
 epilog='''Cool.'''
 )
-parser.add_argument('--mintime-linear-dark', type=int, default=600, required=False,
-                    help = 'Minimum exposure time for linear evolution of bias+dark')
+parser.add_argument('-e','--exp', type = str, default = [300,450,700,900,1200], required = False, nargs="*",
+                    help = 'liner')
 parser.add_argument('-p','--plot', type = bool, default = False, required = False, nargs="*",
                     help = 'If you want to output plot to check or not')
 
-args = parser.parse_args()
+
+args        = parser.parse_args()
 
 camera_arr=['b0','b1','b2','b3','b4','b5','b6','b7','b8','b9','r0','r1','r2','r3','r4','r5','r6','r7','r8','r9','z0','z1','z2','z3','z4','z5','z6','z7','z8','z9']
 
@@ -36,15 +35,15 @@ def calculate_dark(exp_arr,image_arr):
     dark=np.zeros((n0,n1))
     niterations=1
     for iteration in range(niterations) :
-        print(f'Dark fit iteration {iteration}')
+        print(iteration)
 
-        # fit dark
+    # fit dark
         A = np.zeros((2,2))
         b0  = np.zeros((n0,n1))
         b1  = np.zeros((n0,n1))
 
         for image,exptime in zip(image_arr,exp_arr) :
-            print(f'Adding exptime {exptime}')
+            print(exptime)
             res = image
             A[0,0] += 1
             A[0,1] += exptime
@@ -56,16 +55,15 @@ def calculate_dark(exp_arr,image_arr):
         # const + exptime * dark
         const = Ai[0,0]*b0 + Ai[0,1]*b1
         dark  = Ai[1,0]*b0 + Ai[1,1]*b1
-    return dark, const
+    return dark
 
 for camera in camera_arr:
     filename=prefix+camera+".fits"
-    if os.path.exists(filename):
+    try:
         hdu_this = fits.open(filename)
     except:
         print('Can not find file:'+filename)
         continue
-
     nx=len(hdu_this[0].data) #4162
     ny=len(hdu_this[0].data[0]) #4232
     #header=hdu_this[exptime].header
@@ -83,47 +81,16 @@ for camera in camera_arr:
     hdr_dark = fits.Header()
     dataHDU = fits.ImageHDU(dark,header=hdr_dark, name='dark')
     hdu_this.append(dataHDU)
+    #import pdb;pdb.set_trace()
     exptime_arr=[]
-    image_arr=[]
-    bias_image = None
     for hdu in hdu_this:
-        #- EXTNAME = Tnnn
-        if re.match('T\d+$', hdu.name):
-            exptime_arr.append(int(hdu.name[1:]))
-            image_arr.append(hdu.data)
-
-        if hdu.name == 'T0':
-            bias_image = hdu.data
-
-    assert bias_image is not None
-
-    exptime_arr = np.array(exptime_arr)
-    image_arr = np.array(image_arr)
-
-    #- Subtract the bias image from every image and remove the overscan
-    #- since overscans shouldn't be included in the dark calculation
-    for i in range(len(image_arr)):
-        image_arr[i] -= bias_image
-
-    #- Calculate the dark current using exposures long enough to
-    #- establish linear dark current
-    ii = (exptime_arr >= args.mintime_linear_dark)
-    dark, const = calculate_dark(exptime_arr[ii], image_arr[ii])
-
-    ny,nx = hdu_this[0].data.shape
-    indLeft = (slice(0, ny), slice(0, nx//2))
-    indRight = (slice(0, ny), slice(nx//2, 0))
-
-    #- Model any remaining residuals as a 1D function of row for the
-    #- left (A,C) and right (B,D) amplifiers
-
-    for exptime, image in zip(exptime_arr, image_arr):
-
-        #- bias image was already subtracted before calculating dark
-        residual = image - exptime*dark
+        if hdu.name !='0' and hdu.name !='DARK':
+            exptime_arr.append(hdu.name)
+    #exptime_arr=['1200']
+    for exptime in exptime_arr:
 
         ###### Pass1 subtract bias #######
-        pass1=hdu_this['T'+str(exptime)].data-hdu_this['T0'].data
+        pass1=hdu_this[exptime].data-hdu_this['0'].data
         pass1_1d=pass1.ravel()
         std_pass1=np.std(pass1_1d[(pass1_1d<100) & (pass1_1d>-10)])
         print('std_pass1',std_pass1)
@@ -144,12 +111,7 @@ for camera in camera_arr:
             profile_2d_Left=np.transpose(np.tile(profileLeft,(int(ny/2),1)))
             profile_2d_Right=np.transpose(np.tile(profileRight,(int(ny/2),1)))
             profile_2d=np.concatenate((profile_2d_Left,profile_2d_Right),axis=1)
-            try:
-                pass3=pass2-profile_2d
-            except:
-                import IPython; IPython.embed()
-                sys.exit(1)
-
+            pass3=pass2-profile_2d
             correction=1.+np.median(pass3.ravel()/(float(exptime)*dark.ravel()))
             data1d=pass3.ravel()
             std=np.std(data1d[(data1d<10) & (data1d>-10)])
@@ -159,7 +121,7 @@ for camera in camera_arr:
         # Store 1D profile
         hdu_this[exptime].data=np.array([profileLeft,profileRight]).astype('float32') # 
         
-        if args.plot:
+        if plot:
             plt.figure(0,figsize=(25,16))
             font = {'family' : 'sans-serif',
                     'weight' : 'normal',
@@ -202,11 +164,6 @@ for camera in camera_arr:
             plt.title('Std='+str(std)[0:4])
             plt.show()
             print(hdu_this.info())
-
-    hdr_dark = fits.Header()
-    dataHDU = fits.ImageHDU(dark,header=hdr_dark, name='dark')
-    hdu_this.append(dataHDU)
-
     try:
         for hdu in hdu_this:
             if hdu.name =='0':
