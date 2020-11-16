@@ -64,9 +64,11 @@ def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=No
 
 
     if (xcoef.shape[0] == 41) & (ycoef.shape[0] == 41):
-        log.warning('This is a traceset from the test slit with only 41 fibers.')
+        log.warning('This is a traceset from the test slit with only 41 fibers.')\
+        raise NotImplementedError('Nightwatch cannot handle nonstandard numbers of fibers')
     elif (xcoef.shape[0] !=500) | (ycoef.shape[0] != 500):
         log.warning('This traceset does not have the proper number of fibers in at least one dimension')
+        raise NotImplementedError('Nightwatch cannot handle nonstandard numbers of fibers')
 
 
     if fibers is None:
