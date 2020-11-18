@@ -121,7 +121,7 @@ def doublet_fit(x0, rrz, rrzerr, postages, lineida=6, lineidb=7, plot=False):
 
             residuals += res.tolist()
 
-        residuals   = np.array(residuals) 
+        residuals      = np.array(residuals) 
             
         return  residuals
         

@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import scipy
 
@@ -253,7 +254,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     # ihess      = result[3]
     # print(bestfit)
     
-    result       = scipy.optimize.least_squares(_res, x0, verbose=0, ftol=1.e-8, max_nfev=25)
+    result       = scipy.optimize.least_squares(_res, x0, verbose=0, ftol=1.e-8, max_nfev=50)
     bestfit      = result.x
 
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
@@ -411,7 +412,19 @@ if __name__ == '__main__':
         cframes[cam].flux[fiber,:] = flux[band][115]
         
     rrz               = meta['REDSHIFT'][115]
+
+    # [Group][Line Index][Camera].
+    postages          = cframe_postage(cframes, fiber, rrz)
+
+    mpostages         = {}
+
+    groups            = list(postages.keys())
+
+    for group in groups:
+        result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
             
+    start             = time.time() 
+    
     # [Group][Line Index][Camera].
     postages          = cframe_postage(cframes, fiber, rrz)
     
@@ -422,6 +435,11 @@ if __name__ == '__main__':
     for group in groups:
         result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
 
+    end               = time.time()
+
+    print(end - start)
+    
+    ## 
     fig       = plot_postages(postages, mpostages, petal, fiber, rrz, tid)
 
     fig.savefig('postages.pdf', bbox_inches='tight')  

@@ -147,10 +147,6 @@ if len(rankexp) > 0:
                 plt.close('all')
               
                 del rads
-
-                #blacklist.append(expid)
-
-                #print('Rank {} blacklisted {} {}'.format(rank, expid, andes + '/exposures/{}/{:08d}/'.format(night, expid)))
                 
                 sys.stdout.flush()
                 

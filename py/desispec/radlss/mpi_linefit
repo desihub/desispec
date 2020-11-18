@@ -1,0 +1,287 @@
+#!/usr/bin/env python
+# srun -N 1  -n 8 -c 2 ./mpi_linefit --outdir /global/cscratch1/sd/mjwilson/linefit
+import os
+import sys
+import time
+import glob
+import pickle
+import argparse
+import multiprocessing
+import numpy as np
+import itertools
+import fitsio
+
+from   functools import partial
+from   desispec.parallel import default_nproc as numprocesses
+from   pathlib import Path
+from   os import path
+from   mpi4py import  MPI
+from   desispec.parallel import stdouterr_redirected
+from   desispec.io.meta import  findfile
+from   desispec.io import  read_frame
+from   multiprocessing import Pool
+from   astropy.table import Table
+
+
+nproc = multiprocessing.cpu_count() // 2
+
+comm  = MPI.COMM_WORLD
+rank  = comm.Get_rank()
+size  = comm.Get_size()
+
+description = 'Simplified line fitting.'
+parser      = argparse.ArgumentParser(usage = "{prog} [options]", description=description)
+
+parser.add_argument("--andes", type=str, help="input spectro release.", default='/global/cfs/cdirs/desi/spectro/redux/andes')
+parser.add_argument("--night", type=str, help="night to reduce", default='20200315')
+parser.add_argument("--outdir", type=str, help="dir. for output", required=True)
+
+args        = parser.parse_args()
+
+night       = args.night
+andes       = args.andes
+outdir      = args.outdir
+
+def get_expids():
+    tiles  = np.unique(np.array([x.split('/')[-3] for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
+    expids = np.unique(np.array([x.split('/')[-1].split('-')[2].replace('.fits','') for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
+
+    return  expids, tiles
+
+expids, tiles = get_expids()
+
+def is_processed(logfile):
+    processed     = False
+
+    if path.exists(logfile):
+        f           = open(logfile)
+
+        if 'SUCCESS' in f.read():
+            processed = True
+
+        f.close()
+
+    return  processed
+
+def to_reduce(expid):
+    cframes = {}
+    
+    reduced_cameras = glob.glob(andes + '/exposures/{}/{:08d}/cframe-*'.format(night, expid))
+    reduced_cameras = [x.split('-')[1] for x in reduced_cameras]
+
+    sucess = 0
+    
+    for cam in reduced_cameras:
+        petal = cam[1]
+        key   = str(expid) + '-' + petal
+        
+        if key not in cframes:
+            cframes[key] = {}
+            
+        cframes[key][cam] = findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir=andes)        
+
+        hdr    = fitsio.read_header(cframes[key][cam])
+        flavor = hdr['FLAVOR']
+        tileid = hdr['TILEID']
+        
+        if flavor != 'science':
+            del cframes[key][cam]
+
+        sucess = 1
+            
+    return sucess, tileid, cframes
+
+def get_zbest(expid, tileid, petal):
+    filepath = os.path.join(andes, 'tiles', str(tileid), str(night), 'zbest-{}-{}-{}.fits'.format(petal, tileid, night))
+
+    zbest = fitsio.read(filepath, 'ZBEST')
+
+    fmap = fitsio.read(filepath, 'FIBERMAP')
+    fmap = fmap[fmap['EXPID'] == expid]
+    
+    indx = np.argsort(fmap['TARGETID'])
+    tfmap = fmap[indx]
+    
+    indx = np.argsort(tfmap['FIBER'])
+    
+    zbest = zbest[indx]
+
+    # Both fiber / ccd ordered.
+    return zbest, fmap
+
+def linefit_fiber(fiber, zs, zerrs, tids, fids, petal_cframes, plot=True):    
+    from cframe_postage    import cframe_postage
+        
+    from postage_seriesfit import series_fit
+    from postage_seriesfit import plot_postages
+
+    
+    tid = tids[fiber]
+    fid = fids[fiber]
+    rrz = zs[fiber]
+    rrzerr = zerrs[fiber]
+    
+    postages = cframe_postage(petal_cframes, fiber, rrz)
+    
+    groups = list(postages.keys())
+
+    mpostages = {}
+    results = {}
+    
+    # Iterate over spectral groups for this fiber. 
+    for group in groups:
+        # Known problem with even wave range for Resolution() call.     
+        try:
+            linefit_result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
+
+            print(fid, group, tid, rrz, rrzerr, linefit_result.status, linefit_result.x)
+            
+            if plot & (linefit_result.status >= 0):                                                                                                                                                                                     
+                linefit_fig = plot_postages(postages, mpostages, petal, fid, rrz, tid)                                                                                                                                                 
+                linefit_fig.savefig(plotdir + '/linefits-{:08d}-{}-{}.pdf'.format(expid, petal, fid))
+                
+                # Close all figures (to suppress warning).                                                                                                                                                                              
+                plt.close('all')                                                                                                                                                                                                          
+            results[(fiber, group)] = (linefit_result.status, linefit_result.x, len(linefit_result.x))
+                
+        except:
+            print('Line fit failure for fiber {:d}.'.format(fiber))
+ 
+            results[(fiber, group)] = (0, None, None)
+            
+    return  results, mpostages
+        
+def line_fit(expid, tileid, petal, petal_cframes, plot=False):
+    from lines import ugroups
+
+    
+    start_linefit = time.perf_counter()
+    
+    # Fiber ordered. 
+    zbest, fmap = get_zbest(expid, tileid, petal)
+
+    # read cframes.
+    for cam in petal_cframes.keys():
+        petal_cframes[cam] = read_frame(petal_cframes[cam])
+
+    outfile   = outdir + '/linefits/{:08d}/{}/linefits-{:08d}-{}.fits'.format(expid, petal, expid, petal)
+    plotdir   = outdir + '/linefits/{:08d}/{}/plots/'.format(expid, petal)
+    
+    Path(plotdir).mkdir(parents=True, exist_ok=True)
+
+    # HACK
+    nfiber  = 25 # len(fmap)
+    fibers  = np.arange(nfiber)
+
+    zs      = np.array(zbest['Z'].data, copy=True)
+    zerrs   = np.array(zbest['ZERR'].data, copy=True)
+    tids    = np.array(zbest['TARGETID'].data, copy=True)
+    fids    = np.array(fmap['FIBER'].data, copy=True)
+    
+    # Fiber order, i.e. row by row of cframe.flux.  
+    results = Pool(processes=numprocesses).map(partial(linefit_fiber, zs=zs, zerrs=zerrs, tids=tids, fids=fids, petal_cframes=petal_cframes), fibers)
+
+    output  = Table() 
+    output['Z'] = zs
+    output['ZERR'] = zerrs
+    output['TARGETID'] = tids
+    output['FIBER'] = fids
+    output['STATUS'] = [np.zeros(4, dtype=np.float32)] * len(output)
+
+    output.meta = {'EXPID': expid, 'TILEID': tileid, 'PETAL': petal}
+    
+    for group in ugroups:
+        output['GROUP{}'.format(group)] = [np.zeros(24, dtype=np.float32)] * len(output)
+
+    for result in results:
+        pairs = result[0].keys()
+
+        # postfile  = outdir + '/linefits/{:08d}/{}/postages-{:08d}-{}.fits'.format(expid, petal, expid, petal)
+        # mpostfile = outdir + '/linefits/{:08d}/{}/mpostages-{:08d}-{}.fits'.format(expid, petal, expid, petal)
+        # pickle.dump(result[1], open("save.pkl", "wb"))
+        
+        for (fiber, group) in pairs:
+            status = result[0][(fiber, group)][0]
+            
+            output['STATUS'][fiber, group] = status
+
+            if status > 0:            
+                output['GROUP{}'.format(group)][fiber,:len(result[0][(fiber, group)][1])] = result[0][(fiber, group)][1]
+            
+    output.write(outfile, format='fits', overwrite=True)
+    
+    end_linefit = time.perf_counter()
+
+    print('Rank {}:  Calculated line fluxes for petal {} in {:.3f} mins.'.format(rank, petal, (end_linefit - start_linefit) / 60.))
+
+    return outfile, results
+    
+## 
+cframes = {}
+tileids = {}
+
+for expid in expids:
+    success, tileid, exp_cframes = to_reduce(expid)
+    tileids[expid] = tileid
+
+    cframes.update(exp_cframes)
+
+    if success:
+        break
+    
+petals = list(cframes.keys())
+    
+comm.barrier()
+
+petals = comm.bcast(petals, root=0)
+    
+ipetals = np.linspace(0, len(petals), size+1, dtype=int)
+rankpetal = petals[ipetals[rank]:ipetals[rank+1]]
+
+print('rank {} processes {} exposures {}'.format(rank, ipetals[rank+1]-ipetals[rank], rankpetal))
+
+sys.stdout.flush()
+
+comm.barrier()
+
+if len(rankpetal) > 0:
+    for npetal, exp_petal in enumerate(rankpetal):
+        start    = time.perf_counter()
+
+        expid    = exp_petal.split('-')[0]
+        petal    = exp_petal.split('-')[1]
+
+        expid    = np.int(expid)
+        
+        tileid   = tileids[expid]
+        
+        logdir   = args.outdir + '/logs/{:08d}/{}/'.format(expid, petal)
+        logfile  = logdir + '/{:08d}-{}.log'.format(expid, petal)
+
+        done     = is_processed(logfile)                                                                                                                                                                                               
+
+        if not done:
+            Path(logdir).mkdir(parents=True, exist_ok=True)
+
+            print('Rank {}:  Writing log for {:08d}-{} to {}.'.format(rank, expid, petal, logfile))
+
+            #with stdouterr_redirected(to=logfile):
+            print('Rank {}: Solving for EXPID {:08d}-{} ({} of {})'.format(rank, expid, petal, npetal, len(rankpetal)))
+
+            outfile, results = line_fit(expid, tileid, petal, cframes[exp_petal])
+
+            print('Rank {}:  Results written to {:08d}-{} to {}.'.format(rank, expid, petal, outfile))
+            
+            # print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
+
+            # Close all figures (to suppress warning).                                                                                                                                                                             
+            # plt.close('all')
+            
+            sys.stdout.flush()
+
+        else:
+            print('Rank {}:  EXPID {} PETAL {} previously processed successfully.'.format(rank, expid, petal))
+
+        break
+            
+            

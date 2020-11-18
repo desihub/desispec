@@ -30,7 +30,7 @@ for x in [8, 13, 14]:
 # for x in [11, 12, 15]:
 #    lines['MASKED'][x] = 1
     
-ugroups                = np.array(np.unique(lines['GROUP']))
+ugroups, ugroupcnts  = np.unique(lines['GROUP'][lines['MASKED'] == 0].data, return_counts=True)
 
 ##  ----  OII wavelengths  ----
 ##  lines.loc[6,'WAVELENGTH'] 
@@ -45,8 +45,12 @@ if __name__ == '__main__':
     nsinglet         = len(singlets)
     ndoublet         = np.int(len(doublets) / 2)
 
-    
-    print(nsinglet, ndoublet)
-
+    print()
+    print('n singlets: {}, n doulets: {}'.format(nsinglet, ndoublet))
+    print()
+    print('unique groups: {}, counts: {}'.format(ugroups, groupcnts))
+    print()
     print(singlets)
+    print()
     print(doublets)
+    print('\n\n')
