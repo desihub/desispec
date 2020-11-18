@@ -20,7 +20,7 @@ def doublet_prior(z, v, r, lnA, rrz, rrzerr):
     sigA =  5. 
     
     # unnormalised (scalar).
-    return  gaussian_prior(z, muz, sigz) # * jeffreys_prior(v, sigv) # * gaussian_prior(r, 0.7, 0.25) * gaussian_prior(lnA, 1.0, 1.0)
+    return  gaussian_prior(z, muz, sigz) * jeffreys_prior(v, sigv) * gaussian_prior(r, 0.7, 0.1) # * gaussian_prior(lnA, 1.0, 1.0)
 
 def mlogprior(x, rrz, rrzerr):
     z     = x[0]

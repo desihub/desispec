@@ -127,13 +127,16 @@ def linefit_fiber(fiber, zs, zerrs, tids, fids, petal_cframes, expid, petal, plo
 
     mpostages = {}
     results = {}
+    series_params = {}
     
     # Iterate over spectral groups for this fiber. 
     for group in groups:
         # Known problem with even wave range for Resolution() call.     
         try:
-            linefit_result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
+            sp, linefit_result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
 
+            series_params[group] = sp
+            
             print(fid, group, tid, rrz, rrzerr, linefit_result.status, linefit_result.x)
 
             status = linefit_result.status
@@ -142,7 +145,8 @@ def linefit_fiber(fiber, zs, zerrs, tids, fids, petal_cframes, expid, petal, plo
         except:
             print('Line fit failure for fiber {:d}.'.format(fiber))
 
-            status = 0            
+            status = 0
+            series_params[group] = None
             results[(fiber, group)] = (status, None, None)
             
     if plot & (status > 0):
@@ -152,7 +156,7 @@ def linefit_fiber(fiber, zs, zerrs, tids, fids, petal_cframes, expid, petal, plo
         # Close all figures (to suppress warning).                                                                                                                                                                              
         plt.close('all')    
             
-    return  fid, results, postages, mpostages
+    return  fid, series_params, results, postages, mpostages
         
 def line_fit(expid, tileid, petal, petal_cframes, plot=False):
     from lines import ugroups
@@ -172,8 +176,7 @@ def line_fit(expid, tileid, petal, petal_cframes, plot=False):
     
     Path(plotdir).mkdir(parents=True, exist_ok=True)
 
-    # HACK
-    nfiber  = len(fmap)
+    nfiber  = 15 # len(fmap)
     fibers  = np.arange(nfiber)
 
     zs      = np.array(zbest['Z'].data, copy=True)
@@ -189,6 +192,7 @@ def line_fit(expid, tileid, petal, petal_cframes, plot=False):
     output['ZERR'] = zerrs
     output['TARGETID'] = tids
     output['FIBER'] = fids
+    output['PARAMS'] = [np.zeros(4, dtype='|S128')] * len(output)
     output['STATUS'] = [np.zeros(4, dtype=np.float32)] * len(output)
 
     output.meta = {'EXPID': expid, 'TILEID': tileid, 'PETAL': petal}
@@ -198,22 +202,23 @@ def line_fit(expid, tileid, petal, petal_cframes, plot=False):
 
     for result in results:
         fid       = result[0]
-
-        pairs     = result[1].keys()
+        pairs     = result[2].keys()
 
         postfile  = outdir + '/linefits/{:08d}/{}/postages-{:08d}-{}-{}.fits'.format(expid, petal, expid, petal, fid)
         mpostfile = outdir + '/linefits/{:08d}/{}/mpostages-{:08d}-{}-{}.fits'.format(expid, petal, expid, petal, fid)
 
-        pickle.dump(result[2], open(postfile,  "wb"))
-        pickle.dump(result[3], open(mpostfile, "wb"))
+        pickle.dump(result[3], open(postfile,  "wb"))
+        pickle.dump(result[4], open(mpostfile, "wb"))
         
         for (fiber, group) in pairs:
-            status = result[1][(fiber, group)][0]
+            status = result[2][(fiber, group)][0]
             
             output['STATUS'][fiber, group] = status
 
-            if status > 0:            
-                output['GROUP{}'.format(group)][fiber,:len(result[1][(fiber, group)][1])] = result[1][(fiber, group)][1]
+            if status > 0:
+                if result[1] is not None:
+                    output['PARAMS'][fiber, np.int(group)] = ','.join(result[1][group])
+                output['GROUP{}'.format(group)][fiber,:len(result[2][(fiber, group)][1])] = result[2][(fiber, group)][1]
             
     output.write(outfile, format='fits', overwrite=True)
     

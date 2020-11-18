@@ -29,7 +29,9 @@ for x in [8, 13, 14]:
 # Balmer.
 # for x in [11, 12, 15]:
 #    lines['MASKED'][x] = 1
-    
+
+# lines              = lines[lines['MASKED'] == 0]
+
 ugroups, ugroupcnts  = np.unique(lines['GROUP'][lines['MASKED'] == 0].data, return_counts=True)
 
 ##  ----  OII wavelengths  ----
@@ -48,7 +50,7 @@ if __name__ == '__main__':
     print()
     print('n singlets: {}, n doulets: {}'.format(nsinglet, ndoublet))
     print()
-    print('unique groups: {}, counts: {}'.format(ugroups, groupcnts))
+    print('unique groups: {}, counts: {}'.format(ugroups, ugroupcnts))
     print()
     print(singlets)
     print()

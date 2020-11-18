@@ -20,16 +20,17 @@ from   desispec.frame import Spectrum
 from   autograd import grad
 from   twave import twave
 from   astropy.table import Table, vstack  
+from   doublet_priors import gaussian_prior, jeffreys_prior
 
 
-def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
+def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
     '''
     '''
 
     postages         = postages[group]
     
     lineids          = list(postages.keys())
-
+    
     singlets         = lines[lineids][lines['DOUBLET'][lineids] == -99]
     doublets         = lines[lineids][lines['DOUBLET'][lineids] >=   0]
 
@@ -43,13 +44,14 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
              
     nsinglet         = len(singlets)
     ndoublet         = np.int(len(doublets) / 2)
-    '''
-    if len(singlets) > 0:
-        print(singlets)
 
-    if len(doublets) > 0:
-        print(doublets)
-    '''
+    if printit:
+        if len(singlets) > 0:
+            print(singlets)
+
+        if len(doublets) > 0:
+            print(doublets)
+    
     def _X2(x):  
         z             = x[0]
         v             = x[1]
@@ -128,8 +130,10 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
         result        = 0.0
 
-        residuals     = []
-
+        # Prior on redshift fit.
+        # residuals   = [np.sqrt(gaussian_prior(z, rrz, rrzerr))]
+        # residualds += [np.sqrt(jeffreys_prior(v, 50.))]
+        
         for i, singlet in enumerate(singlets):
             lineidb   = singlet['INDEX']
             lineb     = singlet['WAVELENGTH']
@@ -143,6 +147,8 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             lnA       = x[i + 2]
             line_flux = np.exp(lnA)
 
+            # Prior. 
+            
             # print(lineidb, cams)
 
             for cam in cams:
@@ -181,6 +187,9 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
             r         = x[2 * i + 3 + nsinglet]
 
+            # Prior                                                                                                                                                                                                                     
+            # res    += [2. * np.sqrt(mlogprior(x, rrz, rrzerr))]
+            
             for cam in cams:
                 wave  = postage[cam].wave
                 res   = Resolution(postage[cam].R)
@@ -272,11 +281,16 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
     bestfit_v     = bestfit[1]
 
     # print(doublets)
+
+    series_params = ['z', 'v']
     
     for i, singlet in enumerate(singlets):
         lineidb   = singlet['INDEX']
         lineb     = singlet['WAVELENGTH']
         
+        if singlet['MASKED'] == 1:
+            continue
+
         postage   = postages[lineidb]
         cams      = list(postage.keys())
 
@@ -297,7 +311,9 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
             mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, tw, wave, res, continuum=0.0, sigmav=bestfit_v, r=0.0, linea=0.0, lineb=lineb)
             mpostages[group][lineidb][cam] *= np.exp(lnA)
             mpostages[group][lineidb][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
-    
+
+        series_params += ['lnA_{:d}'.format(lineidb)]
+            
     for i in np.arange(ndoublet):
         doublet   = doublets[doublets['DOUBLET'] == i]
 
@@ -306,6 +322,9 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
         linea     = doublet['WAVELENGTH'][0]
         lineb     = doublet['WAVELENGTH'][1]
+
+        if (doublet['MASKED'][0] == 1) | (doublet['MASKED'][1] == 1):
+            continue
         
         postage   = postages[lineidb]
         cams      = list(postage.keys())
@@ -331,8 +350,10 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None):
 
             mpostages[group][lineida][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
             mpostages[group][lineidb][cam]  = mpostages[group][lineida][cam]
+
+        series_params += ['lnA_{:d}-{:d}'.format(lineida, lineidb), 'r_{:d}-{:d}'.format(lineida, lineidb)]
             
-    return  result, mpostages
+    return  series_params, result, mpostages
 
 def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
     import matplotlib.pyplot as plt
@@ -422,8 +443,8 @@ if __name__ == '__main__':
     groups            = list(postages.keys())
 
     for group in groups:
-        result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
-            
+        series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
+
     start             = time.time() 
     
     # [Group][Line Index][Camera].
@@ -434,15 +455,16 @@ if __name__ == '__main__':
     groups            = list(postages.keys())
     
     for group in groups:
-        result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
+        series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
 
+        print(len(result.x), series_params)
+        
     end               = time.time()
 
     print(end - start)
     
     ## 
     fig       = plot_postages(postages, mpostages, petal, fiber, rrz, tid)
-
     fig.savefig('postages.pdf', bbox_inches='tight')  
 
     print('\n\nDone.\n\n')

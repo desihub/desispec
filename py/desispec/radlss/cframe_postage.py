@@ -29,11 +29,13 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
     for u in ugroups:
         postages[u] = {}
 
-    for i, line in enumerate(lines['WAVELENGTH']):
+    sample     = lines[lines['MASKED'] == 0]
+        
+    for i, line in enumerate(sample['WAVELENGTH']):
         limits = (1. + redshift) * line + np.array([-width, width])
-        group  = lines['GROUP'][i]
+        group  = sample['GROUP'][i]
 
-        postages[group][lines['INDEX'][i]] = {}
+        postages[group][sample['INDEX'][i]] = {}
         
         for cam in petal_cframes.keys():        
             wave   = petal_cframes[cam].wave
@@ -41,7 +43,7 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
 
             if np.count_nonzero(inwave):
                 if printit:
-                    print('Reduced LINEID {:2d}:  {:16s} for {} at redshift {:.2f} ({:.3f} to {:.3f}).'.format(lines['INDEX'][i], lines['NAME'][i], cam, redshift, limits[0], limits[1]))
+                    print('Reduced LINEID {:2d}:  {:16s} for {} at redshift {:.2f} ({:.3f} to {:.3f}).'.format(sample['INDEX'][i], sample['NAME'][i], cam, redshift, limits[0], limits[1]))
 
                 res       = petal_cframes[cam].resolution_data[fiber,:,:]
                 flux      = petal_cframes[cam].flux[fiber,:]
@@ -51,7 +53,7 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
                 continuum = (wave > limits[0]) & (wave < limits[1]) & ((wave < (limits[0] + cwidth)) | (wave > (limits[1] - cwidth)))
                 continuum = np.median(flux[continuum])
                             
-                postages[group][lines['INDEX'][i]][cam] = Spectrum(wave[inwave], flux[inwave] - continuum, ivar[inwave], mask=mask[inwave], R=res[:,inwave])
+                postages[group][sample['INDEX'][i]][cam] = Spectrum(wave[inwave], flux[inwave] - continuum, ivar[inwave], mask=mask[inwave], R=res[:,inwave])
 
     for u in ugroups:
         keys = list(postages[u].keys())
