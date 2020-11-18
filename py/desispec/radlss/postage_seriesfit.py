@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import scipy
+import iminuit
 
 from   scipy             import optimize
 from   scipy.optimize    import approx_fprime, minimize, Bounds
