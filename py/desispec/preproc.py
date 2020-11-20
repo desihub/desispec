@@ -288,7 +288,17 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     return bkg
 
 def get_calibration_image(cfinder,keyword,entry) :
-    """Please provide documentation for this function!
+    """Reads a calibration file
+
+    Args:
+        keyword :  BIAS, MASK, or PIXFLAT
+        entry : boolean or filename or image
+                if entry==False return False
+                if entry==True use calibration filename from calib. config and read it
+                if entry==str use this for the filename
+                if entry==image return input
+    returns:
+       2D numpy array with calibration image
     """
     log=get_logger()
 
@@ -316,10 +326,10 @@ def get_calibration_image(cfinder,keyword,entry) :
         return read_bias(filename=filename)
     elif keyword == "MASK" :
         return read_mask(filename=filename)
-    elif keyword == "DARK" :
-        return read_dark(filename=filename)
     elif keyword == "PIXFLAT" :
         return read_pixflat(filename=filename)
+    elif keyword == "DARK" :
+        raise ValueError("Dark are now treated separately.")
     else :
         log.error("Don't known how to read %s in %s"%(keyword,path))
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
@@ -436,16 +446,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else:
         bias = bias_img
 
-    if bias is not False : #- it's an array
-        if bias.shape == rawimage.shape  :
-            log.info("subtracting bias")
-            rawimage = rawimage - bias
-        else:
-            raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
-
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)
-
     #- Double check that we have the necessary keywords
     missing_keywords = list()
     for prefix in ['CCDSEC', 'BIASSEC']:
@@ -458,6 +460,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     if len(missing_keywords) > 0:
         raise KeyError("Missing keywords {}".format(' '.join(missing_keywords)))
 
+
     #- Output arrays
     ny=0
     nx=0
@@ -469,6 +472,47 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     readnoise = np.zeros_like(image)
 
+    #- Load dark
+    if cfinder and cfinder.haskey("DARK") and (dark is not False):
+
+        #- Exposure time
+        if cfinder and cfinder.haskey("EXPTIMEKEY") :
+            exptime_key=cfinder.value("EXPTIMEKEY")
+            log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
+        else :
+            exptime_key="EXPTIME"
+        exptime =  primary_header[exptime_key]
+        log.info("Use exptime = {} sec to compute the dark current".format(exptime))
+
+        dark_filename = cfinder.findfile("DARK")
+        log.info(f'Using DARK model from {dark_filename}')
+        # dark is multipled by exptime, or we use the non-linear dark model in the routine
+        dark = read_dark(filename=dark_filename,exptime=exptime)
+
+        if dark.shape == image.shape :
+            log.info("dark is trimmed")
+            trimmed_dark_in_electrons = dark
+            dark_is_trimmed   = True
+        elif dark.shape == rawimage.shape :
+            log.info("dark is not trimmed")
+            trimmed_dark_in_electrons = np.zeros_like(image)
+            dark_is_trimmed = False
+        else :
+            message="incompatible dark shape={} when raw shape={} and preproc shape={}".format(dark.shape,rawimage.shape,image.shape)
+            log.error(message)
+            raise ValueError(message)
+
+    else:
+        dark = False
+
+    if bias is not False : #- it's an array
+        if bias.shape == rawimage.shape  :
+            log.info("subtracting bias")
+            rawimage = rawimage - bias
+        else:
+            raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
+
+
     #- Load mask
     mask = get_calibration_image(cfinder,"MASK",mask)
 
@@ -477,25 +521,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else :
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
-
-    #- Load dark
-    dark = get_calibration_image(cfinder,"DARK",dark)
-
-    if dark is not False :
-        if dark.shape != image.shape :
-            log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-            raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-
-
-        if cfinder and cfinder.haskey("EXPTIMEKEY") :
-            exptime_key=cfinder.value("EXPTIMEKEY")
-            log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
-        else :
-            exptime_key="EXPTIME"
-        exptime =  primary_header[exptime_key]
-
-        log.info("Multiplying dark by exptime %f"%(exptime))
-        dark *= exptime
 
     for amp in amp_ids:
         # Grab the sections
@@ -520,6 +545,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                     gain = 1.0
                     log.warning('Missing keyword GAIN{} in header and nothing in calib data; using {}'.format(amp,gain))
 
+        #- Record what gain value was actually used
+        header['GAIN'+amp] = gain
 
         #- Add saturation level
         if 'SATURLEV'+amp in header:
@@ -635,6 +662,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         #- ADC to electrons
         image[kk] = data*gain
 
+        if dark is not False :
+            if not dark_is_trimmed :
+                trimmed_dark_in_electrons[kk] = dark[jj]*gain
+
     if not nocrosstalk :
         #- apply cross-talk
 
@@ -694,8 +725,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- subtract dark after multiplication by gain
     if dark is not False  :
-        log.info("subtracting dark for amp %s"%amp)
-        image -= dark
+        log.info("subtracting dark")
+        image -= trimmed_dark_in_electrons
 
     #- Correct for dark trails if any
     if not nodarktrail and cfinder is not None :
@@ -859,24 +890,88 @@ def read_pixflat(filename=None, camera=None, dateobs=None):
     else:
         return fits.getdata(filename, 0)
 
-def read_dark(filename=None, camera=None, dateobs=None):
-    '''
-    Read calibration dark image for camera on dateobs.
+def recover_2d_dark(hdus,exptime,extname):
+    log=get_logger()
+    shape=hdus[0].data.shape
+    nx=shape[0]
+    ny=shape[1]
+    profileLeft=hdus[extname].data[0]
+    profileRight=hdus[extname].data[1]
+    profile_2d_Left=np.transpose(np.tile(profileLeft,(int(ny/2),1)))
+    profile_2d_Right=np.transpose(np.tile(profileRight,(int(ny/2),1)))
+    profile_2d=np.concatenate((profile_2d_Left,profile_2d_Right),axis=1)
+    return profile_2d
 
-    Options:
+def read_dark(filename=None, camera=None, dateobs=None, exptime=None):
+
+    '''
+    Return dark current 2D image ( accounting for exposure time)
+
+    Args:
+
         filename : input filename to read
         camera : e.g. 'b0', 'r1', 'z9'
         dateobs : DATE-OBS string, e.g. '2018-09-23T08:17:03.988'
+        exptime : the exposure time of the image in seconds
 
     Notes:
-        must provide filename, or both camera and dateobs
+        must provide filename
     '''
     from astropy.io import fits
+    log=get_logger()
+
     if filename is None:
         #- use camera and dateobs to derive what pixflat file should be used
         raise NotImplementedError
-    else:
-        return fits.getdata(filename, 0)
+
+    if exptime is None :
+        #- make sure we have the exposure time set to avoid trouble
+        raise ValueError("Need exposure time for dark")
+    exptime = float(exptime) # will throw exception if cannot cast to float
+
+    hdus = fits.open(filename)
+    if len(hdus)==1 :
+        log.info("Single dark frame")
+        return exptime * hdus[0].data
+    else :
+        log.info("Exposure time dependent dark")
+        exptime_arr=[]
+        ext_arr={}
+        for hdu in hdus:
+            if hdu.header['EXTNAME'] == 'DARK' or hdu.header['EXTNAME'] == 'ZERO':
+                pass
+            #elif hdu.header['EXTNAME'] == 'ZERO':
+            #    ext_arr['0']=hdu.header['EXTNAME']
+            #    exptime_arr.append(0)
+            else:
+                ext_arr[hdu.header['EXTNAME'][1:]]=hdu.header['EXTNAME']
+                exptime_arr.append(float(hdu.header['EXTNAME'][1:]))
+
+        exptime_arr = np.array(exptime_arr)
+        min_exptime = np.min(exptime_arr)
+        max_exptime = np.max(exptime_arr)
+
+        if exptime==0.:
+            profile_2d=0.
+        elif exptime< min_exptime :
+            log.warning("Use 2D dark profile at min. exptime={}".format(min_exptime))
+            profile_2d = recover_2d_dark(hdus,min_exptime,ext_arr[str(int(min_exptime))])
+        elif exptime > max_exptime :
+            log.warning("Use 2D dark profile at max. exptime={}".format(max_exptime))
+            profile_2d = recover_2d_dark(hdus,max_exptime,ext_arr[str(int(max_exptime_arr))])
+        else: # Interpolate
+            exptime_arr=np.sort(exptime_arr)
+            ind=np.where(exptime_arr>exptime)
+            ind1=ind[0][0]-1
+            ind2=ind[0][0]
+            log.info('Interpolate between '+str(exptime_arr[ind1])+' and '+str(exptime_arr[ind2]))
+            precision=(exptime-exptime_arr[ind1])/(exptime_arr[ind2]-exptime_arr[ind1])
+            # Run interpolation
+            image1=recover_2d_dark(hdus,exptime_arr[ind1],ext_arr[str(int(exptime_arr[ind1]))])
+            image2=recover_2d_dark(hdus,exptime_arr[ind2],ext_arr[str(int(exptime_arr[ind2]))])
+            profile_2d = image1*(1-precision)+image2*precision
+
+        return profile_2d + exptime * hdus['DARK'].data
 
 def read_mask(filename=None, camera=None, dateobs=None):
     '''

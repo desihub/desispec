@@ -1,0 +1,246 @@
+#!/usr/bin/env python
+
+"""
+Compute "nonlinear dark" model, e.g.
+
+desi_compute_dark_nonlinear --days 20200729 20200730 --camera b0 \
+        --darkfile dark-20200729-b0.fits.gz \
+        --biasfile bias-20200729-b0.fits.gz 
+"""
+
+import argparse
+parser = argparse.ArgumentParser(
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    description="Compute a non-linear dark model",
+    epilog='''
+    Combines a set of ZEROs and DARKs at different exposure times to build
+
+    model(x,y,t) = bias(x,y) + dark(x,y)*t + nonlinear(y,t)
+
+    i.e. the non-linear term is only a function of row (y)
+''')
+
+parser.add_argument('--days', type=int, required=True, nargs="*",
+                    help='YEARMMDD days to use for ZEROs and DARKs')
+parser.add_argument('--darkfile', type=str, required=True,
+                    help='output dark model file')
+parser.add_argument('--biasfile', type=str, required=True,
+                    help='output bias model file')
+parser.add_argument('--camera', type=str, required=True,
+                    help = 'Camera to process (e.g. b0, r1, z9')
+parser.add_argument('-t','--tempdir', type=str, required=False,
+                    help='directory for intermediate files')
+parser.add_argument('--linexptime', type=float, default=300.0, required=False,
+                    help='Model dark current as linear above this exptime')
+parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
+                    help='Skip N ZEROs per day while flushing charge')
+
+args = parser.parse_args()
+
+#- Import after parsing for faster --help
+import os
+import sys
+import glob
+import datetime
+
+from astropy.table import Table
+from astropy.time import Time
+import numpy as np
+import fitsio
+
+from desiutil.log import get_logger
+import desispec.io.util
+from desispec.ccdcalib import compute_dark_file, compute_bias_file
+from desispec.ccdcalib import fit_const_plus_dark
+from desispec.ccdcalib import model_y1d
+from desispec.io import findfile
+
+log = get_logger()
+
+#- tempdir caches files that could be re-used when rerunning for debugging
+#- i.e. it can be cleaned up when done, but isn't completely transient
+if args.tempdir is None:
+    outdir = os.path.dirname(os.path.abspath(args.darkfile))
+    tempdir = os.path.join(outdir, 'temp')
+else:
+    tempdir = args.tempdir
+
+log.debug(f'Writing temporary files to {tempdir}')
+if not os.path.isdir(tempdir):
+    os.makedirs(tempdir)
+
+#- Data taken on the morning of the first day might be associated with the
+#- previous NIGHT
+year = int(str(args.days[0])[0:4])
+month = int(str(args.days[0])[4:6])
+day = int(str(args.days[0])[6:8])
+
+t = datetime.datetime(year, month, day) - datetime.timedelta(days=1)
+nights = [int(t.strftime('%Y%m%d'))]
+nights.extend(args.days)
+
+#- Get table of what exposures were taken on those days
+speclog_file = os.path.join(tempdir, 'speclog.csv')
+if os.path.exists(speclog_file):
+    log.info(f'Reading speclog from {speclog_file}')
+    speclog = Table.read(speclog_file)
+else:
+    log.info(f'Generating speclog for nights {nights}')
+    speclog = desispec.io.util.get_speclog(nights)
+
+    #- Add "DAY" column = rolls over at midnight instead of MST noon
+    t = Time(speclog['MJD']-7/24, format='mjd')
+    speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+
+    #- Trim to just the requested days
+    keep = np.zeros(len(speclog), dtype=bool)
+    for day in args.days:
+        keep |= speclog['DAY'] == day
+
+    speclog = speclog[keep]
+    tmpfile = speclog_file + '.tmp-' + str(os.getpid())
+    speclog.write(tmpfile, format='ascii.csv')
+    os.rename(tmpfile, speclog_file)
+    log.info(f'Wrote speclog to {speclog_file}')
+
+#- group EXPTIMEs by integer
+speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
+
+#- Print some summary stats before continuing
+isZero = speclog['OBSTYPE'] == 'ZERO'
+isDark = speclog['OBSTYPE'] == 'DARK'
+for day in args.days:
+    ii = speclog['DAY'] == day
+    nzeros = np.count_nonzero(ii & isZero)
+    ndarks = np.count_nonzero(ii & isDark)
+    darktimes = sorted(set(speclog['EXPTIME_INT'][ii & isDark]))
+    log.info(f'Day {day} has {nzeros} ZEROs and {ndarks} DARKs with exptimes {darktimes}')
+
+#- Combine the ZEROs into per-day bias files
+all_zerofiles = list()
+for day in args.days:
+    zerofiles = list()
+    ii = isZero & (speclog['DAY'] == day)
+    nzeros = np.count_nonzero(ii)
+    nzeros_good = nzeros - args.nskip_zeros
+    if nzeros_good < 5:
+        log.critical('{nzeros} on {day} is insufficient when skipping {args.nskip_zeros}')
+        sys.exit(1)
+
+    elif nzeros_good < 20:
+        log.warning(f'Only {nzeros_good} good ZEROs on day {day}')
+    else:
+        log.info(f'Using {nzeros_good} ZEROs on day {day}')
+
+    for row in speclog[ii][args.nskip_zeros:]:
+        rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
+        zerofiles.append(rawfile)
+        all_zerofiles.append(rawfile)
+    
+    biasfile = f'{tempdir}/bias-{day}-{args.camera}.fits'
+    if os.path.exists(biasfile):
+        log.info(f'{biasfile} already exists')
+    else:
+        log.info(f'Generating {biasfile}')
+        compute_bias_file(zerofiles, biasfile, args.camera)
+
+#- Combine all ZEROs into a default BIAS file
+if os.path.exists(args.biasfile):
+    log.info(f'{args.biasfile} already exists')
+else:
+    log.info(f'Generating {args.biasfile}')
+    compute_bias_file(zerofiles, args.biasfile, args.camera)
+
+#- Combine the DARKs into master darks per exptime
+darktimes = np.array(sorted(set(speclog['EXPTIME_INT'][isDark])))
+for exptime in darktimes:
+    darkfile = f'{tempdir}/dark-{day}-{args.camera}-{exptime}.fits'
+    if os.path.exists(darkfile):
+        log.info(f'{darkfile} already exists')
+        continue
+    else:
+        log.info(f'Generating {darkfile}')
+
+    rawfiles = list()
+    biasfiles = list()
+    ii = (speclog['EXPTIME_INT'] == exptime)
+    for row in speclog[isDark & ii]:
+        day, night, expid = row['DAY'], row['NIGHT'], row['EXPID']
+        rawfiles.append(findfile('raw', night, expid, args.camera))
+        biasfiles.append(f'{tempdir}/bias-{day}-{args.camera}.fits')
+
+    compute_dark_file(rawfiles, darkfile, args.camera, bias=biasfiles,
+        exptime=exptime)
+
+#- Read the individual combined dark images
+log.info('Reading darks for individual EXPTIMEs')
+darkimages = list()
+darkheaders = list()
+for exptime in darktimes:
+    darkfile = f'{tempdir}/dark-{day}-{args.camera}-{exptime}.fits'
+    img, hdr = fitsio.read(darkfile, 'DARK', header=True)
+    darkimages.append(img*exptime)
+    darkheaders.append(hdr)
+
+darkimages = np.array(darkimages)
+
+if np.max(darktimes) < args.linexptime:
+    log.critical(f'No DARKs with exptime >= args.linexptime={args.linexptime}')
+    sys.exit(2)
+
+ii = darktimes >= args.linexptime
+log.info('Calculating const+dark using exptimes {}'.format(darktimes[ii]))
+const, dark = fit_const_plus_dark(darktimes[ii], darkimages[ii])
+
+#- Assemble final 1D models for left & right amps vs. exposure time
+ny, nx = const.shape
+nonlinear1d = list()
+for exptime, image in zip(darktimes, darkimages):
+    assert image.shape == (ny,nx)
+    tmp = image - dark*exptime  #- 1D images model dark-subtracted residuals
+    left = model_y1d(tmp[:, 0:nx//2], smooth=0)
+    right = model_y1d(tmp[:, nx//2:], smooth=0)
+    nonlinear1d.append( np.array([left, right]) )
+
+#- Write final output
+log.info(f'Writing {args.darkfile}')
+with fitsio.FITS(args.darkfile, 'rw', clobber=True) as fx:
+    header = fitsio.FITSHDR()
+    header['BUNIT'] = 'electron/s'
+    header.add_record(dict(name='DARKFMT', value='v2',
+            comment='bias(x,y) + dark(x,y)*t + nonlinear(y,t)'))
+
+    #- Add header keywords from first DARK
+    hdr = darkheaders[0]
+    for key in hdr.keys():
+        if (key != 'EXPTIME') and \
+           (not key.startswith('INPUT')) and \
+           (key not in header):
+                header.add_record(
+                    dict(name=key, value=hdr[key], comment=hdr.get_comment(key))
+                    )
+    
+    #- Add record of all input files used
+    i = 0
+    for hdr in darkheaders:
+        for k in range(1000):
+            key = f'INPUT{k:03d}'
+            if key in hdr:
+                header[f'INPUT{i:03d}'] = hdr[key]
+                i += 1
+            else:
+                break
+
+    #- 2D dark model in electron/s
+    fx.write(dark.astype(np.float32), extname='DARK', header=header)
+
+    #- 1D profiles at individual times, in electron [not electron/s]
+    for exptime, model1d, hdr in zip(darktimes, nonlinear1d, darkheaders):
+        hdr['BUNIT'] = 'electron'
+        hdr.add_record(dict(name='BUNIT', value='electron',
+            comment='Note: 1D profiles are electron, not electron/s'))
+        hdr.delete('EXTNAME')
+        extname = 'T{}'.format(int(exptime))
+        fx.write(model1d.astype(np.float32), extname=extname, header=hdr)
+
+

@@ -1,16 +1,8 @@
 #!/usr/bin/env python
 
 
-import os,sys
-import astropy.io.fits as pyfits
 import argparse
-import numpy as np
-
-from desiutil.log import get_logger
-from desispec.preproc import _parse_sec_keyword, _overscan
-from desispec.calibfinder import CalibFinder
-
-
+from desispec.ccdcalib import compute_bias_file
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute a master bias from a set of raw data bias images",
@@ -23,84 +15,6 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 parser.add_argument('--camera',type = str, required = True,
                     help = 'camera name BX,RX,ZX with X from 0 to 9')
 
-
 args        = parser.parse_args()
-log = get_logger()
 
-log.info("read images ...")
-images=[]
-shape=None
-first_image_header = None
-for filename in args.image :
-    log.info("reading %s"%filename)
-    fitsfile=pyfits.open(filename)
-
-    primary_header=fitsfile[0].header
-    image_header=fitsfile[args.camera].header
-
-    if first_image_header is None : first_image_header = image_header
-
-    # subtract overscan region
-    cfinder=CalibFinder([image_header,primary_header])
-
-    image=fitsfile[args.camera].data.astype("float64")
-
-    if cfinder and cfinder.haskey("AMPLIFIERS") :
-        amp_ids=list(cfinder.value("AMPLIFIERS"))
-    else :
-        amp_ids=['A','B','C','D']
-
-    n0=image.shape[0]//2
-    n1=image.shape[1]//2
-
-    for a,amp in enumerate(amp_ids) :
-        ii = _parse_sec_keyword(image_header['BIASSEC'+amp])
-        overscan_image = image[ii].copy()
-        overscan,rdnoise = _overscan(overscan_image)
-        log.info("amp {} overscan = {}".format(amp,overscan))
-        if ii[0].start < n0 and ii[1].start < n1 :
-            image[:n0,:n1] -= overscan
-        elif ii[0].start < n0 and ii[1].start >= n1 :
-            image[:n0,n1:] -= overscan
-        elif ii[0].start >= n0 and ii[1].start < n1 :
-            image[n0:,:n1] -= overscan
-        elif ii[0].start >= n0 and ii[1].start >= n1 :
-            image[n0:,n1:] -= overscan
-
-
-    if shape is None :
-        shape=image.shape
-    images.append(image.ravel())
-
-    fitsfile.close()
-
-images=np.array(images)
-print(images.shape)
-
-# compute a mask
-log.info("compute median image ...")
-medimage=np.median(images,axis=0) #.reshape(shape)
-log.info("compute mask ...")
-ares=np.abs(images-medimage)
-nsig=4.
-mask=(ares<nsig*1.4826*np.median(ares,axis=0))
-# average (not median)
-log.info("compute average ...")
-meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
-meanimage=meanimage.reshape(shape)
-
-log.info("write result in %s ..."%args.outfile)
-hdus=pyfits.HDUList([pyfits.PrimaryHDU(meanimage.astype('float32'))])
-
-# copy some keywords
-for key in ["TELESCOP","INSTRUME","SPECGRPH","SPECID","DETECTOR","CAMERA","CCDNAME","CCDPREP","CCDSIZE","CCDTEMP","CPUTEMP","CASETEMP","CCDTMING","CCDCFG","SETTINGS","VESSEL","FEEVER","FEEBOX","PRESECA","PRRSECA","DATASECA","TRIMSECA","BIASSECA","ORSECA","CCDSECA","DETSECA","AMPSECA","PRESECB","PRRSECB","DATASECB","TRIMSECB","BIASSECB","ORSECB","CCDSECB","DETSECB","AMPSECB","PRESECC","PRRSECC","DATASECC","TRIMSECC","BIASSECC","ORSECC","CCDSECC","DETSECC","AMPSECC","PRESECD","PRRSECD","DATASECD","TRIMSECD","BIASSECD","ORSECD","CCDSECD","DETSECD","AMPSECD","DAC0","DAC1","DAC2","DAC3","DAC4","DAC5","DAC6","DAC7","DAC8","DAC9","DAC10","DAC11","DAC12","DAC13","DAC14","DAC15","DAC16","DAC17","CLOCK0","CLOCK1","CLOCK2","CLOCK3","CLOCK4","CLOCK5","CLOCK6","CLOCK7","CLOCK8","CLOCK9","CLOCK10","CLOCK11","CLOCK12","CLOCK13","CLOCK14","CLOCK15","CLOCK16","CLOCK17","CLOCK18","OFFSET0","OFFSET1","OFFSET2","OFFSET3","OFFSET4","OFFSET5","OFFSET6","OFFSET7","DELAYS","CDSPARMS","PGAGAIN","OCSVER","DOSVER","CONSTVER"] :
-    if key in first_image_header :
-        hdus[0].header[key] = (first_image_header[key],first_image_header.comments[key])
-
-hdus[0].header["BUNIT"] = "adu"
-hdus[0].header["EXTNAME"] = "BIAS"
-for filename in args.image :
-    hdus[0].header["COMMENT"] = "Inc. {}".format(os.path.basename(filename))
-hdus.writeto(args.outfile,overwrite="True")
-
-log.info("done")
+compute_bias_file(args.image, args.outfile, args.camera)

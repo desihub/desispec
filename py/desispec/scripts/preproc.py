@@ -158,8 +158,9 @@ def main(args=None):
                               psf_filename=args.psf,
                               model_variance=args.model_variance
             )
-        except IOError:
+        except IOError as e:
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
+            log.error(e)
             continue
 
         if(args.zero_masked) :
