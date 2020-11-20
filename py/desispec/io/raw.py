@@ -137,10 +137,10 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         raise KeyError(msg)
     if dateobs < 20191211 :
         petal_loc = spec_to_petal[int(camera[1])]
-        log.warning('Mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
+        log.warning('Prior to 20191211, mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
     else :
         petal_loc = int(camera[1])
-        log.warning('Since 20191211, camera {} is PETAL_LOC={}'.format(camera, petal_loc))
+        log.debug('Since 20191211, camera {} is PETAL_LOC={}'.format(camera, petal_loc))
     
     ii = (fibermap['PETAL_LOC'] == petal_loc)
     fibermap = fibermap[ii]

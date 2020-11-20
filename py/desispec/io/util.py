@@ -5,6 +5,7 @@ desispec.io.util
 Utility functions for desispec IO.
 """
 import os
+import glob
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -398,3 +399,39 @@ def decode_camword(camword):
                 camlist.append(key+searchstr[0])
             searchstr = searchstr[1:]
     return np.sort(camlist)
+
+def get_speclog(nights, rawdir=None):
+    """
+    Scans raw data headers to return speclog of observations. Slow.
+
+    Args:
+        nights: list of YEARMMDD nights to scan
+
+    Options:
+        rawdir (str): overrides $DESI_SPECTRO_DATA
+
+    Returns:
+        Table with columns NIGHT,EXPID,MJD,FLAVOR,OBSTYPE,EXPTIME
+
+    Scans headers of rawdir/NIGHT/EXPID/desi-EXPID.fits.fz
+    """
+    #- only import fitsio if this function is called
+    import fitsio
+
+    if rawdir is None:
+        rawdir = os.environ['DESI_SPECTRO_DATA']
+
+    rows = list()
+    for night in nights:
+        for filename in sorted(glob.glob(f'{rawdir}/{night}/*/desi-*.fits.fz')):
+            hdr = fitsio.read_header(filename, 1)
+            rows.append([night, hdr['EXPID'], hdr['MJD-OBS'],
+                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME']])
+
+    speclog = Table(
+        names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME'],
+        rows = rows,
+    )
+
+    return speclog
+
