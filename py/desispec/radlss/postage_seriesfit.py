@@ -21,6 +21,7 @@ from   autograd import grad
 from   twave import twave
 from   astropy.table import Table, vstack  
 from   doublet_priors import gaussian_prior, jeffreys_prior
+from   plot_postages import plot_postages
 
 
 def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
@@ -130,9 +131,7 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
 
         result        = 0.0
 
-        # Prior on redshift fit.
-        # residuals   = [np.sqrt(gaussian_prior(z, rrz, rrzerr))]
-        # residualds += [np.sqrt(jeffreys_prior(v, 50.))]
+        residuals     = []
         
         for i, singlet in enumerate(singlets):
             lineidb   = singlet['INDEX']
@@ -146,10 +145,6 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
 
             lnA       = x[i + 2]
             line_flux = np.exp(lnA)
-
-            # Prior. 
-            
-            # print(lineidb, cams)
 
             for cam in cams:
                 wave  = postage[cam].wave
@@ -186,9 +181,6 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
             line_flux = np.exp(lnA)
 
             r         = x[2 * i + 3 + nsinglet]
-
-            # Prior                                                                                                                                                                                                                     
-            # res    += [2. * np.sqrt(mlogprior(x, rrz, rrzerr))]
             
             for cam in cams:
                 wave  = postage[cam].wave
@@ -208,7 +200,11 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
 		
                 residuals += res.tolist()
 
-        residuals = np.array(residuals)
+        # Include a parameter prior. 
+        nelement   = len(residuals)
+        residuals += np.sqrt(2. * mlogprior(x, rrz, rrzerr) / (1. + nelement))
+
+        residuals  = np.array(residuals)
 
         return  residuals
 
@@ -461,10 +457,10 @@ if __name__ == '__main__':
         
     end               = time.time()
 
-    print(end - start)
+    print('\n\nMinimised in {:.2f} seconds.'.format(end - start))
     
     ## 
     fig       = plot_postages(postages, mpostages, petal, fiber, rrz, tid)
-    fig.savefig('postages.pdf', bbox_inches='tight')  
+    fig.savefig('postages.pdf', bbox_inches='tight')
 
     print('\n\nDone.\n\n')

@@ -22,13 +22,9 @@ from   doublet_priors import mlogprior
 from   cframe_postage import cframe_postage
 from   lines import lines, ugroups
 from   twave import twave
+from   doublet_obs import doublet_obs
+from   matchedtemp_lineflux import matchedtemp_lineflux
 
-
-def doublet_obs(z, twave, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726.032, lineb=3728.815):
-    _, tflux = doublet(z=z, twave=twave, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
-    tflux    = resample_flux(wave, twave, tflux)
-
-    return  res.dot(tflux)
 
 def doublet_chi2(z, twave, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5., r=0.1, line_flux=None, linea=3726.032, lineb=3728.815):    
     '''
@@ -39,16 +35,6 @@ def doublet_chi2(z, twave, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5.
     '''
     
     rflux             = doublet_obs(z, twave, wave, res, continuum=0.0, sigmav=sigmav, r=r, linea=linea, lineb=lineb)
-    '''
-    if line_flux is None:
-        ##  Solve for the best fit line_flux given the observed flux.
-        ##  Eqn. (12) of https://arxiv.org/pdf/2007.14484.pdf
-        line_flux     = np.sum( flux * rflux * ivar)
-        line_flux    /= np.sum(rflux * rflux * ivar)
-    
-        line_flux_err = np.sum(rflux * rflux * ivar)
-        line_flux_err = 1. / np.sqrt(line_flux_err)
-     ''' 
     rflux            *= line_flux
         
     X2                = ivar * (flux - rflux)**2.

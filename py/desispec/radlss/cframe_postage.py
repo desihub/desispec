@@ -1,5 +1,6 @@
 import time 
 import numpy as np
+import pickle
 import scipy
 
 from   scipy             import optimize
@@ -13,6 +14,9 @@ from   desispec.resolution import Resolution
 from   doublet_priors import mlogprior
 from   desispec.frame import Spectrum
 from   lines import lines, ugroups
+from   matchedtemp_lineflux import matchedtemp_lineflux
+from   doublet_obs import doublet_obs
+from   plot_postages import plot_postages
 
 
 width  = 50.
@@ -24,24 +28,33 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
     chi sq. for a doublet line model of given parameters, e.g. line flux.
     '''
 
-    postages = {}
+    postages  = {}
+    ipostages = {}
 
     for u in ugroups:
         postages[u] = {}
-
+        ipostages[u] = {}
+        
     sample     = lines[lines['MASKED'] == 0]
         
-    for i, line in enumerate(sample['WAVELENGTH']):
-        limits = (1. + redshift) * line + np.array([-width, width])
-        group  = sample['GROUP'][i]
+    for i, line in enumerate(sample['WAVELENGTH']):        
+        center = (1. + redshift) * line
+        limits = center + np.array([-width, width])
 
+        name   = sample['NAME'][i]
+        group  = sample['GROUP'][i]
+        lratio = sample['LINERATIO'][i]
+        
         postages[group][sample['INDEX'][i]] = {}
+        ipostages[group][sample['INDEX'][i]] = {}
         
         for cam in petal_cframes.keys():        
             wave   = petal_cframes[cam].wave
             inwave = (wave > limits[0]) & (wave < limits[1])
-
-            if np.count_nonzero(inwave):
+            
+            isin   = (wave.min() < center) & (center < wave.max())
+            
+            if isin:
                 if printit:
                     print('Reduced LINEID {:2d}:  {:16s} for {} at redshift {:.2f} ({:.3f} to {:.3f}).'.format(sample['INDEX'][i], sample['NAME'][i], cam, redshift, limits[0], limits[1]))
 
@@ -52,9 +65,21 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
                     
                 continuum = (wave > limits[0]) & (wave < limits[1]) & ((wave < (limits[0] + cwidth)) | (wave > (limits[1] - cwidth)))
                 continuum = np.median(flux[continuum])
-                            
-                postages[group][sample['INDEX'][i]][cam] = Spectrum(wave[inwave], flux[inwave] - continuum, ivar[inwave], mask=mask[inwave], R=res[:,inwave])
 
+                instance  = Spectrum(wave[inwave], flux[inwave] - continuum, ivar[inwave], mask=mask[inwave], R=res[:,inwave])
+
+                # matchedtemp_lineflux(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=50.0, r=0.7, linea=3726.032, lineb=3728.815)
+                instance.meta['LINE']     = name.ljust(15)
+                instance.meta['LINEFLUX'] = matchedtemp_lineflux(redshift, instance.wave, Resolution(instance.R), instance.flux, instance.ivar, instance.mask, sigmav=90.0, r=0.0, linea=0.0, lineb=line)
+
+                # print('{} {} {:.2e} {:.2e}'.format(name.ljust(15), cam, instance.meta['LINEFLUX'][0], instance.meta['LINEFLUX'][1]))
+                
+                postages[group][sample['INDEX'][i]][cam]   = instance
+
+                ipostages[group][sample['INDEX'][i]][cam]  = doublet_obs(redshift, instance.wave, instance.wave, Resolution(instance.R), continuum=0.0, sigmav=90.0, r=0.0, linea=0.0, lineb=line)
+                ipostages[group][sample['INDEX'][i]][cam] *= instance.meta['LINEFLUX'][0]
+                ipostages[group][sample['INDEX'][i]][cam]  = Spectrum(instance.wave, ipostages[group][sample['INDEX'][i]][cam], instance.ivar, mask=instance.mask, R=instance.R)
+                
     for u in ugroups:
         keys = list(postages[u].keys())
         
@@ -65,7 +90,15 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
         if not bool(postages[u]):
             del postages[u]
 
-    return  postages
+    for u in postages.keys():
+        for lineid in postages[u].keys():
+            for cam in postages[u][lineid].keys():
+                name  = postages[u][lineid][cam].meta['LINE']
+                lflux = postages[u][lineid][cam].meta['LINEFLUX'] 
+                
+                print('{} {} {:.2f} +- {:.2f}'.format(name, cam, lflux[0], lflux[1]))
+            
+    return  postages, ipostages
 
 
 if __name__ == '__main__':
@@ -75,51 +108,72 @@ if __name__ == '__main__':
 
     from   astropy.table import Table
 
-    
-    petal    = '0'
-    fiber    =  7
-    
-    zbest    =  Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', str(67142), str(20200315), 'zbest-{}-{}-{}.fits'.format(petal, 67142, 20200315)), 'ZBEST')
-    redshift =  zbest['Z'][fiber]
+    petal    =  '5'
+    fiber    =  11
+    night    = '20200315'
+    expid    = 55589
+    tileid   = '67230'
+
+    ##                                                                                                                                                                                                                                 
+    zbest    = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', tileid, night, 'zbest-{}-{}-{}.fits'.format(petal, tileid, night)), 'ZBEST')
+    tid      = zbest['TARGETID'][fiber]
+    rrz      = zbest['Z'][fiber]
+    rrzerr   = zbest['ZERR'][fiber]
 
     cframes  = {}
     colors   = {'b': 'b', 'r': 'g', 'z': 'r'}
-    
-    for band in ['b', 'r', 'z']:
-      cam    = band+petal
-         
-      # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits
-      cframes[cam] = read_frame(findfile('cframe', night=20200315, expid=55642, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))
-      
-    zbest     = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', str(67142), str(20200315), 'zbest-{}-{}-{}.fits'.format(petal, 67142, 20200315)), 'ZBEST')
 
-    start    = time.time()
+    with open(os.environ['CSCRATCH'] + '/radlss/test/ensemble/template-elg-ensemble-meta.fits', 'rb') as handle:
+        meta = pickle.load(handle)['ELG']
+
+    with open(os.environ['CSCRATCH'] + '/radlss/test/ensemble/template-elg-ensemble-flux.fits', 'rb') as handle:
+        flux = pickle.load(handle)['ELG']
+
+    with open(os.environ['CSCRATCH'] + '/radlss/test/ensemble/template-elg-ensemble-objmeta.fits', 'rb') as handle:
+        objmeta = pickle.load(handle)['ELG']
+
+    for band in ['b', 'r', 'z']:
+        cam    = band + petal
+
+	# E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits                                                                                                                                                             
+        cframes[cam]               = read_frame(findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))
+        cframes[cam].flux[fiber,:] = flux[band][115]
+
+    rrz       = meta['REDSHIFT'][115]
+
     
-    postages  = cframe_postage(cframes, fiber, redshift)
+    print('\n\nOIIFLUX: {:.2f}'.format(1.e17 * objmeta['OIIFLUX'][115]))
+    print('HBETAFLUX: {:.2f}\n\n'.format(objmeta['HBETAFLUX'][115]))
+    
+    start     = time.time()
+    
+    postages, ipostages = cframe_postage(cframes, fiber, rrz)
 
     end       = time.time()
 
-    print(end - start)
+    print('\n\nFinised postages in {:.2f} seconds.'.format(end - start))
 
-    '''
+    fig       = plot_postages(postages, ipostages, petal, fiber, rrz, tid)
+    fig.savefig('ipostages.pdf', bbox_inches='tight')
+    
     ##  Plot.
-    fig, axes = plt.subplots(len(ugroups), 14, figsize=(25,10))
+    fig, axes = plt.subplots(len(ugroups), 10, figsize=(25,10))
 
     for u in np.unique(list(postages.keys())):
         index = 0
 
         for _, x in enumerate(list(postages[u].keys())):
             for cam in postages[u][x]:
-                axes[u,index].axvline((1. + redshift) * lines['WAVELENGTH'][x], c='k', lw=0.5)
+                axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
                 axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
                 axes[u,index].set_title(lines['NAME'][x])
 
                 index += 1
         
-    fig.suptitle('Fiber {} of petal {} with redshift {:2f}'.format(fiber, petal, redshift), y=1.02)
+    fig.suptitle('Fiber {} of petal {} with redshift {:2f}'.format(fiber, petal, rrz), y=1.02)
 
     plt.tight_layout()
     
     pl.show()
-    '''
+    
     print('\n\nDone.\n\n')

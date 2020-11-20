@@ -20,6 +20,10 @@ for i, x in enumerate([[6, 7], [16, 17], [25, 27]]):
     for y in x:
         lines['DOUBLET'][y] = i
 
+lines['LINERATIO']     = 0.0
+lines['LINERATIO'][6]  = 0.7
+lines['LINERATIO'][7]  = 0.7
+        
 lines['MASKED']        = np.zeros(len(lines), dtype=np.int)
 
 # Ignored in chi sq. and not plotted; 4, 5, 8, 13, 14.

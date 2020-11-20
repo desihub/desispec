@@ -31,6 +31,8 @@ class Spectrum(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
+        self.meta = {}
+        
         if mask is None:
             self.mask = np.zeros(self.flux.shape, dtype=int)
         else:
