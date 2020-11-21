@@ -6,7 +6,7 @@ import socket
 import sys
 import numpy as np
 
-from desispec.workflow.daily_processing import daily_processing_manager
+from desispec.scripts.daily_processing import daily_processing_manager
 from desispec.io.util import create_camword
 
 from desispec.workflow.timing import during_operating_hours
