@@ -180,8 +180,9 @@ def main(args, comm=None):
 
     outdir = os.path.dirname(outroot)
     if rank == 0:
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
+        if outdir != "" :
+            if not os.path.isdir(outdir):
+                os.makedirs(outdir)
 
     failcount = 0
 
