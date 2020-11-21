@@ -3,7 +3,7 @@ import pandas as pd
 
 from   astropy.table import Table
 from   pkg_resources import resource_exists, resource_filename
-
+from   air2vac import air2vac
 
 
 fname                = resource_filename('desispec', 'data/emlines.par')
@@ -13,6 +13,7 @@ lines                = pd.read_csv(fname, sep='\s+', skiprows=16, names=['LINEID
 lines['INDEX']       = np.arange(len(lines))
 lines['GROUP']       = lines.groupby(['REDSHIFT GROUP', 'WIDTH GROUP']).ngroup()
 lines['DOUBLET']     = np.zeros(len(lines), dtype=np.int) - 99
+lines['WAVELENGTH']  = air2vac(lines['WAVELENGTH'])
 
 lines                = Table(lines.to_numpy(), names=lines.columns)
 
