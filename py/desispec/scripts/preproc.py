@@ -26,13 +26,14 @@ override a single output filename but only if a single
 camera is given with --cameras.
 --bias/--pixflat/--mask can specify the calibration files
 to use, but also only if a single camera is specified.
+Must specify --infile OR --night and --expid.
         ''')
     parser.add_argument('-i','--infile', type=str, required=False,
                         help = 'path of DESI raw data file')
     parser.add_argument('-n', '--night', type=int, required=False,
-                        help = 'YEARMMDD night; must also provided --expid')
+                        help = 'YEARMMDD night; must also provide --expid')
     parser.add_argument('-e', '--expid', type=int, required=False,
-                        help = 'expossure ID; must also provided --night')
+                        help = 'exposure ID; must also provide --night')
     parser.add_argument('--outdir', type = str, default = None, required=False,
                         help = 'output directory')
     parser.add_argument('--fibermap', type = str, default = None, required=False,
