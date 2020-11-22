@@ -132,14 +132,14 @@ def summarize_exposure(raw_data_dir, night, exp, scitypes, surveynum, colnames, 
         return None
 
     flavor = req_dict['FLAVOR'].lower()
-    if flavor != 'science':
+    if flavor != 'science' and 'dark' not in scitypes and 'zero' not in scitypes:
         ## If FLAVOR is wrong
         give_details(f'ignoring: {reqpath} -- {flavor} not a flavor we care about', f'{exp}: skipped  -- not science')
         return None
 
     if 'OBSTYPE' not in req_dict.keys():
         ## If no obstype is defines, skip it
-        give_details(f'ignoring: {reqpath} -- science flavor but obstype not defined',
+        give_details(f'ignoring: {reqpath} -- {flavor} flavor but obstype not defined',
                      f'{exp}: skipped  -- obstype not given')
         return None
     else:

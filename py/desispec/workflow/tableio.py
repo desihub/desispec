@@ -280,11 +280,11 @@ def write_tables(tables, fullpathnames=None, table_types=None, write_empty=False
         print("Need to define either fullpathnames or the table types in write_tables")
     elif fullpathnames is None:
         for tabl, tabltyp in zip(tables, table_types):
-            if len(tabl) > 0:
+            if write_empty or len(tabl) > 0:
                 write_table(tabl, table_type=tabltyp, verbose=verbose, overwrite=overwrite, write_empty=write_empty)
     else:
         for tabl, tablname in zip(tables, fullpathnames):
-            if len(tabl) > 0:
+            if write_empty or len(tabl) > 0:
                 write_table(tabl, tablename=tablname, verbose=verbose, overwrite=overwrite, write_empty=write_empty)
 
 
