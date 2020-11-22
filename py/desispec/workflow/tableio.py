@@ -45,13 +45,18 @@ def split_str(val, joinsymb='|'):
         return val
 
 
-def write_table(origtable, tablename=None, table_type=None, joinsymb='|', overwrite=True, verbose=False):
+def write_table(origtable, tablename=None, table_type=None, joinsymb='|', overwrite=True, verbose=False, write_empty=False):
     if tablename is None and table_type is None:
         print("Pathname or type of table is required to save the table")
+        return
 
     if tablename is None:
         tablename = translate_type_to_pathname(table_type)
 
+    if not write_empty and len(origtable) == 0:
+        print(f'NOT writing zero length table to {tablename}')
+        return
+        
     if verbose:
         print("In write table" ,tablename ,'\n' ,table_type)
         print(origtable[0:2])
@@ -270,17 +275,17 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
 # def backup_tables(tables, fullpathnames=None, table_types=None):
 #     return write_tables(tables, fullpathnames, table_types)
 
-def write_tables(tables, fullpathnames=None, table_types=None):
+def write_tables(tables, fullpathnames=None, table_types=None, write_empty=False, verbose=False, overwrite=True):
     if fullpathnames is None and table_types is None:
         print("Need to define either fullpathnames or the table types in write_tables")
     elif fullpathnames is None:
         for tabl, tabltyp in zip(tables, table_types):
             if len(tabl) > 0:
-                write_table(tabl, table_type=tabltyp)
+                write_table(tabl, table_type=tabltyp, verbose=verbose, overwrite=overwrite, write_empty=write_empty)
     else:
         for tabl, tablname in zip(tables, fullpathnames):
             if len(tabl) > 0:
-                write_table(tabl, tablename=tablname)
+                write_table(tabl, tablename=tablname, verbose=verbose, overwrite=overwrite, write_empty=write_empty)
 
 
 def load_tables(fullpathnames=None, tabtypes=None):
