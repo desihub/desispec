@@ -4,13 +4,15 @@ desispec.scripts.preproc
 
 Command line wrappers for pre-processing a DESI raw exposure
 """
-from __future__ import absolute_import, division
 
 import argparse
 
 import os
 import sys
+import multiprocessing as mp
+import numpy as np
 from desispec import io
+from desispec.parallel import default_nproc
 from desiutil.log import get_logger
 log = get_logger()
 
@@ -25,8 +27,12 @@ camera is given with --cameras.
 --bias/--pixflat/--mask can specify the calibration files
 to use, but also only if a single camera is specified.
         ''')
-    parser.add_argument('-i','--infile', type = str, default = None, required=True,
+    parser.add_argument('-i','--infile', type=str, required=False,
                         help = 'path of DESI raw data file')
+    parser.add_argument('-n', '--night', type=int, required=False,
+                        help = 'YEARMMDD night; must also provided --expid')
+    parser.add_argument('-e', '--expid', type=int, required=False,
+                        help = 'expossure ID; must also provided --night')
     parser.add_argument('--outdir', type = str, default = None, required=False,
                         help = 'output directory')
     parser.add_argument('--fibermap', type = str, default = None, required=False,
@@ -81,6 +87,8 @@ to use, but also only if a single camera is specified.
     parser.add_argument('--scattered-light', action="store_true", help="fit and remove scattered light")
     parser.add_argument('--psf', type = str, required=False, default=None, help="psf file to remove scattered light or to compute the variance model")
     parser.add_argument('--model-variance', action="store_true", help="compute a model of the CCD image to derive the Poisson noise")
+    parser.add_argument('--ncpu', type=int, default=default_nproc,
+            help=f"number of parallel processes to use [{default_nproc}]")
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -107,6 +115,19 @@ def main(args=None):
     mask=True
     if args.mask : mask=args.mask
     if args.nomask : mask=False
+
+    # infile or night+expid?
+    if args.infile is None:
+        if args.night is None or args.expid is None:
+            log.critical('Must provide --infile or both --night and --expid')
+            sys.exit(1)
+
+        args.infile = io.findfile('raw', args.night, args.expid)
+
+    else:
+        if args.night is not None or args.expid is not None:
+            msg = f'ignoring --night/--expid; using --infile {args.infile}'
+            log.warning(msg)
 
     if args.cameras is None:
         args.cameras = [c+str(i) for c in 'brz' for i in range(10)]
@@ -139,40 +160,105 @@ def main(args=None):
         fibermapfile = infile.replace('desi-', 'fibermap-').replace('.fits.fz', '.fits')
         args.fibermap = os.path.join(datadir, fibermapfile)
 
+    #- Assemble options to pass to io.read_raw/preproc for each camera
+    #- so that they can be optionally parallelized
+    opts_array = list()
     for camera in args.cameras:
-        try:
-            img = io.read_raw(args.infile, camera,
-                              fibermapfile=args.fibermap,
-                              bias=bias, dark=dark, pixflat=pixflat, mask=mask, bkgsub=args.bkgsub,
-                              nocosmic=args.nocosmic,
-                              cosmics_nsig=args.cosmics_nsig,
-                              cosmics_cfudge=args.cosmics_cfudge,
-                              cosmics_c2fudge=args.cosmics_c2fudge,
-                              ccd_calibration_filename=ccd_calibration_filename,
-                              nocrosstalk=args.nocrosstalk,
-                              nogain=args.nogain,
-                              use_savgol=args.use_savgol,
-                              nodarktrail=args.nodarktrail,
-                              fill_header=args.fill_header,
-                              remove_scattered_light=args.scattered_light,
-                              psf_filename=args.psf,
-                              model_variance=args.model_variance
-            )
-        except IOError as e:
-            log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
-            log.error(e)
-            continue
+        opts = dict(
+                infile = args.infile,
+                camera = camera,
+                outfile = args.outfile,
+                outdir = args.outdir,
+                fibermap = args.fibermap,
+                bias=bias, dark=dark, pixflat=pixflat, mask=mask,
+                bkgsub=args.bkgsub,
+                nocosmic=args.nocosmic,
+                cosmics_nsig=args.cosmics_nsig,
+                cosmics_cfudge=args.cosmics_cfudge,
+                cosmics_c2fudge=args.cosmics_c2fudge,
+                ccd_calibration_filename=ccd_calibration_filename,
+                nocrosstalk=args.nocrosstalk,
+                nogain=args.nogain,
+                use_savgol=args.use_savgol,
+                nodarktrail=args.nodarktrail,
+                fill_header=args.fill_header,
+                remove_scattered_light=args.scattered_light,
+                psf_filename=args.psf,
+                model_variance=args.model_variance,
+                )
+        opts_array.append(opts)
 
-        if(args.zero_masked) :
-            img.pix *= (img.mask==0)
+    num_cameras = len(args.cameras)
+    assert num_cameras == len(opts_array)
+    if args.ncpu > 1 and num_cameras>1:
+        n = min(args.ncpu, num_cameras)
+        log.info(f'Processing {num_cameras} cameras with {n} multiprocessing processes')
+        pool = mp.Pool(n)
+        failed = pool.map(_preproc_file_kwargs_wrapper, opts_array)
+        num_failed = np.sum(failed)
+    else:
+        log.info(f'Not using multiprocessing for {num_cameras} cameras')
+        num_failed = 0
+        for opts in opts_array:
+            num_failed += _preproc_file_kwargs_wrapper(opts)
 
-        if args.outfile is None:
-            night = img.meta['NIGHT']
-            expid = img.meta['EXPID']
-            outfile = io.findfile('preproc', night=night, expid=expid, camera=camera,
-                                  outdir=args.outdir)
-        else:
-            outfile = args.outfile
+    if num_failed > 0:
+        log.error(f'{num_failed}/{num_cameras} cameras failed')
+    else:
+        log.info(f'All {num_cameras} cameras successfully preprocessed')
 
-        io.write_image(outfile, img)
-        log.info("Wrote {}".format(outfile))
+    return num_failed
+
+def _preproc_file_kwargs_wrapper(opts):
+    """
+    This function just unpacks opts dict for preproc_file so that it can be
+    used with multiprocessing.Pool.map
+    """
+    return preproc_file(**opts)
+
+def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
+        zero_masked=False, **preproc_opts):
+    """
+    Preprocess a single camera from a single input file
+
+    Args:
+        infile : input raw data file
+        camera : camera, e.g. 'b0', 'r1', 'z9'
+
+    Options:
+        outfile: output preprocessed image file to write
+        outdir: output directory; derive filename from infile NIGHT and EXPID
+        fibermap: fibermap filename to include in output
+        zero_masked (bool): set masked pixels to 0
+        preproc_opts: dictionary to pass to preproc
+
+    Returns error code (1=error, 0=success) but will not raise exception if
+    there is an I/O or preprocessing failure (allows other parallel procs to
+    proceed).
+
+    Note: either `outfile` or `outdir` must be provided
+    """
+    try:
+        img = io.read_raw(infile, camera,
+                          fibermapfile=fibermap,
+                          **preproc_opts)
+    except IOError as e:
+        #- print error and return error code, but don't raise exception so
+        #- that this won't block other cameras for multiprocessing
+        log.error('Error while reading or preprocessing camera {} in {}'.format(camera, infile))
+        log.error(e)
+        return 1
+
+    if(zero_masked) :
+        img.pix *= (img.mask==0)
+
+    if outfile is None:
+        night = img.meta['NIGHT']
+        expid = img.meta['EXPID']
+        outfile = io.findfile('preproc', night=night,expid=expid,camera=camera,
+                              outdir=outdir)
+
+    io.write_image(outfile, img)
+    log.info("Wrote {}".format(outfile))
+    return 0
+
