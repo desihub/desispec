@@ -2,6 +2,7 @@ import time
 import numpy as np
 import scipy
 import iminuit
+import warnings
 
 from   scipy             import optimize
 from   scipy.optimize    import approx_fprime, minimize, Bounds
@@ -23,8 +24,9 @@ from   astropy.table import Table, vstack
 from   doublet_priors import gaussian_prior, jeffreys_prior
 from   plot_postages import plot_postages
 
+warnings.filterwarnings('error')
 
-def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
+def series_fit(rrz, rrzerr, postages, group=3, sig0=90., mpostages=None, printit=False):
     '''
     '''
 
@@ -48,10 +50,10 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
 
     if printit:
         if len(singlets) > 0:
-            print(singlets)
+            print(singlets[singlets['MASKED'] == 0])
 
         if len(doublets) > 0:
-            print(doublets)
+            print(doublets[doublets['MASKED'] == 0])
     
     def _X2(x):  
         z             = x[0]
@@ -132,6 +134,9 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
         result        = 0.0
 
         residuals     = []
+
+        prior         = gaussian_prior(z, rrz, rrzerr)
+        prior        *= gaussian_prior(v,  90,    50.)
         
         for i, singlet in enumerate(singlets):
             lineidb   = singlet['INDEX']
@@ -181,6 +186,8 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
             line_flux = np.exp(lnA)
 
             r         = x[2 * i + 3 + nsinglet]
+
+            prior    *= gaussian_prior(r, 0.70, 0.2)
             
             for cam in cams:
                 wave  = postage[cam].wave
@@ -190,22 +197,22 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
                 mask  = postage[cam].mask == 0
 
                 tw    = twave(wave.min(), wave.max())
-
-		# print(lineidb, cam, z, v, r, line_flux, X2)
+                
+                # print(lineidb, cam, z, v, r, line_flux, X2)
 
                 rflux      = doublet_obs(z, tw, wave, res, continuum=0.0, sigmav=v, r=r, linea=linea, lineb=lineb)
                 rflux     *= line_flux
 
                 res        = np.sqrt(ivar[mask]) * (flux[mask] - rflux[mask])
-		
+        
                 residuals += res.tolist()
 
         # Include a parameter prior. 
         nelement   = len(residuals)
-        residuals += np.sqrt(2. * mlogprior(x, rrz, rrzerr) / (1. + nelement))
 
+        residuals  = [np.sqrt(2. * mlogprior(prior) / (1. + nelement))]            
         residuals  = np.array(residuals)
-
+        
         return  residuals
 
     def mloglike(x):
@@ -230,13 +237,58 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
     # x0: [z, v, [ln(line flux) fxor all singlets], [[ln(line flux), line ratio] for all doublets]]                                                                                                                                         
     # print('\n\nBeginning optimisation for line group {}.'.format(group))
 
-    for sig0, r0, lnA0 in zip([50.0, 50.0, 100.], [0.7, 0.7, 0.9], [5.0, 4.0, 5.0]):
-        x0 = [rrz, sig0] + [lnA0] * nsinglet + [lnA0, r0] * ndoublet
-        x0 = np.array(x0)
+    x0 = [rrz, sig0]
+    
+    # Seed initial amplitudes.  
+    for i, singlet in enumerate(singlets):
+        lineidb   = singlet['INDEX']
+        lineb     = singlet['WAVELENGTH']
 
-        # print('{} \t {} \t {:.6e} \t {:.6e}'.format(x0, gradient(x0), mlogpos(x0), _X2(x0)))
+        if singlet['MASKED'] == 1:
+            continue
 
-        break
+        postage   = postages[lineidb]
+        cams      = list(postage.keys())
+
+        linefluxerr = np.inf
+        
+        for cam in cams:
+            seed            = postage[cam].meta['LINEFLUX']
+
+            if seed[1] < linefluxerr:
+                lineflux    = seed[0] 
+                linefluxerr = seed[1]
+        
+        x0       += [np.log(np.maximum(lineflux, 1.e-10))] 
+        
+    for i in np.arange(ndoublet):
+        doublet   = doublets[doublets['DOUBLET'] == i]
+
+        if (doublet['MASKED'][0] == 1) | (doublet['MASKED'][1] == 1):
+            continue
+
+        lineida   = doublet['INDEX'][0]
+        lineidb   = doublet['INDEX'][1]
+
+        linea     = doublet['WAVELENGTH'][0]
+        lineb     = doublet['WAVELENGTH'][1]
+
+        postage   = postages[lineidb]
+        cams      = list(postage.keys())
+
+        linefluxerr = np.inf
+
+        for cam in cams:
+            seed            = postage[cam].meta['LINEFLUX']
+
+            if seed[1] < linefluxerr:
+                lineflux    = seed[0]
+                linefluxerr = seed[1]
+
+        x0 += [np.log(np.maximum(lineflux, 1.e-10)), 0.7]
+        
+    # x0 = [rrz, sig0] + [lnA0] * nsinglet + [lnA0, r0] * ndoublet
+    x0 = np.array(x0)
     
     # Parameters which minimize f, i.e., f(xopt) == fopt.
     # Minimum value.
@@ -348,61 +400,38 @@ def series_fit(rrz, rrzerr, postages, group=3, mpostages=None, printit=False):
             mpostages[group][lineidb][cam]  = mpostages[group][lineida][cam]
 
         series_params += ['lnA_{:d}-{:d}'.format(lineida, lineidb), 'r_{:d}-{:d}'.format(lineida, lineidb)]
-            
+
+    print('\n\nInitialising at:')
+    print(series_params)
+    print(x0)
+    print('\n\nBest fit found at:')
+    print(result.x)
+    
     return  series_params, result, mpostages
-
-def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
-    import matplotlib.pyplot as plt
-
-    
-    ncol      = 8
-    fig, axes = plt.subplots(len(ugroups), ncol, figsize=(20,10))
-    
-    colors    = {'b': 'b', 'r': 'g', 'z': 'r'}
-
-    stop      = False
-    
-    for u in list(postages.keys()):
-        index = 0
-
-        for i, x in enumerate(list(postages[u].keys())):
-            for cam in postages[u][x]:
-                if lines['MASKED'][x] == 1:
-                    continue
-
-                if not stop:                    
-                    axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
-                    axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
-                    axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
-                    axes[u,index].set_title(lines['NAME'][x])
-
-                    index += 1
-
-                if index == (ncol - 1):
-                    stop = True
-                
-    fig.suptitle('Fiber {} of petal {}: targetid {} with redshift {:2f}'.format(fiber, petal, tid, rrz), y=0.925)
-
-    plt.subplots_adjust(hspace=0.5, wspace=0.3)
-
-    return  fig 
 
 
 if __name__ == '__main__':
     import os
     import pickle
+    import argparse
     import pylab as pl
     import astropy.io.fits as fits
     import matplotlib.pyplot as plt
     
     from   astropy.table import Table
 
+    # 12: Failed to retrieve mpostages: 12.
+    # 14: Failed to fit OI. 
+
+    parser   = argparse.ArgumentParser()
+    parser.add_argument('--fiber', type=int, help='...')
+    args = parser.parse_args()
     
-    petal    =  '5'
-    fiber    =  11
-    night    = '20200315'
-    expid    = 55589
-    tileid   = '67230'
+    petal    =  '3'
+    fiber    =  args.fiber
+    night    = '20200225'
+    expid    = 52115
+    tileid   = '70502'
         
     ## 
     zbest    = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', tileid, night, 'zbest-{}-{}-{}.fits'.format(petal, tileid, night)), 'ZBEST')
@@ -412,7 +441,7 @@ if __name__ == '__main__':
     
     cframes  = {}
     colors   = {'b': 'b', 'r': 'g', 'z': 'r'}
-
+    '''
     with open(os.environ['CSCRATCH'] + '/radlss/test/ensemble/template-elg-ensemble-meta.fits', 'rb') as handle:
         meta = pickle.load(handle)['ELG']
 
@@ -421,46 +450,49 @@ if __name__ == '__main__':
 
     with open(os.environ['CSCRATCH'] + '/radlss/test/ensemble/template-elg-ensemble-objmeta.fits', 'rb') as handle:
         objmeta = pickle.load(handle)['ELG']
-        
+    ''' 
     for band in ['b', 'r', 'z']:
         cam    = band + petal
 
         # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits                                                                                                                                                                   
         cframes[cam]               = read_frame(findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))        
-        cframes[cam].flux[fiber,:] = flux[band][115]
+        # cframes[cam].flux[fiber,:] = flux[band][115]
         
-    rrz               = meta['REDSHIFT'][115]
-
+    # rrz             = meta['REDSHIFT'][115]
+    '''
     # [Group][Line Index][Camera].
-    postages          = cframe_postage(cframes, fiber, rrz)
+    postages, ipostages = cframe_postage(cframes, fiber, rrz)
 
     mpostages         = {}
 
     groups            = list(postages.keys())
-
+    
     for group in groups:
-        series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
-
+        series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages, printit=False)
+    '''
     start             = time.time() 
     
     # [Group][Line Index][Camera].
-    postages          = cframe_postage(cframes, fiber, rrz)
+    postages, ipostages = cframe_postage(cframes, fiber, rrz)
     
     mpostages         = {}
 
     groups            = list(postages.keys())
-    
-    for group in groups:
-        series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages)
 
-        print(len(result.x), series_params)
+    try:
+        for group in groups:
+            series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages, printit=False)
+    except:
+        print('Failed with linefit.')
         
     end               = time.time()
-
+    
     print('\n\nMinimised in {:.2f} seconds.'.format(end - start))
     
     ## 
     fig       = plot_postages(postages, mpostages, petal, fiber, rrz, tid)
     fig.savefig('postages.pdf', bbox_inches='tight')
 
+    pl.show()
+    
     print('\n\nDone.\n\n')

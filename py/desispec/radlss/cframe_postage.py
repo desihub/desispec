@@ -22,7 +22,7 @@ from   plot_postages import plot_postages
 width  = 50.
 cwidth = 25.
 
-def cframe_postage(petal_cframes, fiber, redshift, printit=False):    
+def cframe_postage(petal_cframes, fiber, redshift, ipostage=True, printit=False):    
     '''
     Given a redshift, cframe (extracted wave, res, flux, ivar) return 
     chi sq. for a doublet line model of given parameters, e.g. line flux.
@@ -62,7 +62,13 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
                 flux      = petal_cframes[cam].flux[fiber,:]
                 ivar      = petal_cframes[cam].ivar[fiber,:]
                 mask      = petal_cframes[cam].mask[fiber,:]
-                    
+
+                unmask    = mask == 0
+                nelem     = np.count_nonzero(unmask[inwave])
+
+                if nelem == 0:
+                    continue
+                
                 continuum = (wave > limits[0]) & (wave < limits[1]) & ((wave < (limits[0] + cwidth)) | (wave > (limits[1] - cwidth)))
                 continuum = np.median(flux[continuum])
 
@@ -70,15 +76,17 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
 
                 # matchedtemp_lineflux(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=50.0, r=0.7, linea=3726.032, lineb=3728.815)
                 instance.meta['LINE']     = name.ljust(15)
+                instance.meta['LINEID']   = sample['INDEX'][i]
                 instance.meta['LINEFLUX'] = matchedtemp_lineflux(redshift, instance.wave, Resolution(instance.R), instance.flux, instance.ivar, instance.mask, sigmav=90.0, r=0.0, linea=0.0, lineb=line)
 
                 # print('{} {} {:.2e} {:.2e}'.format(name.ljust(15), cam, instance.meta['LINEFLUX'][0], instance.meta['LINEFLUX'][1]))
                 
-                postages[group][sample['INDEX'][i]][cam]   = instance
+                postages[group][sample['INDEX'][i]][cam]       = instance
 
-                ipostages[group][sample['INDEX'][i]][cam]  = doublet_obs(redshift, instance.wave, instance.wave, Resolution(instance.R), continuum=0.0, sigmav=90.0, r=0.0, linea=0.0, lineb=line)
-                ipostages[group][sample['INDEX'][i]][cam] *= instance.meta['LINEFLUX'][0]
-                ipostages[group][sample['INDEX'][i]][cam]  = Spectrum(instance.wave, ipostages[group][sample['INDEX'][i]][cam], instance.ivar, mask=instance.mask, R=instance.R)
+                if ipostage:
+                    ipostages[group][sample['INDEX'][i]][cam]  = doublet_obs(redshift, instance.wave, instance.wave, Resolution(instance.R), continuum=0.0, sigmav=90.0, r=0.0, linea=0.0, lineb=line)
+                    ipostages[group][sample['INDEX'][i]][cam] *= instance.meta['LINEFLUX'][0]
+                    ipostages[group][sample['INDEX'][i]][cam]  = Spectrum(instance.wave, ipostages[group][sample['INDEX'][i]][cam], instance.ivar, mask=instance.mask, R=instance.R)
                 
     for u in ugroups:
         keys = list(postages[u].keys())
@@ -90,13 +98,18 @@ def cframe_postage(petal_cframes, fiber, redshift, printit=False):
         if not bool(postages[u]):
             del postages[u]
 
-    for u in postages.keys():
-        for lineid in postages[u].keys():
-            for cam in postages[u][lineid].keys():
-                name  = postages[u][lineid][cam].meta['LINE']
-                lflux = postages[u][lineid][cam].meta['LINEFLUX'] 
+    if ipostage:
+        print('\n\n')
+        
+        for u in postages.keys():
+            print()
+            for lineid in postages[u].keys():
+                for cam in postages[u][lineid].keys():
+                    name  = postages[u][lineid][cam].meta['LINE']
+                    index = postages[u][lineid][cam].meta['LINEID']
+                    lflux = postages[u][lineid][cam].meta['LINEFLUX'] 
                 
-                print('{} {} {:.2f} +- {:.2f}'.format(name, cam, lflux[0], lflux[1]))
+                    print('{} ({: 2d}) {} {:.2f} +- {:.2f} ({:.2f})'.format(name, index, cam, lflux[0], lflux[1], np.log(np.maximum(lflux[0], 1.e-10))))
             
     return  postages, ipostages
 
@@ -141,6 +154,7 @@ if __name__ == '__main__':
 
     rrz       = meta['REDSHIFT'][115]
 
+    print(rrz)
     
     print('\n\nOIIFLUX: {:.2f}'.format(1.e17 * objmeta['OIIFLUX'][115]))
     print('HBETAFLUX: {:.2f}\n\n'.format(objmeta['HBETAFLUX'][115]))

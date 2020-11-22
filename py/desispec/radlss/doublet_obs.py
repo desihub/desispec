@@ -12,7 +12,6 @@ def doublet_obs(z, twave, wave, res, continuum=0.0, sigmav=5., r=0.1, linea=3726
 
     # print(z, twave.min(), twave.max(), tflux.max(), sigmav, r, linea, lineb)
     
-    if not np.allclose(twave, wave):
-        tflux = resample_flux(wave, twave, tflux)
+    tflux = resample_flux(wave, twave, tflux)
 
     return  res.dot(tflux)

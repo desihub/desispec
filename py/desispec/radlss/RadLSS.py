@@ -432,7 +432,7 @@ class RadLSS(object):
             rrz                = self.zbests[petal]['Z'][self.zbests[petal]['TARGETID'] == tid][0]
             rrzerr             = self.zbests[petal]['ZERR'][self.zbests[petal]['TARGETID'] == tid][0]
             
-            self.postages      = cframe_postage(self.petal_cframes, fiber, rrz)
+            self.postages, self.ipostages = cframe_postage(self.petal_cframes, fiber, rrz)
 
             groups             = list(self.postages.keys())
 

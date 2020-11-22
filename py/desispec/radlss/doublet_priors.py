@@ -6,27 +6,17 @@ def jeffreys_prior(x, sigma):
     return  1. / sigma
 
 def gaussian_prior(x, mu, sigma):
-    # normalised.  Applied to redrock z.
-    return  (1. / np.sqrt(2. * np.pi) / sigma) * np.exp(-0.5 * (x - mu)**2. / sigma**2.)
+    # unnormalised (1. / (np.sqrt(2. * np.pi) * sigma)).  Applied to redrock z; NOTE: rrzerr ~ 1.e-5 so normaliation
+    # drives to greater than unity.
+    return  np.exp(-0.5 * (x - mu)**2. / sigma**2.)
 
 def doublet_prior(z, v, r, lnA, rrz, rrzerr):
-    # Jeffreys prior in line flux, dispersion, line ratio. 
-    sigv = 50.
-    sigr =  1.
-    sigA =  5. 
-    
-    # unnormalised (scalar).
-    return  gaussian_prior(z, rrz, rrzerr) * gaussian_prior(v, 50, 50.) * gaussian_prior(r, 0.7, 0.2)
+    prior = gaussian_prior(z, rrz, rrzerr) * gaussian_prior(v, 91, 50.) * gaussian_prior(r, 0.71, 0.1)
 
-def mlogprior(x, rrz, rrzerr):
-    z     = x[0]
-    v     = x[1]
-    r     = x[2]
-    lnA   = x[3]
-
-    # prior on the parameter space.
-    p     = doublet_prior(z, v, r, lnA, rrz, rrzerr)
+    return  prior
     
+def mlogprior(p):
+    # prior on the parameter space.    
     with np.errstate(divide='raise'):
       try:
         return  -np.log(p)
@@ -36,14 +26,16 @@ def mlogprior(x, rrz, rrzerr):
         return  1.e99
 
 if __name__ == '__main__':
-    x = jeffreys_prior(1.0, 2.0)
-    y = gaussian_prior(1.0, 1.1, 0.2)
-    z = doublet_prior(1., 100., 0.7, 0.0, 0.95, 0.05)
+    # 1.0157650709152222, 3.1128353189916926e-05, [1.01575065, 58.94169126, -0.98103215, -22.52085698, 3.92917686, 6.37407076, 0.65365138] -9.35107983777596
+    rrz    = 1.01575065
+    rrzerr = 3.1128353189916926e-05
 
-    p = np.array([1., 100., 0.7, 0.0])
-    m = mlogprior(p, 0.0, 0.05)
+    z      = 1.01575065
+    v      = 58.94169126
+    
+    prior  = gaussian_prior(z, rrz, rrzerr)
+    m      = mlogprior(prior)
 
-    for p in [x, y, z, m]:
-        print(p)
+    print(prior, m, np.sqrt(2. * m))
 
     print('\n\nDone.\n\n')

@@ -11,8 +11,15 @@ def matchedtemp_lineflux(z, wave, res, flux, ivar, mask, continuum=0.0, sigmav=5
     mm            = mask == 0
     
     line_flux     = np.sum( flux[mm] * rflux[mm] * ivar[mm])
-    line_flux    /= np.sum(rflux[mm] * rflux[mm] * ivar[mm])
 
+    try:
+        line_flux    /= np.sum(rflux[mm] * rflux[mm] * ivar[mm])
+
+    except:
+        print(rflux[mm], ivar[mm])
+
+        raise RuntimeError()
+        
     line_flux_err = np.sum(rflux[mm] * rflux[mm] * ivar[mm])
     line_flux_err = 1. / np.sqrt(line_flux_err)
 
