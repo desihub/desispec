@@ -66,11 +66,6 @@ for tmp in args.wrange.split(",") :
     yy=np.tile(np.arange(n0),(n1,1)).T
     mask=(yy>=ymin[None,:])&(yy<ymax[None,:])
 
-    import matplotlib.pyplot as plt
-    plt.figure()
-    plt.plot(x,ymin)
-    plt.show()
-
     if args.replace :
         into_image.pix[mask]  = scale*from_image.pix[mask]
         into_image.ivar[mask] = scale_ivar*from_image.ivar[mask]
