@@ -37,7 +37,7 @@ from .raw import read_raw, write_raw
 from .sky import read_sky, write_sky
 from .util import (header2wave, fitsheader, native_endian, makepath,
                    write_bintable, iterfiles, healpix_degrade_fixed,
-                   healpix_subdirectory)
+                   healpix_subdirectory, replace_prefix)
 
 # Why is this even here?
 # Commented out by JXP as this causes a circular import on Python 3.7

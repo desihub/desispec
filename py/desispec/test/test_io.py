@@ -877,6 +877,18 @@ class TestIO(unittest.TestCase):
             for ii in range(len(decoded)):
                 self.assertEqual(str(decoded[ii]),str(cameras[ii]))
 
+    def test_replace_prefix(self):
+        """Test desispec.io.util.replace_prefix
+        """
+        from ..io.util import replace_prefix
+        oldfile = '/blat/foo/blat-foo-blat.fits'
+        newfile = '/blat/foo/quat-foo-blat.fits'
+        self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+        oldfile = 'blat-foo-blat.fits'
+        newfile = 'quat-foo-blat.fits'
+        self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+
+
 def test_suite():
     """Allows testing of only this module with the command::
 

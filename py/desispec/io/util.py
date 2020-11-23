@@ -435,3 +435,24 @@ def get_speclog(nights, rawdir=None):
 
     return speclog
 
+def replace_prefix(filepath, oldprefix, newprefix):
+    """
+    Replace prefix in filepath even if prefix is elsewhere in filepath
+
+    Args:
+        filepath : filename, optionally including path
+        oldprefix: original prefix to filename part of filepath
+        newprefix: new prefix to use for filename
+
+    Returns:
+        new filepath with replaced prefix
+
+    e.g. replace_prefix('/blat/foo/blat-bar-blat.fits', 'blat', 'quat')
+    returns '/blat/foo/quat-bar-blat.fits'
+    """
+    path, filename = os.path.split(filepath)
+    if not filename.startswith(oldprefix):
+        raise ValueError(f'{filename} does not start with {oldprefix}')
+
+    filename = filename.replace(oldprefix, newprefix, 1)
+    return os.path.join(path, filename)
