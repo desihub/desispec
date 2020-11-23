@@ -35,7 +35,7 @@ from astropy.io import fits
 import glob
 import desiutil.timer
 import desispec.io
-from desispec.io import findfile
+from desispec.io import findfile, replace_prefix
 from desispec.io.util import create_camword
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
@@ -310,7 +310,8 @@ if args.obstype in ['ARC', 'TESTARC']:
         camera = args.cameras[i]
         preprocfile = findfile('preproc', args.night, args.expid, camera)
         inpsf  = input_psf[camera]
-        outpsf = findfile('psf', args.night, args.expid, camera).replace("psf","shifted-input-psf")
+        outpsf = findfile('psf', args.night, args.expid, camera)
+        outpsf = replace_prefix(outpsf, "psf", "shifted-input-psf")
         if not os.path.isfile(outpsf) :
             cmd = "desi_compute_trace_shifts"
             cmd += " -i {}".format(preprocfile)
@@ -340,8 +341,8 @@ if args.obstype in ['ARC', 'TESTARC']:
         for camera in args.cameras:
             preprocfile = findfile('preproc', args.night, args.expid, camera)
             tmpname = findfile('psf', args.night, args.expid, camera)
-            inpsf = tmpname.replace("psf","shifted-input-psf")
-            outpsf = tmpname.replace("psf","fit-psf")
+            inpsf = replace_prefix(tmpname,"psf","shifted-input-psf")
+            outpsf = replace_prefix(tmpname,"psf","fit-psf")
 
             log.info("now run specex psf fit")
 
@@ -390,7 +391,13 @@ if args.obstype in ['ARC', 'TESTARC']:
                 if comm_group.rank == 0:
                     print('RUNNING: {}'.format(cmds[camera]))
 
-                desispec.scripts.specex.main(cmdargs, comm=comm_group)
+                try:
+                    desispec.scripts.specex.main(cmdargs, comm=comm_group)
+                except Exception as e:
+                    if comm_group.rank == 0:
+                        log.error(f'FAILED: MPI group {group} ranks {rank}-{rank+group_size-1} camera {camera}')
+                        log.error('FAILED: {}'.format(cmds[camera]))
+                        log.error(e)
 
         comm.barrier()
 
@@ -417,8 +424,8 @@ if args.obstype in ['ARC', 'TESTARC']:
             if cfinder.haskey(blacklistkey):
                 fiberblacklist = cfinder.value(blacklistkey)
                 tmpname = findfile('psf', args.night, args.expid, camera)
-                inpsf = tmpname.replace("psf","fit-psf")
-                outpsf = tmpname.replace("psf","fit-psf-fixed-blacklisted")
+                inpsf = replace_prefix(tmpname,"psf","fit-psf")
+                outpsf = replace_prefix(tmpname,"psf","fit-psf-fixed-blacklisted")
                 if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
                     cmd = 'desi_interpolate_fiber_psf'
                     cmd += ' --infile {}'.format(inpsf)
