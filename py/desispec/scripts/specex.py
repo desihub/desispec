@@ -333,7 +333,7 @@ def main(args, comm=None):
         
         if specex_image_io:
             # read preproc images into pymg with specex (harp)
-            rval = pyio.read_img_data(opts,pymg)
+            pyio.read_img_data(opts,pymg)
         else:
             # read preproc images into pymg with desispec (astropy.io.fits)
             pymg = read_desi_ppimage_spx(opts)
