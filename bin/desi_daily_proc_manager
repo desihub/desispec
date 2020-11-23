@@ -32,6 +32,8 @@ def parse_args():#options=None):
     parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
                         help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
                              "Overwrites the environment variable SPECPROD")
+    parser.add_argument("-q", "--queue", type=str, required=False, default='realtime',
+                        help="The queue to submit jobs to. Default is realtime.")
     parser.add_argument("--exp-table-path", type=str, required=False, default=None,
                         help="Directory name where the output exposure table should be saved.")
     parser.add_argument("--proc-table-path", type=str, required=False, default=None,
@@ -40,6 +42,10 @@ def parse_args():#options=None):
                         help="Directory name where the input raw data can be found.")
     parser.add_argument("--table-file-type", type=str, required=False, default='csv',
                         help="File format and extension for the exp and proc tables.")
+    parser.add_argument("--data-cadence-time", type=int, required=False, default=300,
+                        help="Wait time between loops in looking for new data.")
+    parser.add_argument("--queue-cadence-time", type=int, required=False, default=1800,
+                        help="Wait time between loops in checking queue statuses and resubmitting failures.")
     # parser.add_argument("-r", "--reduxdir", type=str, required=False,
     #                     help="Main reduction dir where specprod dir will reside.")
 
@@ -119,5 +125,6 @@ if __name__ == '__main__':
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
                              procobstypes=args.obs_to_process, dry_run=args.dry_run, tab_filetype=args.table_file_type,
-                             camword=camword, override_night=args.override_night,
-                             continue_looping=args.continue_looping_debug)
+                             camword=camword, override_night=args.override_night, queue=args.queue,
+                             continue_looping_debug=args.continue_looping_debug, data_cadence_time=args.data_cadence_time,
+                             queue_cadence_time=args.queue_cadence_time)

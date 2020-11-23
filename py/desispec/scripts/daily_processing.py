@@ -22,8 +22,9 @@ from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, a
 from desispec.workflow.queue import update_from_queue, continue_looping
 
 
-def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None, procobstypes=None, camword=None,
-                             dry_run=False, tab_filetype='csv',override_night=None, queue='realtime', continue_looping=False):
+def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
+                             procobstypes=None, camword=None, override_night=None, tab_filetype='csv', queue='realtime',
+                             data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -35,11 +36,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         procobstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
         camword: str. Camword that, if set, overwrites the list of cameras found in the files and only runs on those given/
                       Examples: a0123456789, a1, a2b3r3, a2b3r4z3.
-        dry_run: boolean. If true, no scripts are written and no scripts are submitted. The tables are still generated and written, however.
-        tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         override_night: str or int. 8 digit night, e.g. 20200314, of data to run on. If None, it runs on the current night.
+        tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
-        continue_looping: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
+        data_cadence_time: int. Wait time in seconds between loops in looking for new data. Default is 30 seconds.
+        queue_cadence_time: int. Wait time in seconds between loops in checking queue statuses and resubmitting failures. Default is 1800s.
+        dry_run: boolean. If true, no scripts are written and no scripts are submitted. The tables are still generated and written, however.
+        continue_looping_debug: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
                                  is terminated. Default is False.
 
     Returns: Nothing
@@ -61,11 +64,14 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     else:
         night = true_night
 
+    if continue_looping_debug:
+        print("continue_looping_debug is set. Will continue looking for new data and need to be terminated by the user.")
+
     ## Get default values for input variables
     if procobstypes is None:
         procobstypes = default_exptypes_for_proctable()
     if camword is not None:
-        print(f"Over-riding camword in data with user provided value: {camword}")
+        print(f"Overriding camword in data with user provided value: {camword}")
 
     ## Adjust wait times if simulating things
     speed_modifier = 1
@@ -131,7 +137,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         print(f"New exposures: {new_exps}")
 
         ## If there aren't any new exps and there won't be more because we're running on an old night or simulating things, exit
-        if (not continue_looping) and (dry_run or ( override_night is not None )) and (len(list(new_exps))==0):
+        if (not continue_looping_debug) and ( override_night is not None ) and ( len(list(new_exps))==0 ):
+            print("Terminating the search for new exposures because no new exposures are present and you have" + \
+                  " override_night set without continue_looping_debug")
             break
 
         ## Loop over new exposures and process them as relevant to that type
@@ -199,7 +207,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             write_tables( [etable, ptable, unproc_table],
                           fullpathnames=[exp_table_pathname,proc_table_pathname,unproc_table_pathname] )
 
-        time.sleep(300*speed_modifier)
+        print("Reached the end of new exposures. Waiting for {}s for looking for more new data".format(data_cadence_time*speed_modifier))
+        time.sleep(data_cadence_time*speed_modifier)
 
         if len(ptable) > 0:
             ptable, nsubmits = update_and_recurvsively_submit(ptable,start_time=nersc_start,end_time=nersc_end,
@@ -207,7 +216,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
             write_table(ptable, tablename=proc_table_pathname)
-            time.sleep(300*speed_modifier)
+            time.sleep(30*speed_modifier)
         
     ## No more data coming in, so do bottleneck steps if any apply
     ptable, arcjob, flatjob, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
@@ -219,23 +228,21 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run)
     write_table(ptable, tablename=proc_table_pathname)
 
+    print(f"Completed submission of exposures for night {night}. Now resolving job failures.")
+
     ## Now we resubmit failed jobs and their dependencies until all jobs have un-submittable end state
     ## e.g. they either succeeded or failed with a code-related issue
     ii,nsubmits = 0, 0
     while ii < 4 and continue_looping(ptable['STATUS']):
-        print(f"Starting iteration {ii}")
+        print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
         ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
                                                           ptab_name=proc_table_pathname, dry_run=dry_run)
         write_table(ptable, tablename=proc_table_pathname)
         if continue_looping(ptable['STATUS']):
-            time.sleep(1800*speed_modifier)
+            time.sleep(queue_cadence_time*speed_modifier)
 
         ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
         write_table(ptable, tablename=proc_table_pathname)
         ii += 1
-
-
-
-
-if __name__ == '__main__':
-    daily_processing_manager(dry_run=True)
+        
+    print("No job failures left. Exiting")

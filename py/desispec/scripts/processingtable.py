@@ -88,27 +88,6 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
         if night == nights[0]:
             combined_table = exptable.copy()
         else:
-            # for col in exptable.colnames:
-            #     if col in combined_table.colnames:
-            #         newtype = exptable[col].dtype
-            #         curtype = combined_table[col].dtype
-            #         if newtype != curtype:
-            #             print(night, col, curtype, newtype)
-            #             if newtype == object:
-            #                 combined_as_list = np.array([[val] for val in combined_table[col]])
-            #                 print(combined_table[col])
-            #                 print(combined_as_list)
-            #                 combined_table.replace_column(col, Table.Column(name=col,data=combined_as_list,dtype=object))
-            #             elif curtype == object:
-            #                 exp_as_list = np.array([[val] for val in exptable[col]])
-            #                 print(exptable[col])
-            #                 print(exp_as_list)
-            #                 exptable.replace_column(col, Table.Column(name=col,data=exp_as_list,dtype=object))
-            #             newtype = exptable[col].dtype
-            #             curtype = combined_table[col].dtype
-            #             print(night, col, curtype, newtype)
-            #             print(exptable[col])
-            #             print(combined_table[col])
             combined_table = vstack([combined_table, exptable])
 
     processing_table, unprocessed_table = exptable_to_proctable(combined_table, science_types=science_types,
@@ -122,27 +101,3 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
             pathname = pathjoin(proc_table_path, name)
             write_table(tab, pathname, overwrite=overwrite_files)
             print(f'Wrote file: {name}')
-
-
-
-if __name__ == '__main__':
-    overwrite_files = False
-    verbose = False
-
-    prodname = 'testprod'
-
-    exp_filetype = 'csv'
-    prod_filetype = 'csv'
-    exp_table_path = os.path.abspath('./exposure_tables')
-    proc_table_path = os.path.abspath('./production_tables')
-
-    ## Define the nights of interest
-    # nights = list(range(20200218,20200230)) + list(range(20200301,20200316))
-    nights = 'all'  # this will be reset to a list of all nights in the exposure_tables subdirectories with valid filetype
-
-    ## Define the science types of interest
-    science_types = ['arc', 'flat', 'twilight', 'science', 'sci', 'dither']
-
-    create_processing_tables(nights, prodname, exp_table_path=exp_table_path, proc_table_path=proc_table_path,
-                            science_types=science_types, overwrite_files=overwrite_files, verbose=verbose,
-                            exp_filetype=exp_filetype, prod_filetype=prod_filetype, joinsymb='|')

@@ -80,26 +80,3 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, scien
             print('No rows to write to a file.')
 
         return nightly_tabs
-
-
-if __name__ == '__main__':
-    overwrite_files = False
-    verbose = True
-    science_types = ['arc', 'flat', 'twilight', 'science', 'sci', 'dither']
-
-    if 'DESI_SPECTRO_DATA' not in os.environ:
-        os.environ['DESI_SPECTRO_DATA'] = pathjoin(os.path.curdir, 'test_raw_data')
-    if 'DESI_SPECTRO_REDUX' not in os.environ:
-        os.environ['DESI_SPECTRO_REDUX'] = os.path.curdir
-
-    ## Define where to find the data
-    path_to_data = os.environ['DESI_SPECTRO_DATA']
-    ## Define where to save the data
-    exptable_base_path = pathjoin(os.environ['DESI_SPECTRO_REDUX'], 'exposure_tables')
-
-    ## Define the nights of interest
-    nights = list(range(20200219, 20200230)) + list(range(20200301, 20200316))
-
-    create_exposure_tables(nights, path_to_data=path_to_data,
-                           exp_table_path=exptable_base_path, science_types=science_types,\
-                           verbose = verbose, overwrite_files=overwrite_files)
