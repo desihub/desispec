@@ -5,107 +5,87 @@ from fitsio import FITS,FITSHDR
 import numpy as np
 import specter.psf
 
-def write_psf(pyps,opts,dotest):
+def write_psf(pyps,opts):
     
-    if not dotest:
-        
-        import specex as spx
-        specter_psf = specter.psf.GaussHermitePSF(opts.output_fits_filename)
-        
-        # SOME VARIABLES HARD CODED FOR DEVELOPMENT FOR LATER REPLACEMENT 
-        # BY QUERIES TO specex.get_* METHODS
-        nrows=59
-        ntab1=4
-        ntab2=500
-
-        # GET TRACES
-        xtrace=spx.get_trace(pyps,'x')
-        ytrace=spx.get_trace(pyps,'y')
+    import specex as spx
+    specter_psf = specter.psf.GaussHermitePSF(opts.output_fits_filename)
     
-        xtrace = np.reshape(xtrace,(500,7))
-        ytrace = np.reshape(ytrace,(500,7))
-
-        # GET TRACE KEYS
-        fiberkeys = spx.VectorInt()
-        wavekeys  = spx.VectorDouble()
-        spx.get_tracekeys(pyps,fiberkeys,wavekeys)
-
-        mjd             = spx.VectorLongLong()
-        plate_id        = spx.VectorLongLong()
-        camera_id       = spx.VectorString()
-        arc_exposure_id = spx.VectorLongLong()
-        NPIX_X          = spx.VectorLongLong()
-        NPIX_Y          = spx.VectorLongLong()
-        hSizeX          = spx.VectorLongLong()
-        hSizeY          = spx.VectorLongLong()
-        nparams_all     = spx.VectorLongLong()
-        ncoeff          = spx.VectorLongLong()
-        GHDEGX          = spx.VectorLongLong()
-        GHDEGY          = spx.VectorLongLong()
-        psf_error       = spx.VectorDouble()
-        readout_noise   = spx.VectorDouble()
-        gain            = spx.VectorDouble()
-        
-        spx.get_tablekeys(pyps,mjd,plate_id,camera_id,arc_exposure_id,
-                          NPIX_X,NPIX_Y,hSizeX,hSizeY,
-                          nparams_all,ncoeff,GHDEGX,GHDEGY,
-                          psf_error,readout_noise,gain)
-
-        # GET TABLE
-        table_col0 = spx.VectorString()
-        table_col1 = spx.VectorDouble()
-        table_col2 = spx.VectorInt()
-        table_col3 = spx.VectorInt()
-
-        spx.get_table(pyps,table_col0,table_col1,table_col2,table_col3)
-        
-
-        # CONVERT COLUMNS 1-3 TO NUMPY ARRAYS OF THE CORRECT DIMENSIONS
-        col0 = table_col0
-        col1 = np.zeros((nrows,ntab2,ntab1))
-        col2 = np.zeros( nrows)
-        col3 = np.zeros( nrows)
-
-        print(table_col0)
-        i = 0
-        for r in np.arange(nrows):
-            for t2 in np.arange(ntab2):
-                for t1 in np.arange(ntab1):
-                    col1[r,t2,t1] = table_col1[i]
-                    i += 1
-            col2[r] = table_col2[r]
-            col3[r] = table_col3[r]
-
-        # LOAD TABLE INTO data ARRAY FOR WRITING
-        data = np.zeros(nrows, dtype=[('PARAM',   'U8'),
-                                      ('COEFF',   'f8', (ntab2,ntab1)),
-                                      ('LEGDEGX', 'i4'),
-                                      ('LEGDEGW', 'i4')])
-        
-        data['PARAM']   = col0 
-        data['COEFF']   = col1
-        data['LEGDEGX'] = col2
-        data['LEGDEGW'] = col3
-
-    else:
-
-        spxpsf=(
-            '/project/projectdirs/desi/users/malvarez/desi/'+
-            'psf-dev/fit-psf-r0-00055705_00.fits')
-        specter_psf = specter.psf.GaussHermitePSF(spxpsf)
-        
-        fiberkeys = np.asarray([0,499])
-        wavekeys  = np.asarray([5543.,7826.])
+    # SOME VARIABLES HARD CODED FOR DEVELOPMENT FOR LATER REPLACEMENT 
+    # BY QUERIES TO specex.get_* METHODS
+    nrows=59
+    ntab1=4
+    ntab2=500
     
-        hdul = fits.open(spxpsf)
-        xtrace = hdul[0].data
-        ytrace = hdul[1].data
-        print(np.shape(xtrace),np.shape(ytrace))
-        
-    print('first x entry  ',xtrace[0][0])
-    print('first y entry  ',ytrace[0][0])
-    print('fiber,wave keys',fiberkeys,wavekeys)
-
+    # GET TRACES
+    xtrace=spx.get_trace(pyps,'x')
+    ytrace=spx.get_trace(pyps,'y')
+    
+    xtrace = np.reshape(xtrace,(500,7))
+    ytrace = np.reshape(ytrace,(500,7))
+    
+    # GET TRACE KEYS
+    fiberkeys = spx.VectorInt()
+    wavekeys  = spx.VectorDouble()
+    spx.get_tracekeys(pyps,fiberkeys,wavekeys)
+    
+    mjd             = spx.VectorLongLong()
+    plate_id        = spx.VectorLongLong()
+    camera_id       = spx.VectorString()
+    arc_exposure_id = spx.VectorLongLong()
+    NPIX_X          = spx.VectorLongLong()
+    NPIX_Y          = spx.VectorLongLong()
+    hSizeX          = spx.VectorLongLong()
+    hSizeY          = spx.VectorLongLong()
+    nparams_all     = spx.VectorLongLong()
+    ncoeff          = spx.VectorLongLong()
+    GHDEGX          = spx.VectorLongLong()
+    GHDEGY          = spx.VectorLongLong()
+    psf_error       = spx.VectorDouble()
+    readout_noise   = spx.VectorDouble()
+    gain            = spx.VectorDouble()
+    
+    spx.get_tablekeys(pyps,mjd,plate_id,camera_id,arc_exposure_id,
+                      NPIX_X,NPIX_Y,hSizeX,hSizeY,
+                      nparams_all,ncoeff,GHDEGX,GHDEGY,
+                      psf_error,readout_noise,gain)
+    
+    # GET TABLE
+    table_col0 = spx.VectorString()
+    table_col1 = spx.VectorDouble()
+    table_col2 = spx.VectorInt()
+    table_col3 = spx.VectorInt()
+    
+    spx.get_table(pyps,table_col0,table_col1,table_col2,table_col3)
+    
+    
+    # CONVERT COLUMNS 1-3 TO NUMPY ARRAYS OF THE CORRECT DIMENSIONS
+    col0 = table_col0
+    col1 = np.zeros((nrows,ntab2,ntab1))
+    col2 = np.zeros( nrows)
+    col3 = np.zeros( nrows)
+    
+    print(table_col0)
+    i = 0
+    for r in np.arange(nrows):
+        for t2 in np.arange(ntab2):
+            for t1 in np.arange(ntab1):
+                col1[r,t2,t1] = table_col1[i]
+                i += 1
+                col2[r] = table_col2[r]
+                col3[r] = table_col3[r]
+                
+    # LOAD TABLE INTO data ARRAY FOR WRITING
+    data = np.zeros(nrows, dtype=[('PARAM',   'U8'),
+                                  ('COEFF',   'f8', (ntab2,ntab1)),
+                                  ('LEGDEGX', 'i4'),
+                                  ('LEGDEGW', 'i4')])
+    
+    data['PARAM']   = col0 
+    data['COEFF']   = col1
+    data['LEGDEGX'] = col2
+    data['LEGDEGW'] = col3
+    
+    # OPEN FITSFILE
     fitsfile = FITS('fio.fits','rw',clobber=True)
 
     # WRITE XTRACE

@@ -349,9 +349,9 @@ def main(args, comm=None):
                 "value {} running {}".format(rank, rval, comstr))
             failcount += 1
 
-        rval = pyio.write_psf_data(opts,pyps)         # write psf (specex)
-        psfio.write_psf(pyps,opts,False)              # write psf (fitsio)
-        rval = pyio.write_spots(opts,pyps)            # write spots
+        pyio.write_psf_data(opts,pyps) # write psf (specex)
+        psfio.write_psf(pyps,opts)     # write psf (fitsio)
+        pyio.write_spots(opts,pyps)    # write spots
 
         return
     
