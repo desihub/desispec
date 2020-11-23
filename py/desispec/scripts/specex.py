@@ -320,8 +320,11 @@ def main(args, comm=None):
         pypr = spx.PyPrior()   # Gaussian priors
         pyps = spx.PyPSF()     # psf data
         pyft = spx.PyFitting() # psf fitting
-    
-        opts.parse(com)                        # com is list of args
+
+        coms = spx.VectorString()
+        for strs in com:
+            coms.append(strs)
+        opts.parse(coms)                       # coms is list of args
         pyio.check_input_psf(opts)             # set input psf bools
         pypr.deal_with_priors(opts)            # set Gaussian priors
 
@@ -346,10 +349,10 @@ def main(args, comm=None):
                 "value {} running {}".format(rank, rval, comstr))
             failcount += 1
 
-        rval = pyio.write_psf_data(opts,pyps)         # write psf
+        rval = pyio.write_psf_data(opts,pyps)         # write psf (specex)
+        psfio.write_psf(pyps,opts,False)              # write psf (fitsio)
         rval = pyio.write_spots(opts,pyps)            # write spots
 
-        psfio.write_psf(pyps,opts)
         return
     
     if comm is not None:

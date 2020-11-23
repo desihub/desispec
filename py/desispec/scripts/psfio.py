@@ -1,36 +1,98 @@
 from astropy.io import fits
+import fitsio
+from fitsio import FITS,FITSHDR
 
 import numpy as np
-import specex as spx
 import specter.psf
 
-def write_psf(pyps,opts):
+def write_psf(pyps,opts,dotest):
     
-    dotest = False
     if not dotest:
         
+        import specex as spx
         specter_psf = specter.psf.GaussHermitePSF(opts.output_fits_filename)
         
+        # SOME VARIABLES HARD CODED FOR DEVELOPMENT FOR LATER REPLACEMENT 
+        # BY QUERIES TO specex.get_* METHODS
+        nrows=59
+        ntab1=4
+        ntab2=500
+
+        # GET TRACES
         xtrace=spx.get_trace(pyps,'x')
         ytrace=spx.get_trace(pyps,'y')
     
+        xtrace = np.reshape(xtrace,(500,7))
+        ytrace = np.reshape(ytrace,(500,7))
+
+        # GET TRACE KEYS
         fiberkeys = spx.VectorInt()
         wavekeys  = spx.VectorDouble()
         spx.get_tracekeys(pyps,fiberkeys,wavekeys)
 
-        print(fiberkeys,wavekeys)
-        print(np.shape(xtrace))
-        xtrace = np.reshape(xtrace,(500,7))
-        ytrace = np.reshape(ytrace,(500,7))
+        mjd             = spx.VectorLongLong()
+        plate_id        = spx.VectorLongLong()
+        camera_id       = spx.VectorString()
+        arc_exposure_id = spx.VectorLongLong()
+        NPIX_X          = spx.VectorLongLong()
+        NPIX_Y          = spx.VectorLongLong()
+        hSizeX          = spx.VectorLongLong()
+        hSizeY          = spx.VectorLongLong()
+        nparams_all     = spx.VectorLongLong()
+        ncoeff          = spx.VectorLongLong()
+        GHDEGX          = spx.VectorLongLong()
+        GHDEGY          = spx.VectorLongLong()
+        psf_error       = spx.VectorDouble()
+        readout_noise   = spx.VectorDouble()
+        gain            = spx.VectorDouble()
         
+        spx.get_tablekeys(pyps,mjd,plate_id,camera_id,arc_exposure_id,
+                          NPIX_X,NPIX_Y,hSizeX,hSizeY,
+                          nparams_all,ncoeff,GHDEGX,GHDEGY,
+                          psf_error,readout_noise,gain)
+
+        # GET TABLE
+        table_col0 = spx.VectorString()
+        table_col1 = spx.VectorDouble()
+        table_col2 = spx.VectorInt()
+        table_col3 = spx.VectorInt()
+
+        spx.get_table(pyps,table_col0,table_col1,table_col2,table_col3)
+        
+
+        # CONVERT COLUMNS 1-3 TO NUMPY ARRAYS OF THE CORRECT DIMENSIONS
+        col0 = table_col0
+        col1 = np.zeros((nrows,ntab2,ntab1))
+        col2 = np.zeros( nrows)
+        col3 = np.zeros( nrows)
+
+        print(table_col0)
+        i = 0
+        for r in np.arange(nrows):
+            for t2 in np.arange(ntab2):
+                for t1 in np.arange(ntab1):
+                    col1[r,t2,t1] = table_col1[i]
+                    i += 1
+            col2[r] = table_col2[r]
+            col3[r] = table_col3[r]
+
+        # LOAD TABLE INTO data ARRAY FOR WRITING
+        data = np.zeros(nrows, dtype=[('PARAM',   'U8'),
+                                      ('COEFF',   'f8', (ntab2,ntab1)),
+                                      ('LEGDEGX', 'i4'),
+                                      ('LEGDEGW', 'i4')])
+        
+        data['PARAM']   = col0 
+        data['COEFF']   = col1
+        data['LEGDEGX'] = col2
+        data['LEGDEGW'] = col3
+
     else:
 
-        spxpsf='/project/projectdirs/desi/users/malvarez/desi/psf-dev/fit-psf-r0-00055705_00.fits'
+        spxpsf=(
+            '/project/projectdirs/desi/users/malvarez/desi/'+
+            'psf-dev/fit-psf-r0-00055705_00.fits')
         specter_psf = specter.psf.GaussHermitePSF(spxpsf)
-        
-        #x1 = np.linspace(0,1.,7)
-        #x2 = np.linspace(0,1.,500)
-        #xtrace, ytrace = np.meshgrid(x1,x2)
         
         fiberkeys = np.asarray([0,499])
         wavekeys  = np.asarray([5543.,7826.])
@@ -40,59 +102,99 @@ def write_psf(pyps,opts):
         ytrace = hdul[1].data
         print(np.shape(xtrace),np.shape(ytrace))
         
-    print('first x entry',xtrace[0][0])
-    print('first y entry',ytrace[0][0])
+    print('first x entry  ',xtrace[0][0])
+    print('first y entry  ',ytrace[0][0])
+    print('fiber,wave keys',fiberkeys,wavekeys)
 
-    fitsfile='foo.fits'
+    fitsfile = FITS('fio.fits','rw',clobber=True)
 
-    # XTRACE AND HEADER
-
-    hdu_xtrace = fits.PrimaryHDU(xtrace)
-    hdr_xtrace = hdu_xtrace.header
-        
-    hdr_xtrace['EXTNAME'] = 'XTRACE'
-    hdr_xtrace['FIBERMIN'] = fiberkeys[0]
-    hdr_xtrace['FIBERMAX'] = fiberkeys[1]
-    hdr_xtrace['WAVEMIN'] = wavekeys[0]
-    hdr_xtrace['WAVEMAX'] = wavekeys[1]
-
-    hdr_xtrace.comments['EXTEND'] = 'FITS dataset may contain extensions'
-    hdr_xtrace.comments['SIMPLE'] = 'file does conform to FITS standard'
-    hdr_xtrace.comments['BITPIX'] = 'number of bits per data pixel'
-    hdr_xtrace.comments['NAXIS']  = 'number of data axes'
-    hdr_xtrace.comments['NAXIS1'] = 'length of data axis 1'
-    hdr_xtrace.comments['NAXIS2'] = 'length of data axis 2'
+    # WRITE XTRACE
+    fitsfile.write(xtrace)
     
-    hdr_xtrace.insert(6,('COMMENT', '  FITS (Flexible Image Transport System) format is defined in \'Astronomy  and Astrophysics\', volume 376, page 359; bibcode: 2001A&A...376..359H'))
+    fitsfile[0].write_key('EXTNAME','XTRACE','')
+    fitsfile[0].write_key('FIBERMIN',fiberkeys[0])
+    fitsfile[0].write_key('FIBERMAX',fiberkeys[1])
+    fitsfile[0].write_key('WAVEMIN',wavekeys[0])
+    fitsfile[0].write_key('WAVEMAX',wavekeys[1])
+    fitsfile[0].write_key('PSFTYPE','GAUSS-HERMITE')
+    fitsfile[0].write_key('PSFVER', 3)
+    fitsfile[0].write_comment('PSF generated by specex, https://github.com/desihub/specex')
 
-    hdr_xtrace['PSFTYPE'] = 'GAUSS-HERMITE'
-    hdr_xtrace['PSFVER']  = 3
+    # WRITE YTRACE
+    fitsfile.write(ytrace)
 
-    hdr_xtrace.insert(16,('COMMENT', 'PSF generated by specex, https://github.com/desihub/specex'))
-    # YTRACE AND HEADER
+    fitsfile[1].write_key('PCOUNT',0,'required keyword; must = 0')
+    fitsfile[1].write_key('GCOUNT',1,'required keyword; must = 1')
+    fitsfile[1].write_key('EXTNAME','YTRACE','')
+    fitsfile[1].write_key('FIBERMIN',fiberkeys[0],'')
+    fitsfile[1].write_key('FIBERMAX',fiberkeys[1],'')
+    fitsfile[1].write_key('WAVEMIN',wavekeys[0],'')
+    fitsfile[1].write_key('WAVEMAX',wavekeys[1],'')
 
-    hdu_ytrace = fits.ImageHDU(ytrace)
-    hdr_ytrace = hdu_ytrace.header
+    # WRITE TABLE
+    fitsfile.write(data)
+
+    # WRITE REFORMATTED HEADER KEYS
+    fitsfile[2].write_key('TDIM3   ','( 1)','dimension')
+    fitsfile[2].write_key('TDIM4   ','( 1)','dimension')
+
+    # WRITE COMMENTS
+    fitsfile[2].write_comment('------------------------------------------------------------------------')
+    fitsfile[2].write_comment('PSF generated by specex, https://github.com/julienguy/spece')
+    fitsfile[2].write_comment('PSF fit date 2020-11-12')
+    fitsfile[2].write_comment('-')
+    fitsfile[2].write_comment('Each row of the table contains the data vector of one PSF parameter')
+    fitsfile[2].write_comment('The size of the vector is ((FIBERMAX-FIBERMIN+1)*(LEGDEG+1))')
+    fitsfile[2].write_comment('Description of  the NPARAMS parameters :')
+    fitsfile[2].write_comment('GHSIGX   : Sigma of first Gaussian along CCD columns for PSF core')
+    fitsfile[2].write_comment('GHSIGY   : Sigma of first Gaussian along CCD rows for PSF core')
+    fitsfile[2].write_comment('GH-i-j   : Hermite pol. coefficents, i along columns, j along rows,')
+    fitsfile[2].write_comment('         i is integer from 0 to GHDEGX, j is integer from 0 to GHDEGY,')
+    fitsfile[2].write_comment('         there are (GHDEGX+1)*(GHDEGY+1) such coefficents.')
+    fitsfile[2].write_comment('TAILAMP  : Amplitude of PSF tail')
+    fitsfile[2].write_comment('TAILCORE : Size in pixels of PSF tail saturation in PSF core')
+    fitsfile[2].write_comment('TAILXSCA : Scaling apply to CCD coordinate along columns for PSF tail')
+    fitsfile[2].write_comment('TAILYSCA : Scaling apply to CCD coordinate along rows for PSF tail')
+    fitsfile[2].write_comment('TAILINDE : Asymptotic power law index of PSF tail')
+    fitsfile[2].write_comment('CONT     : Continuum flux in arc image (not part of PSF)')
+    fitsfile[2].write_comment('-  ')
+    fitsfile[2].write_comment('PSF_core(X,Y) = [ SUM_ij (GH-i-j)*HERM(i,X/GHSIGX)*HERM(j,Y/GHSIGX) ]')
+    fitsfile[2].write_comment('                                       *GAUS(X,GHSIGX)*GAUS(Y,GHSIGY)')
+    fitsfile[2].write_comment('-  ')
+    fitsfile[2].write_comment('PSF_tail(X,Y) = TAILAMP*R^2/(TAILCORE^2+R^2)^(1+TAILINDE/2)')
+    fitsfile[2].write_comment('                with R^2=(X/TAILXSCA)^2+(Y/TAILYSCA)^2')
+    fitsfile[2].write_comment('-  ')
+    fitsfile[2].write_comment('PSF_core is integrated in pixel')
+    fitsfile[2].write_comment('PSF_tail is not, it is evaluated at center of pixel')
+    fitsfile[2].write_comment('------------------------------------------------------------------------')
+
+    # WRITE KEYS
+    fitsfile[2].write_key('EXTNAME','PSF','');    
+    fitsfile[2].write_key('PSFTYPE','GAUSS-HERMITE','');
+    fitsfile[2].write_key('PSFVER','3','');
     
-    hdr_ytrace['PCOUNT'] = 0
-    hdr_ytrace['GCOUNT'] = 1
-    hdr_ytrace['EXTNAME'] = 'YTRACE'
-    hdr_ytrace['FIBERMIN'] = fiberkeys[0]
-    hdr_ytrace['FIBERMAX'] = fiberkeys[1]
-    hdr_ytrace['WAVEMIN'] = wavekeys[0]
-    hdr_ytrace['WAVEMAX'] = wavekeys[1]
-
-    hdr_ytrace.comments['XTENSION'] = 'IMAGE extension'
-    hdr_ytrace.comments['PCOUNT']   = 'required keyword; must = 0'
-    hdr_ytrace.comments['GCOUNT']   = 'required keyword; must = 1'
-    hdr_ytrace.comments['BITPIX']   = 'number of bits per data pixel'
-    hdr_ytrace.comments['NAXIS']    = 'number of data axes'
-    hdr_ytrace.comments['NAXIS1']   = 'length of data axis 1'
-    hdr_ytrace.comments['NAXIS2']   = 'length of data axis 2'
+    fitsfile[2].write_key('MJD',mjd[0],'MJD of arc lamp exposure');
+    fitsfile[2].write_key('PLATEID',plate_id[0],'plate ID of arc lamp exposure');
+    fitsfile[2].write_key('CAMERA',camera_id[0],'camera ID');
+    fitsfile[2].write_key('ARCEXP',arc_exposure_id[0],'ID of arc lamp exposure used to fit PSF');
     
-    # WRITE HDUS
-    hdul = fits.HDUList([hdu_xtrace, hdu_ytrace])
-    hdul.writeto(fitsfile,overwrite=True)
+    fitsfile[2].write_key('NPIX_X',NPIX_X[0],'number of columns in input CCD image');
+    fitsfile[2].write_key('NPIX_Y',NPIX_Y[0],'number of rows in input CCD image');
+    fitsfile[2].write_key('HSIZEX',hSizeX[0],'Half size of PSF in fit, NX=2*HSIZEX+1');
+    fitsfile[2].write_key('HSIZEY',hSizeY[0],'Half size of PSF in fit, NY=2*HSIZEY+1');
+    fitsfile[2].write_key('FIBERMIN',fiberkeys[0],'first fiber (starting at 0)');
+    fitsfile[2].write_key('FIBERMAX',fiberkeys[1],'last fiber (included)');
+    fitsfile[2].write_key('NPARAMS',nparams_all[0],'number of PSF parameters');
+    fitsfile[2].write_key('LEGDEG',(ncoeff[0]-1),'degree of Legendre pol.(wave) for parameters');
+    fitsfile[2].write_key('GHDEGX',GHDEGX[0],'degree of Hermite polynomial along CCD columns');
+    fitsfile[2].write_key('GHDEGY',GHDEGY[0],'degree of Hermite polynomial along CCD rows');
+    fitsfile[2].write_key('WAVEMIN',wavekeys[0],'minimum wavelength (A), used for the Legendre polynomials');
+    fitsfile[2].write_key('WAVEMAX',wavekeys[1],'maximum wavelength (A), used for the Legendre polynomials');    
+    fitsfile[2].write_key('PSFERROR',psf_error[0],'assumed PSF fractional error in chi2');
+    fitsfile[2].write_key('READNOIS',readout_noise[0],'assumed read out noise in chi2');
+    fitsfile[2].write_key('GAIN',gain[0],'assumed gain in chi2');
     
-    return
+    # CLOSE FITS FILE
+    fitsfile.close()
 
+    return 
