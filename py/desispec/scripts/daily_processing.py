@@ -23,7 +23,7 @@ from desispec.workflow.queue import update_from_queue, continue_looping
 
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None, procobstypes=None, camword=None,
-                             dry_run=False, tab_filetype='csv',override_night=None, queue='realtime'):
+                             dry_run=False, tab_filetype='csv',override_night=None, queue='realtime', continue_looping=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -39,6 +39,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         override_night: str or int. 8 digit night, e.g. 20200314, of data to run on. If None, it runs on the current night.
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
+        continue_looping: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
+                                 is terminated. Default is False.
 
     Returns: Nothing
 
@@ -129,7 +131,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         print(f"New exposures: {new_exps}")
 
         ## If there aren't any new exps and there won't be more because we're running on an old night or simulating things, exit
-        if (dry_run or ( override_night is not None )) and len(list(new_exps))==0:
+        if (not continue_looping) and (dry_run or ( override_night is not None )) and (len(list(new_exps))==0):
             break
 
         ## Loop over new exposures and process them as relevant to that type

@@ -53,6 +53,8 @@ def parse_args():#options=None):
                         help="Perform a dry run where no jobs are actually created or submitted.")
     parser.add_argument("--override-night", type=str,default=None,
                         help="Specify the night to run on. Overrides the current day.")
+    parser.add_argument("--continue-looping-debug",action="store_true",help= "FOR DEBUG purposes only."+
+                         "Will continue looping in search of new data until the process is terminated externally.")
     # parser.add_argument("--force-specprod", action="store_true",
     #                     help="Force the files to be written to custom SPECPROD " +
     #                          "even if user is desi.")
@@ -117,4 +119,5 @@ if __name__ == '__main__':
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
                              procobstypes=args.obs_to_process, dry_run=args.dry_run, tab_filetype=args.table_file_type,
-                             camword=camword, override_night=args.override_night)
+                             camword=camword, override_night=args.override_night,
+                             continue_looping=args.continue_looping_debug)
