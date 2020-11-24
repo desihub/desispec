@@ -8,16 +8,34 @@ import time
 
 
 def get_resubmission_states():
+    """
+    Defines what Slurm job failure modes should be resubmitted in the hopes of the job succeeding the next time.
+
+    Returns:
+        list. A list of strings outlining the job states that should be resubmitted.
+    """
     return ['UNSUBMITTED', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT']
 
 
 def get_termination_states():
+    """
+    Defines what Slurm job states that are final and aren't in question about needing resubmission.
+
+    Returns:
+        list. A list of strings outlining the job states that are considered final (without human investigation/intervention)
+    """
     return ['COMPLETED', 'CANCELLED', 'FAILED']
 
 
 
 def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
                              columns='jobid,state,submit,eligible,start,end,jobname', dry_run=False):
+    """
+    Defines what Slurm job states that are final and aren't in question about needing resubmission.
+
+    Returns:
+        list. A list of strings outlining the job states that are considered final (without human investigation/intervention)
+    """
     # global queue_info_table
     if dry_run:
         string = 'JobID,State,Submit,Start,End,ExitCode,DerivedExitCode,Reason' + '\n'

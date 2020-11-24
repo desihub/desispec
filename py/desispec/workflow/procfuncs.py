@@ -33,7 +33,7 @@ def night_to_starting_iid(night=None):
     if night is None:
         night = what_night_is_it()
     night = int(night)
-    internal_id = (night - 20180000) * 1000
+    internal_id = (night - 20000000) * 1000
     return internal_id
 
 
@@ -100,26 +100,36 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
 
     scriptpathname = batch_script_name(prow)
     if dry_run:
-        print("\tOutput file would have been: {}".format(scriptpathname))
-        print("\tCommand to be run: {}".format(cmd.split()))
+        print("Output file would have been: {}".format(scriptpathname))
+        print("Command to be run: {}".format(cmd.split()))
     else:
-        print("\tRunning: {}".format(cmd.split()))
+        print("Running: {}".format(cmd.split()))
         scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
                                                        cameras=prow['CAMWORD'], jobdesc=prow['JOBDESC'], \
                                                        queue=queue, cmdline=cmd)
-        print("\tOutfile is: ".format(scriptpathname))
+        print("Outfile is: ".format(scriptpathname))
 
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
 
 
-def submit_batch_script(submission, dry_run=False):
+def submit_batch_script(submission, dry_run=False, strictly_successful=False):
     jobname = batch_script_name(submission)
     dependencies = submission['LATEST_DEP_QID']
-    print(dependencies,type(dependencies))
     dep_list, dep_str = '', ''
     if dependencies is not None:
-        dep_str = '--dependency=afterok:'
+        jobtype = submission['JOBDESC']
+        if strictly_successful:
+            depcond = 'afterok'
+        elif jobtype in ['flat','nightlyflat','poststdstar']:
+            depcond = 'afterok'
+        else:
+            ## if arc, psfnight, prestdstar, or stdstarfit, any inputs is fine
+            ## (though psfnight and stdstarfit will require some inputs otherwise they'll go up in flames)
+            depcond = 'afterany'
+
+        dep_str = f'--dependency={depcond}:'
+
         if np.isscalar(dependencies):
             dep_list = str(dependencies).strip(' \t')
             if dep_list == '':
@@ -127,9 +137,11 @@ def submit_batch_script(submission, dry_run=False):
             else:
                 dep_str += dep_list
         else:
-            if len(dependencies)>0:
-                dep_list = ','.join(np.array(dependencies).astype(str))
+            if len(dependencies)>1:
+                dep_list = ':'.join(np.array(dependencies).astype(str))
                 dep_str += dep_list
+            elif len(dependencies) == 1 and dependencies[0] not in [None, 0]:
+                dep_str += str(dependencies[0])
             else:
                 dep_str = ''
 
@@ -149,7 +161,7 @@ def submit_batch_script(submission, dry_run=False):
                                                   stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
 
-    print(f'Submitted {jobname}\t\t with dependencies {dep_list}. Returned qid: {current_qid}')
+    print(f'Submitted {jobname}   with dependencies {dep_str}. Returned qid: {current_qid}')
 
     submission['LATEST_QID'] = current_qid
     submission['ALL_QIDS'] = np.append(submission['ALL_QIDS'],current_qid)
@@ -261,7 +273,7 @@ def parse_previous_tables(etable, ptable, night):
         jobtypes = ptable['JOBDESC']
 
         if 'psfnight' in jobtypes:
-            arcjob = ptable[jobtypes=='psfnight']
+            arcjob = ptable[jobtypes=='psfnight'][0]
         elif lasttype == 'arc':
             arcs = []
             seqnum = 10
@@ -269,12 +281,12 @@ def parse_previous_tables(etable, ptable, night):
                 erow = etable[etable['EXPID']==row['EXPID'][0]]
                 if row['OBSTYPE'].lower() == 'arc' and int(erow['SEQNUM'])<seqnum:
                     arcs.append(row)
-                    seqnum = int(row['SEQNUM'])
+                    seqnum = int(erow['SEQNUM'])
                 else:
                     break
 
         if 'nightlyflat' in jobtypes:
-            flatjob = ptable[jobtypes=='nightlyflat']
+            flatjob = ptable[jobtypes=='nightlyflat'][0]
         elif lasttype == 'flat':
             flats = []
             for row in ptable[::-1]:

@@ -21,7 +21,6 @@ from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, a
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue, continue_looping
 
-
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              procobstypes=None, camword=None, override_night=None, tab_filetype='csv', queue='realtime',
                              data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False):
@@ -41,7 +40,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
         data_cadence_time: int. Wait time in seconds between loops in looking for new data. Default is 30 seconds.
         queue_cadence_time: int. Wait time in seconds between loops in checking queue statuses and resubmitting failures. Default is 1800s.
-        dry_run: boolean. If true, no scripts are written and no scripts are submitted. The tables are still generated and written, however.
+        dry_run: boolean. If true, no scripts are written and no scripts are submitted. The tables are still generated
+                 and written, however. The timing is accelerated. This option is most useful for testing and simulating a run.
         continue_looping_debug: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
                                  is terminated. Default is False.
 
@@ -87,8 +87,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Get context specific variable values
     surveynum = get_surveynum(night)
-    nersc_start = nersc_start_time(obsnight=true_night)
-    nersc_end = nersc_end_time(obsnight=true_night)
+    nersc_start = nersc_start_time(night=true_night)
+    nersc_end = nersc_end_time(night=true_night)
     colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
 
     ## Define where to find the data
@@ -130,7 +130,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ## or doing a dry_run or override_night, keep looping
     while ( (night == what_night_is_it()) and during_operating_hours(dry_run=dry_run) ) or ( override_night is not None ):
         ## Get a list of new exposures that have been found
-        print(f"Previously known exposures: {all_exps}")
+        print(f"\n\n\nPreviously known exposures: {all_exps}")
         located_exps = set( np.array(listpath(path_to_data,str(night))).astype(int) )
         new_exps = located_exps.difference(all_exps)
         all_exps = located_exps # i.e. new_exps.union(all_exps)
@@ -146,7 +146,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         for exp in sorted(list(new_exps)):
             ## Open relevant raw data files to understand what we're dealing with
             erow = summarize_exposure(path_to_data,night,exp,exposure_table_types,surveynum,colnames,coldefaults,verbosely=False)
-            print(f"Found: {erow}")
+            print(f"\nFound: {erow}")
 
             ## If there was an issue, continue. If it's a string summarizing the end of some sequence, use that info.
             ## If the exposure is assosciated with data, process that data.
@@ -207,7 +207,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             write_tables( [etable, ptable, unproc_table],
                           fullpathnames=[exp_table_pathname,proc_table_pathname,unproc_table_pathname] )
 
-        print("Reached the end of new exposures. Waiting for {}s for looking for more new data".format(data_cadence_time*speed_modifier))
+        print("\nReached the end of curent iteration of new exposures.")
+        print("Waiting {}s before looking for more new data".format(data_cadence_time*speed_modifier))
         time.sleep(data_cadence_time*speed_modifier)
 
         if len(ptable) > 0:
@@ -244,5 +245,5 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
         write_table(ptable, tablename=proc_table_pathname)
         ii += 1
-        
+
     print("No job failures left. Exiting")
