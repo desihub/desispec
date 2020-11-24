@@ -19,8 +19,8 @@ from   doublet_obs import doublet_obs
 from   plot_postages import plot_postages
 
 
-width  = 50.
-cwidth = 25.
+width  = 25.
+cwidth = 10.
 
 def cframe_postage(petal_cframes, fiber, redshift, ipostage=True, printit=False):    
     '''

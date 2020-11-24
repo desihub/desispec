@@ -43,9 +43,14 @@ night       = args.night
 andes       = args.andes
 outdir      = args.outdir
 
-def get_expids():
-    tiles  = np.unique(np.array([x.split('/')[-3] for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
-    expids = np.unique(np.array([x.split('/')[-1].split('-')[2].replace('.fits','') for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
+def get_expids(ttype='cframe'):
+    tiles  = np.unique(np.array([x.split('/')[-3] for x in glob.glob(andes + '/tiles/*/{}/{}-*'.format(night, ttype))]).astype(np.int))
+
+    if ttype == 'coadd':
+        expids = None
+
+    else:
+        expids = np.unique(np.array([x.split('/')[-1].split('-')[2].replace('.fits','') for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
 
     return  expids, tiles
 

@@ -15,6 +15,8 @@ lines['GROUP']       = lines.groupby(['REDSHIFT GROUP', 'WIDTH GROUP']).ngroup()
 lines['DOUBLET']     = np.zeros(len(lines), dtype=np.int) - 99
 lines['WAVELENGTH']  = air2vac(lines['WAVELENGTH'])
 
+print('\n\n**  Converting to vacuum wavelengths. ** \n\n')
+
 lines                = Table(lines.to_numpy(), names=lines.columns)
 
 for i, x in enumerate([[6, 7], [16, 17], [25, 27]]):
@@ -24,11 +26,13 @@ for i, x in enumerate([[6, 7], [16, 17], [25, 27]]):
 lines['LINERATIO']     = 0.0
 lines['LINERATIO'][6]  = 0.7
 lines['LINERATIO'][7]  = 0.7
-        
+lines['LINERATIO'][16] = 0.7
+lines['LINERATIO'][17] = 0.7
+
 lines['MASKED']        = np.zeros(len(lines), dtype=np.int)
 
 # Ignored in chi sq. and not plotted; 4, 5, 8, 13, 14.
-for x in [8, 13, 14]:
+for x in [2, 5, 25, 27, 30, 8, 14]:
     lines['MASKED'][x] = 1
 
 # Balmer.

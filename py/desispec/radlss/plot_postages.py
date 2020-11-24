@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
 
 from   lines import ugroups, lines
+from   astropy.convolution import convolve, Box1DKernel
 
-def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
+def plot_postages(postages, mpostages, petal, fiber, rrz, tid, results=None):
     ncol      = 8
     fig, axes = plt.subplots(len(ugroups), ncol, figsize=(20,10))
     
@@ -13,7 +14,6 @@ def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
     # Group.
     for u in list(postages.keys()):
         index = 0
-
 
         print('\n\n----  Plotting {} series  ----'.format(u))
         
@@ -26,23 +26,29 @@ def plot_postages(postages, mpostages, petal, fiber, rrz, tid):
 
                 sstr = '    {: 4d}    {}'.format(x, cam.ljust(4))
                 
-                if not stop:
-                    axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='k', lw=0.5)
-                    axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=0.5, lw=0.75, c=colors[cam[0]])
+                if not stop:                    
+                    if results[u] is not None:                        
+                        bestz = results[u].x[0]
+                        axes[u,index].axvline((1. + bestz) * lines['WAVELENGTH'][x], c='k', lw=0.2)
 
+                    axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='r', lw=0.2, linestyle='--')
+                        
+                    axes[u,index].plot(postages[u][x][cam].wave, postages[u][x][cam].flux, alpha=1.00, lw=0.5, c=colors[cam[0]])
+                    # axes[u,index].plot(postages[u][x][cam].wave, convolve(postages[u][x][cam].flux, Box1DKernel(5)), alpha=1.00, lw=0.5, c=colors[cam[0]])                    
+
+                    axes[u,index].set_title('{} ({})'.format(lines['NAME'][x], lines['INDEX'][x]))
+                    
                     try: 
                         axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
-
+                        
                     except:
                         sstr += '\t ** Failed to retrieve mpostage. **'
-                        
-                    axes[u,index].set_title(lines['NAME'][x])
 
                     index += 1
 
                     if index == ncol:
                         stop = True
-
+                        
                 print(sstr)
 
     fig.suptitle('Fiber {} of petal {}: targetid {} with redshift {:2f}'.format(fiber, petal, tid, rrz), y=0.925)

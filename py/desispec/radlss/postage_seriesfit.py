@@ -3,6 +3,7 @@ import numpy as np
 import scipy
 import iminuit
 import warnings
+import fitsio
 
 from   scipy             import optimize
 from   scipy.optimize    import approx_fprime, minimize, Bounds
@@ -26,7 +27,7 @@ from   plot_postages import plot_postages
 
 warnings.filterwarnings('error')
 
-def series_fit(rrz, rrzerr, postages, group=3, sig0=90., mpostages=None, printit=False):
+def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit=False):
     '''
     '''
 
@@ -419,26 +420,23 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     
     from   astropy.table import Table
-
+    from   astropy.convolution import convolve, Box1DKernel
+    
     # 12: Failed to retrieve mpostages: 12.
     # 14: Failed to fit OI. 
 
     parser   = argparse.ArgumentParser()
     parser.add_argument('--fiber', type=int, help='...')
-    args = parser.parse_args()
+    parser.add_argument('--plotspectra', type=int, default=0, help='...')
     
-    petal    =  '3'
-    fiber    =  args.fiber
-    night    = '20200225'
-    expid    = 52115
-    tileid   = '70502'
-        
-    ## 
-    zbest    = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', tileid, night, 'zbest-{}-{}-{}.fits'.format(petal, tileid, night)), 'ZBEST')
-    tid      = zbest['TARGETID'][fiber]
-    rrz      = zbest['Z'][fiber]
-    rrzerr   = zbest['ZERR'][fiber]
+    args     = parser.parse_args()
     
+    petal    = '3'
+    fiber    = args.fiber
+    night    = '20200315'
+    expid    = 55654
+    tileid   = '66003'
+            
     cframes  = {}
     colors   = {'b': 'b', 'r': 'g', 'z': 'r'}
     '''
@@ -452,13 +450,48 @@ if __name__ == '__main__':
         objmeta = pickle.load(handle)['ELG']
     ''' 
     for band in ['b', 'r', 'z']:
-        cam    = band + petal
+        cam = band + petal
 
-        # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits                                                                                                                                                                   
-        cframes[cam]               = read_frame(findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/'))        
-        # cframes[cam].flux[fiber,:] = flux[band][115]
+        # E.g. ~/andes/exposures/20200315/00055642/cframe-b0-00055642.fits
+        fpath = findfile('cframe', night=night, expid=expid, camera=cam, specprod_dir='/global/homes/m/mjwilson/andes/')
+
+        fibermap     = fitsio.read(fpath, ext='FIBERMAP')
+
+        tid = fibermap['TARGETID'][fiber]
         
-    # rrz             = meta['REDSHIFT'][115]
+        cframes[cam] = read_frame(fpath)        
+        # cframes[cam].flux[fiber,:] = flux[band][115]
+
+        print('Fetched {}.'.format(fpath))
+
+    zbest    = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', tileid, night, 'zbest-{}-{}-{}.fits'.format(petal, tileid, night)), 'ZBEST')
+    row      = zbest['TARGETID'] == tid
+    rrz      = zbest['Z'].data[row][0]
+    rrzerr   = zbest['ZERR'].data[row][0]
+    
+    if args.plotspectra:
+        fig, ax = plt.subplots(1, 1, figsize=(10,5))
+    
+        for cam in cframes.keys():        
+            ax.plot(cframes[cam].wave, convolve(cframes[cam].flux[fiber,:], Box1DKernel(5), boundary='extend'), lw=0.5, alpha=0.5)
+        
+        for line in lines:
+            ax.axvline((1. + rrz) * line['WAVELENGTH'], c='k', alpha=0.25, lw=0.5)
+
+            if ((1. + rrz) * line['WAVELENGTH'] > 4.e3):
+                ax.text((1. + rrz) * line['WAVELENGTH'], np.random.uniform(3., 4.), line['INDEX'], fontsize=6, horizontalalignment='center', verticalalignment='center', rotation=90)
+                
+        ax.set_title('fiber: {} targetid: {} redshift: {:.2f}'.format(fiber, tid, rrz))
+        ax.set_xlim(4.e3, 8.e3)
+
+        # top=10.0
+        ax.set_ylim(bottom=-0.5)
+
+        pl.show()
+        
+        exit(0)
+    
+    # rrz = meta['REDSHIFT'][115]
     '''
     # [Group][Line Index][Camera].
     postages, ipostages = cframe_postage(cframes, fiber, rrz)
@@ -470,29 +503,35 @@ if __name__ == '__main__':
     for group in groups:
         series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages, printit=False)
     '''
-    start             = time.time() 
+    start = time.time() 
     
     # [Group][Line Index][Camera].
     postages, ipostages = cframe_postage(cframes, fiber, rrz)
     
-    mpostages         = {}
+    mpostages = {}
 
-    groups            = list(postages.keys())
+    groups = list(postages.keys())
 
-    try:
-        for group in groups:
+    results = {}
+
+    for group in groups:
+        try:
             series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages, printit=False)
-    except:
-        print('Failed with linefit.')
+            results[group] = result
+            
+        except:
+            results[group] = None
         
-    end               = time.time()
+            print('\n\nFailed with linefit of group: {}.'.format(group))
+        
+    end = time.time()
     
     print('\n\nMinimised in {:.2f} seconds.'.format(end - start))
     
     ## 
-    fig       = plot_postages(postages, mpostages, petal, fiber, rrz, tid)
+    fig = plot_postages(postages, mpostages, petal, fiber, rrz, tid, results=results)
     fig.savefig('postages.pdf', bbox_inches='tight')
 
     pl.show()
     
-    print('\n\nDone.\n\n')
+    print('\n\nDone (fiber: {}, targetid: {}).\n\n'.format(fiber, tid))
