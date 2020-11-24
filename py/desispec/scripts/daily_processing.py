@@ -212,8 +212,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         time.sleep(data_cadence_time*speed_modifier)
 
         if len(ptable) > 0:
-            ptable, nsubmits = update_and_recurvsively_submit(ptable,start_time=nersc_start,end_time=nersc_end,
-                                                              ptab_name=proc_table_pathname, dry_run=dry_run)
+            ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run)
+            # ptable, nsubmits = update_and_recurvsively_submit(ptable,start_time=nersc_start,end_time=nersc_end,
+            #                                                   ptab_name=proc_table_pathname, dry_run=dry_run)
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
             write_table(ptable, tablename=proc_table_pathname)
@@ -229,21 +230,27 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run)
     write_table(ptable, tablename=proc_table_pathname)
 
-    print(f"Completed submission of exposures for night {night}. Now resolving job failures.")
+    print(f"Completed submission of exposures for night {night}.")
 
-    ## Now we resubmit failed jobs and their dependencies until all jobs have un-submittable end state
-    ## e.g. they either succeeded or failed with a code-related issue
-    ii,nsubmits = 0, 0
-    while ii < 4 and continue_looping(ptable['STATUS']):
-        print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
-        ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
-                                                          ptab_name=proc_table_pathname, dry_run=dry_run)
-        write_table(ptable, tablename=proc_table_pathname)
-        if continue_looping(ptable['STATUS']):
-            time.sleep(queue_cadence_time*speed_modifier)
-
-        ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
-        write_table(ptable, tablename=proc_table_pathname)
-        ii += 1
-
-    print("No job failures left. Exiting")
+    # #######################################
+    # ########## Queue Cleanup ##############
+    # #######################################
+    # print("Now resolving job failures.")
+    #
+    # ## Now we resubmit failed jobs and their dependencies until all jobs have un-submittable end state
+    # ## e.g. they either succeeded or failed with a code-related issue
+    # ii,nsubmits = 0, 0
+    # while ii < 4 and continue_looping(ptable['STATUS']):
+    #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
+    #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
+    #                                                       ptab_name=proc_table_pathname, dry_run=dry_run)
+    #     write_table(ptable, tablename=proc_table_pathname)
+    #     if continue_looping(ptable['STATUS']):
+    #         time.sleep(queue_cadence_time*speed_modifier)
+    #
+    #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
+    #     write_table(ptable, tablename=proc_table_pathname)
+    #     ii += 1
+    # 
+    # print("No job failures left.")
+    print("Exiting")
