@@ -24,10 +24,12 @@ def parse_args():#options=None):
                              " to reduce the data. Should be a comma separated list." +
                              " Numbers only assumes you want to reduce r, b, and z " +
                              "for that camera. Otherwise specify separately [brz][0-9].")
-    parser.add_argument("--obs-to-process", type=str, default=None, required=False,
+    parser.add_argument("--exp-obstypes", type=str, default=None, required=False,
+                        help="The basic data obstypes to save in the exposure table. " +
+                             "E.g. science, dark, twilight, flat, arc, zero.")
+    parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
-
     # File and dir defs
     parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
                         help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
@@ -124,7 +126,8 @@ if __name__ == '__main__':
 
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
-                             procobstypes=args.obs_to_process, dry_run=args.dry_run, tab_filetype=args.table_file_type,
+                             expobstypes=args.exp_obstypes, procobstypes=args.proc_obstypes,
+                             dry_run=args.dry_run, tab_filetype=args.table_file_type,
                              camword=camword, override_night=args.override_night, queue=args.queue,
                              continue_looping_debug=args.continue_looping_debug, data_cadence_time=args.data_cadence_time,
                              queue_cadence_time=args.queue_cadence_time)

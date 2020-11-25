@@ -14,7 +14,7 @@ from desispec.workflow.tableio import load_table, write_table
 
 
 def create_processing_tables(nights=None, prodname=None, exp_table_path=None, proc_table_path=None,
-                             science_types=None, overwrite_files=False, verbose=False,
+                             obstypes=None, overwrite_files=False, verbose=False,
                              exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
@@ -24,7 +24,7 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
         prodname: str. The name of the current production. If used, this will overwrite the SPECPROD environment variable.
         exp_table_path: str. Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
         proc_table_path: str. Full path to where to processing tables to be written.
-        science_types: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
+        obstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
         overwrite_files: boolean. Whether to overwrite processing tables if they exist. True overwrites.
         verbose: boolean. Whether to give verbose output information or not. True prints more information.
         exp_filetype: str. The file extension (without the '.') of the exposure tables.
@@ -41,8 +41,8 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
     if nights is None:
         print("Need to provide nights to create processing tables for. If you want all nights, use 'all'")
 
-    if science_types is None:
-        science_types = default_exptypes_for_proctable()
+    if obstypes is None:
+        obstypes = default_exptypes_for_proctable()
     ## Define where to find the data
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path()
@@ -90,7 +90,7 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
         else:
             combined_table = vstack([combined_table, exptable])
 
-    processing_table, unprocessed_table = exptable_to_proctable(combined_table, science_types=science_types,
+    processing_table, unprocessed_table = exptable_to_proctable(combined_table, obstypes=obstypes,
                                                                 joinsymb=joinsymb)
 
     ## Save the tables

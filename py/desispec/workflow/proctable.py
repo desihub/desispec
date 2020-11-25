@@ -58,16 +58,14 @@ def default_exptypes_for_proctable():
     ## Define the science types to be included in the exposure table (case insensitive)
     return ['arc','flat','twilight','science','sci','dither']
 
-def exptable_to_proctable(input_exptable, science_types=None, addtnl_colnames=None, addtnl_coldtypes=None,
-                          joinsymb='|'):
+def exptable_to_proctable(input_exptable, obstypes=None):
     exptable = input_exptable.copy()
 
-    if science_types is None:
-        science_types = default_exptypes_for_exptable()
+    if obstypes is None:
+        obstypes = default_exptypes_for_exptable()
 
     ## Define the column names for the exposure table and their respective datatypes
-    if addtnl_colnames is None:
-        colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
+    colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
 
     for col in ['HEADERERR', 'COMMENTS']:
         if col in exptable.colnames:
@@ -88,7 +86,7 @@ def exptable_to_proctable(input_exptable, science_types=None, addtnl_colnames=No
                             exptable[key][ii] = newval
 
     good_exps = (exptable['EXPFLAG'] == 0)
-    good_types = np.array([val in science_types for val in exptable['OBSTYPE']]).astype(bool)
+    good_types = np.array([val in obstypes for val in exptable['OBSTYPE']]).astype(bool)
     good = (good_exps & good_types)
     good_table = exptable[good]
     unprocessed_table = exptable[~good]
@@ -105,13 +103,6 @@ def exptable_to_proctable(input_exptable, science_types=None, addtnl_colnames=No
         rows.append(prow)
     processing_table = Table(names=colnames, dtype=coldtypes, rows=rows)
 
-    # for nam, typ, default in zip(colnames, coldtypes, coldefaults):
-    #     if typ is str or type(typ) is str:
-    #         data = np.array([joinsymb] * len(processing_table))
-    #     else:
-    #         data = np.zeros(len(processing_table)).astype(typ)
-    #     processing_table.add_column(Table.Column(name=nam, dtype=typ, data=data))
-
     return processing_table, unprocessed_table
 
 
@@ -123,7 +114,7 @@ def instantiate_processing_table(colnames=None, coldtypes=None):
     return processing_table
 
 
-def erow_to_prow_with_overrides(input_erow, colnames=None, coldtypes=None, coldefaults=None, joinsymb='|'):
+def erow_to_prow_with_overrides(input_erow):#, colnames=None, coldtypes=None, coldefaults=None):
     erow = input_erow.copy()
     if type(erow) in [dict, OrderedDict]:
         ecols = erow.keys()
@@ -132,7 +123,7 @@ def erow_to_prow_with_overrides(input_erow, colnames=None, coldtypes=None, colde
 
     for col in ['HEADERERR', 'COMMENTS']:
         if col in ecols:
-            for item in erow.split(joinsymb):
+            for item in erow[col]:
                 clean_item = item.strip(' \t')
                 if len(clean_item) > 6:
                     keyval = None
@@ -148,16 +139,22 @@ def erow_to_prow_with_overrides(input_erow, colnames=None, coldtypes=None, colde
                         erow[key] = newval
 
     ## Define the column names for the exposure table and their respective datatypes
-    if colnames is None:
-        colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
+    # if colnames is None:
+    colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
+    colnames, coldtypes, coldefaults = np.array(colnames), np.array(coldtypes), np.array(coldefaults)
 
     prow = OrderedDict()
     for nam, typ, defval in zip(colnames, coldtypes, coldefaults):
         if nam == 'OBSDESC':
-            prow[nam] = ' '
+            if nam in colnames:
+                prow[nam] = coldefaults[colnames == nam][0]
+            else:
+                prow[nam] = 'unknown'
             for word in ['dither', 'acquisition', 'focus']:
                 if 'PROGRAM' in ecols and word in erow['PROGRAM'].lower():
                     prow[nam] = word
+        elif nam == 'EXPID':
+            prow[nam] = np.array([erow[nam]])
         elif nam in ecols:
             prow[nam] = erow[nam]
         else:
@@ -165,17 +162,17 @@ def erow_to_prow_with_overrides(input_erow, colnames=None, coldtypes=None, colde
     return prow
 
 
-def erow_to_prow(erow, colnames=None, coldtypes=None, coldefaults=None, joinsymb='|'):
+def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joinsymb='|'):
     if type(erow) in [dict, OrderedDict]:
         ecols = erow.keys()
     else:
         ecols = erow.colnames
 
     ## Define the column names for the exposure table and their respective datatypes
-    if colnames is None:
-        colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
-
+    #if colnames is None:
+    colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
     colnames, coldtypes, coldefaults = np.array(colnames), np.array(coldtypes), np.array(coldefaults)
+
     prow = OrderedDict()
     for nam, typ, defval in zip(colnames, coldtypes, coldefaults):
         if nam == 'OBSDESC':
@@ -205,8 +202,6 @@ def get_processing_table_name(prodname=None, prodmod=None, extension='csv'):
         prodname_modifier = '-' + str(prodmod)
     elif 'SPECPROD_MOD' in os.environ:
         prodname_modifier = '-' + os.environ['SPECPROD_MOD']
-    # elif prodname == 'daily' and 'PROD_NIGHT' in os.environ:
-    #     prodname_modifier = '-' + os.environ['PROD_NIGHT']
     else:
         prodname_modifier = ''
 
@@ -227,15 +222,5 @@ def get_processing_table_pathname(prodname=None, prodmod=None, extension='csv'):
     path = get_processing_table_path(prodname)
     table_name = get_processing_table_name(prodname, prodmod, extension)
     return pathjoin(path, table_name)
-
-
-
-
-
-# def get_proctab_uniq_columns():
-#     colnames =  ['LATEST_JOBID', 'LATEST_JOBFILE', 'JOBFILES', 'JOBIDS', 'REDUX_STATUS']
-#     coldtypes = [int           , 'S20'           , 'S80'     , 'S30'   , int]
-#     return colnames, coldtypes
-
 
 

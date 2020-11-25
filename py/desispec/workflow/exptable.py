@@ -92,7 +92,7 @@ def instantiate_exposure_table(rows=None):
     return outtab
 
 
-def summarize_exposure(raw_data_dir, night, exp, scitypes, surveynum, colnames, coldefaults, verbosely=False):
+def summarize_exposure(raw_data_dir, night, exp, obstypes, surveynum, colnames, coldefaults, verbosely=False):
     if type(exp) is not str:
         exp = int(exp)
         exp = f'{exp:08d}'
@@ -132,7 +132,7 @@ def summarize_exposure(raw_data_dir, night, exp, scitypes, surveynum, colnames, 
         return None
 
     flavor = req_dict['FLAVOR'].lower()
-    if flavor != 'science' and 'dark' not in scitypes and 'zero' not in scitypes:
+    if flavor != 'science' and 'dark' not in obstypes and 'zero' not in obstypes:
         ## If FLAVOR is wrong
         give_details(f'ignoring: {reqpath} -- {flavor} not a flavor we care about', f'{exp}: skipped  -- not science')
         return None
@@ -147,7 +147,7 @@ def summarize_exposure(raw_data_dir, night, exp, scitypes, surveynum, colnames, 
 
     ## If obstype isn't in our list of ones we care about, skip it
     obstype = req_dict['OBSTYPE'].lower()
-    if obstype in scitypes:
+    if obstype in obstypes:
         ## Look for the data. If it's not there, say so then move on
         datapath = pathjoin(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
         if not os.path.exists(datapath):

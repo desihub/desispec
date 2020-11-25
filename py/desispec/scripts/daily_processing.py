@@ -19,10 +19,10 @@ from desispec.workflow.proctable import default_exptypes_for_proctable, get_proc
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
-from desispec.workflow.queue import update_from_queue, continue_looping
+from desispec.workflow.queue import update_from_queue, any_not_successful
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
-                             procobstypes=None, camword=None, override_night=None, tab_filetype='csv', queue='realtime',
+                             expobstypes=None, procobstypes=None, camword=None, override_night=None, tab_filetype='csv', queue='realtime',
                              data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
@@ -32,6 +32,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         exp_table_path: str. Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
         proc_table_path: str. Full path to where to processing tables to be written.
         path_to_data: str. Path to the raw data.
+        expobstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the exposure table.
         procobstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
         camword: str. Camword that, if set, overwrites the list of cameras found in the files and only runs on those given/
                       Examples: a0123456789, a1, a2b3r3, a2b3r4z3.
@@ -70,6 +71,15 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ## Get default values for input variables
     if procobstypes is None:
         procobstypes = default_exptypes_for_proctable()
+    if expobstypes is None:
+        ## Define the obstypes to save information for in the exposure table
+        expobstypes = default_exptypes_for_exptable()
+
+    ## Must contain all the types used in processing
+    for typ in procobstypes:
+        if typ not in expobstypes:
+            expobstypes.append(typ)
+
     if camword is not None:
         print(f"Overriding camword in data with user provided value: {camword}")
 
@@ -78,12 +88,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     if dry_run:
         speed_modifier = 0.1
 
-    ## Define the obstypes to save information for in the exposure table
-    exposure_table_types = default_exptypes_for_exptable()
-    ## Must contain all the types used in processing
-    for typ in procobstypes:
-        if typ not in exposure_table_types:
-            exposure_table_types.append(typ)
+
 
     ## Get context specific variable values
     surveynum = get_surveynum(night)
@@ -145,7 +150,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         ## Loop over new exposures and process them as relevant to that type
         for exp in sorted(list(new_exps)):
             ## Open relevant raw data files to understand what we're dealing with
-            erow = summarize_exposure(path_to_data,night,exp,exposure_table_types,surveynum,colnames,coldefaults,verbosely=False)
+            erow = summarize_exposure(path_to_data,night,exp,expobstypes,surveynum,colnames,coldefaults,verbosely=False)
             print(f"\nFound: {erow}")
 
             ## If there was an issue, continue. If it's a string summarizing the end of some sequence, use that info.
@@ -177,7 +182,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
                 if (curtype != lasttype) or (curtile != lasttile):
                     ptable, arcjob, flatjob, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
-                                                                                         flatjob, arcjob, lasttype,
+                                                                                         arcjob, flatjob, lasttype,
                                                                                          last_not_dither, internal_id,
                                                                                          dry_run=dry_run, queue=queue)
 
@@ -222,7 +227,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         
     ## No more data coming in, so do bottleneck steps if any apply
     ptable, arcjob, flatjob, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
-                                                                         flatjob, arcjob, lasttype, last_not_dither,\
+                                                                         arcjob, flatjob, lasttype, last_not_dither,\
                                                                          internal_id, dry_run=dry_run, queue=queue)
 
 
@@ -240,12 +245,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     # ## Now we resubmit failed jobs and their dependencies until all jobs have un-submittable end state
     # ## e.g. they either succeeded or failed with a code-related issue
     # ii,nsubmits = 0, 0
-    # while ii < 4 and continue_looping(ptable['STATUS']):
+    # while ii < 4 and any_not_successful(ptable['STATUS']):
     #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
     #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
     #                                                       ptab_name=proc_table_pathname, dry_run=dry_run)
     #     write_table(ptable, tablename=proc_table_pathname)
-    #     if continue_looping(ptable['STATUS']):
+    #     if any_not_successful(ptable['STATUS']):
     #         time.sleep(queue_cadence_time*speed_modifier)
     #
     #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)

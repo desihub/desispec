@@ -16,8 +16,8 @@ def get_parser():
     parser.add_argument("-p", "--prodname", type=str, default=None, help="name of the production run")
     parser.add_argument("-i", "--exp-table-path", type=str, default=None, help="data path to exposure tables, without the month subdirectory.")
     parser.add_argument("-o","--proc-table-path", type=str, default=None,  help="path to save processing tables")
-    parser.add_argument("--science-types", type=str, default=None, help="comma separated list of exposure types to include in "+\
-                                                           "exposure table, e.g. science,arc,flat,dark,zero, ...")
+    parser.add_argument("--obstypes", type=str, default=None, help="comma separated list of exposure types to include in "+\
+                                                           "the processing table, e.g. science,arc,flat,dark,zero, ...")
     parser.add_argument("--overwrite-files", action="store_true", help="overwrite existing exposure tables")
     parser.add_argument("--verbose", action="store_true", help="print verbose output")
     parser.add_argument("--joinsymb", type=str, default='|', help="String that separates entries multivalue column rows when saving to csv")

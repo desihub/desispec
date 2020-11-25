@@ -107,7 +107,7 @@ def update_from_queue(table, qtable=None, dry_run=False, start_time=None, end_ti
 
     return table
 
-def continue_looping(statuses, termination_states=None):
+def any_not_successful(statuses, termination_states=None):
     if termination_states is None:
         termination_states = get_termination_states()
     return np.any([status not in termination_states for status in statuses])

@@ -15,7 +15,7 @@ from desispec.workflow.tableio import write_table
 
 
 
-def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, science_types=None, \
+def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obstypes=None, \
                            exp_filetype='csv', verbose=False, overwrite_files=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
@@ -24,7 +24,7 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, scien
         nights: str, int, or comma separated list. The night(s) to generate procesing tables for.
         path_to_data: str. The path to the raw data and request*.json and manifest* files.
         exp_table_path: str. Full path to where to exposure tables should be saved, WITHOUT the monthly directory included.
-        science_types: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the exposure table.
+        obstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the exposure table.
         exp_filetype: str. The file extension (without the '.') of the exposure tables.
         overwrite_files: boolean. Whether to overwrite processing tables if they exist. True overwrites.
         verbose: boolean. Whether to give verbose output information or not. True prints more information.
@@ -39,8 +39,8 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, scien
     ## Define where to save the data
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path(night=None)
-    if science_types is None:
-        science_types = default_exptypes_for_exptable()
+    if obstypes is None:
+        obstypes = default_exptypes_for_exptable()
 
     ## Make the save directory exists
     os.makedirs(exp_table_path, exist_ok=True)
@@ -63,7 +63,7 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, scien
 
         ## Loop through all exposures on disk
         for exp in listpath(path_to_data,str(night)):
-            rowdict = summarize_exposure(path_to_data, night=night, exp=exp,scitypes=science_types,surveynum=survey_num,\
+            rowdict = summarize_exposure(path_to_data, night=night, exp=exp, obstypes=obstypes, surveynum=survey_num, \
                                          colnames=colnames, coldefaults=coldefaults, verbosely=verbose)
             if rowdict is not None:
                 ## Add the dictionary of column values as a new row
