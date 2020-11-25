@@ -10,7 +10,7 @@ from desispec.scripts.daily_processing import daily_processing_manager
 from desispec.io.util import create_camword
 
 from desispec.workflow.timing import during_operating_hours
-from desispec.workflow.os import check_running
+from desispec.workflow.utils import check_running
 
 def parse_args():#options=None):
     """

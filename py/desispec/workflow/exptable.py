@@ -6,7 +6,7 @@ import numpy as np
 from astropy.table import Table
 from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.os import define_variable_from_environment, pathjoin, give_relevant_details, get_json_dict
+from desispec.workflow.utils import define_variable_from_environment, pathjoin, give_relevant_details, get_json_dict
 
 
 def get_exposure_table_column_defs(return_default_values=False):

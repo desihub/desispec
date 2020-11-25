@@ -11,7 +11,7 @@ from astropy.table import Table
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_tables, write_table
-from desispec.workflow.os import verify_variable_with_environment, pathjoin, listpath
+from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath
 from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
 from desispec.workflow.exptable import default_exptypes_for_exptable, get_surveynum, get_exposure_table_column_defs, \
                                        get_exposure_table_path, get_exposure_table_name, summarize_exposure
@@ -251,6 +251,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
     #     write_table(ptable, tablename=proc_table_pathname)
     #     ii += 1
-    # 
+    #
     # print("No job failures left.")
     print("Exiting")

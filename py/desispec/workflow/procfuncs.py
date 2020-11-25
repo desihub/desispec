@@ -22,7 +22,7 @@ from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
     get_desi_proc_batch_file_path
-from desispec.workflow.os import pathjoin
+from desispec.workflow.utils import pathjoin
 from desispec.workflow.tableio import write_table
 
 

@@ -11,7 +11,7 @@ from collections import OrderedDict
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.exptable import default_exptypes_for_exptable
 
-from desispec.workflow.os import pathjoin
+from desispec.workflow.utils import pathjoin
 
 def get_processing_table_column_defs(return_default_values=False, overlap_only=False, unique_only=False):
     ## Define the column names for the internal production table and their respective datatypes, split in two

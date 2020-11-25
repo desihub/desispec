@@ -6,7 +6,7 @@ from astropy.table import Table
 ###################################################
 ################  Table Functions #################
 ###################################################
-from desispec.workflow.os import pathjoin
+from desispec.workflow.utils import pathjoin
 
 
 def ensure_scalar(val, joinsymb='|'):
