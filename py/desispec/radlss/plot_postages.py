@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 
 from   lines import ugroups, lines
@@ -27,9 +28,10 @@ def plot_postages(postages, mpostages, petal, fiber, rrz, tid, results=None):
                 sstr = '    {: 4d}    {}'.format(x, cam.ljust(4))
                 
                 if not stop:                    
-                    if results[u] is not None:                        
-                        bestz = results[u].x[0]
-                        axes[u,index].axvline((1. + bestz) * lines['WAVELENGTH'][x], c='k', lw=0.2)
+                    if results is not None:
+                        if u in results.keys():
+                            bestz = results[u].x[0]
+                            axes[u,index].axvline((1. + bestz) * lines['WAVELENGTH'][x], c='k', lw=0.2)
 
                     axes[u,index].axvline((1. + rrz) * lines['WAVELENGTH'][x], c='r', lw=0.2, linestyle='--')
                         
@@ -37,13 +39,24 @@ def plot_postages(postages, mpostages, petal, fiber, rrz, tid, results=None):
                     # axes[u,index].plot(postages[u][x][cam].wave, convolve(postages[u][x][cam].flux, Box1DKernel(5)), alpha=1.00, lw=0.5, c=colors[cam[0]])                    
 
                     axes[u,index].set_title('{} ({})'.format(lines['NAME'][x], lines['INDEX'][x]))
+
+                    mpostage = None
                     
-                    try: 
-                        axes[u,index].plot(mpostages[u][x][cam].wave, mpostages[u][x][cam].flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
+                    try:                        
+                        mpostage = mpostages[u][x][cam]
                         
                     except:
                         sstr += '\t ** Failed to retrieve mpostage. **'
 
+                    if mpostage is not None:
+                        axes[u,index].plot(mpostage.wave, mpostage.flux, alpha=0.5, lw=0.75, c='k', linestyle='--')
+
+                        if not np.allclose(mpostage.wave, postages[u][x][cam].wave):
+                            print('Ill-matching wavelength grid for {} {} {}'.format(u, i, cam))
+
+                            print(mpostage.wave)
+                            print(postages[u][x][cam].wave)
+                            
                     index += 1
 
                     if index == ncol:

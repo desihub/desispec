@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# srun -N 1  -n 8 -c 2 ./mpi_linefit --outdir /global/cscratch1/sd/mjwilson/linefit
+# srun -N 1 -n 8 -c 2 ./mpi_linefit --outdir /global/cscratch1/sd/mjwilson/linefit
 import os
 import sys
 import time
@@ -69,7 +69,7 @@ def is_processed(logfile):
 
     return  processed
 
-def to_reduce(expid):
+def to_reduce(expid, shallow=False):
     cframes = {}
     
     reduced_cameras = glob.glob(andes + '/exposures/{}/{:08d}/cframe-*'.format(night, expid))
@@ -93,9 +93,12 @@ def to_reduce(expid):
         if flavor != 'science':
             del cframes[key][cam]
 
-        sucess = 1
-            
-    return sucess, tileid, cframes
+        success = 1
+
+        if shallow and success:
+            break
+        
+    return success, tileid, cframes
 
 def get_zbest(expid, tileid, petal):
     filepath = os.path.join(andes, 'tiles', str(tileid), str(night), 'zbest-{}-{}-{}.fits'.format(petal, tileid, night))
@@ -154,20 +157,26 @@ def linefit_fiber(fiber, zs, zerrs, tids, fids, petal_cframes, expid, petal, plo
             status = linefit_result.status
             results[(fiber, group)] = (status, linefit_result.x, len(linefit_result.x))
                 
-        except:
+        except Exception as e:
             print('Line fit failure for fiber {:d}.'.format(fiber))
 
+            print('\n\n')
+            print(e)
+            
             series_params[group] = None
             results[(fiber, group)] = (status, None, None)
             
     if plot & (status > 0):
+        initfit_fig = plot_postages(postages, ipostages, petal, fid, rrz, tid)
+        initfit_fig.savefig(plotdir + '/ilinefits-{:08d}-{}-{}.pdf'.format(expid, petal, fid))
+        
         linefit_fig = plot_postages(postages, mpostages, petal, fid, rrz, tid)
         linefit_fig.savefig(plotdir + '/linefits-{:08d}-{}-{}.pdf'.format(expid, petal, fid))
 
         # Close all figures (to suppress warning).                                                                                                                                                                              
         plt.close('all')    
 
-    return  fid, series_params, results, postages, mpostages
+    return  fid, series_params, results, postages, mpostages, ipostages
         
 def line_fit(expid, tileid, petal, petal_cframes, plot=False):
     from lines import ugroups
@@ -218,9 +227,11 @@ def line_fit(expid, tileid, petal, petal_cframes, plot=False):
 
         postfile  = outdir + '/linefits/{:08d}/{}/postages-{:08d}-{}-{}.fits'.format(expid, petal, expid, petal, fid)
         mpostfile = outdir + '/linefits/{:08d}/{}/mpostages-{:08d}-{}-{}.fits'.format(expid, petal, expid, petal, fid)
-
+        ipostfile = outdir + '/linefits/{:08d}/{}/ipostages-{:08d}-{}-{}.fits'.format(expid, petal, expid, petal, fid)
+        
         pickle.dump(result[3], open(postfile,  "wb"))
         pickle.dump(result[4], open(mpostfile, "wb"))
+        pickle.dump(result[5], open(ipostfile, "wb"))
         
         for (fiber, group) in pairs:
             status = result[2][(fiber, group)][0]

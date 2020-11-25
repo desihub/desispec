@@ -7,9 +7,7 @@ import fitsio
 
 from   scipy             import optimize
 from   scipy.optimize    import approx_fprime, minimize, Bounds
-from   scipy.stats       import multivariate_normal
 
-from   desispec.interpolation import resample_flux
 from   doublet import doublet
 from   desispec.io import read_frame
 from   desispec.io.meta import findfile
@@ -19,7 +17,6 @@ from   cframe_postage import cframe_postage
 from   lines import lines, ugroups
 from   doublet_postagefit import doublet_obs, doublet_chi2, doublet_fit
 from   desispec.frame import Spectrum
-from   autograd import grad
 from   twave import twave
 from   astropy.table import Table, vstack  
 from   doublet_priors import gaussian_prior, jeffreys_prior
@@ -27,7 +24,7 @@ from   plot_postages import plot_postages
 
 warnings.filterwarnings('error')
 
-def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit=False):
+def series_fit(rrz, rrzerr, postages, group=3, sig0=41.37, mpostages=None, printit=False, verbose=1):
     '''
     '''
 
@@ -188,7 +185,7 @@ def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit
 
             r         = x[2 * i + 3 + nsinglet]
 
-            prior    *= gaussian_prior(r, 0.70, 0.2)
+            prior    *= gaussian_prior(r, 0.7, 0.2)
             
             for cam in cams:
                 wave  = postage[cam].wave
@@ -211,30 +208,61 @@ def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit
         # Include a parameter prior. 
         nelement   = len(residuals)
 
-        residuals  = [np.sqrt(2. * mlogprior(prior) / (1. + nelement))]            
+        residuals += [np.sqrt(2. * mlogprior(prior) / (1. + nelement))]            
         residuals  = np.array(residuals)
         
         return  residuals
 
     def mloglike(x):
-        return  _X2(x) / 2.
+        raise NotImplementedError()
 
     def mlogpos(x):
-        return  mloglike(x) + mlogprior(x, rrz, rrzerr)
+        return  0.5 * np.sum(_res(x)**2.)
 
     def gradient(x):
         eps    = np.array([rrzerr / 1.e2, 1.] + [1.0] * nsinglet + [0.2, 0.05] * ndoublet)
-        # grad = optimize.approx_fprime(x, mlogpos, epsilon=eps)
-
         grad   = np.zeros_like(x)
 
         for i, element in enumerate(x):
             step     = np.zeros_like(x)
             step[i]  = eps[i]
             grad[i]  = (mlogpos(x + step) - mlogpos(x - step)) / (2. * eps[i])
-        
+
+        # grad = optimize.approx_fprime(x, mlogpos, epsilon=eps) 
+            
         return  grad
+
+    def hessian(x):
+        npar   = len(x)
+
+        eps    = 1.49e-08
+        epss   = np.array([eps, eps] + [eps] * nsinglet + [eps, eps] * ndoublet)
+
+        # epss = np.array([rrzerr / 1.e2, 5.] + [3.0] * nsinglet + [3.0, 0.1] * ndoublet)
         
+        hess   = np.zeros(npar * npar).reshape(npar, npar)
+        zero   = np.zeros_like(x)
+        
+        for j, xj in enumerate(x):
+            for i, xi in enumerate(x):
+                if i <= j:
+                    astep      = np.zeros_like(x)
+                    bstep      = np.zeros_like(x)
+                    
+                    astep[i]   = epss[i]
+                    bstep[j]   = epss[j]
+
+                    hess[i,j]  = mlogpos(x + astep + bstep) - mlogpos(x + astep - bstep) - mlogpos(x - astep + bstep) + mlogpos(x - astep - bstep)
+
+                    hess[i,j] /= (4. * epss[i] * epss[j])
+                    
+                    # Symmetric.
+                    hess[j,i]  = hess[i,j]
+
+                    # print('{} {} {:.10e}'.format(i, j, hess[i,j]))
+                    
+        return  hess
+    
     # x0: [z, v, [ln(line flux) fxor all singlets], [[ln(line flux), line ratio] for all doublets]]                                                                                                                                         
     # print('\n\nBeginning optimisation for line group {}.'.format(group))
 
@@ -312,13 +340,20 @@ def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit
     # bestfit    = result[0]
     # ihess      = result[3]
     # print(bestfit)
+
+    if verbose > 0:
+        print('\n\n')
     
-    result       = scipy.optimize.least_squares(_res, x0, verbose=0, ftol=1.e-8, max_nfev=50)
+    # jac='2-point'
+    result       = scipy.optimize.least_squares(_res, x0, verbose=verbose, ftol=1.e-8, max_nfev=50)
     bestfit      = result.x
 
+    hess         = hessian(bestfit)
+    # ihess      = np.linalg.inv(hess)
+                                          
     # https://astrostatistics.psu.edu/su11scma5/HeavensLecturesSCMAVfull.pdf
     # Note:  marginal errors.
-    # merr         = np.sqrt(np.diag(ihess))
+    # merr       = np.sqrt(np.diag(ihess))
     
     ##
     if mpostages is None:
@@ -369,6 +404,8 @@ def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit
         lineida   = doublet['INDEX'][0]
         lineidb   = doublet['INDEX'][1]
 
+        assert  lineida < lineidb
+        
         linea     = doublet['WAVELENGTH'][0]
         lineb     = doublet['WAVELENGTH'][1]
 
@@ -383,7 +420,6 @@ def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit
 
         r         = bestfit[2 * i + 3 + nsinglet]
         
-        mpostages[group][lineida] = {}
         mpostages[group][lineidb] = {}
         
         for cam in cams:
@@ -397,16 +433,37 @@ def series_fit(rrz, rrzerr, postages, group=3, sig0=50., mpostages=None, printit
             mpostages[group][lineidb][cam]  = doublet_obs(bestfit_z, tw, wave, res, continuum=0.0, sigmav=bestfit_v, r=r, linea=linea, lineb=lineb)
             mpostages[group][lineidb][cam] *= np.exp(lnA)
 
-            mpostages[group][lineida][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
-            mpostages[group][lineidb][cam]  = mpostages[group][lineida][cam]
+            mpostages[group][lineidb][cam]  = Spectrum(wave, mpostages[group][lineidb][cam], ivar, mask=mask, R=res)
+
+        mpostages[group][lineida] = {}
+        
+        postage   = postages[lineida]
+        cams      = list(postage.keys())
+
+        for cam in cams:
+            wave  = postage[cam].wave
+            res   = Resolution(postage[cam].R)
+            ivar  = postage[cam].ivar
+            mask  = postage[cam].mask
+
+            tw    = twave(wave.min(), wave.max())
+
+            mpostages[group][lineida][cam]  = doublet_obs(bestfit_z, tw, wave, res, continuum=0.0, sigmav=bestfit_v, r=r, linea=linea, lineb=lineb)
+            mpostages[group][lineida][cam] *= np.exp(lnA)
+
+            mpostages[group][lineida][cam]  = Spectrum(wave, mpostages[group][lineida][cam], ivar, mask=mask, R=res)
 
         series_params += ['lnA_{:d}-{:d}'.format(lineida, lineidb), 'r_{:d}-{:d}'.format(lineida, lineidb)]
 
     print('\n\nInitialising at:')
     print(series_params)
     print(x0)
-    print('\n\nBest fit found at:')
+    print('\n\nBest fit found at (status {}):'.format(result.status))
     print(result.x)
+    print('\n\nGradient:')
+    print(result.grad)
+    print('\n\nHessian:')
+    print(np.diag(hess))
     
     return  series_params, result, mpostages
 
@@ -426,17 +483,26 @@ if __name__ == '__main__':
     # 14: Failed to fit OI. 
 
     parser   = argparse.ArgumentParser()
-    parser.add_argument('--fiber', type=int, help='...')
+    parser.add_argument('--fiber', type=int, default=None, help='...')
+    parser.add_argument('--petal', type=str, default='9')
+    parser.add_argument('--targetid', type=int, default=None) 
     parser.add_argument('--plotspectra', type=int, default=0, help='...')
+    parser.add_argument('--night', type=str, default='20200303')
+    parser.add_argument('--expid', type=np.int, default=52935)
+    parser.add_argument('--tileid', type=str, default='70500')
     
     args     = parser.parse_args()
     
-    petal    = '3'
+    petal    = args.petal
     fiber    = args.fiber
-    night    = '20200315'
-    expid    = 55654
-    tileid   = '66003'
-            
+    tid      = args.targetid
+    night    = args.night
+    expid    = args.expid
+    tileid   = args.tileid
+
+    if (args.fiber is not None) and (args.targetid is not None):
+        raise ValueError('Specify either fiber or targetid.')
+    
     cframes  = {}
     colors   = {'b': 'b', 'r': 'g', 'z': 'r'}
     '''
@@ -457,13 +523,33 @@ if __name__ == '__main__':
 
         fibermap     = fitsio.read(fpath, ext='FIBERMAP')
 
-        tid = fibermap['TARGETID'][fiber]
-        
+        if fiber is not None:
+            tid = fibermap['TARGETID'][fiber]
+            status = fibermap['FIBERSTATUS'][fiber]
+
+        else:
+            fiber = fibermap['TARGETID'] == args.targetid
+
+            if np.count_nonzero(fiber) > 0:                
+                fiber = np.arange(len(fibermap['TARGETID']))[fiber][0]
+
+                print(fiber)
+                
+            else:
+                raise ValueError('TARGETID {} not present in petal {} of exp. {}'.format(args.targetid, args.petal, expid))
+            
+            status = fibermap['FIBERSTATUS'][fiber]
+            
         cframes[cam] = read_frame(fpath)        
         # cframes[cam].flux[fiber,:] = flux[band][115]
 
         print('Fetched {}.'.format(fpath))
 
+    if status > 0:
+        print('\n\nFIBERSTATUS flagged. Done.\n\n')
+
+        exit(0)
+        
     zbest    = Table.read(os.path.join('/global/homes/m/mjwilson/andes/', 'tiles', tileid, night, 'zbest-{}-{}-{}.fits'.format(petal, tileid, night)), 'ZBEST')
     row      = zbest['TARGETID'] == tid
     rrz      = zbest['Z'].data[row][0]
@@ -479,9 +565,9 @@ if __name__ == '__main__':
             ax.axvline((1. + rrz) * line['WAVELENGTH'], c='k', alpha=0.25, lw=0.5)
 
             if ((1. + rrz) * line['WAVELENGTH'] > 4.e3):
-                ax.text((1. + rrz) * line['WAVELENGTH'], np.random.uniform(3., 4.), line['INDEX'], fontsize=6, horizontalalignment='center', verticalalignment='center', rotation=90)
+                ax.text((1. + rrz) * line['WAVELENGTH'], np.random.uniform(3., 10.), line['INDEX'], fontsize=6, horizontalalignment='center', verticalalignment='center', rotation=90)
                 
-        ax.set_title('fiber: {} targetid: {} redshift: {:.2f}'.format(fiber, tid, rrz))
+        ax.set_title('fiber: {} targetid: {} redshift: {:.4f}'.format(fiber, tid, rrz))
         ax.set_xlim(4.e3, 8.e3)
 
         # top=10.0
@@ -515,22 +601,30 @@ if __name__ == '__main__':
     results = {}
 
     for group in groups:
-        try:
-            series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages, printit=False)
-            results[group] = result
-            
-        except:
+        #try:
+        series_params, result, mpostages = series_fit(rrz, rrzerr, postages, group=group, mpostages=mpostages, printit=False)
+        results[group] = result
+        '''    
+        except Exception as e:
             results[group] = None
         
             print('\n\nFailed with linefit of group: {}.'.format(group))
-        
+            print('\n\n')
+            print(e)
+            print('\n\n')
+        ''' 
     end = time.time()
     
     print('\n\nMinimised in {:.2f} seconds.'.format(end - start))
+
+    fig = plot_postages(postages, ipostages, petal, fiber, rrz, tid, results=results)
+    fig.savefig('ipostages.pdf', bbox_inches='tight')
+
+    pl.show()
     
     ## 
     fig = plot_postages(postages, mpostages, petal, fiber, rrz, tid, results=results)
-    fig.savefig('postages.pdf', bbox_inches='tight')
+    fig.savefig('mpostages.pdf', bbox_inches='tight')
 
     pl.show()
     

@@ -11,8 +11,8 @@ from   jax.experimental  import optimizers
 from   scipy.optimize    import leastsq
 from   numba             import jit
 
-# from   desispec.interpolation import resample_flux
-from   resample_flux import resample_flux
+from   desispec.interpolation import resample_flux
+# from   resample_flux import resample_flux
 
 from   doublet import doublet
 from   desispec.io import read_frame

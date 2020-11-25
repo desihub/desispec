@@ -84,7 +84,7 @@ def cframe_postage(petal_cframes, fiber, redshift, ipostage=True, printit=False)
                 postages[group][sample['INDEX'][i]][cam]       = instance
 
                 if ipostage:
-                    ipostages[group][sample['INDEX'][i]][cam]  = doublet_obs(redshift, instance.wave, instance.wave, Resolution(instance.R), continuum=0.0, sigmav=90.0, r=0.0, linea=0.0, lineb=line)
+                    ipostages[group][sample['INDEX'][i]][cam]  = doublet_obs(redshift, instance.wave, instance.wave, Resolution(instance.R), continuum=0.0, sigmav=41.37, r=0.0, linea=0.0, lineb=line)
                     ipostages[group][sample['INDEX'][i]][cam] *= instance.meta['LINEFLUX'][0]
                     ipostages[group][sample['INDEX'][i]][cam]  = Spectrum(instance.wave, ipostages[group][sample['INDEX'][i]][cam], instance.ivar, mask=instance.mask, R=instance.R)
                 
