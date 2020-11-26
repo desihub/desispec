@@ -180,7 +180,8 @@ class TestRunCmd(unittest.TestCase):
         del os.environ['SLURM_CPUS_PER_TASK']
         importlib.reload(dpl)
         import multiprocessing
-        self.assertEqual(dpl.default_nproc, multiprocessing.cpu_count()//2)
+        
+        self.assertEqual(dpl.default_nproc, max(multiprocessing.cpu_count()//2, 1))
 
     @classmethod
     def setUpClass(cls):
