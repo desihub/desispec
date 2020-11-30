@@ -89,7 +89,7 @@ def _clipped_std_bias(nsigma):
     stdbias = np.sqrt(1 - 2*a*np.exp(-a**2/2.) / (np.sqrt(2*np.pi) * erf(a/np.sqrt(2))))
     return stdbias
 
-def _overscan(pix, nsigma=5, niter=3):
+def _overscan(pix, mask=None, nsigma=5, niter=3):
     """
     Calculates overscan, readnoise from overscan image pixels
 
@@ -97,6 +97,7 @@ def _overscan(pix, nsigma=5, niter=3):
         pix (ndarray) : overscan pixels from CCD image
 
     Optional:
+        mask (int array): 0 means no mask otherwise masked
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
 
@@ -108,28 +109,57 @@ def _overscan(pix, nsigma=5, niter=3):
     log=get_logger()
     #- normalized median absolute deviation as robust version of RMS
     #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
-    overscan = np.median(pix)
-    absdiff = np.abs(pix - overscan)
-    readnoise = 1.4826*np.median(absdiff)
-
-    #- input pixels are integers, so iteratively refit
-    for i in range(niter):
-        absdiff = np.abs(pix - overscan)
-        good = absdiff < nsigma*readnoise
-        if np.sum(good)<5 :
-            log.error("error in sigma clipping for overscan measurement, return result without clipping")
-            overscan = np.median(pix)
-            absdiff = np.abs(pix - overscan)
-            readnoise = 1.4826*np.median(absdiff)
-            return overscan,readnoise
-        overscan = np.mean(pix[good])
-        readnoise = np.std(pix[good])
-
-    #- correct for bias from sigma clipping
-    readnoise /= _clipped_std_bias(nsigma)
+    overscan, readnoise = _sigma_clip(pix, mask=mask, nsigma=nsigma, niter=niter)
 
     return overscan, readnoise
 
+
+def _sigma_clip(data, mask=None, nsigma=5, niter=3):
+    """
+    Calculates sigma clipped mean and stddev from data
+
+    Args:
+        data (ndarray) : input data
+
+    Optional:
+        mask (int array): 0 means no mask otherwise masked
+        nsigma (float) : number of standard deviations for sigma clipping
+        niter (int) : number of iterative refits
+
+    Returns:
+        mean_clip (float): Mean, sigma-clipped value
+        std_clip (float): sigma-clipped stddev
+
+    """
+    log=get_logger()
+    #- normalized median absolute deviation as robust version of RMS
+    #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
+    if mask != None:
+        if len(mask.ravel()) != len(data.ravel()):
+            log.error("length of data and mask are not consistent, abandon mask")
+        else:
+            data = data[mask != 0]
+    mean_clip = np.median(data)
+    absdiff = np.abs(data - mean_clip)
+    std_clip = 1.4826*np.median(absdiff)
+
+    #- input pixels are integers, so iteratively refit
+    for i in range(niter):
+        absdiff = np.abs(data - mean_clip)
+        good = absdiff < nsigma*std_clip
+        if np.sum(good)<5 :
+            log.error("error in sigma clipping, return result without clipping")
+            mean_clip = np.median(data)
+            absdiff = np.abs(data - mean_clip)
+            std_clip = 1.4826*np.median(absdiff)
+            return mean_clip, std_clip
+        mean_clip = np.mean(data[good])
+        std_clip = np.std(data[good])
+
+    #- correct for bias from sigma clipping
+    std_clip /= _clipped_std_bias(nsigma)
+
+    return mean_clip, std_clip
 
 def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
     """
@@ -614,10 +644,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if 'preproc' in desispec_params and len(rawimage)>4000: # There are 1100*900 b0 image in the test script
             header['OVSRDN'+amp] = (median_rdnoise,rdnoise_message)
             ind=desispec_params['preproc']['rdnoise']['PARAMS']['OBSRDN'+amp+'_'+camera.upper()[0]]
+            header['OBSRDN'+amp+'_'+camera.upper()[0]]=ind
             ind_sec = parse_sec_keyword(ind)
             d=rawimage[ind_sec]
             d = d[~np.isnan(d)].ravel()
-            header['OBSRDN'+amp]=(gain*(np.percentile(d,84)-np.percentile(d,16))/2.,rdnoise_message)
+            header['OBSRDN'+amp]=(gain*_sigma_clip(d)[1],rdnoise_message)
         else:
             header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message)
 
