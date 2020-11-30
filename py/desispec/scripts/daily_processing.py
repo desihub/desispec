@@ -19,7 +19,7 @@ from desispec.workflow.proctable import default_exptypes_for_proctable, get_proc
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
-from desispec.workflow.queue import update_from_queue, any_not_successful
+from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              expobstypes=None, procobstypes=None, camword=None, override_night=None, tab_filetype='csv', queue='realtime',
@@ -88,8 +88,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     if dry_run:
         speed_modifier = 0.1
 
-
-
     ## Get context specific variable values
     surveynum = get_surveynum(night)
     nersc_start = nersc_start_time(night=true_night)
@@ -123,8 +121,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     table_types = ['etable','ptable','unproc_table']
 
     ## Load in the files defined above
-    etable, ptable, unproc_table = load_tables(fullpathnames=table_pathnames,\
-                                               tabtypes=table_types)
+    etable, ptable, unproc_table = load_tables(tablenames=table_pathnames, \
+                                               tabletypes=table_types)
 
     ## Get relevant data from the tables
     all_exps = set(etable['EXPID'])
@@ -209,8 +207,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 last_not_dither = (prow['OBSDESC'] != 'dither')
 
             time.sleep(10)
-            write_tables( [etable, ptable, unproc_table],
-                          fullpathnames=[exp_table_pathname,proc_table_pathname,unproc_table_pathname] )
+            write_tables([etable, ptable, unproc_table],
+                         tablenames=[exp_table_pathname, proc_table_pathname, unproc_table_pathname])
 
         print("\nReached the end of curent iteration of new exposures.")
         print("Waiting {}s before looking for more new data".format(data_cadence_time*speed_modifier))
@@ -245,12 +243,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     # ## Now we resubmit failed jobs and their dependencies until all jobs have un-submittable end state
     # ## e.g. they either succeeded or failed with a code-related issue
     # ii,nsubmits = 0, 0
-    # while ii < 4 and any_not_successful(ptable['STATUS']):
+    # while ii < 4 and any_jobs_not_complete(ptable['STATUS']):
     #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
     #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
     #                                                       ptab_name=proc_table_pathname, dry_run=dry_run)
     #     write_table(ptable, tablename=proc_table_pathname)
-    #     if any_not_successful(ptable['STATUS']):
+    #     if any_jobs_not_complete(ptable['STATUS']):
     #         time.sleep(queue_cadence_time*speed_modifier)
     #
     #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)

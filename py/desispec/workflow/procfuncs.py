@@ -561,7 +561,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         time.sleep(2)
         if submits % 10 == 0:
             if ptab_name is None:
-                write_table(proc_table, table_type='processing', overwrite=True)
+                write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
             time.sleep(60)
@@ -569,7 +569,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
             time.sleep(540)
             proc_table = update_from_queue(proc_table)
             if ptab_name is None:
-                write_table(proc_table, table_type='processing', overwrite=True)
+                write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
 

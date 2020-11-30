@@ -54,9 +54,6 @@ def get_surveynum(night, survey_definitions=None):
 def night_to_month(night):
     return str(night)[:-2]
 
-
-
-
 def get_exposure_table_name(night=None, extension='csv'):
     # if night is None and 'PROD_NIGHT' in os.environ:
     #     night = os.environp['PROD_NIGHT']
