@@ -3,125 +3,103 @@ import fitsio
 from fitsio import FITS,FITSHDR
 
 import numpy as np
-import specter.psf
+import specex as spx
 
-def write_psf(pyps,opts):
+def write_psf(pyps,opts):    
     
-    import specex as spx
-    specter_psf = specter.psf.GaussHermitePSF(opts.output_fits_filename)
-    
-    # SOME VARIABLES HARD CODED FOR DEVELOPMENT FOR LATER REPLACEMENT 
-    # BY QUERIES TO specex.get_* METHODS
-    nrows=59
-    ntab1=4
-    ntab2=500
-    
-    # GET TRACES
+    # initialize table writing
+    spx.tablewrite_init(pyps)
+
+    # get traces
     xtrace=spx.get_trace(pyps,'x')
     ytrace=spx.get_trace(pyps,'y')
+
+    xtrace = np.reshape(xtrace,(pyps.nfibers,pyps.trace_ncoeff))
+    ytrace = np.reshape(ytrace,(pyps.nfibers,pyps.trace_ncoeff))
     
-    xtrace = np.reshape(xtrace,(500,7))
-    ytrace = np.reshape(ytrace,(500,7))
-    
-    # GET TRACE KEYS
-    fiberkeys = spx.VectorInt()
-    wavekeys  = spx.VectorDouble()
-    spx.get_tracekeys(pyps,fiberkeys,wavekeys)
-    
-    mjd             = spx.VectorLongLong()
-    plate_id        = spx.VectorLongLong()
-    camera_id       = spx.VectorString()
-    arc_exposure_id = spx.VectorLongLong()
-    NPIX_X          = spx.VectorLongLong()
-    NPIX_Y          = spx.VectorLongLong()
-    hSizeX          = spx.VectorLongLong()
-    hSizeY          = spx.VectorLongLong()
-    nparams_all     = spx.VectorLongLong()
-    ncoeff          = spx.VectorLongLong()
-    GHDEGX          = spx.VectorLongLong()
-    GHDEGY          = spx.VectorLongLong()
-    psf_error       = spx.VectorDouble()
-    readout_noise   = spx.VectorDouble()
-    gain            = spx.VectorDouble()
-    
-    spx.get_tablekeys(pyps,mjd,plate_id,camera_id,arc_exposure_id,
-                      NPIX_X,NPIX_Y,hSizeX,hSizeY,
-                      nparams_all,ncoeff,GHDEGX,GHDEGY,
-                      psf_error,readout_noise,gain)
-    
-    # GET TABLE
+    # get table
     table_col0 = spx.VectorString()
     table_col1 = spx.VectorDouble()
     table_col2 = spx.VectorInt()
     table_col3 = spx.VectorInt()
     
-    spx.get_table(pyps,table_col0,table_col1,table_col2,table_col3)
+    table_bundle_id       = spx.VectorInt()
+    table_bundle_ndata    = spx.VectorInt()
+    table_bundle_nparams  = spx.VectorInt()
+    table_bundle_chi2pdf  = spx.VectorDouble()
     
+    spx.get_table(pyps,table_col0,table_col1,table_col2,table_col3,
+                  table_bundle_id,table_bundle_ndata,table_bundle_nparams,
+                  table_bundle_chi2pdf)
     
-    # CONVERT COLUMNS 1-3 TO NUMPY ARRAYS OF THE CORRECT DIMENSIONS
+    # copy columns to numpy arrays 
     col0 = table_col0
-    col1 = np.zeros((nrows,ntab2,ntab1))
-    col2 = np.zeros( nrows)
-    col3 = np.zeros( nrows)
-    
-    print(table_col0)
+    col1 = np.zeros((pyps.table_nrows,pyps.nfibers,pyps.ncoeff))
+    col2 = np.zeros( pyps.table_nrows)
+    col3 = np.zeros( pyps.table_nrows)
+
     i = 0
-    for r in np.arange(nrows):
-        for t2 in np.arange(ntab2):
-            for t1 in np.arange(ntab1):
+    for r in np.arange(pyps.table_nrows):
+        for t2 in np.arange(pyps.nfibers):
+            for t1 in np.arange(pyps.ncoeff):
                 col1[r,t2,t1] = table_col1[i]
                 i += 1
-                col2[r] = table_col2[r]
-                col3[r] = table_col3[r]
-                
-    # LOAD TABLE INTO data ARRAY FOR WRITING
-    data = np.zeros(nrows, dtype=[('PARAM',   'U8'),
-                                  ('COEFF',   'f8', (ntab2,ntab1)),
-                                  ('LEGDEGX', 'i4'),
-                                  ('LEGDEGW', 'i4')])
+        col2[r] = table_col2[r]
+        col3[r] = table_col3[r]
+
+    # load table into data array for writing
+    data = np.zeros(pyps.table_nrows,
+                    dtype=[('PARAM',   'U8'),
+                           ('COEFF',   'f8', (pyps.nfibers,pyps.ncoeff)),
+                           ('LEGDEGX', 'i4'),
+                           ('LEGDEGW', 'i4')]
+    )
     
     data['PARAM']   = col0 
     data['COEFF']   = col1
     data['LEGDEGX'] = col2
     data['LEGDEGW'] = col3
-    
-    # OPEN FITSFILE
+
+    # pad PARAM strings left justified with spaces to 8 characters
+    i=0
+    for param in data['PARAM']:
+        data['PARAM'][i] = param.ljust(8,' ')
+        i += 1
+        
+    # open fitsfile
     fitsfile = FITS('fio.fits','rw',clobber=True)
 
-    # WRITE XTRACE
+    # write xtrace
     fitsfile.write(xtrace)
     
-    fitsfile[0].write_key('EXTNAME','XTRACE','')
-    fitsfile[0].write_key('FIBERMIN',fiberkeys[0])
-    fitsfile[0].write_key('FIBERMAX',fiberkeys[1])
-    fitsfile[0].write_key('WAVEMIN',wavekeys[0])
-    fitsfile[0].write_key('WAVEMAX',wavekeys[1])
-    fitsfile[0].write_key('PSFTYPE','GAUSS-HERMITE')
-    fitsfile[0].write_key('PSFVER', 3)
+    fitsfile[0].write_key('EXTNAME',  'XTRACE','')
+    fitsfile[0].write_key('FIBERMIN', pyps.FIBERMIN)
+    fitsfile[0].write_key('FIBERMAX', pyps.FIBERMAX)
+    fitsfile[0].write_key('WAVEMIN',  pyps.trace_WAVEMIN)
+    fitsfile[0].write_key('WAVEMAX',  pyps.trace_WAVEMAX)
+    fitsfile[0].write_key('PSFTYPE',  'GAUSS-HERMITE')
+    fitsfile[0].write_key('PSFVER',   3)
+    
     fitsfile[0].write_comment('PSF generated by specex, https://github.com/desihub/specex')
 
-    # WRITE YTRACE
+    # write ytrace
     fitsfile.write(ytrace)
 
-    fitsfile[1].write_key('PCOUNT',0,'required keyword; must = 0')
-    fitsfile[1].write_key('GCOUNT',1,'required keyword; must = 1')
-    fitsfile[1].write_key('EXTNAME','YTRACE','')
-    fitsfile[1].write_key('FIBERMIN',fiberkeys[0],'')
-    fitsfile[1].write_key('FIBERMAX',fiberkeys[1],'')
-    fitsfile[1].write_key('WAVEMIN',wavekeys[0],'')
-    fitsfile[1].write_key('WAVEMAX',wavekeys[1],'')
+    fitsfile[1].write_key('PCOUNT',   0,'required keyword; must = 0')
+    fitsfile[1].write_key('GCOUNT',   1,'required keyword; must = 1')
+    fitsfile[1].write_key('EXTNAME',  'YTRACE')
+    fitsfile[1].write_key('FIBERMIN', pyps.FIBERMIN)
+    fitsfile[1].write_key('FIBERMAX', pyps.FIBERMAX)
+    fitsfile[1].write_key('WAVEMIN',  pyps.trace_WAVEMIN)
+    fitsfile[1].write_key('WAVEMAX',  pyps.trace_WAVEMAX)
 
-    # WRITE TABLE
+    # write table
     fitsfile.write(data)
 
-    # WRITE REFORMATTED HEADER KEYS
-    fitsfile[2].write_key('TDIM3   ','( 1)','dimension')
-    fitsfile[2].write_key('TDIM4   ','( 1)','dimension')
-
-    # WRITE COMMENTS
+    # write comments
     fitsfile[2].write_comment('------------------------------------------------------------------------')
-    fitsfile[2].write_comment('PSF generated by specex, https://github.com/julienguy/spece')
-    fitsfile[2].write_comment('PSF fit date 2020-11-12')
+    fitsfile[2].write_comment('PSF generated by specex, https://github.com/julienguy/specex')
+    fitsfile[2].write_comment('PSF fit date 2020-11-12') # HARDCODED FOR DEV
     fitsfile[2].write_comment('-')
     fitsfile[2].write_comment('Each row of the table contains the data vector of one PSF parameter')
     fitsfile[2].write_comment('The size of the vector is ((FIBERMAX-FIBERMIN+1)*(LEGDEG+1))')
@@ -148,33 +126,55 @@ def write_psf(pyps,opts):
     fitsfile[2].write_comment('PSF_tail is not, it is evaluated at center of pixel')
     fitsfile[2].write_comment('------------------------------------------------------------------------')
 
-    # WRITE KEYS
+    # write keys
     fitsfile[2].write_key('EXTNAME','PSF','');    
     fitsfile[2].write_key('PSFTYPE','GAUSS-HERMITE','');
     fitsfile[2].write_key('PSFVER','3','');
     
-    fitsfile[2].write_key('MJD',mjd[0],'MJD of arc lamp exposure');
-    fitsfile[2].write_key('PLATEID',plate_id[0],'plate ID of arc lamp exposure');
-    fitsfile[2].write_key('CAMERA',camera_id[0],'camera ID');
-    fitsfile[2].write_key('ARCEXP',arc_exposure_id[0],'ID of arc lamp exposure used to fit PSF');
+    fitsfile[2].write_key('MJD',pyps.mjd,'MJD of arc lamp exposure');
+    fitsfile[2].write_key('PLATEID',pyps.plate_id,'plate ID of arc lamp exposure');
+    fitsfile[2].write_key('CAMERA',pyps.camera_id,'camera ID');
+    fitsfile[2].write_key('ARCEXP',pyps.arc_exposure_id,'ID of arc lamp exposure used to fit PSF');
     
-    fitsfile[2].write_key('NPIX_X',NPIX_X[0],'number of columns in input CCD image');
-    fitsfile[2].write_key('NPIX_Y',NPIX_Y[0],'number of rows in input CCD image');
-    fitsfile[2].write_key('HSIZEX',hSizeX[0],'Half size of PSF in fit, NX=2*HSIZEX+1');
-    fitsfile[2].write_key('HSIZEY',hSizeY[0],'Half size of PSF in fit, NY=2*HSIZEY+1');
-    fitsfile[2].write_key('FIBERMIN',fiberkeys[0],'first fiber (starting at 0)');
-    fitsfile[2].write_key('FIBERMAX',fiberkeys[1],'last fiber (included)');
-    fitsfile[2].write_key('NPARAMS',nparams_all[0],'number of PSF parameters');
-    fitsfile[2].write_key('LEGDEG',(ncoeff[0]-1),'degree of Legendre pol.(wave) for parameters');
-    fitsfile[2].write_key('GHDEGX',GHDEGX[0],'degree of Hermite polynomial along CCD columns');
-    fitsfile[2].write_key('GHDEGY',GHDEGY[0],'degree of Hermite polynomial along CCD rows');
-    fitsfile[2].write_key('WAVEMIN',wavekeys[0],'minimum wavelength (A), used for the Legendre polynomials');
-    fitsfile[2].write_key('WAVEMAX',wavekeys[1],'maximum wavelength (A), used for the Legendre polynomials');    
-    fitsfile[2].write_key('PSFERROR',psf_error[0],'assumed PSF fractional error in chi2');
-    fitsfile[2].write_key('READNOIS',readout_noise[0],'assumed read out noise in chi2');
-    fitsfile[2].write_key('GAIN',gain[0],'assumed gain in chi2');
-    
-    # CLOSE FITS FILE
+    fitsfile[2].write_key('NPIX_X',pyps.NPIX_X,'number of columns in input CCD image');
+    fitsfile[2].write_key('NPIX_Y',pyps.NPIX_Y,'number of rows in input CCD image');
+    fitsfile[2].write_key('HSIZEX',pyps.hSizeX,'Half size of PSF in fit, NX=2*HSIZEX+1');
+    fitsfile[2].write_key('HSIZEY',pyps.hSizeY,'Half size of PSF in fit, NY=2*HSIZEY+1');
+    fitsfile[2].write_key('FIBERMIN',pyps.FIBERMIN,'first fiber (starting at 0)');
+    fitsfile[2].write_key('FIBERMAX',pyps.FIBERMAX,'last fiber (included)');
+    fitsfile[2].write_key('NPARAMS',pyps.nparams_all,'number of PSF parameters');
+    fitsfile[2].write_key('LEGDEG',(pyps.ncoeff-1),'degree of Legendre pol.(wave) for parameters');
+    fitsfile[2].write_key('GHDEGX',pyps.GHDEGX,'degree of Hermite polynomial along CCD columns');
+    fitsfile[2].write_key('GHDEGY',pyps.GHDEGY,'degree of Hermite polynomial along CCD rows');
+    fitsfile[2].write_key('WAVEMIN',pyps.table_WAVEMIN,'minimum wavelength (A), used for the Legendre polynomials');
+    fitsfile[2].write_key('WAVEMAX',pyps.table_WAVEMAX,'maximum wavelength (A), used for the Legendre polynomials');    
+    fitsfile[2].write_key('PSFERROR',pyps.psf_error,'assumed PSF fractional error in chi2');
+    fitsfile[2].write_key('READNOIS',pyps.readout_noise,'assumed read out noise in chi2');
+    fitsfile[2].write_key('GAIN',pyps.gain,'assumed gain in chi2');
+
+    i=0
+    for bid in table_bundle_id:
+        ndata   = table_bundle_ndata[i]
+        nparams = table_bundle_nparams[i]
+        chi2pdf = table_bundle_chi2pdf[i]
+        i += 1
+
+        keybase = 'B'+str(bid).rjust(2,'0')
+        print(keybase)
+        # chi2
+        fitsfile[2].write_key(
+            keybase+'RCHI2',chi2pdf,'best fit chi2/ndf for fiber bundle '
+            +str(bid))
+        # ndata
+        fitsfile[2].write_key(
+            keybase+'NDATA',ndata,'number of pixels in fit for fiber bundle '
+            +str(bid))
+        # chi2
+        fitsfile[2].write_key(
+            keybase+'NPAR ',nparams,'number of parameters in fit for fiber bundle '
+            +str(bid))
+                
+    # close fits file
     fitsfile.close()
 
     return 
