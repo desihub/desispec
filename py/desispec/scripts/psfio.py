@@ -161,6 +161,7 @@ def write_psf(pyps,opts):
 
         keybase = 'B'+str(bid).rjust(2,'0')
         print(keybase)
+        
         # chi2
         fitsfile[2].write_key(
             keybase+'RCHI2',chi2pdf,'best fit chi2/ndf for fiber bundle '
