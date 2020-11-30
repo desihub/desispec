@@ -125,10 +125,7 @@ if not only_rows_or_columns :
         for i in range(n0) :
             mask[i]=scipy.ndimage.filters.median_filter(mask[i],args.npix)
 
-
-
-#chi2=ivar*flux**2
-pyfits.writeto(args.out, mask, overwrite=True)
-
-
-#plt.show()
+hdu=pyfits.PrimaryHDU(mask.astype("int16"))
+hdu.header["EXTNAME"] = "MASK"
+hdu.header["BUNIT"] = ""
+hdu.writeto(args.out, overwrite=True)
