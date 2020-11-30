@@ -958,7 +958,7 @@ def read_dark(filename=None, camera=None, dateobs=None, exptime=None):
             profile_2d = recover_2d_dark(hdus,min_exptime,ext_arr[str(int(min_exptime))])
         elif exptime > max_exptime :
             log.warning("Use 2D dark profile at max. exptime={}".format(max_exptime))
-            profile_2d = recover_2d_dark(hdus,max_exptime,ext_arr[str(int(max_exptime_arr))])
+            profile_2d = recover_2d_dark(hdus,max_exptime,ext_arr[str(int(max_exptime))])
         else: # Interpolate
             exptime_arr=np.sort(exptime_arr)
             ind=np.where(exptime_arr>exptime)
