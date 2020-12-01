@@ -210,7 +210,7 @@ def main(args=None):
     else:
         log.info(f'All {num_cameras} cameras successfully preprocessed')
 
-    return num_failed
+    return int(num_failed)
 
 def _preproc_file_kwargs_wrapper(opts):
     """
