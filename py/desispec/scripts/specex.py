@@ -302,59 +302,43 @@ def main(args, comm=None):
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
-        argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) \
-            for i in range(argc)]
-        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in \
-            map(ct.addressof, arg_buffers) ]
-        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
-
         # old way 
+
+        # argc = len(com)
+        # arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) \
+        #     for i in range(argc)]
+        # addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in \
+        #     map(ct.addressof, arg_buffers) ]
+        # arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)        
         # rval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
 
         # new way
-        specex_image_io = False
 
+        # instantiate specex c++ objects exposed to python        
         opts = spx.PyOptions() # input options
         pyio = spx.PyIO()      # IO options and methods
         pypr = spx.PyPrior()   # Gaussian priors
         pyps = spx.PyPSF()     # psf data
         pyft = spx.PyFitting() # psf fitting
 
-        coms = spx.VectorString()
+        # copy com to opaque pybind VectorString object args
+        spxargs = spx.VectorString()
         for strs in com:
-            coms.append(strs)
-        opts.parse(coms)                       # coms is list of args
+            spxargs.append(strs)
+        
+        opts.parse(spxargs)                    # parse args
         pyio.check_input_psf(opts)             # set input psf bools
         pypr.deal_with_priors(opts)            # set Gaussian priors
-
-        fiberkeys = spx.VectorInt()
-        wavekeys  = spx.VectorDouble()
         
-        if specex_image_io:
-            # read preproc images into pymg with specex (harp)
-            pyio.read_img_data(opts,pymg)
-        else:
-            # read preproc images into pymg with desispec (astropy.io.fits)
-            pymg = read_desi_ppimage_spx(opts)
+        pymg = read_desi_ppimage_spx(opts)     # read preproc images (desispec)        
+        pyio.read_psf_data(opts,pyps)          # read psf (specex)        
 
-        pyio.read_psf_data(opts,pyps)          # read psf (specex-py)
+        pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf (specex)
 
-        rval = pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf
+        pyio.prepare_psf(opts,pyps)            # prepare psf (specex)
+        psfio.write_psf(pyps,opts)             # write psf (fitsio)
+        pyio.write_spots(opts,pyps)            # write spots
 
-        # check for fit_psf success
-        if rval != 0:
-            comstr = " ".join(com)
-            log.error("fit_psf on process {} failed with return "
-                "value {} running {}".format(rank, rval, comstr))
-            failcount += 1
-
-        pyio.write_psf_data(opts,pyps) # write psf (specex)
-        psfio.write_psf(pyps,opts)     # write psf (fitsio)
-        pyio.write_spots(opts,pyps)    # write spots
-
-        return
-    
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
@@ -368,7 +352,7 @@ def main(args, comm=None):
 
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
-        args.disable_merge=True
+        args.disable_merge=False
         if args.disable_merge :
             log.info("don't merge")
         else :
