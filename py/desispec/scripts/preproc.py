@@ -197,6 +197,8 @@ def main(args=None):
         pool = mp.Pool(n)
         failed = pool.map(_preproc_file_kwargs_wrapper, opts_array)
         num_failed = np.sum(failed)
+        pool.close()
+        pool.join()
     else:
         log.info(f'Not using multiprocessing for {num_cameras} cameras')
         num_failed = 0

@@ -44,7 +44,7 @@ def write_image(outfile, image, meta=None):
 
     outdir = os.path.dirname(os.path.abspath(outfile))
     if not os.path.isdir(outdir):
-        os.makedirs(outdir)
+        os.makedirs(outdir, exist_ok=True)
 
     hx = fits.HDUList()
     hdu = fits.ImageHDU(image.pix.astype(np.float32), name='IMAGE', header=hdr)
