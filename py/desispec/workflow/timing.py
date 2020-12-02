@@ -148,20 +148,3 @@ def during_operating_hours(dry_run=False, starthour=None, endhour=None):
         return dry_run or (hour < endhour) or (hour > starthour)
     else:
         return dry_run or ( (hour < endhour) and (hour > starthour) )
-
-def get_night_banner(night=None):
-    """
-    Returns a string that when printed shows a banner with the night name in the center.
-
-    Args:
-        night: str or int. The night in YYYYMMDD. By default the current night is used.
-
-    Returns:
-        banner: str. A banner comprised of ascii pound symbols (#) and the given night.
-    """
-    if night is None:
-        night = what_night_is_it()
-    banner = '\n' + '#'*32 + \
-             '\n' + '#'*11 + f' {night} ' + '#'*11 + \
-             '\n' + '#'*32
-    return banner

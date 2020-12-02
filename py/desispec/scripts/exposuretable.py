@@ -8,9 +8,8 @@ from astropy.io import fits
 from desispec.workflow.exptable import summarize_exposure, default_exptypes_for_exptable, get_survey_definitions,\
                                        instantiate_exposure_table, get_exposure_table_name, night_to_month, \
                                        get_surveynum, get_exposure_table_path, get_exposure_table_name, night_to_month, \
-                                       get_exposure_table_column_defs
+                                       get_exposure_table_column_defs, get_night_banner
 from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin
-from desispec.workflow.timing import get_night_banner
 from desispec.workflow.tableio import write_table
 
 

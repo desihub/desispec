@@ -175,6 +175,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 elif 'system test' in erow['PROGRAM'].lower():
                     unproc_table.add_row(erow)
                     continue
+                elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
+                    unproc_table.add_row(erow)
+                    continue
 
                 curtype,curtile = get_type_and_tile(erow)
 
