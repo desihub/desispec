@@ -33,7 +33,7 @@ if __name__ == '__main__':
     if args.nights != 'all':
         args.nights = [ int(val) for val in args.nights.strip("\n\t ").split(",") ]
 
-    if args.science_types is not None:
-        args.science_types = [ val.strip('\t ') for val in args.science_types.split(",") ]
+    if args.obstypes is not None:
+        args.obstypes = [ val.strip('\t ') for val in args.obstypes.split(",") ]
 
     create_processing_tables(**args.__dict__)

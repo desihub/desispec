@@ -24,7 +24,7 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname,
                                               get_desi_proc_batch_file_path
 from desispec.workflow.utils import pathjoin
 from desispec.workflow.tableio import write_table
-
+from desiutil.log import get_logger
 
 #################################################
 ############## Misc Functions ###################
@@ -179,23 +179,24 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    log = get_logger()
     if joint:
         cmd = desi_proc_joint_fit_command(prow, queue=queue)
     else:
         cmd = desi_proc_command(prow, queue=queue)
 
-    #print(cmd)
+    #log.debug(cmd)
 
     scriptpathname = batch_script_name(prow)
     if dry_run:
-        print("Output file would have been: {}".format(scriptpathname))
-        print("Command to be run: {}".format(cmd.split()))
+        log.info("Output file would have been: {}".format(scriptpathname))
+        log.info("Command to be run: {}".format(cmd.split()))
     else:
-        print("Running: {}".format(cmd.split()))
+        log.info("Running: {}".format(cmd.split()))
         scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
                                                        cameras=prow['CAMWORD'], jobdesc=prow['JOBDESC'], \
                                                        queue=queue, cmdline=cmd)
-        print("Outfile is: ".format(scriptpathname))
+        log.info("Outfile is: ".format(scriptpathname))
 
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
@@ -224,6 +225,7 @@ def submit_batch_script(prow, dry_run=False, strictly_successful=False):
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    log = get_logger()
     jobname = batch_script_name(prow)
     dependencies = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
@@ -271,7 +273,7 @@ def submit_batch_script(prow, dry_run=False, strictly_successful=False):
                                                   stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
 
-    print(f'Submitted {jobname}   with dependencies {dep_str}. Returned qid: {current_qid}')
+    log.info(f'Submitted {jobname}  with dependencies {dep_str}. Returned qid: {current_qid}')
 
     prow['LATEST_QID'] = current_qid
     prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
@@ -532,6 +534,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
     """
+    log = get_logger()
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
@@ -549,8 +552,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         if len(qdeps) > 0:
             proc_table['LATEST_DEP_QID'][rown] = qdeps
         else:
-            print("Error: number of qdeps should be 1 or more")
-            print(f'Rown {rown}, ideps {ideps}')
+            log.info("Error: number of qdeps should be 1 or more")
+            log.info(f'Rown {rown}, ideps {ideps}')
 
     proc_table[rown] = submit_batch_script(proc_table[rown], dry_run=dry_run)
     submits += 1

@@ -29,9 +29,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     args.nights = [ int(val) for val in args.nights.strip("\n\t ").split(",") ]
-    if args.science_types is not None:
-        args.science_types = [ val.strip('\t ') for val in args.science_types.split(",") ]
-    print(args.nights)
-    print(args.science_types)
+    if args.obstypes is not None:
+        args.obstypes = [ val.strip('\t ') for val in args.obstypes.split(",") ]
+    print("Nights: ", args.nights)
+    print("Obs types: ", args.obstypes)
 
     create_exposure_tables(**args.__dict__)

@@ -85,6 +85,10 @@ def parse_args():#options=None):
 if __name__ == '__main__':
     args = parse_args()
     if not during_operating_hours(dry_run=args.dry_run) and args.override_night is None:
+        from desispec.workflow.timing import get_nightly_start_time, get_nightly_end_time
+        start = get_nightly_start_time()
+        end = get_nightly_end_time()
+        print(f"Not during operating hours of {start} to {end}. Exiting")
         sys.exit(1)
 
     if not args.ignore_cori_node and socket.gethostname() != 'cori21':
@@ -96,6 +100,7 @@ if __name__ == '__main__':
         if not running:
             print('OK to run')
         else:
+            print("Process is already running. Exiting.")
             sys.exit(1)
 
     if args.cameras is None:

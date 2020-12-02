@@ -6,6 +6,7 @@ import glob
 import json
 import psutil
 
+from desiutil.log import get_logger
 ## Give a shortcut name to os.path.join
 pathjoin = os.path.join
 
@@ -100,10 +101,11 @@ def give_relevant_details(verbose_output, non_verbose_output=None, verbosely=Fal
     Returns:
         Nothing.
     """
+    log = get_logger()
     if verbosely:
-        print(verbose_output)
+        log.info(verbose_output)
     elif non_verbose_output is not None:
-        print(non_verbose_output)
+        log.info(non_verbose_output)
     else:
         pass
 
@@ -121,13 +123,14 @@ def define_variable_from_environment(env_name, var_descr):
         str or Nothing. If the environment variable exists, it returns the value of that environment variable.
                         Otherwise it raises an exit code with status 1.
     """
+    log = get_logger()
     if env_name in os.environ:
         return os.environ[env_name]
     else:
-        print(f'{var_descr} needs to be given explicitly or set using environment variable {env_name}')
+        log.error(f'{var_descr} needs to be given explicitly or set using environment variable {env_name}')
         exit(1)
 
-def verify_variable_with_environment(var, var_name, env_name, output_mechanism=print):
+def verify_variable_with_environment(var, var_name, env_name):
     """
     Helper function that assigns a variable based on the inputs and gives relevant outputs to understand what is being
     done. If the variable is defined, it will make sure that the environment variable (used by some lower-level code)
@@ -138,26 +141,25 @@ def verify_variable_with_environment(var, var_name, env_name, output_mechanism=p
         var, any type. Can be any python data type that can be assigned from an environment variable.
         var_name, str. The name of the variable (used exclusively for outputting useful messages).
         env_name, str. The name of the environment variable that would hold the value relevant to the var variable.
-        output_mechanism, function. A python function that does something with a single string argument. Meant to be
-                                    used with either print or desiutil.logger.(info|debug|error)
 
     Returns:
         var, any type. Either the input var if that is not NoneType. Otherwise the value from the environment variable.
         If neither is defined it exits with status 1 rather than returning anything.
     """
+    log = get_logger()
     if var is not None:
         if env_name in os.environ and var != os.environ[env_name]:
             old = os.environ[env_name]
-            output_mechanism(f"Warning, overwriting what the environment variable is for {env_name}")
-            output_mechanism(f"\tOld {env_name}: {old}")
-            output_mechanism(f"\tNew {env_name}: {var}")
+            log.warning(f"Warning, overwriting what the environment variable is for {env_name}")
+            log.info(f"\tOld {env_name}: {old}")
+            log.info(f"\tNew {env_name}: {var}")
 
         os.environ[env_name] = var
     else:
         if env_name in os.environ:
             var = os.environ[env_name]
         else:
-            output_mechanism(f"Must define either {var_name} or the environment variable {env_name}")
+            log.error(f"Must define either {var_name} or the environment variable {env_name}")
             exit(1)
 
     return var
@@ -175,13 +177,14 @@ def check_running(proc_name='desi_daily_proc_manager', suppress_outputs=False):
          running, bool. True if the process name was found in the list of processes and has a pid different that
                         the current process (signifying a second instance of that program).
     """
+    log = get_logger()
     running = False
     mypid = os.getpid()
     for p in psutil.process_iter():
         if p.pid != mypid and proc_name in ' '.join(p.cmdline()):
             if not suppress_outputs:
-                print('ERROR: {} already running as PID {}:'.format(proc_name, p.pid))
-                print('  ' + ' '.join(p.cmdline()))
+                log.error('ERROR: {} already running as PID {}:'.format(proc_name, p.pid))
+                log.info('  ' + ' '.join(p.cmdline()))
             running = True
             break
     return running

@@ -66,7 +66,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         night = true_night
 
     if continue_looping_debug:
-        print("continue_looping_debug is set. Will continue looking for new data and need to be terminated by the user.")
+        print("continue_looping_debug is set. Will continue looking for new data and needs to be terminated by the user.")
 
     ## Get default values for input variables
     if procobstypes is None:

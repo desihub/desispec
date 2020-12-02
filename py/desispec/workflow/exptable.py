@@ -8,6 +8,7 @@ from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import define_variable_from_environment, pathjoin, give_relevant_details, get_json_dict
 from desispec.workflow.timing import what_night_is_it
+from desiutil.log import get_logger
 
 def get_exposure_table_column_defs(return_default_values=False):
     """
@@ -241,6 +242,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
         OR
         NoneType. If the exposure obstype was not in the requested types (obstypes).
     """
+    log = get_logger()
     ## Define a helper function given the input verbosity.
     def give_details(verbose_output, non_verbose_output=None):
         give_relevant_details(verbose_output, non_verbose_output, verbosely=verbosely)
@@ -323,25 +325,25 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
 
         ## Raw data, so ensure it's read only and close right away just to be safe
         hdulist = fits.open(datapath, mode='readonly')
-        # print(hdulist.info())
+        # log.debug(hdulist.info())
 
         if 'SPEC' in hdulist:
             hdu = hdulist['SPEC']
             if verbosely:
-                print("SPEC found")
+                log.info("SPEC found")
         elif 'SPS' in hdulist:
             hdu = hdulist['SPS']
             if verbosely:
-                print("SPS found")
+                log.info("SPS found")
         else:
-            print(f'{exp}: skipped  -- "SPEC" HDU not found!!')
+            log.info(f'{exp}: skipped  -- "SPEC" HDU not found!!')
             hdulist.close()
             return None
 
         header, specs = dict(hdu.header).copy(), hdu.data.copy()
         hdulist.close()
-        # print(header)
-        # print(specs)
+        # log.debug(header)
+        # log.debug(specs)
 
         ## Define the column values for the current exposure in a dictionary
         outdict = {}
@@ -398,6 +400,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
         #        outdict[nam] = deflt
                 
         if not verbosely:
-            print(f'{exp}: done')
+            log.info(f'{exp}: done')
         return outdict
 

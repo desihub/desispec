@@ -7,7 +7,7 @@ from astropy.table import Table
 ################  Table Functions #################
 ###################################################
 from desispec.workflow.utils import pathjoin
-
+from desiutil.log import get_logger
 
 def ensure_scalar(val, joinsymb='|'):
     """
@@ -92,37 +92,38 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
     Returns:
         Nothing.
     """
+    log = get_logger()
     if tablename is None and tabletype is None:
-        print("Pathname or type of table is required to save the table")
+        log.error("Pathname or type of table is required to save the table")
         return
 
     if tablename is None:
         tablename = translate_type_to_pathname(tabletype)
 
     if not write_empty and len(origtable) == 0:
-        print(f'NOT writing zero length table to {tablename}')
+        log.warning(f'NOT writing zero length table to {tablename}')
         return
         
     if verbose:
-        print("In write table", tablename,'\n', tabletype)
-        print(origtable[0:2])
+        log.info("In write table", tablename,'\n', tabletype)
+        log.info(origtable[0:2])
     basename, ext = os.path.splitext(tablename)
 
     temp_name = f'{basename}.temp{ext}'
     if verbose:
-        print(ext ,temp_name)
+        log.info(ext ,temp_name)
     table = origtable.copy()
 
     if ext in ['.csv', '.ecsv']:
         if verbose:
-            print("Given table: ", table.info)
+            log.info("Given table: ", table.info)
         # replace_cols = {}
 
         for nam in table.colnames:
             ndim = table[nam].ndim
             if ndim > 1 or type(table[nam][0]) in [list, np.ndarray, np.array] or table[nam].dtype is object:
                 if verbose:
-                    print(f'{nam} is {ndim} dimensions, changing to string')
+                    log.info(f'{nam} is {ndim} dimensions, changing to string')
                 col = [ensure_scalar(row, joinsymb=joinsymb) for row in table[nam]]
                 # replace_cols[nam] = Table.Column(name=nam,data=col)
                 if type(table[nam]) is Table.MaskedColumn:
@@ -136,8 +137,8 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
 
         if np.any([c.ndim > 1 or type(table[nam][0]) in [list, np.ndarray, np.array] for c in
                    table.itercols()]) and verbose:
-            print("A column was still more than one dimensional")
-            print(table.info())
+            log.warning("A column was still more than one dimensional")
+            log.info(table.info())
 
         table.write(temp_name, format=f'ascii{ext}', overwrite=overwrite)
     else:
@@ -145,7 +146,7 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
 
     os.rename(temp_name, tablename)
     if verbose:
-        print("Written table: ", table.info)
+        log.info("Written table: ", table.info)
 
 
 def translate_type_to_pathname(tabletype):
@@ -199,16 +200,17 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
     """
     from desispec.workflow.exptable import instantiate_exposure_table, get_exposure_table_column_defs
     from desispec.workflow.proctable import instantiate_processing_table, get_processing_table_column_defs
+    log = get_logger()
 
     if tablename is None:
         if tabletype is None:
-            print("Must specify either tablename or tabletype in load_table()")
+            log.error("Must specify either tablename or tabletype in load_table()")
             return None
         else:
             tablename = translate_type_to_pathname(tabletype)
     else:
         if tabletype is None:
-            print("tabletype not given in load_table(), trying to guess based on filename")
+            log.info("tabletype not given in load_table(), trying to guess based on filename")
             filename = os.path.split(tablename)[1]
             if 'exposure' in filename:
                 tabletype = 'exposure'
@@ -222,14 +224,14 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                 tabletype = 'processing'
 
             if tabletype is None:
-                print(f"Couldn't identify type based on filename {filename}")
+                log.warning(f"Couldn't identify type based on filename {filename}")
             else:
-                print(f"Based on filename {filename}, identified type as {tabletype}")
+                log.info(f"Based on filename {filename}, identified type as {tabletype}")
 
     if os.path.isfile(tablename):
-        print(f"Found table: {tablename}")
+        log.info(f"Found table: {tablename}")
     elif tabletype is not None:
-        print(f'Table {tablename} not found, creating new table of type {tabletype}')
+        log.info(f'Table {tablename} not found, creating new table of type {tabletype}')
         if tabletype.lower() in ['exp', 'exposure', 'etable']:
             return instantiate_exposure_table()
         elif tabletype.lower() in ['unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
@@ -237,10 +239,10 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
         elif tabletype.lower() in ['proc', 'processing', 'int', 'ptable', 'interal']:
             return instantiate_processing_table()
         else:
-            print(f"Couldn't create type {tabletype}, unknown table type")
+            log.warning(f"Couldn't create type {tabletype}, unknown table type")
             return None
     else:
-        print(f"In load_table:\n\tCouldn't find: {tabletype} and tabletype not specified, returning None")
+        log.error(f"In load_table:\n\tCouldn't find: {tabletype} and tabletype not specified, returning None")
         return None
 
     basename, ext = os.path.splitext(tablename)
@@ -248,7 +250,7 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
         table = Table.read(tablename, format=f'ascii{ext}')
 
         if verbose:
-            print("Raw loaded table: ", table.info)
+            log.info("Raw loaded table: ", table.info)
 
         if tabletype.lower() in ['exp', 'exposure', 'etable', 'unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
             colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
@@ -287,7 +289,7 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
         table = Table.read(tablename)
 
     if verbose:
-        print("Expanded table: ", table.info)
+        log.info("Expanded table: ", table.info)
     return table
 
 def guess_default_by_dtype(typ):
@@ -342,6 +344,8 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
                                mixin strings expanded back into np.array's.
         dtyp, DataType. The data type of a row element in the return col.
     """
+    log = get_logger()
+
     if default is None:
         default = guess_default_by_dtype(typ)
 
@@ -361,13 +365,13 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
     firsttype = type(first)
 
     if verbose:
-        print(first, firsttype, firsttype in [str, np.str, np.str_])
+        log.debug(first, firsttype, firsttype in [str, np.str, np.str_])
     if process_mixins and firsttype in [str, np.str, np.str_] and joinsymb in first:
         do_split_str = True
         if typ not in [list, np.array, np.ndarray]:
-            print("Found mixin column with scalar datatype:")
-            print("\tcolname={nam}, first={first}, typefirst={firsttyp}, dtype={typ}")
-            print("\tchanging to np.array datatype")
+            log.warning("Found mixin column with scalar datatype:")
+            log.info("\tcolname={nam}, first={first}, typefirst={firsttyp}, dtype={typ}")
+            log.info("\tchanging to np.array datatype")
             dtyp = np.array
     else:
         do_split_str = False
@@ -384,7 +388,7 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
             col.append(rowdat)
 
     if verbose:
-        print(col)
+        log.info(col)
 
     return col, dtyp
 
@@ -408,8 +412,9 @@ def write_tables(tables, tablenames=None, tabletypes=None, write_empty=False, ve
     Returns:
         Nothing.
     """
+    log = get_logger()
     if tablenames is None and tabletypes is None:
-        print("Need to define either tablenames or the table types in write_tables")
+        log.error("Need to define either tablenames or the table types in write_tables")
     elif tablenames is None:
         for tabl, tabltyp in zip(tables, tabletypes):
             if write_empty or len(tabl) > 0:

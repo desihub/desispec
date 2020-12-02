@@ -90,8 +90,7 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
         else:
             combined_table = vstack([combined_table, exptable])
 
-    processing_table, unprocessed_table = exptable_to_proctable(combined_table, obstypes=obstypes,
-                                                                joinsymb=joinsymb)
+    processing_table, unprocessed_table = exptable_to_proctable(combined_table, obstypes=obstypes)#,joinsymb=joinsymb)
 
     ## Save the tables
     proc_name = get_processing_table_name(extension=prod_filetype)

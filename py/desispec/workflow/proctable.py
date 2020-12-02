@@ -12,6 +12,7 @@ from collections import OrderedDict
 from desispec.workflow.exptable import default_exptypes_for_exptable
 
 from desispec.workflow.utils import pathjoin
+from desiutil.log import get_logger
 
 def get_processing_table_column_defs(return_default_values=False, overlap_only=False, unique_only=False):
     """
@@ -197,6 +198,7 @@ def exptable_to_proctable(input_exptable, obstypes=None):
                                  processed.
         unprocessed_table, Table. The output unprocessed table. Each row is an exposure that should not be processed.
     """
+    log = get_logger()
     exptable = input_exptable.copy()
 
     if obstypes is None:
@@ -219,7 +221,7 @@ def exptable_to_proctable(input_exptable, obstypes=None):
                         if keyval is not None and len(keyval) == 2 and keyval[0].upper() in exptable.colnames:
                             key, newval = keyval[0].upper(), keyval[1]
                             expid, oldval = exptable['EXPID'][ii], exptable[key][ii]
-                            print(
+                            log.info(
                                 f'Found a requested correction to ExpID {expid}: Changing {key} val from {oldval} to {newval}')
                             exptable[key][ii] = newval
 
@@ -235,11 +237,14 @@ def exptable_to_proctable(input_exptable, obstypes=None):
         if col in exptable.colnames:
             good_table.remove_column(col)
 
-    rows = []
-    for erow in good_table:
-        prow = erow_to_prow(erow, colnames, coldtypes, coldefaults)
-        rows.append(prow)
-    processing_table = Table(names=colnames, dtype=coldtypes, rows=rows)
+    if len(good_table) > 0:
+        rows = []
+        for erow in good_table:
+            prow = erow_to_prow(erow)#, colnames, coldtypes, coldefaults)
+            rows.append(prow)
+        processing_table = Table(names=colnames, dtype=coldtypes, rows=rows)
+    else:
+        processing_table = Table(names=colnames, dtype=coldtypes)
 
     return processing_table, unprocessed_table
 
@@ -297,6 +302,7 @@ def erow_to_prow_with_overrides(input_erow):#, colnames=None, coldtypes=None, co
     Returns:
         prow, dict. The output processing table row.
     """
+    log = get_logger()
     erow = input_erow.copy()
     if type(erow) in [dict, OrderedDict]:
         ecols = erow.keys()
@@ -316,7 +322,7 @@ def erow_to_prow_with_overrides(input_erow):#, colnames=None, coldtypes=None, co
                     if keyval is not None and len(keyval) == 2 and keyval[0].upper() in ecols:
                         key, newval = keyval[0].upper(), keyval[1]
                         expid, oldval = erow['EXPID'], erow[key]
-                        print(
+                        log.info(
                             f'Found a requested correction to ExpID {expid}: Changing {key} val from {oldval} to {newval}')
                         erow[key] = newval
 
