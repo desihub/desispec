@@ -18,6 +18,7 @@ from desispec.calibfinder import CalibFinder
 from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
+from desispec.io import params
 from desispec.io import read_fiberflat
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
@@ -544,6 +545,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else :
         if mask.shape != image.shape :
             raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
+    
+    desispec_params=params.read_params()
 
     for amp in amp_ids:
         # Grab the sections
@@ -633,10 +636,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             rdnoise_message = 'ADUs (gain not applied)'
             gain_message    = 'gain not applied to image'
 
+        hash_amp={'1':'A','2':'B','3':'C','4':'D','A':'A','B':'B','C':'C','D':'D'} # 
         if 'preproc' in desispec_params and len(rawimage)>4000: # There is 1100*900 b0 image in the test script
             header['OVSRDN'+amp] = (median_rdnoise,rdnoise_message)
-            ind=desispec_params['preproc']['rdnoise']['PARAMS']['OBSRDN'+amp+'_'+camera.upper()[0]]
-            header['OBSRDN'+amp+'_'+camera.upper()[0]]=ind
+            if camera.upper() in desispec_params['preproc']['rdnoise']['PARAMS'].keys():
+                ind=desispec_params['preproc']['rdnoise']['PARAMS'][camera.upper()]['OBSRDN'+hash_amp[amp]]
+            else:    
+                ind=desispec_params['preproc']['rdnoise']['PARAMS'][camera.upper()[0]]['OBSRDN'+hash_amp[amp]]
+            header['OBSRDN'+amp]=ind
             ind_sec = parse_sec_keyword(ind)
             d=rawimage[ind_sec]
             d = d[~np.isnan(d)].ravel()
