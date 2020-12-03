@@ -633,6 +633,7 @@ for ifile,offset in zip(args.infile,offsets) :
 
 expids = np.unique(table["EXPID"])
 offsets = np.unique(table["OFFSET"])
+
 sigma = np.zeros(expids.size)
 rms = np.zeros(expids.size)
 for j,expid in enumerate(expids) :
@@ -692,7 +693,7 @@ best_focus_offset_microns = -coef[1]/2/coef[0]
 log.info("best focus offset (average piston) = {:4.3f} um".format(best_focus_offset_microns))
 
 if args.plot :
-    plt.figure("focus-scan")
+    plt.figure("focus-scan-{}".format(args.camera))
     x=np.linspace(offsets[kk[0]],offsets[kk[-1]],20)
     plt.plot(x,focuspol(x),color="C1")
     plt.axvline(best_focus_offset_microns,linestyle="--",color="C1")
