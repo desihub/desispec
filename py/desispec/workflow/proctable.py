@@ -14,6 +14,36 @@ from desispec.workflow.exptable import default_exptypes_for_exptable
 from desispec.workflow.utils import pathjoin
 from desiutil.log import get_logger
 
+###############################################
+##### Processing Table Column Definitions #####
+###############################################
+## To eventually being turned into a full-fledged data model. For now a brief description.
+# EXPID, int, the exposure ID's assosciate with the job. Always a np.array, even if a single exposure.
+# NIGHT, int, the night of the observation.
+# OBSTYPE, string, the obstype as defined by ICS.
+# CAMWORD, string, typically 'a'+ str(spectrographs) meaning all cameras of the available spectrographs.
+# TILEID, int, the TILEID of the tile the exposure observed.
+# CALIBRATOR, int, A 0 signifies that the job is not assosciated with a calibration exposure. 1 means that it is.
+# INTID, int, an internally generated ID for a single job within a production. Only unique within a production and
+#             not guaranteed will not necessarily be the same between different production runs (e.g. between a daily
+#             run and a large batch reprocessing run).
+# OBSDESC, string, describes the observation in more detail than obstype. Currently only used for DITHER on dither tiles.
+# JOBDESC, string, described the job that the row defines. For a single science exposure that could be 'prestdstar' or
+#                  'poststdstar'. For joint science that would be 'stdstarfit'. For individual arcs it is 'arc', for
+#                  joint arcs it is 'psfnight'. For individual flats it is 'flat', for joint fits it is 'psfnightly'.
+# LATEST_QID, int, the most recent Slurm ID assigned to the submitted job.
+# SUBMIT_DATE, int, the 'unix time' of the job submission in seconds (int(time.time())).
+# STATUS, string, the most recent Slurm status of the job. See docstring of desispec.workflow.queue.get_resubmission_states
+#                 for a list and description.
+# SCRIPTNAME, string, the name of the script submitted to Slurm. Due to astropy table constraints, this is truncated
+#                     to a maximum of 40 characters.
+# INT_DEP_IDS, np.array, internal ID's of all jobs that are dependencies for the current row. I.e. inputs to the current job.
+# LATEST_DEP_QID,  np.array, the most recent Slurm ID's for the dependencies jobs uniquely identified by internal ID's
+#                            in INT_DEP_IDS
+# ALL_QIDS, np.array, a list of all Slurm ID's assosciated with submissions of this job. Useful if multiple submissions
+#                     were made because of node failures or any other issues that were later resolved (or not resolved).
+##################################################
+
 def get_processing_table_column_defs(return_default_values=False, overlap_only=False, unique_only=False):
     """
     Contains the column names, data types, and default row values for a DESI processing table. It returns
@@ -33,13 +63,13 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
 
-    colnames1 = ['EXPID'              , 'NIGHT' , 'OBSTYPE', 'CAMWORD'    , 'TILEID', 'CALIBRATOR']
-    coltypes1 = [np.ndarray           , int     , 'S10'    , 'S40'        , int     , np.int8     ]
-    coldefault1 = [np.ndarray(shape=0), 20000101, 'unknown', 'a0123456789', -99     , 0           ]
+    colnames1 = ['EXPID'              , 'NIGHT' , 'OBSTYPE', 'CAMWORD'    , 'TILEID']
+    coltypes1 = [np.ndarray           , int     , 'S10'    , 'S40'        , int     ]
+    coldefault1 = [np.ndarray(shape=0), 20000101, 'unknown', 'a0123456789', -99     ]
 
-    colnames2 = ['INTID', 'OBSDESC', 'SCRIPTNAME', 'JOBDESC', 'LATEST_QID', 'SUBMIT_DATE', 'STATUS']
-    coltypes2 = [int    , 'S16'    , 'S40'       , 'S12'    , int         ,  int        , 'S10'   ]
-    coldefault2 = [-99  , 'unknown', 'unknown'   , 'unknown', -99         , -99      , 'U'     ]
+    colnames2 = ['CALIBRATOR', 'INTID', 'OBSDESC', 'JOBDESC', 'LATEST_QID', 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
+    coltypes2 = [ np.int8    ,  int   , 'S16'    , 'S12'    , int         ,  int         , 'S10'   , 'S40'       ]
+    coldefault2 = [ 0        ,  -99   , 'unknown', 'unknown', -99         , -99          , 'U'     , 'unknown'   ]
 
     colnames3 =   ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
     coltypes3 =   [np.ndarray                     , np.ndarray                     , np.ndarray                     ]

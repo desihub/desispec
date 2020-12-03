@@ -10,6 +10,36 @@ from desispec.workflow.utils import define_variable_from_environment, pathjoin, 
 from desispec.workflow.timing import what_night_is_it
 from desiutil.log import get_logger
 
+#############################################
+##### Exposure Table Column Definitions #####
+#############################################
+## To eventually being turned into a full-fledged data model. For now a brief description.
+# EXPID, int, the exposure ID.
+# EXPTIME, float, the exposure time.
+# OBSTYPE, string, the obstype as defined by ICS.
+# SPECTROGRAPHS, string, the spectrographs as defined by ICS.
+# CAMWORD, string, typically 'a'+ str(spectrographs) meaning all cameras of the available spectrographs.
+# TILEID, int, the TILEID of the tile the exposure observed.
+# NIGHT, int, the night of the observation.
+# EXPFLAG, int, A 0 signifies that it is a good observation. 1 or greater indicates an issue.
+#               Each number will be assigned a meaning. Currently 1 just means "don't use".
+# HEADERERR, np.ndarray, Given as a "|" separated list of key=value pairs describing columns in the table that should
+#                        be corrected. The workflow transforms these into an array of strings.
+#                        NOTE: This will be used to change the given key/value pairs in the production table.
+# SURVEY, int, a numeric ID for a given observing run, e.g. CMX is 0. SV0 is 1, etc.
+# SEQNUM, int, The number of the current exposure in a sequence of exposures, as given by ICS. If not a sequence, SEQNUM is 1.
+# SEQTOT, int, The total number of exposures taken in the current sequence, as given by ICS. If not a sequence, SEQTOT is 1.
+# PROGRAM, string, The program as given by ICS.
+# MJD-OBS, float, The MJD-OBS as given by ICS. Modified Julian Date of the observation.
+# REQRA, float, The REQRA as given by ICS. The requested RA.
+# REQDEC, float, The REQDEC as given by ICS. The requested DEC.
+# TARGTRA, float, The TARGTRA as given by ICS. The RA of the target.
+# TARGTDEC, float, The TARGTDEC as given by ICS. The DEC of the target.
+# COMMENTS, np.ndarray, In the csv given as either a "|" separated list of comments or one long comment. When loaded it
+#                       is a numpy array of the strings.These are not used by the workflow but useful for humans
+#                       to put notes for other humans.
+##################################################
+
 def get_exposure_table_column_defs(return_default_values=False):
     """
     Contains the column names, data types, and default row values for a DESI Exposure table. It returns

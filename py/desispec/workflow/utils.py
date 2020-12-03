@@ -156,11 +156,7 @@ def verify_variable_with_environment(var, var_name, env_name):
 
         os.environ[env_name] = var
     else:
-        if env_name in os.environ:
-            var = os.environ[env_name]
-        else:
-            log.error(f"Must define either {var_name} or the environment variable {env_name}")
-            exit(1)
+        var = define_variable_from_environment(env_name, var_name)
 
     return var
 
