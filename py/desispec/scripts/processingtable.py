@@ -1,6 +1,7 @@
 
 
 import os
+import sys
 import numpy as np
 from astropy.table import Table, vstack
 from astropy.io import fits
@@ -100,3 +101,8 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
             pathname = pathjoin(proc_table_path, name)
             write_table(tab, pathname, overwrite=overwrite_files)
             print(f'Wrote file: {name}')
+
+    print("Processing table generations complete")
+    ## Flush the outputs
+    sys.stdout.flush()
+    sys.stderr.flush()

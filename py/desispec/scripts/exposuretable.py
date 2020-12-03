@@ -1,5 +1,6 @@
 
 import os
+import sys
 import numpy as np
 from astropy.table import Table
 from astropy.io import fits
@@ -78,4 +79,8 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
         else:
             print('No rows to write to a file.')
 
+        print("Exposure table generations complete")
+        ## Flush the outputs
+        sys.stdout.flush()
+        sys.stderr.flush()
         return nightly_tabs

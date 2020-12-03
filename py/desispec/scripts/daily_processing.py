@@ -209,6 +209,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 lasttype = curtype
                 last_not_dither = (prow['OBSDESC'] != 'dither')
 
+                ## Flush the outputs
+                sys.stdout.flush()
+                sys.stderr.flush()
+
             time.sleep(10)
             write_tables([etable, ptable, unproc_table],
                          tablenames=[exp_table_pathname, proc_table_pathname, unproc_table_pathname])
@@ -225,7 +229,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
             write_table(ptable, tablename=proc_table_pathname)
             time.sleep(30*speed_modifier)
-        
+
+    ## Flush the outputs
+    sys.stdout.flush()
+    sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
     ptable, arcjob, flatjob, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
                                                                          arcjob, flatjob, lasttype, last_not_dither,\
@@ -243,6 +250,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     # #######################################
     # print("Now resolving job failures.")
     #
+    # ## Flush the outputs
+    # sys.stdout.flush()
+    # sys.stderr.flush()
     # ## Now we resubmit failed jobs and their dependencies until all jobs have un-submittable end state
     # ## e.g. they either succeeded or failed with a code-related issue
     # ii,nsubmits = 0, 0
@@ -256,7 +266,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     #
     #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
     #     write_table(ptable, tablename=proc_table_pathname)
+    #     ## Flush the outputs
+    #     sys.stdout.flush()
+    #     sys.stderr.flush()
     #     ii += 1
     #
     # print("No job failures left.")
     print("Exiting")
+    ## Flush the outputs
+    sys.stdout.flush()
+    sys.stderr.flush()
