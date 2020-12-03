@@ -114,12 +114,15 @@ def _overscan(pix, mask=None, nsigma=5, niter=3):
 def _sigma_clip(data, mask=None, nsigma=5, niter=3):
     """
     Calculates sigma clipped mean and stddev from data
+
     Args:
         data (ndarray) : input data
+
     Optional:
         mask (int array): 0 means no mask otherwise masked
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
+
     Returns:
         mean_clip (float): Mean, sigma-clipped value
         std_clip (float): sigma-clipped stddev
