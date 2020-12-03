@@ -298,7 +298,7 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
     ## Define the column names for the exposure table and their respective datatypes
     #if colnames is None:
     colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
-    colnames, coldtypes, coldefaults = np.array(colnames), np.array(coldtypes), np.array(coldefaults)
+    colnames, coldtypes, coldefaults = np.array(colnames,dtype=object), np.array(coldtypes,dtype=object), np.array(coldefaults,dtype=object)
 
     prow = dict()
     for nam, typ, defval in zip(colnames, coldtypes, coldefaults):
@@ -359,7 +359,7 @@ def erow_to_prow_with_overrides(input_erow):#, colnames=None, coldtypes=None, co
     ## Define the column names for the exposure table and their respective datatypes
     # if colnames is None:
     colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
-    colnames, coldtypes, coldefaults = np.array(colnames), np.array(coldtypes), np.array(coldefaults)
+    colnames, coldtypes, coldefaults = np.array(colnames,dtype=object), np.array(coldtypes,dtype=object), np.array(coldefaults,dtype=object)
 
     prow = dict()
     for nam, typ, defval in zip(colnames, coldtypes, coldefaults):
