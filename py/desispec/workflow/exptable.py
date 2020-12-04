@@ -280,7 +280,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
     if verbosely:
         log.info(f'\n\n###### Summarizing exposure: {exp} ######\n')
     else:
-        log.info(f'#### Summarizing exposure: {exp}')
+        log.info(f'Summarizing exposure: {exp}')
     ## Request json file is first used to quickly identify science exposures
     ## If a request file doesn't exist for an exposure, it shouldn't be an exposure we care about
     reqpath = pathjoin(raw_data_dir, night, exp, f'request-{exp}.json')
@@ -420,6 +420,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
         #    if nam not in outdict.keys():
         #        outdict[nam] = deflt
                 
-        log.info(f'{exp}: done')
+        log.info(f'Done summarizing exposure: {exp}')
         return outdict
 
