@@ -119,7 +119,7 @@ def _sigma_clip(data, mask=None, nsigma=5, niter=3):
         data (ndarray) : input data
 
     Optional:
-        mask (int array): 0 means no mask otherwise masked
+        mask (int array): 0 means good; non-zero means masked (don't use)
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
 
@@ -130,11 +130,11 @@ def _sigma_clip(data, mask=None, nsigma=5, niter=3):
     log=get_logger()
     #- normalized median absolute deviation as robust version of RMS
     #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
-    if mask != None:
+    if mask is not None:
         if len(mask.ravel()) != len(data.ravel()):
             log.error("length of data and mask are not consistent, abandon mask")
         else:
-            data = data[mask != 0]
+            data = data[mask == 0]
     mean_clip = np.median(data)
     absdiff = np.abs(data - mean_clip)
     std_clip = 1.4826*np.median(absdiff)
