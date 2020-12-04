@@ -6,9 +6,9 @@ import numpy as np
 from astropy.table import Table, vstack
 from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, get_exposure_table_pathname,night_to_month
+from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, night_to_month
 
-from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin
+from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin, get_printable_banner
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, exptable_to_proctable, \
                                         get_processing_table_name
 from desispec.workflow.tableio import load_table, write_table
@@ -81,6 +81,8 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
     ## Loop over nights
     for night in nights:
         if verbose:
+            print(get_printable_banner(input_str=night))
+        else:
             print(f'Processing {night}')
         exptab_name = get_exposure_table_name(night=night, extension=exp_filetype)
         month = night_to_month(night)

@@ -196,7 +196,7 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
         scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
                                                        cameras=prow['CAMWORD'], jobdesc=prow['JOBDESC'], \
                                                        queue=queue, cmdline=cmd)
-        log.info("Outfile is: ".format(scriptpathname))
+        log.info("Outfile is: {}".format(scriptpathname))
 
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
@@ -605,6 +605,9 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False):
                        of a stdstarfit, the poststdstar science exposure jobs.
         joint_prow, Table.Row or dict. Row of a processing table corresponding to the joint fit job.
     """
+    if len(prows) < 1:
+        return ptable, None
+
     if descriptor is None:
         return ptable, None
     elif descriptor == 'science':

@@ -88,26 +88,6 @@ def get_json_dict(reqpath):
             req_dict = json.load(req)
     return req_dict
 
-def give_relevant_details(verbose_output, non_verbose_output=None, verbosely=False):
-    """
-    Helper function that eliminates redundant code in workflow. If verbosely is True, it prints the first argument
-    (verbose_output), otherwise it prints the second (non_verbose_output).
-
-    Args:
-        verbose_output, str. The output to be printed if the verbosely flag is True.
-        non_verbose_output, str. The output to be printed if the verbosely flag is False.
-        verbosely, bool. Flag to specify whether to give verbose output information or more succinct non-verbose info.
-                         These two outputs are defined by the first two variables.
-    Returns:
-        Nothing.
-    """
-    log = get_logger()
-    if verbosely:
-        log.info(verbose_output)
-    elif non_verbose_output is not None:
-        log.info(non_verbose_output)
-    else:
-        pass
 
 def define_variable_from_environment(env_name, var_descr):
     """
@@ -184,3 +164,25 @@ def check_running(proc_name='desi_daily_proc_manager', suppress_outputs=False):
             running = True
             break
     return running
+
+def get_printable_banner(input_str=None):
+    """
+    Returns a string that when printed shows a banner with the given string in the center.
+
+    Args:
+        input_str: str. Any string of moderate length roughly less than 30 that you want placed inside a
+                        pound/hashtag (#) banner.
+
+    Returns:
+        banner: str. A banner comprised of ascii pound symbols (#) and the given string in the center.
+    """
+    if type(input_str) is not str:
+        input_str = str(input_str)
+    ninput = len(input_str)
+    nhash = max(4+ninput, 36)
+    nshort1 = (nhash - ninput - 2) // 2
+    nshort2 = nhash - ninput - 2 - nshort1
+    banner = '\n' + '#'*nhash + \
+             '\n' + '#'*nshort1 + f' {input_str} ' + '#'*nshort2 + \
+             '\n' + '#'*nhash
+    return banner

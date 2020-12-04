@@ -11,7 +11,7 @@ from astropy.table import Table
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_tables, write_table
-from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath
+from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, get_printable_banner
 from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
 from desispec.workflow.exptable import default_exptypes_for_exptable, get_surveynum, get_exposure_table_column_defs, \
                                        get_exposure_table_path, get_exposure_table_name, summarize_exposure
@@ -23,7 +23,8 @@ from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              expobstypes=None, procobstypes=None, camword=None, override_night=None, tab_filetype='csv', queue='realtime',
-                             data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False):
+                             data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False,
+                             verbose=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -45,6 +46,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                  and written, however. The timing is accelerated. This option is most useful for testing and simulating a run.
         continue_looping_debug: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
                                  is terminated. Default is False.
+        verbose: bool. True if you want more verbose output, false otherwise. Current not propagated to lower code,
+                       so it is only used in the main daily_processing script itself.
 
     Returns: Nothing
 
@@ -147,6 +150,11 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
         ## Loop over new exposures and process them as relevant to that type
         for exp in sorted(list(new_exps)):
+            if verbose:
+                print(get_printable_banner(str(exp)))
+            else:
+                print(f'\n\n############### {exp} ###################')
+
             ## Open relevant raw data files to understand what we're dealing with
             erow = summarize_exposure(path_to_data,night,exp,expobstypes,surveynum,colnames,coldefaults,verbosely=False)
             print(f"\nFound: {erow}")
@@ -158,10 +166,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             elif type(erow) is str:
                 if 'short' in erow and flatjob is None:
                     flats = []
-                elif 'long' in erow and flatjob is None:
+                elif 'long' in erow and flatjob is None and 'flat' in procobstypes and len(flats)>0:
                     ptable, flatjob = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
                     internal_id += 1
-                elif 'arc' in erow and arcjob is None:
+                elif 'arc' in erow and arcjob is None and 'arc' in procobstypes and len(arcs)>0:
                     ptable, arcjob = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
                     internal_id += 1
                 else:
