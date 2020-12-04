@@ -325,9 +325,9 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
     expdir = f'{nightdir}/{expid:08d}'
 
     if tileid is not None:
-        faglob = nightdir+'/*/fiberassign-{:06d}.fits'.format(tileid)
+        faglob = nightdir+'/*/fiberassign-{:06d}.fits*'.format(tileid)
     else:
-        faglob = nightdir+'/*/fiberassign*.fits'
+        faglob = nightdir+'/*/fiberassign*.fits*'
 
     fafile = None
     for filename in sorted(glob.glob(faglob)):
