@@ -77,6 +77,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     if expobstypes is None:
         ## Define the obstypes to save information for in the exposure table
         expobstypes = default_exptypes_for_exptable()
+    elif isinstance(expobstypes, str):
+        expobstypes = expobstypes.split(',')
 
     ## Must contain all the types used in processing
     for typ in procobstypes:
