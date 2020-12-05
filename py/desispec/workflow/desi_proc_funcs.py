@@ -9,7 +9,7 @@ import numpy as np
 import fitsio
 import desispec.io
 from desispec.io import findfile
-from desispec.io.util import create_camword
+from desispec.io.util import create_camword, decode_camword
 # from desispec.calibfinder import findcalibfile
 
 def get_desi_proc_parser():
@@ -311,6 +311,69 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
 
     return ncores, nodes, runtime
 
+def get_desi_proc_batch_file_path(night,reduxdir=None):
+    """
+    Returns the default directory location to store a batch script file given a night
+
+    Args:
+        night: str or int, defines the night (should be 8 digits)
+        reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live.
+
+    Returns:
+        batchdir: str, the default location where a batch script file should be written
+    """
+    if reduxdir is None:
+        reduxdir = desispec.io.specprod_root()
+    batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(night))
+    return batchdir
+
+def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
+    """
+    Returns the default directory location to store a batch script file given a night
+
+    Args:
+        night: str or int, defines the night (should be 8 digits)
+        exp: str, int, or array of ints, defines the exposure id(s) relevant to the job
+        jobdesc: str, type of data being processed 
+        cameras: str or list of str. If str, must be camword, If list, must be list of cameras to include in the processing.
+
+    Returns:
+        pathname: str, the default script name for a desi_proc batch script file
+    """
+    if np.isscalar(cameras):
+        camword = cameras
+    else:
+        camword = create_camword(cameras)
+    if type(exp) is not str:
+        if np.isscalar(exp):
+            expstr = '{:08d}'.format(exp)
+        else:
+            #expstr = '-'.join(['{:08d}'.format(curexp) for curexp in exp])                                                                           
+            expstr = '{:08d}'.format(exp[0])
+    else:
+        expstr = exp
+    jobname = '{}-{}-{}-{}'.format(jobdesc.lower(), night, expstr, camword)
+    return jobname
+
+def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=None):
+    """
+    Returns the default directory location to store a batch script file given a night
+
+    Args:
+        night: str or int, defines the night (should be 8 digits)
+        exp: str, int, or array of ints, defines the exposure id(s) relevant to the job
+        jobdesc: str, type of data being processed
+        cameras: str or list of str. If str, must be camword, If list, must be list of cameras to include in the processing. 
+        reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live 
+
+    Returns:
+        pathname: str, the default location and script name for a desi_proc batch script file
+    """
+    path = get_desi_proc_batch_file_path(night,reduxdir=reduxdir)
+    name = get_desi_proc_batch_file_name(night, exp, jobdesc, cameras)
+    return os.path.join(path, name)
+
+
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None):
     """
@@ -319,7 +382,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     Args:
         night: str or int. The night the data was acquired
         exp: str, int, or list of ints. The exposure id(s) for the data.
-        cameras: list of str. List of cameras to include in the processing.
+        cameras: str or list of str. List of cameras to include in the processing.
         jobdesc: str. Description of the job to be performed. Used to determine requested resources
                       and whether to operate in a more mpi parallelism (all except poststdstar) or less (only poststdstar).
                       Directly relate to the obstype, with science exposures being split into two (pre, post)-stdstar,
@@ -345,24 +408,17 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         batchdir and jobname can be used to define an alternative pathname, but may not work with assumptions in desi_proc.
             These optional arguments should be used with caution and primarily for debugging.
     """
-
+    if np.isscalar(cameras):
+        camword = cameras
+        cameras = decode_camword(camword)
+    
     if batchdir is None:
-        reduxdir = desispec.io.specprod_root()
-        batchdir = os.path.join(reduxdir, 'run', 'scripts', 'night', str(night))
+        batchdir = get_desi_proc_batch_file_path(night)
 
     os.makedirs(batchdir, exist_ok=True)
 
     if jobname is None:
-        camword = create_camword(cameras)
-        if type(exp) is not str:
-            if np.isscalar(exp):
-                expstr = '{:08d}'.format(exp)
-            else:
-                #expstr = '-'.join(['{:08d}'.format(curexp) for curexp in exp])
-                expstr = '{:08d}'.format(exp[0])
-        else:
-            expstr = exp
-        jobname = '{}-{}-{}-{}'.format(jobdesc.lower(), night, expstr, camword)
+        jobname = get_desi_proc_batch_file_name(night, exp, jobdesc, cameras)
 
     if timingfile is None:
         timingfile = f'{jobname}-timing-$SLURM_JOBID.json'
@@ -400,8 +456,13 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         if cmdline is None:
             inparams = list(sys.argv).copy()
+        elif np.isscalar(cmdline):
+            inparams = [] 
+            for param in cmdline.split(' '): 
+                for subparam in param.split("="):
+                    inparams.append(subparam)
         else:
-            inparams = cmdline.split(' ')[1:]
+            inparams = list(cmdline)        
         for parameter in ['-q', '--queue', '--batch-opts']:
             if parameter in inparams:
                 loc = np.where(np.array(inparams) == parameter)[0][0]
