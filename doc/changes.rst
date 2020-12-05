@@ -2,12 +2,54 @@
 desispec Change Log
 ===================
 
-0.34.8 (unreleased)
+0.35.0 (unreleased)
 -------------------
 
-* Fix dark CCD calibration corrections (PR `#1002`_).
+* Major updates:
+
+  * New opts to model image variance and improve sky subtraction (PR `#1008`_).
+  * Refactor desi_proc and daily processing workflow
+    (PRs `#1012`_, `#1014`_, `#1030`_)
+  * New bias+dark model ("non-linear dark y1D") (PR `#1029`_)
+
+* Smaller (but important) updates:
+
+  * Add support for gzipped fiberassign files (PR `#1042`_).
+  * Fix tests on single-core machines (PR `#1035`_).
+  * `desi_paste_preproc` for future use combining short+long arcs (PR `#1034`_).
+  * `desi_proc` more robust to `specex` failures (PR `#1033`_).
+  * Add parallelism to `desi_preproc` (PRs `#1032`_, `#1036`_, `#1038`_).
+  * Fix specex empty path bug (PR `#1031`_).
+  * Better qproc warnings for test slit exposures (PR `#1028`_).
+  * `desi_focus` focus scan analysis (PR `#1027`_).
+  * Fix/add BUNIT header keyword (PR `#1023`_).
+  * Adds `desi_compute_broadband_pixel_flatfield` (PR `#1022`_).
+  * Update desi_proc timing logging (PR `#1003`_, `#1026`_).
+  * desispec.module sets MPICH_GNI_FORK_MODE=FULLCOPY for MPI+multiprocessing
+    (PR `#1007`_).
+  * Fix dark CCD calibration corrections (PR `#1002`_).
 
 .. _`#1002`: https://github.com/desihub/desispec/issues/1002
+.. _`#1003`: https://github.com/desihub/desispec/issues/1003
+.. _`#1007`: https://github.com/desihub/desispec/issues/1007
+.. _`#1008`: https://github.com/desihub/desispec/issues/1008
+.. _`#1012`: https://github.com/desihub/desispec/issues/1012
+.. _`#1014`: https://github.com/desihub/desispec/issues/1014
+.. _`#1022`: https://github.com/desihub/desispec/issues/1022
+.. _`#1023`: https://github.com/desihub/desispec/issues/1023
+.. _`#1026`: https://github.com/desihub/desispec/issues/1026
+.. _`#1027`: https://github.com/desihub/desispec/issues/1027
+.. _`#1028`: https://github.com/desihub/desispec/issues/1028
+.. _`#1029`: https://github.com/desihub/desispec/issues/1029
+.. _`#1030`: https://github.com/desihub/desispec/issues/1030
+.. _`#1031`: https://github.com/desihub/desispec/issues/1031
+.. _`#1032`: https://github.com/desihub/desispec/issues/1032
+.. _`#1033`: https://github.com/desihub/desispec/issues/1033
+.. _`#1034`: https://github.com/desihub/desispec/issues/1034
+.. _`#1035`: https://github.com/desihub/desispec/issues/1035
+.. _`#1036`: https://github.com/desihub/desispec/issues/1036
+.. _`#1038`: https://github.com/desihub/desispec/issues/1038
+.. _`#1042`: https://github.com/desihub/desispec/issues/1042
 
 0.34.7 (2020-09-01)
 -------------------
