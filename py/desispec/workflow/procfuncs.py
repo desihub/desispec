@@ -312,7 +312,10 @@ def define_and_assign_dependency(prow, arcjob, flatjob):
     """
     prow['JOBDESC'] = prow['OBSTYPE']
     if prow['OBSTYPE'] in ['science', 'twiflat']:
-        dependency = flatjob
+        if flatjob is None:
+            dependency = arcjob
+        else:
+            dependency = flatjob
         prow['JOBDESC'] = 'prestdstar'
     elif prow['OBSTYPE'] == 'flat':
         dependency = arcjob
@@ -408,6 +411,7 @@ def parse_previous_tables(etable, ptable, night):
                           is the latest unassigned value.
         last_not_dither, bool, True if the last job was a science dither tile. Otherwise False.
     """
+    log = get_logger()
     arcs, flats, sciences = [], [], []
     arcjob, flatjob = None, None
     curtype,lasttype = None,None
@@ -422,6 +426,7 @@ def parse_previous_tables(etable, ptable, night):
 
         if 'psfnight' in jobtypes:
             arcjob = ptable[jobtypes=='psfnight'][0]
+            log.info("Located joint fit arc job in exposure table: {}".format(arcjob))
         elif lasttype == 'arc':
             arcs = []
             seqnum = 10
@@ -435,6 +440,7 @@ def parse_previous_tables(etable, ptable, night):
 
         if 'nightlyflat' in jobtypes:
             flatjob = ptable[jobtypes=='nightlyflat'][0]
+            log.info("Located joint fit flat job in exposure table: {}".format(flatjob))
         elif lasttype == 'flat':
             flats = []
             for row in ptable[::-1]:

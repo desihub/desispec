@@ -83,4 +83,4 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
         ## Flush the outputs
         sys.stdout.flush()
         sys.stderr.flush()
-        return nightly_tabs
+    return nightly_tabs
