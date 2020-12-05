@@ -888,6 +888,39 @@ class TestIO(unittest.TestCase):
         newfile = 'quat-foo-blat.fits'
         self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
 
+    def test_find_fibermap(self):
+        '''Test finding (non)gzipped fiberassign files'''
+        from ..io.fibermap import find_fiberassign_file
+        night = 20101020
+        nightdir = os.path.join(self.datadir, str(night))
+        os.makedirs(nightdir)
+        os.makedirs(f'{nightdir}/00012345')
+        os.makedirs(f'{nightdir}/00012346')
+        os.makedirs(f'{nightdir}/00012347')
+        os.makedirs(f'{nightdir}/00012348')
+        fafile = f'{nightdir}/00012346/fiberassign-001111.fits'
+        fafilegz = f'{nightdir}/00012347/fiberassign-001122.fits'
+
+        fx = open(fafile, 'w'); fx.close()
+        fx = open(fafilegz, 'w'); fx.close()
+
+        a = find_fiberassign_file(night, 12346)
+        self.assertEqual(a, fafile)
+
+        a = find_fiberassign_file(night, 12347)
+        self.assertEqual(a, fafilegz)
+
+        a = find_fiberassign_file(night, 12348)
+        self.assertEqual(a, fafilegz)
+
+        a = find_fiberassign_file(night, 12348, tileid=1111)
+        self.assertEqual(a, fafile)
+
+        with self.assertRaises(IOError) as ex:
+            find_fiberassign_file(night, 12345)
+
+        with self.assertRaises(IOError) as ex:
+            find_fiberassign_file(night, 12348, tileid=4444)
 
 def test_suite():
     """Allows testing of only this module with the command::
