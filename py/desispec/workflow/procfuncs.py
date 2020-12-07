@@ -610,9 +610,11 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False):
         ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
                        of a stdstarfit, the poststdstar science exposure jobs.
         joint_prow, Table.Row or dict. Row of a processing table corresponding to the joint fit job.
+        internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
+    log = get_logger()
     if len(prows) < 1:
-        return ptable, None
+        return ptable, None, internal_id
 
     if descriptor is None:
         return ptable, None
@@ -624,25 +626,33 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False):
         descriptor = 'nightlyflat'
 
     if descriptor not in ['stdstarfit', 'psfnight', 'nightlyflat']:
-        return ptable, None
+        return ptable, None, internal_id
 
+    log.info(" ")
+    log.info(f"Joint fit criteria found. Running {descriptor}.\n")
     joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
+    internal_id += 1
     joint_prow = create_and_submit(joint_prow, queue=queue, joint=True, dry_run=dry_run)
     ptable.add_row(joint_prow)
 
     if descriptor == 'stdstarfit':
+        log.info(" ")
+        log.info(f"Submitting individual science exposures now that joint fitting of standard stars is submitted.\n")
         for row in prows:
+            if dry_run:
+                time.sleep(1)
             row['JOBDESC'] = 'poststdstar'
             row['INTID'] = internal_id
             row['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
             internal_id += 1
             row = assign_dependency(row, joint_prow)
-            row = create_and_submit(row, dry_run=dry_run)
+            row = create_and_submit(row, queue=queue, dry_run=dry_run)
             ptable.add_row(row)
     else:
+        log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
         ptable = set_calibrator_flag(prows, ptable)
 
-    return ptable, joint_prow
+    return ptable, joint_prow, internal_id
 
 
 ## wrapper functions for joint fitting
@@ -753,19 +763,23 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         ptable, Table, Processing table of all exposures that have been processed.
         arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
         flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
+        sciences, list of Table.Row's, list of the most recent individual prestdstar science exposures
+                                       (if currently processing that tile). May be empty if none identified yet or
+                                       we just submitted them for processing.
         internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
                           from the input such that it represents the smallest unused ID.
     """
     if lasttype == 'science' and last_not_dither:
-        ptable, tilejob = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue)
-        internal_id += 1
+        ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue)
+        if tilejob is not None:
+            sciences = []
     elif lasttype == 'flat' and flatjob is None and len(flats) > 10:
-        ptable, flatjob = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
+        ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
         internal_id += 1
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
-        ptable, arcjob = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
+        ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
         internal_id += 1
-    return ptable, arcjob, flatjob, internal_id
+    return ptable, arcjob, flatjob, sciences, internal_id
 
 
 def set_calibrator_flag(prows, ptable):

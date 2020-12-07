@@ -71,16 +71,19 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     if continue_looping_debug:
         print("continue_looping_debug is set. Will continue looking for new data and needs to be terminated by the user.")
 
-    ## Get default values for input variables
+    ## Define the obstypes to process
     if procobstypes is None:
         procobstypes = default_exptypes_for_proctable()
+    elif isinstance(procobstypes, str):
+        procobstypes = procobstypes.split(',')
+
+    ## Define the obstypes to save information for in the exposure table
     if expobstypes is None:
-        ## Define the obstypes to save information for in the exposure table
         expobstypes = default_exptypes_for_exptable()
     elif isinstance(expobstypes, str):
         expobstypes = expobstypes.split(',')
 
-    ## Must contain all the types used in processing
+    ## expobstypes must contain all the types used in processing
     for typ in procobstypes:
         if typ not in expobstypes:
             expobstypes.append(typ)
@@ -142,7 +145,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         located_exps = set( np.array(listpath(path_to_data,str(night))).astype(int) )
         new_exps = located_exps.difference(all_exps)
         all_exps = located_exps # i.e. new_exps.union(all_exps)
-        print(f"New exposures: {new_exps}")
+        print(f"\nNew exposures: {new_exps}\n\n")
 
         ## If there aren't any new exps and there won't be more because we're running on an old night or simulating things, exit
         if (not continue_looping_debug) and ( override_night is not None ) and ( len(list(new_exps))==0 ):
@@ -155,7 +158,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if verbose:
                 print(get_printable_banner(str(exp)))
             else:
-                print(f'\n\n############### {exp} ###################')
+                print(f'\n\n##################### {exp} #########################')
 
             ## Open relevant raw data files to understand what we're dealing with
             erow = summarize_exposure(path_to_data,night,exp,expobstypes,surveynum,colnames,coldefaults,verbosely=False)
@@ -166,36 +169,47 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if erow is None:
                 continue
             elif type(erow) is str:
-                if 'short' in erow and flatjob is None:
+                if 'arc' in erow and arcjob is None and 'arc' in procobstypes and len(arcs) > 0:
+                    print("\nLocated end of arc calibration sequence flag. Processing psfnight.\n")
+                    ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
+                elif 'long' in erow and flatjob is None and 'flat' in procobstypes and len(flats) > 0:
+                    print("\nLocated end of long flat calibration sequence flag. Processing nightlyflat.\n")
+                    ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
+                elif 'short' in erow and flatjob is None:
+                    print("\nLocated end of short flat calibration flag. Removing flats from list for nightlyflat processing.\n")
                     flats = []
-                elif 'long' in erow and flatjob is None and 'flat' in procobstypes and len(flats)>0:
-                    ptable, flatjob = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
-                    internal_id += 1
-                elif 'arc' in erow and arcjob is None and 'arc' in procobstypes and len(arcs)>0:
-                    ptable, arcjob = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
-                    internal_id += 1
                 else:
                     continue
             else:
                 etable.add_row(erow)
 
                 if erow['OBSTYPE'] not in procobstypes:
+                    print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
                     unproc_table.add_row(erow)
                     continue
                 elif 'system test' in erow['PROGRAM'].lower():
+                    print("\nExposure identified as system test. Not processing.")
+                    unproc_table.add_row(erow)
+                    continue
+                elif str(erow['OBSTYPE']).lower() == 'science' and float(erow['EXPTIME']) < 20.0:
+                    print("\nScience exposure with EXPTIME less than 20s. Not processing.")
                     unproc_table.add_row(erow)
                     continue
                 elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
+                    print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
                     unproc_table.add_row(erow)
                     continue
 
                 curtype,curtile = get_type_and_tile(erow)
 
                 if (curtype != lasttype) or (curtile != lasttile):
-                    ptable, arcjob, flatjob, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
-                                                                                         arcjob, flatjob, lasttype,
-                                                                                         last_not_dither, internal_id,
-                                                                                         dry_run=dry_run, queue=queue)
+                    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
+                                                                                                   sciences, arcjob,
+                                                                                                   flatjob, lasttype,
+                                                                                                   last_not_dither,
+                                                                                                   internal_id,
+                                                                                                   dry_run=dry_run,
+                                                                                                   queue=queue)
 
                 prow = erow_to_prow(erow)
 
@@ -204,7 +218,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 prow['INTID'] = internal_id
                 internal_id += 1
                 prow = define_and_assign_dependency(prow, arcjob, flatjob)
-                print(f"Processing: {prow}")
+                print(f"\nProcessing: {prow}\n")
                 prow = create_and_submit(prow, dry_run=dry_run, queue=queue)
                 ptable.add_row(prow)
 
@@ -244,7 +258,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     sys.stdout.flush()
     sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
-    ptable, arcjob, flatjob, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
+    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
                                                                          arcjob, flatjob, lasttype, last_not_dither,\
                                                                          internal_id, dry_run=dry_run, queue=queue)
 
