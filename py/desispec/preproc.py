@@ -953,7 +953,9 @@ def read_dark(filename=None, camera=None, dateobs=None, exptime=None):
 
         if exptime==0.:
             profile_2d=0.
-        elif exptime< min_exptime :
+        elif exptime in exptime_arr:
+            profile_2d = recover_2d_dark(hdus,exptime,ext_arr[str(int(exptime))])
+        elif exptime < min_exptime :
             log.warning("Use 2D dark profile at min. exptime={}".format(min_exptime))
             profile_2d = recover_2d_dark(hdus,min_exptime,ext_arr[str(int(min_exptime))])
         elif exptime > max_exptime :
