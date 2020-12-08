@@ -237,7 +237,7 @@ def exptable_to_proctable(input_exptable, obstypes=None):
     ## Define the column names for the exposure table and their respective datatypes
     colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
 
-    for col in ['HEADERERR', 'COMMENTS']:
+    for col in ['COMMENTS']: #'HEADERERR',
         if col in exptable.colnames:
             for ii, arr in enumerate(exptable[col]):
                 for item in arr:
@@ -339,7 +339,7 @@ def erow_to_prow_with_overrides(input_erow):#, colnames=None, coldtypes=None, co
     else:
         ecols = erow.colnames
 
-    for col in ['HEADERERR', 'COMMENTS']:
+    for col in ['COMMENTS']: #'HEADERERR',
         if col in ecols:
             for item in erow[col]:
                 clean_item = item.strip(' \t')

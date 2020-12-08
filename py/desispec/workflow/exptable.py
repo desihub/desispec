@@ -404,10 +404,9 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
         for check in ['EXPTIME', 'OBSTYPE', 'FLAVOR']:
             rval, hval = req_dict[check], header[check]
             if rval != hval:
-                if verbosely:
-                    log.info(f'{rval}\t{hval}')
+                log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
                 outdict['EXPFLAG'] = 1
-                outdict['HEADERERR'] += f'req:{rval} but hdu:{hval} | '
+                outdict['HEADERERR'] = np.append(outdict['HEADERERR'],f'For {check}- req:{rval} but hdu:{hval}|')
             else:
                 if verbosely:
                     log.info(f'{check} checks out')
