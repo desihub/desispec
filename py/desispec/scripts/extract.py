@@ -211,15 +211,18 @@ def main_gpu_specter(args, comm=None, timing=None):
 
     #- Load MPI only if requested
     if comm is not None:
+        if hasattr(comm, "is_extract_rank"):
+            pass
+        else:
+            import gpu_specter.mpi
+            comm = gpu_specter.mpi.SyncIOComm(comm)
         rank, size = comm.rank, comm.size
     else:
         comm = None
         rank, size = 0, 1
 
     #- Load inputs
-    image = psf = None
-    corrected_wavelength = None
-    if rank == 0:
+    def read_data():
         img = io.read_image(args.input)
         image = {
             'image': img.pix,
@@ -232,6 +235,8 @@ def main_gpu_specter(args, comm=None, timing=None):
             fibermap = io.read_fibermap(args.input)
         except:
             fibermap = None
+
+        image['fibermap'] = fibermap
 
         #- Configure wavelength range
         if args.wavelength is not None:
@@ -246,6 +251,8 @@ def main_gpu_specter(args, comm=None, timing=None):
         #- Wave includes boundaries wmin, wmax
         wave = np.arange(wmin, wmax + 0.5*dw, dw)
 
+        image['wave'] = wave
+
         if args.barycentric_correction:
             if ('RA' in img.meta) or ('TARGTRA' in img.meta):
                 barycentric_correction_factor = \
@@ -259,7 +266,7 @@ def main_gpu_specter(args, comm=None, timing=None):
                 msg = 'Barycentric corr requires (TARGT)RA in HDU 0 or fibermap'
                 log.critical(msg)
                 raise KeyError(msg)
-        else :
+        else:
             barycentric_correction_factor = 1.
 
         #- Explictly define the correct wavelength values to avoid confusion of reference frame
@@ -294,37 +301,57 @@ def main_gpu_specter(args, comm=None, timing=None):
         img.meta['IN_PSF']  = (_trim(args.psf), 'Input spectral PSF')
         img.meta['IN_IMG']  = (_trim(args.input), 'Input image')
 
-    if comm is not None:
-        corrected_wavelength = comm.bcast(corrected_wavelength, root=0)
+        image['meta'] = img.meta
+
+        return image, psf, corrected_wavelength
+
+
+    image, psf, corrected_wavelength = comm.read(read_data, (None, None, None))
 
     time_setup = time.time()
 
     #- Perform extraction
     core_timing = dict()
-    result = gpu_specter.core.extract_frame(
-        image, psf, args.bundlesize,       # input data
-        args.specmin, args.nspec,          # spectra to extract (specmin, specmin + nspec)
-        corrected_wavelength,              # wavelength range to extract
-        args.nwavestep, args.nsubbundles,  # extraction algorithm parameters
-        args.model,
-        args.regularize,
-        args.psferr,
-        comm, rank, size,                  # mpi parameters
-        args.gpu,                          # gpu parameters
-        loglevel=None,
-        timing=core_timing,
-    )
+
+    result = None
+    if comm.is_extract_rank():
+
+        corrected_wavelength = comm.extract_comm.bcast(corrected_wavelength, root=0)
+
+        result = gpu_specter.core.extract_frame(
+            image, psf, args.bundlesize,       # input data
+            args.specmin, args.nspec,          # spectra to extract (specmin, specmin + nspec)
+            corrected_wavelength,              # wavelength range to extract
+            args.nwavestep, args.nsubbundles,  # extraction algorithm parameters
+            args.model,
+            args.regularize,
+            args.psferr,
+            comm.extract_comm,                 # mpi parameters
+            args.gpu,                          # gpu parameters
+            loglevel=None,
+            timing=core_timing,
+        )
+
+        if comm.rank == comm.EXTRACT_ROOT:
+            result['fibermap'] = image['fibermap']
+            result['wave'] = image['wave']
+            result['meta'] = image['meta']
+    else:
+        # READ_RANK / WRITE_RANK
+        pass
 
     time_extract = time.time()
 
     #- Write output
-    if rank == 0:
+    def write_data(result):
         flux = result['specflux']
         ivar = result['specivar']
         mask = result['specmask']
         Rdiags = result['Rdiags']
         pixmask_fraction = result['pixmask_fraction']
         chi2pix = result['chi2pix']
+        fibermap = result['fibermap']
+        wave = result['wave']
 
         #- Compute the output mask
         mask = np.zeros(flux.shape, dtype=np.uint32)
@@ -341,7 +368,7 @@ def main_gpu_specter(args, comm=None, timing=None):
 
         #- Use the uncorrected wave for output
         frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdiags,
-                  fibers=fibers, meta=img.meta, fibermap=fibermap,
+                  fibers=fibers, meta=result['meta'], fibermap=fibermap,
                   chi2pix=chi2pix)
 
         #- Add unit
@@ -362,9 +389,11 @@ def main_gpu_specter(args, comm=None, timing=None):
 
         if args.model is not None:
             modelimage = result['modelimage']
-            log.info("Writing model {}".format(args.output))
+            log.info("Writing model {}".format(args.model))
             fits.writeto(args.model+'.tmp', modelimage, header=frame.meta, overwrite=True, checksum=True)
             os.rename(args.model+'.tmp', args.model)
+
+    comm.write(write_data, result)
 
     time_write = time.time()
 
@@ -375,7 +404,7 @@ def main_gpu_specter(args, comm=None, timing=None):
         timing["frame-extract"] = time_extract
         timing["frame-write"] = time_write
 
-    if rank == 0:
+    if comm.rank == comm.EXTRACT_ROOT:
         name = os.path.basename(args.output)
         log.info(f"{name} setup-time: {time_setup - time_start:0.2f}")
         log.info(f"{name} extract-time: {time_extract - time_setup:0.2f}")
