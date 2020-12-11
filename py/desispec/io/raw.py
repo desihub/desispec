@@ -100,6 +100,9 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         log.warning('creating blank fibermap')
         fibermap = desispec.io.empty_fibermap(5000)
 
+    #- Add image header keywords inherited from raw data to fibermap too
+    desispec.io.util.addkeys(fibermap.meta, img.meta)
+
     #- Augment the image header with some tile info from fibermap if needed
     for key in ['TILEID', 'TILERA', 'TILEDEC']:
         if key in fibermap.meta:

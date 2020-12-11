@@ -19,6 +19,7 @@ from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_fiberflat
+from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 
@@ -844,6 +845,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 psf_filename = cfinder.findfile("PSF")
             xyset = read_xytraceset(psf_filename)
         img.pix -= model_scattered_light(img,xyset)
+
+    #- Extend header with primary header keywords too
+    addkeys(img.meta, primary_header)
 
     return img
 

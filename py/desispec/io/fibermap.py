@@ -17,8 +17,8 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
-from desispec.io.util import fitsheader, write_bintable, makepath
-from desispec.io.meta import rawdata_root
+from desispec.io.util import fitsheader, write_bintable, makepath, addkeys
+from desispec.io.meta import rawdata_root, findfile
 
 from desispec.maskbits import fibermask
 
@@ -357,6 +357,10 @@ def assemble_fibermap(night, expid, force=False):
 
     log = get_logger()
 
+    #- raw data file for header
+    rawfile = findfile('raw', night, expid)
+    rawheader = fits.getheader(rawfile, 'SPEC')
+
     #- Find fiberassign file
     fafile = find_fiberassign_file(night, expid)
 
@@ -396,6 +400,7 @@ def assemble_fibermap(night, expid, force=False):
 
     #- Preflight announcements
     log.info(f'Night {night} spectro expid {expid}')
+    log.info(f'Raw data file {rawfile}')
     log.info(f'Fiberassign file {fafile}')
     log.info(f'Platemaker coordinates file {coordfile}')
     log.info(f'Guider file {guidefile}')
@@ -498,28 +503,21 @@ def assemble_fibermap(night, expid, force=False):
                 fibermap[targetcol][iidesi] |= mask
                 fibermap['DESI_TARGET'][ii] |= mask
 
+    #- Add header information from rawfile
+    log.debug(f'Adding header keywords from {rawfile}')
+    skipkeys = ['EXPTIME',]
+    addkeys(fibermap.meta, rawheader, skipkeys=skipkeys)
+
     #- Add header info from guide file
     if guidefile is not None:
-        hdr = fits.getheader(guidefile, 0)
+        log.debug(f'Adding header keywords from {guidefile}')
+        guideheader = fits.getheader(guidefile, 0)
 
-        skipkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
-                    'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
-                    'XTENSTION', 'TFIELDS']
-        if fibermap.meta['TILEID'] != hdr['TILEID']:
+        if fibermap.meta['TILEID'] != guideheader['TILEID']:
             raise RuntimeError('fiberassign tile {} != guider tile {}'.format(
-                fibermap.meta['TILEID'], hdr['TILEID']))
+                fibermap.meta['TILEID'], guideheader['TILEID']))
 
-        for key, value in hdr.items():
-            if key not in skipkeys \
-                   and not key.startswith('TTYPE') \
-                   and not key.startswith('TFORM') \
-                   and not key.startswith('TUNIT'):
-
-                if key not in fibermap.meta:
-                    fibermap.meta[key] = value
-                elif fibermap.meta[key] != hdr[key]:
-                    fmval = fibermap.meta[key]
-                    log.warning(f'fibermap[{key}] {fmval} != guide[{key}] {value}')
+        addkeys(fibermap.meta, guideheader, skipkeys=skipkeys)
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
