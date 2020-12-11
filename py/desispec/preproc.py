@@ -557,9 +557,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 saturlev_adu = float(cfinder.value('SATURLEV'+amp))
                 log.info('Using SATURLEV{}={} from calibration data'.format(amp,saturlev_adu))
             else :
-                saturlev_adu = 2**16
+                saturlev_adu = 2**16-1 # 65535 is the max value in the images
                 log.warning('Missing keyword SATURLEV{} in header and nothing in calib data; using {} ADU'.format(amp,saturlev_adu))
-        header['ADUSAT'+amp] = (saturlev_adu,"saturation or non lin. level, in ADU, inc. bias")
+        header['SATULEV'+amp] = (saturlev_adu,"saturation or non lin. level, in ADU, inc. bias")
 
 
         # Generate the overscan images
@@ -644,6 +644,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             data[k] -= overscan_col[k]
 
         saturlev_elec = gain*(saturlev_adu - np.mean(overscan_col))
+        header['SATUELE'+amp] = (saturlev_elec,"saturation or non lin. level, in electrons")
 
         # And now the rows
         if use_overscan_row:
