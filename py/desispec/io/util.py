@@ -456,3 +456,32 @@ def replace_prefix(filepath, oldprefix, newprefix):
 
     filename = filename.replace(oldprefix, newprefix, 1)
     return os.path.join(path, filename)
+
+def addkeys(hdr1, hdr2, skipkeys=None):
+    """
+    Add new header keys from hdr2 to hdr1, skipping skipkeys
+
+    Arguments:
+        hdr1 (dict-like): destination header for keywords
+        hdr2 (dict-like): source header for keywords
+
+    Modifies hdr1 in place
+    """
+    log = get_logger()
+    #- standard keywords that should be skipped
+    stdkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
+                'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
+                'XTENSTION', 'TFIELDS']
+
+    for key, value in hdr2.items():
+        if key not in stdkeys and \
+               ((skipkeys is None) or (key not in skipkeys)) \
+               and not key.startswith('TTYPE') \
+               and not key.startswith('TFORM') \
+               and not key.startswith('TUNIT') \
+               and key not in hdr1:
+            log.debug(f'Adding {key}')
+            hdr1[key] = value
+        else:
+            log.debug(f'Skipping {key}')
+

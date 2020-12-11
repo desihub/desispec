@@ -922,6 +922,22 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(IOError) as ex:
             find_fiberassign_file(night, 12348, tileid=4444)
 
+    def test_addkeys(self):
+        """test desispec.io.util.addkeys"""
+        from ..io.util import addkeys
+        h1 = dict(A=1, B=1, NAXIS=2)
+        h2 = dict(A=2, C=2, EXTNAME='blat', TTYPE1='F8')
+        addkeys(h1, h2)
+        self.assertEqual(h1['A'], 1)  #- h2['A'] shouldn't override
+        self.assertEqual(h1['C'], 2)  #- h2['C'] was added to h1
+        self.assertNotIn('EXTNAME', h1)  #- reserved keywords not added
+        self.assertNotIn('TTYPE1', h1)  #- reserved keywords not added
+        h3 = dict(X=3, Y=3, Z=3)
+        addkeys(h1, h3, skipkeys=['X', 'Y'])
+        self.assertNotIn('X', h1)
+        self.assertNotIn('Y', h1)
+        self.assertEqual(h1['Z'], 3)
+
 def test_suite():
     """Allows testing of only this module with the command::
 
