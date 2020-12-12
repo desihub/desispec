@@ -169,10 +169,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if erow is None:
                 continue
             elif type(erow) is str:
-                if 'arc' in erow and arcjob is None and 'arc' in procobstypes and len(arcs) > 0:
+                if erow == 'endofarcs' and arcjob is None and 'arc' in procobstypes:
                     print("\nLocated end of arc calibration sequence flag. Processing psfnight.\n")
                     ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
-                elif 'long' in erow and flatjob is None and 'flat' in procobstypes and len(flats) > 0:
+                elif erow == 'endofflats' and flatjob is None and 'flat' in procobstypes:
                     print("\nLocated end of long flat calibration sequence flag. Processing nightlyflat.\n")
                     ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
                 elif 'short' in erow and flatjob is None:
@@ -222,11 +222,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 prow = create_and_submit(prow, dry_run=dry_run, queue=queue)
                 ptable.add_row(prow)
 
+                ## Note: Assumption here on number of flats
                 if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
                     flats.append(prow)
                 elif curtype == 'arc' and arcjob is None:
                     arcs.append(prow)
-                elif curtype == 'science' and last_not_dither:
+                elif curtype == 'science' and (prow['OBSDESC'] != 'dither'):
                     sciences.append(prow)
 
                 lasttile = curtile

@@ -296,17 +296,25 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
 
     ## Check to see if it is a manifest file for calibrations
     if "SEQUENCE" in req_dict and req_dict["SEQUENCE"].lower() == "manifest":
-        if 'PROGRAM' in req_dict:
-            prog = req_dict['PROGRAM'].lower()
-            if 'calib' in prog and 'done' in prog:
-                if 'short' in prog:
-                    return "short calib complete"
-                elif 'long' in prog:
-                    return "long calib complete"
-                elif 'arc' in prog:
-                    return 'arc calib complete'
-                else:
-                    pass
+        if int(night) < 20200310:
+            pass
+        elif int(night) < 20200801:
+            if 'PROGRAM' in req_dict:
+                prog = req_dict['PROGRAM'].lower()
+                if 'calib' in prog and 'done' in prog:
+                    if 'short' in prog:
+                        return "short calib complete"
+                    elif 'long' in prog:
+                        return 'endofflats'
+                    elif 'arc' in prog:
+                        return 'endofarcs'
+        else:
+            if 'MANIFEST' in req_dict:
+                manifest = req_dict['MANIFEST']
+                if 'name' in manifest:
+                    name = manifest['name'].lower()
+                    if name in ['endofarcs','endofflats']:
+                        return name
 
     ## If FLAVOR is wrong or no obstype is defines, skip it
     if 'FLAVOR' not in req_dict.keys():
@@ -394,10 +402,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
 
         ## As an example of future flag possibilites, flag science exposures are
         ##    garbage if less than 60 seconds
-        if header['OBSTYPE'].lower() == 'science' and float(header['EXPTIME']) < 60:
-            outdict['EXPFLAG'] = 2
-        else:
-            outdict['EXPFLAG'] = 0
+        # if header['OBSTYPE'].lower() == 'science' and float(header['EXPTIME']) < 60:
+        #     outdict['EXPFLAG'] = 2
+        # else:
+        #     outdict['EXPFLAG'] = 0
+        outdict['EXPFLAG'] = 0
 
         ## For Things defined in both request and data, if they don't match, flag in the
         ##     output file for followup/clarity
