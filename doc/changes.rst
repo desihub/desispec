@@ -19,6 +19,7 @@ desispec Change Log
 
 * Smaller (but important) updates:
 
+  * etc/desispec.modules uses desi_spectro_calib 0.2.0
   * Default saturation 2**16-1; updated keywords (PR `#1046`_).
   * Fix preproc header keyword propagation (PR `#1045`_).
   * Add support for gzipped fiberassign files (PR `#1042`_).
