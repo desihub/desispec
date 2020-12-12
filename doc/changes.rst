@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.35.0 (unreleased)
+0.35.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.35.0 (2020-12-11)
 -------------------
 
 * Major updates:
@@ -14,6 +19,8 @@ desispec Change Log
 
 * Smaller (but important) updates:
 
+  * Default saturation 2**16-1; updated keywords (PR `#1046`_).
+  * Fix preproc header keyword propagation (PR `#1045`_).
   * Add support for gzipped fiberassign files (PR `#1042`_).
   * Fix tests on single-core machines (PR `#1035`_).
   * `desi_paste_preproc` for future use combining short+long arcs (PR `#1034`_).
@@ -50,6 +57,8 @@ desispec Change Log
 .. _`#1036`: https://github.com/desihub/desispec/issues/1036
 .. _`#1038`: https://github.com/desihub/desispec/issues/1038
 .. _`#1042`: https://github.com/desihub/desispec/issues/1042
+.. _`#1045`: https://github.com/desihub/desispec/issues/1045
+.. _`#1046`: https://github.com/desihub/desispec/issues/1046
 
 0.34.7 (2020-09-01)
 -------------------
