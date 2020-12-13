@@ -359,7 +359,10 @@ def assemble_fibermap(night, expid, force=False):
 
     #- raw data file for header
     rawfile = findfile('raw', night, expid)
-    rawheader = fits.getheader(rawfile, 'SPEC')
+    try:
+        rawheader = fits.getheader(rawfile, 'SPEC')
+    except KeyError:
+        rawheader = fits.getheader(rawfile, 'SPS')
 
     #- Find fiberassign file
     fafile = find_fiberassign_file(night, expid)
