@@ -5,7 +5,10 @@ desispec Change Log
 0.35.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Fixes assemble_fibermap for older data
+  (PR `#1047`_, bug introduced in PR `#1045`_).
+
+.. _`#1047`: https://github.com/desihub/desispec/issues/1047
 
 0.35.0 (2020-12-11)
 -------------------
