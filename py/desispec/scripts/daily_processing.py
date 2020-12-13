@@ -226,7 +226,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     flats.append(prow)
                 elif curtype == 'arc' and arcjob is None:
                     arcs.append(prow)
-                elif curtype == 'science' and last_not_dither:
+                elif curtype == 'science' and (prow['OBSDESC'] != 'dither'):
                     sciences.append(prow)
 
                 lasttile = curtile
