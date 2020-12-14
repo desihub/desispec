@@ -20,7 +20,7 @@ from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 from desispec.parallel import default_nproc
 from desispec.io.filters import load_legacy_survey_filter
-from desiutil.dust import ext_odonnell
+from desiutil.dust import ext_odonnell,extinction_total_to_selective_ratio
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 def parse(options=None):
@@ -41,7 +41,7 @@ def parse(options=None):
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
     parser.add_argument('--maxstdstars', type=int, default=30, \
             help='Maximum number of stdstars to include')
-    
+
     log = get_logger()
     args = None
     if options is None:
@@ -117,10 +117,10 @@ def main(args) :
                 fiberstatus = frame.fibermap['FIBERSTATUS'].data.copy()
             else:
                 fiberstatus |= frame.fibermap['FIBERSTATUS']
-            
+
         for camera,frame in camdict.items():
             frame.fibermap['FIBERSTATUS'] |= fiberstatus
-            # Set fibermask flagged spectra to have 0 flux and variance                       
+            # Set fibermask flagged spectra to have 0 flux and variance
             frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
             frame_fibermap = frame.fibermap
             frame_starindices = np.where(isStdStar(frame_fibermap))[0]
@@ -134,7 +134,7 @@ def main(args) :
                 keep &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
 
             frame_starindices = frame_starindices[keep]
-        
+
             if spectrograph is None :
                 spectrograph = frame.spectrograph
                 fibermap = frame_fibermap
@@ -163,7 +163,7 @@ def main(args) :
         if not camera in skies :
             skies[camera]=[]
         skies[camera].append(sky)
-        
+
     for filename in args.fiberflats :
         log.info("reading %s"%filename)
         flat=io.read_fiberflat(filename)
@@ -175,7 +175,7 @@ def main(args) :
             #raise ValueError("cannot handle several flats of same camera (%s)"%camera)
         else :
             flats[camera]=flat
-    
+
 
     if starindices.size == 0 :
         log.error("no STD star found in fibermap")
@@ -184,7 +184,7 @@ def main(args) :
     log.info("found %d STD stars"%starindices.size)
 
     log.warning("Not using flux errors for Standard Star fits!")
-    
+
     # DIVIDE FLAT AND SUBTRACT SKY , TRIM DATA
     ############################################
     # since poping dict, we need to copy keys to iterate over to avoid
@@ -200,7 +200,7 @@ def main(args) :
             log.warning("Missing flat for %s"%cam)
             frames.pop(cam)
             continue
-        
+
         flat=flats[cam]
         for frame,sky in zip(frames[cam],skies[cam]) :
             frame.flux = frame.flux[starindices]
@@ -230,15 +230,15 @@ def main(args) :
             msnr *= (msnr>0)
             snr[band] = np.sqrt( snr[band]**2 + msnr**2 )
     log.info("SNR(B) = {}".format(snr['b']))
-    
+
     ###############################
     max_number_of_stars = 50
     min_blue_snr = 4.
     ###############################
     indices=np.argsort(snr['b'])[::-1][:max_number_of_stars]
-    
+
     validstars = np.where(snr['b'][indices]>min_blue_snr)[0]
-    
+
     #- TODO: later we filter on models based upon color, thus throwing
     #- away very blue stars for which we don't have good models.
 
@@ -251,9 +251,9 @@ def main(args) :
 
     for band in ['b','r','z'] :
         snr[band]=snr[band][validstars]
-    
+
     log.info("BLUE SNR of selected stars={}".format(snr['b']))
-    
+
     for cam in frames :
         for frame in frames[cam] :
             frame.flux = frame.flux[validstars]
@@ -289,12 +289,8 @@ def main(args) :
     if 'PHOTSYS' not in fibermap.colnames:
         log.warning('Old fibermap format; using defaults for missing columns')
         log.warning("    PHOTSYS = 'S'")
-        log.warning("    MW_TRANSMISSION_G/R/Z = 1.0")
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
-        fibermap['MW_TRANSMISSION_G'] = 1.0
-        fibermap['MW_TRANSMISSION_R'] = 1.0
-        fibermap['MW_TRANSMISSION_Z'] = 1.0
         fibermap['EBV'] = 0.0
 
     model_filters = dict()
@@ -318,9 +314,16 @@ def main(args) :
 
     star_mags = dict()
     star_unextincted_mags = dict()
+
+    photometric_systems = np.unique(fibermap['PHOTSYS'])
     for band in ['G', 'R', 'Z']:
         star_mags[band] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band])
-        star_unextincted_mags[band] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band] / fibermap['MW_TRANSMISSION_'+band])
+        star_unextincted_mags[band] = np.zeros(star_mags[band].shape)
+        for photsys in  photometric_systems :
+            r_band = extinction_total_to_selective_ratio(band , photsys)
+            selection = (fibermap['PHOTSYS'] == photsys)
+            a_band = r_band * fibermap['EBV'][selection]  # a_band = -2.5*log10(transmission); a_band>0
+            star_unextincted_mags[band][selection] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band][selection]) - a_band
 
     star_colors = dict()
     star_colors['G-R'] = star_mags['G'] - star_mags['R']
@@ -355,14 +358,14 @@ def main(args) :
             raise ValueError('Unknown color {}'.format(args.color))
         bands=args.color.split("-")
         model_colors = model_mags[bands[0]+photsys] - model_mags[bands[1]+photsys]
-        
+
         color_diff = model_colors - star_unextincted_colors[args.color][star]
         selection = np.abs(color_diff) < args.delta_color
         if np.sum(selection) == 0 :
             log.warning("no model in the selected color range for this star")
             continue
-        
-        
+
+
         # smallest cube in parameter space including this selection (needed for interpolation)
         new_selection = (teff>=np.min(teff[selection]))&(teff<=np.max(teff[selection]))
         new_selection &= (logg>=np.min(logg[selection]))&(logg<=np.max(logg[selection]))
@@ -372,7 +375,7 @@ def main(args) :
         log.info("star#%d fiber #%d, %s = %f, number of pre-selected models = %d/%d"%(
             star, starfibers[star], args.color, star_unextincted_colors[args.color][star],
             selection.size, stdflux.shape[0]))
-        
+
         # Match unextincted standard stars to data
         coefficients, redshift[star], chi2dof[star] = match_templates(
             wave, flux, ivar, resolution_data,
@@ -381,9 +384,9 @@ def main(args) :
             ncpu=args.ncpu, z_max=args.z_max, z_res=args.z_res,
             template_error=args.template_error
             )
-        
+
         linear_coefficients[star,selection] = coefficients
-        
+
         log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
             starfibers[star],
             np.inner(teff,linear_coefficients[star]),
@@ -392,7 +395,7 @@ def main(args) :
             redshift[star],
             chi2dof[star])
             )
-        
+
         # Apply redshift to original spectrum at full resolution
         model=np.zeros(stdwave.size)
         redshifted_stdwave = stdwave*(1+redshift[star])
@@ -413,7 +416,7 @@ def main(args) :
         model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
         fitted_model_colors[star] = model_mag1 - model_mag2
         if bands[0]=="R" :
-            model_magr = model_mag1 
+            model_magr = model_mag1
         elif bands[1]=="R" :
             model_magr = model_mag2
 
@@ -447,4 +450,3 @@ def main(args) :
     data['RED_SNR']  = snr['r'][fitted_stars]
     data['NIR_SNR']  = snr['z'][fitted_stars]
     io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers[fitted_stars],data)
-
