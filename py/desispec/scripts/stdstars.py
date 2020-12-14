@@ -320,9 +320,15 @@ def main(args) :
         star_mags[band] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band])
         star_unextincted_mags[band] = np.zeros(star_mags[band].shape)
         for photsys in  photometric_systems :
-            r_band = extinction_total_to_selective_ratio(band , photsys)
+            r_band = extinction_total_to_selective_ratio(band , photsys) # dimensionless
+            # r_band = a_band / E(B-V)
+            # E(B-V) is a difference of magnitudes (dimensionless)
+            # a_band = -2.5*log10(effective dust transmission) , dimensionless
+            # effective dust transmission =
+            #                  integral( SED(lambda) * filter_transmission(lambda,band) * milkyway_dust_transmission(lambda,E(B-V)) dlamdba)
+            #                / integral( SED(lambda) * filter_transmission(lambda,band) dlamdba)
             selection = (fibermap['PHOTSYS'] == photsys)
-            a_band = r_band * fibermap['EBV'][selection]  # a_band = -2.5*log10(transmission); a_band>0
+            a_band = r_band * fibermap['EBV'][selection]  # dimensionless
             star_unextincted_mags[band][selection] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band][selection]) - a_band
 
     star_colors = dict()
