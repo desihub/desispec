@@ -17,9 +17,10 @@ jobs:
             fail-fast: true
             matrix:
                 os: [ubuntu-latest]
-                python-version: [3.6, 3.7, 3.8]
+                python-version: [3.7, 3.8]  # fitsio does not like Python < 3.7
                 # astropy-version: ['<3.0', '<4.1']  #, '<5.0']
         env:
+            DESIUTIL_VERSION: 3.1.0
             DESIMODEL_DATA: branches/test-0.12
 
         steps:
@@ -35,7 +36,7 @@ jobs:
               run: |
                 python -m pip install --upgrade pip wheel
                 python -m pip install pytest
-                python -m pip install git+https://github.com/desihub/desiutil.git@3.1.0#egg=desiutil
+                python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
                 svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data
             - name: Run the test
@@ -49,6 +50,9 @@ jobs:
             matrix:
                 os: [ubuntu-latest]
                 python-version: [3.8]
+        env:
+            DESIUTIL_VERSION: 3.1.0
+            DESIMODEL_DATA: branches/test-0.12
 
         steps:
             - name: Checkout code
@@ -63,7 +67,7 @@ jobs:
               run: |
                 python -m pip install --upgrade pip wheel
                 python -m pip install pytest pytest-cov coveralls
-                python -m pip install git+https://github.com/desihub/desiutil.git@3.1.0#egg=desiutil
+                python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
                 svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data
             - name: Run the test with coverage
