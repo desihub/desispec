@@ -5,7 +5,8 @@ healpy
 speclite
 sqlalchemy
 fitsio
-git+https://github.com/desihub/desiutil.git@3.1.0#egg=desiutil
+# Install desiutil separately since it is needed for the other installs.
+# git+https://github.com/desihub/desiutil.git@3.1.0#egg=desiutil
 git+https://github.com/desihub/specter.git@0.9.4#egg=specter
 git+https://github.com/desihub/desimodel.git@0.13.0#egg=desimodel
 # Don't forget to install desimodel test data.
