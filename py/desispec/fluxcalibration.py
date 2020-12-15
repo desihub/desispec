@@ -41,6 +41,7 @@ def isStdStar(fibermap, bright=None):
 
     TODO: move out of scripts/stdstars.py
     """
+    log = get_logger()
     target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
     desi_target = fibermap[target_colnames[0]]  # (SV1_)DESI_TARGET
     desi_mask = target_masks[0]                 # (sv1) desi_mask
@@ -55,6 +56,17 @@ def isStdStar(fibermap, bright=None):
     for bla in ['SV0_STD_FAINT','SV0_STD_BRIGHT'] :
         if bla in desi_mask.names():
             yes |= (desi_target & desi_mask[bla]) != 0
+
+    #- Hack for data on 20201214 where some fiberassign files had targeting
+    #- bits set to 0, but column FA_TYPE was still ok
+    #- Hardcode mask to avoid fiberassign dependency loop
+    FA_STDSTAR_MASK = 2   # fiberassing.targets.TARGET_TYPE_STANDARD
+    if np.count_nonzero(yes) == 0:
+        log.error(f'No standard stars found in {target_colnames[0]}')
+        if 'FA_TYPE' in fibermap.dtype.names and \
+                np.sum((fibermap['FA_TYPE'] & FA_STDSTAR_MASK) != 0) > 0:
+            log.warning('Using FA_TYPE to find standard stars instead')
+            yes = (fibermap['FA_TYPE'] & FA_STDSTAR_MASK) != 0
 
     return yes
 
