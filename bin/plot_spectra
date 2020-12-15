@@ -111,7 +111,7 @@ for tid in targetids :
         for j in jj :
             for b in spec._bands :
 
-                i=np.where(spec.ivar[b][j]*(spec.mask[b][j]==0)>1./5.**2)[0]
+                i=np.where(spec.ivar[b][j]*(spec.mask[b][j]==0)>1./100.**2)[0]
                 if i.size<10 : continue
                 if args.rebin is not None and args.rebin>0:
                     rwave=np.linspace(spec.wave[b][0],spec.wave[b][-1],spec.wave[b].size//args.rebin)
