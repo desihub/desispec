@@ -352,16 +352,15 @@ def main(args, comm=None):
 
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
-        args.disable_merge=False
         if args.disable_merge :
             log.info("don't merge")
         else :
             #- Empirically it appears that files written by one rank sometimes
             #- aren't fully buffer-flushed and closed before getting here,
             #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
-            log.info('HACK: taking a 20 sec pause before merging')
+            log.info('HACK: taking a 2 sec pause before merging')
             sys.stdout.flush()
-            time.sleep(20.)
+            time.sleep(2.)
 
             merge_psf(inputs,outfits)
 

@@ -192,9 +192,7 @@ def write_psf(pyps,opts):
         bytes(namein,encoding='utf8'),
         bytes(nameout,encoding='utf8')
     )
-    #        b'4,500) \'                      ',
-    #        b' 4, 500)\'          / dimension'
-    #)
+
     fin.close()
 
     fin = open(fitsfilename,"wb")
