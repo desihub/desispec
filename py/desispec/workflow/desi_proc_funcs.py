@@ -436,13 +436,18 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     with open(scriptfile, 'w') as fx:
         fx.write('#!/bin/bash -l\n\n')
-        fx.write('#SBATCH -C haswell\n')
+        if queue != 'dirac1' :
+            fx.write('#SBATCH -C haswell\n')
         fx.write('#SBATCH -N {}\n'.format(nodes))
         fx.write('#SBATCH -n {}\n'.format(ncores))
-        fx.write('#SBATCH --qos {}\n'.format(queue))
+        if queue == 'dirac1' :
+            fx.write('#SBATCH --partition {}\n'.format(queue))
+        else :
+            fx.write('#SBATCH --qos {}\n'.format(queue))
         if batch_opts is not None:
             fx.write('#SBATCH {}\n'.format(batch_opts))
-        fx.write('#SBATCH --account desi\n')
+        if queue != 'dirac1' :
+            fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
         fx.write('#SBATCH --time=00:{:02d}:00\n'.format(runtime))
