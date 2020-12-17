@@ -272,6 +272,10 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
         nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // 32 + 1
         runtime: int, the max time requested for the script in minutes for the processing.
     """
+    cores_per_node = 32
+    if queue == 'dirac1':
+        cores_per_node = 24
+        
     nspectro = (ncameras - 1) // 3 + 1
     if jobdesc in ('ARC', 'TESTARC'):
         ncores, runtime = 20 * ncameras, 35
@@ -280,7 +284,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('ZERO', 'DARK'):
-        ncores, runtime = 2, 5
+        ncores, runtime = ncameras, 5
     elif jobdesc == 'PSFNIGHT':
         ncores, runtime = 20 * nspectro, 5 #ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
@@ -294,7 +298,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     if forced_runtime is not None:
         runtime = forced_runtime
 
-    nodes = (ncores - 1) // 32 + 1
+    nodes = (ncores - 1) // cores_per_node + 1
 
     # - Arcs and flats make good use of full nodes, but throttle science
     # - exposures to 5 nodes to enable two to run together in the 10-node
@@ -307,7 +311,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
 
     if (queue == 'realtime') and (nodes > max_realtime_nodes):
         nodes = max_realtime_nodes
-        ncores = 32 * nodes
+        ncores = cores_per_node * nodes
 
     return ncores, nodes, runtime
 
