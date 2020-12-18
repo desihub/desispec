@@ -559,7 +559,8 @@ def find_most_recent(night, file_type='psfnight', cam='r', n_nights=30):
     for daysback in range(n_nights) :
         test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
         test_night_str = time.strftime('%Y%m%d', test_night_struct)
-        nightfile = findfile(file_type, test_night_str, '00000000', cam)
+        ## Give Expid of 0, because we don't use that anyway
+        nightfile = findfile(file_type, test_night_str, 0, cam)
         if os.path.isfile(nightfile) :
             return nightfile
 
