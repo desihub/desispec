@@ -779,6 +779,8 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
         internal_id += 1
+    if dry_run:
+        time.sleep(1)
     return ptable, arcjob, flatjob, sciences, internal_id
 
 
