@@ -28,7 +28,8 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
-from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_joint_fit_parser, create_desi_proc_batch_script
+from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_joint_fit_parser, create_desi_proc_batch_script, \
+                                              find_most_recent
 from desispec.workflow.desi_proc_funcs import load_raw_data_header, update_args_with_headers
 
 parser = get_desi_proc_joint_fit_parser()
@@ -366,13 +367,30 @@ if args.obstype in ['SCIENCE']:
         comm.barrier()
 
     if rank==0 and len(args.expids) > 1:
+        start_directory = os.path.abspath(os.curdir)
         for sp in spectro_nums:
             saved_stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
+            existing_dirname, existing_fname = os.path.split(saved_stdfile)
             for expid in args.expids[1:]:
                 new_stdfile = findfile('stdstars', args.night, expid, spectrograph=sp)
-                cmd = f'ln -s {saved_stdfile} {new_stdfile}'
-                log.info(f'Sym Linking jointly fitted stdstar file: {saved_stdfile}  to  {new_stdfile}')
+                new_dirname, new_fname = os.path.split(new_stdfile)
+                log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
+                                                                                     os.path.isfile(new_stdfile),
+                                                                                     os.path.islink(new_stdfile)))
+                os.chdir(new_dirname)
+                rel_path_to_orig = os.path.relpath(existing_dirname,new_dirname)
+                rel_path_to_orig_name = os.path.join(rel_path_to_orig,existing_fname)
+                log.info(f'Sym Linking jointly fitted stdstar file: {new_stdfile} '+\
+                         f'to existing file at rel. path {rel_path_to_orig_name}')
+                cmd = f'ln -s {rel_path_to_orig_name} {new_fname}'
+                cmdlist = cmd.split(' ')
+                log.info(str(cmdlist))
                 runcmd(cmd, inputs=[saved_stdfile], outputs=[new_stdfile])
+                log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
+                                                                                     os.path.isfile(new_stdfile),
+                                                                                     os.path.islink(new_stdfile)))
+        os.chdir(start_directory)
+
 # -------------------------------------------------------------------------
 # - Wrap up
 
