@@ -428,7 +428,6 @@ def parse_previous_tables(etable, ptable, night):
             arcjob = ptable[jobtypes=='psfnight'][0]
             log.info("Located joint fit arc job in exposure table: {}".format(arcjob))
         elif lasttype == 'arc':
-            arcs = []
             seqnum = 10
             for row in ptable[::-1]:
                 erow = etable[etable['EXPID']==row['EXPID'][0]]
@@ -437,18 +436,20 @@ def parse_previous_tables(etable, ptable, night):
                     seqnum = int(erow['SEQNUM'])
                 else:
                     break
+            ## Because we work backword to fill in, we need to reverse them to get chronological order back
+            arcs = arcs[::-1]
 
         if 'nightlyflat' in jobtypes:
             flatjob = ptable[jobtypes=='nightlyflat'][0]
             log.info("Located joint fit flat job in exposure table: {}".format(flatjob))
         elif lasttype == 'flat':
-            flats = []
             for row in ptable[::-1]:
                 erow = etable[etable['EXPID']==row['EXPID'][0]]
                 if row['OBSTYPE'].lower() == 'flat' and int(erow['SEQTOT'])<5:
                     flats.append(row)
                 else:
                     break
+            flats = flats[::-1]
 
         if lasttype.lower() == 'science':
             for row in ptable[::-1]:
@@ -457,6 +458,7 @@ def parse_previous_tables(etable, ptable, night):
                     sciences.append(row)
                 else:
                     break
+            sciences = sciences[::-1]
     else:
         internal_id = night_to_starting_iid(night)
         last_not_dither = True
@@ -774,9 +776,11 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         if tilejob is not None:
             sciences = []
     elif lasttype == 'flat' and flatjob is None and len(flats) > 10:
+        ## Note here we have an assumption about the number of expected flats being greater than 10
         ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
         internal_id += 1
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
+        ## Note here we have an assumption about the number of expected arcs being greater than 4
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
         internal_id += 1
     return ptable, arcjob, flatjob, sciences, internal_id
