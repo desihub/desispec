@@ -532,15 +532,15 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     return scriptfile
 
-def find_most_recent(night, file_type='psfnight', exp='00000000', cam='r', n_nights=30):
+def find_most_recent(night, file_type='psfnight', cam='r', n_nights=30):
     '''
        Searches back in time for either psfnight or fiberflatnight (or anything supported by
-       desispec.calibfinder.findcalibfile.
+       desispec.calibfinder.findcalibfile. This only works on nightly-based files, so exposure id
+       information is not used.
 
        Inputs:
          night : str. YYYYMMDD   night to look back from
          file_type : str. psfnight or fiberflatnight
-         exp : str. 8-digit exposure ID. Default is 00000000
          cam : str. camera (b, r, or z).
          n_nights : int.  number of nights to step back before giving up
 
@@ -559,7 +559,7 @@ def find_most_recent(night, file_type='psfnight', exp='00000000', cam='r', n_nig
     for daysback in range(n_nights) :
         test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
         test_night_str = time.strftime('%Y%m%d', test_night_struct)
-        nightfile = findfile(file_type, test_night_str, exp, cam)
+        nightfile = findfile(file_type, test_night_str, '00000000', cam)
         if os.path.isfile(nightfile) :
             return nightfile
 

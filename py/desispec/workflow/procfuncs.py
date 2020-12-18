@@ -649,6 +649,8 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False):
             row = create_and_submit(row, queue=queue, dry_run=dry_run)
             ptable.add_row(row)
     else:
+        if dry_run:
+            time.sleep(1)
         log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
         ptable = set_calibrator_flag(prows, ptable)
 
@@ -779,8 +781,6 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
         internal_id += 1
-    if dry_run:
-        time.sleep(1)
     return ptable, arcjob, flatjob, sciences, internal_id
 
 
