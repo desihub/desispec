@@ -85,7 +85,6 @@ else:
         for infile in args.inputs:
             hdr = load_raw_data_header(pathname=infile, return_filehandle=False)
             args.expids.append(int(hdr['EXPID']))
-            fx.close()
 
     args.expids = np.sort(args.expids)
     args.inputs = np.sort(args.inputs)
