@@ -226,7 +226,7 @@ def main(args) :
                 medflux[i] = np.median(frame.flux)
             medflux *= (medflux>0)
             weights=medflux/np.mean(medflux)
-            log.debug("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
+            log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
 
             sw=np.zeros(frames[cam][0].flux.shape)
             swf=np.zeros(frames[cam][0].flux.shape)
