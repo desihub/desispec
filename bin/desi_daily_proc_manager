@@ -5,9 +5,11 @@ import argparse
 import socket
 import sys
 import numpy as np
+import os
 
 from desispec.scripts.daily_processing import daily_processing_manager
 from desispec.io.util import create_camword
+from desispec.desi_proc_dashboard import get_skipped_expids
 
 from desispec.workflow.timing import during_operating_hours
 from desispec.workflow.utils import check_running
@@ -48,6 +50,12 @@ def parse_args():#options=None):
                         help="Wait time between loops in looking for new data.")
     parser.add_argument("--queue-cadence-time", type=int, required=False, default=1800,
                         help="Wait time between loops in checking queue statuses and resubmitting failures.")
+    parser.add_argument("--override-night", type=str,default=None,
+                        help="Specify the night to run on. Overrides the current day.")
+    parser.add_argument("--ignore-expid-list", type=str,default=None,
+                        help="Specify the expid's to ignore in a comma separated list given as a string.")
+    parser.add_argument("--ignore-expid-file", type=str,default=None,
+                        help="Specify the expid's to ignore in a comma separated list within a text file.")
     # parser.add_argument("-r", "--reduxdir", type=str, required=False,
     #                     help="Main reduction dir where specprod dir will reside.")
 
@@ -59,8 +67,6 @@ def parse_args():#options=None):
                         help="Allow script to run on nodes other than cori21")
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually created or submitted.")
-    parser.add_argument("--override-night", type=str,default=None,
-                        help="Specify the night to run on. Overrides the current day.")
     parser.add_argument("--continue-looping-debug",action="store_true",help= "FOR DEBUG purposes only."+
                          "Will continue looping in search of new data until the process is terminated externally.")
     # parser.add_argument("--force-specprod", action="store_true",
@@ -129,10 +135,18 @@ if __name__ == '__main__':
         print(f"Couldn't understand cameras={args.cameras}, ignoring and using information from files")
         camword = None
 
+    exps_to_ignore = []
+    if args.ignore_expid_list is not None:
+        expids = [int(val) for val in args.ignore_expid_list.split(',')]
+        exps_to_ignore.extend(expids)
+    if args.ignore_expid_file is not None and os.path.isfile(args.ignore_expid_file):
+        expids = get_skipped_expids(args.ignore_expid_file)
+        exps_to_ignore.extend(expids)
+
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
                              expobstypes=args.exp_obstypes, procobstypes=args.proc_obstypes,
-                             dry_run=args.dry_run, tab_filetype=args.table_file_type,
-                             camword=camword, override_night=args.override_night, queue=args.queue,
+                             dry_run=args.dry_run, tab_filetype=args.table_file_type, camword=camword, queue=args.queue,
+                             override_night=args.override_night, exps_to_ignore=exps_to_ignore,
                              continue_looping_debug=args.continue_looping_debug, data_cadence_time=args.data_cadence_time,
                              queue_cadence_time=args.queue_cadence_time)

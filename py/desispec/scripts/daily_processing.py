@@ -22,7 +22,8 @@ from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, a
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
-                             expobstypes=None, procobstypes=None, camword=None, override_night=None, tab_filetype='csv', queue='realtime',
+                             expobstypes=None, procobstypes=None, camword=None, override_night=None,
+                             tab_filetype='csv', queue='realtime', exps_to_ignore=None,
                              data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False,
                              verbose=False):
     """
@@ -40,6 +41,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         override_night: str or int. 8 digit night, e.g. 20200314, of data to run on. If None, it runs on the current night.
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
+        exps_to_ignore: list. A list of exposure id's that should not be processed. Each should be an integer.
         data_cadence_time: int. Wait time in seconds between loops in looking for new data. Default is 30 seconds.
         queue_cadence_time: int. Wait time in seconds between loops in checking queue statuses and resubmitting failures. Default is 1800s.
         dry_run: boolean. If true, no scripts are written and no scripts are submitted. The tables are still generated
@@ -88,8 +90,15 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         if typ not in expobstypes:
             expobstypes.append(typ)
 
+    ## Warn people if changing camword
     if camword is not None:
         print(f"Overriding camword in data with user provided value: {camword}")
+
+    ## Define the set of exposures to ignore
+    if exps_to_ignore is None:
+        exps_to_ignore = set()
+    else:
+        exps_to_ignore = set(np.array(exps_to_ignore).astype(int))
 
     ## Adjust wait times if simulating things
     speed_modifier = 1
@@ -180,9 +189,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     flats = []
                 else:
                     continue
+            elif exp in exps_to_ignore:
+                    print("\n{} given as exposure id to ignore. Not processing.".format(exp))
+                    erow['EXPFLAG'] = 9
+                    etable.add_row(erow)
+                    unproc_table.add_row(erow)
             else:
                 etable.add_row(erow)
-
                 if erow['OBSTYPE'] not in procobstypes:
                     print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
                     unproc_table.add_row(erow)
