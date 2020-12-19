@@ -639,6 +639,7 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False):
         log.info(" ")
         log.info(f"Submitting individual science exposures now that joint fitting of standard stars is submitted.\n")
         for row in prows:
+            ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
             if dry_run:
                 time.sleep(1)
             row['JOBDESC'] = 'poststdstar'
@@ -649,6 +650,7 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False):
             row = create_and_submit(row, queue=queue, dry_run=dry_run)
             ptable.add_row(row)
     else:
+        ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
         if dry_run:
             time.sleep(1)
         log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
