@@ -217,6 +217,32 @@ def main(args) :
                     frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
             frame.resolution_data = frame.resolution_data[starindices]
 
+        nframes=len(frames[cam])
+        if nframes>1 :
+            # optimal weights for the coaddition = ivar*throughput, not directly ivar,
+            # we estimate the relative throughput with median fluxes at this stage
+            medflux=np.zeros(nframes)
+            for i,frame in enumerate(frames[cam]) :
+                medflux[i] = np.median(frame.flux)
+            medflux *= (medflux>0)
+            weights=medflux/np.mean(medflux)
+            log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
+
+            sw=np.zeros(frames[cam][0].flux.shape)
+            swf=np.zeros(frames[cam][0].flux.shape)
+            swr=np.zeros(frames[cam][0].resolution_data.shape)
+
+            for i,frame in enumerate(frames[cam]) :
+                sw  += weights[i]*frame.ivar
+                swf += weights[i]*frame.ivar*frame.flux
+                swr += weights[i]*frame.ivar[:,None,:]*frame.resolution_data
+            coadded_frame = frames[cam][0]
+            coadded_frame.ivar = sw
+            coadded_frame.flux = swf/(sw+(sw==0))
+            coadded_frame.resolution_data = swr/((sw+(sw==0))[:,None,:])
+            frames[cam] = [ coadded_frame ]
+
+
     # CHECK S/N
     ############################################
     # for each band in 'brz', record quadratic sum of median S/N across wavelength
