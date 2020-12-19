@@ -300,7 +300,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     # - exposures to 5 nodes to enable two to run together in the 10-node
     # - realtime queue, since their wallclock is dominated by less
     # - efficient sky and fluxcalib steps
-    if jobdesc in ('ARC', 'TESTARC', 'FLAT', 'TESTFLAT'):
+    if jobdesc in ('ARC', 'TESTARC'):#, 'FLAT', 'TESTFLAT'):
         max_realtime_nodes = 10
     else:
         max_realtime_nodes = 5
@@ -463,14 +463,21 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                     inparams.append(subparam)
         else:
             inparams = list(cmdline)        
-        for parameter in ['-q', '--queue', '--batch-opts']:
+        for parameter in ['--queue', '-q', '--batch-opts']:
+            ## If a parameter is in the list, remove it and it's argument
+            ## Elif it is a '--' command, it might be --option=value, which won't be split.
+            ##      check for that and remove the whole "--option=value"
             if parameter in inparams:
                 loc = np.where(np.array(inparams) == parameter)[0][0]
                 # Remove the command
                 inparams.pop(loc)
                 # Remove the argument of the command (now in the command location after pop)
                 inparams.pop(loc)
-
+            elif '--' in parameter:
+                for ii,inparam in enumerate(inparams.copy()):
+                    if parameter in inparam:
+                        inparams.pop(ii)
+                        break
 
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
@@ -525,18 +532,20 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     return scriptfile
 
-def find_most_recent(night, file_type='psfnight', n_nights=30):
+def find_most_recent(night, file_type='psfnight', cam='r', n_nights=30):
     '''
        Searches back in time for either psfnight or fiberflatnight (or anything supported by
-       desispec.calibfinder.findcalibfile.
+       desispec.calibfinder.findcalibfile. This only works on nightly-based files, so exposure id
+       information is not used.
 
        Inputs:
-         night : str YYYMMDD   night to look back from
-         file_type : str psfnight or fiberflatnight
-         n_nights : int  number of nights to step back before giving up
+         night : str. YYYYMMDD   night to look back from
+         file_type : str. psfnight or fiberflatnight
+         cam : str. camera (b, r, or z).
+         n_nights : int.  number of nights to step back before giving up
 
       returns:
-         nightfile : str Full pathname to calibration file of interest.
+         nightfile : str. Full pathname to calibration file of interest.
                      If none found, None is returned.
 
     '''
@@ -550,7 +559,7 @@ def find_most_recent(night, file_type='psfnight', n_nights=30):
     for daysback in range(n_nights) :
         test_night_struct = time.strptime(time.ctime(time.mktime(test_night_struct)-one_day))
         test_night_str = time.strftime('%Y%m%d', test_night_struct)
-        nightfile = findfile(file_type, test_night_str, '00000000', camera)
+        nightfile = findfile(file_type, test_night_str, camera=cam)
         if os.path.isfile(nightfile) :
             return nightfile
 

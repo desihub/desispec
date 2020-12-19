@@ -28,7 +28,8 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger, DEBUG, INFO
 stop_imports = time.time()
 
-from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_joint_fit_parser, create_desi_proc_batch_script
+from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_joint_fit_parser, create_desi_proc_batch_script, \
+                                              find_most_recent
 from desispec.workflow.desi_proc_funcs import load_raw_data_header, update_args_with_headers
 
 parser = get_desi_proc_joint_fit_parser()
@@ -84,7 +85,6 @@ else:
         for infile in args.inputs:
             hdr = load_raw_data_header(pathname=infile, return_filehandle=False)
             args.expids.append(int(hdr['EXPID']))
-            fx.close()
 
     args.expids = np.sort(args.expids)
     args.inputs = np.sort(args.inputs)
@@ -370,9 +370,19 @@ if args.obstype in ['SCIENCE']:
             saved_stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
             for expid in args.expids[1:]:
                 new_stdfile = findfile('stdstars', args.night, expid, spectrograph=sp)
-                cmd = f'ln -s {saved_stdfile} {new_stdfile}'
-                log.info(f'Sym Linking jointly fitted stdstar file: {saved_stdfile}  to  {new_stdfile}')
-                runcmd(cmd, inputs=[saved_stdfile], outputs=[new_stdfile])
+                new_dirname, new_fname = os.path.split(new_stdfile)
+                log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
+                                                                                     os.path.isfile(new_stdfile),
+                                                                                     os.path.islink(new_stdfile)))
+                relpath_saved_std = os.path.relpath(saved_stdfile, new_dirname)
+                log.debug(f'Sym Linking jointly fitted stdstar file: {new_stdfile} '+\
+                          f'to existing file at rel. path {relpath_saved_std}')
+                runcmd(os.symlink, args=(relpath_saved_std, new_stdfile), \
+                       inputs=[saved_stdfile, ], outputs=[new_stdfile, ])
+                log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
+                                                                                     os.path.isfile(new_stdfile),
+                                                                                     os.path.islink(new_stdfile)))
+
 # -------------------------------------------------------------------------
 # - Wrap up
 
