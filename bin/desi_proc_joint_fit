@@ -377,11 +377,9 @@ if args.obstype in ['SCIENCE']:
                                                                                      os.path.islink(new_stdfile)))
                 relpath_saved_std = os.path.relpath(saved_stdfile, new_dirname)
                 log.debug(f'Sym Linking jointly fitted stdstar file: {new_stdfile} '+\
-                         f'to existing file at rel. path {relpath_saved_std}')
-                cmd = f'ln -s {relpath_saved_std} {new_stdfile}'
-                cmdlist = cmd.split(' ')
-                log.info(str(cmdlist))
-                runcmd(cmd, inputs=[saved_stdfile], outputs=[new_stdfile])
+                          f'to existing file at rel. path {relpath_saved_std}')
+                runcmd(os.symlink, args=(relpath_saved_std, new_stdfile), \
+                       inputs=[relpath_saved_std, ], outputs=[new_stdfile, ])
                 log.debug("Path exists: {}, file exists: {}, link exists: {}".format(os.path.exists(new_stdfile),
                                                                                      os.path.isfile(new_stdfile),
                                                                                      os.path.islink(new_stdfile)))
