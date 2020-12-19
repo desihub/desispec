@@ -55,7 +55,7 @@ def parse_args():#options=None):
     parser.add_argument("--ignore-expid-list", type=str,default=None,
                         help="Specify the expid's to ignore in a comma separated list given as a string.")
     parser.add_argument("--ignore-expid-file", type=str,default=None,
-                        help="Specify the expid's to ignore in a comma separated list within a text file.")
+                        help="Specify the expid's to ignore in a text file with one expid per line.")
     # parser.add_argument("-r", "--reduxdir", type=str, required=False,
     #                     help="Main reduction dir where specprod dir will reside.")
 

@@ -98,8 +98,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     if exps_to_ignore is None:
         exps_to_ignore = set()
     else:
-        exps_to_ignore = set(np.array(exps_to_ignore).astype(int))
-
+        exps_to_ignore = np.sort(np.array(exps_to_ignore).astype(int))
+        print(f"\nReceived exposures to ignore: {exps_to_ignore}")
+        exps_to_ignore = set(exps_to_ignore)
+        
     ## Adjust wait times if simulating things
     speed_modifier = 1
     if dry_run:
@@ -178,7 +180,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if erow is None:
                 continue
             elif type(erow) is str:
-                if erow == 'endofarcs' and arcjob is None and 'arc' in procobstypes:
+                if exp in exps_to_ignore:
+                    print(f"Located {erow} in exposure {exp}, but the exposure was listed in the expids to ignore. Ignoring this.")
+                    continue
+                elif erow == 'endofarcs' and arcjob is None and 'arc' in procobstypes:
                     print("\nLocated end of arc calibration sequence flag. Processing psfnight.\n")
                     ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
                 elif erow == 'endofflats' and flatjob is None and 'flat' in procobstypes:
@@ -251,7 +256,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 sys.stdout.flush()
                 sys.stderr.flush()
 
-            time.sleep(10)
+            time.sleep(10*speed_modifier)
             write_tables([etable, ptable, unproc_table],
                          tablenames=[exp_table_pathname, proc_table_pathname, unproc_table_pathname])
 

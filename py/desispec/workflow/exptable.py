@@ -303,7 +303,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
                 prog = req_dict['PROGRAM'].lower()
                 if 'calib' in prog and 'done' in prog:
                     if 'short' in prog:
-                        return "short calib complete"
+                        return "endofshortflats"
                     elif 'long' in prog:
                         return 'endofflats'
                     elif 'arc' in prog:
@@ -313,7 +313,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
                 manifest = req_dict['MANIFEST']
                 if 'name' in manifest:
                     name = manifest['name'].lower()
-                    if name in ['endofarcs','endofflats']:
+                    if name in ['endofarcs', 'endofflats', 'endofshortflats']:
                         return name
 
     ## If FLAVOR is wrong or no obstype is defines, skip it
