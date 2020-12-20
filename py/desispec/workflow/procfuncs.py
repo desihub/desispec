@@ -122,7 +122,7 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
-    specs = ','.join(str(prow['CAMWORD'])[1:])
+    specs = str(prow['CAMWORD'])
     cmd += ' --cameras={} -n {} -e {}'.format(specs, prow['NIGHT'], prow['EXPID'][0])
     return cmd
 
@@ -148,7 +148,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
     descriptor = prow['OBSTYPE'].lower()
         
     night = prow['NIGHT']
-    specs = ','.join(str(prow['CAMWORD'])[1:])
+    specs = str(prow['CAMWORD'])
     expids = prow['EXPID']
     expid_str = ','.join([str(eid) for eid in expids])
 

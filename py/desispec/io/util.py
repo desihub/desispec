@@ -371,7 +371,8 @@ def create_camword(cameras):
     return outstr
 
 def decode_camword(camword):
-    """                                                                                                                             Function that takes in a succinct listing                                                     
+    """
+    Function that takes in a succinct listing
     of all spectrographs and outputs a 1-d numpy array with a list of all
     spectrograph/camera pairs. It uses "a" followed by                                                      
     numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.                                             
@@ -398,7 +399,56 @@ def decode_camword(camword):
             else:
                 camlist.append(key+searchstr[0])
             searchstr = searchstr[1:]
-    return np.sort(camlist)
+    return sorted(camlist)
+
+def parse_cameras(cameras):
+    """
+    Function that takes in a representation
+    of all spectrographs and outputs a string that succinctly lists all
+    spectrograph/camera pairs. It uses "a" followed by
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.
+    b, r, and z represent the camera of the same name. All trailing numbers
+    represent the spectrographs for which that camera exists in the list.
+
+    Args:
+       cameras, str. 1-d array, list: Either a str that is a comma separated list or a series of spectrographs.
+                                      Also accepts a list or iterable that is processed with create_camword().
+    Returns (str):
+       camword, str. A string representing all information about the spectrographs/cameras
+                     given in the input iterable, e.g. a01234678b59z9
+    """
+    log = get_logger()
+    if cameras is None:
+        camword, camlist = None, None
+    elif type(cameras) is str:
+        cameras = cameras.strip(' \t').lower()
+        if 'a' in cameras or 'b' in cameras or 'r' in cameras or 'z' in cameras:
+            if ',' in cameras:
+                camlist = []
+                for cam in cameras.split(','):
+                    if 'a' == cam[0]:
+                        camlist.append('b'+cam[1])
+                        camlist.append('r'+cam[1])
+                        camlist.append('z'+cam[1])
+                    elif len(cam) == 1 and cam.isnumeric():
+                        camlist.append('b'+cam)
+                        camlist.append('r'+cam)
+                        camlist.append('z'+cam)
+                    else:
+                        camlist.append(cam)
+                camword = create_camword(camlist)
+            else:
+                camword = cameras
+        elif ',' in cameras:
+            camword = 'a'+cameras.replace(',','')
+        else:
+            camword = 'a'+cameras
+    elif not np.isscalar(cameras):
+        camword = create_camword(cameras)
+    else:
+        log.info(f"Couldn't understand cameras={cameras}, ignoring and using information from files")
+        camword = None
+    return camword
 
 def get_speclog(nights, rawdir=None):
     """

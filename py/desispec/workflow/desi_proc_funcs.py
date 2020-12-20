@@ -9,8 +9,9 @@ import numpy as np
 import fitsio
 import desispec.io
 from desispec.io import findfile
-from desispec.io.util import create_camword, decode_camword
+from desispec.io.util import create_camword, decode_camword, parse_cameras
 # from desispec.calibfinder import findcalibfile
+from desiutil.log import get_logger
 
 def get_desi_proc_parser():
     """
@@ -191,6 +192,7 @@ def update_args_with_headers(args):
     Note:
         The input args is modified and returned here.
     """
+    log = get_logger()
     if args.input is None:
         if args.night is None or args.expid is None:
             raise RuntimeError('Must specify --input or --night AND --expid')
@@ -228,17 +230,9 @@ def update_args_with_headers(args):
             raise RuntimeError("No [BRZ][0-9] camera HDUs found in {}".format(args.input))
 
         args.cameras = cameras
-        cameras = None
     else:
-        cam_str = args.cameras.strip(' \t').lower()
-        cameras = cam_str.split(',')
-        if cam_str[0] not in ['b', 'r', 'z'] and cameras[0].isnumeric():
-            args.cameras = []
-            for camnum in cameras:
-                for ccd in ['b', 'r', 'z']:
-                    args.cameras.append('{}{}'.format(ccd, camnum))
-        else:
-            args.cameras = cameras
+        camword = parse_cameras(args.cameras)
+        args.cameras = decode_camword(camword)
 
     # - Update args to be in consistent format
     args.cameras = sorted(args.cameras)

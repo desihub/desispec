@@ -8,7 +8,7 @@ import numpy as np
 import os
 
 from desispec.scripts.daily_processing import daily_processing_manager
-from desispec.io.util import create_camword
+from desispec.io.util import parse_cameras
 from desispec.desi_proc_dashboard import get_skipped_expids
 
 from desispec.workflow.timing import during_operating_hours
@@ -109,31 +109,7 @@ if __name__ == '__main__':
             print("Process is already running. Exiting.")
             sys.exit(1)
 
-    if args.cameras is None:
-        camword = None
-    elif type(args.cameras) is str:
-        if 'a' in args.cameras or 'b' in args.cameras or 'r' in args.cameras or 'z' in args.cameras:
-            if ',' in args.cameras:
-                camlist = []
-                for cam in args.cameras.split(','):
-                    if 'a' == cam[0]:
-                        camlist.append('b'+cam[1])
-                        camlist.append('r'+cam[1])
-                        camlist.append('z'+cam[1])
-                    else:
-                        camlist.append(cam)
-                camword = create_camword(camlist)
-            else:
-                camword = args.cameras
-        elif ',' in args.cameras:
-            camword = 'a'+args.cameras.replace(',','')
-        else:
-            camword = 'a'+args.cameras
-    elif not np.isscalar(args.cameras):
-        camword = create_camword(args.cameras)
-    else:
-        print(f"Couldn't understand cameras={args.cameras}, ignoring and using information from files")
-        camword = None
+    camword = parse_cameras(args.cameras)
 
     exps_to_ignore = []
     if args.ignore_expid_list is not None:
