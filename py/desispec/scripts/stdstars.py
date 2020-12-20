@@ -183,7 +183,7 @@ def main(args) :
 
     log.info("found %d STD stars"%starindices.size)
 
-    log.warning("Not using flux errors for Standard Star fits!")
+    # log.warning("Not using flux errors for Standard Star fits!")
 
     # DIVIDE FLAT AND SUBTRACT SKY , TRIM DATA
     ############################################
@@ -223,7 +223,7 @@ def main(args) :
             # we estimate the relative throughput with median fluxes at this stage
             medflux=np.zeros(nframes)
             for i,frame in enumerate(frames[cam]) :
-                medflux[i] = np.median(frame.flux)
+                medflux[i] = np.median(frame.flux[frame.ivar>0])
             medflux *= (medflux>0)
             weights=medflux/np.mean(medflux)
             log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
