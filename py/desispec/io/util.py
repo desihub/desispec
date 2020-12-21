@@ -356,7 +356,9 @@ def create_camword(cameras):
     camdict = {'r':[],'b':[],'z':[]}
 
     for c in cameras:
-        if c[0] in ['r','b','z'] and c[1].isnumeric():
+        if len(c) != 2:
+            log.info(f"Couldn't understand camera {c}. Ignoring")
+        elif c[0] in ['r','b','z'] and c[1].isnumeric():
             camdict[c[0]].append(c[1])
         else:
             camname,camnum = c[0],c[1]
