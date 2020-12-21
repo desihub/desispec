@@ -352,14 +352,21 @@ def create_camword(cameras):
        A string representing all information about the spectrographs/cameras
        given in the input iterable, e.g. a01234678b59z9
     """
+    log = get_logger()
     camdict = {'r':[],'b':[],'z':[]}
 
     for c in cameras:
-        camdict[c[0]].append(c[1])
+        if c[0] in ['r','b','z'] and c[1].isnumeric():
+            camdict[c[0]].append(c[1])
+        else:
+            camname,camnum = c[0],c[1]
+            log.info(f"Couldn't understand key {camname}{camnum}. Ignoring")
 
     allcam = np.sort(list((set(camdict['r']).intersection(set(camdict['b'])).intersection(set(camdict['z'])))))
 
-    outstr = 'a'+''.join(allcam)
+    outstr = ''
+    if len(allcam) > 0:
+        outstr = 'a'+''.join(allcam)
 
     for key in np.sort(list(camdict.keys())):
         val = camdict[key]
@@ -385,6 +392,7 @@ def decode_camword(camword):
     Returns (np.ndarray, 1d):  an array containing strings of                                                              
                                 cameras, e.g. 'b0','r1',...                                                                
     """
+    log = get_logger()
     searchstr = camword
     camlist = []
     while len(searchstr) > 1:
@@ -396,8 +404,11 @@ def decode_camword(camword):
                 camlist.append('b'+searchstr[0])
                 camlist.append('r'+searchstr[0])
                 camlist.append('z'+searchstr[0])
-            else:
+            elif key in ['b','r','z']:
                 camlist.append(key+searchstr[0])
+            else:
+                value = searchstr[0]
+                log.info(f"Couldn't understand key={key} in camword={camword}, ignoring {key}{value}.")
             searchstr = searchstr[1:]
     return sorted(camlist)
 
