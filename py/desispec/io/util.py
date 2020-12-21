@@ -357,12 +357,12 @@ def create_camword(cameras):
 
     for c in cameras:
         if len(c) != 2:
-            log.info(f"Couldn't understand camera {c}. Ignoring")
+            log.warning(f"Couldn't understand camera {c}. Ignoring")
         elif c[0] in ['r','b','z'] and c[1].isnumeric():
             camdict[c[0]].append(c[1])
         else:
             camname,camnum = c[0],c[1]
-            log.info(f"Couldn't understand key {camname}{camnum}. Ignoring")
+            log.warning(f"Couldn't understand key {camname}{camnum}. Ignoring")
 
     allcam = np.sort(list((set(camdict['r']).intersection(set(camdict['b'])).intersection(set(camdict['z'])))))
 
@@ -410,7 +410,7 @@ def decode_camword(camword):
                 camlist.append(key+searchstr[0])
             else:
                 value = searchstr[0]
-                log.info(f"Couldn't understand key={key} in camword={camword}, ignoring {key}{value}.")
+                log.warning(f"Couldn't understand key={key} in camword={camword}, ignoring {key}{value}.")
             searchstr = searchstr[1:]
     return sorted(camlist)
 
@@ -469,7 +469,7 @@ def parse_cameras(cameras):
                         camlist.append(substr)
                     ## otherwise throw a message
                     else:
-                        log.info(f"Couldn't understand substring={substr}, ignoring.")
+                        log.warning(f"Couldn't understand substring={substr}, ignoring.")
 
                 ## Encode the given list of spectrographs to the simplest camword form
                 camword = create_camword(camlist)
@@ -487,8 +487,11 @@ def parse_cameras(cameras):
         camword = create_camword(cameras)
     ## Otherwise give an error with the cameras given
     else:
-        log.info(f"Couldn't understand cameras={cameras}, ignoring and using information from files")
+        log.warning(f"Couldn't understand cameras={cameras}, ignoring and using information from files")
         camword = None
+    if camword == '':
+        log.warning("The returned camword was empty. Please check the supplied string for errors. " + 
+                    "Returing None and using information from files")
     return camword
 
 def get_speclog(nights, rawdir=None):
