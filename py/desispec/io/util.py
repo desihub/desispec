@@ -487,12 +487,14 @@ def parse_cameras(cameras):
         camword = create_camword(cameras)
     ## Otherwise give an error with the cameras given
     else:
-        log.warning(f"Couldn't understand cameras={cameras}, ignoring and using information from files")
+        log.warning(f"Couldn't understand cameras={cameras}, ignoring and using information from files.")
         camword = None
     if camword == '':
-        log.warning("The returned camword was empty. Please check the supplied string for errors. " +
-                    "Returing None and using information from files")
+        log.warning(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. " +
+                    "Returing None and using information from files.")
         camword = None
+
+    log.info(f"Converted input cameras={cameras} to camword={camword}")
     return camword
 
 def get_speclog(nights, rawdir=None):
