@@ -50,8 +50,8 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--calibnight", type=int, required=False, default=None,
                         help="use this night to find nightly PSF and fiberflats")
     parser.add_argument("--scattered-light", action='store_true', help="fit and remove scattered light")
-    parser.add_argument("--extra-variance", action='store_true',
-                        help='increase sky model variance based on chi2 on sky lines')
+    parser.add_argument("--no-extra-variance", action='store_true',
+                        help='disable increase sky model variance based on chi2 on sky lines')
     parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
     parser.add_argument("--nosubmit", action="store_true", help="Create batch script but don't submit")
     parser.add_argument("-q", "--queue", type=str, default="realtime", help="batch queue to use")
@@ -59,8 +59,8 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--runtime", type=int, default=None, help="batch runtime in minutes")
     parser.add_argument("--most-recent-calib", action="store_true", help="If no calibrations exist for the night," +
                         " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
-    parser.add_argument("--model-pixel-variance", action="store_true",
-                        help="Use a model of the variance in preprocessing")
+    parser.add_argument("--no-model-pixel-variance", action="store_true",
+                        help="Do not use a model of the variance in preprocessing")
     parser.add_argument("--adjust-sky-wavelength", action="store_true", help="Adjust wavelength of sky lines")
     parser.add_argument("--adjust-sky-lsf", action="store_true", help="Adjust width of sky lines")
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
@@ -100,7 +100,7 @@ def add_desi_proc_joint_fit_terms(parser):
 def assign_mpi(do_mpi, do_batch, log):
     """
     Based on whether the mpi flag is set and whether the batch flag is set, assign the appropriate
-    MPI values for the communicator, rank, and number of ranks. Also verify that environment 
+    MPI values for the communicator, rank, and number of ranks. Also verify that environment
     variables are set and provide useful information via the log
 
     Args:
@@ -139,7 +139,7 @@ def assign_mpi(do_mpi, do_batch, log):
             log.error(f'MPICH_GNI_FORK_MODE={gnifork} is not "FULLCOPY"; this might not work with MPI+multiprocessing, but not overriding')
     elif rank == 0:
         log.debug('MPICH_GNI_FORK_MODE={}'.format(os.environ['MPICH_GNI_FORK_MODE']))
-        
+
     return comm, rank, size
 
 def load_raw_data_header(pathname, return_filehandle=False):
@@ -153,7 +153,7 @@ def load_raw_data_header(pathname, return_filehandle=False):
                                  it and only return the header. Default is False.
     Returns:
         hdr: fitsio header object from the file at pathname
-        fx:  optional, fitsio file object returned only if return_filehandle is True 
+        fx:  optional, fitsio file object returned only if return_filehandle is True
     """
     # - Fill in values from raw data header if not overridden by command line
     fx = fitsio.FITS(pathname)
@@ -172,7 +172,7 @@ def load_raw_data_header(pathname, return_filehandle=False):
     else:
         fx.close()
         return hdr
-    
+
 def update_args_with_headers(args):
     """
     Update input argparse object with values from header if the argparse values are uninformative defaults (generally
@@ -334,7 +334,7 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
     Args:
         night: str or int, defines the night (should be 8 digits)
         exp: str, int, or array of ints, defines the exposure id(s) relevant to the job
-        jobdesc: str, type of data being processed 
+        jobdesc: str, type of data being processed
         cameras: str or list of str. If str, must be camword, If list, must be list of cameras to include in the processing.
 
     Returns:
@@ -348,7 +348,7 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
         if np.isscalar(exp):
             expstr = '{:08d}'.format(exp)
         else:
-            #expstr = '-'.join(['{:08d}'.format(curexp) for curexp in exp])                                                                           
+            #expstr = '-'.join(['{:08d}'.format(curexp) for curexp in exp])
             expstr = '{:08d}'.format(exp[0])
     else:
         expstr = exp
@@ -363,8 +363,8 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
         night: str or int, defines the night (should be 8 digits)
         exp: str, int, or array of ints, defines the exposure id(s) relevant to the job
         jobdesc: str, type of data being processed
-        cameras: str or list of str. If str, must be camword, If list, must be list of cameras to include in the processing. 
-        reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live 
+        cameras: str or list of str. If str, must be camword, If list, must be list of cameras to include in the processing.
+        reduxdir: str (optional), define the base directory where the /run/scripts directory should or does live
 
     Returns:
         pathname: str, the default location and script name for a desi_proc batch script file
@@ -411,7 +411,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     if np.isscalar(cameras):
         camword = cameras
         cameras = decode_camword(camword)
-    
+
     if batchdir is None:
         batchdir = get_desi_proc_batch_file_path(night)
 
@@ -457,12 +457,12 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if cmdline is None:
             inparams = list(sys.argv).copy()
         elif np.isscalar(cmdline):
-            inparams = [] 
-            for param in cmdline.split(' '): 
+            inparams = []
+            for param in cmdline.split(' '):
                 for subparam in param.split("="):
                     inparams.append(subparam)
         else:
-            inparams = list(cmdline)        
+            inparams = list(cmdline)
         for parameter in ['--queue', '-q', '--batch-opts']:
             ## If a parameter is in the list, remove it and it's argument
             ## Elif it is a '--' command, it might be --option=value, which won't be split.
