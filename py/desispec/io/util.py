@@ -419,32 +419,60 @@ def parse_cameras(cameras):
     """
     log = get_logger()
     if cameras is None:
-        camword, camlist = None, None
+        camword = None
     elif type(cameras) is str:
+        ## Clean the string
         cameras = cameras.strip(' \t').lower()
+        ## Check to see if it already has cameras names specified
         if 'a' in cameras or 'b' in cameras or 'r' in cameras or 'z' in cameras:
+            ## If there is a comma, treat each substring
+            ## else decode and re-encode the camword to get the simplest camword represention
             if ',' in cameras:
                 camlist = []
-                for cam in cameras.split(','):
-                    if 'a' == cam[0]:
-                        camlist.append('b'+cam[1])
-                        camlist.append('r'+cam[1])
-                        camlist.append('z'+cam[1])
-                    elif len(cam) == 1 and cam.isnumeric():
-                        camlist.append('b'+cam)
-                        camlist.append('r'+cam)
-                        camlist.append('z'+cam)
+                ## Treat each substring as it's own substring
+                for substr in cameras.split(','):
+                    ## If len 1 and numeric, its a spectrograph name
+                    if len(substr) == 1 and substr.isnumeric():
+                        camlist.append('b' + substr)
+                        camlist.append('r' + substr)
+                        camlist.append('z' + substr)
+                    ## If larger than 2 chars and has letters, it's a camword. Decode it
+                    elif len(substr) > 2 and substr[0] in ['a','b','r','z']:
+                        camlist.extend(decode_camword(substr))
+                    ## If larger than 2 chars and no letters, it's a list of spectrographs
+                    elif len(substr) > 2 and substr[0].isnumeric():
+                        for char in substr:
+                            if char.isnumeric():
+                                camlist.append('b' + char)
+                                camlist.append('r' + char)
+                                camlist.append('z' + char)
+                    ## If len 2 and starts with a, it's the full spectrograph
+                    elif 'a' == substr[0]:
+                        camlist.append('b'+substr[1])
+                        camlist.append('r'+substr[1])
+                        camlist.append('z'+substr[1])
+                    ## else add the one camera if it is a known camera
+                    elif substr[0] in ['b','r','z']:
+                        camlist.append(substr)
+                    ## otherwise throw a message
                     else:
-                        camlist.append(cam)
+                        log.info(f"Couldn't understand substring={substr}, ignoring.")
+
+                ## Encode the given list of spectrographs to the simplest camword form
                 camword = create_camword(camlist)
             else:
-                camword = cameras
+                ## decode and re-encode the camword to get the simplest camword represention
+                camword = create_camword(decode_camword(cameras))
+        ## if no letters present, then assume the comma separated list is of spectrographs
         elif ',' in cameras:
             camword = 'a'+cameras.replace(',','')
+        ## if no letters or commas present, then assume the string is of spectrographs without commas
         else:
             camword = 'a'+cameras
+    ## If it is a list or array, treat it as a camlist to encode
     elif not np.isscalar(cameras):
         camword = create_camword(cameras)
+    ## Otherwise give an error with the cameras given
     else:
         log.info(f"Couldn't understand cameras={cameras}, ignoring and using information from files")
         camword = None
