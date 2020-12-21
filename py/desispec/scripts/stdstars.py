@@ -233,7 +233,7 @@ def main(args) :
             if mmedflux == 0 :
                 log.error("mean median flux = 0, for all stars in fibers {}".format(list(frames[cam][0].fibermap["FIBER"][starindices])))
                 sys.exit(12)
-            weights=medflux/np.mean(medflux)
+            weights=medflux/mmedflux
             log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
 
             sw=np.zeros(frames[cam][0].flux.shape)
