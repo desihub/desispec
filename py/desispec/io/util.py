@@ -357,12 +357,12 @@ def create_camword(cameras):
 
     for c in cameras:
         if len(c) != 2:
-            log.warning(f"Couldn't understand camera {c}. Ignoring")
+            log.warning(f"Couldn't understand camera {c}, ignoring.")
         elif c[0] in ['r','b','z'] and c[1].isnumeric():
             camdict[c[0]].append(c[1])
         else:
             camname,camnum = c[0],c[1]
-            log.warning(f"Couldn't understand key {camname}{camnum}. Ignoring")
+            log.warning(f"Couldn't understand key {camname}{camnum}, ignoring.")
 
     allcam = np.sort(list((set(camdict['r']).intersection(set(camdict['b'])).intersection(set(camdict['z'])))))
 
@@ -490,8 +490,9 @@ def parse_cameras(cameras):
         log.warning(f"Couldn't understand cameras={cameras}, ignoring and using information from files")
         camword = None
     if camword == '':
-        log.warning("The returned camword was empty. Please check the supplied string for errors. " + 
+        log.warning("The returned camword was empty. Please check the supplied string for errors. " +
                     "Returing None and using information from files")
+        camword = None
     return camword
 
 def get_speclog(nights, rawdir=None):
