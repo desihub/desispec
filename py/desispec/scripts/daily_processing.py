@@ -120,7 +120,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Define the files to look for
     file_glob = os.path.join(path_to_data, str(night), '*', 'checksum-*')
-    
+
     ## Determine where the exposure table will be written
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path(night=night)
