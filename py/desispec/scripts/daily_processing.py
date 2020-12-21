@@ -7,7 +7,7 @@ import os
 import sys
 import time
 from astropy.table import Table
-
+import glob
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_tables, write_table
@@ -118,6 +118,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD')
 
+    ## Define the files to look for
+    file_glob = os.path.join(path_to_data, str(night), '*', 'checksum-*')
+    
     ## Determine where the exposure table will be written
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path(night=night)
@@ -153,7 +156,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     while ( (night == what_night_is_it()) and during_operating_hours(dry_run=dry_run) ) or ( override_night is not None ):
         ## Get a list of new exposures that have been found
         print(f"\n\n\nPreviously known exposures: {all_exps}")
-        located_exps = set( np.array(listpath(path_to_data,str(night))).astype(int) )
+        located_exps = set(sorted([int(os.path.basename(os.path.dirname(fil))) for fil in glob.glob(file_glob)]))
         new_exps = located_exps.difference(all_exps)
         all_exps = located_exps # i.e. new_exps.union(all_exps)
         print(f"\nNew exposures: {new_exps}\n\n")
