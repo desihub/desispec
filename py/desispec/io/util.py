@@ -494,7 +494,7 @@ def parse_cameras(cameras):
         raise ValueError(f"Couldn't understand cameras={cameras}.")
     if camword == '':
         log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
-        raise ValueError(f"Couldn't understand substring={substr}.")
+        raise ValueError(f"The returned camword was empty for input: {cameras}.")
 
     log.info(f"Converted input cameras={cameras} to camword={camword}")
     return camword
