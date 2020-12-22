@@ -357,12 +357,14 @@ def create_camword(cameras):
 
     for c in cameras:
         if len(c) != 2:
-            log.warning(f"Couldn't understand camera {c}, ignoring.")
+            log.error(f"Couldn't understand camera {c}.")
+            raise ValueError(f"Couldn't understand camera {c}.")
         elif c[0] in ['r','b','z'] and c[1].isnumeric():
             camdict[c[0]].append(c[1])
         else:
             camname,camnum = c[0],c[1]
-            log.warning(f"Couldn't understand key {camname}{camnum}, ignoring.")
+            log.error(f"Couldn't understand key {camname}{camnum}.")
+            raise ValueError(f"Couldn't understand key {camname}{camnum}.")
 
     allcam = np.sort(list((set(camdict['r']).intersection(set(camdict['b'])).intersection(set(camdict['z'])))))
 
@@ -409,8 +411,8 @@ def decode_camword(camword):
             elif key in ['b','r','z']:
                 camlist.append(key+searchstr[0])
             else:
-                value = searchstr[0]
-                log.warning(f"Couldn't understand key={key} in camword={camword}, ignoring {key}{value}.")
+                log.error(f"Couldn't understand key={key} in camword={camword}.")
+                raise ValueError(f"Couldn't understand key={key} in camword={camword}.")
             searchstr = searchstr[1:]
     return sorted(camlist)
 
@@ -469,7 +471,8 @@ def parse_cameras(cameras):
                         camlist.append(substr)
                     ## otherwise throw a message
                     else:
-                        log.warning(f"Couldn't understand substring={substr}, ignoring.")
+                        log.error(f"Couldn't understand substring={substr}.")
+                        raise ValueError(f"Couldn't understand substring={substr}.")
 
                 ## Encode the given list of spectrographs to the simplest camword form
                 camword = create_camword(camlist)
@@ -487,12 +490,11 @@ def parse_cameras(cameras):
         camword = create_camword(cameras)
     ## Otherwise give an error with the cameras given
     else:
-        log.warning(f"Couldn't understand cameras={cameras}, ignoring and using information from files.")
-        camword = None
+        log.error(f"Couldn't understand cameras={cameras}.")
+        raise ValueError(f"Couldn't understand cameras={cameras}.")
     if camword == '':
-        log.warning(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. " +
-                    "Returing None and using information from files.")
-        camword = None
+        log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
+        raise ValueError(f"Couldn't understand substring={substr}.")
 
     log.info(f"Converted input cameras={cameras} to camword={camword}")
     return camword
