@@ -938,6 +938,25 @@ class TestIO(unittest.TestCase):
         self.assertNotIn('Y', h1)
         self.assertEqual(h1['Z'], 3)
 
+    def test_parse_cameras(self):
+        """test desispec.io.util.parse_cameras"""
+        from ..io.util import parse_cameras
+        self.assertEqual(parse_cameras('0,1,2,3,4'),        'a01234')
+        self.assertEqual(parse_cameras('01234'),            'a01234')
+        self.assertEqual(parse_cameras('15'),               'a15')
+        self.assertEqual(parse_cameras('a01234'),           'a01234')
+        self.assertEqual(parse_cameras('a012345b6'),        'a012345b6')
+        self.assertEqual(parse_cameras('a01234b5z5r5'),     'a012345')
+        self.assertEqual(parse_cameras('a01234b56z56r5'),   'a012345b6z6')
+        self.assertEqual(parse_cameras('0,1,2,3,4,b5'),     'a01234b5')
+        self.assertEqual(parse_cameras('b1,r1,z1,b2,r2'),   'a1b2r2')
+        self.assertEqual(parse_cameras('0,1,2,a3,b4,5,6'),  'a012356b4')
+        self.assertEqual(parse_cameras('a1234,b5,r5,z5'),   'a12345')
+        self.assertEqual(parse_cameras('a01234,b5,r5,z56'), 'a012345z6')
+        self.assertEqual(parse_cameras(None), None)
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2']), 'a1b2')
+
+
 def test_suite():
     """Allows testing of only this module with the command::
 

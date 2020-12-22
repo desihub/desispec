@@ -352,14 +352,25 @@ def create_camword(cameras):
        A string representing all information about the spectrographs/cameras
        given in the input iterable, e.g. a01234678b59z9
     """
+    log = get_logger()
     camdict = {'r':[],'b':[],'z':[]}
 
     for c in cameras:
-        camdict[c[0]].append(c[1])
+        if len(c) != 2:
+            log.error(f"Couldn't understand camera {c}.")
+            raise ValueError(f"Couldn't understand camera {c}.")
+        elif c[0] in ['r','b','z'] and c[1].isnumeric():
+            camdict[c[0]].append(c[1])
+        else:
+            camname,camnum = c[0],c[1]
+            log.error(f"Couldn't understand key {camname}{camnum}.")
+            raise ValueError(f"Couldn't understand key {camname}{camnum}.")
 
     allcam = np.sort(list((set(camdict['r']).intersection(set(camdict['b'])).intersection(set(camdict['z'])))))
 
-    outstr = 'a'+''.join(allcam)
+    outstr = ''
+    if len(allcam) > 0:
+        outstr = 'a'+''.join(allcam)
 
     for key in np.sort(list(camdict.keys())):
         val = camdict[key]
@@ -371,7 +382,8 @@ def create_camword(cameras):
     return outstr
 
 def decode_camword(camword):
-    """                                                                                                                             Function that takes in a succinct listing                                                     
+    """
+    Function that takes in a succinct listing
     of all spectrographs and outputs a 1-d numpy array with a list of all
     spectrograph/camera pairs. It uses "a" followed by                                                      
     numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.                                             
@@ -384,6 +396,7 @@ def decode_camword(camword):
     Returns (np.ndarray, 1d):  an array containing strings of                                                              
                                 cameras, e.g. 'b0','r1',...                                                                
     """
+    log = get_logger()
     searchstr = camword
     camlist = []
     while len(searchstr) > 1:
@@ -395,10 +408,96 @@ def decode_camword(camword):
                 camlist.append('b'+searchstr[0])
                 camlist.append('r'+searchstr[0])
                 camlist.append('z'+searchstr[0])
-            else:
+            elif key in ['b','r','z']:
                 camlist.append(key+searchstr[0])
+            else:
+                log.error(f"Couldn't understand key={key} in camword={camword}.")
+                raise ValueError(f"Couldn't understand key={key} in camword={camword}.")
             searchstr = searchstr[1:]
-    return np.sort(camlist)
+    return sorted(camlist)
+
+def parse_cameras(cameras):
+    """
+    Function that takes in a representation
+    of all spectrographs and outputs a string that succinctly lists all
+    spectrograph/camera pairs. It uses "a" followed by
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.
+    b, r, and z represent the camera of the same name. All trailing numbers
+    represent the spectrographs for which that camera exists in the list.
+
+    Args:
+       cameras, str. 1-d array, list: Either a str that is a comma separated list or a series of spectrographs.
+                                      Also accepts a list or iterable that is processed with create_camword().
+    Returns (str):
+       camword, str. A string representing all information about the spectrographs/cameras
+                     given in the input iterable, e.g. a01234678b59z9
+    """
+    log = get_logger()
+    if cameras is None:
+        camword = None
+    elif type(cameras) is str:
+        ## Clean the string
+        cameras = cameras.strip(' \t').lower()
+        ## Check to see if it already has cameras names specified
+        if 'a' in cameras or 'b' in cameras or 'r' in cameras or 'z' in cameras:
+            ## If there is a comma, treat each substring
+            ## else decode and re-encode the camword to get the simplest camword represention
+            if ',' in cameras:
+                camlist = []
+                ## Treat each substring as it's own substring
+                for substr in cameras.split(','):
+                    ## If len 1 and numeric, its a spectrograph name
+                    if len(substr) == 1 and substr.isnumeric():
+                        camlist.append('b' + substr)
+                        camlist.append('r' + substr)
+                        camlist.append('z' + substr)
+                    ## If larger than 2 chars and has letters, it's a camword. Decode it
+                    elif len(substr) > 2 and substr[0] in ['a','b','r','z']:
+                        camlist.extend(decode_camword(substr))
+                    ## If larger than 2 chars and no letters, it's a list of spectrographs
+                    elif len(substr) > 2 and substr[0].isnumeric():
+                        for char in substr:
+                            if char.isnumeric():
+                                camlist.append('b' + char)
+                                camlist.append('r' + char)
+                                camlist.append('z' + char)
+                    ## If len 2 and starts with a, it's the full spectrograph
+                    elif 'a' == substr[0]:
+                        camlist.append('b'+substr[1])
+                        camlist.append('r'+substr[1])
+                        camlist.append('z'+substr[1])
+                    ## else add the one camera if it is a known camera
+                    elif substr[0] in ['b','r','z']:
+                        camlist.append(substr)
+                    ## otherwise throw a message
+                    else:
+                        log.error(f"Couldn't understand substring={substr}.")
+                        raise ValueError(f"Couldn't understand substring={substr}.")
+
+                ## Encode the given list of spectrographs to the simplest camword form
+                camword = create_camword(camlist)
+            else:
+                ## decode and re-encode the camword to get the simplest camword represention
+                camword = create_camword(decode_camword(cameras))
+        ## if no letters present, then assume the comma separated list is of spectrographs
+        elif ',' in cameras:
+            camword = 'a'+cameras.replace(',','')
+        ## if no letters or commas present, then assume the string is of spectrographs without commas
+        else:
+            camword = 'a'+cameras
+    ## If it is a list or array, treat it as a camlist to encode
+    elif not np.isscalar(cameras):
+        camword = create_camword(cameras)
+    ## Otherwise give an error with the cameras given
+    else:
+        log.error(f"Couldn't understand cameras={cameras}.")
+        raise ValueError(f"Couldn't understand cameras={cameras}.")
+    if camword == '':
+        log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
+        raise ValueError(f"The returned camword was empty for input: {cameras}.")
+
+    log.info(f"Converted input cameras={cameras} to camword={camword}")
+    return camword
 
 def get_speclog(nights, rawdir=None):
     """
