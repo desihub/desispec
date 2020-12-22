@@ -210,8 +210,9 @@ if not (args.obstype in ['SCIENCE'] and args.noprestdstarfit):
             cmd += " --scattered-light"
         if fibermap is not None:
             cmd += " --fibermap {}".format(fibermap)
-        if args.model_pixel_variance :
-            cmd += " --model-variance"
+        if not args.obstype in ['ARC'] : # never model variance for arcs
+            if not args.no_model_pixel_variance :
+                cmd += " --model-variance"
         runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
     timer.stop('preproc')
@@ -766,7 +767,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.nop
         cmd += " -i {}".format(framefile)
         cmd += " --fiberflat {}".format(fiberflatfile)
         cmd += " --o {}".format(skyfile)
-        if not args.extra_variance :
+        if args.no_extra_variance :
             cmd += " --no-extra-variance"
         if args.adjust_sky_wavelength : cmd += " --adjust-wavelength"
         if args.adjust_sky_lsf : cmd += " --adjust-lsf"
@@ -853,7 +854,7 @@ if args.obstype in ['SCIENCE'] and \
             (not args.nofluxcalib):
     timer.start('fluxcalib')
 
-    night, expid = args.night, args.expid #- shorter  
+    night, expid = args.night, args.expid #- shorter
     #- Compute flux calibration vectors per camera
     for camera in args.cameras[rank::size]:
         framefile = findfile('frame', night, expid, camera)
