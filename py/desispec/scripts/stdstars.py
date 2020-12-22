@@ -223,9 +223,17 @@ def main(args) :
             # we estimate the relative throughput with median fluxes at this stage
             medflux=np.zeros(nframes)
             for i,frame in enumerate(frames[cam]) :
-                medflux[i] = np.median(frame.flux[frame.ivar>0])
+                if np.sum(frame.ivar>0) == 0 :
+                    log.error("ivar=0 for all std star spectra in frame {}-{:08d}".format(cam,frame.meta["EXPID"]))
+                else :
+                    medflux[i] = np.median(frame.flux[frame.ivar>0])
+            log.debug("medflux = {}".format(medflux))
             medflux *= (medflux>0)
-            weights=medflux/np.mean(medflux)
+            if np.sum(medflux>0)==0 :
+               log.error("mean median flux = 0, for all stars in fibers {}".format(list(frames[cam][0].fibermap["FIBER"][starindices])))
+               sys.exit(12)
+            mmedflux = np.mean(medflux[medflux>0])
+            weights=medflux/mmedflux
             log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
 
             sw=np.zeros(frames[cam][0].flux.shape)
