@@ -186,7 +186,8 @@ def main(args=None):
                 remove_scattered_light=args.scattered_light,
                 psf_filename=args.psf,
                 model_variance=args.model_variance,
-                )
+                zero_masked=args.zero_masked
+        )
         opts_array.append(opts)
 
     num_cameras = len(args.cameras)
@@ -252,7 +253,8 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
         log.error(e)
         return 1
 
-    if(zero_masked) :
+    if zero_masked :
+        log.info("Setting masked pixels values to zero")
         img.pix *= (img.mask==0)
 
     if outfile is None:
@@ -264,4 +266,3 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
     io.write_image(outfile, img)
     log.info("Wrote {}".format(outfile))
     return 0
-
