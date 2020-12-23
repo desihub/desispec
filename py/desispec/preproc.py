@@ -332,7 +332,7 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
             return False # we say in the calibration data we don't need this
     elif isinstance(entry,str) :
         filename = entry
-        depend.setdep(header, calkey, shorten_filenam(filename))
+        depend.setdep(header, calkey, shorten_filename(filename))
     else :
         depend.setdep(header, calkey, 'Unknown image')
         return entry # it's expected to be an image array
