@@ -299,7 +299,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     else:
         max_realtime_nodes = 5
 
-    if (queue == 'realtime') and (nodes > max_realtime_nodes):
+    #- Pending further optimizations, use same number of nodes in all queues
+    ### if (queue == 'realtime') and (nodes > max_realtime_nodes):
+    if (nodes > max_realtime_nodes):
         nodes = max_realtime_nodes
         ncores = 32 * nodes
 

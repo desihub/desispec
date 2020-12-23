@@ -385,6 +385,9 @@ if args.obstype in ['ARC', 'TESTARC']:
         num_groups = (size + group_size - 1) // group_size
         comm_group = comm.Split(color=group)
 
+        if rank == 0:
+            log.info(f'Fitting PSFs with {num_groups} sub-communicators of size {group_size}')
+
         for i in range(group, len(args.cameras), num_groups):
             camera = args.cameras[i]
             if camera in cmds:
@@ -392,7 +395,9 @@ if args.obstype in ['ARC', 'TESTARC']:
                 cmdargs = desispec.scripts.specex.parse(cmdargs)
                 if comm_group.rank == 0:
                     print('RUNNING: {}'.format(cmds[camera]))
-
+                    t0 = time.time()
+                    timestamp = time.asctime()
+                    log.info(f'MPI group {group} ranks {rank}-{rank+group_size-1} fitting PSF for {camera} at {timestamp}')
                 try:
                     desispec.scripts.specex.main(cmdargs, comm=comm_group)
                 except Exception as e:
@@ -400,6 +405,10 @@ if args.obstype in ['ARC', 'TESTARC']:
                         log.error(f'FAILED: MPI group {group} ranks {rank}-{rank+group_size-1} camera {camera}')
                         log.error('FAILED: {}'.format(cmds[camera]))
                         log.error(e)
+
+                if comm_group.rank == 0:
+                    specex_time = time.time() - t0
+                    log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
 
         comm.barrier()
 
@@ -412,32 +421,35 @@ if args.obstype in ['ARC', 'TESTARC']:
     if comm is not None:
         comm.barrier()
 
-    if rank == 0:
-        # loop on all cameras and interpolate bad fibers
-        for camera in args.cameras:
+    # loop on all cameras and interpolate bad fibers
+    for camera in args.cameras[rank::size]:
+        t0 = time.time()
+        log.info(f'Rank {rank} interpolating {camera} PSF over bad fibers')
+        # look for fiber blacklist
+        cfinder = CalibFinder([hdr, camhdr[camera]])
+        blacklistkey="FIBERBLACKLIST"
+        if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
+            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+            blacklistkey="BROKENFIBERS"
 
-            # look for fiber blacklist
-            cfinder = CalibFinder([hdr, camhdr[camera]])
-            blacklistkey="FIBERBLACKLIST"
-            if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
-                log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
-                blacklistkey="BROKENFIBERS"
+        if cfinder.haskey(blacklistkey):
+            fiberblacklist = cfinder.value(blacklistkey)
+            tmpname = findfile('psf', args.night, args.expid, camera)
+            inpsf = replace_prefix(tmpname,"psf","fit-psf")
+            outpsf = replace_prefix(tmpname,"psf","fit-psf-fixed-blacklisted")
+            if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
+                cmd = 'desi_interpolate_fiber_psf'
+                cmd += ' --infile {}'.format(inpsf)
+                cmd += ' --outfile {}'.format(outpsf)
+                cmd += ' --fibers {}'.format(fiberblacklist)
+                log.info('For camera {} interpolating PSF for broken fibers: {}'.format(camera,fiberblacklist))
+                runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
+                if os.path.isfile(outpsf) :
+                    os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-blacklisted-fix"))
+                    subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
 
-            if cfinder.haskey(blacklistkey):
-                fiberblacklist = cfinder.value(blacklistkey)
-                tmpname = findfile('psf', args.night, args.expid, camera)
-                inpsf = replace_prefix(tmpname,"psf","fit-psf")
-                outpsf = replace_prefix(tmpname,"psf","fit-psf-fixed-blacklisted")
-                if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
-                    cmd = 'desi_interpolate_fiber_psf'
-                    cmd += ' --infile {}'.format(inpsf)
-                    cmd += ' --outfile {}'.format(outpsf)
-                    cmd += ' --fibers {}'.format(fiberblacklist)
-                    log.info('For camera {} interpolating PSF for broken fibers: {}'.format(camera,fiberblacklist))
-                    runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
-                    if os.path.isfile(outpsf) :
-                        os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-blacklisted-fix"))
-                        subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
+        dt = time.time() - t0
+        log.info(f'Rank {rank} {camera} PSF interpolation took {dt:.1f} sec')
 
     timer.stop('psf')
 
@@ -636,41 +648,42 @@ if False:
 
 #-------------------------------------------------------------------------
 #- Get input fiberflat
-timer.start('find_fiberflat')
-input_fiberflat = dict()
-if rank == 0:
-    for camera in args.cameras :
-        if args.fiberflat is not None :
-            input_fiberflat[camera] = args.fiberflat
-        elif args.calibnight is not None :
-            # look for a fiberflatnight for this calib night
-            fiberflatnightfile = findfile('fiberflatnight',
-                    args.calibnight, args.expid, camera)
-            if not os.path.isfile(fiberflatnightfile) :
-                log.error("no {}".format(fiberflatnightfile))
-                raise IOError("no {}".format(fiberflatnightfile))
-            input_fiberflat[camera] = fiberflatnightfile
-        else :
-            # look for a fiberflatnight fiberflat
-            fiberflatnightfile = findfile('fiberflatnight',
-                    args.night, args.expid, camera)
-            if os.path.isfile(fiberflatnightfile) :
+if args.obstype in ['SCIENCE', 'SKY'] and (not args.nofiberflat):
+    timer.start('find_fiberflat')
+    input_fiberflat = dict()
+    if rank == 0:
+        for camera in args.cameras :
+            if args.fiberflat is not None :
+                input_fiberflat[camera] = args.fiberflat
+            elif args.calibnight is not None :
+                # look for a fiberflatnight for this calib night
+                fiberflatnightfile = findfile('fiberflatnight',
+                        args.calibnight, args.expid, camera)
+                if not os.path.isfile(fiberflatnightfile) :
+                    log.error("no {}".format(fiberflatnightfile))
+                    raise IOError("no {}".format(fiberflatnightfile))
                 input_fiberflat[camera] = fiberflatnightfile
-            elif args.most_recent_calib:
-                nightfile = find_most_recent(args.night, file_type='fiberflatnight')
-                if nightfile is None:
-                    input_fiberflat[camera] = findcalibfile([hdr, camhdr[camera]], 'FIBERFLAT')
-                else:
-                    input_fiberflat[camera] = nightfile
             else :
-                input_fiberflat[camera] = findcalibfile(
-                        [hdr, camhdr[camera]], 'FIBERFLAT')
-        log.info("Will use input FIBERFLAT: {}".format(input_fiberflat[camera]))
+                # look for a fiberflatnight fiberflat
+                fiberflatnightfile = findfile('fiberflatnight',
+                        args.night, args.expid, camera)
+                if os.path.isfile(fiberflatnightfile) :
+                    input_fiberflat[camera] = fiberflatnightfile
+                elif args.most_recent_calib:
+                    nightfile = find_most_recent(args.night, file_type='fiberflatnight')
+                    if nightfile is None:
+                        input_fiberflat[camera] = findcalibfile([hdr, camhdr[camera]], 'FIBERFLAT')
+                    else:
+                        input_fiberflat[camera] = nightfile
+                else :
+                    input_fiberflat[camera] = findcalibfile(
+                            [hdr, camhdr[camera]], 'FIBERFLAT')
+            log.info("Will use input FIBERFLAT: {}".format(input_fiberflat[camera]))
 
-if comm is not None:
-    input_fiberflat = comm.bcast(input_fiberflat, root=0)
+    if comm is not None:
+        input_fiberflat = comm.bcast(input_fiberflat, root=0)
 
-timer.stop('find_fiberflat')
+    timer.stop('find_fiberflat')
 
 #-------------------------------------------------------------------------
 #- Apply fiberflat and write fframe file
