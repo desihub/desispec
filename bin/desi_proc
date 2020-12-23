@@ -386,7 +386,7 @@ if args.obstype in ['ARC', 'TESTARC']:
         comm_group = comm.Split(color=group)
 
         if rank == 0:
-            log.info('Fitting PSFs with {num_groups} sub-communicators of size {group_size}')
+            log.info(f'Fitting PSFs with {num_groups} sub-communicators of size {group_size}')
 
         for i in range(group, len(args.cameras), num_groups):
             camera = args.cameras[i]
