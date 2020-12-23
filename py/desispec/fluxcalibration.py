@@ -12,6 +12,7 @@ from .interpolation import resample_flux
 from desiutil.log import get_logger
 from .io.filters import load_legacy_survey_filter
 from desispec import util
+from desispec.frame import Frame
 from desitarget.targets import main_cmx_or_sv
 import scipy, scipy.sparse, scipy.ndimage
 import sys
@@ -20,6 +21,7 @@ from astropy import units
 import multiprocessing
 from pkg_resources import resource_exists, resource_filename
 import numpy.linalg
+import copy
 
 try:
     from scipy import constants
@@ -74,9 +76,9 @@ def applySmoothingFilter(flux,width=200) :
     """ Return a smoothed version of the input flux array using a median filter
 
     Args:
-        flux  : 1D array of flux 
+        flux  : 1D array of flux
         width : size of the median filter box
-            
+
     Returns:
         smooth_flux : median filtered flux of same size as input
     """
@@ -108,15 +110,15 @@ except TypeError:
 def resample_template(data_wave_per_camera,resolution_data_per_camera,template_wave,template_flux,template_id) :
     """Resample a spectral template on the data wavelength grid. Then convolve the spectra by the resolution
     for each camera. Also returns the result of applySmoothingFilter. This routine is used internally in
-    a call to multiprocessing.Pool. 
-    
+    a call to multiprocessing.Pool.
+
     Args:
         data_wave_per_camera : A dictionary of 1D array of vacuum wavelengths [Angstroms], one entry per camera and exposure.
         resolution_data_per_camera :  A dictionary of resolution corresponding for the fiber, one entry per camera and exposure.
         template_wave : 1D array, input spectral template wavelength [Angstroms] (arbitrary spacing).
         template_flux : 1D array, input spectral template flux density.
         template_id   : int, template identification index, used to ensure matching of input/output after a multiprocessing run.
-    
+
     Returns:
         template_id   : int, template identification index, same as input.
         output_wave   : A dictionary of 1D array of vacuum wavelengths
@@ -161,14 +163,14 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
         ivar : A dictionary 1D inverse variance of flux
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
-        stdflux : 1D[nwave] template flux        
+        stdflux : 1D[nwave] template flux
         z_max : float, maximum blueshift and redshift in scan, has to be positive
         z_res : float, step of of redshift scan between [-z_max,+z_max]
         template_error : float, assumed template flux relative error
 
     Returns:
         redshift : redshift of standard star
-        
+
 
     Notes:
       - wave and stdwave can be on different grids that don't
@@ -196,7 +198,7 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
     minlwave=np.log10(minwave)
     maxlwave=np.log10(maxwave) # desired, but readjusted
     nstep=(maxlwave-minlwave)/lstep
-    
+
     resampled_lwave=minlwave+lstep*np.arange(nstep)
     resampled_wave=10**resampled_lwave
 
@@ -229,13 +231,13 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
         tmp=applySmoothingFilter(resampled_data[cam])
         resampled_data[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=tmp**2
-                
+
         if template_error>0 :
             ok=np.where(resampled_ivar[cam]>0)[0]
             if ok.size > 0 :
                 resampled_ivar[cam][ok] = 1./ ( 1/resampled_ivar[cam][ok] + template_error**2 )
-                
-        tmp=applySmoothingFilter(resampled_model[cam])        
+
+        tmp=applySmoothingFilter(resampled_model[cam])
         resampled_model[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=(tmp!=0)
 
@@ -246,10 +248,10 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
         for cam in cameras :
             ndata[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]>0)
             if i<margin :
-                chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:-margin+i])**2)                
+                chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:-margin+i])**2)
             else :
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:])**2)
-        
+
     i=np.argmin(chi2)-margin
     z=10**(-i*lstep)-1
     log.debug("Best z=%f"%z)
@@ -262,12 +264,12 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
     for cam in cameras :
         ok=np.where(resampled_ivar[cam]>0)[0]
         #plt.plot(resampled_wave[ok],resampled_data[cam][ok],"o",c="gray")
-        plt.errorbar(resampled_wave[ok],resampled_data[cam][ok],1./np.sqrt(resampled_ivar[cam][ok]),fmt="o",color="gray")        
+        plt.errorbar(resampled_wave[ok],resampled_data[cam][ok],1./np.sqrt(resampled_ivar[cam][ok]),fmt="o",color="gray")
         plt.plot(resampled_wave[margin:-margin],resampled_model[cam][margin+i:-margin+i],"-",c="r")
     plt.show()
     '''
     return z
-   
+
 
 def _compute_coef(coord,node_coords) :
     """ Function used by interpolate_on_parameter_grid2
@@ -277,9 +279,9 @@ def _compute_coef(coord,node_coords) :
         node_coords : 2D array of coordinates of nodes, shape = (n_nodes,n_axis)
 
     Returns:
-        coef : 1D array of linear coefficients for each node, size = n_nodes   
+        coef : 1D array of linear coefficients for each node, size = n_nodes
     """
-    
+
     n_nodes=node_coords.shape[0]
     npar=node_coords.shape[1]
     coef=np.ones(n_nodes)
@@ -287,22 +289,22 @@ def _compute_coef(coord,node_coords) :
         coef[s]=1.
         for a in range(npar) :
             dist=np.abs(node_coords[s,a]-coord[a]) # distance between model point and node along axis a
-            
+
             # piece-wise linear version
             if dist>1 :
                 coef[s]=0.
                 break
             coef[s] *= (1.-dist)
-            
+
             # we could alternatively have used b-spline of higher order
-    
+
     norme=np.sum(coef)
     if norme<=0 : # we are outside of valid grid
         return np.zeros(coef.shape) # will be detected in fitter
     coef /= norme
     return coef
 
-  
+
 def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2) :
     """ 3D Interpolation routine among templates based on a grid of parameters teff, logg, feh.
         The tricky part is to define a cube on the parameter grid populated with templates, and it is not always possible.
@@ -317,24 +319,24 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
         logg : 1D[ntemplates]
         feh  : 1D[ntemplates]
         template_chi2 : 1D[ntemplatess] array of precomputed chi2 = sum(data_ivar*(data_flux-template_flux)**2)
-    
+
     Returns:
         coefficients : best fit coefficient of linear combination of templates
         chi2 : chi2 of the linear combination
     """
-    
+
     log = get_logger()
     log.debug("starting interpolation on grid")
 
     best_model_id = np.argmin(template_chi2)
     ndata=np.sum(data_ivar>0)
-    
+
     log.debug("best model id=%d chi2/ndata=%f teff=%d logg=%2.1f feh=%2.1f"%(best_model_id,template_chi2[best_model_id]/ndata,teff[best_model_id],logg[best_model_id],feh[best_model_id]))
-    
+
     ntemplates=template_flux.shape[0]
 
     log_linear = False # if True , model = exp( sum_i a_i * log(template_flux_i) ), else model = sum_i a_i * template_flux_i
-    
+
     # physical parameters define axes
     npar=3
     param=np.zeros((npar,ntemplates))
@@ -344,26 +346,26 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
 
     # grid nodes coordinates (unique values of the parameters)
     uparam=[]
-    for a in range(npar) : 
+    for a in range(npar) :
         uparam.append(np.unique(param[a]))
-    #for a in range(npar) : 
+    #for a in range(npar) :
     #    log.debug("param %d : %s"%(a,str(uparam[a])))
-    
-   
-    node_grid_coords=np.zeros((npar,3)).astype(int)   
-    for a in range(npar) : # a is an axis         
+
+
+    node_grid_coords=np.zeros((npar,3)).astype(int)
+    for a in range(npar) : # a is an axis
         # this is the coordinate on axis 'a' of the best node
         i=np.where(uparam[a]==param[a,best_model_id])[0][0]
         node_grid_coords[a]=np.array([i-1,i,i+1])
         log.debug("node_grid_coords[%d]=%s"%(a,node_grid_coords[a]))
-    
+
     # we don't always have a template on all nodes
-    node_template_ids=[] 
-    node_cube_coords=[] 
+    node_template_ids=[]
+    node_cube_coords=[]
     for i0,j0 in zip(node_grid_coords[0],[-1,0,1]) :
         for i1,j1 in zip(node_grid_coords[1],[-1,0,1]) :
             for i2,j2 in zip(node_grid_coords[2],[-1,0,1]) :
-                
+
                 # check whether coord is in grid
                 in_grid = (i0>=0)&(i0<uparam[0].size)&(i1>=0)&(i1<uparam[1].size)&(i2>=0)&(i2<uparam[2].size)
                 if not in_grid :
@@ -378,15 +380,15 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
                 node_template_ids.append(selection[0])
     node_template_ids=np.array(node_template_ids).astype(int)
     node_cube_coords=np.array(node_cube_coords).astype(int)
-    
+
     # the parameters of the fit are npar coordinates in the range [-1,1] centered on best fit node
     coord=np.zeros(npar)
-    
+
     n_templates = node_template_ids.size
-    
+
     # we are done with the indexing and choice of template nodes
     node_template_flux = template_flux[node_template_ids]
-        
+
     # compute all weighted scalar products among templates (only works if linear combination, not the log version)
     HB=np.zeros(n_templates)
     HA=np.zeros((n_templates,n_templates))
@@ -397,32 +399,32 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
                 HA[t,t2] = HA[t2,t]
             else :
                 HA[t,t2] = np.sum(data_ivar*node_template_flux[t]*node_template_flux[t2])
-    
+
     chi2_0 = np.sum(data_ivar*data_flux**2)
-    
+
     # chi2  =  np.sum(data_ivar*(data_flux-model)**2)
     #       =  chi2_0 - 2*np.sum(data_ivar*data_flux*model) + np.sum(data_ivar*model**2)
     # model = sum_i coef_i model_i
     # chi2  =  chi2_0 - 2* sum_i coef_i * HB[i] + sum_ij coef_i * coef_j * HA[i,j]
     # chi2  =  chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
-    
-    
+
+
     # initial state
     coef = _compute_coef(coord,node_cube_coords)
     chi2 = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
     log.debug("init coord=%s chi2/ndata=%f"%(coord,chi2/ndata))
-    
+
     # now we have to do the fit
     # fitting one axis at a time (simultaneous fit of 3 axes was tested and found inefficient : rapidly stuck on edges)
     # it has to be iterative because the model is a non-linear combination of parameters w, ex: w[0]*(1-w[1])*(1-w[2])
     for loop in range(50) :
-        
+
         previous_chi2=chi2.copy()
         previous_coord=coord.copy()
-        
+
         for a in range(npar) :
             previous_chi2_a=chi2.copy()
-            
+
             # it's a linear combination of templates, but the model is non-linear function of coordinates
             # so there is no gain in trying to fit robustly with Gauss-Newton, we simply do a scan
             # it is converging rapidely (need however to iterate on axes)
@@ -436,17 +438,17 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
                     chi2[i]=1e20
                 else :
                     chi2[i] = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
-            
+
             ibest=np.argmin(chi2)
             chi2=chi2[ibest]
             coord[a]=xx[ibest]
-        
+
         log.debug("loop #%d coord=%s chi2/ndata=%f (-dchi2_loop=%f -dchi2_tot=%f)"%(loop,coord,chi2/ndata,previous_chi2-chi2,template_chi2[best_model_id]-chi2))
         diff=np.max(np.abs(coord-previous_coord))
         if diff < 0.001 :
             break
-    
-    # finally perform an exact best fit per axis 
+
+    # finally perform an exact best fit per axis
     for loop in range(50) :
         previous_chi2=chi2.copy()
         previous_coord=coord.copy()
@@ -460,7 +462,7 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
             coef_plus  = _compute_coef(xcoord,node_cube_coords)
             dcoef_dcoord = (coef_plus-coef_minus)/eps # do a numeric derivative
             #log.debug("dcoef_dcoord=%s"%dcoef_dcoord)
-            B = np.inner(dcoef_dcoord,HB) - np.inner(dcoef_dcoord,HA.dot(coef_minus))        
+            B = np.inner(dcoef_dcoord,HB) - np.inner(dcoef_dcoord,HA.dot(coef_minus))
             A = np.inner(dcoef_dcoord,HA.dot(dcoef_dcoord))
             if A>0 :
                 dcoord=B/A
@@ -469,7 +471,7 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
                 tmp_coord[a] += dcoord
                 if tmp_coord[a]<-1 or tmp_coord[a]>1 :
                     #log.debug("do not allow extrapolations")
-                    continue            
+                    continue
                 coef = _compute_coef(tmp_coord,node_cube_coords)
                 tmp_chi2 = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
                 if tmp_chi2 < chi2 :
@@ -478,17 +480,17 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
                     chi2 = tmp_chi2
         diff=np.max(np.abs(coord-previous_coord))
         if diff < 0.001 :
-            break    
-    
+            break
+
     coef = _compute_coef(coord,node_cube_coords)
     chi2 = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
-    
+
     input_number_of_templates=template_flux.shape[0]
     final_coefficients=np.zeros(input_number_of_templates)
     final_coefficients[node_template_ids]=coef
-    
+
     log.debug("COORD=%s"%coord)
-    log.debug("COEF=%s"%coef)    
+    log.debug("COEF=%s"%coef)
     #for i in np.where(final_coefficients>0)[0] :
     #    log.debug("TEFF[%d]=%f"%(i,teff[i]))
     #    log.debug("LOGG[%d]=%f"%(i,logg[i]))
@@ -497,11 +499,11 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     log.debug("LOGG=%f"%np.inner(final_coefficients,logg))
     log.debug("FEH=%f"%np.inner(final_coefficients,feh))
     log.debug("Contributing template Ids=%s"%np.where(final_coefficients!=0)[0])
-    
+
     '''
     # useful debugging plot
     import matplotlib.pyplot as plt
-    plt.figure()        
+    plt.figure()
     ok=np.where(data_ivar>0)[0]
     ii=np.argsort(data_wave[ok])
     twave=data_wave[ok][ii]
@@ -525,9 +527,9 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     plt.show()
     '''
 
-    
+
     return final_coefficients,chi2
-        
+
 
 def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00002, template_error=0):
     """For each input spectrum, identify which standard star template is the closest
@@ -546,7 +548,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         ncpu : number of cpu for multiprocessing
 
     Returns:
-        coef : numpy.array of linear coefficient of standard stars        
+        coef : numpy.array of linear coefficient of standard stars
         redshift : redshift of standard star
         chipdf : reduced chi2
 
@@ -572,32 +574,32 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     for cam in wave.keys() :
         tmp=applySmoothingFilter(flux[cam]) # this is fast
         continuum[cam] = tmp
-            
+
     # mask out wavelength that could bias the fit
-    
+
     log.debug("mask potential cosmics (3 sigma positive fluctuations)")
     for cam in wave.keys() :
         ok=np.where((ivar[cam]>0))[0]
         if ok.size>0 :
             ivar[cam][ok] *= (flux[cam][ok]<(continuum[cam][ok]+3/np.sqrt(ivar[cam][ok])))
-    
-    
+
+
     log.debug("mask sky lines")
     # in vacuum
     # mask blue lines that can affect fit of Balmer series
     # line at 5577 has a stellar line close to it !
     # line at 7853. has a stellar line close to it !
-    # mask everything above 8270A because it can bias the star redshift 
+    # mask everything above 8270A because it can bias the star redshift
     # all of this is based on analysis of a few exposures of BOSS data
     # in vacuum
     skylines=np.array([4047.5,4359.3,5462.3,5578.9,5891.3,5897.3,6301.8,6365.4,7823.3,7855.2])
-    
+
     hw=6. # A
     for cam in wave.keys() :
         for line in skylines :
             ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
         ivar[cam][wave[cam]>8270]=0.
-    
+
     # mask telluric lines
     srch_filename = "data/arc_lines/telluric_lines.txt"
     if not resource_exists('desispec', srch_filename):
@@ -609,8 +611,8 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     for cam in wave.keys() :
         for feature in telluric_features :
             ivar[cam][(wave[cam]>=feature[0])&(wave[cam]<=feature[1])]=0.
-    
-    
+
+
 
     # add error propto to flux to account for model error
     if template_error>0  :
@@ -618,7 +620,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
             ok=np.where(ivar[cam]>0)[0]
             if ok.size>0 :
                 ivar[cam][ok] = 1./ ( 1./ivar[cam][ok] + (template_error*continuum[cam][ok] )**2 )
-    
+
     # normalize data and store them in single array
     data_wave=np.array([])
     data_flux=np.array([])
@@ -634,19 +636,19 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         data_continuum=np.append(data_continuum,continuum[cam])
         data_ivar=np.append(data_ivar,ivar[cam]*continuum[cam]**2)
     data_index=data_index.astype(int)
-    
+
     ndata = np.sum(data_ivar>0)
-    
-    
+
+
     # start looking at models
-    
+
     # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
     canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
-    
+
     # fit redshift on canonical model
     # we use the original data to do this
     # because we resample both the data and model on a logarithmic grid in the routine
-    
+
     if True : # mask Ca H&K lines. Present in ISM, can bias the stellar redshift fit
         log.debug("Mask ISM lines for redshift")
         ismlines=np.array([3934.77,3969.59])
@@ -654,16 +656,16 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         for cam in wave.keys() :
             for line in ismlines :
                 ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
-    
+
     z = redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux[canonical_model], z_max, z_res)
-            
+
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
-    
+
     ntemplates=stdflux.shape[0]
 
     # here we take into account the redshift once and for all
     shifted_stdwave=stdwave*(1+z)
-        
+
     func_args = []
     # need to parallelize the model resampling
     for template_id in range(ntemplates) :
@@ -673,8 +675,8 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                    "template_flux":stdflux[template_id],
                    "template_id":template_id}
         func_args.append( arguments )
-    
-    
+
+
     if ncpu > 1:
         log.debug("creating multiprocessing pool with %d cpus"%ncpu); sys.stdout.flush()
         pool = multiprocessing.Pool(ncpu)
@@ -686,7 +688,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("Finished pool.join()"); sys.stdout.flush()
     else:
         log.debug("Not using multiprocessing for {} cpus".format(ncpu))
-        
+
         results = [_func(x) for x in func_args]
         log.debug("Finished serial loop")
 
@@ -711,50 +713,50 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     template_chi2=np.zeros(ntemplates)
     for template_id in range(ntemplates) :
         template_chi2[template_id] = np.sum(data_ivar*(data_flux-template_flux[template_id])**2)
-    
-    best_model_id=np.argmin(template_chi2) 
+
+    best_model_id=np.argmin(template_chi2)
     best_chi2=template_chi2[best_model_id]
     log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
-        
+
     # interpolate around best model using parameter grid
     coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
     log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
-    
+
     log.debug("use best fit to derive calibration and apply it to the templates before refitting the star ...")
     # the division by the median filtered spectrum leaves some imprint of the input transmission
     # so we will apply calibration to the model and redo the whole fit
     # to make sure this is not driving the stellar model selection.
 
-    
+
     log.debug("remultiply template by their norme")
-    template_flux *= template_norm 
-    
+    template_flux *= template_norm
+
     log.debug("compute best fit model")
     model=np.zeros(data_wave.size)
     for c,t in zip(coef,template_flux) :
         if c>0 : model += c*t
 
 
-    func_args=[]    
+    func_args=[]
     for index in np.unique(data_index) :
         log.debug("compute calib for cam index %d"%index)
         ii=np.where(data_index==index)[0]
         calib = (data_flux[ii]*data_continuum[ii])/(model[ii]+(model[ii]==0))
         scalib = applySmoothingFilter(calib,width=400)
-        
+
         min_scalib=0.
         bad=scalib<=min_scalib
         if np.sum(bad)>0 :
             scalib[bad]=min_scalib
-            
+
         log.debug("multiply templates by calib for cam index %d"%index)
         template_flux[:,ii] *= scalib
-        
+
         # apply this to all the templates and recompute median filter
         for t in range(template_flux.shape[0]) :
             arguments={"template_id":t,"camera_index":index,"template_flux":template_flux[t][ii]}
             func_args.append(arguments)
-    
+
     if ncpu > 1:
         log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d"%ncpu)
         pool = multiprocessing.Pool(ncpu)
@@ -767,27 +769,27 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("divide templates serially")
         results = [_func2(x) for x in func_args]
         log.debug("Finished serial loop")
-    
+
     # collect results
     for result in results :
         template_id = result[0]
         index  = result[1]
         template_flux[template_id][data_index==index] /= (result[2] + (result[2]==0))
-    
+
     log.debug("refit the model ...")
     template_chi2=np.zeros(ntemplates)
     for template_id in range(ntemplates) :
         template_chi2[template_id] = np.sum(data_ivar*(data_flux-template_flux[template_id])**2)
-    
-    best_model_id=np.argmin(template_chi2) 
+
+    best_model_id=np.argmin(template_chi2)
     best_chi2=template_chi2[best_model_id]
-    
+
     log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
-        
+
     # interpolate around best model using parameter grid
     coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
     log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
-    
+
 
     return coef,z,chi2/ndata
 
@@ -819,7 +821,7 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
     return normflux
 
 def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0) :
-    
+
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
@@ -857,10 +859,43 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     log=get_logger()
     log.info("starting")
 
+    # add margin to frame
+    def add_margin_2d_dim1(iarray,margin) :
+        shape=(iarray.shape[0],iarray.shape[1]+2*margin)
+        oarray=np.zeros(shape,dtype=iarray.dtype)
+        oarray[:,:margin]=iarray[:,0][:,None]
+        oarray[:,margin:-margin]=iarray
+        oarray[:,-margin:]=iarray[:,-1][:,None]
+        return oarray
+    def add_margin_3d_dim2(iarray,margin) :
+        shape=(iarray.shape[0],iarray.shape[1],iarray.shape[2]+2*margin)
+        oarray=np.zeros(shape,dtype=iarray.dtype)
+        oarray[:,:,:margin]=iarray[:,:,0][:,:,None]
+        oarray[:,:,margin:-margin]=iarray
+        oarray[:,:,-margin:]=iarray[:,:,-1][:,:,None]
+        return oarray
+
+    margin = 3
+    log.info("adding margin of {} pixels on each side".format(margin))
+    nwave=frame.wave.size
+    dw=frame.wave[1]-frame.wave[0]
+    wave_with_margin=np.zeros(nwave+2*margin)
+    wave_with_margin[margin:nwave+margin]=frame.wave
+    wave_with_margin[0:margin]=frame.wave[0]+dw*np.arange(-margin,0)
+    wave_with_margin[nwave+margin:]=frame.wave[-1]+dw*np.arange(1,margin+1)
+    tframe = copy.deepcopy(frame)
+    tframe.wave = wave_with_margin
+    tframe.nwave = tframe.wave.size
+    tframe.flux = add_margin_2d_dim1(frame.flux,margin)
+    tframe.ivar = add_margin_2d_dim1(frame.ivar,margin)
+    tframe.mask = add_margin_2d_dim1(frame.mask,margin)
+    tframe.resolution_data = add_margin_3d_dim2(frame.resolution_data,margin)
+    tframe.R = np.array( [Resolution(r) for r in tframe.resolution_data] )
+
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
-    stdfibers = np.where(isStdStar(frame.fibermap))[0]
+    stdfibers = np.where(isStdStar(tframe.fibermap))[0]
     assert len(stdfibers) > 0
 
     if not np.all(np.in1d(stdfibers, input_model_fibers)):
@@ -868,12 +903,12 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         if len(bad) > 0:
             log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
         stdfibers = np.intersect1d(stdfibers, input_model_fibers)
-    
+
     # also other way around
     stdfibers = np.intersect1d(input_model_fibers, stdfibers)
     log.info("Std stars fibers: {}".format(stdfibers))
-    
-    stdstars = frame[stdfibers]
+
+    stdstars = tframe[stdfibers]
 
     nwave=stdstars.nwave
     nstds=stdstars.flux.shape[0]
@@ -893,17 +928,17 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=stdstars.ivar*(stdstars.mask==0)
-    
+
     #- Start with a first pass median rejection
     calib = (convolved_model_flux!=0)*(stdstars.flux/(convolved_model_flux + (convolved_model_flux==0)))
     median_calib = np.median(calib, axis=0)
-        
+
     # First fit of smooth correction per fiber, and 10% model error to variance,  and perform first outlier rejection
     smooth_fiber_correction=np.ones((stdstars.flux.shape))
-    chi2=np.zeros((stdstars.flux.shape))  
+    chi2=np.zeros((stdstars.flux.shape))
 
     badfiber=np.zeros(nstds,dtype=int)
-    
+
     for star in range(nstds) :
         if badfiber[star] : continue
         if np.sum(current_ivar[star]) == 0 :
@@ -931,8 +966,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             current_ivar[star]=0.
             badfiber[star] = 1
             continue
-        
-        # add few percent multiplicative error to ivar for sigma clipping 
+
+        # add few percent multiplicative error to ivar for sigma clipping
         chi2[star]=(current_ivar[star]>0)*(stdstars.flux[star]-smooth_fiber_correction[star]*M)**2/(1./(current_ivar[star] + (current_ivar[star]==0))+(0.1*stdstars.flux[star])**2)
         # checking indexing using mags
         #from desispec.io.filters import load_legacy_survey_filter
@@ -947,7 +982,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
-    
+
     sqrtw=np.sqrt(current_ivar)
     sqrtwflux=np.sqrt(current_ivar)*stdstars.flux
 
@@ -955,7 +990,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     D1=scipy.sparse.lil_matrix((nwave,nwave))
     D2=scipy.sparse.lil_matrix((nwave,nwave))
 
-    
+
     nout_tot=0
     previous_mean=0.
     for iteration in range(20) :
@@ -1014,7 +1049,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             log.info("nbad={}".format(bad.size))
             good = np.where(wmask==0)[0]
             calibration[bad] = np.interp(bad,good,calibration[good],left=0,right=0)
-                
+
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
         for star in range(nstds) :
@@ -1022,7 +1057,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
                 log.info("iter %d fiber %d(smooth)"%(iteration,star))
 
             if badfiber[star]: continue
-            
+
             M = stdstars.R[star].dot(calibration*model_flux[star])
 
             try:
@@ -1113,7 +1148,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         if nout_iter == 0 and np.max(np.abs(mean-previous_mean))<0.0001 :
             break
         previous_mean = mean
-    
+
     # smooth_fiber_correction does not converge exactly to one on average, so we apply its mean to the calibration
     # (tested on sims)
     calibration /= mean
@@ -1133,16 +1168,16 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     # we also want to save the convolved calibration and a calibration variance
     # first compute average resolution
-    mean_res_data=np.mean(frame.resolution_data,axis=0)
+    mean_res_data=np.mean(tframe.resolution_data,axis=0)
     R = Resolution(mean_res_data)
     # compute convolved calib
-    ccalibration = np.zeros(frame.flux.shape)
-    for i in range(frame.nspec):
-        norme = frame.R[i].dot(np.ones(calibration.shape))
+    ccalibration = np.zeros(tframe.flux.shape)
+    for i in range(tframe.nspec):
+        norme = tframe.R[i].dot(np.ones(calibration.shape))
         ok=np.where(norme>0)[0]
         if ok.size :
-            ccalibration[i][ok]=frame.R[i].dot(calibration)[ok]/norme[ok]
-        
+            ccalibration[i][ok]=tframe.R[i].dot(calibration)[ok]/norme[ok]
+
     # Use diagonal of mean calibration covariance for output.
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
     ccalibvar=np.array(np.diagonal(ccalibcovar))
@@ -1161,19 +1196,28 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     bad[1:-1] |= bad[:-2]
     nbad=np.sum(bad>0)
     log.info("Requesting at least {} star spectra at each wavelength results in masking {} add. flux bins ({} already masked)".format(min_number_of_stars,nbad-nallbad,nallbad))
-    
+
     ccalibivar[bad]=0.
     ccalibration[:,bad]=0.
-        
+
     # convert to 2D
     # For now this is the same for all fibers; in the future it may not be
-    ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
+    ccalibivar = np.tile(ccalibivar, tframe.nspec).reshape(tframe.nspec, tframe.nwave)
 
     # need to do better here
-    mask = frame.mask.copy()
+    mask = tframe.mask.copy()
+
+    mccalibration = R.dot(calibration)
+
+    # trim back
+    ccalibration=ccalibration[:,margin:-margin]
+    ccalibivar=ccalibivar[:,margin:-margin]
+    mask=mask[:,margin:-margin]
+    mccalibration=mccalibration[margin:-margin]
+    stdstars.wave=stdstars.wave[margin:-margin]
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration))
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration)
 
 
 
@@ -1257,7 +1301,7 @@ def apply_flux_calibration(frame, fluxcalib):
     frame.flux = frame.flux * (C>0) / (C+(C==0))
     frame.ivar *= (fluxcalib.ivar>0) * (C>0)
     for i in range(nfibers) :
-        ok=np.where(frame.ivar[i]>0)[0]        
+        ok=np.where(frame.ivar[i]>0)[0]
         if ok.size>0 :
             frame.ivar[i,ok] = 1./( 1./(frame.ivar[i,ok]*C[i,ok]**2)+frame.flux[i,ok]**2/(fluxcalib.ivar[i,ok]*C[i,ok]**4)  )
 
