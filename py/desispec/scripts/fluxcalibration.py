@@ -51,7 +51,7 @@ def parse(options=None):
                         help = 'path of QA figure file')
     parser.add_argument('--highest-throughput', type = int, default = 0, required=False,
                         help = 'use this number of stars ranked by highest throughput to normalize transmission (for DESI commissioning)')
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -77,7 +77,7 @@ def main(args) :
 
     # Set fibermask flagged spectra to have 0 flux and variance
     frame = get_fiberbitmasked_frame(frame, bitmask='flux',ivar_framemask=True)
-    
+
     log.info("apply fiberflat")
     # read fiberflat
     fiberflat = read_fiberflat(args.fiberflat)
@@ -98,27 +98,48 @@ def main(args) :
     model_flux,model_wave,model_fibers,model_metadata=read_stdstar_models(args.models)
 
     ok=np.ones(len(model_metadata),dtype=bool)
-    
+
     if args.chi2cut > 0 :
-        log.info("Apply cut CHI2DOF<{}".format(args.chi2cut))
-        ok &= (model_metadata["CHI2DOF"]<args.chi2cut)
+        log.info("apply cut CHI2DOF<{}".format(args.chi2cut))
+        good = (model_metadata["CHI2DOF"]<args.chi2cut)
+        bad  = ~good
+        ok  &= good
+        if np.any(bad) :
+            log.info(" discard {} stars with CHI2DOF= {}".format(np.sum(bad),list(model_metadata["CHI2DOF"][bad])))
+
     if args.delta_color_cut > 0 :
-        log.info("Apply cut |delta color|<{}".format(args.delta_color_cut))
-        ok &= (np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)
+        log.info("apply cut |delta color|<{}".format(args.delta_color_cut))
+        good = (np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)
+        bad  = ok&(~good)
+        ok  &= good
+        if np.any(bad) :
+            vals=model_metadata["MODEL_G-R"][bad]-model_metadata["DATA_G-R"][bad]
+            log.info(" discard {} stars with dcolor= {}".format(np.sum(bad),list(vals)))
+
     if args.min_color is not None :
-        log.info("Apply cut DATA_G-R>{}".format(args.min_color))
-        ok &= (model_metadata["DATA_G-R"]>args.min_color)
+        log.info("apply cut DATA_G-R>{}".format(args.min_color))
+        good = (model_metadata["DATA_G-R"]>args.min_color)
+        bad  = ok&(~good)
+        ok  &= good
+        if np.any(bad) :
+            vals=model_metadata["DATA_G-R"][bad]
+            log.info(" discard {} stars with G-R= {}".format(np.sum(bad),list(vals)))
+
     if args.chi2cut_nsig > 0 :
         # automatically reject stars that ar chi2 outliers
         mchi2=np.median(model_metadata["CHI2DOF"])
         rmschi2=np.std(model_metadata["CHI2DOF"])
         maxchi2=mchi2+args.chi2cut_nsig*rmschi2
-        log.info("Apply cut CHI2DOF<{} based on chi2cut_nsig={}".format(maxchi2,args.chi2cut_nsig))
-        ok &= (model_metadata["CHI2DOF"]<=maxchi2)
-    
+        log.info("apply cut CHI2DOF<{} based on chi2cut_nsig={}".format(maxchi2,args.chi2cut_nsig))
+        good = (model_metadata["CHI2DOF"]<=maxchi2)
+        bad  = ok&(~good)
+        ok  &= good
+        if np.any(bad) :
+            log.info(" discard {} stars with CHI2DOF={}".format(np.sum(bad),list(model_metadata["CHI2DOF"][bad])))
+
     ok=np.where(ok)[0]
     if ok.size == 0 :
-        log.error("cuts discarded all stars")
+        log.error("selection cuts discarded all stars")
         sys.exit(12)
     nstars=model_flux.shape[0]
     nbad=nstars-ok.size
@@ -127,7 +148,7 @@ def main(args) :
         model_flux=model_flux[ok]
         model_fibers=model_fibers[ok]
         model_metadata=model_metadata[:][ok]
-    
+
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
 
