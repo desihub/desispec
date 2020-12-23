@@ -47,13 +47,12 @@ import desispec.scripts.specex
 from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
-stop_imports = time.time()
 
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
 
-
+stop_imports = time.time()
 
 #########################################
 ######## Begin Body of the Code #########
@@ -63,16 +62,23 @@ args = parser.parse_args()
 log = get_logger()
 
 #- Check MPI flags and determine the comm, rank, and size given the arguments
+start_mpi_connect = time.time()
 comm, rank, size = assign_mpi(do_mpi=args.mpi, do_batch=args.batch, log=log)
+stop_mpi_connect = time.time()
 
 #- Start timer; only print log messages from rank 0 (others are silent)
 timer = desiutil.timer.Timer(silent=(rank>0))
+
+#- Fill in timing information for steps before we had the timer created
 if args.starttime is not None:
     timer.start('startup', starttime=args.starttime)
     timer.stop('startup', stoptime=start_imports)
 
 timer.start('imports', starttime=start_imports)
 timer.stop('imports', stoptime=stop_imports)
+
+timer.start('mpi_connect', starttime=start_mpi_connect)
+timer.stop('mpi_connect', stoptime=stop_mpi_connect)
 
 #- Freeze IERS after parsing args so that it doesn't bother if only --help
 timer.start('freeze_iers')
