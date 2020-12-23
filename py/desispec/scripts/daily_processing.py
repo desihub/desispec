@@ -213,7 +213,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     unproc_table.add_row(erow)
                     continue
                 elif str(erow['OBSTYPE']).lower() == 'science' and float(erow['EXPTIME']) < 59.0:
-                    print("\nScience exposure with EXPTIME less than 20s. Not processing.")
+                    print("\nScience exposure with EXPTIME less than 59s. Not processing.")
                     unproc_table.add_row(erow)
                     continue
                 elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
