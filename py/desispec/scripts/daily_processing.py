@@ -212,7 +212,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     print("\nExposure identified as system test. Not processing.")
                     unproc_table.add_row(erow)
                     continue
-                elif str(erow['OBSTYPE']).lower() == 'science' and float(erow['EXPTIME']) < 20.0:
+                elif str(erow['OBSTYPE']).lower() == 'science' and float(erow['EXPTIME']) < 59.0:
                     print("\nScience exposure with EXPTIME less than 20s. Not processing.")
                     unproc_table.add_row(erow)
                     continue
