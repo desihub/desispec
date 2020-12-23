@@ -32,11 +32,15 @@ class TestIO(unittest.TestCase):
         cls.origEnv = {'SPECPROD': None,
                        "DESI_ROOT": None,
                        "DESI_SPECTRO_DATA": None,
-                       "DESI_SPECTRO_REDUX": None}
+                       "DESI_SPECTRO_REDUX": None,
+                       "DESI_SPECTRO_CALIB": None,
+                       }
         cls.testEnv = {'SPECPROD':'dailytest',
                        "DESI_ROOT": cls.testDir,
                        "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
-                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux')}
+                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
+                       "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
+                       }
         cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
         cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
                                     cls.testEnv['SPECPROD'])
@@ -956,6 +960,36 @@ class TestIO(unittest.TestCase):
         self.assertEqual(parse_cameras(None), None)
         self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2']), 'a1b2')
 
+    def test_shorten_filename(self):
+        """Test desispec.io.meta.shorten_filename"""
+        from ..io.meta import shorten_filename, specprod_root
+
+        specprod = specprod_root()
+        longname = os.path.join(specprod, 'blat/foo.fits')
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, 'SPECPROD/blat/foo.fits')
+
+        #- if SPECPROD not set, don't shorten but don't fail
+        del os.environ['SPECPROD']
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+
+        #- if no matching prefix, don't shorten but don't fail
+        longname = '/bar/blat/foo.fits'
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+
+        #- with and without DESI_SPECTRO_CALIB
+        calibdir = os.getenv('DESI_SPECTRO_CALIB')
+        longname = os.path.join(calibdir, 'blat/foo.fits')
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, 'SPCALIB/blat/foo.fits')
+
+        del os.environ['DESI_SPECTRO_CALIB']
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+        os.environ['DESI_SPECTRO_CALIB'] = self.testEnv['DESI_SPECTRO_CALIB']
 
 def test_suite():
     """Allows testing of only this module with the command::

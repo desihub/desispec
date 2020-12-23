@@ -570,7 +570,7 @@ def addkeys(hdr1, hdr2, skipkeys=None):
     #- standard keywords that should be skipped
     stdkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
                 'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
-                'XTENSTION', 'TFIELDS']
+                'XTENSION', 'TFIELDS']
 
     for key, value in hdr2.items():
         if key not in stdkeys and \
