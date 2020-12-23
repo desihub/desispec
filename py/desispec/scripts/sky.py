@@ -6,6 +6,7 @@ from desispec.io import read_fiberflat
 from desispec.io import write_sky
 from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
+from desispec.io import shorten_filename
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.qa import qa_plots
@@ -89,6 +90,10 @@ def main(args) :
         # Figure(s)
         if args.qafig is not None:
             qa_plots.frame_skyres(args.qafig, frame, skymodel, qaframe)
+
+    # record inputs
+    frame.meta['IN_FRAME'] = shorten_filename(args.infile)
+    frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
 
     # write result
     write_sky(args.outfile, skymodel, frame.meta)

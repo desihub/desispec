@@ -14,11 +14,12 @@ from desispec.image import Image
 from desispec import cosmics
 from desispec.maskbits import ccdmask
 from desiutil.log import get_logger
+from desiutil import depend
 from desispec.calibfinder import CalibFinder
 from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
-from desispec.io import read_fiberflat
+from desispec.io import read_fiberflat, shorten_filename
 from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
@@ -288,23 +289,34 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     log.info("done")
     return bkg
 
-def get_calibration_image(cfinder,keyword,entry) :
+def get_calibration_image(cfinder, keyword, entry, header=None):
     """Reads a calibration file
 
     Args:
+        cfinder : None or CalibFinder object
         keyword :  BIAS, MASK, or PIXFLAT
         entry : boolean or filename or image
                 if entry==False return False
                 if entry==True use calibration filename from calib. config and read it
                 if entry==str use this for the filename
                 if entry==image return input
+
+    Options:
+        header : if not None, update header['CAL...'] = calib provenance
+
     returns:
        2D numpy array with calibration image
     """
     log=get_logger()
 
-    if entry is False : return False # we don't want do anything
+    #- set the header to something so that we don't have to keep checking it
+    if header is None:
+        header = dict()
 
+    calkey = 'CCD_CALIB_{}'.format(keyword.upper())
+    if entry is False:
+        depend.setdep(header, calkey, 'None')
+        return False # we don't want do anything
 
     filename = None
     if entry is True :
@@ -314,13 +326,16 @@ def get_calibration_image(cfinder,keyword,entry) :
             raise ValueError("no calibration data was found")
         if cfinder.haskey(keyword) :
             filename = cfinder.findfile(keyword)
+            depend.setdep(header, calkey, shorten_filename(filename))
         else :
+            depend.setdep(header, calkey, 'None')
             return False # we say in the calibration data we don't need this
     elif isinstance(entry,str) :
         filename = entry
+        depend.setdep(header, calkey, shorten_filenam(filename))
     else :
+        depend.setdep(header, calkey, 'Unknown image')
         return entry # it's expected to be an image array
-
 
     log.info("Using %s %s"%(keyword,filename))
     if keyword == "BIAS" :
@@ -421,6 +436,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     log=get_logger()
 
     header = header.copy()
+    depend.setdep(header, 'DESI_SPECTRO_CALIB', os.getenv('DESI_SPECTRO_CALIB'))
 
     cfinder = None
 
@@ -443,7 +459,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     # Set bias image, as desired
     if bias_img is None:
-        bias = get_calibration_image(cfinder,"BIAS",bias)
+        bias = get_calibration_image(cfinder,"BIAS",bias,header)
     else:
         bias = bias_img
 
@@ -486,6 +502,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         log.info("Use exptime = {} sec to compute the dark current".format(exptime))
 
         dark_filename = cfinder.findfile("DARK")
+        depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
         log.info(f'Using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
         dark = read_dark(filename=dark_filename,exptime=exptime)
@@ -513,9 +530,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
-
     #- Load mask
-    mask = get_calibration_image(cfinder,"MASK",mask)
+    mask = get_calibration_image(cfinder,"MASK",mask,header)
 
     if mask is False :
         mask = np.zeros(image.shape, dtype=np.int32)
@@ -746,7 +762,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
 
     #- Divide by pixflat image
-    pixflat = get_calibration_image(cfinder,"PIXFLAT",pixflat)
+    pixflat = get_calibration_image(cfinder,"PIXFLAT",pixflat,header)
     if pixflat is not False :
         if pixflat.shape != image.shape:
             raise ValueError('shape mismatch pixflat {} != image {}'.format(pixflat.shape, image.shape))
@@ -798,6 +814,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         psf = None
         if psf_filename is None :
             psf_filename = cfinder.findfile("PSF")
+
+        depend.setdep(header, 'CCD_CALIB_PSF', shorten_filename(psf_filename))
         xyset = read_xytraceset(psf_filename)
 
         fiberflat = None
@@ -807,6 +825,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if with_sky_model :
             log.debug("Will use a sky model to model the spectra")
             fiberflat_filename = cfinder.findfile("FIBERFLAT")
+            depend.setdep(header, 'CCD_CALIB_FIBERFLAT', shorten_filename(fiberflat_filename))
             if fiberflat_filename is not None :
                 fiberflat = read_fiberflat(fiberflat_filename)
 
@@ -849,6 +868,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if xyset is None :
             if psf_filename is None :
                 psf_filename = cfinder.findfile("PSF")
+                depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
             xyset = read_xytraceset(psf_filename)
         img.pix -= model_scattered_light(img,xyset)
 

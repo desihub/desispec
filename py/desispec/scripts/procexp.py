@@ -7,6 +7,7 @@ spectro-photometric calibration depending on input.
 from desispec.io import read_frame, write_frame
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
+from desispec.io import shorten_filename
 from desispec.io.fluxcalibration import read_flux_calibration
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -115,6 +116,11 @@ def main(args):
         frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
+    # record inputs
+    frame.meta['IN_FRAME'] = shorten_filename(args.infile)
+    frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
+    frame.meta['IN_SKY']   = shorten_filename(args.sky)
+    frame.meta['IN_CALIB'] = shorten_filename(args.calib)
 
     # save output
     write_frame(args.outfile, frame, units='10**-17 erg/(s cm2 Angstrom)')

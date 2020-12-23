@@ -20,6 +20,7 @@ from specter.extract import ex2d
 
 from desiutil.log import get_logger
 from desiutil.iers import freeze_iers
+from desiutil import depend
 
 from desispec import io
 from desispec.frame import Frame
@@ -260,8 +261,9 @@ def main_mpi(args, comm=None, timing=None):
     img.meta['WAVEMAX'] = (raw_wstop, 'Last wavelength [Angstroms]')
     img.meta['WAVESTEP']= (raw_dw, 'Wavelength step size [Angstroms]')
     img.meta['SPECTER'] = (specter.__version__, 'https://github.com/desihub/specter')
-    img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
-    img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
+    img.meta['IN_PSF']  = (io.shorten_filename(psf_file), 'Input spectral PSF')
+    img.meta['IN_IMG']  = (io.shorten_filename(input_file), 'Input image')
+    depend.add_dependencies(img.meta)
 
     #- If not using MPI, use a single call to each of these and then end this function call
     #  Otherwise, continue on to splitting things up for the different ranks

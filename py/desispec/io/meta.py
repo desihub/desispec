@@ -417,6 +417,32 @@ def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
     # Return
     return sorted(nights)
 
+def shorten_filename(filename):
+    """Attempt to shorten filename to fit in FITS header without CONTINUE
+
+    Args:
+        filename (str): input filename
+
+    Returns potentially shortened filename
+
+    Replaces prefixes from environment variables:
+      * $DESI_SPECTRO_CALIB -> SPCALIB
+      * $DESI_SPECTRO_REDUX/$SPECPROD -> SPECPROD
+    """
+    spcalib = os.getenv('DESI_SPECTRO_CALIB')
+    if spcalib is not None and filename.startswith(spcalib):
+        return filename.replace(spcalib, 'SPCALIB', 1)
+
+    try:
+        specprod = specprod_root()
+    except KeyError:
+        specprod = None
+
+    if specprod is not None and filename.startswith(specprod):
+        return filename.replace(specprod, 'SPECPROD', 1)
+
+    #- no substitutions
+    return filename
 
 
 def rawdata_root():

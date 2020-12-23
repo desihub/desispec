@@ -690,6 +690,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and \
             flatfilename=input_fiberflat[camera]
             if flatfilename is not None :
                 ff = desispec.io.read_fiberflat(flatfilename)
+                fr.meta['FIBERFLT'] = desispec.io.shorten_filename(flatfilename)
                 apply_fiberflat(fr, ff)
 
                 fframefile = findfile('fframe', args.night, args.expid, camera)
