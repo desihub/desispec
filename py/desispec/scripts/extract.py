@@ -268,9 +268,13 @@ def main_mpi(args, comm=None, timing=None):
     #- Check if input PSF was itself a traceshifted version of another PSF
     orig_psf = None
     if rank == 0:
-        psfhdr = fits.getheader(psf_file, 'PSF')
-        if 'IN_PSF' in psfhdr:
+        try:
+            psfhdr = fits.getheader(psf_file, 'PSF')
             orig_psf = psfhdr['IN_PSF']
+        except KeyError:
+            #- could happen due to PSF format not having "PSF" extension,
+            #- or due to PSF header not having 'IN_PSF' keyword.  Either is OK
+            pass
 
     if comm is not None:
         orig_psf = comm.bcast(orig_psf, root=0)
