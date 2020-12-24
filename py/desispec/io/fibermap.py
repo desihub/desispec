@@ -418,7 +418,18 @@ def assemble_fibermap(night, expid, force=False):
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
 
+    #- Read platemaker (pm) coordinates file and count positioning iterations
     if coordfile is not None:
+        pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
+        numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
+        if numiter == 0:
+            log.warning('No positioning iters in coordinates file thus no FVC/platemaker info')
+    else:
+        pm = None
+        numiter = 0
+
+    #- If there were positioning iterations, merge that info with fiberassign
+    if (pm is not None) and (numiter > 0):
         pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
         pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
         keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
@@ -427,7 +438,6 @@ def assemble_fibermap(night, expid, force=False):
         log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
 
         #- Count offset iterations by counting columns with name OFFSET_{n}
-        # numiter = len([col for col in pm.colnames if col.startswith('FVC_X_')])
         numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
 
         #- Create fibermap table to merge with fiberassign file
@@ -466,9 +476,13 @@ def assemble_fibermap(night, expid, force=False):
         fibermap['_BADPOS'][bad] = True
 
         #- Missing columns from coordinates file...
-        log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
-        fibermap['FIBER_RA'] = np.zeros(len(pm))
-        fibermap['FIBER_DEC'] = np.zeros(len(pm))
+        if ('FIBER_RA' in pm.colnames) and ('FIBER_DEC' in pm.colnames):
+            fibermap['FIBER_RA'] = pm['FIBER_RA']
+            fibermap['FIBER_DEC'] = pm['FIBER_DEC']
+        else:
+            log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
+            fibermap['FIBER_RA'] = np.zeros(len(pm))
+            fibermap['FIBER_DEC'] = np.zeros(len(pm))
 
         fibermap = join(fa, fibermap, join_type='left')
 
@@ -481,9 +495,9 @@ def assemble_fibermap(night, expid, force=False):
         fibermap.remove_column('_BADPOS')
 
     else:
-        #- No coordinates file; just use fiberassign + dummy columns
+        #- No coordinates file or no positioning iterations;
+        #- just use fiberassign + dummy columns
         fibermap = fa
-        # Include NUM_ITER that is added if coord file exists
         fibermap['NUM_ITER'] = 0
         fibermap['FIBER_X'] = 0.0
         fibermap['FIBER_Y'] = 0.0
@@ -527,6 +541,12 @@ def assemble_fibermap(night, expid, force=False):
         addkeys(fibermap.meta, guideheader, skipkeys=skipkeys)
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
+
+    #- Early data raw headers had bad >8 char 'FIBERASSIGN' keyword
+    if 'FIBERASSIGN' in fibermap.meta:
+        log.warning('Renaming header keyword FIBERASSIGN -> FIBASSGN')
+        fibermap.meta['FIBASSGN'] = fibermap.meta['FIBERASSIGN']
+        del fibermap.meta['FIBERASSIGN']
 
     #- Record input guide and coordinates files
     if guidefile is not None:
