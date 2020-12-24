@@ -265,6 +265,19 @@ def main_mpi(args, comm=None, timing=None):
     img.meta['IN_IMG']  = (io.shorten_filename(input_file), 'Input image')
     depend.add_dependencies(img.meta)
 
+    #- Check if input PSF was itself a traceshifted version of another PSF
+    orig_psf = None
+    if rank == 0:
+        psfhdr = fits.getheader(psf_file, 'PSF')
+        if 'IN_PSF' in psfhdr:
+            orig_psf = psfhdr['IN_PSF']
+
+    if comm is not None:
+        orig_psf = comm.bcast(orig_psf, root=0)
+
+    if orig_psf is not None:
+        img.meta['ORIG_PSF'] = orig_psf
+
     #- If not using MPI, use a single call to each of these and then end this function call
     #  Otherwise, continue on to splitting things up for the different ranks
     if comm is None:
