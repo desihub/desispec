@@ -237,8 +237,10 @@ if args.obstype in ['FLAT']:
                             if os.path.isfile(ofile):
                                 average_flats[camera].append(ofile)
                             else:
-                                log.info("Will use existing {}".format(ofile))
-                                average_flats[camera].append(ofile)
+                                log.error(f"Generating {ofile} failed; proceeding with other flats")
+                        else:
+                            log.info("Will use existing {}".format(ofile))
+                            average_flats[camera].append(ofile)
 
                 log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
                 for camera_arm in ["b", "r", "z"]:
@@ -250,10 +252,14 @@ if args.obstype in ['FLAT']:
                             if camera in average_flats:
                                 for flat in average_flats[camera]:
                                     flats_for_this_arm.append(flat)
-                    cmd = "desi_autocalib_fiberflat --night {} --arm {} -i ".format(args.night, camera_arm)
-                    for flat in flats_for_this_arm:
-                        cmd += " {} ".format(flat)
-                    runcmd(cmd, inputs=flats_for_this_arm, outputs=[])
+                    if len(flats_for_this_arm) > 0:
+                        cmd = "desi_autocalib_fiberflat --night {} --arm {} -i ".format(args.night, camera_arm)
+                        for flat in flats_for_this_arm:
+                            cmd += " {} ".format(flat)
+                        runcmd(cmd, inputs=flats_for_this_arm, outputs=[])
+                    else:
+                        log.error(f'No flats found for arm {camera_arm}')
+
                 log.info("Done with fiber flats per night")
 
     timer.stop('fiberflatnight')  
