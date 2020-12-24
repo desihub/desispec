@@ -35,7 +35,7 @@ from astropy.io import fits
 import glob
 import desiutil.timer
 import desispec.io
-from desispec.io import findfile, replace_prefix
+from desispec.io import findfile, replace_prefix, shorten_filename
 from desispec.io.util import create_camword
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
@@ -709,6 +709,7 @@ if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and \
             flatfilename=input_fiberflat[camera]
             if flatfilename is not None :
                 ff = desispec.io.read_fiberflat(flatfilename)
+                fr.meta['FIBERFLT'] = desispec.io.shorten_filename(flatfilename)
                 apply_fiberflat(fr, ff)
 
                 fframefile = findfile('fframe', args.night, args.expid, camera)
@@ -804,6 +805,8 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.nop
             sky = desispec.io.read_sky(skyfile)
             apply_fiberflat(frame, fiberflat)
             subtract_sky(frame, sky, apply_throughput_correction=True)
+            frame.meta['IN_SKY'] = shorten_filename(skyfile)
+            frame.meta['FIBERFLT'] = shorten_filename(fiberflatfile)
             desispec.io.write_frame(sframefile, frame)
 
     timer.stop('skysub')
