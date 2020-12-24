@@ -36,6 +36,7 @@ desispec Change Log
   * Only uses fiberassign .fits and .fits.gz (but not .fits.orig) (PR `#1072`_).
   * Support "unpositioned" exposures; propagate FIBER_RA/DEC if present
     (PR `#1073`_).
+  * Use desi_spectro_calib tag 0.2.1
 
 .. _`#1047`: https://github.com/desihub/desispec/issues/1047
 .. _`#1048`: https://github.com/desihub/desispec/issues/1048
@@ -63,7 +64,8 @@ desispec Change Log
   * New opts to model image variance and improve sky subtraction (PR `#1008`_).
   * Refactor desi_proc and daily processing workflow
     (PRs `#1012`_, `#1014`_, `#1030`_)
-  * New bias+dark model ("non-linear dark y1D") (PR `#1029`_)
+  * New bias+dark model ("non-linear dark y1D") in desi_spectro_calib 0.2.0
+    (PR `#1029`_)
 
 * Smaller (but important) updates:
 
