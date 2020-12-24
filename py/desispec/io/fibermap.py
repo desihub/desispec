@@ -319,6 +319,7 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     Raises FileNotFoundError if no fibermap is found
     """
+    log = get_logger()
     if nightdir is None:
         nightdir = os.path.join(rawdata_root(), str(night))
 
@@ -331,11 +332,14 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     fafile = None
     for filename in sorted(glob.glob(faglob)):
-        dirname = os.path.dirname(filename)
-        if dirname <= expdir:
-            fafile = filename
+        if filename.endswith('.fits.gz') or filename.endswith('.fits'):
+            dirname = os.path.dirname(filename)
+            if dirname <= expdir:
+                fafile = filename
+            else:
+                break
         else:
-            break
+            log.debug(f'Ignoring {filename}')
 
     if fafile is None:
         raise FileNotFoundError(
