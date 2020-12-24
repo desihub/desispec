@@ -228,6 +228,11 @@ def main_gpu_specter(args, comm=None, timing=None):
             'image': img.pix,
             'ivar': img.ivar*(img.mask==0)
         }
+        if args.gpu:
+            import cupy as cp
+            image['image'] = cp.asarray(image['image'])
+            image['ivar'] = cp.asarray(image['ivar'])
+
         #- TODO: check compatibility with specter.psf.load_psf
         psf = gpu_specter.io.read_psf(args.psf)
 
