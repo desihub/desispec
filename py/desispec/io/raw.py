@@ -48,17 +48,28 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         if "EXPTIME" in primary_header : break
 
         if len(fx)>hdu+1 :
-            log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
+            if hdu > 0:
+                log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
             hdu +=1 
         else :
             log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
             raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
-    
-    blacklist = ["EXTEND","SIMPLE","NAXIS1","NAXIS2","CHECKSUM","DATASUM","XTENSION","EXTNAME","COMMENT"]
+
+    #- early data have >8 char FIBERASSIGN key; rename to match current data
+    if 'FIBERASSIGN' in primary_header:
+        log.warning('renaming long header keyword FIBERASSIGN -> FIBASSGN')
+        primary_header['FIBASSGN'] = primary_header['FIBERASSIGN']
+        del primary_header['FIBERASSIGN']
+
+    if 'FIBERASSIGN' in header:
+        header['FIBASSGN'] = header['FIBERASSIGN']
+        del header['FIBERASSIGN']
+
+    skipkeys = ["EXTEND","SIMPLE","NAXIS1","NAXIS2","CHECKSUM","DATASUM","XTENSION","EXTNAME","COMMENT"]
     if 'INHERIT' in header and header['INHERIT']:
         h0 = fx[0].header
         for key in h0:
-            if ( key not in blacklist ) and ( key not in header ):
+            if ( key not in skipkeys ) and ( key not in header ):
                 header[key] = h0[key]
 
     if "fill_header" in kwargs :
@@ -80,11 +91,11 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
                 if hdu in fx :
                     hdu_header = fx[hdu].header
                     for key in hdu_header:
-                        if ( key not in blacklist ) and ( key not in header ) :
+                        if ( key not in skipkeys ) and ( key not in header ) :
                             log.debug("adding {} = {}".format(key,hdu_header[key]))
                             header[key] = hdu_header[key]                        
                         else :
-                            log.debug("key %s already in header or blacklisted"%key)
+                            log.debug("key %s already in header or in skipkeys"%key)
                 else :
                     log.warning("warning HDU %s not in fits file"%str(hdu))
 

@@ -2,13 +2,59 @@
 desispec Change Log
 ===================
 
-0.35.1 (unreleased)
+0.36.0 (unreleased)
 -------------------
 
-* Fixes assemble_fibermap for older data
-  (PR `#1047`_, bug introduced in PR `#1045`_).
+* No changes yet
+
+0.36.0 (2020-12-23)
+-------------------
+
+* Major updates:
+
+  * Coadd fluxes in multi-exp standard stars before fitting (PR `#1059`_).
+  * New model of CCD pixel-level variance (PR `#1062`_).
+  * Adjust sky-line variance based on model chi2 (PR `#1062`_).
+
+* Smaller (but important) updates:
+
+  * Fixes assemble_fibermap for older data
+    (PR `#1047`_, bug introduced in PR `#1045`_).
+  * Use EBV instead of MW_TRANSMISSION_G/R/Z from fiberassign (PR `#1048`_).
+  * Fallback to using FA_TYPE if no stdstars in (SVn\_)DESI_TARGET
+    (PR `#1050`_).
+  * Use GitHub Actions for testing instead of Travis (PR `#1053`_).
+  * Fix stdstar absolute symlinks (PR `#1056`_).
+  * Adjust nodes per job (PR `#1056`_ and `#1068`_).
+  * Workflow options for bad exposures and new end-of-cals manifests
+    (PR `#1057`_).
+  * stdstar robustness if petal is disabled (PR `#1060`_).
+  * improved camera argument parsing (PR `#1061`_).
+  * Fix unphysical spike at edge of calibration vectors (PR `#1065`_).
+  * Add header keywords for input calib provenance (PR `#1069`_).
+  * More logging about stdstar selection cuts (PR `#1070`_).
+  * Only uses fiberassign .fits and .fits.gz (but not .fits.orig) (PR `#1072`_).
+  * Support "unpositioned" exposures; propagate FIBER_RA/DEC if present
+    (PR `#1073`_).
+  * Use desi_spectro_calib tag 0.2.1
 
 .. _`#1047`: https://github.com/desihub/desispec/issues/1047
+.. _`#1048`: https://github.com/desihub/desispec/issues/1048
+.. _`#1050`: https://github.com/desihub/desispec/issues/1050
+.. _`#1053`: https://github.com/desihub/desispec/issues/1053
+.. _`#1056`: https://github.com/desihub/desispec/issues/1056
+.. _`#1057`: https://github.com/desihub/desispec/issues/1057
+.. _`#1059`: https://github.com/desihub/desispec/issues/1059
+.. _`#1060`: https://github.com/desihub/desispec/issues/1060
+.. _`#1061`: https://github.com/desihub/desispec/issues/1061
+.. _`#1062`: https://github.com/desihub/desispec/issues/1062
+.. _`#1065`: https://github.com/desihub/desispec/issues/1065
+.. _`#1068`: https://github.com/desihub/desispec/issues/1068
+.. _`#1069`: https://github.com/desihub/desispec/issues/1069
+.. _`#1070`: https://github.com/desihub/desispec/issues/1070
+.. _`#1072`: https://github.com/desihub/desispec/issues/1072
+.. _`#1073`: https://github.com/desihub/desispec/issues/1073
+
 
 0.35.0 (2020-12-11)
 -------------------
@@ -18,7 +64,8 @@ desispec Change Log
   * New opts to model image variance and improve sky subtraction (PR `#1008`_).
   * Refactor desi_proc and daily processing workflow
     (PRs `#1012`_, `#1014`_, `#1030`_)
-  * New bias+dark model ("non-linear dark y1D") (PR `#1029`_)
+  * New bias+dark model ("non-linear dark y1D") in desi_spectro_calib 0.2.0
+    (PR `#1029`_)
 
 * Smaller (but important) updates:
 
