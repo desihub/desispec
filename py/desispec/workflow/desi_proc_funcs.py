@@ -268,9 +268,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     """
     nspectro = (ncameras - 1) // 3 + 1
     if jobdesc in ('ARC', 'TESTARC'):
-        ncores, runtime = 20 * ncameras, 35
+        ncores, runtime = 20 * ncameras, 45
     elif jobdesc in ('FLAT', 'TESTFLAT'):
-        ncores, runtime = 20 * nspectro, 15
+        ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('ZERO', 'DARK'):
