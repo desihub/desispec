@@ -191,9 +191,9 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
         # increase the masked regions.
         for d in [-2,-1,1,2] :
             frame_ivar[i,2:n1-2][frame_ivar[i,2+d:n1-2+d]==0]=0
-        j=(frame_ivar[i]>0)
-        if np.sum(j)>0 :
-            flux[i] = np.interp(wave, frame_wave[i][j],frame_flux[i][j],left=0,right=0)
+        good=(frame_ivar[i]>0)
+        if np.sum(good)>0 :
+            flux[i] = np.interp(wave, frame_wave[i][good],frame_flux[i][good],left=0,right=0)
             ivar[i] = np.interp(wave, frame_wave[i],frame_ivar[i],left=0,right=0)/oversampling # larger variance, approximately
         else :
             log.warning("fiber {} has no valid data".format(i))
