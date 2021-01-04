@@ -41,6 +41,7 @@ def coadd_fibermap(fibermap) :
 
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
+    tfmap['COADD_EXPTIME'] = np.zeros(len(tfmap), dtype=np.float32) - 1
 
     # smarter values for some columns
     for k in ['DELTA_X','DELTA_Y'] :
@@ -71,7 +72,7 @@ def coadd_fibermap(fibermap) :
         allamps_flagged = ( (targ_fibstatuses & fiberstatus_amp_bits) == fiberstatus_amp_bits )
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
-
+        tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
         for k in ['DELTA_X','DELTA_Y'] :
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]

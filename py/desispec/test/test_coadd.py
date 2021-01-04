@@ -53,10 +53,13 @@ class TestCoadd(unittest.TestCase):
         #- Nothing masked
         nspec, nwave = 4,10
         s1 = _makespec(nspec, nwave)
+        expt = 33 # random number
+        s1.fibermap['EXPTIME'][:]=expt
         self.assertEqual(len(s1.fibermap), nspec)
         coadd(s1)
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec)
+        self.assertEqual(s1.fibermap['COADD_EXPTIME'][0], expt*nspec)
         self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 0)
         self.assertTrue(np.all(s1.flux['x'] == 1.0))
         self.assertTrue(np.allclose(s1.ivar['x'], 1.0*nspec))
