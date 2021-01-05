@@ -2,13 +2,24 @@
 desispec Change Log
 ===================
 
-0.36.0 (unreleased)
+0.36.2 (unreleased)
 -------------------
 
 * No changes yet
 
+0.36.1 (2021-01-04)
+-------------------
+
+* Fix PSF traceshifts when a fiber is completely masked (PR `1080`_).
+* Robust to NaN in desi_average_flux_calibration (commit f1de1ac).
+* Increase arc and flat runtimes (commit 7cb294c).
+
+.. _`#1080`: https://github.com/desihub/desispec/issues/1080
+
 0.36.0 (2020-12-23)
 -------------------
+
+This is the primary tag for the Mt. Blanc spectro pipeline run.
 
 * Major updates:
 
