@@ -10,7 +10,7 @@ desispec Change Log
 0.36.1 (2021-01-04)
 -------------------
 
-* Fix PSF traceshifts when a fiber is completely masked (PR `1080`_).
+* Fix PSF traceshifts when a fiber is completely masked (PR `#1080`_).
 * Robust to NaN in desi_average_flux_calibration (commit f1de1ac).
 * Increase arc and flat runtimes (commit 7cb294c).
 
