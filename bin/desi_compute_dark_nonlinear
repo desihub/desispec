@@ -34,6 +34,8 @@ parser.add_argument('--linexptime', type=float, default=300.0, required=False,
                     help='Model dark current as linear above this exptime')
 parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
                     help='Skip N ZEROs per day while flushing charge')
+parser.add_argument('--mindarks', type=int, default=5, required=False,
+                    help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
 
 args = parser.parse_args()
 
@@ -106,6 +108,19 @@ else:
 #- group EXPTIMEs by integer
 speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
 
+#- Remove any EXPTIME_INTs with too few exposures to make a good dark
+keep = np.zeros(len(speclog), dtype=bool)
+for exptime in np.unique(speclog['EXPTIME_INT']):
+    ii = (speclog['EXPTIME_INT'] == exptime)
+    ndarks = np.count_nonzero(ii)
+    if ndarks >= args.mindarks:
+        log.info(f'Using {ndarks} exposures with EXPTIME {exptime}')
+        keep[ii] = True
+    else:
+        log.warning(f'Only {ndarks}<{args.mindarks} DARKs for EXPTIME {exptime}; dropping')
+
+speclog = speclog[keep]
+
 #- Print some summary stats before continuing
 isZero = speclog['OBSTYPE'] == 'ZERO'
 isDark = speclog['OBSTYPE'] == 'DARK'
@@ -124,7 +139,7 @@ for day in args.days:
     nzeros = np.count_nonzero(ii)
     nzeros_good = nzeros - args.nskip_zeros
     if nzeros_good < 5:
-        log.critical('{nzeros} on {day} is insufficient when skipping {args.nskip_zeros}')
+        log.critical(f'{nzeros} ZEROS on {day} is insufficient when skipping {args.nskip_zeros}')
         sys.exit(1)
 
     elif nzeros_good < 20:
@@ -154,7 +169,7 @@ else:
 #- Combine the DARKs into master darks per exptime
 darktimes = np.array(sorted(set(speclog['EXPTIME_INT'][isDark])))
 for exptime in darktimes:
-    darkfile = f'{tempdir}/dark-{day}-{args.camera}-{exptime}.fits'
+    darkfile = f'{tempdir}/dark-{args.camera}-{exptime}.fits'
     if os.path.exists(darkfile):
         log.info(f'{darkfile} already exists')
         continue
@@ -177,7 +192,7 @@ log.info('Reading darks for individual EXPTIMEs')
 darkimages = list()
 darkheaders = list()
 for exptime in darktimes:
-    darkfile = f'{tempdir}/dark-{day}-{args.camera}-{exptime}.fits'
+    darkfile = f'{tempdir}/dark-{args.camera}-{exptime}.fits'
     img, hdr = fitsio.read(darkfile, 'DARK', header=True)
     darkimages.append(img*exptime)
     darkheaders.append(hdr)
