@@ -8,6 +8,7 @@ from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import define_variable_from_environment, pathjoin, get_json_dict
 from desiutil.log import get_logger
+from desispec.util import header2night
 
 #############################################
 ##### Exposure Table Column Definitions #####
@@ -384,6 +385,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
         ## Define the column values for the current exposure in a dictionary
         outdict = {}
         for key,default in zip(colnames,coldefaults):
+            if key.lower() == 'night':
+                continue
             if key in header.keys():
                 val = header[key]
                 if type(val) is str:
@@ -392,6 +395,12 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
                     outdict[key] = val
             else:
                 outdict[key] = default
+
+        ## Make sure that the night is defined:
+        try:
+            outdict['NIGHT'] = int(header['NIGHT'])
+        except (KeyError, ValueError, TypeError):
+            outdict['NIGHT'] = header2night(header)
 
         ## For now assume that all 3 cameras were good for all operating spectrographs
         outdict['SPECTROGRAPHS'] = ''.join([str(spec) for spec in np.sort(specs)])
@@ -410,7 +419,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
 
         ## For Things defined in both request and data, if they don't match, flag in the
         ##     output file for followup/clarity
-        for check in ['EXPTIME', 'OBSTYPE', 'FLAVOR']:
+        for check in ['OBSTYPE', 'FLAVOR']:
             rval, hval = req_dict[check], header[check]
             if rval != hval:
                 log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
@@ -420,6 +429,16 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveynum=None, 
                 if verbosely:
                     log.info(f'{check} checks out')
 
+        ## Special logic for EXPTIME because of real-world variance on order 10's - 100's of ms
+        check = 'EXPTIME'
+        rval, hval = req_dict[check], header[check]
+        if np.abs(float(rval)-float(hval))>0.5:
+            log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
+            outdict['EXPFLAG'] = 1
+            outdict['HEADERERR'] = np.append(outdict['HEADERERR'],f'For {check}- req:{rval} but hdu:{hval}|')
+        else:
+            if verbosely:
+                log.info(f'{check} checks out')
         #outdict['COMMENTS'] += '|'
         #outdict['HEADERERR'] += '|'
 

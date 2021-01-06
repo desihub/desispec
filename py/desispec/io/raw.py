@@ -13,6 +13,7 @@ from desiutil.depend import add_dependencies
 
 import desispec.io
 import desispec.io.util
+from desispec.util import header2night
 import desispec.preproc
 from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder 
@@ -54,6 +55,23 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         else :
             log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
             raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
+
+    #- Check if NIGHT keyword is present and valid; fix if needed
+    try:
+        tmp = int(primary_header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        primary_header['NIGHT'] = header2night(primary_header)
+
+    try:
+        tmp = int(header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        header['NIGHT'] = header2night(header)
+
+    if primary_header['NIGHT'] != header['NIGHT']:
+        msg = 'primary header NIGHT={} != camera header NIGHT={}'.format(
+            primary_header['NIGHT'], header['NIGHT'])
+        log.error(msg)
+        raise ValueError(msg)
 
     #- early data have >8 char FIBERASSIGN key; rename to match current data
     if 'FIBERASSIGN' in primary_header:
