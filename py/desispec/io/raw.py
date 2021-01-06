@@ -56,15 +56,14 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
             log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
             raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
 
-    #- Fix occasional missing or None NIGHT (e.g. on 20210105/70934)
-    #- update header as needed so the correction propagates downstream
+    #- Check if NIGHT keyword is present and valid; fix if needed
     try:
-        night = int(primary_header['NIGHT'])
+        tmp = int(primary_header['NIGHT'])
     except (KeyError, ValueError, TypeError):
         primary_header['NIGHT'] = header2night(primary_header)
 
     try:
-        night = int(header['NIGHT'])
+        tmp = int(header['NIGHT'])
     except (KeyError, ValueError, TypeError):
         header['NIGHT'] = header2night(header)
 
