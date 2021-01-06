@@ -331,7 +331,7 @@ def header2night(header):
         pass
 
     try:
-        return mjd2night(mjd)
+        return mjd2night(header['MJD-OBS'])
     except (KeyError, ValueError, TypeError): # i.e. missing, not float, or None
         pass
 

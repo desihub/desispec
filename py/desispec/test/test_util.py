@@ -199,7 +199,56 @@ class TestRunCmd(unittest.TestCase):
             if os.path.exists(filename):
                 os.remove(filename)
 
-        
+class TestUtil(unittest.TestCase):
+
+    def test_header2night(self):
+        from astropy.time import Time
+        night = 20210105
+        dateobs = '2021-01-06T04:33:55.704316928'
+        mjd = Time(dateobs).mjd
+        hdr = dict()
+
+        #- Missing NIGHT and DATE-OBS falls back to MJD-OBS
+        hdr['MJD-OBS'] = mjd
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- Missing NIGHT and MJD-OBS falls back to DATE-OBS
+        del hdr['MJD-OBS']
+        hdr['DATE-OBS'] = dateobs
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- NIGHT is NIGHT
+        del hdr['DATE-OBS']
+        hdr['NIGHT'] = night
+        self.assertEqual(util.header2night(hdr), night)
+        hdr['NIGHT'] = str(night)
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- NIGHT trumps DATE-OBS
+        hdr['NIGHT'] = night+1
+        hdr['DATE-OBS'] = dateobs
+        self.assertEqual(util.header2night(hdr), night+1)
+
+        #- Bogus NIGHT falls back to DATE-OBS
+        hdr['NIGHT'] = None
+        self.assertEqual(util.header2night(hdr), night)
+        hdr['NIGHT'] = '        '
+        self.assertEqual(util.header2night(hdr), night)
+        hdr['NIGHT'] = 'Sunday'
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- Check rollover at noon KPNO (MST) = UTC 19:00
+        hdr = dict()
+        hdr['DATE-OBS'] = '2021-01-05T18:59:00'
+        self.assertEqual(util.header2night(hdr), 20210104)
+        hdr['DATE-OBS'] = '2021-01-05T19:00:01'
+        self.assertEqual(util.header2night(hdr), 20210105)
+        hdr['DATE-OBS'] = '2021-01-06T01:00:01'
+        self.assertEqual(util.header2night(hdr), 20210105)
+        hdr['DATE-OBS'] = '2021-01-06T18:59:59'
+        self.assertEqual(util.header2night(hdr), 20210105)
+
+
 if __name__ == '__main__':
     unittest.main()
         
