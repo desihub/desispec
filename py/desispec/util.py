@@ -313,7 +313,14 @@ def dateobs2night(dateobs):
     """
     # use astropy to flexibily handle multiple valid ISO8601 variants
     from astropy.time import Time
-    mjd = Time(dateobs).mjd
+    try:
+        mjd = Time(dateobs).mjd
+    except ValueError:
+        #- only use optional dependency dateutil if needed;
+        #- it can handle some ISO8601 timezone variants that astropy can't
+        from dateutil.parser import isoparser
+        mjd = Time(isoparser().isoparse(dateobs))
+
     return mjd2night(mjd)
 
 def header2night(header):
