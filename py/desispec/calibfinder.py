@@ -10,7 +10,7 @@ import os
 import numpy as np
 import yaml
 import os.path
-from desispec.util import parse_fibers
+from desispec.util import parse_fibers, header2night
 from desiutil.log import get_logger
 
 def parse_date_obs(value):
@@ -169,15 +169,8 @@ class CalibFinder() :
             specid=int(header["SPECID"])
         else :
             specid=None
-        
-        if "NIGHT" in header:
-            dateobs = int(header["NIGHT"])
-        elif "DATE-OBS" in header:
-            dateobs=parse_date_obs(header["DATE-OBS"])
-        else:
-            msg = "Need either NIGHT or DATE-OBS in header"
-            log.error(msg)
-            raise KeyError(msg)
+
+        dateobs = header2night(header)
 
         detector=header["DETECTOR"].strip()
         if "CCDCFG" in header :
