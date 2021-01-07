@@ -391,6 +391,10 @@ def assemble_fibermap(night, expid, force=False):
     #- And guide file
     dirname, filename = os.path.split(fafile)
     globfiles = glob.glob(dirname+'/guide-????????.fits.fz')
+    if len(globfiles) == 0:
+        #- try falling back to acquisition image
+        globfiles = glob.glob(dirname+'/guide-????????-0000.fits.fz')
+
     if len(globfiles) == 1:
         guidefile = globfiles[0]
     elif len(globfiles) == 0:
@@ -530,9 +534,12 @@ def assemble_fibermap(night, expid, force=False):
     addkeys(fibermap.meta, rawheader, skipkeys=skipkeys)
 
     #- Add header info from guide file
+    #- sometimes full header is in HDU 0, other times HDU 1...
     if guidefile is not None:
         log.debug(f'Adding header keywords from {guidefile}')
         guideheader = fits.getheader(guidefile, 0)
+        if 'TILEID' not in guideheader:
+            guideheader = fits.getheader(guidefile, 1)
 
         if fibermap.meta['TILEID'] != guideheader['TILEID']:
             raise RuntimeError('fiberassign tile {} != guider tile {}'.format(
