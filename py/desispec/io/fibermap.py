@@ -200,6 +200,7 @@ fibermap_columns.extend([
     # ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
     ('NUM_ITER',        'i4', '', 'Number of positioner iterations'),
     ('SPECTROID',       'i4', '', 'Hardware ID of spectrograph'),
+    ('EXPTIME','f4','s','Exposure time'),
 ])
 
 #- fibermap_comments[colname] = 'comment to include in FITS header'
@@ -532,7 +533,7 @@ def assemble_fibermap(night, expid, force=False):
     log.debug(f'Adding header keywords from {rawfile}')
     skipkeys = ['EXPTIME',]
     addkeys(fibermap.meta, rawheader, skipkeys=skipkeys)
-
+    fibermap['EXPTIME'] = rawheader['EXPTIME']
     #- Add header info from guide file
     #- sometimes full header is in HDU 0, other times HDU 1...
     if guidefile is not None:
