@@ -101,7 +101,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         exps_to_ignore = np.sort(np.array(exps_to_ignore).astype(int))
         print(f"\nReceived exposures to ignore: {exps_to_ignore}")
         exps_to_ignore = set(exps_to_ignore)
-        
+
     ## Adjust wait times if simulating things
     speed_modifier = 1
     if dry_run:
@@ -216,8 +216,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     print("\nScience exposure with EXPTIME less than 59s. Not processing.")
                     unproc_table.add_row(erow)
                     continue
-                elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
-                    print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
+                elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) < 20.0:
+                    print("\nArc exposure with EXPTIME lower than 20s. Not processing.")
                     unproc_table.add_row(erow)
                     continue
 
