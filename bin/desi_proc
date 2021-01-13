@@ -51,6 +51,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
+from desispec.workflow.desi_proc_funcs import load_raw_data_header
 
 stop_imports = time.time()
 
@@ -309,6 +310,78 @@ if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
 
 if args.obstype in ['ARC', 'TESTARC']:
 
+
+    exptime = hdr["EXPTIME"]
+    if exptime > 10 :
+        timer.start('arc_coadd')
+        other_expid = None
+        if rank==0 :
+            log.info("look for other exposure to pair with")
+            count=0
+            for decrement in range(1,20) :
+                oexpid=args.expid-decrement
+                if os.path.isfile(findfile('raw', args.night, oexpid)) :
+                    log.debug("found an exposure with id {}".format(oexpid))
+                    count += 1
+                    if count == 5 :
+                        other_expid = oexpid
+                        break
+            if other_expid is None :
+                mess="did not find another exposure to pair with {}".format(arg.expid)
+                log.error(mess)
+                raise RuntimeError(mess)
+
+        if comm is not None:
+            other_expid = comm.bcast(other_expid, root=0)
+
+        if rank==0 :
+            log.info("will coadd with other exposure {}".format(other_expid))
+            infile = findfile('raw', args.night, other_expid)
+            hdr = load_raw_data_header(infile,return_filehandle=False)
+            if hdr["OBSTYPE"].upper().strip() != "ARC" :
+                mess="wrong pairing: exposure {} has OBSTYPE={}".format(other_expid,hdr["OBSTYPE"])
+                log.error(mess)
+                raise RuntimeError(mess)
+            if hdr["EXPTIME"]>10 :
+                mess="wrong pairing: exposure {} has EXOTIME={}>10".format(other_expid,hdr["EXPTIME"])
+                log.error(mess)
+                raise RuntimeError(mess)
+
+        for i in range(rank, len(args.cameras), size):
+            camera = args.cameras[i]
+
+            infile = findfile('raw', args.night, other_expid)
+            outfile = findfile('preproc', args.night, other_expid, camera)
+            outdir = os.path.dirname(outfile)
+            cmd = "desi_preproc -i {} -o {} --outdir {} --cameras {}".format(
+                infile, outfile, outdir, camera)
+            if args.scattered_light :
+                cmd += " --scattered-light"
+            if fibermap is not None:
+                cmd += " --fibermap {}".format(fibermap)
+            runcmd(cmd, inputs=[args.input], outputs=[outfile])
+
+            if os.path.isfile(outfile) :
+                preprocfile = findfile('preproc', args.night, args.expid, camera)
+                coadd_into_preprocfile = outfile
+                coadded_preprocfile = os.path.join(os.path.dirname(preprocfile),os.path.basename(preprocfile).replace("preproc","coadded-preproc"))
+
+                if camera[0]=="z" :
+                    cmd = "desi_paste_preproc --from-image {} --into-image {} --wrange 8840:9900 -o {}".format(preprocfile,coadd_into_preprocfile,coadded_preprocfile)
+                    runcmd(cmd, inputs=[preprocfile,coadd_into_preprocfile], outputs=[coadded_preprocfile])
+                elif camera[0]=="b" :
+                    # avoid the very bright Cd line at 4800A which could cause non-linearity problems
+                    # this enhances 2 Cd lines. a doublet at 3611-3613A and a bright line at 4679A
+                    cmd = "desi_paste_preproc --from-image {} --into-image {} --wrange 3500:4750 -o {}".format(preprocfile,coadd_into_preprocfile,coadded_preprocfile)
+                    runcmd(cmd, inputs=[preprocfile,coadd_into_preprocfile], outputs=[coadded_preprocfile])
+                else :
+                    cmd = "ln -s {} {}".format(coadd_into_preprocfile,coadded_preprocfile)
+                    runcmd(cmd, inputs=[coadd_into_preprocfile], outputs=[coadded_preprocfile])
+
+        timer.stop('arc_coadd')
+        if comm is not None:
+            comm.barrier()
+
     timer.start('arc_traceshift')
 
     if rank == 0:
@@ -316,7 +389,13 @@ if args.obstype in ['ARC', 'TESTARC']:
 
     for i in range(rank, len(args.cameras), size):
         camera = args.cameras[i]
+
         preprocfile = findfile('preproc', args.night, args.expid, camera)
+        coadded_preprocfile = os.path.join(os.path.dirname(preprocfile),os.path.basename(preprocfile).replace("preproc","coadded-preproc"))
+        if os.path.isfile(coadded_preprocfile) :
+            log.info("Use coadded preproc {}".format(coadded_preprocfile))
+            preprocfile = coadded_preprocfile
+
         inpsf  = input_psf[camera]
         outpsf = findfile('psf', args.night, args.expid, camera)
         outpsf = replace_prefix(outpsf, "psf", "shifted-input-psf")
@@ -335,6 +414,7 @@ if args.obstype in ['ARC', 'TESTARC']:
     if comm is not None:
         comm.barrier()
 
+
     timer.start('psf')
 
     if rank == 0:
@@ -348,6 +428,11 @@ if args.obstype in ['ARC', 'TESTARC']:
         outputs = dict()
         for camera in args.cameras:
             preprocfile = findfile('preproc', args.night, args.expid, camera)
+            coadded_preprocfile = os.path.join(os.path.dirname(preprocfile),os.path.basename(preprocfile).replace("preproc","coadded-preproc"))
+            if os.path.isfile(coadded_preprocfile) :
+                log.info("Use coadded preproc {}".format(coadded_preprocfile))
+                preprocfile = coadded_preprocfile
+
             tmpname = findfile('psf', args.night, args.expid, camera)
             inpsf = replace_prefix(tmpname,"psf","shifted-input-psf")
             outpsf = replace_prefix(tmpname,"psf","fit-psf")
