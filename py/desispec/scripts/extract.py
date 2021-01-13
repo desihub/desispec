@@ -176,8 +176,6 @@ def gpu_specter_check_input_options(args):
             return False, 'cannot import module cupy'
         if not cp.is_available():
             return False, 'gpu is not available'
-        if cp.cuda.runtime.getDeviceCount() > 1 and not args.mpi:
-            return False, 'mpi is required to run with multiple gpu devices'
 
     if args.fibermap:
         msg = "--fibermap not implemented with --gpu-specter"
@@ -208,18 +206,22 @@ def main_gpu_specter(args, comm=None, timing=None):
 
     import gpu_specter.io
     import gpu_specter.core
+    from gpu_specter.mpi import NoMPIComm, SyncIOComm, AsyncIOComm
 
     #- Load MPI only if requested
     if comm is not None:
-        if hasattr(comm, "is_extract_rank"):
+        from mpi4py import MPI
+        if isinstance(comm, MPI.Intracomm):
+            #- use gpu_specter mpi comm wrapper
+            comm = gpu_specter.mpi.SyncIOComm(comm)
+        elif isinstance(comm, (NoMPIComm, SyncIOComm, AsyncIOComm)):
+            #- comm is already good to go
             pass
         else:
-            import gpu_specter.mpi
-            comm = gpu_specter.mpi.SyncIOComm(comm)
-        rank, size = comm.rank, comm.size
+            raise TypeError("Invalid comm type")
     else:
-        comm = None
-        rank, size = 0, 1
+        #- use gpu_specter no mpi comm wrapper
+        comm = gpu_specter.mpi.NoMPIComm()
 
     #- Load inputs
     def read_data():
@@ -249,9 +251,6 @@ def main_gpu_specter(args, comm=None, timing=None):
         else:
             wmin, wmax = psf['PSF'].meta['WAVEMIN'], psf['PSF'].meta['WAVEMAX']
             dw = 0.8
-
-        if rank == 0:
-            log.info(f'Extracting wavelengths {wmin},{wmax},{dw}')
 
         #- Wave includes boundaries wmin, wmax
         wave = np.arange(wmin, wmax + 0.5*dw, dw)
@@ -321,7 +320,8 @@ def main_gpu_specter(args, comm=None, timing=None):
     result = None
     if comm.is_extract_rank():
 
-        corrected_wavelength = comm.extract_comm.bcast(corrected_wavelength, root=0)
+        if comm.extract_comm is not None:
+            corrected_wavelength = comm.extract_comm.bcast(corrected_wavelength, root=0)
 
         result = gpu_specter.core.extract_frame(
             image, psf, args.bundlesize,       # input data
@@ -337,7 +337,7 @@ def main_gpu_specter(args, comm=None, timing=None):
             timing=core_timing,
         )
 
-        if comm.rank == comm.EXTRACT_ROOT:
+        if comm.is_extract_root():
             result['fibermap'] = image['fibermap']
             result['wave'] = image['wave']
             result['meta'] = image['meta']
@@ -409,7 +409,7 @@ def main_gpu_specter(args, comm=None, timing=None):
         timing["frame-extract"] = time_extract
         timing["frame-write"] = time_write
 
-    if comm.rank == comm.EXTRACT_ROOT:
+    if comm.is_extract_root():
         name = os.path.basename(args.output)
         log.info(f"{name} setup-time: {time_setup - time_start:0.2f}")
         log.info(f"{name} extract-time: {time_extract - time_setup:0.2f}")
