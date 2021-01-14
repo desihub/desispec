@@ -15,6 +15,7 @@ import re
 import warnings
 import time
 import copy
+import numbers
 
 import numpy as np
 
@@ -60,9 +61,12 @@ class Spectra(object):
         If ``True``, store data in memory as single precision.
     scores
         QA scores table.
+    extra_catalog : numpy or astropy Table, optional
+        optional table of metadata, rowmatched to fibermap,
+        e.g. a redshift catalog for these spectra
     """
     def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None, resolution_data=None,
-        fibermap=None, meta=None, extra=None, single=False, scores=None):
+        fibermap=None, meta=None, extra=None, single=False, scores=None, extra_catalog=None):
         
         self._bands = bands
         self._single = single
@@ -111,12 +115,26 @@ class Spectra(object):
                     if ex[1].shape != flux[b].shape:
                         raise RuntimeError("extra arrays must have the same shape as the flux array")
 
+        if fibermap is not None and extra_catalog is not None:
+            if len(fibermap) != len(extra_catalog):
+                raise ValueError('fibermap and extra_catalog have different number of entries {} != {}'.format(
+                    len(fibermap), len(extra_catalog) ))
+
+            if ('TARGETID' in fibermap.dtype.names) and ('TARGETID' in extra_catalog.dtype.names):
+                if not np.all(fibermap['TARGETID'] == extra_catalog['TARGETID']):
+                    raise ValueError('TARGETID mismatch between fibermap and extra_catalog')
+
         # copy data
 
         if fibermap is not None:
             self.fibermap = fibermap.copy()
         else:
             self.fibermap = None
+
+        if extra_catalog is not None:
+            self.extra_catalog = extra_catalog.copy()
+        else:
+            self.extra_catalog = None
 
         self.wave = {}
         self.flux = {}
@@ -316,7 +334,7 @@ class Spectra(object):
 
     def __getitem__(self, index):
         """Slice spectra by index"""
-        if not isinstance(index, slice):
+        if isinstance(index, numbers.Integral):
             index = slice(index, index+1)
 
         bands = copy.copy(self.bands)
@@ -345,6 +363,11 @@ class Spectra(object):
         else:
             fibermap = None
 
+        if self.extra_catalog is not None:
+            extra_catalog = self.extra_catalog[index].copy()
+        else:
+            extra_catalog = None
+
         if self.scores is not None:
             scores = dict()
             for col in self.scores:
@@ -354,7 +377,7 @@ class Spectra(object):
 
         sp = Spectra(bands, wave, flux, ivar,
             mask=mask, resolution_data=rdat, fibermap=fibermap,
-            meta=self.meta, extra=extra, scores=scores,
+            meta=self.meta, extra=extra, scores=scores, extra_catalog=extra_catalog,
         )
         return sp
 
@@ -373,6 +396,7 @@ class Spectra(object):
         Returns:
             nothing (object updated in place).
 
+        Note: does not support updating extra_catalog
         """
 
         # Does the other Spectra object have any data?
@@ -648,6 +672,20 @@ def stack(speclist):
     else:
         fibermap = None
 
+    if speclist[0].extra_catalog is not None:
+        if isinstance(speclist[0].extra_catalog, np.ndarray):
+            #- note named arrays need hstack not vstack
+            extra_catalog = np.hstack([sp.extra_catalog for sp in speclist])
+        else:
+            import astropy.table
+            if isinstance(speclist[0].extra_catalog, astropy.table.Table):
+                extra_catalog = astropy.table.vstack([sp.extra_catalog for sp in speclist])
+            else:
+                raise ValueError("Can't stack extra_catalogs of type {}".format(
+                    type(speclist[0].extra_catalog)))
+    else:
+        extra_catalog = None
+
     if speclist[0].extra is not None:
         extra = dict()
         for band in bands:
@@ -667,5 +705,6 @@ def stack(speclist):
     sp = Spectra(bands, wave, flux, ivar,
         mask=mask, resolution_data=rdat, fibermap=fibermap,
         meta=speclist[0].meta, extra=extra, scores=scores,
+        extra_catalog=extra_catalog,
     )
     return sp

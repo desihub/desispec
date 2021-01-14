@@ -12,7 +12,7 @@ import warnings
 import numpy as np
 import numpy.testing as nt
 
-#from astropy.table import Table
+from astropy.table import Table
 
 from desiutil.io import encode_table
 from desispec.io import empty_fibermap
@@ -97,6 +97,9 @@ class TestSpectra(unittest.TestCase):
                 self.extra[b]["FOO"] = self.flux[b]
 
         self.scores = dict(BLAT=np.arange(self.nspec), FOO=np.ones(self.nspec))
+        self.extra_catalog = Table()
+        self.extra_catalog['A'] = np.arange(self.nspec)
+        self.extra_catalog['B'] = np.ones(self.nspec)
 
     def tearDown(self):
         if os.path.exists(self.fileio):
@@ -190,22 +193,31 @@ class TestSpectra(unittest.TestCase):
         """Test desispec.spectra.stack"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
-            meta=self.meta, extra=self.extra, scores=self.scores)
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
 
         sp2 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res, fibermap=self.fmap2,
-            meta=self.meta, extra=self.extra, scores=self.scores)
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
 
         sp3 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res, fibermap=self.fmap3,
-            meta=self.meta, extra=self.extra, scores=self.scores)
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
 
         spx = stack([sp1, sp2, sp3])
         for band in self.bands:
             self.assertEqual(spx.flux[band].shape[0], 3*self.nspec)
             self.assertEqual(spx.flux[band].shape[1], self.nwave)
+            self.assertEqual(spx.ivar[band].shape[0], 3*self.nspec)
+            self.assertEqual(spx.mask[band].shape[0], 3*self.nspec)
+            self.assertEqual(spx.resolution_data[band].shape[0], 3*self.nspec)
             self.assertTrue(np.all(spx.flux[band][0:self.nspec] == sp1.flux[band]))
             self.assertTrue(np.all(spx.ivar[band][0:self.nspec] == sp1.ivar[band]))
+
+        self.assertEqual(len(spx.fibermap), 3*self.nspec)
+        self.assertEqual(len(spx.extra_catalog), 3*self.nspec)
 
         #- Stacking also works if optional params are None
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar)
@@ -217,7 +229,8 @@ class TestSpectra(unittest.TestCase):
         """Test desispec.spectra.stack"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
-            meta=self.meta, extra=self.extra, scores=self.scores)
+            meta=self.meta, extra=self.extra, scores=self.scores,
+            extra_catalog=self.extra_catalog)
 
         sp2 = sp1[0:self.nspec-1]
         for band in self.bands:
@@ -226,6 +239,7 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(sp2.mask[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.resolution_data[band].shape[0], self.nspec-1)
             self.assertEqual(len(sp2.fibermap), self.nspec-1)
+            self.assertEqual(len(sp2.extra_catalog), self.nspec-1)
             self.assertEqual(sp2.extra[band]['FOO'].shape, sp2.flux[band].shape)
 
         self.assertEqual(len(sp2.scores['BLAT']), self.nspec-1)
@@ -237,14 +251,23 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(sp2.mask[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.resolution_data[band].shape[0], self.nspec-1)
             self.assertEqual(len(sp2.fibermap), self.nspec-1)
+            self.assertEqual(len(sp2.extra_catalog), self.nspec-1)
 
         #- slicing also works when various optional elements are None
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar)
         sp2 = sp1[1:self.nspec]
 
         #- single element index promotes to slice
-        sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar)
         sp2 = sp1[1]
+
+        #- Other types of numpy-style slicing with indexes and booleans
+        sp2 = sp1[[1,3]]
+        for band in self.bands:
+            self.assertEqual(sp2.flux[band].shape[0], 2)
+
+        sp2 = sp1[[True,False,True,False,True]]
+        for band in self.bands:
+            self.assertEqual(sp2.flux[band].shape[0], 3)
 
 
 def test_suite():
