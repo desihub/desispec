@@ -55,7 +55,9 @@ def isStdStar(fibermap, bright=None):
     else:
         yes = (desi_target & desi_mask.mask('STD_FAINT')) != 0
 
-    for bla in ['SV0_STD_FAINT','SV0_STD_BRIGHT'] :
+    for bla in ['SV0_STD_FAINT','SV0_STD_BRIGHT',
+                'GAIA_STD_FAINT','GAIA_STD_WD','GAIA_STD_BRIGHT']:
+    # new Gaia stanadards
         if bla in desi_mask.names():
             yes |= (desi_target & desi_mask[bla]) != 0
 
