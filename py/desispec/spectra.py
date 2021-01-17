@@ -75,7 +75,11 @@ class Spectra(object):
         if single:
             self._ftype = np.float32
 
-        self.scores = scores
+        if scores is not None:
+            self.scores = Table(scores)
+        else:
+            self.scores = None
+
         self.meta = None
         if meta is None:
             self.meta = {}
