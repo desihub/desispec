@@ -49,25 +49,31 @@ def isStdStar(fibermap, bright=None):
     mws_target = fibermap[target_colnames[2]]
     desi_mask = target_masks[0]                 # (sv1) desi_mask
     mws_mask =  target_masks[2]
-    if bright is None:
-        yes = (((desi_target & desi_mask.mask('STD_FAINT|STD_BRIGHT')) != 0)|
-         ((mws_target & mws_mask.mask('GAIA_STD_FAINT|GAIA_STD_WD|GAIA_STD_BRIGHT')) != 0))
-    elif bright:
-        yes = (((desi_target & desi_mask.mask('STD_BRIGHT')) != 0)|
-         ((mws_target & mws_mask.mask('GAIA_STD_WD|GAIA_STD_BRIGHT')) != 0))
-    else:
-        yes = (((desi_target & desi_mask.mask('STD_FAINT')) != 0)|
-         ((mws_target & mws_mask.mask('GAIA_STD_WD|GAIA_STD_FAINT')) != 0))
-    for bla in ['SV0_STD_FAINT','SV0_STD_BRIGHT']:
-        if bla in desi_mask.names():
-            yes |= (desi_target & desi_mask[bla]) != 0
-
+    desiDict ={
+        None:['STD_FAINT','STD_BRIGHT', 'SV0_STD_FAINT', 'SV0_STD_BRIGHT'],
+        True: ['STD_BRIGHT', 'SV0_STD_BRIGHT'],
+        False: ['STD_FAINT', 'SV0_STD_FAINT']
+        }
+    mwsDict ={
+        None:['GAIA_STD_FAINT','GAIA_STD_BRIGHT', 'GAIA_STD_WD'],
+        True:['GAIA_STD_BRIGHT', 'GAIA_STD_WD'],
+        False:['GAIA_STD_FAINT', 'GAIA_STD_WD'],
+        }
+    yes = np.zeros_like(desi_target, dtype=bool)
+    for k in desiDict[bright]:
+        if k in desi_mask.names():
+            yes = yes | ((desi_target & desi_mask[k])!=0)
+    yes_mws = np.zeros_like(desi_target, dtype=bool)
+    for k in mwsDict[bright]:
+        if k in mws_mask.names():
+            yes_mws |= ((mws_target & mws_mask[k])!=0)
+    yes = yes | yes_mws
     #- Hack for data on 20201214 where some fiberassign files had targeting
     #- bits set to 0, but column FA_TYPE was still ok
     #- Hardcode mask to avoid fiberassign dependency loop
     FA_STDSTAR_MASK = 2   # fiberassing.targets.TARGET_TYPE_STANDARD
     if np.count_nonzero(yes) == 0:
-        log.error(f'No standard stars found in {target_colnames[0]}')
+        log.error(f'No standard stars found in {target_colnames[0]} and {target_colnames[1]}')
         if 'FA_TYPE' in fibermap.dtype.names and \
                 np.sum((fibermap['FA_TYPE'] & FA_STDSTAR_MASK) != 0) > 0:
             log.warning('Using FA_TYPE to find standard stars instead')
