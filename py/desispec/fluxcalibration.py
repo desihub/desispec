@@ -46,18 +46,19 @@ def isStdStar(fibermap, bright=None):
     log = get_logger()
     target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
     desi_target = fibermap[target_colnames[0]]  # (SV1_)DESI_TARGET
+    mws_target = fibermap[target_colnames[2]]
     desi_mask = target_masks[0]                 # (sv1) desi_mask
-
+    mws_mask =  target_masks[2]
     if bright is None:
-        yes = (desi_target & desi_mask.mask('STD_FAINT|STD_BRIGHT')) != 0
+        yes = (((desi_target & desi_mask.mask('STD_FAINT|STD_BRIGHT')) != 0)|
+         ((mws_target & mws_mask.mask('GAIA_STD_FAINT|GAIA_STD_WD|GAIA_STD_BRIGHT')) != 0))
     elif bright:
-        yes = (desi_target & desi_mask.mask('STD_BRIGHT')) != 0
+        yes = (((desi_target & desi_mask.mask('STD_BRIGHT')) != 0)|
+         ((mws_target & mws_mask.mask('GAIA_STD_WD|GAIA_STD_BRIGHT')) != 0))
     else:
-        yes = (desi_target & desi_mask.mask('STD_FAINT')) != 0
-
-    for bla in ['SV0_STD_FAINT','SV0_STD_BRIGHT',
-                'GAIA_STD_FAINT','GAIA_STD_WD','GAIA_STD_BRIGHT']:
-    # new Gaia stanadards
+        yes = (((desi_target & desi_mask.mask('STD_FAINT')) != 0)|
+         ((mws_target & mws_mask.mask('GAIA_STD_WD|GAIA_STD_FAINT')) != 0))
+    for bla in ['SV0_STD_FAINT','SV0_STD_BRIGHT']:
         if bla in desi_mask.names():
             yes |= (desi_target & desi_mask[bla]) != 0
 
