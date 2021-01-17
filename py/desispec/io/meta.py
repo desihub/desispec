@@ -454,14 +454,20 @@ def rawdata_root():
     return os.environ['DESI_SPECTRO_DATA']
 
 
-def specprod_root():
+def specprod_root(specprod=None):
     """Return directory root for spectro production, i.e.
     ``$DESI_SPECTRO_REDUX/$SPECPROD``.
+
+    Options:
+        specprod (str): overrides $SPECPROD
 
     Raises:
         KeyError: if these environment variables aren't set.
     """
-    return os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'])
+    if specprod is None:
+        specprod = os.environ['SPECPROD']
+
+    return os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
 
 
 def qaprod_root(specprod_dir=None):

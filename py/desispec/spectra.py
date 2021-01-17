@@ -18,6 +18,7 @@ import copy
 import numbers
 
 import numpy as np
+from astropy.table import Table
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
@@ -369,8 +370,8 @@ class Spectra(object):
             extra_catalog = None
 
         if self.scores is not None:
-            scores = dict()
-            for col in self.scores:
+            scores = Table()
+            for col in self.scores.dtype.names:
                 scores[col] = self.scores[col][index].copy()
         else:
             scores = None
@@ -696,8 +697,8 @@ def stack(speclist):
         extra = None
 
     if speclist[0].scores is not None:
-        scores = dict()
-        for col in speclist[0].scores:
+        scores = Table()
+        for col in speclist[0].scores.dtype.names:
             scores[col] = np.concatenate([sp.scores[col] for sp in speclist])
     else:
         scores = None
