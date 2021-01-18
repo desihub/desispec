@@ -331,9 +331,8 @@ def main(args) :
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
             model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
-    gaia_filters = dict ()
     for band in ["G","BP","RP"] :
-        model_filters["GAIA"+band] = load_gaia_filter(band=band,dr=2)
+        model_filters["GAIA-"+band] = load_gaia_filter(band=band,dr=2)
 
     log.info("computing model mags for %s"%sorted(model_filters.keys()))
     model_mags = dict()
@@ -403,10 +402,16 @@ def main(args) :
 
         # preselect models based on magnitudes
         photsys=fibermap['PHOTSYS'][star]
-        if not args.color in ['G-R','R-Z'] :
+        if not args.color in ['G-R','R-Z', 'GAIA-BP-RP', 'GAIA-G-RP'] :
             raise ValueError('Unknown color {}'.format(args.color))
+        
         bands=args.color.split("-")
-        model_colors = model_mags[bands[0]+photsys] - model_mags[bands[1]+photsys]
+        if args.color[:4] == 'GAIA':
+            bands=args.color[5:].split("-")
+            model_colors = model_mags['GAIA-'+bands[0]] - model_mags['GAIA-'+bands[1]]
+        else:
+            bands=args.color.split("-")            
+            model_colors = model_mags[bands[0]+photsys] - model_mags[bands[1]+photsys]
 
         color_diff = model_colors - star_unextincted_colors[args.color][star]
         selection = np.abs(color_diff) < args.delta_color
