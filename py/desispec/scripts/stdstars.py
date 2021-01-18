@@ -331,6 +331,9 @@ def main(args) :
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
             model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
+    gaia_filters = dict ()
+    for band in ["G","BP","RP"] :
+        model_filters["GAIA"+band] = load_gaia_filter(band=band,dr=2)
 
     log.info("computing model mags for %s"%sorted(model_filters.keys()))
     model_mags = dict()
@@ -364,15 +367,21 @@ def main(args) :
             selection = (fibermap['PHOTSYS'] == photsys)
             a_band = r_band * fibermap['EBV'][selection]  # dimensionless
             star_unextincted_mags[band][selection] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band][selection]) - a_band
-
+    for band in ['G','BP','RP']:
+        star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
+        star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band]
+        # TODO Implement extinction
+        
     star_colors = dict()
     star_colors['G-R'] = star_mags['G'] - star_mags['R']
     star_colors['R-Z'] = star_mags['R'] - star_mags['Z']
-
+    star_colors['GAIA-BP-RP'] = star_mags['GAIA-BP']-star_mags['GAIA-RP']
+    star_colors['GAIA-G-RP'] = star_mags['GAIA-G']-star_mags['GAIA-RP']
     star_unextincted_colors = dict()
     star_unextincted_colors['G-R'] = star_unextincted_mags['G'] - star_unextincted_mags['R']
     star_unextincted_colors['R-Z'] = star_unextincted_mags['R'] - star_unextincted_mags['Z']
-
+    star_unextincted_colors['GAIA-BP-RP'] = star_unextincted_mags['GAIA-BP']-star_unextincted_mags['GAIA-RP']
+    star_unextincted_colors['GAIA-G-RP'] = star_unextincted_mags['GAIA-G']-star_unextincted_mags['GAIA-RP']
     fitted_model_colors = np.zeros(nstars)
 
     for star in range(nstars) :
