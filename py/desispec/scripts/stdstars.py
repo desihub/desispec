@@ -19,7 +19,7 @@ from desispec.fluxcalibration import match_templates,normalize_templates,isStdSt
 from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 from desispec.parallel import default_nproc
-from desispec.io.filters import load_legacy_survey_filter
+from desispec.io.filters import load_legacy_survey_filter, load_gaia_filter
 from desiutil.dust import ext_odonnell,extinction_total_to_selective_ratio
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
@@ -35,7 +35,8 @@ def parse(options=None):
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
     parser.add_argument('--ncpu', type = int, default = default_nproc, required = False, help = 'use ncpu for multiprocessing')
     parser.add_argument('--delta-color', type = float, default = 0.2, required = False, help = 'max delta-color for the selection of standard stars (on top of meas. errors)')
-    parser.add_argument('--color', type = str, default = "G-R", choices=['G-R', 'R-Z'], required = False, help = 'color for selection of standard stars')
+    parser.add_argument('--color', type = str, default = "G-R", choices=['G-R', 'R-Z',
+    'GAIA-BP-RP','GAIA-G-RP'], required = False, help = 'color for selection of standard stars')
     parser.add_argument('--z-max', type = float, default = 0.008, required = False, help = 'max peculiar velocity (blue/red)shift range')
     parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
@@ -105,7 +106,7 @@ def main(args) :
     starfibers=None
     starindices=None
     fibermap=None
-
+    use_gaia = True
     # For each unique expid,spec pair, get the logical OR of the FIBERSTATUS for all
     # cameras and then proceed with extracting the frame information
     # once we modify the fibermap FIBERSTATUS
@@ -132,7 +133,12 @@ def main(args) :
             for colname in ['FLUX_G', 'FLUX_R', 'FLUX_Z']:  #- and W1 and W2?
                 keep &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
                 keep &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
+            keep_gaia = np.ones(len(frame_starindices), dtype=bool)
 
+            for colname in ['G', 'BP', 'RP']:  #- and W1 and W2?
+                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] > 10
+                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] < 20
+            keep = keep | keep_gaia
             frame_starindices = frame_starindices[keep]
 
             if spectrograph is None :
@@ -330,7 +336,13 @@ def main(args) :
     model_filters = dict()
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
-            model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
+            if photsys != '':
+                model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
+    if len(model_filters)==0:
+        log.info('No Legacy survey standards')
+        gaia_only=True
+    else:
+        gaia_only=False
     for band in ["G","BP","RP"] :
         model_filters["GAIA-"+band] = load_gaia_filter(band=band,dr=2)
 
@@ -352,33 +364,36 @@ def main(args) :
     star_unextincted_mags = dict()
 
     photometric_systems = np.unique(fibermap['PHOTSYS'])
-    for band in ['G', 'R', 'Z']:
-        star_mags[band] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band])
-        star_unextincted_mags[band] = np.zeros(star_mags[band].shape)
-        for photsys in  photometric_systems :
-            r_band = extinction_total_to_selective_ratio(band , photsys) # dimensionless
-            # r_band = a_band / E(B-V)
-            # E(B-V) is a difference of magnitudes (dimensionless)
-            # a_band = -2.5*log10(effective dust transmission) , dimensionless
-            # effective dust transmission =
-            #                  integral( SED(lambda) * filter_transmission(lambda,band) * milkyway_dust_transmission(lambda,E(B-V)) dlamdba)
-            #                / integral( SED(lambda) * filter_transmission(lambda,band) dlamdba)
-            selection = (fibermap['PHOTSYS'] == photsys)
-            a_band = r_band * fibermap['EBV'][selection]  # dimensionless
-            star_unextincted_mags[band][selection] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band][selection]) - a_band
+    if not gaia_only:
+        for band in ['G', 'R', 'Z']:
+            star_mags[band] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band])
+            star_unextincted_mags[band] = np.zeros(star_mags[band].shape)
+            for photsys in  photometric_systems :
+                r_band = extinction_total_to_selective_ratio(band , photsys) # dimensionless
+                # r_band = a_band / E(B-V)
+                # E(B-V) is a difference of magnitudes (dimensionless)
+                # a_band = -2.5*log10(effective dust transmission) , dimensionless
+                # effective dust transmission =
+                #                  integral( SED(lambda) * filter_transmission(lambda,band) * milkyway_dust_transmission(lambda,E(B-V)) dlamdba)
+                #                / integral( SED(lambda) * filter_transmission(lambda,band) dlamdba)
+                selection = (fibermap['PHOTSYS'] == photsys)
+                a_band = r_band * fibermap['EBV'][selection]  # dimensionless
+                star_unextincted_mags[band][selection] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band][selection]) - a_band
     for band in ['G','BP','RP']:
         star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
         star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band]
         # TODO Implement extinction
         
     star_colors = dict()
-    star_colors['G-R'] = star_mags['G'] - star_mags['R']
-    star_colors['R-Z'] = star_mags['R'] - star_mags['Z']
+    star_unextincted_colors = dict()
+    if not gaia_only:
+        star_colors['G-R'] = star_mags['G'] - star_mags['R']
+        star_colors['R-Z'] = star_mags['R'] - star_mags['Z']
+        star_unextincted_colors['G-R'] = star_unextincted_mags['G'] - star_unextincted_mags['R']
+        star_unextincted_colors['R-Z'] = star_unextincted_mags['R'] - star_unextincted_mags['Z']
     star_colors['GAIA-BP-RP'] = star_mags['GAIA-BP']-star_mags['GAIA-RP']
     star_colors['GAIA-G-RP'] = star_mags['GAIA-G']-star_mags['GAIA-RP']
-    star_unextincted_colors = dict()
-    star_unextincted_colors['G-R'] = star_unextincted_mags['G'] - star_unextincted_mags['R']
-    star_unextincted_colors['R-Z'] = star_unextincted_mags['R'] - star_unextincted_mags['Z']
+
     star_unextincted_colors['GAIA-BP-RP'] = star_unextincted_mags['GAIA-BP']-star_unextincted_mags['GAIA-RP']
     star_unextincted_colors['GAIA-G-RP'] = star_unextincted_mags['GAIA-G']-star_unextincted_mags['GAIA-RP']
     fitted_model_colors = np.zeros(nstars)
@@ -463,24 +478,44 @@ def main(args) :
 
         # Compute final color of dust-extincted model
         photsys=fibermap['PHOTSYS'][star]
-        if not args.color in ['G-R','R-Z'] :
+        if not args.color in ['G-R','R-Z','GAIA-BP-RP','GAIA-G-RP']:
             raise ValueError('Unknown color {}'.format(args.color))
-        bands=args.color.split("-")
-        model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
-        model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
-        fitted_model_colors[star] = model_mag1 - model_mag2
-        if bands[0]=="R" :
-            model_magr = model_mag1
-        elif bands[1]=="R" :
-            model_magr = model_mag2
-
+        if args.color[:4] != 'GAIA':
+            bands=args.color.split("-")
+            model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
+            model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
+            fitted_model_colors[star] = model_mag1 - model_mag2
+            ref_mag_name = 'R'
+            if bands[0]==ref_mag_name:
+                model_magr = model_mag1
+            elif bands[1]==ref_mag_name :
+                model_magr = model_mag2
+            gaia_color = False
+        else:
+            bands = args.color[5:].split('-')
+            model_mag1 = model_filters['GAIA-'+bands[0]].get_ab_magnitude(model*fluxunits, stdwave)
+            model_mag2 = model_filters['GAIA-'+bands[1]].get_ab_magnitude(model*fluxunits, stdwave)
+            ref_mag_name = 'G'
+            if bands[0]==ref_mag_name:
+                model_magr= model_mag1
+            elif bands[1]==ref_mag_name:
+                model_magr=model_mag2
+            else:
+                model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave)
+            gaia_color=True
+            
         #- TODO: move this back into normalize_templates, at the cost of
         #- recalculating a model magnitude?
 
-        # Normalize the best model using reported magnitude
-        scalefac=10**((model_magr - star_mags['R'][star])/2.5)
+        if gaia_color:
+            # Normalize the best model using reported magnitude
+            cur_refmag = star_mags['GAIA-'+ref_mag_name][star]
+        else:
+            # Normalize the best model using reported magnitude
+            cur_refmag = stars[ref_mag_name][star]
+        scalefac=10**((model_magr - cur_refmag)/2.5)
 
-        log.info('scaling R mag {:.3f} to {:.3f} using scale {}'.format(model_magr, star_mags['R'][star], scalefac))
+        log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
         normflux.append(model*scalefac)
 
     # Now write the normalized flux for all best models to a file
