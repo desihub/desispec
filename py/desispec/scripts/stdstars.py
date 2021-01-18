@@ -106,7 +106,6 @@ def main(args) :
     starfibers=None
     starindices=None
     fibermap=None
-    use_gaia = True
     # For each unique expid,spec pair, get the logical OR of the FIBERSTATUS for all
     # cameras and then proceed with extracting the frame information
     # once we modify the fibermap FIBERSTATUS
@@ -379,10 +378,25 @@ def main(args) :
                 selection = (fibermap['PHOTSYS'] == photsys)
                 a_band = r_band * fibermap['EBV'][selection]  # dimensionless
                 star_unextincted_mags[band][selection] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band][selection]) - a_band
+
     for band in ['G','BP','RP']:
         star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
-        star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band]
-        # TODO Implement extinction
+
+    # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)    
+    gaia_poly_coeff = {'G':[0.9761, -0.1704,
+                           0.0086, 0.0011, -0.0438, 0.0013, 0.0099],
+                      'BP': [1.1517, -0.0871, -0.0333, 0.0173,
+                             -0.0230, 0.0006, 0.0043],
+                      'RP':[0.6104, -0.0170, -0.0026,
+                            -0.0017, -0.0078, 0.00005, 0.0006]}
+    gaia_a0 = 3.1 * fibermap["EBV"]
+    bprp = star_mags['GAIA-BP'] - star_mags["GAIA-RP"]
+    for band in ['G','BP','RP']:
+        curp = gaia_poly_coeff[band]
+        dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
+                 curp[4]*gaia_a0 + curp[5]*gaia_a0**2 + curp[6]*bprp*gaia_a0
+                 )*gaia_a0
+        star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
         
     star_colors = dict()
     star_unextincted_colors = dict()
@@ -391,11 +405,11 @@ def main(args) :
         star_colors['R-Z'] = star_mags['R'] - star_mags['Z']
         star_unextincted_colors['G-R'] = star_unextincted_mags['G'] - star_unextincted_mags['R']
         star_unextincted_colors['R-Z'] = star_unextincted_mags['R'] - star_unextincted_mags['Z']
-    star_colors['GAIA-BP-RP'] = star_mags['GAIA-BP']-star_mags['GAIA-RP']
-    star_colors['GAIA-G-RP'] = star_mags['GAIA-G']-star_mags['GAIA-RP']
+    star_colors['GAIA-BP-RP'] = star_mags['GAIA-BP'] - star_mags['GAIA-RP']
+    star_colors['GAIA-G-RP'] = star_mags['GAIA-G'] - star_mags['GAIA-RP']
 
-    star_unextincted_colors['GAIA-BP-RP'] = star_unextincted_mags['GAIA-BP']-star_unextincted_mags['GAIA-RP']
-    star_unextincted_colors['GAIA-G-RP'] = star_unextincted_mags['GAIA-G']-star_unextincted_mags['GAIA-RP']
+    star_unextincted_colors['GAIA-BP-RP'] = star_unextincted_mags['GAIA-BP'] - star_unextincted_mags['GAIA-RP']
+    star_unextincted_colors['GAIA-G-RP'] = star_unextincted_mags['GAIA-G'] - star_unextincted_mags['GAIA-RP']
     fitted_model_colors = np.zeros(nstars)
 
     for star in range(nstars) :
