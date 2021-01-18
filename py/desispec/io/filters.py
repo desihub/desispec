@@ -64,7 +64,7 @@ def load_gaia_filter(band,dr=2):
         dr: 2 or 3 
     """
     if band.upper() not in ["G","BP","RP"]:
-        raise ValueError("unknown band '{}'".format(band)
+        raise ValueError("unknown band '{}'".format(band))
     if dr!=2:
         raise ValueError("currently only DR2 is supported")
     filternamemap = f'gaiadr{dr}-{band}'
