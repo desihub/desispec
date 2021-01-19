@@ -5,7 +5,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This script computes the PSF serially with SpecEX.
+This script coadds frames
 """
 
 import desispec.scripts.coadd_frames as coadd_frames
