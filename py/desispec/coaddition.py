@@ -130,7 +130,7 @@ def coadd(spectra, cosmics_nsig=0.) :
             if len(jj) == 0:
                 continue
 
-            if cosmics_nsig is not None and cosmics_nsig > 0 :
+            if cosmics_nsig is not None and cosmics_nsig > 0  and len(jj)>2 :
                 # interpolate over bad measurements
                 # to be able to compute gradient next
                 # to a bad pixel and identify outlier
@@ -162,7 +162,7 @@ def coadd(spectra, cosmics_nsig=0.) :
                 ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
             else :
                 ivarjj=spectra.ivar[b][jj]
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
                 grad=np.array(grad)
                 gradvar=np.array(gradvar)
                 gradivar=(gradvar>0)/np.array(gradvar+(gradvar==0))
@@ -281,7 +281,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
             if len(jj) == 0:
                 continue
 
-            if cosmics_nsig is not None and cosmics_nsig > 0 :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2 :
                 # interpolate over bad measurements
                 # to be able to compute gradient next
                 # to a bad pixel and identify oulier
@@ -315,7 +315,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
             else :
                 ivarjj=spectra.ivar[b][jj]
 
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
                 nspec=grad.shape[0]
