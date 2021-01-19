@@ -4,9 +4,10 @@ Coadd spectra
 
 from __future__ import absolute_import, division, print_function
 
-import os
+import os,sys
 import numpy as np
 from astropy.table import Table
+import fitsio
 
 from desiutil.log import get_logger
 from desispec.io import read_spectra,write_spectra,read_frame
@@ -20,7 +21,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser("Coadd all spectra per target, and optionally resample on linear or logarithmic wavelength grid")
     parser.add_argument("-i","--infile", type=str, nargs='+', help="input spectra file or input frame files")
     parser.add_argument("-o","--outfile", type=str,  help="output spectra file")
-    parser.add_argument("--nsig", type=float, default=None, help="nsigma rejection threshold for cosmic rays")
+    parser.add_argument("--nsig", type=float, default=4, help="nsigma rejection threshold for cosmic rays")
     parser.add_argument("--lin-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
     parser.add_argument("--log10-step", type=float, default=None, help="resampling to single log10 wave array of given step in units of log10")
     parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra), used only with option --lin-step or --log10-step")
@@ -28,15 +29,15 @@ def parse(options=None):
     parser.add_argument("--fast", action="store_true", help="fast resampling, at the cost of correlated pixels and no resolution matrix (used only with option --lin-step or --log10-step)")
     parser.add_argument("--nproc", type=int, default=1, help="multiprocessing")
     parser.add_argument("--coadd-cameras", action="store_true", help="coadd spectra of different cameras. works only if wavelength grids are aligned")
-    
-    
+
+
     if options is None:
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
 
     return args
-    
+
 def main(args=None):
 
     log = get_logger()
@@ -54,12 +55,46 @@ def main(args=None):
     if len(args.infile) == 0:
         log.critical("You must specify input files")
         return 12
-    
-    log.info("reading spectra ...")
-        
-    if len(args.infile) == 1:
+
+    log.info("reading input ...")
+
+    # inspect headers
+    input_is_frames = False
+    input_is_spectra = False
+    for filename in args.infile :
+        ifile = fitsio.FITS(filename)
+        head=ifile[0].read_header()
+        identified = False
+        if "EXTNAME" in head and head["EXTNAME"]=="FLUX" :
+            print(filename,"is a frame")
+            input_is_frames = True
+            identified = True
+            ifile.close()
+            continue
+        for hdu in ifile :
+            head=hdu.read_header()
+            if "EXTNAME" in head and head["EXTNAME"].find("_FLUX")>=0 :
+                print(filename,"is a spectra")
+                input_is_spectra = True
+                identified = True
+                break
+        ifile.close()
+        if not identified :
+            log.error("{} not identified as frame of spectra file".format(filename))
+            sys.exit(1)
+
+
+    if input_is_frames and input_is_spectra :
+        log.error("cannot combine input spectra and frames")
+        sys.exit(1)
+
+
+    if input_is_spectra :
         spectra = read_spectra(args.infile[0])
-    else:
+        for filename in args.infile[1:] :
+            log.info("append {}".format(filename))
+            spectra.update(read_spectra(filename))
+    else: # frames
         frames = dict()
         cameras = {}
         for filename in args.infile:

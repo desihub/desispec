@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script coadds frames
+"""
+
+import desispec.scripts.coadd_frames as coadd_frames
+
+
+if __name__ == '__main__':
+    args = coadd_frames.parse()
+    coadd_frames.main(args)
