@@ -4,7 +4,7 @@ Coadd spectra
 
 from __future__ import absolute_import, division, print_function
 
-import os
+import os,sys
 import numpy as np
 from astropy.table import Table
 import fitsio
@@ -85,7 +85,7 @@ def main(args=None):
 
 
     if input_is_frames and input_is_spectra :
-        log.error("cannot combine input spectra and files")
+        log.error("cannot combine input spectra and frames")
         sys.exit(1)
 
 
