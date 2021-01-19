@@ -7,6 +7,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import numpy as np
 from astropy.table import Table
+import fitsio
 
 from desiutil.log import get_logger
 from desispec.io import read_spectra,write_spectra,read_frame
@@ -55,11 +56,45 @@ def main(args=None):
         log.critical("You must specify input files")
         return 12
 
-    log.info("reading spectra ...")
+    log.info("reading input ...")
 
-    if len(args.infile) == 1:
+    # inspect headers
+    input_is_frames = False
+    input_is_spectra = False
+    for filename in args.infile :
+        ifile = fitsio.FITS(filename)
+        head=ifile[0].read_header()
+        identified = False
+        if "EXTNAME" in head and head["EXTNAME"]=="FLUX" :
+            print(filename,"is a frame")
+            input_is_frames = True
+            identified = True
+            ifile.close()
+            continue
+        for hdu in ifile :
+            head=hdu.read_header()
+            if "EXTNAME" in head and head["EXTNAME"].find("_FLUX")>=0 :
+                print(filename,"is a spectra")
+                input_is_spectra = True
+                identified = True
+                break
+        ifile.close()
+        if not identified :
+            log.error("{} not identified as frame of spectra file".format(filename))
+            sys.exit(1)
+
+
+    if input_is_frames and input_is_spectra :
+        log.error("cannot combine input spectra and files")
+        sys.exit(1)
+
+
+    if input_is_spectra :
         spectra = read_spectra(args.infile[0])
-    else:
+        for filename in args.infile[1:] :
+            log.info("append {}".format(filename))
+            spectra.update(read_spectra(filename))
+    else: # frames
         frames = dict()
         cameras = {}
         for filename in args.infile:
