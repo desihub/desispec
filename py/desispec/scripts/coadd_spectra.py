@@ -20,7 +20,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser("Coadd all spectra per target, and optionally resample on linear or logarithmic wavelength grid")
     parser.add_argument("-i","--infile", type=str, nargs='+', help="input spectra file or input frame files")
     parser.add_argument("-o","--outfile", type=str,  help="output spectra file")
-    parser.add_argument("--nsig", type=float, default=None, help="nsigma rejection threshold for cosmic rays")
+    parser.add_argument("--nsig", type=float, default=4, help="nsigma rejection threshold for cosmic rays")
     parser.add_argument("--lin-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
     parser.add_argument("--log10-step", type=float, default=None, help="resampling to single log10 wave array of given step in units of log10")
     parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra), used only with option --lin-step or --log10-step")
