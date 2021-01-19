@@ -28,15 +28,15 @@ def parse(options=None):
     parser.add_argument("--fast", action="store_true", help="fast resampling, at the cost of correlated pixels and no resolution matrix (used only with option --lin-step or --log10-step)")
     parser.add_argument("--nproc", type=int, default=1, help="multiprocessing")
     parser.add_argument("--coadd-cameras", action="store_true", help="coadd spectra of different cameras. works only if wavelength grids are aligned")
-    
-    
+
+
     if options is None:
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
 
     return args
-    
+
 def main(args=None):
 
     log = get_logger()
@@ -54,9 +54,9 @@ def main(args=None):
     if len(args.infile) == 0:
         log.critical("You must specify input files")
         return 12
-    
+
     log.info("reading spectra ...")
-        
+
     if len(args.infile) == 1:
         spectra = read_spectra(args.infile[0])
     else:
