@@ -11,7 +11,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desispec.io import read_frame,write_frame
 from desispec.coaddition import coadd,coadd_cameras,resample_spectra_lin_or_log
-
+from desispec.specscore import  compute_and_append_frame_scores
 
 def parse(options=None):
     import argparse
@@ -19,6 +19,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser("Coadd frames")
     parser.add_argument("-i","--infile", type=str, nargs='+', help="input frame files")
     parser.add_argument("-o","--outfile", type=str,  help="output frame file")
+    parser.add_argument("--scores",action="store_true", help="add scores")
 
     if options is None:
         args = parser.parse_args()
@@ -57,18 +58,39 @@ def main(args=None):
         frames.append(frame)
 
 
+
     ivar = frames[0].ivar * (frames[0].mask == 0)
-    ivarflux = frames[0].ivar * (frames[0].mask == 0) * frames[0].flux
+    ivarflux = ivar * frames[0].flux
+    ivarres = np.zeros(frames[0].resolution_data.shape)
+    ndiag=ivarres.shape[1]
+    for diag in range(ndiag) :
+        ivarres[:,diag,:] = ivar * frames[0].resolution_data[:,diag,:]
+
     mask = frames[0].mask
+
     for frame in frames[1:] :
-        ivar += frame.ivar * (frame.mask == 0)
-        ivarflux += frame.ivar * (frame.mask == 0) * frame.flux
+        tmp_ivar = frame.ivar * (frame.mask == 0)
+        ivar += tmp_ivar
+        ivarflux += tmp_ivar * frame.flux
+        for diag in range(ndiag) :
+            ivarres[:,diag,:] += tmp_ivar * frame.resolution_data[:,diag,:]
         mask &= frame.mask # and mask
 
     coadd = frames[0]
     coadd.ivar = ivar
     coadd.flux = ivarflux/(ivar+(ivar==0))
     coadd.mask = mask
+    for diag in range(ndiag) :
+        coadd.resolution_data[:,diag,:] = ivarres[:,diag,:]/(ivar+(ivar==0))
+
+    if args.scores :
+        compute_and_append_frame_scores(coadd)
+    else :
+        coadd.scores = None
+        coadd.scores_comments = None
+
+    # remove info on chi2pix
+    coadd.chi2pix = None
 
     log.info("writing {} ...".format(args.outfile))
     write_frame(args.outfile,coadd)
