@@ -51,12 +51,15 @@ def coadd_fibermap(fibermap) :
             tfmap.add_column(xx,name='RMS_'+k)
     for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
         if k in fibermap.colnames :
-            xx = Column(np.arange(ntarget))
-            tfmap.add_column(xx,name='FIRST_'+k)
-            xx = Column(np.arange(ntarget))
-            tfmap.add_column(xx,name='LAST_'+k)
-            xx = Column(np.arange(ntarget))
-            tfmap.add_column(xx,name='NUM_'+k)
+            if not 'FIRST_'+k in tfmap.dtype.names :
+                xx = Column(np.arange(ntarget))
+                tfmap.add_column(xx,name='FIRST_'+k)
+            if not 'LAST_'+k in tfmap.dtype.names :
+                xx = Column(np.arange(ntarget))
+                tfmap.add_column(xx,name='LAST_'+k)
+            if not 'NUM_'+k in tfmap.dtype.names :
+                xx = Column(np.arange(ntarget))
+                tfmap.add_column(xx,name='NUM_'+k)
 
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
