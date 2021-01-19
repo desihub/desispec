@@ -14,8 +14,11 @@ import os
 import re
 import warnings
 import time
+import copy
+import numbers
 
 import numpy as np
+from astropy.table import Table
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
@@ -59,9 +62,12 @@ class Spectra(object):
         If ``True``, store data in memory as single precision.
     scores
         QA scores table.
+    extra_catalog : numpy or astropy Table, optional
+        optional table of metadata, rowmatched to fibermap,
+        e.g. a redshift catalog for these spectra
     """
     def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None, resolution_data=None,
-        fibermap=None, meta=None, extra=None, single=False, scores=None):
+        fibermap=None, meta=None, extra=None, single=False, scores=None, extra_catalog=None):
         
         self._bands = bands
         self._single = single
@@ -69,7 +75,11 @@ class Spectra(object):
         if single:
             self._ftype = np.float32
 
-        self.scores = scores
+        if scores is not None:
+            self.scores = Table(scores)
+        else:
+            self.scores = None
+
         self.meta = None
         if meta is None:
             self.meta = {}
@@ -110,12 +120,26 @@ class Spectra(object):
                     if ex[1].shape != flux[b].shape:
                         raise RuntimeError("extra arrays must have the same shape as the flux array")
 
+        if fibermap is not None and extra_catalog is not None:
+            if len(fibermap) != len(extra_catalog):
+                raise ValueError('fibermap and extra_catalog have different number of entries {} != {}'.format(
+                    len(fibermap), len(extra_catalog) ))
+
+            if ('TARGETID' in fibermap.dtype.names) and ('TARGETID' in extra_catalog.dtype.names):
+                if not np.all(fibermap['TARGETID'] == extra_catalog['TARGETID']):
+                    raise ValueError('TARGETID mismatch between fibermap and extra_catalog')
+
         # copy data
 
         if fibermap is not None:
             self.fibermap = fibermap.copy()
         else:
             self.fibermap = None
+
+        if extra_catalog is not None:
+            self.extra_catalog = extra_catalog.copy()
+        else:
+            self.extra_catalog = None
 
         self.wave = {}
         self.flux = {}
@@ -313,6 +337,54 @@ class Spectra(object):
 
         return ret
 
+    def __getitem__(self, index):
+        """Slice spectra by index"""
+        if isinstance(index, numbers.Integral):
+            index = slice(index, index+1)
+
+        bands = copy.copy(self.bands)
+        flux = dict()
+        ivar = dict()
+        wave = dict()
+        mask = dict() if self.mask is not None else None
+        rdat = dict() if self.resolution_data is not None else None
+        extra = dict() if self.extra is not None else None
+
+        for band in bands:
+            flux[band] = self.flux[band][index].copy()
+            ivar[band] = self.ivar[band][index].copy()
+            wave[band] = self.wave[band].copy()
+            if self.mask is not None:
+                mask[band] = self.mask[band][index].copy()
+            if self.resolution_data is not None:
+                rdat[band] = self.resolution_data[band][index].copy()
+            if self.extra is not None:
+                extra[band] = dict()
+                for col in self.extra[band]:
+                    extra[band][col] = self.extra[band][col][index].copy()
+
+        if self.fibermap is not None:
+            fibermap = self.fibermap[index].copy()
+        else:
+            fibermap = None
+
+        if self.extra_catalog is not None:
+            extra_catalog = self.extra_catalog[index].copy()
+        else:
+            extra_catalog = None
+
+        if self.scores is not None:
+            scores = Table()
+            for col in self.scores.dtype.names:
+                scores[col] = self.scores[col][index].copy()
+        else:
+            scores = None
+
+        sp = Spectra(bands, wave, flux, ivar,
+            mask=mask, resolution_data=rdat, fibermap=fibermap,
+            meta=self.meta, extra=extra, scores=scores, extra_catalog=extra_catalog,
+        )
+        return sp
 
     def update(self, other):
         """
@@ -329,6 +401,7 @@ class Spectra(object):
         Returns:
             nothing (object updated in place).
 
+        Note: does not support updating extra_catalog
         """
 
         # Does the other Spectra object have any data?
@@ -551,3 +624,92 @@ class Spectra(object):
 
         return
 
+def stack(speclist):
+    """
+    Stack a list of spectra, return a new spectra object
+
+    Args:
+        speclist : list of Spectra objects
+
+    returns stacked Spectra object
+
+    Note: all input spectra must have the same bands, wavelength grid,
+    and include or not the same optional elements (mask, fibermap, extra, ...).
+    The returned Spectra have the meta from the first input Spectra.
+
+    Also see Spectra.update, which is less efficient but more flexible for
+    handling heterogeneous inputs
+    """
+    flux = dict()
+    ivar = dict()
+    wave = dict()
+    bands = copy.copy(speclist[0].bands)
+    for band in bands:
+        flux[band] = np.vstack([sp.flux[band] for sp in speclist])
+        ivar[band] = np.vstack([sp.ivar[band] for sp in speclist])
+        wave[band] = speclist[0].wave[band].copy()
+
+    if speclist[0].mask is not None:
+        mask = dict()
+        for band in bands:
+            mask[band] = np.vstack([sp.mask[band] for sp in speclist])
+    else:
+        mask = None
+
+    if speclist[0].resolution_data is not None:
+        rdat = dict()
+        for band in bands:
+            rdat[band] = np.vstack([sp.resolution_data[band] for sp in speclist])
+    else:
+        rdat = None
+
+    if speclist[0].fibermap is not None:
+        if isinstance(speclist[0].fibermap, np.ndarray):
+            #- note named arrays need hstack not vstack
+            fibermap = np.hstack([sp.fibermap for sp in speclist])
+        else:
+            import astropy.table
+            if isinstance(speclist[0].fibermap, astropy.table.Table):
+                fibermap = astropy.table.vstack([sp.fibermap for sp in speclist])
+            else:
+                raise ValueError("Can't stack fibermaps of type {}".format(
+                    type(speclist[0].fibermap)))
+    else:
+        fibermap = None
+
+    if speclist[0].extra_catalog is not None:
+        if isinstance(speclist[0].extra_catalog, np.ndarray):
+            #- note named arrays need hstack not vstack
+            extra_catalog = np.hstack([sp.extra_catalog for sp in speclist])
+        else:
+            import astropy.table
+            if isinstance(speclist[0].extra_catalog, astropy.table.Table):
+                extra_catalog = astropy.table.vstack([sp.extra_catalog for sp in speclist])
+            else:
+                raise ValueError("Can't stack extra_catalogs of type {}".format(
+                    type(speclist[0].extra_catalog)))
+    else:
+        extra_catalog = None
+
+    if speclist[0].extra is not None:
+        extra = dict()
+        for band in bands:
+            extra[band] = dict()
+            for col in speclist[0].extra[band]:
+                extra[band][col] = np.concatenate([sp.extra[band][col] for sp in speclist])
+    else:
+        extra = None
+
+    if speclist[0].scores is not None:
+        scores = Table()
+        for col in speclist[0].scores.dtype.names:
+            scores[col] = np.concatenate([sp.scores[col] for sp in speclist])
+    else:
+        scores = None
+
+    sp = Spectra(bands, wave, flux, ivar,
+        mask=mask, resolution_data=rdat, fibermap=fibermap,
+        meta=speclist[0].meta, extra=extra, scores=scores,
+        extra_catalog=extra_catalog,
+    )
+    return sp
