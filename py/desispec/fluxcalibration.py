@@ -47,13 +47,9 @@ def isStdStar(fibermap, bright=None):
     target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
     desi_target = fibermap[target_colnames[0]]  # (SV1_)DESI_TARGET
     desi_mask = target_masks[0]                 # (sv1_)desi_mask
-    if len(target_colnames)>2 :
+    if survey != 'cmx':
         mws_target = fibermap[target_colnames[2]]   # (SV1_)MWS_TARGET
         mws_mask =  target_masks[2]                 # (sv1_)mws_mask
-    else :
-        log.warning("Use same selection for faint or bright conditions")
-        mws_target = desi_target
-        mws_mask   = desi_mask
 
     # mapping of which stdstar bits to use depending upon `bright` input
     # NOTE: STD_WD and GAIA_STD_WD not yet included in stdstar fitting
@@ -72,11 +68,13 @@ def isStdStar(fibermap, bright=None):
     for k in desiDict[bright]:
         if k in desi_mask.names():
             yes = yes | ((desi_target & desi_mask[k])!=0)
-    yes_mws = np.zeros_like(desi_target, dtype=bool)
-    for k in mwsDict[bright]:
-        if k in mws_mask.names():
-            yes_mws |= ((mws_target & mws_mask[k])!=0)
-    yes = yes | yes_mws
+
+    if survey != 'cmx':
+        yes_mws = np.zeros_like(desi_target, dtype=bool)
+        for k in mwsDict[bright]:
+            if k in mws_mask.names():
+                yes_mws |= ((mws_target & mws_mask[k])!=0)
+        yes = yes | yes_mws
 
     #- Hack for data on 20201214 where some fiberassign files had targeting
     #- bits set to 0, but column FA_TYPE was still ok

@@ -189,6 +189,47 @@ class TestFluxCalibration(unittest.TestCase):
         with self.assertRaises(SystemExit):  #should be ValueError instead?
             apply_flux_calibration(frame,fc)
 
+    def test_isStdStar(self):
+        """test isStdStar works for cmx, main, and sv1 fibermaps"""
+        from desispec.fluxcalibration import isStdStar
+        from desitarget.targetmask import desi_mask, mws_mask
+        from desitarget.sv1.sv1_targetmask import desi_mask as sv1_desi_mask
+        from desitarget.sv1.sv1_targetmask import mws_mask as sv1_mws_mask
+        from desitarget.cmx.cmx_targetmask import cmx_mask
+        from desitarget.targets import main_cmx_or_sv
+        from astropy.table import Table
+
+        #- CMX
+        fm = Table()
+        fm['CMX_TARGET'] = np.zeros(10, dtype=int)
+        fm['CMX_TARGET'][0:2] = cmx_mask.STD_FAINT
+        fm['CMX_TARGET'][2:4] = cmx_mask.SV0_STD_FAINT
+        self.assertEqual(main_cmx_or_sv(fm)[2], 'cmx')
+        self.assertEqual(np.count_nonzero(isStdStar(fm)), 4)
+
+        #- SV1
+        fm = Table()
+        fm['SV1_DESI_TARGET'] = np.zeros(10, dtype=int)
+        fm['SV1_MWS_TARGET'] = np.zeros(10, dtype=int)
+        fm['SV1_DESI_TARGET'][0:2] = sv1_desi_mask.STD_FAINT
+        fm['SV1_MWS_TARGET'][2:4] = sv1_mws_mask.GAIA_STD_FAINT
+        self.assertEqual(main_cmx_or_sv(fm)[2], 'sv1')
+        self.assertEqual(np.count_nonzero(isStdStar(fm)), 4)
+
+        #- Main
+        fm = Table()
+        fm['DESI_TARGET'] = np.zeros(10, dtype=int)
+        fm['MWS_TARGET'] = np.zeros(10, dtype=int)
+        fm['DESI_TARGET'][0:2] = desi_mask.STD_FAINT
+        fm['DESI_TARGET'][2:4] = desi_mask.STD_BRIGHT
+        fm['DESI_TARGET'][4:6] |= desi_mask.MWS_ANY
+        fm['MWS_TARGET'][4:6] = sv1_mws_mask.GAIA_STD_FAINT
+        self.assertEqual(main_cmx_or_sv(fm)[2], 'main')
+        self.assertEqual(np.count_nonzero(isStdStar(fm)), 6)
+        self.assertEqual(np.count_nonzero(isStdStar(fm, bright=False)), 4)
+        self.assertEqual(np.count_nonzero(isStdStar(fm, bright=True)), 2)
+
+
     def test_main(self):
         pass
 
