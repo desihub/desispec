@@ -296,12 +296,12 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
                     else :
                         ttivar = spectra.ivar[b][j]
                     good = (ttivar>0)
-                    bad  = (ttivar<=0)
-                    ttflux = spectra.flux[b][j]
+                    bad  = ~good
+                    ttflux = spectra.flux[b][j].copy()
                     ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
-                    ttivar = spectra.ivar[b][j]
+                    ttivar = spectra.ivar[b][j].copy()
                     ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
-                    ttvar = 1./ttivar
+                    ttvar = 1./(ttivar+(ttivar==0))
                     ttflux[1:] = ttflux[1:]-ttflux[:-1]
                     ttvar[1:]  = ttvar[1:]+ttvar[:-1]
                     ttflux[0]  = 0
@@ -322,12 +322,15 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
                 meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
                 deltagrad=grad-meangrad
                 chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
-
-                for l in np.where(chi2>cosmics_nsig**2)[0]  :
-                    k=np.argmax(gradivar[:,l]*deltagrad[:,l]**2)
-                    log.debug("masking spec {} wave={}".format(k,spectra.wave[b][l]))
-                    ivarjj[k][l]=0.
-
+                bad  = (chi2>cosmics_nsig**2)
+                nbad = np.sum(bad)
+                if nbad>0 :
+                    log.info("masking {} values for targetid={}".format(nbad,tid))
+                    badindex=np.where(bad)[0]
+                    for bi in badindex  :
+                        k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
+                        ivarjj[k,bi]=0.
+                        log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
 
             ivar[i,windices] += np.sum(ivarjj,axis=0)
             flux[i,windices] += np.sum(ivarjj*spectra.flux[b][jj],axis=0)
