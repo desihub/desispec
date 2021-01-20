@@ -144,11 +144,11 @@ class TestBinScripts(unittest.TestCase):
         data['TEFF']=6000.*np.ones(fibers.size)
         data['FEH']=np.zeros(fibers.size)
         data['COEF']=np.zeros((fibers.size,12))
-        # cannot be exactly the same values 
-        data['CHI2DOF']=np.ones(fibers.size)+0.1*(fibers%2) 
+        # cannot be exactly the same values
+        data['CHI2DOF']=np.ones(fibers.size)+0.1*(fibers%2)
         data['REDSHIFT']=np.zeros(fibers.size)
         data['DATA_G-R']=0.3*np.ones(fibers.size)
-        data['MODEL_G-R']=0.3*np.ones(fibers.size)        
+        data['MODEL_G-R']=0.3*np.ones(fibers.size)
         io.write_stdstar_models(self.stdfile,stdflux,self.wave,fibers,data)
 
     def _remove_files(self, filenames):
@@ -175,27 +175,32 @@ class TestBinScripts(unittest.TestCase):
 
         #- Confirm that the output file can be read as a fiberflat
         ff1 = io.read_fiberflat(self.fiberflatfile)
-        
+
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)
-        args = desispec.scripts.fiberflat.parse(cmd.split()[2:])        
+        args = desispec.scripts.fiberflat.parse(cmd.split()[2:])
         err = runcmd(desispec.scripts.fiberflat.main, args=[args,],
             inputs=inputs, outputs=outputs, clobber=True)
 
         #- Confirm that the output file can be read as a fiberflat
         ff2 = io.read_fiberflat(self.fiberflatfile)
-        
+
         self.assertTrue(np.all(ff1.fiberflat == ff2.fiberflat))
         self.assertTrue(np.all(ff1.ivar == ff2.ivar))
         self.assertTrue(np.all(ff1.mask == ff2.mask))
         self.assertTrue(np.all(ff1.meanspec == ff2.meanspec))
         self.assertTrue(np.all(ff1.wave == ff2.wave))
-        self.assertTrue(np.all(ff1.fibers == ff2.fibers))        
+        self.assertTrue(np.all(ff1.fibers == ff2.fibers))
 
     def test_compute_fluxcalib(self):
         """
-        Tests desi_compute_sky --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        Tests desi_compute_fluxcalibration
         """
+
+        if 'DESI_SPECTRO_CALIB' not in os.environ :
+            print("do not test desi_compute_fluxcalib without DESI_SPECTRO_CALIB set")
+            return
+
         self._write_frame(flavor='science', camera='b0')
         self._write_fiberflat()
         self._write_fibermap()
@@ -212,7 +217,7 @@ class TestBinScripts(unittest.TestCase):
 
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)
-        args = desispec.scripts.fluxcalibration.parse(cmd.split()[2:])        
+        args = desispec.scripts.fluxcalibration.parse(cmd.split()[2:])
         err = runcmd(desispec.scripts.fluxcalibration.main, args=[args,],
             inputs=inputs, outputs=outputs, clobber=True)
         self.assertEqual(err, None)
@@ -234,7 +239,7 @@ class TestBinScripts(unittest.TestCase):
 
         #- Remove outputs and call again via function instead of system call
         self._remove_files(outputs)
-        args = desispec.scripts.sky.parse(cmd.split()[2:])        
+        args = desispec.scripts.sky.parse(cmd.split()[2:])
         err = runcmd(desispec.scripts.sky.main, args=[args,],
             inputs=inputs, outputs=outputs, clobber=True)
         self.assertEqual(err, None)
