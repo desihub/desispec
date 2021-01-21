@@ -741,7 +741,7 @@ def apply_fiberflat(frame, fiberflat):
     sp = frame  #- sp=spectra for this frame
 
     #- check for heliocentric correction
-    if 'HELIOCOR' in sp.meta :
+    if sp.meta is not None and 'HELIOCOR' in sp.meta :
         heliocor=sp.meta['HELIOCOR']
         log.info("Also apply heliocentric correction scale factor {} to fiber flat".format(heliocor))
         # first apply the multiplicative factor
