@@ -6,11 +6,11 @@
 
 #  ----  Calling  ----
 #- salloc -N 6 -C haswell -q interactive -t 02:00:00
-#- srun -N 6 -n 24 -c 4 python mpi_driver.py
-#- srun -N 6 -n 32 -c 2 python mpi_driver.py (spectra & redrock).
+#-   srun -N 6 -n 24 -c 4 python mpi_radlss
+#-   srun -N 6 -n 32 -c 2 python mpi_radlss (spectra & redrock).
 #-
-#- 24 mins. per exposure (all ten petals, brz).
-#- 45 exposures to process for 20200315.
+#-   24 mins. per exposure (all ten petals, brz).
+#-   45 exposures to process for 20200315.
 #-
 import multiprocessing
 
@@ -24,7 +24,6 @@ rank  = comm.Get_rank()
 size  = comm.Get_size()
 
 # -----------------------------------------------------------
-
 import os
 import sys
 import time
@@ -65,17 +64,24 @@ from   RadLSS                    import  RadLSS
 from   desispec.parallel         import  stdouterr_redirected
 
 
-andes     = '/global/cfs/cdirs/desi/spectro/redux/andes'
+prod = '/global/cfs/cdirs/desi/spectro/redux/blanc'
+odir = '/global/cscratch1/sd/mjwilson/radlss/test/'
 
-def get_expids(night, andes='/global/cfs/cdirs/desi/spectro/redux/andes'):
-    tiles  = np.unique(np.array([x.split('/')[-3] for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
+def get_expids(night, prod=prod):
+    '''
+    Get the exposure list for a given night of the specified reduction. 
+    '''
+    tiles  = np.unique(np.array([x.split('/')[-3] for x in glob.glob(prod + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int))
 
-    # np.sort(np.array([x.split('/')[-1] for x in glob.glob(andes + '/exposures/{}/*'.format(night))]).astype(np.int))  
-    expids = np.unique(np.array([x.split('/')[-1].split('-')[2].replace('.fits','') for x in glob.glob(andes + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int)) 
+    # np.sort(np.array([x.split('/')[-1] for x in glob.glob(prod + '/exposures/{}/*'.format(night))]).astype(np.int))  
+    expids = np.unique(np.array([x.split('/')[-1].split('-')[2].replace('.fits','') for x in glob.glob(prod + '/tiles/*/{}/cframe-*'.format(night))]).astype(np.int)) 
     
     return  expids, tiles
     
 def is_processed(logfile):
+    '''
+    Query whether this epxosure has been reduced already (SUCCESS present in written logfile.)
+    '''
     processed     = False
 
     if path.exists(logfile):
@@ -88,25 +94,31 @@ def is_processed(logfile):
     
     return  processed
 
+# Hard limit on number of exposure to process.
 nmax      = 1
+
+# Night to reduce.
 night     = '20200315'
+
+# Tracer sets to reduce. 
 tracers   = ['ELG']
+
+overwrite = True
 
 expids, tiles = get_expids(night)
 
+# Test set, e.g. ['b6', 'r6', 'z6'] or full: cameras=None. 
 cameras   = ['b6', 'r6', 'z6']
 
 comm.barrier()
-
-# ----  Test  ----
-# expids  = expids[1:3]
 
 expids    = comm.bcast(expids, root=0)
 
 if rank == 0:
     print('Number of exposures to process: {}'.format(len(expids)))
 
-# https://github.com/desihub/desitarget/blob/master/bin/mpi_select_mock_targets
+# Divide exposures amongst available ranks. 
+#     See https://github.com/desihub/desitarget/blob/master/bin/mpi_select_mock_targets
 iexp      = np.linspace(0, len(expids), size+1, dtype=int)
 rankexp   = expids[iexp[rank]:iexp[rank+1]]
 
@@ -120,11 +132,13 @@ if len(rankexp) > 0:
     for nexp, expid in enumerate(rankexp):
         start    = time.perf_counter()
       
-        logdir   = '/global/cscratch1/sd/mjwilson/radlss/test/logs/{:08d}/'.format(expid)
+        logdir   = odir + '/logs/{:08d}/'.format(expid)
         logfile  = logdir + '/{:08d}.log'.format(expid) 
 
-        # done   = is_processed(logfile)
-        done     = 0
+        if overwrite:
+            done = 0
+        else:
+            done = is_processed(logfile)
         
         if not done:      
             Path(logdir).mkdir(parents=True, exist_ok=True)
@@ -134,12 +148,12 @@ if len(rankexp) > 0:
             with stdouterr_redirected(to=logfile):
                 print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
-                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=False)
+                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=False, outdir=odir)
                 
                 rads.compute(templates=False)
 
-                #  if nexp == nmax:
-                #    break
+                if nexp == nmax:
+                    break
 
                 print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
 

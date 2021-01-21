@@ -42,30 +42,29 @@ from   dtemplateSNR              import  dtemplateSNR, dtemplateSNR_modelivar
 warnings.simplefilter('ignore', category=AstropyWarning)
 
 class RadLSS(object):
-    def __init__(self, night, expid, cameras=None, shallow=False, andes='/global/cfs/cdirs/desi/spectro/redux/andes/', outdir='/global/cscratch1/sd/mjwilson/radlss/test/', rank=0):
+    def __init__(self, night, expid, cameras=None, shallow=False, prod='/global/cfs/cdirs/desi/spectro/redux/blanc/', calibdir=os.environ['DESI_SPECTRO_CALIB'], outdir='/global/cscratch1/sd/mjwilson/radlss/blanc/', rank=0):
         """
         Creates a spectroscopic rad(ial) weights instance.
         
         Args:
-            night: 
+            night: night to solve for
             expid: 
-            
-        Optional inputs:
-            andes: 
+            cameras: subset of cameras to reduce, else all (None) 
+            prod: path to spec. pipeline reductions.
+            shallow:
+            odir: path to write to. 
+            rank: given rank, for logging.  
         """
-        
-        # /global/cfs/cdirs/desi/spectro/redux/andes/'
-        # self.andes          = '/global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/redux/andes/'
-        self.andes            = andes
-            
-        # os.environ['DESIMODEL']            = '/global/common/software/desi/cori/desiconda/20200801-1.4.0-spec/code/desimodel/0.13.0' 
-        # os.environ['DESIMODEL']            = '/global/scratch/mjwilson/miniconda3/envs/desi/code/desimodel/'
-        # os.environ['DESI_BASIS_TEMPLATES'] = '/global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/templates/basis_templates/v3.1/'
-        # os.environ['DESI_SPECTRO_CALIB']   = self.andes + '/calibnight/'
-        
+                    
+        # E.g. $DESI_SPECTRO_CALIB:  /global/cfs/cdirs/desi/spectro/desi_spectro_calib/trunk.     
+        # E.g. $DESI_MODEL:  global/common/software/desi/cori/desiconda/20200801-1.4.0-spec/code/desimodel/0.13.0.
+        # E.g. $DESI_BASIS_TEMPLATES:  /global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/templates/basis_templates/v3.1/
+
+        self.prod             = prod
         self.night            = night
         self.expid            = expid
         self.rank             = rank
+        self.calibdir         = calibdir
         
         if cameras is None:
             petals            = np.arange(10)
@@ -82,13 +81,13 @@ class RadLSS(object):
         self.nmodel           =  0
         self.ensemble_tracers = []
         self.ensemble_flux    = {}
-        self.ensemble_dflux   = {}
+        self.ensemble_dflux   = {} # Stored (F - ~F_100A) flux for the ensemble.
         self.ensemble_meta    = {}
         self.ensemble_objmeta = {}
         self.template_snrs    = {}
 
         self.get_data(shallow=shallow)
- 
+        '''
         if (not self.fail) and (self.flavor == 'science'):
             if not shallow:
                 self.get_gfas()
@@ -112,19 +111,19 @@ class RadLSS(object):
             self.fail         = True
 
             print('Non-science exposure')  
-               
-    def get_data(self, shallow=False):    
+        '''    
+    def get_data(self, shallow=False, aux=False):    
         '''
         Grab the raw and reduced data for a given (SV0) expid.
         Bundle by camera (band, petal) for each exposure instance.
 
         args:
-            shallow:  if True, populate class with exptime, mjd, tileid,
-                      flavour & program for this exposure, but do not grab
-                      pipeline data, e.g. cframe etc.  
+            shallow:  if True, populate class with header derived exptime, mjd, tileid,
+                      flavour & program for this exposure, but do not gather corresponding
+                      pipeline data, e.g. cframe flux etc.  
         '''
         
-        # For each camera.
+        # For each camera of a given exposure.
         self.frames      = {}
         self.cframes     = {}
 
@@ -143,8 +142,9 @@ class RadLSS(object):
 
         # Start the clock.
         start_getdata    = time.perf_counter()
-        
-        reduced_cameras  = glob.glob(self.andes + '/exposures/{}/{:08d}/cframe-*'.format(self.night, self.expid))
+
+        # Of the requested cameras, which are actually reduced. 
+        reduced_cameras  = glob.glob(self.prod + '/exposures/{}/{:08d}/cframe-*'.format(self.night, self.expid))
         reduced_cameras  = [x.split('-')[1] for x in reduced_cameras]
 
         bit_mask         = [x in reduced_cameras for x in self.cameras]
@@ -153,14 +153,15 @@ class RadLSS(object):
             self.fail    = True
 
             print('Requested cameras {} are not successfully reduced.  Try any of {}.'.format(self.cameras, reduced_cameras))
-        
+
+        # Solve for only reduced & requested cameras. 
         self.cameras     = np.array(self.cameras)[bit_mask]
         self.cameras     = self.cameras.tolist()
 
         self.cam_bitmask = bitarray(bit_mask)
 
-        # All petals with an available camera.                                                                                                                                                                                               
-        self.petals              = np.unique(np.array([x[1] for x in self.cameras]))
+        # All petals with an available camera.
+        self.petals      = np.unique(np.array([x[1] for x in self.cameras]))
 
         # print(reduced_cameras, bit_mask, self.cameras)
 
@@ -168,7 +169,7 @@ class RadLSS(object):
             print('Rank {}:  Grabbing camera {}'.format(self.rank, cam))
             
             # E.g.  /global/cfs/cdirs/desi/spectro/redux/andes/tiles/67230/20200314/cframe-z9-00055382.fits                      
-            self.cframes[cam]    = read_frame(findfile('cframe', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))
+            self.cframes[cam]    = read_frame(findfile('cframe', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.prod))
                      
             self.exptime         = self.cframes[cam].meta['EXPTIME']        
             self.mjd             = self.cframes[cam].meta['MJD-OBS']
@@ -178,36 +179,34 @@ class RadLSS(object):
             
             if shallow:
                 del self.cframes[cam]
-
                 continue
-            
+
             self.fibermaps[cam]  = self.cframes[cam].fibermap
                 
             self._ofibermapcols  = list(self.cframes[cam].fibermap.dtype.names)
                 
             self.fibermaps[cam]['TILEFIBERID'] = 10000 * self.tileid + self.fibermaps[cam]['FIBER']
-                
-            self.psfs[cam]       = GaussHermitePSF(findfile('psf', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))
-
-            # self.psf_nights[cam] = GaussHermitePSF(findfile('psfnight', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))
-                
-            self.skies[cam]      = read_sky(findfile('sky', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))
+                                
+            self.skies[cam]      = read_sky(findfile('sky', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.prod))
         
             # https://desidatamodel.readthedocs.io/en/latest/DESI_SPECTRO_CALIB/fluxcalib-CAMERA.html
-            self.fluxcalibs[cam] = read_flux_calibration(findfile('fluxcalib', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))
+            self.fluxcalibs[cam] = read_flux_calibration(findfile('fluxcalib', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.prod))
         
-            fiberflat_path       = os.environ['DESI_SPECTRO_CALIB'] + '/' + CalibFinder([self.cframes[cam].meta]).data['FIBERFLAT']
+            # fiberflat_path     = calibdir + '/' + CalibFinder([self.cframes[cam].meta]).data['FIBERFLAT']
             
-            # findfile('fiberflat', night=self.night, expid=flatid, camera=cam, specprod_dir=self.andes)
-            self.fiberflats[cam] = read_fiberflat(fiberflat_path)
+            self.fiberflats[cam] = read_fiberflat()
             self.flat_expid      = self.fiberflats[cam].header['EXPID']
         
             # If fail:  CalibFinder([rads.cframes['b5'].meta, rads.cframes['b5'].meta])?
-        
-            self.frames[cam]     = read_frame(findfile('frame', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))
-                
-            self.preprocs[cam]   = read_image(findfile('preproc', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.andes))
+    
+            if aux:
+                # ['psf', 'psfnight']
+                self.psfs[cam]     = GaussHermitePSF(findfile('psf', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.prod))
 
+                self.preprocs[cam] = read_image(findfile('preproc', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.prod))
+
+                self.frames[cam]   = read_frame(findfile('frame', night=self.night, expid=self.expid, camera=cam, specprod_dir=self.prod))
+                
         # End the clock.                                                                                                                                                                                     
         end_getdata    = time.perf_counter()
 
@@ -549,7 +548,7 @@ class RadLSS(object):
             petal      = cam[1] 
             
             # E.g. /global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/redux/andes/tiles/67230/20200314
-            self.data_zbest_file   = os.path.join(self.andes, 'tiles', str(self.tileid), str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, self.tileid, self.night))
+            self.data_zbest_file   = os.path.join(self.prod, 'tiles', str(self.tileid), str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, self.tileid, self.night))
              
             self.zbests[petal]     = zbest = Table.read(self.data_zbest_file, 'ZBEST')
             self.zbests_fib[petal] = Table.read(self.data_zbest_file, 'FIBERMAP')
@@ -663,7 +662,7 @@ class RadLSS(object):
         
         for petal in self.petals:
             # https://desi.lbl.gov/trac/wiki/Pipeline/HowTo/ProcessOneExposure. b0-00055656.fits
-            in_files = self.andes  + '/exposures/{}/{:08d}/cframe-*{}-{:08d}.fits'.format(self.night, self.expid, petal, self.expid)
+            in_files = self.prod   + '/exposures/{}/{:08d}/cframe-*{}-{:08d}.fits'.format(self.night, self.expid, petal, self.expid)
 
             out_file = self.expdir + '/spectra-{}-{:08d}.fits'.format(petal, self.expid)
             rr_file  = self.expdir + '/redrock-{}-{:08d}.fits'.format(petal, self.expid)
@@ -889,7 +888,7 @@ class RadLSS(object):
         with open(self.ensemble_dir + '/template-{}-ensemble-objmeta.fits'.format(tracer.lower()), 'wb') as handle:
             pickle.dump(self.ensemble_objmeta, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-        # List of tracers computed.                                                                                                                                                                                                           
+        # List of tracers computed.
         if tracer not in self.ensemble_tracers:
             self.ensemble_tracers.append(tracer)
 
@@ -1002,8 +1001,8 @@ class RadLSS(object):
 
         for petal in np.arange(10).astype(np.str):
             # E.g. /global/scratch/mjwilson/desi-data.dm.noao.edu/desi/spectro/redux/andes/tiles/67230/20200314                                                                                                                             
-            deepfield_zbest_file                          = os.path.join(self.andes, 'tiles', deepfield_tileid, str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
-            deepfield_coadd_file                          = os.path.join(self.andes, 'tiles', deepfield_tileid, str(self.night), 'coadd-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
+            deepfield_zbest_file                          = os.path.join(self.prod, 'tiles', deepfield_tileid, str(self.night), 'zbest-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
+            deepfield_coadd_file                          = os.path.join(self.prod, 'tiles', deepfield_tileid, str(self.night), 'coadd-{}-{}-{}.fits'.format(petal, deepfield_tileid, self.night))
 
             self.df_ensemble_coadds[petal]                = read_spectra(deepfield_coadd_file)            
             self.df_ensemble_zbests[petal]                = Table.read(deepfield_zbest_file, 'ZBEST')
@@ -1188,7 +1187,7 @@ class RadLSS(object):
         start_writeweights = time.perf_counter()
 
         for petal in self.petals:            
-          hdr             = fits.open(findfile('cframe', night=self.night, expid=self.expid, camera=self.cameras[0], specprod_dir=self.andes))[0].header
+          hdr             = fits.open(findfile('cframe', night=self.night, expid=self.expid, camera=self.cameras[0], specprod_dir=self.prod))[0].header
 
           hdr['EXTNAME']  = 'RADWEIGHT'
 
@@ -1427,8 +1426,8 @@ class RadLSS(object):
             
                 # self.ext_redrock_2Dframes()  
 
-                for petal in np.arange(10).astype(str):
-                    self.line_fit(petal=petal, plot=False)
+                # for petal in np.arange(10).astype(str):
+                #    self.line_fit(petal=petal, plot=False)
                 
                 # -------------  Deep Field  ---------------              
                 # self.grab_deepfield_ensemble()
@@ -1436,8 +1435,6 @@ class RadLSS(object):
                 # -------------  Templates  --------------- 
                 if templates:  
                     for tracer in tracers:  
-                        # self.gen_template_ensemble(tracer=tracer)
-             
                         self.calc_templatesnrs(tracer=tracer)
 
                         # self.run_ensemble_redrock(tracer=tracer)
@@ -1446,7 +1443,7 @@ class RadLSS(object):
                         self.write_radweights()
                     
                         # -------------  QA  -------------            
-                        self.qa_plots()
+                        # self.qa_plots()
               
                 # except:
                 # print('Failed to compute for expid {} and cameras {}'.format(expid, self.cameras))
