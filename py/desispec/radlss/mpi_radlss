@@ -94,20 +94,20 @@ def is_processed(logfile):
     
     return  processed
 
-# Hard limit on number of exposure to process.
-nmax      = 1
-
 # Night to reduce.
-night     = '20200315'
-
-# Tracer sets to reduce. 
-tracers   = ['ELG']
-
+night     = '20201223'
+tracers   = ['BGS']
+templates = True
 overwrite = True
 
+
+# ------------------------------ #
 expids, tiles = get_expids(night)
 
-# Test set, e.g. ['b6', 'r6', 'z6'] or full: cameras=None. 
+# Test set. 
+expids    = [69611]
+
+# One petal test set, e.g. ['b6', 'r6', 'z6'] or full: cameras=None. 
 cameras   = ['b6', 'r6', 'z6']
 
 comm.barrier()
@@ -129,7 +129,7 @@ sys.stdout.flush()
 comm.barrier()
 
 if len(rankexp) > 0:    
-    for nexp, expid in enumerate(rankexp):
+    for nexp, expid in enumerate(rankexp):        
         start    = time.perf_counter()
       
         logdir   = odir + '/logs/{:08d}/'.format(expid)
@@ -137,6 +137,7 @@ if len(rankexp) > 0:
 
         if overwrite:
             done = 0
+            
         else:
             done = is_processed(logfile)
         
@@ -148,21 +149,21 @@ if len(rankexp) > 0:
             with stdouterr_redirected(to=logfile):
                 print('Rank {}: Solving for EXPID {:08d} ({} of {})'.format(rank, expid, nexp, len(rankexp)))
         
-                rads = RadLSS(night, expid, cameras=None, rank=rank, shallow=False, outdir=odir)
+                rads = RadLSS(night, expid, cameras=cameras, rank=rank, shallow=False, outdir=odir)
                 
-                rads.compute(templates=False)
-
-                if nexp == nmax:
-                    break
-
+                rads.compute(templates=templates)
+                
                 print('Rank {}:  SUCCESS.  Processed EXPID {:08d} in {:.3f} minutes.'.format(rank, expid, (time.perf_counter() - start) / 60.))
-
+                
                 # Close all figures (to suppress warning). 
                 plt.close('all')
-              
-                del rads
-                
+                              
                 sys.stdout.flush()
+
+            if rads.flavor != 'science':
+                print('Rank {}:  {:08d}  Non-science exposure ({}).'.format(rank, expid, rads.flavor))
+                    
+            del rads
                 
         else:
             print('Rank {}:  EXPID {} previously processed successfully.'.format(rank, expid))
