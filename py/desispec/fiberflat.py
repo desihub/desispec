@@ -90,10 +90,10 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     # (it's faster that way, and we try to use sparse matrices as much as possible)
     #
 
-    #- if problematic fibers, set ivars to 0 and mask them with specmask.BADFIBER                 
+    #- if problematic fibers, set ivars to 0 and mask them with specmask.BADFIBER
     frame = get_fiberbitmasked_frame(frame,bitmask='flat',ivar_framemask=True)
 
-    #- Shortcuts                                                                                                      
+    #- Shortcuts
     nwave=frame.nwave
     nfibers=frame.nspec
     wave = frame.wave.copy()  #- this will become part of output too
@@ -304,17 +304,17 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         if np.abs(max_diff-previous_max_diff)<accuracy*0.1 :
             log.warning("no significant improvement on max diff, quit loop")
             break
-        
+
         previous_max_diff=max_diff
-        
+
         log.info("2nd pass, iter %d, max diff. = %g > requirement = %g, continue iterating"%(iteration,max_diff,accuracy))
 
 
 
-    
+
     log.info("Total number of masked pixels=%d"%nout_tot)
     log.info("3rd pass, final computation of fiber flat")
-    
+
     # now use mean spectrum to compute flat field correction without any smoothing
     # because sharp feature can arise if dead columns
 
@@ -324,7 +324,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     # reset ivar
     ivar = frame.ivar.copy()
-    
+
     fiberflat_mask=12 # place holder for actual mask bit when defined
 
     nsig_for_mask=nsig_clipping # only mask out N sigma outliers
@@ -352,11 +352,11 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                 mask[fiber] += fiberflat_mask
                 fiberflat_ivar[fiber] = 0.
                 break
-                
+
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
             bad=np.where(chi2>nsig_for_mask**2)[0]
             if bad.size>0 :
-                
+
                 nbadmax=1
                 if bad.size>nbadmax : # not more than nbadmax pixels at a time
                     ii=np.argsort(chi2[bad])
@@ -369,10 +369,10 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                 break
             iteration += 1
 
-        
+
         log.info("3rd pass : fiber #%d , number of iterations %d"%(fiber,iteration))
-    
-    
+
+
     # set median flat to 1
     log.info("3rd pass : set median fiberflat to 1")
 
@@ -383,7 +383,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             mean[i] = np.median(fiberflat[ok,i])
     ok=np.where(mean!=0)[0]
     for fiber in range(nfibers) :
-        fiberflat[fiber,ok] /= mean[ok]  
+        fiberflat[fiber,ok] /= mean[ok]
 
     log.info("3rd pass : interpolating over masked pixels")
 
@@ -394,7 +394,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             continue
         # replace bad by smooth fiber flat
         bad=np.where((mask[fiber]>0)|(fiberflat_ivar[fiber]==0)|(fiberflat[fiber]<minval)|(fiberflat[fiber]>maxval))[0]
-        
+
         if bad.size>0 :
 
             fiberflat_ivar[fiber,bad] = 0
@@ -449,26 +449,26 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     fiberflat = FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
                      chi2pdf=chi2pdf,header=frame.meta,fibermap=frame.fibermap)
-        
+
     #for broken_fiber in broken_fibers :
     #    log.info("mask broken fiber {} in flat".format(broken_fiber))
     #    fiberflat.fiberflat[fiber]=1.
     #    fiberflat.ivar[fiber]=0.
     #    fiberflat.mask[fiber]=specmask.BADFIBERFLAT
-    
+
     return fiberflat
 
 def average_fiberflat(fiberflats):
-    """Average several fiberflats 
+    """Average several fiberflats
     Args:
         fiberflats : list of `desispec.FiberFlat` object
 
     returns a desispec.FiberFlat object
     """
-    
+
     log=get_logger()
     log.info("starting")
-    
+
     if len(fiberflats) == 0 :
         message = "input fiberflat list is empty"
         log.critical(message)
@@ -477,14 +477,14 @@ def average_fiberflat(fiberflats):
         log.warning("only one fiberflat to average??")
         return fiberflats[0]
 
-    # check wavelength range 
+    # check wavelength range
     for fflat in fiberflats[1:] :
         if not np.allclose(fiberflats[0].wave, fflat.wave):
             message = "fiberflats do not have the same wavelength arrays"
             log.critical(message)
-            raise ValueError(message) 
+            raise ValueError(message)
     wave = fiberflats[0].wave
-    
+
     fiberflat = None
     ivar      = None
     if len(fiberflats) > 2 :
@@ -544,25 +544,25 @@ def average_fiberflat(fiberflats):
         if np.sum(ok)>0 :
             meanspec = np.zeros(fiberflats[0].meanspec.shape)
             meanspec[ok] = swf[ok]/sw[ok]
-    
+
     return FiberFlat(wave,fiberflat,ivar,mask,
                      meanspec=meanspec,
-                     header=fiberflats[0].header, 
+                     header=fiberflats[0].header,
                      fibers=fiberflats[0].fibers,
                      fibermap=fiberflats[0].fibermap,
                      spectrograph=fiberflats[0].spectrograph)
 
 def autocalib_fiberflat(fiberflats):
-    """Combine fiberflats of all spectrographs from different lamps to maximize uniformity 
+    """Combine fiberflats of all spectrographs from different lamps to maximize uniformity
     Args:
         fiberflats : list of `desispec.FiberFlat` object
 
     returns a dictionary of desispec.FiberFlat objects , one per spectrograph
     """
-    
+
     log=get_logger()
     log.info("starting")
-    
+
     if len(fiberflats) == 0 :
         message = "input fiberflat list is empty"
         log.critical(message)
@@ -571,12 +571,12 @@ def autocalib_fiberflat(fiberflats):
         log.warning("only one fiberflat to average??")
         return fiberflats[0]
 
-    # check wavelength range 
+    # check wavelength range
     for fflat in fiberflats[1:] :
         if not np.allclose(fiberflats[0].wave, fflat.wave):
             message = "fiberflats do not have the same wavelength arrays"
             log.critical(message)
-            raise ValueError(message) 
+            raise ValueError(message)
     wave = fiberflats[0].wave
 
     # investigate number of spectrographs and number of exposures
@@ -591,7 +591,7 @@ def autocalib_fiberflat(fiberflats):
     log.info("EXPID: {}".format(np.unique(expid)))
     log.info("SPECTRO: {}".format(np.unique(spectro)))
 
-    
+
     cfflat=dict()
     for ee in np.unique(expid) :
         log.info("Fit fiberflats of exposure #{}".format(ee))
@@ -632,7 +632,7 @@ def autocalib_fiberflat(fiberflats):
             coeff, r, rank, s = np.linalg.lstsq(A, Z[:,j],rcond=-1)
             cfflat[ee][j] = coeff[0] # value at center of field of view
         log.debug("median value at center of field for exp {} = {}".format(expid[i],np.median(cfflat[ee])))
-    
+
     # combine the fiber flat of each exposure, per spectrum
     output_fiberflats = dict()
     mflat = list()
@@ -644,7 +644,7 @@ def autocalib_fiberflat(fiberflats):
         var       = np.zeros_like(fflat0.ivar)
         mask      = np.zeros_like(fflat0.mask)
         meanspec  = np.zeros_like(fflat0.meanspec)
-        
+
         for i in ii :
             ee = expid[i]
             corr = 1./(cfflat[ee]+(cfflat[ee]==0))
@@ -654,12 +654,12 @@ def autocalib_fiberflat(fiberflats):
             meanspec  +=  fiberflats[i].meanspec*corr # this is quite artificial now
 
         var /= (ii.size)**2
-        ivar      = (var>0)/(var+(var==0))  
+        ivar      = (var>0)/(var+(var==0))
         fiberflat /= ii.size
         meanspec /= ii.size
         fflat = FiberFlat(fflat0.wave,fiberflat,ivar,mask,
                           meanspec=meanspec,
-                          header=fflat0.header, 
+                          header=fflat0.header,
                           fibers=fflat0.fibers,
                           fibermap=fflat0.fibermap,
                           spectrograph=fflat0.spectrograph)
@@ -673,20 +673,20 @@ def autocalib_fiberflat(fiberflats):
         filter_fiberflat(output_fiberflats[spec])
     log.info("done")
     return output_fiberflats
-    
+
 def mask_bad_fiberflat(fiberflat) :
     log = get_logger()
-    
+
     for fiber in range(fiberflat.fiberflat.shape[0]) :
         fiberflat.mask[fiber][fiberflat.fiberflat[fiber]<0.1] |= specmask.LOWFLAT
         fiberflat.mask[fiber][fiberflat.fiberflat[fiber]>2.] |= specmask.BADFIBERFLAT
         nbad = np.sum((fiberflat.ivar[fiber]==0)|(fiberflat.mask[fiber]!=0))
-        if nbad > 500 : 
+        if nbad > 500 :
             log.warning("fiber {} is 'BAD' because {} flatfield values are bad".format(fiber,nbad))
             fiberflat.fiberflat[fiber]=1.
             fiberflat.ivar[fiber]=0.
             fiberflat.mask[fiber] |= specmask.BADFIBERFLAT
-            
+
 def filter_fiberflat(fiberflat) :
     log = get_logger()
     var=1/(fiberflat.ivar+(fiberflat.ivar==0)*0.000001)
@@ -704,7 +704,10 @@ def filter_fiberflat(fiberflat) :
     return fiberflat
 
 def apply_fiberflat(frame, fiberflat):
-    """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
+    """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar.
+       Checks whether an heliocentric correction has been applied
+       to the frame wavelength in which case also apply it to the
+       flat field array.
 
     Args:
         frame : `desispec.Frame` object
@@ -736,6 +739,21 @@ def apply_fiberflat(frame, fiberflat):
     #- shorthand
     ff = fiberflat
     sp = frame  #- sp=spectra for this frame
+
+    #- check for heliocentric correction
+    if sp.meta is not None and 'HELIOCOR' in sp.meta :
+        heliocor=sp.meta['HELIOCOR']
+        log.info("Also apply heliocentric correction scale factor {} to fiber flat".format(heliocor))
+        # first apply the multiplicative factor
+        fiberflat_wave_in_frame_system = ff.wave*heliocor
+        # then interpolate to the grid in the frame
+        # (it's different because we applied the inverse transform to the wave array
+        # used for extraction to avoid resampling the data, see desispec.scripts.extract)
+        for fiber in range(ff.fiberflat.shape[0]) :
+            good = (ff.ivar[fiber]>0)
+            if np.sum(good)>0 :
+                ff.fiberflat[fiber] = np.interp(sp.wave,fiberflat_wave_in_frame_system[good],ff.fiberflat[fiber][good])
+                # we do not modify the ivar because the correction is smaller than 1 flux bin
 
     #- update sp.ivar first since it depends upon the original sp.flux
     sp.ivar=(sp.ivar>0)*(ff.ivar>0)*(ff.fiberflat>0)/( 1./((sp.ivar+(sp.ivar==0))*(ff.fiberflat**2+(ff.fiberflat==0))) + sp.flux**2/(ff.ivar*ff.fiberflat**4+(ff.ivar*ff.fiberflat==0)) )
@@ -843,7 +861,7 @@ class FiberFlat(object):
             fibermap = self.fibermap[index]
         else:
             fibermap = None
-        
+
         result = FiberFlat(self.wave, self.fiberflat[index], self.ivar[index],
                            self.mask[index], self.meanspec, header=self.header,
                            fibers=self.fibers[index], fibermap=fibermap,  spectrograph=self.spectrograph)
