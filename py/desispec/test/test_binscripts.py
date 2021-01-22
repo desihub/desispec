@@ -100,7 +100,7 @@ class TestBinScripts(unittest.TestCase):
         Rdata = np.ones((self.nspec, 1, self.nwave))
         fibermap = self._get_fibermap()
         frame = Frame(self.wave, flux, ivar, mask, Rdata, fibermap=fibermap,
-                      meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night, EXPTIME=1000.))
+                      meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night, EXPTIME=1000., DETECTOR='SIM'))
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):
@@ -213,6 +213,7 @@ class TestBinScripts(unittest.TestCase):
         inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.stdfile]
         outputs = [self.calibfile,self.qa_data_file,self.qafig,]
         err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+
         self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
 
         #- Remove outputs and call again via function instead of system call
