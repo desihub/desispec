@@ -24,6 +24,10 @@ parser.add_argument('--zbest',type = str, default = None, required = False,
                     help = 'zbest file')
 parser.add_argument('--spectype',type = str, default = None, required = False,
                     help = 'spectype to select')
+parser.add_argument('--ylim', type=float, default=None, required=False, nargs=2,
+                    help = 'ymin ymax for plot')
+parser.add_argument('--title', type=str, default=None, required=False,
+                    help = 'plot title')
 parser.add_argument('--rest-frame', action='store_true',
                     help = 'show rest-frame wavelength')
 parser.add_argument('--errors', action='store_true',
@@ -147,6 +151,12 @@ for tid in targetids :
     if zbest is not None :
         bla+="\nZ  = {:4.3f}".format(zbest['Z'][j])
     plt.text(0.9,0.9,bla,fontsize=12, bbox=props,transform = ax.transAxes,verticalalignment='top', horizontalalignment='right')
+    if args.ylim is not None:
+        plt.ylim(args.ylim[0], args.ylim[1])
+
+    if args.title is not None:
+        plt.title(args.title)
+
     plt.tight_layout()
     plt.show()
 
