@@ -72,6 +72,26 @@ def dust_transmission(wave,ebv) :
     extinction = ext_odonnell(wave,Rv=Rv)
     return 10**(-Rv*extinction*ebv/2.5)
 
+def unextinct_gaia_mags(star_mags, ebv):
+    
+    star_unextincted_mags = {}
+# correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)    
+    gaia_poly_coeff = {'G':[0.9761, -0.1704,
+                           0.0086, 0.0011, -0.0438, 0.0013, 0.0099],
+                      'BP': [1.1517, -0.0871, -0.0333, 0.0173,
+                             -0.0230, 0.0006, 0.0043],
+                      'RP':[0.6104, -0.0170, -0.0026,
+                            -0.0017, -0.0078, 0.00005, 0.0006]}
+    gaia_a0 = 3.1 * ebv
+    bprp = star_mags['GAIA-BP'] - star_mags["GAIA-RP"]
+    for band in ['G','BP','RP']:
+        curp = gaia_poly_coeff[band]
+        dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
+                 curp[4]*gaia_a0 + curp[5]*gaia_a0**2 + curp[6]*bprp*gaia_a0
+                 )*gaia_a0
+        star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
+    return star_unextincted_mags
+
 def main(args) :
     """ finds the best models of all standard stars in the frame
     and normlize the model flux. Output is written to a file and will be called for calibration.
@@ -381,23 +401,8 @@ def main(args) :
 
     for band in ['G','BP','RP']:
         star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
+    star_unextincted_mags = unextinct_gaia_mags(star_mags, fibermap['EBV'])
 
-    # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)    
-    gaia_poly_coeff = {'G':[0.9761, -0.1704,
-                           0.0086, 0.0011, -0.0438, 0.0013, 0.0099],
-                      'BP': [1.1517, -0.0871, -0.0333, 0.0173,
-                             -0.0230, 0.0006, 0.0043],
-                      'RP':[0.6104, -0.0170, -0.0026,
-                            -0.0017, -0.0078, 0.00005, 0.0006]}
-    gaia_a0 = 3.1 * fibermap["EBV"]
-    bprp = star_mags['GAIA-BP'] - star_mags["GAIA-RP"]
-    for band in ['G','BP','RP']:
-        curp = gaia_poly_coeff[band]
-        dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
-                 curp[4]*gaia_a0 + curp[5]*gaia_a0**2 + curp[6]*bprp*gaia_a0
-                 )*gaia_a0
-        star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
-        
     star_colors = dict()
     star_unextincted_colors = dict()
     if not gaia_only:
