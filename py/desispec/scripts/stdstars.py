@@ -35,8 +35,7 @@ def parse(options=None):
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
     parser.add_argument('--ncpu', type = int, default = default_nproc, required = False, help = 'use ncpu for multiprocessing')
     parser.add_argument('--delta-color', type = float, default = 0.2, required = False, help = 'max delta-color for the selection of standard stars (on top of meas. errors)')
-    parser.add_argument('--color', type = str, default = "G-R", choices=['G-R', 'R-Z',
-    'GAIA-BP-RP','GAIA-G-RP'], required = False, help = 'color for selection of standard stars')
+    parser.add_argument('--color', type = str, default = None, choices=['G-R', 'R-Z', 'GAIA-BP-RP','GAIA-G-RP'], required = False, help = 'color for selection of standard stars')
     parser.add_argument('--z-max', type = float, default = 0.008, required = False, help = 'max peculiar velocity (blue/red)shift range')
     parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
@@ -72,9 +71,8 @@ def dust_transmission(wave,ebv) :
     extinction = ext_odonnell(wave,Rv=Rv)
     return 10**(-Rv*extinction*ebv/2.5)
 
-def unextinct_gaia_mags(star_mags, ebv):
+def unextinct_gaia_mags(star_mags, unextincted_mags, ebv):
     
-    star_unextincted_mags = {}
 # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)    
     gaia_poly_coeff = {'G':[0.9761, -0.1704,
                            0.0086, 0.0011, -0.0438, 0.0013, 0.0099],
@@ -89,8 +87,7 @@ def unextinct_gaia_mags(star_mags, ebv):
         dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
                  curp[4]*gaia_a0 + curp[5]*gaia_a0**2 + curp[6]*bprp*gaia_a0
                  )*gaia_a0
-        star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
-    return star_unextincted_mags
+        unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
 
 def main(args) :
     """ finds the best models of all standard stars in the frame
@@ -157,7 +154,11 @@ def main(args) :
             for colname in ['G', 'BP', 'RP']:  #- and W1 and W2?
                 keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] > 10
                 keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] < 20
+            n_legacy_std = keep.sum() 
+            n_gaia_std = keep_gaia.sum()
             keep = keep | keep_gaia
+            # accept both types of standards
+            
             frame_starindices = frame_starindices[keep]
 
             if spectrograph is None :
@@ -201,12 +202,39 @@ def main(args) :
         else :
             flats[camera]=flat
 
+    # if color is not specified we decide on the fly 
+    color = args.color
+    if color is not None:
+        if color[:4] == 'GAIA':
+            legacy_color  = False
+            gaia_color = True
+        else:
+            legacy_color = True
+            gaia_color = False
 
-    if starindices.size == 0 :
+    if starindices.size == 0:
         log.error("no STD star found in fibermap")
         raise ValueError("no STD star found in fibermap")
+    if n_legacy_std==0 and legacy_color:
+        raise Exception('Specified Legacy survey color, but noe legacy standards')
+    if n_gaia_std==0 and gaia_color:
+        raise Exception('Specified gaia color, but no gaia stds')
 
+    if n_legacy_std==0:
+        gaia_std = True
+        if color is None:
+            color='GAIA-BP-RP'
+    else:
+        gaia_std = False
+        if color is None:
+            color='G-R'
+        if n_gaia_std>0:
+            log.info('Gaia standards found but not used')
     log.info("found %d STD stars"%starindices.size)
+
+    # excessive but just in case
+    if not color in ['G-R','R-Z','GAIA-BP-RP','GAIA-G-RP']:
+        raise ValueError('Unknown color {}'.format(color))
 
     # log.warning("Not using flux errors for Standard Star fits!")
 
@@ -351,18 +379,20 @@ def main(args) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
-
+    
     model_filters = dict()
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
             if photsys != '':
                 model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
-    if len(model_filters)==0:
-        log.info('No Legacy survey standards')
-        gaia_only=True
-    else:
-        gaia_only=False
-    for band in ["G","BP","RP"] :
+    if len(model_filters) == 0:
+        log.info('No Legacy survey photometry identified in fibermap')
+        if legacy_color:
+            # I don't think we could end up here..
+            raise Exception("Can't proceed because you required DECALS colors" )
+
+    # I will always load gaia data even if we are fitting LS standards only
+    for band in ["G", "BP", "RP"] :
         model_filters["GAIA-"+band] = load_gaia_filter(band=band,dr=2)
 
     log.info("computing model mags for %s"%sorted(model_filters.keys()))
@@ -383,7 +413,7 @@ def main(args) :
     star_unextincted_mags = dict()
 
     photometric_systems = np.unique(fibermap['PHOTSYS'])
-    if not gaia_only:
+    if not gaia_std:
         for band in ['G', 'R', 'Z']:
             star_mags[band] = 22.5 - 2.5 * np.log10(fibermap['FLUX_'+band])
             star_unextincted_mags[band] = np.zeros(star_mags[band].shape)
@@ -401,11 +431,11 @@ def main(args) :
 
     for band in ['G','BP','RP']:
         star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
-    star_unextincted_mags = unextinct_gaia_mags(star_mags, fibermap['EBV'])
+    unextinct_gaia_mags(star_mags, star_unextincted_mags, fibermap['EBV'])
 
     star_colors = dict()
     star_unextincted_colors = dict()
-    if not gaia_only:
+    if not gaia_std:
         star_colors['G-R'] = star_mags['G'] - star_mags['R']
         star_colors['R-Z'] = star_mags['R'] - star_mags['Z']
         star_unextincted_colors['G-R'] = star_unextincted_mags['G'] - star_unextincted_mags['R']
@@ -436,18 +466,15 @@ def main(args) :
 
         # preselect models based on magnitudes
         photsys=fibermap['PHOTSYS'][star]
-        if not args.color in ['G-R','R-Z', 'GAIA-BP-RP', 'GAIA-G-RP'] :
-            raise ValueError('Unknown color {}'.format(args.color))
         
-        bands=args.color.split("-")
-        if args.color[:4] == 'GAIA':
-            bands=args.color[5:].split("-")
+        if gaia_std:
+            bands=color[5:].split("-")
             model_colors = model_mags['GAIA-'+bands[0]] - model_mags['GAIA-'+bands[1]]
         else:
-            bands=args.color.split("-")            
+            bands=color.split("-")            
             model_colors = model_mags[bands[0]+photsys] - model_mags[bands[1]+photsys]
 
-        color_diff = model_colors - star_unextincted_colors[args.color][star]
+        color_diff = model_colors - star_unextincted_colors[color][star]
         selection = np.abs(color_diff) < args.delta_color
         if np.sum(selection) == 0 :
             log.warning("no model in the selected color range for this star")
@@ -461,7 +488,7 @@ def main(args) :
         selection = np.where(new_selection)[0]
 
         log.info("star#%d fiber #%d, %s = %f, number of pre-selected models = %d/%d"%(
-            star, starfibers[star], args.color, star_unextincted_colors[args.color][star],
+            star, starfibers[star], color, star_unextincted_colors[color][star],
             selection.size, stdflux.shape[0]))
 
         # Match unextincted standard stars to data
@@ -497,10 +524,9 @@ def main(args) :
 
         # Compute final color of dust-extincted model
         photsys=fibermap['PHOTSYS'][star]
-        if not args.color in ['G-R','R-Z','GAIA-BP-RP','GAIA-G-RP']:
-            raise ValueError('Unknown color {}'.format(args.color))
-        if args.color[:4] != 'GAIA':
-            bands=args.color.split("-")
+
+        if not gaia_std:
+            bands=color.split("-")
             model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
             model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
             fitted_model_colors[star] = model_mag1 - model_mag2
@@ -509,9 +535,8 @@ def main(args) :
                 model_magr = model_mag1
             elif bands[1]==ref_mag_name :
                 model_magr = model_mag2
-            gaia_color = False
         else:
-            bands = args.color[5:].split('-')
+            bands = color[5:].split('-')
             model_mag1 = model_filters['GAIA-'+bands[0]].get_ab_magnitude(model*fluxunits, stdwave)
             model_mag2 = model_filters['GAIA-'+bands[1]].get_ab_magnitude(model*fluxunits, stdwave)
             ref_mag_name = 'G'
@@ -521,17 +546,16 @@ def main(args) :
                 model_magr=model_mag2
             else:
                 model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave)
-            gaia_color=True
             
         #- TODO: move this back into normalize_templates, at the cost of
         #- recalculating a model magnitude?
 
-        if gaia_color:
+        if gaia_std:
             # Normalize the best model using reported magnitude
             cur_refmag = star_mags['GAIA-'+ref_mag_name][star]
         else:
             # Normalize the best model using reported magnitude
-            cur_refmag = stars[ref_mag_name][star]
+            cur_refmag = star_mags[ref_mag_name][star]
         scalefac=10**((model_magr - cur_refmag)/2.5)
 
         log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
@@ -552,7 +576,7 @@ def main(args) :
     data['CHI2DOF']=chi2dof[fitted_stars]
     data['REDSHIFT']=redshift[fitted_stars]
     data['COEFF']=linear_coefficients[fitted_stars,:]
-    data['DATA_%s'%args.color]=star_colors[args.color][fitted_stars]
+    data['DATA_%s'%color]=star_colors[color][fitted_stars]
     data['MODEL_%s'%args.color]=fitted_model_colors[fitted_stars]
     data['BLUE_SNR'] = snr['b'][fitted_stars]
     data['RED_SNR']  = snr['r'][fitted_stars]
