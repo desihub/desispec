@@ -6,6 +6,8 @@ Utility functions for desispec IO.
 """
 import os
 import glob
+import time
+import datetime
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -584,3 +586,21 @@ def addkeys(hdr1, hdr2, skipkeys=None):
         else:
             log.debug(f'Skipping {key}')
 
+def iotime_message(readwrite, filename, iotime):
+    """Return standardized I/O timing message for logging
+
+    Args:
+        readwrite (str): either "read" or "write"
+        filename (str): filename that was read or written
+        iotime (float): time in seconds to perform I/O operations
+
+    Returns: I/O timing message to log
+
+    Note: this function does not call log.info() itself so that the logging
+    source file and line number can be associated with the I/O function itself
+    instead of this utility formatting function.
+    """
+    basename = os.path.basename(filename)
+    timestamp = datetime.datetime.now().isoformat()
+    msg = f"iotime {iotime:.3f} sec to {readwrite} {basename} at {timestamp}"
+    return msg

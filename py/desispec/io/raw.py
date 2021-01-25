@@ -14,6 +14,7 @@ from desiutil.depend import add_dependencies
 
 import desispec.io
 import desispec.io.util
+from .util import iotime_message
 from desispec.util import header2night
 import desispec.preproc
 from desiutil.log import get_logger
@@ -123,7 +124,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
 
     fx.close()
     iotime = time.time() - t0
-    log.info(f'iotime {iotime:.3f} sec to read {filename}')
+    log.info(iotime_message('read', filename, iotime))
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
 
@@ -328,4 +329,4 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         hdus.writeto(filename)
 
     iotime = time.time() - t0
-    log.info(f'iotime {iotime:.3f} sec to write {filename}')
+    log.info(iotime_message('write', filename, iotime))

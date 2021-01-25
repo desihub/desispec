@@ -12,7 +12,7 @@ from astropy.io import fits
 
 from ..xytraceset import XYTraceSet
 from desiutil.log import get_logger
-from .util import makepath
+from .util import makepath, iotime_message
 
 def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
     log=get_logger()
@@ -154,7 +154,7 @@ def read_xytraceset(filename) :
     
     fits_file.close()
     iotime = time.time() - t0
-    log.info(f'iotime {iotime:.3f} sec to read {filename}')
+    log.info(iotime_message('read', filename, iotime))
     
     if wsigmacoef is not None :
         log.warning("Converting deprecated WSIGMA coefficents (in Ang.) into YSIG (in CCD pixels)")
@@ -211,7 +211,7 @@ def write_xytraceset(outfile,xytraceset) :
     os.rename(outfile+'.tmp', outfile)
     iotime = time.time() - t0
     log.info("wrote a xytraceset in {}".format(outfile))
-    log.info(f'iotime {iotime:.3f} sec to write {outfile}')
+    log.info(iotime_message('write', outfile, iotime))
 
     return outfile
 
