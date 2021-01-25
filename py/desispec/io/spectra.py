@@ -53,7 +53,7 @@ def write_spectra(outfile, spec, units=None):
         The absolute path to the file that was written.
 
     """
-
+    log = get_logger()
     outfile = os.path.abspath(outfile)
 
     # Create the parent directory, if necessary.
@@ -146,8 +146,11 @@ def write_spectra(outfile, spec, units=None):
                     if value in spec.scores_comments.keys() :
                         hdu.header[key] = (value, spec.scores_comments[value])
 
+    t0 = time.time()
     all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
     os.rename("{}.tmp".format(outfile), outfile)
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to read {outfile}')
 
     return outfile
 
@@ -167,7 +170,7 @@ def read_spectra(infile, single=False):
         The object containing the data read from disk.
 
     """
-
+    log = get_logger()
     ftype = np.float64
     if single:
         ftype = np.float32
@@ -176,6 +179,7 @@ def read_spectra(infile, single=False):
     if not os.path.isfile(infile):
         raise IOError("{} is not a file".format(infile))
 
+    t0 = time.time()
     hdus = fits.open(infile, mode="readonly")
     nhdu = len(hdus)
 
@@ -243,14 +247,16 @@ def read_spectra(infile, single=False):
                     extra[band] = {}
                 extra[band][type] = native_endian(hdus[h].data.astype(ftype))
 
+    hdus.close()
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to read {infile}')
+
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
 
     spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
         fibermap=fmap, meta=meta, extra=extra, single=single, scores=scores)
-
-    hdus.close()
 
     return spec
 

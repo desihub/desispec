@@ -6,8 +6,9 @@ IO routines for sky.
 """
 from __future__ import absolute_import, division
 import os
+import time
 from astropy.io import fits
-
+from desiutil.log import get_logger
 
 def write_sky(outfile, skymodel, header=None):
     """Write sky model.
@@ -25,6 +26,7 @@ def write_sky(outfile, skymodel, header=None):
     from desiutil.depend import add_dependencies
     from .util import fitsheader, makepath
 
+    log = get_logger()
     outfile = makepath(outfile, 'sky')
 
     #- Convert header to fits.Header if needed
@@ -50,8 +52,11 @@ def write_sky(outfile, skymodel, header=None):
 
     hx[-1].header['BUNIT'] = 'Angstrom'
 
+    t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to write {outfile}')
 
     return outfile
 
@@ -64,11 +69,13 @@ def read_sky(filename) :
     from .meta import findfile
     from .util import native_endian
     from ..sky import SkyModel
+    log = get_logger()
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('sky', night, expid, camera)
 
+    t0 = time.time()
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header
@@ -85,6 +92,8 @@ def read_sky(filename) :
     else :
         throughput_corrections = None
     fx.close()
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to read {filename}')
 
     skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr,stat_ivar=stat_ivar,\
                         throughput_corrections=throughput_corrections)

@@ -6,6 +6,7 @@ I/O routines for Image objects
 """
 
 import os
+import time
 import warnings
 import numpy as np
 
@@ -72,8 +73,11 @@ def write_image(outfile, image, meta=None):
 
         hx.append(fmhdu)
 
+    t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to write {outfile}')
 
     return outfile
 
@@ -81,18 +85,22 @@ def read_image(filename):
     """
     Returns desispec.image.Image object from input file
     """
-    fx = fits.open(filename, uint=True, memmap=False)
-    image = native_endian(fx['IMAGE'].data).astype(np.float64)
-    ivar = native_endian(fx['IVAR'].data).astype(np.float64)
-    mask = native_endian(fx['MASK'].data).astype(np.uint16)
-    camera = fx['IMAGE'].header['CAMERA'].lower()
-    meta = fx['IMAGE'].header
+    log = get_logger()
+    t0 = time.time()
+    with fits.open(filename, uint=True, memmap=False) as fx:
+        image = native_endian(fx['IMAGE'].data).astype(np.float64)
+        ivar = native_endian(fx['IVAR'].data).astype(np.float64)
+        mask = native_endian(fx['MASK'].data).astype(np.uint16)
+        camera = fx['IMAGE'].header['CAMERA'].lower()
+        meta = fx['IMAGE'].header
 
-    if 'READNOISE' in fx:
-        readnoise = native_endian(fx['READNOISE'].data).astype(np.float64)
-    else:
-        readnoise = fx['IMAGE'].header['RDNOISE']
+        if 'READNOISE' in fx:
+            readnoise = native_endian(fx['READNOISE'].data).astype(np.float64)
+        else:
+            readnoise = fx['IMAGE'].header['RDNOISE']
 
-    fx.close()
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to read {filename}')
+
     return Image(image, ivar, mask=mask, readnoise=readnoise,
                  camera=camera, meta=meta)

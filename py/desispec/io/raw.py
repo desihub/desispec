@@ -6,6 +6,7 @@ TODO: move into datamodel after we have verified the format
 '''
 
 import os.path
+import time
 from astropy.io import fits
 import numpy as np
 
@@ -36,7 +37,8 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
     
     log = get_logger()
-    
+
+    t0 = time.time()
     fx = fits.open(filename, memmap=False)
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
@@ -120,6 +122,8 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         kwargs.pop("fill_header")
 
     fx.close()
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to read {filename}')
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
 
@@ -306,6 +310,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         dataHDU = fits.ImageHDU(rawdata, header=header, name=extname)
 
     #- Actually write or update the file
+    t0 = time.time()
     if os.path.exists(filename):
         hdus = fits.open(filename, mode='append', memmap=False)
         if extname in hdus:
@@ -321,3 +326,6 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         hdus.append(fits.PrimaryHDU(None, header=primary_header))
         hdus.append(dataHDU)
         hdus.writeto(filename)
+
+    iotime = time.time() - t0
+    log.info(f'iotime {iotime:.3f} sec to write {filename}')
