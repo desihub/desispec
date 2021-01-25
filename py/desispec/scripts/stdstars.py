@@ -215,25 +215,30 @@ def main(args) :
     if starindices.size == 0:
         log.error("no STD star found in fibermap")
         raise ValueError("no STD star found in fibermap")
-    if n_legacy_std==0 and legacy_color:
-        raise Exception('Specified Legacy survey color, but noe legacy standards')
-    if n_gaia_std==0 and gaia_color:
+    if n_legacy_std == 0 and legacy_color:
+        raise Exception('Specified Legacy survey color, but no legacy standards')
+    if n_gaia_std == 0 and gaia_color:
         raise Exception('Specified gaia color, but no gaia stds')
 
-    if n_legacy_std==0:
+    if n_legacy_std == 0:
         gaia_std = True
         if color is None:
-            color='GAIA-BP-RP'
+            color = 'GAIA-BP-RP'
     else:
         gaia_std = False
         if color is None:
             color='G-R'
-        if n_gaia_std>0:
+        if n_gaia_std > 0:
             log.info('Gaia standards found but not used')
-    log.info("found %d STD stars"%starindices.size)
+    log.info("found %d STD stars" % starindices.size)
 
-    # excessive but just in case
-    if not color in ['G-R','R-Z','GAIA-BP-RP','GAIA-G-RP']:
+    if gaia_std:
+        log.info("Using Gaia standards with color {}".format(color))
+    else:
+        log.info("Using Legacy standards with color {}".format(color))
+    
+    # excessive check but just in case
+    if not color in ['G-R', 'R-Z', 'GAIA-BP-RP', 'GAIA-G-RP']:
         raise ValueError('Unknown color {}'.format(color))
 
     # log.warning("Not using flux errors for Standard Star fits!")
