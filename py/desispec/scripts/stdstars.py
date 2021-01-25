@@ -168,8 +168,8 @@ def main(args) :
                 starfibers=fibermap["FIBER"][starindices]
 
             elif spectrograph != frame.spectrograph :
-                log.error("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
-                raise ValueError("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
+                log.error("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
+                raise ValueError("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
             elif starindices.size != frame_starindices.size or np.sum(starindices!=frame_starindices)>0 :
                 log.error("incompatible fibermap")
                 raise ValueError("incompatible fibermap")
