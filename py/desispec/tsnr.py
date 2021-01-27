@@ -1,5 +1,39 @@
 import numpy as np
+import astropy.io.fits as fits
+import glob
+import numpy as np
 
+from desispec.io.spectra import Spectra
+from astropy.convolution import convolve, Box1DKernel
+
+def get_ensemble(dirpath, smooth=True):
+    paths = glob.glob(dirpath + '/tsnr-ensemble-*.fits')
+    bands = ['B', 'R', 'Z']
+
+    wave = {}
+    flux = {}
+    ivar = {}
+    mask = {}
+    res = {}
+
+    ensembles = {}
+
+    for path in paths:
+        tracer = path.split('/')[-1].split('-')[2]
+        dat    = fits.open(path)
+
+        for band in bands:
+            wave[band] = dat['WAVE_{}'.format(band)].data
+            flux[band] = dat['DFLUX_{}'.format(band)].data
+            ivar[band] = 1.e99 * np.ones_like(flux[band])
+
+            if smooth:
+                flux[band] = convolve(flux[band][0,:], Box1DKernel(125), boundary='extend')
+                flux[band] = flux[band].reshape(1, len(flux[band]))
+                
+        ensembles[tracer] = Spectra(bands, wave, flux, ivar)
+
+    return  ensembles
 
 def quadrant(x, y, frame):
     ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.int)
@@ -16,7 +50,7 @@ def quadrant(x, y, frame):
         else:
             return  'D'
         
-def calc_tsnr(frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix):
+def calc_tsnr(frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemble):
     rdnoise = []
 
     for ifiber in range(len(frame.flux)):
