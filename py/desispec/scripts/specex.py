@@ -293,6 +293,7 @@ def main(args, comm=None):
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
         com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
+        com.extend(['--legendre-deg-wave', "{}".format(1)])
         if args.broken_fibers :
             com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
         if args.debug :
