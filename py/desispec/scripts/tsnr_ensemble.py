@@ -53,29 +53,36 @@ class template_ensemble(object):
                 zrange = (0.6, 1.6)
                 magrange = (22.4, 23.4)
                 tfilter='decam2014-r'
+
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, trans_filter=tfilter, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
                 
             elif tracer == 'qso':
                 maker = desisim.templates.QSO(wave=wave)
                 zrange = (0.5, 3.0)
                 magrange = (21.5, 22.5)
                 tfilter='decam2014-r'
+
+                # Does not recognize trans filter. 
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
                 
             elif tracer == 'lrg':
                 maker = desisim.templates.LRG(wave=wave)
                 zrange = (0.7, 0.9)
                 magrange = (20.5, 21.3)
-                tfilter='decam2014-z' 
+                tfilter='decam2014-z'
+
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, trans_filter=tfilter, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
                 
             elif tracer == 'bgs':
                 maker = desisim.templates.BGS(wave=wave)
                 zrange = (0.01, 0.4)
                 magrange = (19.8, 20.0)
                 tfilter='decam2014-r'
+
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, trans_filter=tfilter, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
                 
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
-
-            flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, trans_filter=tfilter, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
             return  wave, flux, meta, objmeta
         
@@ -122,7 +129,7 @@ class template_ensemble(object):
 
         hdu_list = fits.HDUList(hdu_list)
             
-        hdu_list.writeto('{}/tsnr-ensemble-{}-{:d}.fits'.format(outdir, tracer, nmodel), overwrite=True)
+        hdu_list.writeto('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer), overwrite=True)
                                     
 def main():
     log = get_logger()
