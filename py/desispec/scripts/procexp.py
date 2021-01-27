@@ -16,7 +16,8 @@ from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 from specter.psf.gausshermite  import  GaussHermitePSF
-from desispec.tsnr import get_tsnr
+from desispec.tsnr import calc_tsnr
+from desispec.nea import read_nea
 
 import argparse
 import sys
@@ -33,7 +34,9 @@ def parse(options=None):
     parser.add_argument('--calib', type = str, default = None,
                         help = 'path of DESI calibration fits file')
     parser.add_argument('--psf', type = str, default=None,
-                        help = 'path of DESI calibration psf file (triggers tsnr) ')
+                        help = 'path of DESI calibration psf file (triggers tsnr)')
+    parser.add_argument('--nea', type = str, default=None,
+                        help = 'path of DESI measter nea file (required for tsnr)')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
@@ -42,7 +45,8 @@ def parse(options=None):
                         help = 'Do NOT apply a throughput correction when subtraction the sky')
     parser.add_argument('--no-zero-ivar', action='store_true',
                         help = 'Do NOT set ivar=0 for masked pixels')
-
+    
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -122,10 +126,14 @@ def main(args):
     if args.psf != None:                
         log.info("calculating tsnr")
 
+        if args.nea == None:
+            raise ValueError('master nea file required for tsnr.')
+        
         # construct PSF from file. 
         psf=GaussHermitePSF(args.psf)
-
-        tsnr=get_tsnr(frame, psf) 
+        nea, angperpix=read_nea(args.nea)
+        
+        tsnr=calc_tsnr(frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix) 
         
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
