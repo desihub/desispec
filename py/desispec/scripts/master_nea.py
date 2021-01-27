@@ -16,7 +16,7 @@ import astropy.io.fits as fits
 # https://github.com/desihub/desispec/issues/1006
 sampling           = 10
 
-wmin, wmax, wdelta = 3600, 9824, 0.8
+wmin, wmax, wdelta = 3600., 9824., 0.8
 fullwave           = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
 cslice             = {"b": slice(0, 2751, sampling), "r": slice(2700, 5026, sampling), "z": slice(4900, 7781, sampling)}
 
@@ -44,14 +44,15 @@ def process_one(w, psf, ifiber):
         # Automatically raises an assertion.                                                                                                                                                                                               
         np.testing.assert_almost_equal(norm, 1.0, decimal=7)
 
+        # http://articles.adsabs.harvard.edu/pdf/1983PASP...95..163K                                                                                                                                                                
+        nea       = 1. / np.sum(psf_2d ** 2.)  # [pixel units].                                                                                                                                                                           
+        angperpix = psf.angstroms_per_pixel(ifiber, w)
+
+        return  [nea, angperpix]
+
     except:
-        raise ValueError('Failed on fiber {} and wavelength {} with norm {}.'.format(ifiber, w, norm))
-        
-    # http://articles.adsabs.harvard.edu/pdf/1983PASP...95..163K                                                                                                                                                                       
-    nea       = 1. / np.sum(psf_2d ** 2.)  # [pixel units].                                                                                                                                                                            
-    angperpix = psf.angstroms_per_pixel(ifiber, w)
-            
-    return  [nea, angperpix]
+        print('Failed on fiber {} and wavelength {} [{} to {} limit] with norm {}.'.format(ifiber, w, psf._wmin_spec[ifiber], psf._wmax_spec[ifiber], norm))        
+        return [-99., -99.]
 
 def main(args):
     log  = get_logger()
@@ -85,6 +86,15 @@ def main(args):
     neas = np.array(neas)
     angperpix = np.array(angperpix)
 
+    # Patch failures.
+    log.info('Patching failures of psf norm. with median nea.')
+    
+    med_nea = np.median(neas)
+    med_angperpix = np.median(angperpix)
+
+    neas[neas == -99.] = med_nea
+    angperpix[angperpix == -99.] = med_angperpix
+    
     hdr  = fits.Header()
     hdr['MASTERPSF'] = args.infile
     hdr['CAMERA'] = cam
