@@ -39,10 +39,14 @@ def process_one(w, psf, ifiber):
     # Normalized to one by definition (TBC, again).                                                                                                                                                                                    
     # dA = 1.0 [pixel units]                                                                                                                                                                                                           
     norm = np.sum(psf_2d)
-            
-    # Automatically raises an assertion.                                                                                                                                                                                               
-    np.testing.assert_almost_equal(norm, 1.0, decimal=7)
-            
+
+    try:
+        # Automatically raises an assertion.                                                                                                                                                                                               
+        np.testing.assert_almost_equal(norm, 1.0, decimal=7)
+
+    except:
+        raise ValueError('Failed on fiber {} and wavelength {} with norm {}.'.format(ifiber, w, norm))
+        
     # http://articles.adsabs.harvard.edu/pdf/1983PASP...95..163K                                                                                                                                                                       
     nea       = 1. / np.sum(psf_2d ** 2.)  # [pixel units].                                                                                                                                                                            
     angperpix = psf.angstroms_per_pixel(ifiber, w)
@@ -85,7 +89,7 @@ def main(args):
     hdr['MASTERPSF'] = args.infile
     hdr['CAMERA'] = cam
     
-    hdu0 = fits.PrimaryHDU(header=hdr)
+    hdu0 = fits.PrimaryHDU()
     hdu1 = fits.ImageHDU(wave, name='WAVELENGTH') 
     hdu2 = fits.ImageHDU(neas, name='NEA')
     hdu3 = fits.ImageHDU(angperpix, name='ANGPERPIX')

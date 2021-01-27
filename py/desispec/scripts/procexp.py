@@ -1,4 +1,3 @@
-
 """
 This script processes an exposure by applying fiberflat, sky subtraction,
 spectro-photometric calibration depending on input.
@@ -16,6 +15,8 @@ from desiutil.log import get_logger
 from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
+from specter.psf.gausshermite  import  GaussHermitePSF
+from desispec.tsnr import get_tsnr
 
 import argparse
 import sys
@@ -118,44 +119,14 @@ def main(args):
         frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
-    def quadrant(x, y, frame):
-        ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.int)
-
-        if (x < (ccdsizes[0] / 2)):
-            if (y < (ccdsizes[1] / 2)):
-                return  'A'
-            else:
-                return  'C'
-
-        else:
-            if (y < (ccdsizes[1] / 2)):
-                return  'B'
-            else:
-                return  'D'             
-        
-    if args.psf != None:
-        import numpy as np
-        
-        from specter.psf.gausshermite  import  GaussHermitePSF
-
-        
+    if args.psf != None:                
         log.info("calculating tsnr")
 
         # construct PSF from file. 
         psf=GaussHermitePSF(args.psf)
 
-        rdnoise = []
+        tsnr=get_tsnr(frame, psf) 
         
-        for ifiber in range(len(frame.flux)):        
-            # quadrants for readnoise. 
-            psf_wave = np.median(frame.wave)
-
-            x, y     = psf.xy(ifiber, psf_wave)
-            ccd_quad = quadrant(x, y, frame)
-            rdnoise.append(frame.meta['OBSRDN{}'.format(ccd_quad)])
-
-        rdnoise = np.array(rdnoise)
-            
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
