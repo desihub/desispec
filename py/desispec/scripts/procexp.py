@@ -31,6 +31,8 @@ def parse(options=None):
                         help = 'path of DESI sky fits file')
     parser.add_argument('--calib', type = str, default = None,
                         help = 'path of DESI calibration fits file')
+    parser.add_argument('--psf', type = str, default=None,
+                        help = 'path of DESI calibration psf file (triggers tsnr) ')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
@@ -116,6 +118,44 @@ def main(args):
         frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
+    def quadrant(x, y, frame):
+        ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.int)
+
+        if (x < (ccdsizes[0] / 2)):
+            if (y < (ccdsizes[1] / 2)):
+                return  'A'
+            else:
+                return  'C'
+
+        else:
+            if (y < (ccdsizes[1] / 2)):
+                return  'B'
+            else:
+                return  'D'             
+        
+    if args.psf != None:
+        import numpy as np
+        
+        from specter.psf.gausshermite  import  GaussHermitePSF
+
+        
+        log.info("calculating tsnr")
+
+        # construct PSF from file. 
+        psf=GaussHermitePSF(args.psf)
+
+        rdnoise = []
+        
+        for ifiber in range(len(frame.flux)):        
+            # quadrants for readnoise. 
+            psf_wave = np.median(frame.wave)
+
+            x, y     = psf.xy(ifiber, psf_wave)
+            ccd_quad = quadrant(x, y, frame)
+            rdnoise.append(frame.meta['OBSRDN{}'.format(ccd_quad)])
+
+        rdnoise = np.array(rdnoise)
+            
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
