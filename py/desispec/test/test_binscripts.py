@@ -6,6 +6,7 @@ from uuid import uuid4
 import numpy as np
 
 from astropy.io import fits
+from astropy.table import Table
 
 from desitarget.targetmask import desi_mask
 from desispec.resolution import Resolution
@@ -17,7 +18,9 @@ from desispec.util import runcmd
 import desispec.scripts
 import desispec.scripts.sky
 import desispec.scripts.fiberflat
+import desispec.scripts.stdstars
 import desispec.scripts.fluxcalibration
+from desispec.test.util import get_frame_data, get_models
 
 class TestBinScripts(unittest.TestCase):
 
@@ -31,6 +34,7 @@ class TestBinScripts(unittest.TestCase):
         cls.framefile = 'frame-'+id+'.fits'
         cls.fiberflatfile = 'fiberflat-'+id+'.fits'
         cls.fibermapfile = 'fibermap-'+id+'.fits'
+        cls.modelfile ='stdstar_templates-'+id+'.fits'
         cls.skyfile = 'sky-'+id+'.fits'
         cls.stdfile = 'std-'+id+'.fits'
         cls.qa_calib_file = 'qa-calib-'+id+'.yaml'
@@ -84,7 +88,7 @@ class TestBinScripts(unittest.TestCase):
         """Cleanup in case tests crashed and left files behind"""
         for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, \
             cls.skyfile, cls.calibfile, cls.stdfile, cls.qa_calib_file,
-                         cls.qa_data_file, cls.qafig]:
+                         cls.qa_data_file, cls.modelfile, cls.qafig]:
             if os.path.exists(filename):
                 os.remove(filename)
         if cls.origPath is None:
@@ -92,33 +96,60 @@ class TestBinScripts(unittest.TestCase):
         else:
             os.environ['PYTHONPATH'] = cls.origPath
 
-    def _write_frame(self, flavor='none', camera='b', expid=1, night='20160607'):
+    def _write_frame(self, flavor='none', camera='b', expid=1, night='20160607',gaia=False):
         """Write a fake frame"""
         flux = np.ones((self.nspec, self.nwave))
-        ivar = np.ones((self.nspec, self.nwave))
+        ivar = np.ones((self.nspec, self.nwave))*100 # S/N=10
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        fibermap = self._get_fibermap()
+        fibermap = self._get_fibermap(gaia=gaia)
         frame = Frame(self.wave, flux, ivar, mask, Rdata, fibermap=fibermap,
                       meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night, EXPTIME=1000.))
         io.write_frame(self.framefile, frame)
 
-    def _write_fiberflat(self):
+    def _write_models(self):
+        wav, mods = get_models(wavemin=2900,wavemax=11000)
+        nmod = len(mods)
+        tid,logg,feh,teff=[np.arange(nmod) for _ in range(4)]
+        tab = Table({'TEMPLATEID':tid,
+                          'LOGG':logg,
+                          'FEH':feh,
+                          'TEFF':teff})
+        fits.HDUList([fits.PrimaryHDU(mods),
+                      fits.BinTableHDU(tab),
+                      fits.ImageHDU(wav)
+                      ]).writeto(self.modelfile, overwrite=True)
+        
+    def _write_fiberflat(self, camera=None):
         """Write a fake fiberflat"""
         fiberflat = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         meanspec = np.ones(self.nwave)
         ff = FiberFlat(self.wave, fiberflat, ivar, mask, meanspec)
-        io.write_fiberflat(self.fiberflatfile, ff)
+        if camera is not None:
+            hdr=fits.Header()
+            hdr['CAMERA']=camera
+        else:
+            hdr=None
+        io.write_fiberflat(self.fiberflatfile, ff, hdr)
 
-    def _get_fibermap(self):
+    def _get_fibermap(self, gaia=False):
         fibermap = io.empty_fibermap(self.nspec, 1500)
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['DESI_TARGET'][i] = desi_mask.SKY
             fibermap['OBJTYPE'][i+1] = 'TGT'
             fibermap['DESI_TARGET'][i+1] = desi_mask.STD_FAINT
+            if gaia:
+                fibermap['GAIA_PHOT_G_MEAN_MAG'][i+1] =15
+                fibermap['GAIA_PHOT_BP_MEAN_MAG'][i+1] =15
+                fibermap['GAIA_PHOT_RP_MEAN_MAG'][i+1] =15
+            if not gaia:
+                fibermap['FLUX_G'][i+1] =100
+                fibermap['FLUX_R'][i+1] =100
+                fibermap['FLUX_Z'][i+1] =100
+            
         return fibermap
 
     def _write_fibermap(self):
@@ -126,13 +157,18 @@ class TestBinScripts(unittest.TestCase):
         fibermap = self._get_fibermap()
         io.write_fibermap(self.fibermapfile, fibermap)
 
-    def _write_skymodel(self):
+    def _write_skymodel(self, camera=None):
         """Write a fake SkyModel"""
         skyflux = np.ones((self.nspec, self.nwave))*0.1  # Must be less 1
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         sky = SkyModel(self.wave, skyflux, ivar, mask, nrej=1)
-        io.write_sky(self.skyfile, sky)
+        if camera is not None:
+            hdr=fits.Header()
+            hdr['CAMERA']=camera
+        else:
+            hdr=None
+        io.write_sky(self.skyfile, sky, hdr)
 
     def _write_stdstars(self):
         """Write a fake StdStar model file"""
@@ -192,6 +228,57 @@ class TestBinScripts(unittest.TestCase):
         self.assertTrue(np.all(ff1.wave == ff2.wave))
         self.assertTrue(np.all(ff1.fibers == ff2.fibers))        
 
+    def test_fit_stdstars(self):
+        """
+        Tests desi_fit_stdstars --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        """
+        self._write_frame(flavor='science', camera='b0')
+        self._write_fiberflat(camera='b0')
+        self._write_skymodel(camera='b0')
+        self._write_models()
+#        import os
+#        os.kill(os.getpid(),9)
+        cmd = "{} {}/desi_fit_stdstars --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
+            sys.executable, self.binDir, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
+        inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
+        outputs  = [ self.stdfile]
+        err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+        
+        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+
+        #- Remove outputs and call again via function instead of system call
+        self._remove_files(outputs) 
+        args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
+        err = runcmd(desispec.scripts.stdstars.main, args=[args,],
+            inputs=inputs, outputs=outputs, clobber=True)
+        self.assertEqual(err, None)
+
+    def test_fit_stdstars_gaia(self):
+        """
+        Tests desi_fit_stdstars --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        """
+        self._write_frame(flavor='science', camera='b0', gaia=True)
+        self._write_fiberflat(camera='b0')
+        self._write_skymodel(camera='b0')
+        self._write_models()
+#        import os
+#        os.kill(os.getpid(),9)
+        cmd = "{} {}/desi_fit_stdstars --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
+            sys.executable, self.binDir, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
+        inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
+        outputs  = [ self.stdfile]
+        err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
+        
+        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+
+        #- Remove outputs and call again via function instead of system call
+        self._remove_files(outputs) 
+        args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
+        err = runcmd(desispec.scripts.stdstars.main, args=[args,],
+            inputs=inputs, outputs=outputs, clobber=True)
+        self.assertEqual(err, None)
+
+        
     def test_compute_fluxcalib(self):
         """
         Tests desi_compute_sky --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
