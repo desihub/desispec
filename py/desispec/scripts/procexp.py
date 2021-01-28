@@ -18,6 +18,7 @@ from desispec.fiberbitmasking import get_fiberbitmasked_frame
 from specter.psf.gausshermite  import  GaussHermitePSF
 from desispec.tsnr import calc_tsnr, get_ensemble
 from desispec.nea import read_nea
+from desispec.specscore import append_frame_scores
 
 import argparse
 import sys
@@ -57,7 +58,6 @@ def parse(options=None):
 
 
 def main(args):
-
     log = get_logger()
 
     if (args.fiberflat is None) and (args.sky is None) and (args.calib is None):
@@ -132,12 +132,23 @@ def main(args):
 
         if args.ensembledir == None:
             raise ValueError('template ensemble files required for tsnr.')
+
+        cam=args.infile.split('/')[-1].split('-')[1]
+        band=cam[0]
+        bands=[band]
         
         # construct PSF from file. 
         psf=GaussHermitePSF(args.psf)
         nea, angperpix=read_nea(args.nea)
-        ensemble=get_ensemble(args.ensembledir)        
-        tsnr=calc_tsnr(frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemble) 
+        ensemble=get_ensemble(args.ensembledir, bands=bands)        
+        tsnrs=calc_tsnr(bands, frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemble) 
+
+        for tracer in tsnrs.keys():            
+            key = tracer.upper() + 'TSNR_{}'.format(band.upper())
+            score = {key: tsnrs[tracer][band]}
+            comments={key: ''}
+            
+            append_frame_scores(frame,score,comments,overwrite=True)
         
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)

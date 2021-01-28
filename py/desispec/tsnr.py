@@ -6,9 +6,8 @@ import numpy as np
 from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
 
-def get_ensemble(dirpath, smooth=True):
+def get_ensemble(dirpath, bands, smooth=True):
     paths = glob.glob(dirpath + '/tsnr-ensemble-*.fits')
-    bands = ['B', 'R', 'Z']
 
     wave = {}
     flux = {}
@@ -17,14 +16,14 @@ def get_ensemble(dirpath, smooth=True):
     res = {}
 
     ensembles = {}
-
+    
     for path in paths:
-        tracer = path.split('/')[-1].split('-')[2]
+        tracer = path.split('/')[-1].split('-')[2].replace('.fits','')
         dat    = fits.open(path)
 
-        for band in bands:
-            wave[band] = dat['WAVE_{}'.format(band)].data
-            flux[band] = dat['DFLUX_{}'.format(band)].data
+        for band in bands:            
+            wave[band] = dat['WAVE_{}'.format(band.upper())].data
+            flux[band] = dat['DFLUX_{}'.format(band.upper())].data
             ivar[band] = 1.e99 * np.ones_like(flux[band])
 
             if smooth:
@@ -50,10 +49,13 @@ def quadrant(x, y, frame):
         else:
             return  'D'
         
-def calc_tsnr(frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemble):
+def calc_tsnr(bands, frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemble):
+    nspec, nwave = fluxcalib.calib.shape
+    
+    fibers = np.arange(nspec)
     rdnoise = []
 
-    for ifiber in range(len(frame.flux)):
+    for ifiber in fibers:
         # quadrants for readnoise.                                                                                                                   
         psf_wave = np.median(frame.wave)
         
@@ -62,24 +64,35 @@ def calc_tsnr(frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemb
         rdnoise.append(frame.meta['OBSRDN{}'.format(ccd_quad)])
 
     # rdnoise by fiber. 
-    rdnoise = np.array(rdnoise)
+    rdnoise = np.array(rdnoise)    
 
-    '''
-    dflux   = np.array(dtemplate_flux, copy=True)
+    tsnrs = {}
 
-    # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
-    dflux  *= flux_calib    # [e/A]                                                                                                                                                                
+    npix = nea(fibers, frame.wave)
+    angperpix = angperpix(fibers, frame.wave)
 
-    # Wavelength dependent fiber flat;  Multiply or divide - check with Julien.
-    result  = dflux * fiberflat
-    result  = result**2.
+    for tracer in ensemble.keys():
+        tsnrs[tracer] = {}
+        
+        for band in bands:
+            wave = ensemble[tracer].wave[band]
+            dflux = ensemble[tracer].flux[band]
 
-    # RDNOISE & NPIX assumed wavelength independent.
-    denom   = readnoise**2 * npix / angstroms_per_pixel + fiberflat * sky_flux
-    result /= denom
-    
-    # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
-    return  np.sum(result)
-    '''
-    
-    return  None
+            np.allclose(frame.wave, wave)
+            
+            # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
+            # Broadcast.
+            dflux = dflux * fluxcalib.calib # [e/A]
+            
+            # Wavelength dependent fiber flat;  Multiply or divide - check with Julien.
+            result = dflux * fiberflat.fiberflat
+            result = result**2.
+            
+            # RDNOISE & NPIX assumed wavelength independent.
+            denom   = rdnoise[:,None]**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
+            result /= denom
+            
+            # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
+            tsnrs[tracer][band] = np.sum(result, axis=1)
+
+    return  tsnrs
