@@ -64,6 +64,9 @@ def quadrant(x, y, frame):
             return  'B'
         else:
             return  'D'
+
+def var_model(rdnoise, npix, angperpix, fiberflat, skymodel):
+    return  rdnoise[:,None]**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
         
 def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, skymodel):
     psf=GaussHermitePSF(psfpath)
@@ -109,8 +112,7 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, 
             result = dflux * fiberflat.fiberflat
             result = result**2.
             
-            # RDNOISE & NPIX assumed wavelength independent.
-            denom   = rdnoise[:,None]**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
+            denom   = var_model(rdnoise, npix, angperpix, fiberflat, skymodel)
             result /= denom
             
             # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
