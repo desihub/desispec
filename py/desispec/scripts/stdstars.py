@@ -211,26 +211,31 @@ def main(args) :
         else:
             legacy_color = True
             gaia_color = False
+        if n_legacy_std == 0 and legacy_color:
+            raise Exception('Specified Legacy survey color, but no legacy standards')
+        if n_gaia_std == 0 and gaia_color:
+            raise Exception('Specified gaia color, but no gaia stds')
+
 
     if starindices.size == 0:
         log.error("no STD star found in fibermap")
         raise ValueError("no STD star found in fibermap")
-    if n_legacy_std == 0 and legacy_color:
-        raise Exception('Specified Legacy survey color, but no legacy standards')
-    if n_gaia_std == 0 and gaia_color:
-        raise Exception('Specified gaia color, but no gaia stds')
+    log.info("found %d STD stars" % starindices.size)
 
     if n_legacy_std == 0:
         gaia_std = True
         if color is None:
             color = 'GAIA-BP-RP'
+        gaia_color = True
+        legacy_color=False
     else:
         gaia_std = False
         if color is None:
             color='G-R'
+        gaia_color = False
+        legacy_color = True
         if n_gaia_std > 0:
             log.info('Gaia standards found but not used')
-    log.info("found %d STD stars" % starindices.size)
 
     if gaia_std:
         log.info("Using Gaia standards with color {}".format(color))
