@@ -50,27 +50,36 @@ def read_nea(path):
 
     return  nea, angperpix
 
-def quadrant(x, y, frame):
-    ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.int)
+def fb_rdnoise(fibers, frame, psf):
+    ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.float)
 
-    if (x < (ccdsizes[0] / 2)):
-        if (y < (ccdsizes[1] / 2)):
-            return  'A'
+    xtrans = ccdsizes[0] / 2.
+    ytrans = ccdsizes[1] / 2. 
+
+    rdnoise = np.zeros_like(frame.flux)
+    
+    for ifiber in fibers:
+        wave_lim = psf.wavelength(ispec=ifiber, y=ytrans)
+        x = psf.x(ifiber, wave_lim)
+
+        # A | C.  
+        if x < xtrans:
+            rdnoise[ifiber, frame.wave <  wave_lim] = frame.meta['OBSRDNA']
+            rdnoise[ifiber, frame.wave >= wave_lim] = frame.meta['OBSRDNC']
+
+        # B | D
         else:
-            return  'C'
+            rdnoise[ifiber, frame.wave <  wave_lim] = frame.meta['OBSRDNB']
+            rdnoise[ifiber, frame.wave >= wave_lim] = frame.meta['OBSRDND']
 
-    else:
-        if (y < (ccdsizes[1] / 2)):
-            return  'B'
-        else:
-            return  'D'
-
+    return rdnoise
+    
 def var_model(rdnoise, npix, angperpix, fiberflat, skymodel, components=False):
     if components:
-        return (rdnoise[:,None]**2 * npix / angperpix, fiberflat.fiberflat * skymodel.flux)
+        return (rdnoise**2 * npix / angperpix, fiberflat.fiberflat * skymodel.flux)
 
     else:
-        return  rdnoise[:,None]**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
+        return  rdnoise**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
         
 def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, skymodel):
     psf=GaussHermitePSF(psfpath)
@@ -81,19 +90,9 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, 
     nspec, nwave = fluxcalib.calib.shape
     
     fibers = np.arange(nspec)
-    rdnoise = []
-
-    for ifiber in fibers:
-        # quadrants for readnoise.                                                                                                                   
-        psf_wave = np.median(frame.wave)
-        
-        x, y     = psf.xy(ifiber, psf_wave)
-        ccd_quad = quadrant(x, y, frame)
-        rdnoise.append(frame.meta['OBSRDN{}'.format(ccd_quad)])
-
-    # rdnoise by fiber. 
-    rdnoise = np.array(rdnoise)    
-
+    rdnoise = fb_rdnoise(fibers, frame, psf)
+    
+    #
     tsnrs = {}
 
     npix = nea(fibers, frame.wave)
