@@ -67,6 +67,10 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     except (KeyError, ValueError, TypeError):
         header['NIGHT'] = header2night(header)
 
+    #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
+    primary_header['NIGHT'] = int(primary_header['NIGHT'])
+    header['NIGHT'] = int(header['NIGHT'])
+
     if primary_header['NIGHT'] != header['NIGHT']:
         msg = 'primary header NIGHT={} != camera header NIGHT={}'.format(
             primary_header['NIGHT'], header['NIGHT'])
