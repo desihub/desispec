@@ -15,9 +15,7 @@ from desiutil.log import get_logger
 from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
-from specter.psf.gausshermite  import  GaussHermitePSF
-from desispec.tsnr import calc_tsnr, get_ensemble
-from desispec.io.nea import read_nea
+from desispec.tsnr import calc_tsnr, get_ensemble, read_nea
 from desispec.specscore import append_frame_scores
 
 import argparse
@@ -137,11 +135,7 @@ def main(args):
         band=cam[0]
         bands=[band]
         
-        # construct PSF from file. 
-        psf=GaussHermitePSF(args.psf)
-        nea, angperpix=read_nea(args.nea)
-        ensemble=get_ensemble(args.ensembledir, bands=bands)        
-        tsnrs=calc_tsnr(bands, frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemble) 
+        tsnrs=calc_tsnr(bands, args.nea, args.ensembledir, args.psf, frame, fluxcalib, fiberflat, skymodel) 
 
         for tracer in tsnrs.keys():            
             key = tracer.upper() + 'TSNR_{}'.format(band.upper())

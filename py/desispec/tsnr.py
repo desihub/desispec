@@ -5,6 +5,8 @@ import numpy as np
 
 from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
+from scipy.interpolate import RectBivariateSpline
+from specter.psf.gausshermite  import  GaussHermitePSF
 
 def get_ensemble(dirpath, bands, smooth=True):
     paths = glob.glob(dirpath + '/tsnr-ensemble-*.fits')
@@ -34,6 +36,19 @@ def get_ensemble(dirpath, bands, smooth=True):
 
     return  ensembles
 
+def read_nea(path):
+    nea=fits.open(path)
+    wave=nea['WAVELENGTH'].data
+    angperpix=nea['ANGPERPIX'].data
+    nea=nea['NEA'].data
+
+    fiber = np.arange(len(nea))
+
+    nea = RectBivariateSpline(fiber, wave, nea)
+    angperpix = RectBivariateSpline(fiber, wave, angperpix)
+
+    return  nea, angperpix
+
 def quadrant(x, y, frame):
     ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.int)
 
@@ -49,7 +64,12 @@ def quadrant(x, y, frame):
         else:
             return  'D'
         
-def calc_tsnr(bands, frame, psf, fluxcalib, fiberflat, skymodel, nea, angperpix, ensemble):
+def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, skymodel):
+    psf=GaussHermitePSF(psfpath)
+    
+    nea, angperpix=read_nea(neadir)
+    ensemble=get_ensemble(ensembledir, bands=bands)
+
     nspec, nwave = fluxcalib.calib.shape
     
     fibers = np.arange(nspec)
