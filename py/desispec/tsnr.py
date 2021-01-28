@@ -65,8 +65,12 @@ def quadrant(x, y, frame):
         else:
             return  'D'
 
-def var_model(rdnoise, npix, angperpix, fiberflat, skymodel):
-    return  rdnoise[:,None]**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
+def var_model(rdnoise, npix, angperpix, fiberflat, skymodel, components=False):
+    if components:
+        return (rdnoise[:,None]**2 * npix / angperpix, fiberflat.fiberflat * skymodel.flux)
+
+    else:
+        return  rdnoise[:,None]**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
         
 def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, skymodel):
     psf=GaussHermitePSF(psfpath)
