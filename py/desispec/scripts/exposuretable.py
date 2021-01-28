@@ -8,7 +8,7 @@ from astropy.io import fits
 
 from desispec.workflow.exptable import summarize_exposure, default_exptypes_for_exptable, get_survey_definitions,\
                                        instantiate_exposure_table, get_exposure_table_name, night_to_month, \
-                                       get_surveynum, get_exposure_table_path, get_exposure_table_name, night_to_month, \
+                                       get_surveyname, get_exposure_table_path, get_exposure_table_name, night_to_month, \
                                        get_exposure_table_column_defs
 from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin, get_printable_banner
 from desispec.workflow.tableio import write_table
@@ -59,11 +59,11 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
         #night_path = pathjoin(path_to_data,str(night))
 
         ## Define the "Survey", for now this is just based on night
-        survey_num = get_surveynum(night,survey_def)
+        survey_num = get_surveyname(night, survey_def)
 
         ## Loop through all exposures on disk
         for exp in listpath(path_to_data,str(night)):
-            rowdict = summarize_exposure(path_to_data, night=night, exp=exp, obstypes=obstypes, surveynum=survey_num, \
+            rowdict = summarize_exposure(path_to_data, night=night, exp=exp, obstypes=obstypes, surveyname=survey_num, \
                                          colnames=colnames, coldefaults=coldefaults, verbosely=verbose)
             if rowdict is not None:
                 ## Add the dictionary of column values as a new row

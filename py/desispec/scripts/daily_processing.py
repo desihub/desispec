@@ -13,7 +13,7 @@ import glob
 from desispec.workflow.tableio import load_tables, write_tables, write_table
 from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, get_printable_banner
 from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
-from desispec.workflow.exptable import default_exptypes_for_exptable, get_surveynum, get_exposure_table_column_defs, \
+from desispec.workflow.exptable import default_exptypes_for_exptable, get_surveyname, get_exposure_table_column_defs, \
                                        get_exposure_table_path, get_exposure_table_name, summarize_exposure
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, get_processing_table_name, erow_to_prow
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
@@ -108,7 +108,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         speed_modifier = 0.1
 
     ## Get context specific variable values
-    surveynum = get_surveynum(night)
+    surveynum = get_surveyname(night)
     nersc_start = nersc_start_time(night=true_night)
     nersc_end = nersc_end_time(night=true_night)
     colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
