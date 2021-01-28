@@ -587,7 +587,7 @@ def main(args) :
     data['REDSHIFT']=redshift[fitted_stars]
     data['COEFF']=linear_coefficients[fitted_stars,:]
     data['DATA_%s'%color]=star_colors[color][fitted_stars]
-    data['MODEL_%s'%args.color]=fitted_model_colors[fitted_stars]
+    data['MODEL_%s'%color]=fitted_model_colors[fitted_stars]
     data['BLUE_SNR'] = snr['b'][fitted_stars]
     data['RED_SNR']  = snr['r'][fitted_stars]
     data['NIR_SNR']  = snr['z'][fitted_stars]
