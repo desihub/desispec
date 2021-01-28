@@ -17,7 +17,7 @@ from desispec.specscore import compute_and_append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 from specter.psf.gausshermite  import  GaussHermitePSF
 from desispec.tsnr import calc_tsnr, get_ensemble
-from desispec.nea import read_nea
+from desispec.io.nea import read_nea
 from desispec.specscore import append_frame_scores
 
 import argparse
