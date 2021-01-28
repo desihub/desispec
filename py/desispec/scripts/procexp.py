@@ -16,7 +16,6 @@ from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 from desispec.tsnr import calc_tsnr, get_ensemble, read_nea
-from desispec.specscore import append_frame_scores
 
 import argparse
 import sys
@@ -135,15 +134,8 @@ def main(args):
         band=cam[0]
         bands=[band]
         
-        tsnrs=calc_tsnr(bands, args.nea, args.ensembledir, args.psf, frame, fluxcalib, fiberflat, skymodel) 
+        calc_tsnr(bands, args.nea, args.ensembledir, args.psf, frame, fluxcalib, fiberflat, skymodel) 
 
-        for tracer in tsnrs.keys():            
-            key = tracer.upper() + 'TSNR_{}'.format(band.upper())
-            score = {key: tsnrs[tracer][band]}
-            comments={key: ''}
-            
-            append_frame_scores(frame,score,comments,overwrite=True)
-        
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)

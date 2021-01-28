@@ -7,6 +7,7 @@ from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
 from scipy.interpolate import RectBivariateSpline
 from specter.psf.gausshermite  import  GaussHermitePSF
+from desispec.specscore import append_frame_scores
 
 def get_ensemble(dirpath, bands, smooth=True):
     paths = glob.glob(dirpath + '/tsnr-ensemble-*.fits')
@@ -115,4 +116,9 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, 
             # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
             tsnrs[tracer][band] = np.sum(result, axis=1)
 
-    return  tsnrs
+    for tracer in tsnrs.keys():
+        key = tracer.upper() + 'TSNR_{}'.format(band.upper())
+        score = {key: tsnrs[tracer][band]}
+        comments={key: ''}
+
+        append_frame_scores(frame,score,comments,overwrite=True)
