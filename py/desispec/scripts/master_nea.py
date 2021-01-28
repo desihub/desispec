@@ -14,7 +14,7 @@ import copy
 import astropy.io.fits as fits
 
 # https://github.com/desihub/desispec/issues/1006
-sampling           = 10
+sampling           = 500
 
 wmin, wmax, wdelta = 3600., 9824., 0.8
 fullwave           = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
@@ -35,17 +35,19 @@ def parse(options=None):
 
 def process_one(w, psf, ifiber):    
     psf_2d = psf.pix(ispec=ifiber, wavelength=w)
-
+    psf_1d = np.sum(psf_2d, axis=0)
+    
     # Normalized to one by definition (TBC, again).                                                                                                                                                                                    
     # dA = 1.0 [pixel units]                                                                                                                                                                                                           
-    norm = np.sum(psf_2d)
-
+    norm = np.sum(psf_1d)
+    psf_1d /= norm
+    
     try:
         # Automatically raises an assertion.                                                                                                                                                                                               
-        np.testing.assert_almost_equal(norm, 1.0, decimal=7)
+        # np.testing.assert_almost_equal(norm, 1.0, decimal=7)
 
         # http://articles.adsabs.harvard.edu/pdf/1983PASP...95..163K                                                                                                                                                                
-        nea       = 1. / np.sum(psf_2d ** 2.)  # [pixel units].                                                                                                                                                                           
+        nea       = 1. / np.sum(psf_1d**2.)  # [pixel units].                                                                                                                                                                           
         angperpix = psf.angstroms_per_pixel(ifiber, w)
 
         return  [nea, angperpix]
@@ -94,6 +96,13 @@ def main(args):
 
     neas[neas == -99.] = med_nea
     angperpix[angperpix == -99.] = med_angperpix
+
+    # Convert to float 32.
+    neas = neas.astype(np.float32)
+    angperpix = angperpix.astype(np.float32)
+
+    print('MEDIAN NEA: {:.3f}'.format(np.median(neas)))
+    print('MEDIAN ANG PER PIX: {:.3f}'.format(np.median(angperpix)))
     
     hdr  = fits.Header()
     hdr['MASTERPSF'] = args.infile

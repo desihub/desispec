@@ -76,10 +76,10 @@ def fb_rdnoise(fibers, frame, psf):
     
 def var_model(rdnoise, npix, angperpix, fiberflat, skymodel, components=False):
     if components:
-        return (rdnoise**2 * npix / angperpix, fiberflat.fiberflat * skymodel.flux)
+        return ((npix / angperpix) * rdnoise**2, fiberflat.fiberflat * skymodel.flux)
 
     else:
-        return  rdnoise**2 * npix / angperpix + fiberflat.fiberflat * skymodel.flux
+        return (npix / angperpix) * rdnoise**2 + fiberflat.fiberflat * skymodel.flux
         
 def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, skymodel):
     psf=GaussHermitePSF(psfpath)
