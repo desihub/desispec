@@ -40,8 +40,10 @@ def parse(options=None):
                         help = 'apply a reduced chi2 cut for the selection of stars')
     parser.add_argument('--chi2cut-nsig', type = float, default = 0., required=False,
                         help = 'discard n-sigma outliers from the reduced chi2 of the standard star fit')
+    parser.add_argument('--color', type = str, default = None, required=False,
+                        help = 'color used for filtering. Can be G-R R-Z or GAIA-BP-RP or GAIA-G-RP')
     parser.add_argument('--min-color', type = float, default = None, required=False,
-                        help = 'only consider stars with g-r greater than this')
+                        help = 'only consider stars with color greater than this')
     parser.add_argument('--delta-color-cut', type = float, default = 0.2, required=False,
                         help = 'discard model stars with different broad-band color from imaging')
     parser.add_argument('--outfile', type = str, default = None, required=True,
@@ -96,7 +98,7 @@ def main(args) :
     log.info("compute flux calibration")
 
     # read models
-    model_flux,model_wave,model_fibers,model_metadata=read_stdstar_models(args.models)
+    model_flux, model_wave, model_fibers, model_metadata=read_stdstar_models(args.models)
 
     ok=np.ones(len(model_metadata),dtype=bool)
 
@@ -108,23 +110,45 @@ def main(args) :
         if np.any(bad) :
             log.info(" discard {} stars with CHI2DOF= {}".format(np.sum(bad),list(model_metadata["CHI2DOF"][bad])))
 
+    legacy_filters = ('G-R', 'R-Z')
+    gaia_filters = ('GAIA-BP-RP', 'GAIA-G-RP')
+    model_column_list = model_metadata.columns.names
+    if args.color is None:
+        if 'MODEL_G-R' in model_column_list:
+            color = 'G-R'
+        elif 'MODEL_GAIA-BP-RP' in model_column_list:
+            log.info('Using Gaia filters')
+            color ='GAIA-BP-RP'
+        else:
+            log.error("Can't find either G-R or BP-RP color in the model file.")
+            sys.exit(15)
+    else:
+        if args.color not in legacy_filters and args.color not in gaia_filters:
+            log.error('Color name {} is not allowed, must be one of {} {}'.format(args.color, legacy_filters,gaia_filters))
+            sys.exit(14)
+        color = args.color
+        if color not in model_column_list:
+            # This should't happen
+            log.error('The color {} was not computed in the models'.format(color))
+            sys.exit(16)
+ 
     if args.delta_color_cut > 0 :
         log.info("apply cut |delta color|<{}".format(args.delta_color_cut))
-        good = (np.abs(model_metadata["MODEL_G-R"]-model_metadata["DATA_G-R"])<args.delta_color_cut)
+        good = (np.abs(model_metadata["MODEL_"+color]-model_metadata["DATA_"+color])<args.delta_color_cut)
         bad  = ok&(~good)
         ok  &= good
         if np.any(bad) :
-            vals=model_metadata["MODEL_G-R"][bad]-model_metadata["DATA_G-R"][bad]
+            vals=model_metadata["MODEL_"+color][bad]-model_metadata["DATA_"+color][bad]
             log.info(" discard {} stars with dcolor= {}".format(np.sum(bad),list(vals)))
 
     if args.min_color is not None :
-        log.info("apply cut DATA_G-R>{}".format(args.min_color))
-        good = (model_metadata["DATA_G-R"]>args.min_color)
+        log.info("apply cut DATA_{}>{}".format(color, args.min_color))
+        good = (model_metadata["DATA_{}".format(color)]>args.min_color)
         bad  = ok&(~good)
         ok  &= good
         if np.any(bad) :
-            vals=model_metadata["DATA_G-R"][bad]
-            log.info(" discard {} stars with G-R= {}".format(np.sum(bad),list(vals)))
+            vals=model_metadata["DATA_{}".format(color)][bad]
+            log.info(" discard {} stars with {}= {}".format(np.sum(bad),color,list(vals)))
 
     if args.chi2cut_nsig > 0 :
         # automatically reject stars that ar chi2 outliers
