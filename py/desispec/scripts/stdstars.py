@@ -537,32 +537,36 @@ def main(args) :
 
         if not gaia_std:
             bands=color.split("-")
-            model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
-            model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude(model*fluxunits, stdwave)
+            model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
+            model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
+            # see https://github.com/desihub/speclite/issues/34 
+            # to explain copy()
             fitted_model_colors[star] = model_mag1 - model_mag2
             ref_mag_name = 'R'
-            if bands[0]==ref_mag_name:
+            if bands[0] == ref_mag_name:
                 model_magr = model_mag1
-            elif bands[1]==ref_mag_name :
+            elif bands[1] == ref_mag_name :
                 model_magr = model_mag2
+            else:
+                raise Exception("Couldn't find reference mag")
         else:
             bands = color[5:].split('-')
-            model_mag1 = model_filters['GAIA-'+bands[0]].get_ab_magnitude(model*fluxunits, stdwave)
-            model_mag2 = model_filters['GAIA-'+bands[1]].get_ab_magnitude(model*fluxunits, stdwave)
+            model_mag1 = model_filters['GAIA-'+bands[0]].get_ab_magnitude(model*fluxunits, stdwave.copy())
+            model_mag2 = model_filters['GAIA-'+bands[1]].get_ab_magnitude(model*fluxunits, stdwave.copy())
             ref_mag_name = 'G'
-            if bands[0]==ref_mag_name:
+            if bands[0] == ref_mag_name:
                 model_magr= model_mag1
-            elif bands[1]==ref_mag_name:
+            elif bands[1] == ref_mag_name:
                 model_magr=model_mag2
             else:
-                model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave)
+                model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave.copy())
             
         #- TODO: move this back into normalize_templates, at the cost of
         #- recalculating a model magnitude?
 
         if gaia_std:
             # Normalize the best model using reported magnitude
-            cur_refmag = star_mags['GAIA-'+ref_mag_name][star]
+            cur_refmag = star_mags['GAIA-' + ref_mag_name][star]
         else:
             # Normalize the best model using reported magnitude
             cur_refmag = star_mags[ref_mag_name][star]
