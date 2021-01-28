@@ -96,13 +96,13 @@ class TestBinScripts(unittest.TestCase):
         else:
             os.environ['PYTHONPATH'] = cls.origPath
 
-    def _write_frame(self, flavor='none', camera='b', expid=1, night='20160607',gaia=False):
+    def _write_frame(self, flavor='none', camera='b', expid=1, night='20160607',gaia_only=False):
         """Write a fake frame"""
         flux = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))*100 # S/N=10
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        fibermap = self._get_fibermap(gaia=gaia)
+        fibermap = self._get_fibermap(gaia_only=gaia_only)
         frame = Frame(self.wave, flux, ivar, mask, Rdata, fibermap=fibermap,
                       meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night, EXPTIME=1000.))
         io.write_frame(self.framefile, frame)
@@ -134,18 +134,17 @@ class TestBinScripts(unittest.TestCase):
             hdr=None
         io.write_fiberflat(self.fiberflatfile, ff, hdr)
 
-    def _get_fibermap(self, gaia=False):
+    def _get_fibermap(self, gaia_only=False):
         fibermap = io.empty_fibermap(self.nspec, 1500)
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['DESI_TARGET'][i] = desi_mask.SKY
             fibermap['OBJTYPE'][i+1] = 'TGT'
             fibermap['DESI_TARGET'][i+1] = desi_mask.STD_FAINT
-            if gaia:
-                fibermap['GAIA_PHOT_G_MEAN_MAG'][i+1] =15
-                fibermap['GAIA_PHOT_BP_MEAN_MAG'][i+1] =15
-                fibermap['GAIA_PHOT_RP_MEAN_MAG'][i+1] =15
-            if not gaia:
+            fibermap['GAIA_PHOT_G_MEAN_MAG'][i+1] =15
+            fibermap['GAIA_PHOT_BP_MEAN_MAG'][i+1] =15
+            fibermap['GAIA_PHOT_RP_MEAN_MAG'][i+1] =15
+            if not gaia_only:
                 fibermap['FLUX_G'][i+1] =100
                 fibermap['FLUX_R'][i+1] =100
                 fibermap['FLUX_Z'][i+1] =100
@@ -258,7 +257,7 @@ for legacy standards
         Tests desi_fit_stdstars --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         for gaia standards
         """
-        self._write_frame(flavor='science', camera='b0', gaia=True)
+        self._write_frame(flavor='science', camera='b0', gaia_only=True)
         self._write_fiberflat(camera='b0')
         self._write_skymodel(camera='b0')
         self._write_models()
