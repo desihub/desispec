@@ -231,52 +231,52 @@ class TestBinScripts(unittest.TestCase):
     def test_fit_stdstars(self):
         """
         Tests desi_fit_stdstars --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+for legacy standards
         """
         self._write_frame(flavor='science', camera='b0')
         self._write_fiberflat(camera='b0')
         self._write_skymodel(camera='b0')
         self._write_models()
-#        import os
-#        os.kill(os.getpid(),9)
-        cmd = "{} {}/desi_fit_stdstars --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
-            sys.executable, self.binDir, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
-        inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
-        outputs  = [ self.stdfile]
-        err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
-        
-        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+        for opt in ['','--color=R-Z']:
+            cmd = "{} {}/desi_fit_stdstars {} --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
+                sys.executable, self.binDir, opt, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
+            inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
+            outputs  = [ self.stdfile]
+            err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
 
-        #- Remove outputs and call again via function instead of system call
-        self._remove_files(outputs) 
-        args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
-        err = runcmd(desispec.scripts.stdstars.main, args=[args,],
-            inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, None)
+            self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+
+            #- Remove outputs and call again via function instead of system call
+            self._remove_files(outputs) 
+            args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
+            err = runcmd(desispec.scripts.stdstars.main, args=[args,],
+                inputs=inputs, outputs=outputs, clobber=True)
+            self.assertEqual(err, None)
 
     def test_fit_stdstars_gaia(self):
         """
         Tests desi_fit_stdstars --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        for gaia standards
         """
         self._write_frame(flavor='science', camera='b0', gaia=True)
         self._write_fiberflat(camera='b0')
         self._write_skymodel(camera='b0')
         self._write_models()
-#        import os
-#        os.kill(os.getpid(),9)
-        cmd = "{} {}/desi_fit_stdstars --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
-            sys.executable, self.binDir, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
-        inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
-        outputs  = [ self.stdfile]
-        err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
-        
-        self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+        for opt in ['', '--color=GAIA-BP-RP']:
+            cmd = "{} {}/desi_fit_stdstars {} --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
+                sys.executable, self.binDir, opt, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
+            inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]
+            outputs  = [ self.stdfile]
+            err = runcmd(cmd, inputs=inputs, outputs=outputs, clobber=True)
 
-        #- Remove outputs and call again via function instead of system call
-        self._remove_files(outputs) 
-        args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
-        err = runcmd(desispec.scripts.stdstars.main, args=[args,],
-            inputs=inputs, outputs=outputs, clobber=True)
-        self.assertEqual(err, None)
+            self.assertEqual(err, 0, 'FAILED: {}'.format(cmd))
+
+            #- Remove outputs and call again via function instead of system call
+            self._remove_files(outputs) 
+            args = desispec.scripts.stdstars.parse(cmd.split()[2:])        
+            err = runcmd(desispec.scripts.stdstars.main, args=[args,],
+                inputs=inputs, outputs=outputs, clobber=True)
+            self.assertEqual(err, None)
 
         
     def test_compute_fluxcalib(self):
