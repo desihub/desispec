@@ -14,7 +14,6 @@ from astropy.io import fits
 from astropy import units
 from astropy.table import Table
 import astropy.coordinates as acoo
-import astropy.units as auni
 
 
 from desispec import io
@@ -471,8 +470,8 @@ def main(args) :
         # when doing gaia standards, on old tiles the
         # EBV is not set so we fetch from SFD (in original SFD scaling)
         ebv = SFDMap(scaling=1).ebv(acoo.SkyCoord(
-            ra=fibermap['TARGET_RA']*auni.deg,
-            dec=fibermap['TARGET_DEC']*auni.deg))
+            ra=fibermap['TARGET_RA']*units.deg,
+            dec=fibermap['TARGET_DEC']*units.deg))
     else:
         ebv = fibermap['EBV']
     
