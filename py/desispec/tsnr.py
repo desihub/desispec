@@ -8,6 +8,8 @@ from astropy.convolution import convolve, Box1DKernel
 from scipy.interpolate import RectBivariateSpline
 from specter.psf.gausshermite  import  GaussHermitePSF
 from desispec.specscore import append_frame_scores
+from desiutil.log import get_logger
+from scipy.optimize import minimize
 
 def get_ensemble(dirpath, bands, smooth=True):
     paths = glob.glob(dirpath + '/tsnr-ensemble-*.fits')
@@ -73,17 +75,45 @@ def fb_rdnoise(fibers, frame, psf):
             rdnoise[ifiber, frame.wave >= wave_lim] = frame.meta['OBSRDND']
 
     return rdnoise
-    
+
 def var_model(rdnoise, npix, angperpix, fiberflat, skymodel, alpha=1.0, components=False):
     if components:
         return (alpha * npix * (rdnoise / angperpix)**2, fiberflat.fiberflat * skymodel.flux)
 
     else:
         return alpha * npix * (rdnoise / angperpix)**2 + fiberflat.fiberflat * skymodel.flux
-        
-def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, skymodel):
-    psf=GaussHermitePSF(psfpath)
+
+def calc_alpha(frame, fibermap, rdnoise, npix, angperpix, fiberflat, skymodel):
+    '''
+    Model Var = alpha * rdnoise component + sky.
+
+    Calcualte the best-fit alpha using the sky fibers
+    available to the frame. 
+    '''
+
+    sky_indx = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
+    rd_var, sky_var = var_model(rdnoise, npix, angperpix, fiberflat, skymodel, alpha=1.0, components=True)
     
+    def calc_alphavar(alpha):
+        return alpha * rd_var[sky_indx,:] + sky_var[sky_indx,:]
+
+    def alpha_X2(alpha):
+        var = calc_alphavar(alpha)
+        ivar =  1. / var
+        X2 = (frame.ivar[sky_indx,:] - ivar)**2.
+        return np.sum(X2)
+
+    res = minimize(alpha_X2, x0=[1.])
+    alpha = res.x
+
+    return alpha
+
+def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, uframe, fluxcalib, fiberflat, skymodel, fibermap):
+    log = get_logger()
+    
+    psf=GaussHermitePSF(psfpath)
+
+    # Returns bivariate splie to be evaluated at (fiber, wave).
     nea, angperpix=read_nea(neadir)
     ensemble=get_ensemble(ensembledir, bands=bands)
 
@@ -91,13 +121,26 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, 
     
     fibers = np.arange(nspec)
     rdnoise = fb_rdnoise(fibers, frame, psf)
-    
-    #
-    tsnrs = {}
 
+    # Evaluate.
     npix = nea(fibers, frame.wave)
     angperpix = angperpix(fibers, frame.wave)
 
+    for label, x in zip(['RDNOISE', 'NEA', 'ANGPERPIX'], [rdnoise, npix, angperpix]):
+        log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
+
+    # Relative weighting between rdnoise & sky terms to model var. 
+    if fibermap is not None:
+        # alpha calc. introduces calibration dependent frame.ivar dependence. 
+        alpha = calc_alpha(frame, fibermap, rdnoise, npix, angperpix, fiberflat, skymodel)[0]
+        
+    else:
+        alpha = 1.0
+
+    log.info('TSNR alpha = {:.6f}'.format(alpha))
+    
+    tsnrs = {}
+    
     for tracer in ensemble.keys():
         tsnrs[tracer] = {}
         
@@ -115,7 +158,7 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, 
             result = dflux * fiberflat.fiberflat
             result = result**2.
             
-            denom   = var_model(rdnoise, npix, angperpix, fiberflat, skymodel)
+            denom   = var_model(rdnoise, npix, angperpix, fiberflat, skymodel, alpha=alpha)
             result /= denom
             
             # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
@@ -127,3 +170,8 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, fluxcalib, fiberflat, 
         comments={key: ''}
 
         append_frame_scores(frame,score,comments,overwrite=True)
+
+        log.info('TSNR {} = {:.6f}'.format(key, np.median(tsnrs[tracer][band])))
+        
+    frame.meta['TSNRALP'] = alpha
+        
