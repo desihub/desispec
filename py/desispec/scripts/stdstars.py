@@ -112,8 +112,8 @@ def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
         if i == 0:
             bprp = star_mags['GAIA-BP'] - star_mags["GAIA-RP"]
         else:
-            bprp = (unextincted_star_mags['GAIA-BP'] -
-                    unextinctincted_star_mags["GAIA-RP"])
+            bprp = (unextincted_mags['GAIA-BP'] -
+                    unextincted_mags['GAIA-RP'])
             
         for band in ['G','BP','RP']:
             curp = gaia_poly_coeff[band]
