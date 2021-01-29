@@ -106,7 +106,10 @@ Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
         corr = 0
     if not(cur_filt in model_filters):
         raise Exception(('Filter {} is not present in models').format(cur_filt))
-    return  model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
+    # see https://github.com/desihub/speclite/issues/34 
+    # to explain copy()
+    retmag = model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
+    return retmag
 
 def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
     # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)
@@ -594,28 +597,22 @@ def main(args) :
         photsys=fibermap['PHOTSYS'][star]
 
         if not gaia_std:
-            model_mag1 = get_magnitude(stdwave, model, model_filters, color_band1 + photsys)
-            model_mag2 = get_magnitude(stdwave, model, model_filters, color_band2 + photsys)
-            # see https://github.com/desihub/speclite/issues/34 
-            # to explain copy()
-            if color_band1 == ref_mag_name:
-                model_magr = model_mag1
-            elif color_band2 == ref_mag_name :
-                model_magr = model_mag2
-            else:
-                raise Exception("Couldn't find reference mag")
+            model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ + photsys) for _ in [color_band1, color_band2]]
         else:
-            model_mag1 = get_magnitude(stdwave, model, model_filters, color_band1)
-            model_mag2 = get_magnitude(stdwave, model, model_filters, color_band2)
-            if color_band1 == ref_mag_name:
-                model_magr = model_mag1
-            elif color_band2 == ref_mag_name:
-                model_magr = model_mag2
-            else:
-                # if the reference magnitude is not among colours
-                # I'm fetching it separately. This will happen when
-                # colour is BP-RP and ref magnitude is G
+            model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ ) for _ in [color_band1, color_band2]]
+
+        if color_band1 == ref_mag_name:
+            model_magr = model_mag1
+        elif color_band2 == ref_mag_name:
+            model_magr = model_mag2
+        else:
+            # if the reference magnitude is not among colours
+            # I'm fetching it separately. This will happen when
+            # colour is BP-RP and ref magnitude is G
+            if gaia_std:
                 model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name)
+            else:
+                model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name + photsys)
         fitted_model_colors[star] = model_mag1 - model_mag2
             
         #- TODO: move this back into normalize_templates, at the cost of
