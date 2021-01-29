@@ -93,23 +93,34 @@ Vega magnitudes (as the official gaia catalog is in vega)
     # the simulated ab into vega
     return ret
 
-def unextinct_gaia_mags(star_mags, unextincted_mags, ebv):
-    
-# correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)    
+def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
+    # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)
+    # we assume the inputs are in the original SFD scale
+    # The input dictionary unextincted_mags is *MODIFIED*
     gaia_poly_coeff = {'G':[0.9761, -0.1704,
                            0.0086, 0.0011, -0.0438, 0.0013, 0.0099],
                       'BP': [1.1517, -0.0871, -0.0333, 0.0173,
                              -0.0230, 0.0006, 0.0043],
                       'RP':[0.6104, -0.0170, -0.0026,
                             -0.0017, -0.0078, 0.00005, 0.0006]}
+    ebv = 0.86 * ebv_sfd # Apply Schlafly+11 correction
     gaia_a0 = 3.1 * ebv
-    bprp = star_mags['GAIA-BP'] - star_mags["GAIA-RP"]
-    for band in ['G','BP','RP']:
-        curp = gaia_poly_coeff[band]
-        dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
+    # here I apply a second-order correction for extinction
+    # i.e. I use corrected colors after 1 iteration to determine
+    # the best final correction
+    for i in range(2):
+        if i == 0:
+            bprp = star_mags['GAIA-BP'] - star_mags["GAIA-RP"]
+        else:
+            bprp = (unextincted_star_mags['GAIA-BP'] -
+                    unextinctincted_star_mags["GAIA-RP"])
+            
+        for band in ['G','BP','RP']:
+            curp = gaia_poly_coeff[band]
+            dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
                  curp[4]*gaia_a0 + curp[5]*gaia_a0**2 + curp[6]*bprp*gaia_a0
                  )*gaia_a0
-        unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
+            unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
 
 def main(args) :
     """ finds the best models of all standard stars in the frame
@@ -452,8 +463,9 @@ def main(args) :
 
     if gaia_std and (fibermap['EBV']==0).all():
         log.info("Using E(B-V) from SFD rather than FIBERMAP")
-        # when doing gaia standards EBV is not set
-        ebv = SFDMap(scaling=0.86).ebv(acoo.SkyCoord(
+        # when doing gaia standards, on old tiles the
+        # EBV is not set so we fetch from SFD (in original SFD scaling)
+        ebv = SFDMap(scaling=1).ebv(acoo.SkyCoord(
             ra=fibermap['TARGET_RA']*auni.deg,
             dec=fibermap['TARGET_DEC']*auni.deg))
     else:
