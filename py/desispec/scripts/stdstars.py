@@ -87,7 +87,7 @@ Vega magnitudes (as the official gaia catalog is in vega)
     # revised dr2 zpts from https://www.cosmos.esa.int/web/gaia/iow_20180316
     ret = {}
     for k in vega_zpt.keys():
-        ret[k] = vega_zpt[k] - ab_zpt[k]
+        ret['GAIA-'+k] = vega_zpt[k] - ab_zpt[k]
     # these corrections need to be added to convert
     # the simulated ab into vega
     return ret
@@ -259,23 +259,20 @@ def main(args) :
         gaia_std = True
         if color is None:
             color = 'GAIA-BP-RP'
-        gaia_color = True
-        legacy_color=False
     else:
         gaia_std = False
         if color is None:
             color='G-R'
-        gaia_color = False
-        legacy_color = True
         if n_gaia_std > 0:
             log.info('Gaia standards found but not used')
 
-
     if gaia_std:
-        ref_mag_name = 'G'
+        ref_mag_name = 'GAIA-G'
+        color_band1, color_band2  = ['GAIA-'+ _ for _ in color[5:].split('-')]
         log.info("Using Gaia standards with color {} and normalizing to {}".format(color, ref_mag_name))
     else:
         ref_mag_name = 'R'
+        color_band1, color_band2  = color.split('-')
         log.info("Using Legacy standards with color {} and normalizing to {}".format(color, ref_mag_name))
     
     # excessive check but just in case
@@ -434,9 +431,7 @@ def main(args) :
                 model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
     if len(model_filters) == 0:
         log.info('No Legacy survey photometry identified in fibermap')
-        if legacy_color:
-            # I don't think we could end up here..
-            raise Exception("Can't proceed because you required DECALS colors" )
+
     # I will always load gaia data even if we are fitting LS standards only
     for band in ["G", "BP", "RP"] :
         model_filters["GAIA-" + band] = load_gaia_filter(band=band, dr=2)
@@ -447,7 +442,7 @@ def main(args) :
     for filter_name, filter_response in model_filters.items():
         if filter_name[:5] == 'GAIA-':
             # don't forget to correct AB to Vega
-            corr = gaia_vega_ab[filter_name[5:]]
+            corr = gaia_vega_ab[filter_name]
         else:
             corr = 0
         model_mags[filter_name] = filter_response.get_ab_magnitude(stdflux*fluxunits, stdwave) + corr
@@ -534,11 +529,9 @@ def main(args) :
         photsys=fibermap['PHOTSYS'][star]
         
         if gaia_std:
-            bands=color[5:].split("-")
-            model_colors = model_mags['GAIA-'+bands[0]] - model_mags['GAIA-'+bands[1]]
+            model_colors = model_mags[color_band1] - model_mags[color_band2]
         else:
-            bands=color.split("-")            
-            model_colors = model_mags[bands[0]+photsys] - model_mags[bands[1]+photsys]
+            model_colors = model_mags[color_band1 + photsys] - model_mags[color_band2 + photsys]
 
         color_diff = model_colors - star_unextincted_colors[color][star]
         selection = np.abs(color_diff) < args.delta_color
@@ -592,39 +585,35 @@ def main(args) :
         photsys=fibermap['PHOTSYS'][star]
 
         if not gaia_std:
-            bands=color.split("-")
-            model_mag1 = model_filters[bands[0]+photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
-            model_mag2 = model_filters[bands[1]+photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
+            model_mag1 = model_filters[color_band1 + photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
+            model_mag2 = model_filters[color_band2 + photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
             # see https://github.com/desihub/speclite/issues/34 
             # to explain copy()
-            if bands[0] == ref_mag_name:
+            if color_band1 == ref_mag_name:
                 model_magr = model_mag1
-            elif bands[1] == ref_mag_name :
+            elif color_band2 == ref_mag_name :
                 model_magr = model_mag2
             else:
                 raise Exception("Couldn't find reference mag")
         else:
-            bands = color[5:].split('-')
-            model_mag1 = model_filters['GAIA-'+bands[0]].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[bands[0]]
-            model_mag2 = model_filters['GAIA-'+bands[1]].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[bands[1]]
-            if bands[0] == ref_mag_name:
+            model_mag1 = model_filters[color_band1].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[color_band1]
+            model_mag2 = model_filters[color_band2].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[color_band2]
+            if color_band1 == ref_mag_name:
                 model_magr = model_mag1
-            elif bands[1] == ref_mag_name:
+            elif color_band2 == ref_mag_name:
                 model_magr = model_mag2
             else:
                 # if the reference magnitude is not among colours
                 # I'm fetching it separately. This will happen when
                 # colour is BP-RP and ref magnitude is G
-                model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave.copy())+ gaia_vega_ab[ref_mag_name]
+                model_magr = model_filters[ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave.copy())+ gaia_vega_ab[ref_mag_name]
         fitted_model_colors[star] = model_mag1 - model_mag2
             
         #- TODO: move this back into normalize_templates, at the cost of
         #- recalculating a model magnitude?
 
-        if gaia_std:
-            cur_refmag = star_mags['GAIA-' + ref_mag_name][star]
-        else:
-            cur_refmag = star_mags[ref_mag_name][star]
+        cur_refmag = star_mags[ref_mag_name][star]
+
         # Normalize the best model using reported magnitude
         scalefac=10**((model_magr - cur_refmag)/2.5)
 
