@@ -131,9 +131,8 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, uframe, fluxcalib, fib
 
     # Relative weighting between rdnoise & sky terms to model var. 
     if fibermap is not None:
-        # alpha calc. introduces calibration dependent frame.ivar dependence. 
-        alpha = calc_alpha(frame, fibermap, rdnoise, npix, angperpix, fiberflat, skymodel)[0]
-        
+        # alpha calc. introduces calibration-dependent (c)frame.ivar dependence. Use uncalibrated.
+        alpha = calc_alpha(uframe, fibermap, rdnoise, npix, angperpix, fiberflat, skymodel)[0]        
     else:
         alpha = 1.0
 
