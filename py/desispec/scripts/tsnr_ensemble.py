@@ -116,7 +116,6 @@ class template_ensemble(object):
         for band in ['b', 'r', 'z']:
             self.ensemble_dflux_stack[band] = np.sqrt(np.mean(self.ensemble_dflux[band]**2., axis=0).reshape(1, len(self.ensemble_dflux[band].T)))
 
-
         hdr = fits.Header()
         hdr['NMODEL'] = nmodel
         hdr['TRACER'] = tracer
