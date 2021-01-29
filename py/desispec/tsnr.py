@@ -98,18 +98,18 @@ def calc_alpha(frame, fibermap, rdnoise, npix, angperpix, fiberflat, skymodel):
         return alpha * rd_var[sky_indx,:] + sky_var[sky_indx,:]
 
     def alpha_X2(alpha):
-        var = calc_alphavar(alpha)
-        ivar =  1. / var
-        X2 = (frame.ivar[sky_indx,:] - ivar)**2.
+        _var = calc_alphavar(alpha)
+        _ivar =  1. / _var
+        X2 = (frame.ivar[sky_indx,:] - _ivar)**2.
         return np.sum(X2)
 
     res = minimize(alpha_X2, x0=[1.])
-    alpha = res.x
+    alpha = res.x[0]
 
     return alpha
 
 def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, uframe, fluxcalib, fiberflat, skymodel, fibermap):
-    log = get_logger()
+    log=get_logger()
     
     psf=GaussHermitePSF(psfpath)
 
@@ -120,11 +120,11 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, uframe, fluxcalib, fib
     nspec, nwave = fluxcalib.calib.shape
     
     fibers = np.arange(nspec)
-    rdnoise = fb_rdnoise(fibers, frame, psf)
+    rdnoise = fb_rdnoise(fibers, uframe, psf)
 
     # Evaluate.
-    npix = nea(fibers, frame.wave)
-    angperpix = angperpix(fibers, frame.wave)
+    npix = nea(fibers, uframe.wave)
+    angperpix = angperpix(fibers, uframe.wave)
 
     for label, x in zip(['RDNOISE', 'NEA', 'ANGPERPIX'], [rdnoise, npix, angperpix]):
         log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
@@ -132,11 +132,11 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, uframe, fluxcalib, fib
     # Relative weighting between rdnoise & sky terms to model var. 
     if fibermap is not None:
         # alpha calc. introduces calibration-dependent (c)frame.ivar dependence. Use uncalibrated.
-        alpha = calc_alpha(uframe, fibermap, rdnoise, npix, angperpix, fiberflat, skymodel)[0]        
+        alpha = calc_alpha(uframe, fibermap, rdnoise, npix, angperpix, fiberflat, skymodel)        
     else:
         alpha = 1.0
 
-    log.info('TSNR alpha = {:.6f}'.format(alpha))
+    log.info('TSNR ALPHA = {:.6f}'.format(alpha))
     
     tsnrs = {}
     
@@ -147,7 +147,7 @@ def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, uframe, fluxcalib, fib
             wave = ensemble[tracer].wave[band]
             dflux = ensemble[tracer].flux[band]
 
-            np.allclose(frame.wave, wave)
+            np.allclose(uframe.wave, wave)
             
             # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
             # Broadcast.
