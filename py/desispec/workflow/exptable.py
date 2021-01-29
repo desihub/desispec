@@ -10,6 +10,7 @@ from desispec.workflow.utils import define_variable_from_environment, pathjoin, 
 from desispec.workflow.desi_proc_funcs import load_raw_data_header
 from desiutil.log import get_logger
 from desispec.util import header2night
+from desispec.io.util import create_camword
 
 #############################################
 ##### Exposure Table Column Definitions #####
@@ -23,7 +24,8 @@ from desispec.util import header2night
 # TARGTRA, float, The TARGTRA as given by ICS. The RA of the target.
 # TARGTDEC, float, The TARGTDEC as given by ICS. The DEC of the target.
 # NIGHT, int, the night of the observation.
-# SURVEY, int, a numeric ID for a given observing run, e.g. CMX is 0. SV0 is 1, etc.
+# PURPOSE, str, The purpose of the exposure as defined by ICS.
+# FA_SURV, str, The survey designated/used by fiberassign
 # SEQNUM, int, The number of the current exposure in a sequence of exposures, as given by ICS. If not a sequence, SEQNUM is 1.
 # SEQTOT, int, The total number of exposures taken in the current sequence, as given by ICS. If not a sequence, SEQTOT is 1.
 # PROGRAM, string, The program as given by ICS.
@@ -31,9 +33,8 @@ from desispec.util import header2night
 # BADCAMWORD, string, camword defining the bad cameras that should not be processed.
 # BADAMPS, string, pipe-separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D|z8A'
 # LASTSTEP, string, typically 'a'+ str(spectrographs) defined by ICS unless specified by command line argument
-# EXPFLAG, int, A 0 signifies that it is a good observation. 1 or greater indicates an issue.
-#               Each number will be assigned a meaning. Currently 1 just means "don't use".
-# HEADERERR, np.ndarray, Given as a "|" separated list of key=value pairs describing columns in the table that should
+# EXPFLAG, np.ndarray, set of flags that describe that describe the exposure.
+# HEADERERR, np.ndarray, In the csv given as a "|" separated list of key=value pairs describing columns in the table that should
 #                        be corrected. The workflow transforms these into an array of strings.
 #                        NOTE: This will be used to change the given key/value pairs in the production table.
 # COMMENTS, np.ndarray, In the csv given as either a "|" separated list of comments or one long comment. When loaded it
@@ -65,9 +66,9 @@ def get_exposure_table_column_defs(return_default_values=False):
     coltypes2 = ['S20',     'S10',     int,      int,     'S30',     float]
     coldeflt2 = ['',        '',        1,        1,       'unknown', 50000.0]
 
-    colnames3 = ['BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'EXPFLAG', 'HEADERERR',             'COMMENTS']
-    coltypes3 = ['S30',        'S30',      'S30',      'S30',     np.ndarray,              np.ndarray]
-    coldeflt3 = ['',            '',        '',        '',         np.array([], dtype=str), np.array([], dtype=str)]
+    colnames3 = ['BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'EXPFLAG',    'HEADERERR',  'COMMENTS']
+    coltypes3 = ['S30',        'S30',      'S30',     np.ndarray,   np.ndarray,   np.ndarray]
+    coldeflt3 = ['',            '',        '',   np.array([], dtype=str), np.array([], dtype=str), np.array([], dtype=str)]
 
     colnames = colnames1 + colnames2 + colnames3
     coldtypes = coltypes1 + coltypes2 + coltypes3
@@ -401,7 +402,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
     ## Raw data, so ensure it's read only and close right away just to be safe
     # log.debug(hdulist.info())
 
-    header = load_raw_data_header(pathname=datapath)
+    header,fx = load_raw_data_header(pathname=datapath, return_filehandle=True)
     # log.debug(header)
     # log.debug(specs)
 
@@ -425,7 +426,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
                 outdict[key] = val
         ## If key not in the header, identify that and place a default value
         else:
-            outdict['EXPFLAG'] = 'metadata_missing'
+            if 'metadata_missing' not in outdict['EXPFLAG']:
+                outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_missing')
             outdict[key] = default
             if np.isscalar(default):
                 reporting = header_error_reporting(key, '', default)
@@ -435,7 +437,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
     try:
         outdict['NIGHT'] = int(header['NIGHT'])
     except (KeyError, ValueError, TypeError):
-        outdict['EXPFLAG'] = 'metadata_missing'
+        if 'metadata_missing' not in outdict['EXPFLAG']:
+            outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_missing')
         outdict['NIGHT'] = header2night(header)
         try:
             orig = str(header['NIGHT'])
@@ -445,29 +448,38 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
         outdict['HEADERERR'] = np.append(outdict['HEADERERR'],reporting)
 
     ## For now assume that all 3 cameras were good for all operating spectrographs
-    if 'SPCGRPHS' in header:
-        spectrographs = ''.join(sorted(header['SPCGRPHS'].lower().replace("sp",'').split(",")))
-        outdict['CAMWORD'] = 'a' + spectrographs
-    else:
-        outdict['EXPFLAG'] = 'metadata_missing'
-        reporting = header_error_reporting('SPCGRPHS', '', str(outdict['CAMWORD'].strip('a')))
-        outdict['HEADERERR'] = np.append(outdict['HEADERERR'], reporting)
+    cams = []
+    for f in fx:
+        try:
+            extname = str(f.get_extname()).lower()
+        except (KeyError, ValueError, TypeError):
+            extname = ''
+        if len(extname) == 2 and extname[0] in ['b', 'r', 'z'] and extname[1].isnumeric():
+            cams.append(extname)
+    camword = create_camword(cams)
+    outdict['CAMWORD'] = camword
+    fx.close()
 
-    ## Survey number befined in upper loop based on night
-    outdict['SURVEY'] = surveyname
+    ### Survey number befined in upper loop based on night
+    #outdict['SURVEY'] = surveyname
+
+    ## Add the fiber assign survey, if it doesn't exist use the pre-defined one
+    if "FA_SURV" in req_dict and "FA_SURV" in colnames:
+        outdict['FA_SURV'] = req_dict['FA_SURV']
 
     ## As an example of future flag possibilites, flag science exposures are
     ##    garbage if less than 60 seconds
     if outdict['OBSTYPE'].lower() == 'science' and float(outdict['EXPTIME']) < 60:
-        outdict['EXPFLAG'] += 'short_exp'
+        outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exp')
 
     ## For Things defined in both request and data, if they don't match, flag in the
     ##     output file for followup/clarity
-    for check in ['OBSTYPE', 'FLAVOR']:
+    for check in ['OBSTYPE']:#, 'FLAVOR']:
         rval, hval = req_dict[check], header[check]
         if rval != hval:
             log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
-            outdict['EXPFLAG'] += 'metadata_mismatch'
+            if 'metadata_mismatch' not in outdict['EXPFLAG']:
+                outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_mismatch')
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'],f'For {check}: req={rval} but hdu={hval}')
         else:
             if verbosely:
@@ -478,15 +490,12 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
     rval, hval = req_dict[check], header[check]
     if np.abs(float(rval)-float(hval))>0.5:
         log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
-        outdict['EXPFLAG'] += 'aborted'
+        if 'aborted' not in outdict['EXPFLAG']:
+            outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'aborted')
         outdict['COMMENTS'] = np.append(outdict['COMMENTS'],f'For {check}: req={rval} but hdu={hval}')
     else:
         if verbosely:
             log.info(f'{check} checks out')
-
-    ## Add the fiber assign survey, if it doesn't exist use the pre-defined one
-    if "FA_SURV" in req_dict:
-        outdict['FA_SURV'] = req_dict['FA_SURV']
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
