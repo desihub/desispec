@@ -92,6 +92,22 @@ Vega magnitudes (as the official gaia catalog is in vega)
     # the simulated ab into vega
     return ret
 
+def get_magnitude(stdwave, model, model_filters, cur_filt):
+    """ Obtain magnitude for a filter taking into
+account the ab/vega correction if needed.
+Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
+    """ 
+    fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
+
+    # AB/Vega correction
+    if cur_filt[:5] == 'GAIA-':
+        corr = get_gaia_ab_correction()[cur_filt]
+    else:
+        corr = 0
+    if not(cur_filt in model_filters):
+        raise Exception(('Filter {} is not present in models').format(cur_filt))
+    return  model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
+
 def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
     # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)
     # we assume the inputs are in the original SFD scale
@@ -248,8 +264,6 @@ def main(args) :
         if n_gaia_std == 0 and gaia_color:
             raise Exception('Specified gaia color, but no gaia stds')
 
-    gaia_vega_ab = get_gaia_ab_correction()
-
     if starindices.size == 0:
         log.error("no STD star found in fibermap")
         raise ValueError("no STD star found in fibermap")
@@ -267,6 +281,7 @@ def main(args) :
             log.info('Gaia standards found but not used')
 
     if gaia_std:
+        # The name of the reference filter to which we normalize the flux
         ref_mag_name = 'GAIA-G'
         color_band1, color_band2  = ['GAIA-'+ _ for _ in color[5:].split('-')]
         log.info("Using Gaia standards with color {} and normalizing to {}".format(color, ref_mag_name))
@@ -438,14 +453,8 @@ def main(args) :
 
     log.info("computing model mags for %s"%sorted(model_filters.keys()))
     model_mags = dict()
-    fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
-    for filter_name, filter_response in model_filters.items():
-        if filter_name[:5] == 'GAIA-':
-            # don't forget to correct AB to Vega
-            corr = gaia_vega_ab[filter_name]
-        else:
-            corr = 0
-        model_mags[filter_name] = filter_response.get_ab_magnitude(stdflux*fluxunits, stdwave) + corr
+    for filter_name in model_filters.keys():
+        model_mags[filter_name] = get_magnitude(stdwave, stdflux, model_filters, filter_name)
      
     log.info("done computing model mags")
 
@@ -585,8 +594,8 @@ def main(args) :
         photsys=fibermap['PHOTSYS'][star]
 
         if not gaia_std:
-            model_mag1 = model_filters[color_band1 + photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
-            model_mag2 = model_filters[color_band2 + photsys].get_ab_magnitude((model*fluxunits), stdwave.copy())
+            model_mag1 = get_magnitude(stdwave, model, model_filters, color_band1 + photsys)
+            model_mag2 = get_magnitude(stdwave, model, model_filters, color_band2 + photsys)
             # see https://github.com/desihub/speclite/issues/34 
             # to explain copy()
             if color_band1 == ref_mag_name:
@@ -596,8 +605,8 @@ def main(args) :
             else:
                 raise Exception("Couldn't find reference mag")
         else:
-            model_mag1 = model_filters[color_band1].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[color_band1]
-            model_mag2 = model_filters[color_band2].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[color_band2]
+            model_mag1 = get_magnitude(stdwave, model, model_filters, color_band1)
+            model_mag2 = get_magnitude(stdwave, model, model_filters, color_band2)
             if color_band1 == ref_mag_name:
                 model_magr = model_mag1
             elif color_band2 == ref_mag_name:
@@ -606,7 +615,7 @@ def main(args) :
                 # if the reference magnitude is not among colours
                 # I'm fetching it separately. This will happen when
                 # colour is BP-RP and ref magnitude is G
-                model_magr = model_filters[ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave.copy())+ gaia_vega_ab[ref_mag_name]
+                model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name)
         fitted_model_colors[star] = model_mag1 - model_mag2
             
         #- TODO: move this back into normalize_templates, at the cost of
