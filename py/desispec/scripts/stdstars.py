@@ -450,7 +450,7 @@ def main(args) :
     star_mags = dict()
     star_unextincted_mags = dict()
 
-    if gaia_std:
+    if gaia_std and (fibermap['EBV']==0).all():
         log.info("Using E(B-V) from SFD rather than FIBERMAP")
         # when doing gaia standards EBV is not set
         ebv = SFDMap(scaling=0.86).ebv(acoo.SkyCoord(
