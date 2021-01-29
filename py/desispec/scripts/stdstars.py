@@ -74,6 +74,25 @@ def dust_transmission(wave,ebv) :
     extinction = ext_odonnell(wave,Rv=Rv)
     return 10**(-Rv*extinction*ebv/2.5)
 
+def get_gaia_ab_correction():
+    """
+Get the dictionary with corrections from AB magnitudes to 
+Vega magnitudes (as the official gaia catalog is in vega)
+"""
+    vega_zpt = dict(G=25.6914396869,
+                    BP=25.3488107670,
+                    RP=24.7626744847)
+    ab_zpt=dict(G=25.7915509947,
+                BP=25.3861560855,
+                RP=25.1161664528)
+    # revised dr2 zpts from https://www.cosmos.esa.int/web/gaia/iow_20180316
+    ret = {}
+    for k in vega_zpt.keys():
+        ret[k] = vega_zpt[k] - ab_zpt[k]
+    # these corrections need to be added to convert
+    # the simulated ab into vega
+    return ret
+
 def unextinct_gaia_mags(star_mags, unextincted_mags, ebv):
     
 # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)    
@@ -219,6 +238,7 @@ def main(args) :
         if n_gaia_std == 0 and gaia_color:
             raise Exception('Specified gaia color, but no gaia stds')
 
+    gaia_vega_ab = get_gaia_ab_correction()
 
     if starindices.size == 0:
         log.error("no STD star found in fibermap")
@@ -417,6 +437,7 @@ def main(args) :
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
     for filter_name, filter_response in model_filters.items():
         model_mags[filter_name] = filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave)
+     
     log.info("done computing model mags")
 
     # LOOP ON STARS TO FIND BEST MODEL
@@ -567,15 +588,14 @@ def main(args) :
                 raise Exception("Couldn't find reference mag")
         else:
             bands = color[5:].split('-')
-            model_mag1 = model_filters['GAIA-'+bands[0]].get_ab_magnitude(model*fluxunits, stdwave.copy())
-            model_mag2 = model_filters['GAIA-'+bands[1]].get_ab_magnitude(model*fluxunits, stdwave.copy())
+            model_mag1 = model_filters['GAIA-'+bands[0]].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[bands[0]]
+            model_mag2 = model_filters['GAIA-'+bands[1]].get_ab_magnitude(model*fluxunits, stdwave.copy()) + gaia_vega_ab[bands[1]]
             if bands[0] == ref_mag_name:
                 model_magr = model_mag1
             elif bands[1] == ref_mag_name:
                 model_magr = model_mag2
             else:
-                model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave.copy())
-
+                model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave.copy())+ gaia_vega_ab[ref_mag_name]
         fitted_model_colors[star] = model_mag1 - model_mag2
             
         #- TODO: move this back into normalize_templates, at the cost of
