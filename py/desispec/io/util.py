@@ -499,6 +499,28 @@ def parse_cameras(cameras):
     log.info(f"Converted input cameras={cameras} to camword={camword}")
     return camword
 
+def difference_camwords(fullcamword,badcamword):
+    """
+    Returns the difference of two camwords. The second argument cameras are removed from the first argument and the
+    remainer is returned. Smart enough to ignore bad cameras if they don't exist in full camword list.
+
+    Args:
+        fullcamword, str. The camword of all cameras (including the bad ones to be removed).
+        badcamword, str. A camword defining the bad cameras you don't want to include in the final camword that is output
+
+    Returns:
+        str. A camword of cameras in fullcamword that are not in badcamword.
+    """
+    log = get_logger()
+    full_cameras = decode_camword(fullcamword)
+    bad_cameras = decode_camword(badcamword)
+    for cam in bad_cameras:
+        if cam in full_cameras:
+            full_cameras.remove(cam)
+        else:
+            log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
+    return create_camword(full_cameras)
+
 def get_speclog(nights, rawdir=None):
     """
     Scans raw data headers to return speclog of observations. Slow.

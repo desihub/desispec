@@ -881,6 +881,17 @@ class TestIO(unittest.TestCase):
             for ii in range(len(decoded)):
                 self.assertEqual(str(decoded[ii]),str(cameras[ii]))
 
+    def test_difference_camwords(self):
+        """ Test desispec.io.difference_camwords
+        """
+        from ..io.util import difference_camwords
+        fcamwords = ['a0123456789', 'a012345678b9', 'a012345678r9z9', 'a012346789', 'a012356789r4', 'a0123456']
+        bcamwords = ['a0123', 'a019', 'b9', 'z89', 'a7r4', 'a0123456']
+        truediffs = ['a456789', 'a2345678', 'a012345678r9z9', 'a0123467b89r89', 'a01235689', '']
+        for fcw, bcw, truth in zip(fcamwords, bcamwords, truediffs):
+            diff = difference_camwords(fcw, bcw)
+            self.assertEqual(diff, truth)
+
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix
         """
