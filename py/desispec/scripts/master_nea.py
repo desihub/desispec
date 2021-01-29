@@ -43,7 +43,7 @@ def process_one(w, psf, ifiber):
     psf_1d /= norm
     
     try:
-        # Automatically raises an assertion.                                                                                                                                                                                               
+        # Automatically raises an assertion.                                                                                                                                                                                              
         # np.testing.assert_almost_equal(norm, 1.0, decimal=7)
 
         # http://articles.adsabs.harvard.edu/pdf/1983PASP...95..163K                                                                                                                                                                
