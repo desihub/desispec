@@ -447,7 +447,12 @@ def main(args) :
     model_mags = dict()
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
     for filter_name, filter_response in model_filters.items():
-        model_mags[filter_name] = filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave)
+        if filter_name[:5]=='GAIA-':
+            # don't forget to correct AB to Vega
+            corr = gaia_vega_ab[filter_name[5:]]
+        else:
+            corr = 0
+        model_mags[filter_name] = filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave) + corr
      
     log.info("done computing model mags")
 
