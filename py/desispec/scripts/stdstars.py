@@ -425,8 +425,8 @@ def main(args) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
-
-
+        
+    # Fetching Filter curves
     model_filters = dict()
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
@@ -437,21 +437,20 @@ def main(args) :
         if legacy_color:
             # I don't think we could end up here..
             raise Exception("Can't proceed because you required DECALS colors" )
-
     # I will always load gaia data even if we are fitting LS standards only
     for band in ["G", "BP", "RP"] :
-        model_filters["GAIA-"+band] = load_gaia_filter(band=band,dr=2)
+        model_filters["GAIA-" + band] = load_gaia_filter(band=band, dr=2)
 
     log.info("computing model mags for %s"%sorted(model_filters.keys()))
     model_mags = dict()
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
     for filter_name, filter_response in model_filters.items():
-        if filter_name[:5]=='GAIA-':
+        if filter_name[:5] == 'GAIA-':
             # don't forget to correct AB to Vega
             corr = gaia_vega_ab[filter_name[5:]]
         else:
             corr = 0
-        model_mags[filter_name] = filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave) + corr
+        model_mags[filter_name] = filter_response.get_ab_magnitude(stdflux*fluxunits, stdwave) + corr
      
     log.info("done computing model mags")
 
@@ -470,8 +469,8 @@ def main(args) :
         # when doing gaia standards, on old tiles the
         # EBV is not set so we fetch from SFD (in original SFD scaling)
         ebv = SFDMap(scaling=1).ebv(acoo.SkyCoord(
-            ra=fibermap['TARGET_RA']*units.deg,
-            dec=fibermap['TARGET_DEC']*units.deg))
+            ra = fibermap['TARGET_RA'] * units.deg,
+            dec = fibermap['TARGET_DEC'] * units.deg))
     else:
         ebv = fibermap['EBV']
     
@@ -499,6 +498,8 @@ def main(args) :
     star_colors = dict()
     star_unextincted_colors = dict()
 
+    # compute the colors and define the unextincted colors
+    # the unextincted colors are filled later
     if not gaia_std:
         for c1,c2 in ['GR', 'RZ']:
             star_colors[c1 + '-' + c2] = star_mags[c1] - star_mags[c2]
@@ -611,6 +612,9 @@ def main(args) :
             elif bands[1] == ref_mag_name:
                 model_magr = model_mag2
             else:
+                # if the reference magnitude is not among colours
+                # I'm fetching it separately. This will happen when
+                # colour is BP-RP and ref magnitude is G
                 model_magr = model_filters['GAIA-'+ref_mag_name].get_ab_magnitude(model*fluxunits, stdwave.copy())+ gaia_vega_ab[ref_mag_name]
         fitted_model_colors[star] = model_mag1 - model_mag2
             
@@ -618,11 +622,10 @@ def main(args) :
         #- recalculating a model magnitude?
 
         if gaia_std:
-            # Normalize the best model using reported magnitude
             cur_refmag = star_mags['GAIA-' + ref_mag_name][star]
         else:
-            # Normalize the best model using reported magnitude
             cur_refmag = star_mags[ref_mag_name][star]
+        # Normalize the best model using reported magnitude
         scalefac=10**((model_magr - cur_refmag)/2.5)
 
         log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
