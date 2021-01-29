@@ -22,6 +22,8 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('--days', type=int, required=True, nargs="*",
                     help='YEARMMDD days to use for ZEROs and DARKs')
+parser.add_argument('--first-expid', type=int, required=False,
+                    help='First EXPID to include')
 parser.add_argument('--darkfile', type=str, required=True,
                     help='output dark model file')
 parser.add_argument('--biasfile', type=str, required=True,
@@ -104,6 +106,14 @@ else:
     speclog.write(tmpfile, format='ascii.csv')
     os.rename(tmpfile, speclog_file)
     log.info(f'Wrote speclog to {speclog_file}')
+
+#- filter expids if requested
+if args.first_expid is not None:
+    keep = speclog['EXPID'] >= args.first_expid
+    speclog = speclog[keep]
+    if len(speclog) == 0:
+        log.critical('No exposures! exiting...')
+        sys.exit(1)
 
 #- group EXPTIMEs by integer
 speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
