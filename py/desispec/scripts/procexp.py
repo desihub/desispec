@@ -14,9 +14,9 @@ from desispec.sky import subtract_sky
 from desispec.fluxcalibration import apply_flux_calibration
 from desiutil.log import get_logger
 from desispec.cosmics import reject_cosmic_rays_1d
-from desispec.specscore import compute_and_append_frame_scores
+from desispec.specscore import compute_and_append_frame_scores,append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
-from desispec.tsnr import calc_tsnr, get_ensemble, read_nea
+from desispec.tsnr import calc_tsnr
 
 import argparse
 import sys
@@ -46,9 +46,9 @@ def parse(options=None):
                         help = 'Do NOT apply a throughput correction when subtraction the sky')
     parser.add_argument('--no-zero-ivar', action='store_true',
                         help = 'Do NOT set ivar=0 for masked pixels')
-    parser.add_argument('--fitalpha', type = int, default=1,
-                        help = 'tsnr: fit for the relative weighting between rdnosie & skymodel per exp.')
-    
+    parser.add_argument('--tsnr', action='store_true',
+                        help = 'compute template SNR')
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -64,16 +64,20 @@ def main(args):
         log.critical('no --fiberflat, --sky, or --calib; nothing to do ?!?')
         sys.exit(12)
 
+    if args.tsnr and (args.calib is None) :
+        log.critical('need --fiberflat --sky and --calib to compute template SNR')
+        sys.exit(12)
+
     frame = read_frame(args.infile)
 
-    if args.psf != None:
+    if args.tsnr :
         # tsnr alpha calc. requires uncalibrated + no substraction rame.
-        uframe = copy.deepcopy(frame)
-        
+        uncalibrated_frame = copy.deepcopy(frame)
+
     #- Raw scores already added in extraction, but just in case they weren't
     #- it is harmless to rerun to make sure we have them.
     compute_and_append_frame_scores(frame,suffix="RAW")
-    
+
     if args.cosmics_nsig>0 and args.sky==None : # Reject cosmics (otherwise do it after sky subtraction)
         log.info("cosmics ray 1D rejection")
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
@@ -128,25 +132,11 @@ def main(args):
         frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
-    if args.psf != None:                
+    if args.tsnr:
         log.info("calculating tsnr")
-
-        if args.nea == None:
-            raise ValueError('master nea file required for tsnr.')
-
-        if args.ensembledir == None:
-            raise ValueError('template ensemble files required for tsnr.')
-
-        if args.fitalpha:
-            fibermap=read_fibermap(args.infile)
-        else:
-            fibermap=None
-            
-        cam=args.infile.split('/')[-1].split('-')[1]
-        band=cam[0]
-        bands=[band]
-        
-        calc_tsnr(bands, args.nea, args.ensembledir, args.psf, frame, uframe, fluxcalib, fiberflat, skymodel, fibermap) 
+        results = calc_tsnr(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
+        comments = {k:"from calc_frame_tsnr" for k in results.keys()}
+        append_frame_scores(frame,results,comments,overwrite=True)
 
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
