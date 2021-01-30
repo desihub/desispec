@@ -1,21 +1,14 @@
 """
-This script processes an exposure by applying fiberflat, sky subtraction,
-spectro-photometric calibration depending on input.
+This script computes the template SNR
 """
 
-from desispec.io import read_frame, write_frame
+from desispec.io import read_frame
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
 from desispec.io import shorten_filename
 from desispec.io import read_fibermap
 from desispec.io.fluxcalibration import read_flux_calibration
-from desispec.fiberflat import apply_fiberflat
-from desispec.sky import subtract_sky
-from desispec.fluxcalibration import apply_flux_calibration
 from desiutil.log import get_logger
-from desispec.cosmics import reject_cosmic_rays_1d
-from desispec.specscore import compute_and_append_frame_scores,append_frame_scores
-from desispec.fiberbitmasking import get_fiberbitmasked_frame
 from desispec.tsnr import calc_tsnr
 
 import argparse
@@ -31,13 +24,7 @@ def parse(options=None):
     parser.add_argument('--sky', type = str, default = None,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--calib', type = str, default = None,
-                        help = 'path of DESI calibration fits file')
-    parser.add_argument('--psf', type = str, default=None,
-                        help = 'path of DESI calibration psf file (triggers tsnr)')
-    parser.add_argument('--nea', type = str, default=None,
-                        help = 'path of DESI measter nea file (required for tsnr)')
-    parser.add_argument('--ensembledir', type = str, default=None,
-                        help = 'dir. of tsnr dflux ensembles (required for tsnr)')
+                        help = 'path of DESI calibration fits file')xs
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
