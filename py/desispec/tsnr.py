@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import astropy.io.fits as fits
 import glob
@@ -7,7 +8,7 @@ from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
 from scipy.interpolate import RectBivariateSpline
 from specter.psf.gausshermite  import  GaussHermitePSF
-from desispec.specscore import append_frame_scores
+from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 from scipy.optimize import minimize
 
@@ -125,69 +126,76 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 
     return alpha
 
-def calc_tsnr(bands, neadir, ensembledir, psfpath, frame, uframe, fluxcalib, fiberflat, skymodel, fibermap):
+def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
+
     log=get_logger()
 
+    if not (frame.meta["BUNIT"]=="count/Angstrom" or frame.meta["BUNIT"]=="electron/Angstrom" ) :
+        log.error("requires an uncalibrated frame")
+        raise RuntimeError("requires an uncalibrated frame")
+
+    camera=frame.meta["CAMERA"].strip().lower()
+    band=camera[0]
+
+    psfpath=findcalibfile([frame.meta],"PSF")
     psf=GaussHermitePSF(psfpath)
 
     # Returns bivariate splie to be evaluated at (fiber, wave).
-    nea, angperpix=read_nea(neadir)
-    ensemble=get_ensemble(ensembledir, bands=bands)
+    if not "DESIMODEL" in os.environ :
+        log.error("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
+        raise RuntimeError("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
+
+    neafilename=os.path.join(os.environ["DESIMODEL"],"data/specpsf/nea/masternea_{}.fits".format(camera))
+    log.info("read NEA file {}".format(neafilename))
+    nea, angperpix=read_nea(neafilename)
+
+    ensembledir=os.path.join(os.environ["DESIMODEL"],"data/tsnr")
+    log.info("read TSNR ensemble files in {}".format(ensembledir))
+    ensemble=get_ensemble(ensembledir, bands=[band,])
 
     nspec, nwave = fluxcalib.calib.shape
 
     fibers = np.arange(nspec)
-    rdnoise = fb_rdnoise(fibers, uframe, psf)
+    rdnoise = fb_rdnoise(fibers, frame, psf)
 
     # Evaluate.
-    npix = nea(fibers, uframe.wave)
-    angperpix = angperpix(fibers, uframe.wave)
-    angperspecbin = np.mean(np.gradient(uframe.wave))
+    npix = nea(fibers, frame.wave)
+    angperpix = angperpix(fibers, frame.wave)
+    angperspecbin = np.mean(np.gradient(frame.wave))
 
     for label, x in zip(['RDNOISE', 'NEA', 'ANGPERPIX', 'ANGPERSPECBIN'], [rdnoise, npix, angperpix, angperspecbin]):
         log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
 
     # Relative weighting between rdnoise & sky terms to model var.
-    if fibermap is not None:
-        # alpha calc. introduces calibration-dependent (c)frame.ivar dependence. Use uncalibrated.
-        alpha = calc_alpha(uframe, fibermap, rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel)
-    else:
-        alpha = 1.0
-
-    log.info('TSNR ALPHA = {:.6f}'.format(alpha))
+    alpha = calc_alpha(frame, fibermap=frame.fibermap, rdnoise_sigma=rdnoise, npix_1d=npix, angperpix=angperpix, angperspecbin=angperspecbin, fiberflat=fiberflat, skymodel=skymodel)
+    log.info("ALPHA = {:4.3f}".format(alpha))
 
     tsnrs = {}
-
     for tracer in ensemble.keys():
-        tsnrs[tracer] = {}
 
-        for band in bands:
-            wave = ensemble[tracer].wave[band]
-            dflux = ensemble[tracer].flux[band]
+        wave = ensemble[tracer].wave[band]
+        dflux = ensemble[tracer].flux[band]
 
-            np.allclose(uframe.wave, wave)
+        np.allclose(frame.wave, wave)
 
-            # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
-            # Broadcast.
-            dflux = dflux * fluxcalib.calib # [e/A]
+        # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
+        # Broadcast.
+        dflux = dflux * fluxcalib.calib # [e/A]
 
-            # Wavelength dependent fiber flat;  Multiply or divide - check with Julien.
-            result = dflux * fiberflat.fiberflat
-            result = result**2.
+        # Wavelength dependent fiber flat;  Multiply or divide - check with Julien.
+        result = dflux * fiberflat.fiberflat
+        result = result**2.
 
-            denom   = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
-            result /= denom
+        denom   = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
+        result /= denom
 
-            # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
-            tsnrs[tracer][band] = np.sum(result, axis=1)
+        # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
+        tsnrs[tracer] = np.sum(result, axis=1)
 
+    results=dict()
     for tracer in tsnrs.keys():
         key = tracer.upper() + 'TSNR_{}'.format(band.upper())
-        score = {key: tsnrs[tracer][band]}
-        comments={key: ''}
+        results[key]=tsnrs[tracer]
+        log.info('TSNR {} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
 
-        append_frame_scores(frame,score,comments,overwrite=True)
-
-        log.info('TSNR {} = {:.6f}'.format(key, np.median(tsnrs[tracer][band])))
-
-    frame.meta['TSNRALP'] = alpha
+    return results
