@@ -192,6 +192,8 @@ class ConfigEditor(object) :
 
         parser.add_argument("--entries", required=True, default=None,
                             help="coma separated list of key=values, like '--keyval PSF=toto.fits,FIBERFLAT=fiberflat.fits'")
+        parser.add_argument("--rm-entries", required=True, default=None,
+                            help="coma separated list of keys to remove")
         parser.add_argument("--comments", required=False, default=None,
                             help="add this comment")
         parser.add_argument("-o","--ofilename", required=False, default=None,
