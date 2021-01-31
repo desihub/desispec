@@ -13,6 +13,22 @@ from desiutil.log import get_logger
 from scipy.optimize import minimize
 
 def get_ensemble(dirpath, bands, smooth=True):
+    '''                                                                                                              
+    Function that takes a frame object and a bitmask and                                                               
+    returns ivar (and optionally mask) array(s) that have fibers with                                                  
+    offending bits in fibermap['FIBERSTATUS'] set to                                                                   
+    0 in ivar and optionally flips a bit in mask.                                                                      
+                                                                                                                       
+    input:                                                                                                             
+        dirpath: path to the dir. with ensemble dflux files. 
+        bands:  bands to expect, typically [BRZ] - case ignored.
+        smooth:  Further convolve the residual ensemble flux. 
+                                                                                                                       
+    returns:                                                                                                            
+        Dictionary with keys labelling each tracer (bgs, lrg, etc.) for which each value
+        is a Spectra class instance with wave, flux for BRZ arms.  Note flux is the high 
+        frequency residual for the ensemble.  See doc. 4723.
+    '''
     paths = glob.glob(dirpath + '/tsnr-ensemble-*.fits')
 
     wave = {}
@@ -41,6 +57,18 @@ def get_ensemble(dirpath, bands, smooth=True):
     return  ensembles
 
 def read_nea(path):
+    '''
+    Read a master noise equivalent area [sq. pixel] file.  
+
+    input:
+        path: path to a master nea file for a given camera, e.g. b0.
+ 
+    returns:
+        nea: 2D split object to be evaluated at (fiber, wavelength)
+        angperpix:  2D split object to be evaluated at (fiber, wavelength),
+                    yielding angstrom per pixel. 
+    '''
+    
     nea=fits.open(path)
     wave=nea['WAVELENGTH'].data
     angperpix=nea['ANGPERPIX'].data
@@ -54,6 +82,20 @@ def read_nea(path):
     return  nea, angperpix
 
 def fb_rdnoise(fibers, frame, psf):
+    '''
+    Approximate the readnoise for a given fiber (on a given camera) for the 
+    wavelengths present in frame. wave.
+
+    input:
+        fibers: e.g. np.arange(500) to index fiber. 
+        frame:  frame instance for the given camera.
+        psf:  corresponding psf instance. 
+
+    returns:
+        rdnoise: (nfiber x nwave) array with the estimated readnosie.  Same 
+                 units as OBSRDNA, e.g. ang per pix.
+    '''
+    
     ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.float)
 
     xtrans = ccdsizes[0] / 2.
@@ -78,10 +120,25 @@ def fb_rdnoise(fibers, frame, psf):
     return rdnoise
 
 def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel, alpha=1.0, components=False):
+    '''
+    Evaluate a model for the 1D spectral flux variance, e.g. quadrature sum of readnoise and sky components.  
 
+    input:
+        rdnoise_sigma:
+        npix_1d:  equivalent to (1D) nea. 
+        angperpix:  Angstroms per pixel.
+        angperspecbin: Angstroms per bin.       
+        fiberflat: fiberflat instance
+        skymodel: Sky instance.
+        alpha: empirical weighting of the rdnoise term to e.g. better fit sky fibers per exp. cam.    
+        components:  if True, return tuple of individual contributions to the variance.  Else return variance. 
+
+    returns: 
+        nfiber x nwave array of the expected variance. 
+    '''
+    
     # the extraction is performed with a wavelength bin of width = angperspecbin
     # so the effective number of CCD pixels corresponding to a spectral bin width is
-
     npix_2d = npix_1d * (angperspecbin / angperpix)
 
     # then, the extracted flux per specbin is converted to an extracted flux per A, so
@@ -127,7 +184,16 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     return alpha
 
 def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
+    '''
+    Compute template SNR values for a given frame and append to the scores.     
 
+    returns:
+        Dictionary, with keys labelling tracer (bgs, elg, etc.), of values holding nfiber 
+        length array of the tsnr values for this camera.  
+
+    Note:  Assumes DESIMODEL is set and up to date. 
+    '''
+    
     log=get_logger()
 
     if not (frame.meta["BUNIT"]=="count/Angstrom" or frame.meta["BUNIT"]=="electron/Angstrom" ) :

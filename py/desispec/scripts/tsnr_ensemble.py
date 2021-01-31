@@ -1,3 +1,9 @@
+'''
+Generate Master TSNR ensemble DFLUX files.  See doc. 4723.  Note: in this instance, ensemble avg. of flux 
+is written, in order to efficiently generate tile depths.  
+
+Currently assumes redshift and mag. ranges derived from FDR, but uniform in both.
+'''
 import sys
 import copy
 import pickle
@@ -16,8 +22,8 @@ from   desiutil.log                  import get_logger
 
 np.random.seed(seed=314)
 
-# AR/DK DESI spectra wavelengths                                                                                                                                                                                                              
-# TODO:  where are brz extraction wavelengths defined?  https://github.com/desihub/desispec/issues/1006.                                                                                                                                      
+# AR/DK DESI spectra wavelengths
+# TODO:  where are brz extraction wavelengths defined?  https://github.com/desihub/desispec/issues/1006.                                                                                                                              
 wmin, wmax, wdelta = 3600, 9824, 0.8
 wave               = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
 cslice             = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(4900, 7781)}

@@ -1,7 +1,6 @@
 """
-This script generates a master NEA file for a given camera.
+This script generates a master NEA (Noise Equivalent Area) file for a given camera.
 """
-
 from   specter.psf.gausshermite  import  GaussHermitePSF
 from   desiutil.log import get_logger
 from   desispec.parallel import default_nproc as numprocesses
@@ -88,7 +87,7 @@ def main(args):
     neas = np.array(neas)
     angperpix = np.array(angperpix)
 
-    # Patch failures.
+    # Patch failures:  PSF *not* normalized to unity close to end of red spectral range.
     log.info('Patching failures of psf norm. with median nea.')
     
     med_nea = np.median(neas)
@@ -97,7 +96,7 @@ def main(args):
     neas[neas == -99.] = med_nea
     angperpix[angperpix == -99.] = med_angperpix
 
-    # Convert to float 32.
+    # Convert to float 32 for smaller files.
     neas = neas.astype(np.float32)
     angperpix = angperpix.astype(np.float32)
 
