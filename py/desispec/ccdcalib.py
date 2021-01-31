@@ -187,7 +187,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     log.info(f"done")
 
 
-def compute_bias_file(rawfiles, outfile, camera):
+def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
     """
     Compute a bias file from input ZERO rawfiles
 
@@ -195,8 +195,35 @@ def compute_bias_file(rawfiles, outfile, camera):
         rawfiles: list of input raw file names
         outfile (str): output filename
         camera (str): camera, e.g. b0, r1, z9
+
+    Options:
+        explistfile: filename with text list of NIGHT EXPID to use
+
+    Notes: explistfile is only used if rawfiles=None; it should have
+    one NIGHT EXPID entry per line.
     """
     log = get_logger()
+
+    if explistfile is not None:
+        if rawfiles is not None:
+            msg = "specify rawfiles or explistfile, but not both"
+            log.error(msg)
+            raise ValueError(msg)
+
+        rawfiles = list()
+        with open(explistfile, 'r') as fx:
+            for line in fx:
+                line = line.strip()
+                if line.startswith('#') or len(line)<2:
+                    continue
+                night, expid = map(int, line.split())
+                filename = io.findfile('raw', night, expid)
+                if not os.path.exists(filename):
+                    msg = f'Missing {filename}'
+                    log.critical(msg)
+                    raise RuntimeError(msg)
+
+                rawfiles.append(filename)
 
     log.info("read images ...")
     images=[]

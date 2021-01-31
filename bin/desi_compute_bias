@@ -8,13 +8,20 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 description="Compute a master bias from a set of raw data bias images",
 epilog='''This is simply a median of the input raw images.'''
 )
-parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
+parser.add_argument('-i','--image', type = str, default = None, nargs="*",
                     help = 'path of image fits files')
-parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+parser.add_argument('-o','--outfile', type=str, default = None, required = True,
                     help = 'output median image filename')
 parser.add_argument('--camera',type = str, required = True,
                     help = 'camera name BX,RX,ZX with X from 0 to 9')
+parser.add_argument('--explistfile', type=str, default=None, required=False,
+                    help = 'Read NIGHT EXPID from file (one per line)')
 
 args        = parser.parse_args()
 
-compute_bias_file(args.image, args.outfile, args.camera)
+if (args.image is not None) and (args.explistfile is not None):
+    print('ERROR: specify --image or --explistfile but not both')
+    sys.exit(1)
+
+compute_bias_file(args.image, args.outfile, args.camera,
+                  explistfile=args.explistfile)
