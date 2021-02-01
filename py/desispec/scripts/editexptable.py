@@ -36,7 +36,10 @@ def parse_int_list(input_string, intable=None, only_unique=True):
 
 def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=True, overwrite_value=False, joinsymb='|'):
     ## Make sure colname exists before proceeding
+    ## Don't edit fixed columns
     colname = colname.upper()
+    if colname in ['EXPID','NIGHT','CAMWORD','OBSTYPE']:
+        raise ValueError(f"Not allowed to edit colname={colname}.")
     if colname not in exptable.colnames:
         raise ValueError(f"Colname {colname} not in exposure table")
 
@@ -127,25 +130,32 @@ def document_in_comments(tablerow,colname,value,comment_col='COMMENTS'):
 
 
 def edit_exposure_table(night, exp_str, colname, value, append_value=True, overwrite_value=False,
-                        read_user_version=True, write_user_version=True, overwrite_file=True):#, joinsymb='|'):
+                        read_user_version=False, write_user_version=False, overwrite_file=True):#, joinsymb='|'):
+    ## Don't edit fixed columns
+    colname = colname.upper()
+    if colname in ['EXPID','NIGHT','CAMWORD','OBSTYPE']:
+        raise ValueError(f"Not allowed to edit colname={colname}.")
+
     ## Get the file locations
     path = get_exposure_table_path(night=night)
     name = get_exposure_table_name(night=night, extension='.csv')
     pathname = pathjoin(path, name)
     if read_user_version or write_user_version:
         user_pathname = os.path.join(path, name.replace('.csv', str(os.environ['USER']) + '.csv'))
+    else:
+        user_pathname = None
 
     ## Read in the table
     if read_user_version and os.path.isfile(user_pathname):
-        exptable = load_table(user_pathname)
+        exptable = load_table(tablename=user_pathname, tabletype='exptable')
     else:
-        exptable = load_table(pathname)
+        exptable = load_table(tablename=pathname, tabletype='exptable')
 
     ## Do the modification
     outtable = change_exposure_table_rows(exptable, exp_str, colname, value, append_value, overwrite_value)#, joinsymb)
 
     ## Write out the table
     if write_user_version:
-        write_table(outtable, tablename=user_pathname, table_type='exptable', overwrite=overwrite_file)
+        write_table(outtable, tablename=user_pathname, tabletype='exptable', overwrite=overwrite_file)
     else:
-        write_table(outtable, tablename=pathname, table_type='exptable', overwrite=overwrite_file)
+        write_table(outtable, tablename=pathname, tabletype='exptable', overwrite=overwrite_file)

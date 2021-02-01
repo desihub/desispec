@@ -163,11 +163,11 @@ def translate_type_to_pathname(tabletype):
     """
     from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
     from desispec.workflow.proctable import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
-    if tabletype.lower() in ['exp', 'exposure', 'etable']:
+    if tabletype.lower() in ['exp', 'exposure', 'etable', 'exptable', 'exptab']:
         tablename = get_exposure_table_pathname()
-    elif tabletype.lower() in ['proc', 'processing', 'int', 'ptable', 'interal']:
+    elif tabletype.lower() in ['proc', 'processing', 'proctable', 'proctab', 'int', 'ptable', 'interal']:
         tablename = get_processing_table_pathname()
-    elif tabletype.lower() in ['unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
+    elif tabletype.lower() in ['unproc', 'unproc_table', 'unproctable', 'unprocessed', 'unprocessing']:
         tablepath = get_processing_table_path()
         tablename = get_processing_table_name().replace("processing", 'unprocessed')
         tablename = pathjoin(tablepath, tablename)
