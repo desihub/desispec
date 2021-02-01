@@ -7,7 +7,7 @@ from astropy.table import Table
 from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.utils import define_variable_from_environment, pathjoin, get_json_dict
-from desispec.workflow.desi_proc_funcs import load_raw_data_header
+from desispec.workflow.desi_proc_funcs import load_raw_data_header, cameras_from_raw_data
 from desiutil.log import get_logger
 from desispec.util import header2night
 from desispec.io.util import create_camword
@@ -88,6 +88,43 @@ def default_exptypes_for_exptable():
     """
     ## Define the science types to be included in the exposure table (case insensitive)
     return ['arc','flat','twilight','science','sci','dither','dark','bias','zero']
+
+def get_exposure_flags():
+    """
+    Defines the exposure flags that can be saved in the exposure table.
+
+    Returns:
+        list. A list of exposure flags that can be included in an exposure table.
+    """
+    return [
+            'good',
+            'extra_cal', # if more than one series of cals are run, it would be nice to flag and skip others in some circumstances
+
+            ## Might potentially crash, but nothing fundamentally wrong
+            'low_flux',
+            'short_exposure',
+            'aborted',
+
+            ## Missing or incorrect data
+            'metadata_missing', # important header keywords or fiberassign values missing
+            'metadata_mismatch', # the raw data header and accompanying files disagree on something
+
+            ## Hardware issues
+            'misconfig_cal', # cal lamps weren't on, etc.
+            'misconfig_petal', # positioners in wrong places, etc.
+
+            ## Targeting issues
+            'off_target',  # telescope wasn't pointed, etc.
+            'no_stdstars',  # data is missing standard stars
+
+            ## Others
+            'test', # a test exposure that shouldn't be processed
+            'corrupted', # data is corrupted
+            'junk',
+
+            ## No explanation, but don't use
+            'bad'
+           ]
 
 def get_survey_definitions():
     """
@@ -236,10 +273,10 @@ def instantiate_exposure_table(colnames=None, coldtypes=None, rows=None):
             exposure_table.add_row(row)
     return exposure_table
 
-def header_error_reporting(keyword, original_val, replacement_val):
+def keyval_change_reporting(keyword, original_val, replacement_val):
     """
-    Creates a reporting string to be saved in the HEADERERR column of the exposure table. Give the keyword, the original
-    value, and the value that it was replaced with.
+    Creates a reporting string to be saved in the HEADERERR or COMMENTS column of the exposure table. Give the keyword,
+    the original value, and the value that it was replaced with.
 
     Args:
         keyword, str. Keyword in the exposure table that the values correspond to.
@@ -251,7 +288,7 @@ def header_error_reporting(keyword, original_val, replacement_val):
     """
     if original_val is None:
         original_val = "None"
-    return f' {keyword}:{original_val}->{replacement_val} '
+    return f'{keyword}:{original_val}->{replacement_val}'
 
 def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None, colnames=None, coldefaults=None, verbosely=False):
     """
@@ -430,7 +467,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_missing')
             outdict[key] = default
             if np.isscalar(default):
-                reporting = header_error_reporting(key, '', default)
+                reporting = keyval_change_reporting(key, '', default)
                 outdict['HEADERERR'] = np.append(outdict['HEADERERR'], reporting)
 
     ## Make sure that the night is defined:
@@ -444,18 +481,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
             orig = str(header['NIGHT'])
         except (KeyError, ValueError, TypeError):
             orig = ''
-        reporting = header_error_reporting('NIGHT',orig,outdict['NIGHT'])
+        reporting = keyval_change_reporting('NIGHT',orig,outdict['NIGHT'])
         outdict['HEADERERR'] = np.append(outdict['HEADERERR'],reporting)
 
-    ## For now assume that all 3 cameras were good for all operating spectrographs
-    cams = []
-    for f in fx:
-        try:
-            extname = str(f.get_extname()).lower()
-        except (KeyError, ValueError, TypeError):
-            extname = ''
-        if len(extname) == 2 and extname[0] in ['b', 'r', 'z'] and extname[1].isnumeric():
-            cams.append(extname)
+    ## Get the cameras available in the raw data and summarize with camword
+    cams = cameras_from_raw_data(fx)
     camword = create_camword(cams)
     outdict['CAMWORD'] = camword
     fx.close()

@@ -174,6 +174,33 @@ def load_raw_data_header(pathname, return_filehandle=False):
         fx.close()
         return hdr
 
+def cameras_from_raw_data(rawdata):
+    """
+    Takes a filepath or fitsio FITS object corresponding to a DESI raw data file
+    and returns a list of cameras for which data exists in the file.
+
+    Args:
+        rawdata, str or fitsio.FITS object. The input raw desi data file. str must be a full file path. Otherwise
+                                            it must be a fitsio.FITS object.
+    Returns:
+        cameras, str. The list of cameras that have data in the given file.
+    """
+    ## Be flexible on whether input is filepath or a filehandle
+    if type(rawdata) is str:
+        if os.path.isfile(rawdata):
+            fx = fitsio.FITS(rawdata)
+        else:
+            raise IOError(f"File {rawdata} doesn't exist.")
+    else:
+        fx = rawdata
+
+    recam = re.compile('^[brzBRZ][\d]$')
+    cameras = list()
+    for hdu in fx.hdu_list:
+        if recam.match(hdu.get_extname()):
+            cameras.append(hdu.get_extname().lower())
+    return cameras
+
 def update_args_with_headers(args):
     """
     Update input argparse object with values from header if the argparse values are uninformative defaults (generally
@@ -220,12 +247,7 @@ def update_args_with_headers(args):
             raise RuntimeError('Need --obstype or OBSTYPE or FLAVOR header keywords')
 
     if args.cameras is None:
-        recam = re.compile('^[brzBRZ][\d]$')
-        cameras = list()
-        for hdu in fx.hdu_list:
-            if recam.match(hdu.get_extname()):
-                cameras.append(hdu.get_extname().lower())
-
+        cameras = cameras_from_raw_data(fx)
         if len(cameras) == 0:
             raise RuntimeError("No [BRZ][0-9] camera HDUs found in {}".format(args.input))
 
