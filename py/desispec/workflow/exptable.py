@@ -445,8 +445,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
 
     ## Define the column values for the current exposure in a dictionary
     outdict = {}
-    outdict['HEADERERR'] = coldefaults[colnames == 'HEADERERR']
-    outdict['EXPFLAG'] = coldefaults[colnames == 'EXPFLAG']
+    outdict['HEADERERR'] = coldefaults[colnames == 'HEADERERR'][0]
+    outdict['EXPFLAG'] = coldefaults[colnames == 'EXPFLAG'][0]
     for key,default in zip(colnames,coldefaults):
         ## These are dealt with separately
         if key in ['NIGHT','HEADERERR','EXPFLAG']:

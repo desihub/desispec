@@ -71,8 +71,8 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
     ## Get column names and definitions
     colnames,coldtypes,coldeflts = get_exposure_table_column_defs(return_default_values=True)
     colnames,coldtypes,coldeflts = np.array(colnames),np.array(coldtypes),np.array(coldeflts,dtype=object)
-    cur_dtype = coldtypes[colnames==colname]
-    cur_default = coldeflts[colnames==colname]
+    cur_dtype = coldtypes[colnames==colname][0]
+    cur_default = coldeflts[colnames==colname][0]
 
     ## Assign new value
     isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
