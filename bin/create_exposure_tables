@@ -17,7 +17,7 @@ def get_parser():
                                                            "the exposure table, e.g. science,arc,flat,dark,zero, ...")
     parser.add_argument("-i", "--path-to-data", type=str, default=None, help="path to the raw input data")
     parser.add_argument("-o","--exp-table-path", type=str, default=None,  help="path to save exposure tables, without monthly subdirectory")
-    parser.add_argument("--overwrite-file", action="store_true", help="overwrite existing exposure tables")
+    parser.add_argument("--overwrite-files", action="store_true", help="overwrite existing exposure tables")
     parser.add_argument("--verbose", action="store_true", help="print verbose output")
 
     return parser
