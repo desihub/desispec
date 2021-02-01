@@ -41,5 +41,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     ## Convert default-true flags to bools
     args.append_value = (args.append_value.lower() == 'true')
-    args.overwrite_files = (args.overwrite_files.lower() == 'true')
+    args.overwrite_file = (args.overwrite_file.lower() == 'true')
     edit_exposure_table(**args.__dict__)
