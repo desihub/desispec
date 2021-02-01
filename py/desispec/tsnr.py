@@ -264,4 +264,6 @@ def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
         results[key]=tsnrs[tracer]
         log.info('TSNR {} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
 
+    results['ALPHA'] = alpha
+        
     return results
