@@ -736,17 +736,34 @@ def _closing_str():
     return closing
 
 def _table_row(elements,idlabel=None):
+    color_profile = return_color_profile()
     if idlabel is None:
         row_str = '<tr>'
     else:
         row_str = '<tr id="'+str(idlabel)+'">'
     for elem in elements:
-        row_str += _table_element(elem)
+        chars = str(elem).split('/')
+        if len(chars)==2: # m/n
+            if chars[0]=='0' and chars[1]=='0':
+                row_str += _table_element_style(elem,'background-color:'+color_profile['GOOD']['background']+';color:gray')
+            elif chars[0]=='0' and chars[1]!='0':
+                row_str += _table_element_style(elem,'background-color:'+color_profile['BAD']['background'])
+            elif chars[0]!='0' and int(chars[0])<int(chars[1]):
+                row_str += _table_element_style(elem,'background-color:'+color_profile['INCOMPLETE']['background'])
+            elif chars[0]!='0' and int(chars[0])==int(chars[1]):
+                row_str += _table_element_style(elem,'background-color:'+color_profile['GOOD']['background']) # Medium Aqua Green
+
+
+        else:
+            row_str += _table_element(elem)
     row_str += '</tr>'#\n'
     return row_str
 
 def _table_element(elem):
     return '<td>{}</td>'.format(elem)
+
+def _table_element_style(elem,style):
+    return '<td style="{}">{}</td>'.format(style,elem)
 
 def _hyperlink(rel_path,displayname):
     hlink =  '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>'.format(rel_path,displayname)
