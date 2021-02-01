@@ -465,6 +465,9 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
         ## If tileid and not science, just replace with default
         elif key == 'TILEID' and 'OBSTYPE' in header and str(header['OBSTYPE']).lower() != 'science':
             outdict[key] = default
+        ## If obstype isn't arc or flat, don't worry about seqnum or seqtot
+        elif key in ['SEQNUM','SEQTOT'] and 'OBSTYPE' in header and str(header['OBSTYPE']).lower() != 'science':
+            outdict[key] = default
         ## if something else, flag as missing metadata and replace with default
         else:
             if 'metadata_missing' not in outdict['EXPFLAG']:
