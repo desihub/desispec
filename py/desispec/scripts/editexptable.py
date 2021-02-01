@@ -34,7 +34,7 @@ def parse_int_list(input_string, intable=None, only_unique=True):
         out_array = np.unique(out_array)
     return out_array.astype(int)
 
-def change_exposure_table_rows(exptable, exp_str, colname, content, append_content=True, overwrite_content=False, joinsymb='|'):
+def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=True, overwrite_value=False, joinsymb='|'):
     ## Make sure colname exists before proceeding
     colname = colname.upper()
     if colname not in exptable.colnames:
@@ -54,14 +54,14 @@ def change_exposure_table_rows(exptable, exp_str, colname, content, append_conte
     ## Match data type and convert where necessary
     if colname == 'EXPFLAG':
         expflags = get_exposure_flags()
-        content = content.lower().replace(' ','_')
-        if content not in expflags:
-            raise ValueError(f"Couldn't understand exposure flag: {content}")
+        value = value.lower().replace(' ','_')
+        if value not in expflags:
+            raise ValueError(f"Couldn't understand exposure flag: {value}")
     elif colname == 'BADAMPS':
-        content = content.replace(' ','')
+        value = value.replace(' ','')
         for symb in [',',':',';','.']:
-            content = content.replace(symb,joinsymb)
-        for amp in content.split(joinsymb):
+            value = value.replace(symb,joinsymb)
+        for amp in value.split(joinsymb):
             if len(amp)!=3 or not amp[2].isnumeric():
                 raise ValueError("Each BADAMPS entry must be {camera}{petal}{amp} (e.g. r7A). "+f'Given: {amp}')
 
@@ -71,63 +71,63 @@ def change_exposure_table_rows(exptable, exp_str, colname, content, append_conte
     cur_dtype = coldtypes[colnames==colname]
     cur_default = coldeflts[colnames==colname]
 
-    ## Assign new content
+    ## Assign new value
     isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
     isarr = (cur_dtype in [list, np.array, np.ndarray])
     for rownum in row_numbers:
         if isstr and str(exptable[colname][rownum]).strip() != '':
-            if append_content:
-                exptable[colname][rownum] += f'{joinsymb}{content}'
-            elif overwrite_content:
-                exptable[rownum] = document_in_comments(exptable[rownum],colname,content)
-                exptable[colname][rownum] = f'{content}'
+            if append_value:
+                exptable[colname][rownum] += f'{joinsymb}{value}'
+            elif overwrite_value:
+                exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
+                exptable[colname][rownum] = f'{value}'
             else:
                 exp = exptable[rownum]['EXPID']
                 raise ValueError \
-                    (f"In exposure: {exp}. Asked to overwrite non-empty cell without overwrite_content or append_content enabled Skipping.")
+                    (f"In exposure: {exp}. Asked to overwrite non-empty cell without overwrite_value or append_value enabled Skipping.")
         elif isarr and len(exptable[colname][rownum])>0:
-            if append_content:
-                exptable[colname][rownum] = np.append(exptable[colname][rownum], content)
-            elif overwrite_content:
-                exptable[rownum] = document_in_comments(exptable[rownum],colname,content)
-                exptable[colname][rownum] = np.append(cur_default, content)
+            if append_value:
+                exptable[colname][rownum] = np.append(exptable[colname][rownum], value)
+            elif overwrite_value:
+                exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
+                exptable[colname][rownum] = np.append(cur_default, value)
             else:
                 exp = exptable[rownum]['EXPID']
                 raise ValueError \
-                    (f"In exposure: {exp}. Asked to overwrite non-empty cell without overwrite_content or append_content enabled. Skipping.")
+                    (f"In exposure: {exp}. Asked to overwrite non-empty cell without overwrite_value or append_value enabled. Skipping.")
         elif exptable[colname][rownum] != cur_default:
-            if append_content:
+            if append_value:
                 exp = exptable[rownum]['EXPID']
                 raise ValueError(
                     f"In exposure: {exp}. Cannot append to non-empty cell with type: {cur_dtype}. Skipping.")
-            elif overwrite_content:
-                exptable[rownum] = document_in_comments(exptable[rownum],colname,content)
-                exptable[colname][rownum] = np.append(cur_default, content)
+            elif overwrite_value:
+                exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
+                exptable[colname][rownum] = np.append(cur_default, value)
             else:
                 exp = exptable[rownum]['EXPID']
-                raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype} without overwrite_content enabled. Skipping.")
+                raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype} without overwrite_value enabled. Skipping.")
         else:
-            exptable[colname][rownum] = content
-            exptable[rownum] = document_in_comments(exptable[rownum],colname,content)
+            exptable[colname][rownum] = value
+            exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
     return exptable
 
 
-def document_in_comments(tablerow,colname,content,comment_col='COMMENTS'):
-    reporting = keyval_change_reporting(colname, tablerow[colname], content)
+def document_in_comments(tablerow,colname,value,comment_col='COMMENTS'):
+    reporting = keyval_change_reporting(colname, tablerow[colname], value)
     existing_entries = [colname in term for term in tablerow[comment_col]]
     if np.any(existing_entries):
         loc = np.where(existing_entries)[0][0]
         entry = tablerow[comment_col][loc]
-        old_content = entry.split('->')[1]
-        new_entry = entry.replace(old_content,content)
+        old_value = entry.split('->')[1]
+        new_entry = entry.replace(old_value,value)
         tablerow[comment_col][loc] = new_entry
     else:
         tablerow[comment_col] = np.append(tablerow[comment_col], reporting)
     return tablerow
 
 
-def edit_exposure_table(night, exp_str, colname, content, read_user_version=True, write_user_version=True,
-                        append_content=True, overwrite_content=False, overwrite_file=False, joinsymb='|'):
+def edit_exposure_table(night, exp_str, colname, value, append_value=True, overwrite_value=False,
+                        read_user_version=True, write_user_version=True, overwrite_file=True):#, joinsymb='|'):
     ## Get the file locations
     path = get_exposure_table_path(night=night)
     name = get_exposure_table_name(night=night, extension='.csv')
@@ -142,8 +142,7 @@ def edit_exposure_table(night, exp_str, colname, content, read_user_version=True
         exptable = load_table(pathname)
 
     ## Do the modification
-    outtable = change_exposure_table_rows(exptable, exp_str, colname, content, append_content, overwrite_content,
-                                          joinsymb)
+    outtable = change_exposure_table_rows(exptable, exp_str, colname, value, append_value, overwrite_value)#, joinsymb)
 
     ## Write out the table
     if write_user_version:
