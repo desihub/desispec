@@ -17,10 +17,7 @@ from ctypes.util import find_library
 from astropy.io import fits
 
 from desiutil.log import get_logger
-
-import specex as spx
-import specter.psf
-from . import psfio
+from desispec.psfio import run_specex
 
 modext = "so"
 if sys.platform == "darwin":
@@ -66,94 +63,6 @@ if libspecex is not None:
         ct.POINTER(ct.POINTER(ct.c_char))
     ]
 
-#########################################
-# TEMPORARY SPECEX-DESISPEC I/O FUNCTIONS
-
-def compare_psfs(specter_psf, specexpy_psf, specex_psf):
-    print('specter nspec',specter_psf.nspec)
-    print('specex deg   ',specex_psf.Degree())
-    return
-
-def meta2header(meta):
-    header = spx.MapStringString()
-
-    for key in meta:
-        mkey = meta[key]
-        if type(mkey) == bool:
-            header[key]='F'
-            if mkey: header[key]='T'
-        elif type(mkey) == str: 
-            mstr = mkey
-            if len(mstr) < 8: mstr = mstr.ljust(8, ' ')
-            header[key]="\'"+mstr+"\'"
-        else:
-            mstr = str(mkey)
-            if len(mstr) > 1:
-                if mstr[-2:]=='.0': mstr=mstr[:-1]
-            header[key]=mstr
-
-    return header
-
-def read_desi_ppimage_spx(opts):
-    import desispec.io.image
-
-    # read images from fits file
-    dsmg = desispec.io.image.read_image(opts.arc_image_filename)
-
-    # set ivar=0 to pixels with mask!=0
-    dsmg.ivar[dsmg.mask!=0] = 0.0
-
-    # convert from astropy.io.fits.header.Header dict-like object to
-    # std::map<std::string,std::string> object via meta2header
-    # function above, changing formatting to match current use in
-    # specex
-    hdr  = meta2header(dsmg.meta)
-
-    # instantiate new specex::PyImage object with arrays and header
-    # from the preproc fits file. this object will be passed to the
-    # specex::PyFitting::fit_psf routine 
-    pymg = spx.PyImage(dsmg.pix, dsmg.ivar,
-                       dsmg.mask,dsmg.readnoise,
-                       hdr)
-
-    return pymg
-
-def compheaders(header1,header2):
-    if len(header1) != len(header2):
-        print('lengths not same')
-        return 1
-
-    for key in header1:
-        if header1[key] != header2[key]:
-            print('values for key ',key,' are ',header1[key],' ',header2[key])
-            return 1
-
-    return 0
-
-def comparrs(arr1,arr2,tag):
-
-    if np.array_equal(arr1,arr2): return 0
-    
-    if len(arr1) != len(arr2):
-        print(tag,' array length are different')
-        return 1
-    
-    diff = np.abs(arr1-arr2)
-    print(tag,' arrays are different')
-    print('  min diff',diff.min())
-    print('  max diff',diff.max())
-    print('  avg diff',diff.mean())
-    print('  arr1 avg',arr1.mean())
-    print('  arr2 avg',arr2.mean())
-    print(np.shape(arr1))
-    print(len(diff[diff>0]))
-    print(arr1[diff>0],'\n')
-    print(arr2[diff>0],'\n')
-
-    return 1
-
-# END TEMPORARY I/O SUPPORT FUNCTIONS
-#########################################
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
@@ -179,7 +88,7 @@ def parse(options=None):
                         help="comma separated list of broken fibers")
     parser.add_argument("--disable-merge", action = 'store_true',
                         help="disable merging fiber bundles")
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -189,10 +98,6 @@ def parse(options=None):
 
 
 def main(args, comm=None):
-
-    #pyps = opts= 0
-    #psfio.write_psf(pyps,opts)
-    #return
 
     log = get_logger()
 
@@ -213,6 +118,7 @@ def main(args, comm=None):
     specmin = int(args.specmin)
     nspec = int(args.nspec)
     bundlesize = int(args.bundlesize)
+
     specmax = specmin + nspec
 
     # Now we divide our spectra into bundles
@@ -255,8 +161,6 @@ def main(args, comm=None):
 
     if rank == 0:
         # Print parameters
-        log.info("specex:  io_refactor")
-        time.sleep(5)
         log.info("specex:  using {} processes".format(nproc))
         log.info("specex:  input image = {}".format(imgfile))
         log.info("specex:  input PSF = {}".format(inpsffile))
@@ -277,8 +181,9 @@ def main(args, comm=None):
 
     outdir = os.path.dirname(outroot)
     if rank == 0:
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
+        if outdir != "" :
+            if not os.path.isdir(outdir):
+                os.makedirs(outdir)
 
     failcount = 0
 
@@ -303,42 +208,13 @@ def main(args, comm=None):
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
-        # old way 
+        retval = run_specex(com)
 
-        # argc = len(com)
-        # arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) \
-        #     for i in range(argc)]
-        # addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in \
-        #     map(ct.addressof, arg_buffers) ]
-        # arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)        
-        # rval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
-
-        # new way
-
-        # instantiate specex c++ objects exposed to python        
-        opts = spx.PyOptions() # input options
-        pyio = spx.PyIO()      # IO options and methods
-        pypr = spx.PyPrior()   # Gaussian priors
-        pyps = spx.PyPSF()     # psf data
-        pyft = spx.PyFitting() # psf fitting
-
-        # copy com to opaque pybind VectorString object args
-        spxargs = spx.VectorString()
-        for strs in com:
-            spxargs.append(strs)
-        
-        opts.parse(spxargs)                    # parse args
-        pyio.check_input_psf(opts)             # set input psf bools
-        pypr.deal_with_priors(opts)            # set Gaussian priors
-        
-        pymg = read_desi_ppimage_spx(opts)     # read preproc images (desispec)        
-        pyio.read_psf_data(opts,pyps)          # read psf (specex)        
-
-        pyft.fit_psf(opts,pyio,pypr,pymg,pyps) # fit psf (specex)
-
-        pyio.prepare_psf(opts,pyps)            # prepare psf (specex)
-        psfio.write_psf(pyps,opts)             # write psf (fitsio)
-        pyio.write_spots(opts,pyps)            # write spots
+        if retval != 0:
+            comstr = " ".join(com)
+            log.error("desi_psf_fit on process {} failed with return "
+                "value {} running {}".format(rank, retval, comstr))
+            failcount += 1
 
     if comm is not None:
         from mpi4py import MPI
@@ -359,9 +235,9 @@ def main(args, comm=None):
             #- Empirically it appears that files written by one rank sometimes
             #- aren't fully buffer-flushed and closed before getting here,
             #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
-            log.info('HACK: taking a 2 sec pause before merging')
+            log.info('5 sec pause before merging')
             sys.stdout.flush()
-            time.sleep(2.)
+            time.sleep(5.)
 
             merge_psf(inputs,outfits)
 
@@ -473,7 +349,7 @@ def mean_psf(inputs, output):
     nbundles=None
     nfibers_per_bundle=None
 
-    
+
     for input in inputs :
         log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
@@ -574,11 +450,21 @@ def mean_psf(inputs, output):
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
 
-            if ok.size>=2 : # use median
-                log.debug("bundle #{} : use median".format(bundle))
+            # We finally resorted to use a mean instead of a median here for two reasons.
+            # First, there is already a vetting of PSF bundles with good chi2 above
+            # that protects us from bad fits (we only expect outliers because of bad fits because of cosmic rays,
+            # not a glitch in hardware). Second, some of the PSF parameters have large correlations,
+            # which mean that two pairs of parameter values, like (p_a_i,p_b_i) and (p_a_j,p_b_j) (with a,b param
+            # indexes and i,j exposure indices) may give similar PSFs despite large noise in individual parameters
+            # but a median could decide to select a pair like (p_a_i,p_b_j) that could lead to a PSF inconsistent
+            # with data. Using a mean instead of a median protects us from this situation.
+
+            if ok.size>=2 : # use mean
+                log.debug("bundle #{} : use mean".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
-                    output_coeff[f]=np.median(coeff[ok,f],axis=0)
-                output_rchi2[bundle]=np.median(bundle_rchi2[ok,bundle])
+                    output_coeff[f]=np.mean(coeff[ok,f],axis=0)
+                output_rchi2[bundle]=np.mean(bundle_rchi2[ok,bundle])
+
             elif ok.size==1 : # copy
                 log.debug("bundle #{} : use only one psf ".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
@@ -619,8 +505,8 @@ def mean_psf(inputs, output):
                     val = legval(iu,ytrace[f])
                     ytrace[f] = legfit(ou,val,deg=npar-1)
 
-            hdulist["xtrace"].data = np.median(np.array(xtrace),axis=0)
-            hdulist["ytrace"].data = np.median(np.array(ytrace),axis=0)
+            hdulist["xtrace"].data = np.mean(xtrace,axis=0)
+            hdulist["ytrace"].data = np.mean(ytrace,axis=0)
 
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
@@ -629,7 +515,7 @@ def mean_psf(inputs, output):
         if hdu in hdulist :
             for input in inputs :
                 hdulist[hdu].header["comment"] = "inc {}".format(input)
-        
+
     # save output PSF
     hdulist.writeto(output, overwrite=True)
     log.info("wrote {}".format(output))
