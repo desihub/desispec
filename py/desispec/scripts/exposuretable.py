@@ -67,7 +67,7 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
                                          colnames=colnames, coldefaults=coldefaults, verbosely=verbose)
             if verbose:
                 print("Rowdict:\n",rowdict,"\n\n")
-            if rowdict is not None:
+            if rowdict is not None and type(rowdict) is not str:
                 ## Add the dictionary of column values as a new row
                 nightly_tabs[night].add_row(rowdict)
 
