@@ -44,6 +44,14 @@ log = get_logger()
 # Set SPEC_PROD also.
 calibdir = os.environ['DESI_SPECTRO_CALIB']
 
+log.info('outdir = {}'.format(args.outdir))
+log.info('prod = {}'.format(args.prod))
+log.info('camera = {}'.format(args.camera))
+log.info('summary_only = {}'.format(args.summary_only))
+log.info('expids = {}'.format(args.expids))
+
+log.info('$DESI_SPECTRO_CALIB = {}'.format(calibdir))
+
 petals = np.arange(10).astype(str)
 
 if args.camera is None:
@@ -84,11 +92,8 @@ for cam in cameras:
 
         hdul.close()
         
-    print('{} science frames to reduce for {}.'.format(len(sci_frames[cam]), cam))
-
-exit(0)
+    log.info('{} science frames to reduce for {}.'.format(len(sci_frames[cam]), cam))
     
-# 
 for cam in cameras:
     summary  = None
     
@@ -113,11 +118,13 @@ for cam in cameras:
             camera = parts[1]
             
             calib  = findfile('fluxcalib', night=night, expid=expid, camera=camera, specprod_dir=None)
+            calib  = calib.replace('SPCALIB', calibdir)
             
             cframe = fits.open(x)
             hdr    = cframe[0].header['FIBERFLT']
             flat   = hdr.replace('SPECPROD', args.prod)
-
+            flat   = flat.replace('SPCALIB', calibdir)
+            
             tileid = cframe[0].header['TILEID']
         
             iin = x.replace('cframe', 'frame')
@@ -127,7 +134,7 @@ for cam in cameras:
             ens = '/project/projectdirs/desi/users/mjwilson/tsnr-ensemble/'
             out = args.outdir + '/tsnr/{}/{:08d}/tsnr-{}-{:08d}.fits'.format(night, expid, camera, expid)
 
-            if os.path.exists(out):
+            if (not args.summary_only) & os.path.exists(out):
                 continue
             
             Path(os.path.dirname(out)).mkdir(parents=True, exist_ok=True)
@@ -177,7 +184,7 @@ for cam in cameras:
             else:
                 summary = vstack((summary, entry))
                 
-            print('{:08d}  {}: Reduced {} of {}.'.format(expid, cam, kk, len(sci_frames[cam])))
+            log.info('{:08d}  {}: Reduced {} of {}.'.format(expid, cam, kk, len(sci_frames[cam])))
 
         hdul.close()
         
