@@ -462,6 +462,10 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
             else:
                 outdict[key] = val
         ## If key not in the header, identify that and place a default value
+        ## If tileid and not science, just replace with default
+        elif key == 'TILEID' and 'OBSTYPE' in header and str(header['OBSTYPE']).lower() != 'science':
+            outdict[key] = default
+        ## if something else, flag as missing metadata and replace with default
         else:
             if 'metadata_missing' not in outdict['EXPFLAG']:
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_missing')
