@@ -65,6 +65,8 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
         for exp in listpath(path_to_data,str(night)):
             rowdict = summarize_exposure(path_to_data, night=night, exp=exp, obstypes=obstypes, surveyname=survey_num, \
                                          colnames=colnames, coldefaults=coldefaults, verbosely=verbose)
+            if verbose:
+                print("Rowdict:\n",rowdict,"\n\n")
             if rowdict is not None:
                 ## Add the dictionary of column values as a new row
                 nightly_tabs[night].add_row(rowdict)
