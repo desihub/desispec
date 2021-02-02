@@ -18,10 +18,17 @@ parser = argparse.ArgumentParser(
     model(x,y,t) = bias(x,y) + dark(x,y)*t + nonlinear(y,t)
 
     i.e. the non-linear term is only a function of row (y)
+
+    Data can be grouped by calendar --days (rollover at midnight) or
+    --nights (rollover at noon)
 ''')
 
-parser.add_argument('--days', type=int, required=True, nargs="*",
+parser.add_argument('--days', type=int, nargs="*",
                     help='YEARMMDD days to use for ZEROs and DARKs')
+parser.add_argument('--nights', type=int, nargs="*",
+                    help='YEARMMDD nights to use for ZEROs and DARKs')
+parser.add_argument('--first-expid', type=int, required=False,
+                    help='First EXPID to include')
 parser.add_argument('--darkfile', type=str, required=True,
                     help='output dark model file')
 parser.add_argument('--biasfile', type=str, required=True,
@@ -59,6 +66,10 @@ from desispec.io import findfile
 
 log = get_logger()
 
+if args.days is None and args.nights is None:
+    log.critical('Must specify --days or --nights')
+    sys.exit(1)
+
 #- tempdir caches files that could be re-used when rerunning for debugging
 #- i.e. it can be cleaned up when done, but isn't completely transient
 if args.tempdir is None:
@@ -73,13 +84,21 @@ if not os.path.isdir(tempdir):
 
 #- Data taken on the morning of the first day might be associated with the
 #- previous NIGHT
-year = int(str(args.days[0])[0:4])
-month = int(str(args.days[0])[4:6])
-day = int(str(args.days[0])[6:8])
+#- Note: use the variable named "night" whether grouped by days or nights
+if args.days:
+    log.info('Grouping ZEROs with DARKs by calendar DAY')
+    daynight = 'DAY'
+    year = int(str(args.days[0])[0:4])
+    month = int(str(args.days[0])[4:6])
+    day = int(str(args.days[0])[6:8])
 
-t = datetime.datetime(year, month, day) - datetime.timedelta(days=1)
-nights = [int(t.strftime('%Y%m%d'))]
-nights.extend(args.days)
+    t = datetime.datetime(year, month, day) - datetime.timedelta(days=1)
+    nights = [int(t.strftime('%Y%m%d'))]
+    nights.extend(args.days)
+else:
+    log.info('Grouping ZEROs with DARKs by observing NIGHT')
+    daynight = 'NIGHT'
+    nights = args.nights
 
 #- Get table of what exposures were taken on those days
 speclog_file = os.path.join(tempdir, 'speclog.csv')
@@ -91,19 +110,28 @@ else:
     speclog = desispec.io.util.get_speclog(nights)
 
     #- Add "DAY" column = rolls over at midnight instead of MST noon
-    t = Time(speclog['MJD']-7/24, format='mjd')
-    speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+    if daynight == 'DAY':
+        t = Time(speclog['MJD']-7/24, format='mjd')
+        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
 
-    #- Trim to just the requested days
+    #- Trim to just the requested days/nights
     keep = np.zeros(len(speclog), dtype=bool)
-    for day in args.days:
-        keep |= speclog['DAY'] == day
+    for night in nights:
+        keep |= speclog[daynight] == night
 
     speclog = speclog[keep]
     tmpfile = speclog_file + '.tmp-' + str(os.getpid())
     speclog.write(tmpfile, format='ascii.csv')
     os.rename(tmpfile, speclog_file)
     log.info(f'Wrote speclog to {speclog_file}')
+
+#- filter expids if requested
+if args.first_expid is not None:
+    keep = speclog['EXPID'] >= args.first_expid
+    speclog = speclog[keep]
+    if len(speclog) == 0:
+        log.critical('No exposures! exiting...')
+        sys.exit(1)
 
 #- group EXPTIMEs by integer
 speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
@@ -124,35 +152,35 @@ speclog = speclog[keep]
 #- Print some summary stats before continuing
 isZero = speclog['OBSTYPE'] == 'ZERO'
 isDark = speclog['OBSTYPE'] == 'DARK'
-for day in args.days:
-    ii = speclog['DAY'] == day
+for night in nights:
+    ii = speclog[daynight] == night
     nzeros = np.count_nonzero(ii & isZero)
     ndarks = np.count_nonzero(ii & isDark)
     darktimes = sorted(set(speclog['EXPTIME_INT'][ii & isDark]))
-    log.info(f'Day {day} has {nzeros} ZEROs and {ndarks} DARKs with exptimes {darktimes}')
+    log.info(f'{night} has {nzeros} ZEROs and {ndarks} DARKs with exptimes {darktimes}')
 
 #- Combine the ZEROs into per-day bias files
 all_zerofiles = list()
-for day in args.days:
+for night in nights:
     zerofiles = list()
-    ii = isZero & (speclog['DAY'] == day)
+    ii = isZero & (speclog[daynight] == night)
     nzeros = np.count_nonzero(ii)
     nzeros_good = nzeros - args.nskip_zeros
     if nzeros_good < 5:
-        log.critical(f'{nzeros} ZEROS on {day} is insufficient when skipping {args.nskip_zeros}')
+        log.critical(f'{nzeros} ZEROS on {night} is insufficient when skipping {args.nskip_zeros}')
         sys.exit(1)
 
     elif nzeros_good < 20:
-        log.warning(f'Only {nzeros_good} good ZEROs on day {day}')
+        log.warning(f'Only {nzeros_good} good ZEROs on {night}')
     else:
-        log.info(f'Using {nzeros_good} ZEROs on day {day}')
+        log.info(f'Using {nzeros_good} ZEROs on {night}')
 
     for row in speclog[ii][args.nskip_zeros:]:
         rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
         zerofiles.append(rawfile)
         all_zerofiles.append(rawfile)
     
-    biasfile = f'{tempdir}/bias-{day}-{args.camera}.fits'
+    biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
         log.info(f'{biasfile} already exists')
     else:
@@ -180,7 +208,7 @@ for exptime in darktimes:
     biasfiles = list()
     ii = (speclog['EXPTIME_INT'] == exptime)
     for row in speclog[isDark & ii]:
-        day, night, expid = row['DAY'], row['NIGHT'], row['EXPID']
+        day, night, expid = row[daynight], row['NIGHT'], row['EXPID']
         rawfiles.append(findfile('raw', night, expid, args.camera))
         biasfiles.append(f'{tempdir}/bias-{day}-{args.camera}.fits')
 

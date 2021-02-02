@@ -187,7 +187,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     log.info(f"done")
 
 
-def compute_bias_file(rawfiles, outfile, camera):
+def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
     """
     Compute a bias file from input ZERO rawfiles
 
@@ -195,8 +195,35 @@ def compute_bias_file(rawfiles, outfile, camera):
         rawfiles: list of input raw file names
         outfile (str): output filename
         camera (str): camera, e.g. b0, r1, z9
+
+    Options:
+        explistfile: filename with text list of NIGHT EXPID to use
+
+    Notes: explistfile is only used if rawfiles=None; it should have
+    one NIGHT EXPID entry per line.
     """
     log = get_logger()
+
+    if explistfile is not None:
+        if rawfiles is not None:
+            msg = "specify rawfiles or explistfile, but not both"
+            log.error(msg)
+            raise ValueError(msg)
+
+        rawfiles = list()
+        with open(explistfile, 'r') as fx:
+            for line in fx:
+                line = line.strip()
+                if line.startswith('#') or len(line)<2:
+                    continue
+                night, expid = map(int, line.split())
+                filename = io.findfile('raw', night, expid)
+                if not os.path.exists(filename):
+                    msg = f'Missing {filename}'
+                    log.critical(msg)
+                    raise RuntimeError(msg)
+
+                rawfiles.append(filename)
 
     log.info("read images ...")
     images=[]
@@ -363,10 +390,25 @@ def model_y1d(image, smooth=0):
 
     return model1d
 
-def make_dark_scripts(days, outdir, cameras=None,
-        linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False):
+def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
+        linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
+        first_expid=None):
     """
-    TODO: document
+    Generate batch script to run desi_compute_dark_nonlinear
+
+    Args:
+        outdir (str): output directory
+        days or nights (list of int): days or nights to include
+
+    Options:
+        cameras (list of str): cameras to include, e.g. b0, r1, z9
+        linexptime (float): exptime after which dark current is linear
+        nskip_zeros (int): number of ZEROs at beginning of day/night to skip
+        tempdir (str): tempfile working directory
+        nosubmit (bool): generate scripts but don't submit them to batch queue
+        first_expid (int): ignore expids prior to this
+
+    Args/Options are passed to the desi_compute_dark_nonlinear script
     """
     log = get_logger()
 
@@ -389,7 +431,14 @@ def make_dark_scripts(days, outdir, cameras=None,
     today = datetime.datetime.now().strftime('%Y%m%d')
 
     #- Convert list of days to single string to use in command
-    days = ' '.join([str(tmp) for tmp in days])
+    if days is not None:
+        days = ' '.join([str(tmp) for tmp in days])
+    elif nights is not None:
+        nights = ' '.join([str(tmp) for tmp in nights])
+    else:
+        msg = 'Must specify days or nights'
+        log.critical(msg)
+        raise ValueError(msg)
 
     for camera in cameras:
         sp = 'sp' + camera[1]
@@ -400,15 +449,21 @@ def make_dark_scripts(days, outdir, cameras=None,
         darkfile = f'dark-{key}.fits.gz'
         biasfile = f'bias-{key}.fits.gz'
 
-        cmd = f"desi_compute_dark_nonlinear --days {days}"
+        cmd = f"desi_compute_dark_nonlinear"
         cmd += f" \\\n    --camera {camera}"
         cmd += f" \\\n    --tempdir {tempdir}"
         cmd += f" \\\n    --darkfile {darkfile}"
         cmd += f" \\\n    --biasfile {biasfile}"
+        if days is not None:
+            cmd += f" \\\n    --days {days}"
+        if nights is not None:
+            cmd += f" \\\n    --nights {nights}"
         if linexptime is not None:
             cmd += f" \\\n    --linexptime {linexptime}"
         if nskip_zeros is not None:
             cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
+        if first_expid is not None:
+            cmd += f" \\\n    --first-expid {first_expid}"
 
         with open(batchfile, 'w') as fx:
             fx.write(f'''#!/bin/bash -l

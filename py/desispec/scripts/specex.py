@@ -156,13 +156,12 @@ def main(args, comm=None):
 
 
     mynbundle = int(nbundle / nproc)
-    myfirstbundle = 0
     leftover = nbundle % nproc
     if rank < leftover:
         mynbundle += 1
-        myfirstbundle = rank * mynbundle
+        myfirstbundle = bundles[0] + rank * mynbundle
     else:
-        myfirstbundle = ((mynbundle + 1) * leftover) + \
+        myfirstbundle = bundles[0] + ((mynbundle + 1) * leftover) + \
             (mynbundle * (rank - leftover))
 
     if rank == 0:
