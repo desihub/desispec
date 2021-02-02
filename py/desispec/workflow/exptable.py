@@ -445,8 +445,10 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
 
     ## Define the column values for the current exposure in a dictionary
     outdict = {}
+    ## Set HEADERERR and EXPFLAG before loop because they may be set if other columns have missing information
     outdict['HEADERERR'] = coldefaults[colnames == 'HEADERERR'][0]
     outdict['EXPFLAG'] = coldefaults[colnames == 'EXPFLAG'][0]
+    ## Loop over columns and fill in the information. If unavailable report/flag if necessary and assign default
     for key,default in zip(colnames,coldefaults):
         ## These are dealt with separately
         if key in ['NIGHT','HEADERERR','EXPFLAG']:
@@ -463,10 +465,10 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
                 outdict[key] = val
         ## If key not in the header, identify that and place a default value
         ## If tileid and not science, just replace with default
-        elif key == 'TILEID' and 'OBSTYPE' in header and str(header['OBSTYPE']).lower() != 'science':
+        elif key in ['SEQNUM','SEQTOT'] and obstype in ['science','dark','zero']:
             outdict[key] = default
         ## If obstype isn't arc or flat, don't worry about seqnum or seqtot
-        elif key in ['SEQNUM','SEQTOT'] and 'OBSTYPE' in header and str(header['OBSTYPE']).lower() != 'science':
+        elif key in ['TILEID','TARGTRA','TARGTDEC'] and obstype != 'science':
             outdict[key] = default
         ## if something else, flag as missing metadata and replace with default
         else:

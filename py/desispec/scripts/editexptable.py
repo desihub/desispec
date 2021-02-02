@@ -38,7 +38,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
     ## Make sure colname exists before proceeding
     ## Don't edit fixed columns
     colname = colname.upper()
-    if colname in ['EXPID','NIGHT','CAMWORD','OBSTYPE']:
+    if colname in ['EXPID','CAMWORD']:
         raise ValueError(f"Not allowed to edit colname={colname}.")
     if colname not in exptable.colnames:
         raise ValueError(f"Colname {colname} not in exposure table")
