@@ -107,26 +107,21 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
                     f"In exposure: {exp}. Cannot append to non-empty cell with type: {cur_dtype}. Skipping.")
             elif overwrite_value:
                 exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
-                exptable[colname][rownum] = np.append(cur_default, value)
+                exptable[colname][rownum] = value
             else:
                 exp = exptable[rownum]['EXPID']
                 raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype} without overwrite_value enabled. Skipping.")
         else:
+            exptable[rownum] = document_in_comments(exptable[rownum], colname, value)
             exptable[colname][rownum] = value
-            exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
+            
     return exptable
 
 def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
     colname = colname.upper()
-    if colname in ['COMMENTS','HEADERERR']:
-        print("Won't do comment reporting for comment column.")
+    if colname in ['COMMENTS','HEADERERR','BADCANWORD','BADAMPS','LASTSTEP','EXPFLAG']:
+        print("Won't do comment reporting for user defined column.")
         return tablerow
-
-    if comment_col is None:
-        if colname in ['EXPFLAG','BADCANWORD','BADAMPS','LASTSTEP']:
-            comment_col = 'COMMENTS'
-    else:
-        comment_col = 'HEADERERR'
 
     existing_entries = [colname in term for term in tablerow[comment_col]]
     if np.any(existing_entries):
@@ -150,7 +145,7 @@ def deconstruct_document_in_comments(entry):
     ## Get the key left of colon
     entries = entry.split(':')
     key = entries[0]
-    ## The values could potentially have colon's. This allows that
+    ## The values could potentially have colon's. This allows for that
     values = ':'.join(entries[1:])
     ## Two values should be separated by text arrow
     val1,val2 = values.split("->")
@@ -168,7 +163,7 @@ def edit_exposure_table(night, exp_str, colname, value, append_value=True, overw
     name = get_exposure_table_name(night=night)#, extension='.csv')
     pathname = pathjoin(path, name)
     if read_user_version or write_user_version:
-        user_pathname = os.path.join(path, name.replace('.csv', str(os.environ['USER']) + '.csv'))
+        user_pathname = os.path.join(path, name.replace('.csv', '_' + str(os.environ['USER']) + '.csv'))
     else:
         user_pathname = None
 
