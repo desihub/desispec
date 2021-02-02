@@ -97,6 +97,9 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         log.error("Pathname or type of table is required to save the table")
         return
 
+    if tabletype is not None:
+        tabletype = standardize_tabletype(tabletype)
+
     if tablename is None:
         tablename = translate_type_to_pathname(tabletype)
 
@@ -148,6 +151,24 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
     if verbose:
         log.info("Written table: ", table.info)
 
+def standardize_tabletype(tabletype):
+    """
+    Given the user defined type of table it returns the proper 'tabletype' expected by the pipeline
+
+    Args:
+        tabletype, str. Allows for a flexible number of input options, but should refer to either the 'exposure',
+                         'processing', or 'unprocessed' table types.
+
+    Returns:
+         tabletype, str. Standardized tabletype values. Either "exptable", "proctable", "unproctable".
+    """
+    if tabletype.lower() in ['exp', 'exposure', 'etable', 'exptable', 'exptab']:
+        tabletype = 'exptable'
+    elif tabletype.lower() in ['proc', 'processing', 'proctable', 'proctab', 'int', 'ptable', 'interal']:
+        tabletype = 'proctable'
+    elif tabletype.lower() in ['unproc', 'unproctable', 'unproctab', 'unprocessed', 'unprocessing']:
+        tabletype = 'unproctable'
+    return tabletype
 
 def translate_type_to_pathname(tabletype):
     """
@@ -163,16 +184,16 @@ def translate_type_to_pathname(tabletype):
     """
     from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
     from desispec.workflow.proctable import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
-    if tabletype.lower() in ['exp', 'exposure', 'etable', 'exptable', 'exptab']:
+    tabletype = standardize_tabletype(tabletype)
+    if tabletype == 'exptable':
         tablename = get_exposure_table_pathname()
-    elif tabletype.lower() in ['proc', 'processing', 'proctable', 'proctab', 'int', 'ptable', 'interal']:
+    elif tabletype == 'proctable':
         tablename = get_processing_table_pathname()
-    elif tabletype.lower() in ['unproc', 'unproc_table', 'unproctable', 'unprocessed', 'unprocessing']:
+    elif tabletype == 'unproctable':
         tablepath = get_processing_table_path()
         tablename = get_processing_table_name().replace("processing", 'unprocessed')
         tablename = pathjoin(tablepath, tablename)
     return tablename
-
 
 def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, process_mixins=True):
     """
@@ -202,6 +223,9 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
     from desispec.workflow.proctable import instantiate_processing_table, get_processing_table_column_defs
     log = get_logger()
 
+    if tabletype is not None:
+        tabletype = standardize_tabletype(tabletype)
+
     if tablename is None:
         if tabletype is None:
             log.error("Must specify either tablename or tabletype in load_table()")
@@ -211,17 +235,13 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
     else:
         if tabletype is None:
             log.info("tabletype not given in load_table(), trying to guess based on filename")
-            filename = os.path.split(tablename)[1]
-            if 'exposure' in filename:
-                tabletype = 'exposure'
-            elif 'unprocessed' in filename or 'unproc' in filename:
-                tabletype = 'unproc'
-            elif 'processing' in filename:
-                tabletype = 'processing'
-            elif 'etable' in filename or 'exp' in filename:
-                tabletype = 'exposure'
-            elif 'ptable' in filename or 'proc' in filename:
-                tabletype = 'processing'
+            filename = os.path.split(tablename)[-1]
+            if 'exp' in filename or 'etable' in filename:
+                tabletype = 'exptable'
+            elif 'unproc' in filename:
+                tabletype = 'unproctable'
+            elif 'proc' in filename or 'ptable' in filename:
+                tabletype = 'proctable'
 
             if tabletype is None:
                 log.warning(f"Couldn't identify type based on filename {filename}")
@@ -232,11 +252,11 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
         log.info(f"Found table: {tablename}")
     elif tabletype is not None:
         log.info(f'Table {tablename} not found, creating new table of type {tabletype}')
-        if tabletype.lower() in ['exp', 'exposure', 'etable']:
+        if tabletype == 'exptable':
             return instantiate_exposure_table()
-        elif tabletype.lower() in ['unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
+        elif tabletype == 'unproctable':
             return instantiate_exposure_table()
-        elif tabletype.lower() in ['proc', 'processing', 'int', 'ptable', 'interal']:
+        elif tabletype == 'proctable':
             return instantiate_processing_table()
         else:
             log.warning(f"Couldn't create type {tabletype}, unknown table type")
@@ -252,9 +272,9 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
         if verbose:
             log.info("Raw loaded table: ", table.info)
 
-        if tabletype.lower() in ['exp', 'exposure', 'etable', 'unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
+        if tabletype in ['exptable', 'unproctable']:
             colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
-        elif tabletype.lower() in ['proc', 'processing', 'int', 'ptable', 'interal']:
+        elif tabletype == 'proctable':
             colnames, coltypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
         else:
             colnames = table.colnames

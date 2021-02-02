@@ -133,7 +133,7 @@ def edit_exposure_table(night, exp_str, colname, value, append_value=True, overw
                         read_user_version=False, write_user_version=False, overwrite_file=True):#, joinsymb='|'):
     ## Don't edit fixed columns
     colname = colname.upper()
-    if colname in ['EXPID','NIGHT','CAMWORD','OBSTYPE']:
+    if colname in ['EXPID','CAMWORD']:
         raise ValueError(f"Not allowed to edit colname={colname}.")
 
     ## Get the file locations
@@ -150,6 +150,10 @@ def edit_exposure_table(night, exp_str, colname, value, append_value=True, overw
         exptable = load_table(tablename=user_pathname, tabletype='exptable')
     else:
         exptable = load_table(tablename=pathname, tabletype='exptable')
+
+    if exptable is None:
+        print("There was a problem loading the exposure table... Exiting.")
+        return
 
     ## Do the modification
     outtable = change_exposure_table_rows(exptable, exp_str, colname, value, append_value, overwrite_value)#, joinsymb)
