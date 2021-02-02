@@ -103,11 +103,23 @@ def main(args, comm=None):
     imgfile = args.input_image
     outfile = args.output_psf
 
+
+    nproc = 1
+    rank = 0
+    if comm is not None:
+        nproc = comm.size
+        rank = comm.rank
+
+    hdr=None
+    if rank == 0 :
+        hdr = fits.getheader(imgfile)
+    if comm is not None:
+        hdr = comm.bcast(hdr, root=0)
+
     if args.input_psf is not None:
         inpsffile = args.input_psf
     else:
         from desispec.calibfinder import findcalibfile
-        hdr = fits.getheader(imgfile)
         inpsffile = findcalibfile([hdr,], 'PSF')
 
     optarray = []
@@ -142,11 +154,6 @@ def main(args, comm=None):
 
     # Now we assign bundles to processes
 
-    nproc = 1
-    rank = 0
-    if comm is not None:
-        nproc = comm.size
-        rank = comm.rank
 
     mynbundle = int(nbundle / nproc)
     myfirstbundle = 0
@@ -184,6 +191,9 @@ def main(args, comm=None):
             if not os.path.isdir(outdir):
                 os.makedirs(outdir)
 
+    cam = hdr["camera"].lower().strip()
+    band = cam[0]
+
     failcount = 0
 
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
@@ -197,7 +207,11 @@ def main(args, comm=None):
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
         com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
-        com.extend(['--legendre-deg-wave', "{}".format(1)])
+        if band == "z" :
+            com.extend(['--legendre-deg-wave', "{}".format(3)])
+            com.extend(['--fit-continuum'])
+        else :
+            com.extend(['--legendre-deg-wave', "{}".format(1)])
         if args.broken_fibers :
             com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
         if args.debug :
