@@ -500,14 +500,14 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         if adjust_wavelength :
             if only_use_skyfibers_for_adjustments : # simple interpolation over fibers
                 for j in range(interpolated_sky_dwave.shape[1]) :
-                    interpolated_sky_dwave[:,j] = np.interp(np.arange(frame.nspec),skyfibers,interpolated_sky_dwave[skyfibers,j])
+                    interpolated_sky_dwave[:,j] = np.interp(np.arange(interpolated_sky_dwave.shape[0]),skyfibers,interpolated_sky_dwave[skyfibers,j])
             else : # median filter
                 interpolated_sky_dwave = scipy.ndimage.filters.median_filter(interpolated_sky_dwave,(nfibers_for_filter,1))
             cskyflux += interpolated_sky_dwave*dskydwave
         if adjust_lsf : # simple interpolation over fibers
             if only_use_skyfibers_for_adjustments :
-                for j in range(interpolated_sky_dwave.shape[1]) :
-                    interpolated_sky_dlsf[:,j] = np.interp(np.arange(frame.nspec),skyfibers,interpolated_sky_dlsf[skyfibers,j])
+                for j in range(interpolated_sky_dlsf.shape[1]) :
+                    interpolated_sky_dlsf[:,j] = np.interp(np.arange(interpolated_sky_dlsf.shape[0]),skyfibers,interpolated_sky_dlsf[skyfibers,j])
             else : # median filter
                 interpolated_sky_dlsf = scipy.ndimage.filters.median_filter(interpolated_sky_dlsf,(nfibers_for_filter,1))
             cskyflux += interpolated_sky_dlsf*dskydlsf
