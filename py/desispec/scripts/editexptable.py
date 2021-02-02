@@ -116,20 +116,34 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
             exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
     return exptable
 
-
-def document_in_comments(tablerow,colname,value,comment_col='COMMENTS'):
-    reporting = keyval_change_reporting(colname, tablerow[colname], value)
+def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
     existing_entries = [colname in term for term in tablerow[comment_col]]
     if np.any(existing_entries):
         loc = np.where(existing_entries)[0][0]
         entry = tablerow[comment_col][loc]
-        old_value = entry.split('->')[1]
-        new_entry = entry.replace(old_value,value)
+        key, origval, oldval = deconstruct_document_in_comments(entry)
+        if key != colname:
+            print("Key didn't match colname in document_in_comments")
+            raise
+        new_entry = keyval_change_reporting(colname, origval, value)
         tablerow[comment_col][loc] = new_entry
     else:
+        reporting = keyval_change_reporting(colname, tablerow[colname], value)
         tablerow[comment_col] = np.append(tablerow[comment_col], reporting)
     return tablerow
 
+def deconstruct_document_in_comments(entry):
+    ## Ensure that the rudimentary characteristics are there
+    if ':' not in entry or '->' not in entry:
+        raise ValueError("Entry must be of the form {key}:{oldval}->{newval}. Exiting")
+    ## Get the key left of colon
+    entries = entry.split(':')
+    key = entries[0]
+    ## The values could potentially have colon's. This allows that
+    values = ':'.join(entries[1:])
+    ## Two values should be separated by text arrow
+    val1,val2 = values.split("->")
+    return key, val1, val2
 
 def edit_exposure_table(night, exp_str, colname, value, append_value=True, overwrite_value=False,
                         read_user_version=False, write_user_version=False, overwrite_file=True):#, joinsymb='|'):
