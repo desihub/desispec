@@ -34,7 +34,7 @@ def parse_int_list(input_string, intable=None, only_unique=True):
         out_array = np.unique(out_array)
     return out_array.astype(int)
 
-def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=True, overwrite_value=False, joinsymb='|'):
+def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=True, overwrite_value=False, joinsymb=';'):
     ## Make sure colname exists before proceeding
     ## Don't edit fixed columns
     colname = colname.upper()
@@ -45,6 +45,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
 
     ## Parse the exposure numbers
     exposure_list = parse_int_list(exp_str, intable=exptable, only_unique=True)
+    print(f"Changing column: {colname} values to {value} for exposures: {exposure_list}.")
 
     ## Match exposures to row numbers
     row_numbers = []
@@ -62,11 +63,12 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
             raise ValueError(f"Couldn't understand exposure flag: {value}")
     elif colname == 'BADAMPS':
         value = value.replace(' ','')
-        for symb in [',',':',';','.']:
+        for symb in [',',':','|','.']:
             value = value.replace(symb,joinsymb)
         for amp in value.split(joinsymb):
-            if len(amp)!=3 or not amp[2].isnumeric():
-                raise ValueError("Each BADAMPS entry must be {camera}{petal}{amp} (e.g. r7A). "+f'Given: {amp}')
+            if len(amp)!=3 or not amp[1].isnumeric():
+                raise ValueError("Each BADAMPS entry must be a semicolon separated list of {camera}{petal}{amp} "+
+                                 f"(e.g. r7A;b8B). Given: {amp}")
 
     ## Get column names and definitions
     colnames,coldtypes,coldeflts = get_exposure_table_column_defs(return_default_values=True)
@@ -138,7 +140,7 @@ def edit_exposure_table(night, exp_str, colname, value, append_value=True, overw
 
     ## Get the file locations
     path = get_exposure_table_path(night=night)
-    name = get_exposure_table_name(night=night, extension='.csv')
+    name = get_exposure_table_name(night=night)#, extension='.csv')
     pathname = pathjoin(path, name)
     if read_user_version or write_user_version:
         user_pathname = os.path.join(path, name.replace('.csv', str(os.environ['USER']) + '.csv'))
