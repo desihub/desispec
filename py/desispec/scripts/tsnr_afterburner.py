@@ -154,13 +154,18 @@ for cam in cameras:
                     if k != 'ALPHA':
                         table[k] = results[k].astype(np.float32)
 
+                table['FIBER']       = frame.fibermap['FIBER']
+                table['TARGETID']    = frame.fibermap['TARGETID']
+                
                 table.meta['NIGHT']  = night
                 table.meta['EXPID']  = '{:08d}'.format(expid)
                 table.meta['ALPHA']  = results['ALPHA']
                 table.meta['TILEID'] = tileid
             
                 table.write(out, format='fits', overwrite=True)
-            
+
+                log.info('Successfully written {}.'.format(out))
+                
             # Append to summary. 
             entry = Table(data=np.array(['{:08d}'.format(expid)]), names=['EXPID'])
             
@@ -177,7 +182,7 @@ for cam in cameras:
                                 
             for k in results:                                                                                                                                                                                                
                 entry[k] = np.median(results[k].astype(np.float32))
-
+                
             if summary is None:
                 summary = entry
 
