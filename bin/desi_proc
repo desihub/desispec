@@ -291,8 +291,6 @@ if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
                     cmd += " --degyx 2 --degyy 0"
                 if args.obstype in ['SCIENCE', 'SKY']:
                     cmd += ' --sky'
-                elif args.obstype in ['ARC', 'TESTARC']:
-                    cmd += ' --arc-lamps'
             else :
                 cmd = "ln -s {} {}".format(inpsf,outpsf)
             runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
