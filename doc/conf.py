@@ -134,9 +134,10 @@ napoleon_include_private_with_doc = True
 # some external dependencies are not met at build time and break the
 # building process.
 autodoc_mock_imports = []
-for missing in ('astropy', 'astropy.modeling', 'desimodel', 'desitarget', 'desiutil', 'fitsio', 'healpy',
+for missing in ('astropy', 'astropy.modeling', 'desimodel', 'desitarget',
+                'desiutil', 'fitsio', 'healpy',
                 'matplotlib', 'numba', 'numpy', 'redrock', 'requests',
-                'scipy', 'speclite', 'specter', 'sqlalchemy', 'yaml'):
+                'scipy', 'speclite', 'specter', 'sqlalchemy', 'yaml', 'specex'):
     try:
         foo = import_module(missing)
     except ImportError:
