@@ -787,8 +787,8 @@ if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.nop
         cmd += " --o {}".format(skyfile)
         if args.no_extra_variance :
             cmd += " --no-extra-variance"
-        if args.adjust_sky_wavelength : cmd += " --adjust-wavelength"
-        if args.adjust_sky_lsf : cmd += " --adjust-lsf"
+        if not args.no_sky_wavelength_adjustment : cmd += " --adjust-wavelength"
+        if not args.no_sky_lsf_adjustment : cmd += " --adjust-lsf"
 
         runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
 
