@@ -117,6 +117,17 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
     return exptable
 
 def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
+    colname = colname.upper()
+    if colname in ['COMMENTS','HEADERERR']:
+        print("Won't do comment reporting for comment column.")
+        return tablerow
+
+    if comment_col is None:
+        if colname in ['EXPFLAG','BADCANWORD','BADAMPS','LASTSTEP']:
+            comment_col = 'COMMENTS'
+    else:
+        comment_col = 'HEADERERR'
+
     existing_entries = [colname in term for term in tablerow[comment_col]]
     if np.any(existing_entries):
         loc = np.where(existing_entries)[0][0]
