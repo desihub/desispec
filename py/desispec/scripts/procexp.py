@@ -26,7 +26,7 @@ def parse(options=None):
     parser.add_argument('--sky', type = str, default = None,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--calib', type = str, default = None,
-                        help = 'path of DESI calibration fits file')xs
+                        help = 'path of DESI calibration fits file')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,

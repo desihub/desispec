@@ -32,7 +32,21 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def process_one(w, psf, ifiber):    
+def process_one(w, psf, ifiber):
+    '''
+    Compute the 1D NEA for a given wavelength, fiber and 
+    desispec psf instance.  
+
+    input:
+        w:  wavelength, Angstroms. 
+        psf: desispec psf instance. 
+        ifiber:  fiber indexing integer [0,500].
+
+    returns:
+        list of 1D nea value [pixles] and 
+        angstroms per pix. for this fiber and wavelength. 
+    '''
+    
     psf_2d = psf.pix(ispec=ifiber, wavelength=w)
     psf_1d = np.sum(psf_2d, axis=0)
     
@@ -41,19 +55,15 @@ def process_one(w, psf, ifiber):
     norm = np.sum(psf_1d)
     psf_1d /= norm
     
-    try:
-        # Automatically raises an assertion.                                                                                                                                                                                              
-        # np.testing.assert_almost_equal(norm, 1.0, decimal=7)
+    # NOTE: PSf is unexpectedly unnormailzed for the first few fibers
+    # at the edges of the wavelength grid.  Given we renomalize after
+    # marginalizing over wavelength, we ignore this fact. 
 
-        # http://articles.adsabs.harvard.edu/pdf/1983PASP...95..163K                                                                                                                                                                
-        nea       = 1. / np.sum(psf_1d**2.)  # [pixel units].                                                                                                                                                                           
-        angperpix = psf.angstroms_per_pixel(ifiber, w)
+    # http://articles.adsabs.harvard.edu/pdf/1983PASP...95..163K                                                                                                                                                                
+    nea       = 1. / np.sum(psf_1d**2.)  # [pixel units].                                                                                                                                                                           
+    angperpix = psf.angstroms_per_pixel(ifiber, w)
 
-        return  [nea, angperpix]
-
-    except:
-        print('Failed on fiber {} and wavelength {} [{} to {} limit] with norm {}.'.format(ifiber, w, psf._wmin_spec[ifiber], psf._wmax_spec[ifiber], norm))        
-        return [-99., -99.]
+    return  [nea, angperpix]
 
 def main(args):
     log  = get_logger()
