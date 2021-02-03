@@ -18,16 +18,16 @@ log                = get_logger()
 # https://github.com/desihub/desispec/issues/1006
 sampling           = 500
 
-wmin, wmax, wdelta = 3600., 9824., 0.8
-fullwave           = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
-cslice             = {"b": slice(0, 2751, sampling), "r": slice(2700, 5026, sampling), "z": slice(4900, 7781, sampling)}
-
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate master NEA file for a given camera.")
     parser.add_argument('-i','--infile', type = str, default = None, required=True,
                         help = 'path of DESI psf fits file.')
     parser.add_argument('--outdir', type = str, default = None, required=True,
 			help = 'dir. of output maser nea file for a given camera')
+    parser.add_argument('--blue_lim', type=float, default=3600., required=False,
+                        help = 'Blue wavelength limit [Angstroms]')
+    parser.add_argument('--red_lim', type=float, default=9824., required=False,
+                        help = 'Red wavelength limit [Angstroms]')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -74,6 +74,10 @@ def main(args):
     
     log.info("calculating master nea for camera {}.".format(cam))
 
+    wmin, wmax, wdelta = args.blue_lim, args.red_lim, 0.8
+    fullwave           = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
+    cslice             = {"b": slice(0, 2751, sampling), "r": slice(2700, 5026, sampling), "z": slice(4900, 7781, sampling)}
+    
     psf   = GaussHermitePSF(args.infile)
     nspec = psf.nspec 
     
@@ -109,7 +113,7 @@ def main(args):
     hdr['MASTPSF'] = args.infile
     hdr['CAMERA'] = cam
     
-    hdu0 = fits.PrimaryHDU()
+    hdu0 = fits.PrimaryHDU(header=hdr)
     hdu1 = fits.ImageHDU(wave, name='WAVELENGTH') 
     hdu2 = fits.ImageHDU(neas, name='NEA')
     hdu3 = fits.ImageHDU(angperpix, name='ANGPERPIX')
@@ -118,7 +122,7 @@ def main(args):
 
     hdul.writeto(args.outdir + '/masternea_{}.fits'.format(cam), overwrite=True)
 
-    log.info("successfully wrote {}".format(args.outdir + '/masternea_{}.fits'.format(cam)))
+    log.info("Successfully wrote {}".format(args.outdir + '/masternea_{}.fits'.format(cam)))
 
     
 if __name__ == '__main__':
