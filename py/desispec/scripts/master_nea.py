@@ -77,6 +77,9 @@ def main(args):
     wmin, wmax, wdelta = args.blue_lim, args.red_lim, 0.8
     fullwave           = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
     cslice             = {"b": slice(0, 2751, sampling), "r": slice(2700, 5026, sampling), "z": slice(4900, 7781, sampling)}
+
+    log.info('Assuming blue wavelength of {} A.'.format(wmin))
+    log.info('Assuming  red wavelength of {} A.'.format(wmax))
     
     psf   = GaussHermitePSF(args.infile)
     nspec = psf.nspec 
