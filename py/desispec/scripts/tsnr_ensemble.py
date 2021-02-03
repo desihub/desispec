@@ -29,11 +29,11 @@ wave               = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
 cslice             = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(4900, 7781)}
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate a sim. template ensemble of given type.")
+    parser = argparse.ArgumentParser(description="Generate a sim. template ensemble stack of given type.")
     parser.add_argument('--nmodel', type = int, default = 2000, required=True,
                         help='Number of galaxies in the ensemble.')
     parser.add_argument('--tracer', type = str, default = 'bgs', required=True,
-                        help='Tracer to generate.')
+                        help='Tracer to generate of [bgs, lrg, elg, qso].')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
 			help='Directory to write to.')
     args = None
@@ -51,7 +51,7 @@ class template_ensemble(object):
     (z, m, OII, etc.) space.                                                                                                                                                                                                                                                                                                                                                                                                                                                       
     If conditioned, uses deepfield redshifts and (currently r) magnitudes to condition simulated templates.                                                                                                                               
     '''
-    def __init__(self, outdir, tracer='ELG', nmodel=5):        
+    def __init__(self, outdir, tracer='elg', nmodel=5):        
         def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None):
             # https://arxiv.org/pdf/1611.00036.pdf
             if tracer == 'elg':
@@ -113,7 +113,7 @@ class template_ensemble(object):
             # Retain only spectral features < 100. Angstroms.                                                                                                                                                                                 
             # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.                                                                                                                                                                        
             for i, ff in enumerate(self.ensemble_flux[band]):
-                sflux                     = convolve(ff, Box1DKernel(125), boundary='extend')
+                sflux                     = convolve(ff, Box1DKernel(13), boundary='extend')
                 dflux[i,:]                = ff - sflux
 
             self.ensemble_dflux[band]     = dflux
