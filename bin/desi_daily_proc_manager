@@ -21,11 +21,21 @@ def parse_args():#options=None):
     parser = argparse.ArgumentParser(description="Perform daily processing of spectral" +
                                                  "data using the DESI pipeline.")
 
-    parser.add_argument("--cameras", type=str, required=False,
-                        help="Explicitly define the spectrographs for which you want" +
+    parser.add_argument("--cameras", type=str, required=False, default='',
+                        help="Explicitly define the cameras for which you want" +
                              " to reduce the data. Should be a comma separated list." +
-                             " Numbers only assumes you want to reduce r, b, and z " +
+                             " Only numbers assumes you want to reduce r, b, and z " +
                              "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--bad-cameras", type=str, required=False, default='',
+                        help="Explicitly define the cameras that you don't want" +
+                             " to reduce the data. Should be a comma separated list." +
+                             " Only numbers assumes you want to reduce r, b, and z " +
+                             "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--badamps", type=str, required=False, default='',
+                        help="Define amplifiers that you know to be bad and should not" +
+                             " be processed. Should be a list separated by comma or semicolon." +
+                             " Saved list will converted to semicolons. Each entry should be of " +
+                             "the form {camera}{spectrograph}{amp}, i.e. [brz][0-9][A-D].")
     parser.add_argument("--exp-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to save in the exposure table. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
@@ -110,6 +120,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
     camword = parse_cameras(args.cameras)
+    badcamword = parse_cameras(args.bad_cameras)
 
     exps_to_ignore = []
     if args.ignore_expid_list is not None:
@@ -122,7 +133,8 @@ if __name__ == '__main__':
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
                              expobstypes=args.exp_obstypes, procobstypes=args.proc_obstypes,
-                             dry_run=args.dry_run, tab_filetype=args.table_file_type, camword=camword, queue=args.queue,
+                             dry_run=args.dry_run, tab_filetype=args.table_file_type, camword=camword,
+                             badcamword=badcamword, badamps=args.badamps, queue=args.queue,
                              override_night=args.override_night, exps_to_ignore=exps_to_ignore,
                              continue_looping_debug=args.continue_looping_debug, data_cadence_time=args.data_cadence_time,
                              queue_cadence_time=args.queue_cadence_time)

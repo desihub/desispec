@@ -23,7 +23,7 @@ from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.io.util import difference_camwords
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
-                             expobstypes=None, procobstypes=None, camword=None, badcamword=None, badamps=None,
+                             expobstypes=None, procobstypes=None, camword=None, badcamword='', badamps='',
                              override_night=None, tab_filetype='csv', queue='realtime', exps_to_ignore=None,
                              data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False,
                              verbose=False):
@@ -97,15 +97,16 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Warn people if changing camword
     finalcamword = 'a0123456789'
-    badcamword = ''
-    if camword is not None and badcamword is None:
-        badcamword = difference_camwords('a0123456789',camword)
+    if camword is not None and badcamword == '':
+        badcamword = difference_camwords(finalcamword,camword)
         finalcamword = camword
-    elif camword is not None and badcamword is not None:
+    elif camword is not None and badcamword != '':
         finalcamword = difference_camwords(camword, badcamword)
         badcamword = difference_camwords('a0123456789', finalcamword)
+    elif badcamword != '':
+        finalcamword = difference_camwords(finalcamword,badcamword)
 
-    if badcamword is not None:
+    if badcamword != '':
         print(f"Modifying camword of data to be processed with badcamword: {badcamword}. "+\
               f"Camword to be processed: {finalcamword}")
 
