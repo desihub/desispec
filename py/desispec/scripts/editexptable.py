@@ -1,6 +1,7 @@
 
 from desispec.workflow.exptable import get_exposure_table_name,get_exposure_table_path, \
-                                       get_exposure_flags, get_exposure_table_column_defs, keyval_change_reporting
+                                       get_exposure_flags, get_exposure_table_column_defs, \
+                                       keyval_change_reporting, deconstruct_keyval_reporting, validate_badamps
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.utils import pathjoin
 
@@ -111,7 +112,7 @@ def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
     if np.any(existing_entries):
         loc = np.where(existing_entries)[0][0]
         entry = tablerow[comment_col][loc]
-        key, origval, oldval = deconstruct_reporting_in_comments(entry)
+        key, origval, oldval = deconstruct_keyval_reporting(entry)
         if key != colname:
             print("Key didn't match colname in document_in_comments")
             raise
@@ -121,31 +122,6 @@ def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
         reporting = keyval_change_reporting(colname, tablerow[colname], value)
         tablerow[comment_col] = np.append(tablerow[comment_col], reporting)
     return tablerow
-
-def deconstruct_reporting_in_comments(entry):
-    """
-    Takes a reporting of the form '{colname}:{oldval}->{newval}' and returns colname, oldval, newval.
-
-    Args:
-        entry, str. A string of the form '{colname}:{oldval}->{newval}'. colname should be an all upper case column name.
-                    oldval and newval can include any string characters except the specific combination "->".
-
-    Returns:
-        key, str. The string that precedes the initial colon. The name of the column being reported.
-        val1, str. The string after the initial colon and preceding the '->'. The original value of the column.
-        val2, str. The string after the '->'. The value that the original was changed to.
-    """
-    ## Ensure that the rudimentary characteristics are there
-    if ':' not in entry or '->' not in entry:
-        raise ValueError("Entry must be of the form {key}:{oldval}->{newval}. Exiting")
-    ## Get the key left of colon
-    entries = entry.split(':')
-    key = entries[0]
-    ## The values could potentially have colon's. This allows for that
-    values = ':'.join(entries[1:])
-    ## Two values should be separated by text arrow
-    val1,val2 = values.split("->")
-    return key, val1, val2
 
 def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=False, overwrite_value=False, joinsymb=';'):
     """
@@ -202,13 +178,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=
         if value not in expflags:
             raise ValueError(f"Couldn't understand exposure flag: {value}")
     elif colname == 'BADAMPS':
-        value = value.replace(' ','')
-        for symb in [',',':','|','.']:
-            value = value.replace(symb,joinsymb)
-        for amp in value.split(joinsymb):
-            if len(amp)!=3 or not amp[1].isnumeric():
-                raise ValueError("Each BADAMPS entry must be a semicolon separated list of {camera}{petal}{amp} "+
-                                 f"(e.g. r7A;b8B). Given: {amp}")
+        value = validate_badamps(value, joinsymb=joinsymb)
 
     ## Inform user on whether reporting will be done
     if colname in columns_not_to_report():

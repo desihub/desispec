@@ -13,17 +13,18 @@ import glob
 from desispec.workflow.tableio import load_tables, write_tables, write_table
 from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, get_printable_banner
 from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
-from desispec.workflow.exptable import default_exptypes_for_exptable, get_surveyname, get_exposure_table_column_defs, \
+from desispec.workflow.exptable import default_exptypes_for_exptable, get_exposure_table_column_defs, validate_badamps, \
                                        get_exposure_table_path, get_exposure_table_name, summarize_exposure
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, get_processing_table_name, erow_to_prow
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
+from desispec.io.util import difference_camwords
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
-                             expobstypes=None, procobstypes=None, camword=None, override_night=None,
-                             tab_filetype='csv', queue='realtime', exps_to_ignore=None,
+                             expobstypes=None, procobstypes=None, camword=None, badcamword=None, badamps=None,
+                             override_night=None, tab_filetype='csv', queue='realtime', exps_to_ignore=None,
                              data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False,
                              verbose=False):
     """
@@ -36,8 +37,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         path_to_data: str. Path to the raw data.
         expobstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the exposure table.
         procobstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
-        camword: str. Camword that, if set, overwrites the list of cameras found in the files and only runs on those given/
+        camword: str. Camword that, if set, alters the set of cameras that will be set for processing.
                       Examples: a0123456789, a1, a2b3r3, a2b3r4z3.
+        badcamword: str. Camword that, if set, will be removed from the camword defined in camword if given, or the camword
+                         inferred from the data if camword is not given.
+        badamps: str. Semicolon seperated list of bad amplifiers that should not be processed. Should be of the
+                      form "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
         override_night: str or int. 8 digit night, e.g. 20200314, of data to run on. If None, it runs on the current night.
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
@@ -91,8 +96,21 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             expobstypes.append(typ)
 
     ## Warn people if changing camword
-    if camword is not None:
-        print(f"Overriding camword in data with user provided value: {camword}")
+    finalcamword = 'a0123456789'
+    badcamword = ''
+    if camword is not None and badcamword is None:
+        badcamword = difference_camwords('a0123456789',camword)
+        finalcamword = camword
+    elif camword is not None and badcamword is not None:
+        finalcamword = difference_camwords(camword, badcamword)
+        badcamword = difference_camwords('a0123456789', finalcamword)
+
+    if badcamword is not None:
+        print(f"Modifying camword of data to be processed with badcamword: {badcamword}. "+\
+              f"Camword to be processed: {finalcamword}")
+
+    ## Make sure badamps is formatted properly
+    badamps = validate_badamps(badamps)
 
     ## Define the set of exposures to ignore
     if exps_to_ignore is None:
@@ -108,14 +126,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         speed_modifier = 0.1
 
     ## Get context specific variable values
-    surveynum = get_surveyname(night)
     nersc_start = nersc_start_time(night=true_night)
     nersc_end = nersc_end_time(night=true_night)
     colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
 
     ## Define where to find the data
     path_to_data = verify_variable_with_environment(var=path_to_data,var_name='path_to_data', env_name='DESI_SPECTRO_DATA')
-
     specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD')
 
     ## Define the files to look for
@@ -175,7 +191,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 print(f'\n\n##################### {exp} #########################')
 
             ## Open relevant raw data files to understand what we're dealing with
-            erow = summarize_exposure(path_to_data,night,exp,expobstypes,surveynum,colnames,coldefaults,verbosely=False)
+            erow = summarize_exposure(path_to_data, night, exp, expobstypes, colnames, coldefaults, verbosely=False)
             print(f"\nFound: {erow}")
 
             ## If there was an issue, continue. If it's a string summarizing the end of some sequence, use that info.
@@ -197,27 +213,38 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     flats = []
                 else:
                     continue
-            elif exp in exps_to_ignore:
+            else:
+                erow['BADCAMWORD'] = badcamword
+                erow['BADAMPS'] = badamps
+                if exp in exps_to_ignore:
                     print("\n{} given as exposure id to ignore. Not processing.".format(exp))
-                    erow['EXPFLAG'] = 9
+                    erow['LASTSTEP'] = 'ignore'
+                    # erow['EXPFLAG'] = np.append(erow['EXPFLAG'], )
                     etable.add_row(erow)
                     unproc_table.add_row(erow)
-            else:
-                etable.add_row(erow)
-                if erow['OBSTYPE'] not in procobstypes:
+                    continue
+                elif erow['OBSTYPE'] not in procobstypes:
                     print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
+                    etable.add_row(erow)
                     unproc_table.add_row(erow)
                     continue
                 elif 'system test' in erow['PROGRAM'].lower():
+                    erow['LASTSTEP'] = 'ignore'
+                    erow['EXPFLAG'] = np.append(erow['EXPFLAG'], 'test')
                     print("\nExposure identified as system test. Not processing.")
+                    etable.add_row(erow)
                     unproc_table.add_row(erow)
                     continue
                 elif str(erow['OBSTYPE']).lower() == 'science' and float(erow['EXPTIME']) < 59.0:
+                    erow['LASTSTEP'] = 'skysub'
+                    erow['EXPFLAG'] = np.append(erow['EXPFLAG'], 'short_exposure')
                     print("\nScience exposure with EXPTIME less than 59s. Not processing.")
+                    etable.add_row(erow)
                     unproc_table.add_row(erow)
                     continue
                 elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
                     print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
+                    etable.add_row(erow)
                     unproc_table.add_row(erow)
                     continue
 
@@ -283,7 +310,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
                                                                          arcjob, flatjob, lasttype, last_not_dither,\
                                                                          internal_id, dry_run=dry_run, queue=queue)
-
 
     ## All jobs now submitted, update information from job queue and save
     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run)

@@ -31,8 +31,8 @@ from desispec.io.util import create_camword
 # PROGRAM, string, The program as given by ICS.
 # MJD-OBS, float, The MJD-OBS as given by ICS. Modified Julian Date of the observation.
 # BADCAMWORD, string, camword defining the bad cameras that should not be processed.
-# BADAMPS, string, pipe-separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D|z8A'
-# LASTSTEP, string, typically 'a'+ str(spectrographs) defined by ICS unless specified by command line argument
+# BADAMPS, string, semicolon list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
+# LASTSTEP, string, the last step the pipeline should run through for the given exposure. Inclusive of last step.
 # EXPFLAG, np.ndarray, set of flags that describe that describe the exposure.
 # HEADERERR, np.ndarray, In the csv given as a "|" separated list of key=value pairs describing columns in the table that should
 #                        be corrected. The workflow transforms these into an array of strings.
@@ -63,12 +63,12 @@ def get_exposure_table_column_defs(return_default_values=False):
     coldeflt1 = [-99,     0.0,       'unknown', 'a0123456789', -99, 89.99,    -89.99,      20000101]
 
     colnames2 = ['PURPOSE', 'FA_SURV', 'SEQNUM', 'SEQTOT', 'PROGRAM', 'MJD-OBS']
-    coltypes2 = ['S20',     'S10',     int,      int,     'S30',     float]
+    coltypes2 = ['S30',     'S10',     int,      int,     'S60',     float]
     coldeflt2 = ['',        '',        1,        1,       'unknown', 50000.0]
 
     colnames3 = ['BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'EXPFLAG',    'HEADERERR',  'COMMENTS']
     coltypes3 = ['S30',        'S30',      'S30',     np.ndarray,   np.ndarray,   np.ndarray]
-    coldeflt3 = ['',            '',        '',   np.array([], dtype=str), np.array([], dtype=str), np.array([], dtype=str)]
+    coldeflt3 = ['',            '',        'all',   np.array([], dtype=str), np.array([], dtype=str), np.array([], dtype=str)]
 
     colnames = colnames1 + colnames2 + colnames3
     coldtypes = coltypes1 + coltypes2 + coltypes3
@@ -126,50 +126,14 @@ def get_exposure_flags():
             'bad'
            ]
 
-def get_survey_definitions():
+def get_last_step_options():
     """
-    Defines a string to signify the 'survey' campaign that the data was taken under, which in this context is a duration
-    of observing nights that shared some common theme. Examples: miniSV2, SV0, SV1, commissioning, etc.
-
-    Night ranges are INCLUSIVE.
+    Defines the LASTSTEP options that can be saved in the exposure table that will be understood by the pipeline.
 
     Returns:
-        survey_def, dict. A dictionary with keys corresponding to the string representation of a particular survey,
-                          with values being a tuple of ints. The first int is the first valid night and the
-                          second int is the last valid night of the survey (inclusive).
+        list. A list of LASTSTEP's that can be included in an exposure table.
     """
-    ## Create a rudimentary way of assigning "SURVEY keywords based on what date range a night falls into"
-    survey_def = {
-                    'CMX': (20200201, 20200315),
-                    'miniSV2': (20200219, 20200307),
-                    'SV0': (20200308, 20200315),
-                    'reCMX': (20200501, 202001130),
-                    'SV1': (20201201, 20210301)
-                 }
-    return survey_def
-
-def get_surveyname(night, survey_definitions=None):
-    """
-    Given a night and optionally the survey definitions (which are looked up if not given), this returns the
-    survey it was taken under.
-
-    Args:
-        night, int or str. The night of observations for which you want to know the numeric survey ID.
-        survey_definitions, dict. A dictionary with keys corresponding to the numeric representation of a particular survey,
-                          with values being a tuple of ints. The first int is the first valid night and the
-                          second int is the last valid night of the survey.
-
-    Returns:
-        str. The string corresponding to the survey in which the given night took place.
-    """
-    night = int(night)
-    if survey_definitions is None:
-        survey_definitions = get_survey_definitions()
-
-    for survey, (low, high) in survey_definitions.items():
-        if night >= low and night <= high:
-            return survey
-    return ''
+    return ['ignore', 'skysub', 'fluxcal', 'all']
 
 def night_to_month(night):
     """
@@ -290,7 +254,42 @@ def keyval_change_reporting(keyword, original_val, replacement_val):
         original_val = "None"
     return f'{keyword}:{original_val}->{replacement_val}'
 
-def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None, colnames=None, coldefaults=None, verbosely=False):
+def deconstruct_keyval_reporting(entry):
+    """
+    Takes a reporting of the form '{colname}:{oldval}->{newval}' and returns colname, oldval, newval.
+
+    Args:
+        entry, str. A string of the form '{colname}:{oldval}->{newval}'. colname should be an all upper case column name.
+                    oldval and newval can include any string characters except the specific combination "->".
+
+    Returns:
+        key, str. The string that precedes the initial colon. The name of the column being reported.
+        val1, str. The string after the initial colon and preceding the '->'. The original value of the column.
+        val2, str. The string after the '->'. The value that the original was changed to.
+    """
+    ## Ensure that the rudimentary characteristics are there
+    if ':' not in entry or '->' not in entry:
+        raise ValueError("Entry must be of the form {key}:{oldval}->{newval}. Exiting")
+    ## Get the key left of colon
+    entries = entry.split(':')
+    key = entries[0]
+    ## The values could potentially have colon's. This allows for that
+    values = ':'.join(entries[1:])
+    ## Two values should be separated by text arrow
+    val1,val2 = values.split("->")
+    return key, val1, val2
+
+def validate_badamps(badamps,joinsymb=';'):
+    badamps = badamps.replace(' ', '')
+    for symb in [',', ':', '|', '.']:
+        badamps = badamps.replace(symb, joinsymb)
+    for amp in badamps.split(joinsymb):
+        if len(amp) != 3 or not amp[1].isnumeric():
+            raise ValueError("Each BADAMPS entry must be a semicolon separated list of {camera}{petal}{amp} " +
+                             f"(e.g. r7A;b8B). Given: {amp}")
+    return badamps
+
+def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, coldefaults=None, verbosely=False):
     """
     Given a raw data directory and exposure information, this searches for the raw DESI data files for that
     exposure and loads in relevant information for that flavor+obstype. It returns a dictionary if the obstype
@@ -306,8 +305,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
                                              information about that exposure is taken and returned for the exposure
                                              table. Otherwise None is returned (or str if it is an end-of-cal manifest).
                                              If None, the default list in default_exptypes_for_exptable() is used.
-        surveyname, str. The survey that the night corresponds to. If none, it is looked up from the
-                        default in get_surveyname().
         colnames, list or np.array. List of column names for an exposure table. If None, the defaults are taken from
                                     get_exposure_table_column_defs().
         coldefaults, list or np.array. List of default values for the corresponding colnames. If None, the defaults
@@ -335,8 +332,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
     ## Use defaults if things aren't defined
     if obstypes is None:
         obstypes = default_exptypes_for_exptable()
-    if surveyname is None:
-        surveyname = get_surveyname(night)
     if colnames is None or coldefaults is None:
         cnames, cdtypes, cdflts = get_exposure_table_column_defs(return_default_values=True)
         if colnames is None:
@@ -464,11 +459,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
             else:
                 outdict[key] = val
         ## If key not in the header, identify that and place a default value
-        ## If tileid and not science, just replace with default
-        elif key in ['SEQNUM','SEQTOT'] and obstype in ['science','dark','zero']:
-            outdict[key] = default
         ## If obstype isn't arc or flat, don't worry about seqnum or seqtot
-        elif key in ['TILEID','TARGTRA','TARGTDEC'] and obstype != 'science':
+        elif key in ['SEQNUM','SEQTOT'] and obstype not in ['arc','flat']:
+            outdict[key] = default
+        ## If tileid or TARGT and not science, just replace with default
+        elif key in ['TILEID','TARGTRA','TARGTDEC'] and obstype not in ['science']:
             outdict[key] = default
         ## if something else, flag as missing metadata and replace with default
         else:
@@ -498,9 +493,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, surveyname=None,
     camword = create_camword(cams)
     outdict['CAMWORD'] = camword
     fx.close()
-
-    ### Survey number befined in upper loop based on night
-    #outdict['SURVEY'] = surveyname
 
     ## Add the fiber assign survey, if it doesn't exist use the pre-defined one
     if "FA_SURV" in req_dict and "FA_SURV" in colnames:
