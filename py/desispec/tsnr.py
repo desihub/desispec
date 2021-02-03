@@ -12,6 +12,7 @@ from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 from scipy.optimize import minimize
 
+
 def get_ensemble(dirpath, bands, smooth=True):
     '''                                                                                                              
     Function that takes a frame object and a bitmask and                                                               
