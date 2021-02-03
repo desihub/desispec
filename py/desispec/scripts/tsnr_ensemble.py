@@ -29,7 +29,7 @@ wave               = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
 cslice             = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(4900, 7781)}
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate a sim. template ensemble stack of given type.")
+    parser = argparse.ArgumentParser(description="Generate a sim. template ensemble stack of given type and write it to disk at --outdir.")
     parser.add_argument('--nmodel', type = int, default = 2000, required=True,
                         help='Number of galaxies in the ensemble.')
     parser.add_argument('--tracer', type = str, default = 'bgs', required=True,
@@ -53,6 +53,15 @@ class template_ensemble(object):
     '''
     def __init__(self, outdir, tracer='elg', nmodel=5):        
         def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None):
+            '''
+            Dedicated wrapeper for desisim.templates.GALAXY.make_templates call, stipulating templates in a
+            redshift range suggested by the FDR.  Further, assume fluxes close to the expected (within ~0.5 mags.)
+            in the appropriate band.   
+
+            Class init will write ensemble stack to disk at outdir, for a given tracer [bgs, lrg, elg, qso], having 
+            generated nmodel templates.  Optionally, provide redshifts and mags. to condition appropriately at cose 
+            of runtime.    
+            '''
             # https://arxiv.org/pdf/1611.00036.pdf
             if tracer == 'elg':
                 maker = desisim.templates.ELG(wave=wave)
