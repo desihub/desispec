@@ -636,7 +636,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     last_column : :class:`str`, optional
         Do not load columns past this name (default 'NUMOBS_MORE').
     """
-    fiberpath = os.path.join(datapath, 'fiberassign*.fits')
+    fiberpath = os.path.join(datapath, 'fiberassign*.fits*')
     log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob.glob(fiberpath)
     if len(tile_files) == 0:
@@ -648,7 +648,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     #
     latest_tiles = dict()
     if latest_epoch:
-        tileidre = re.compile(r'/(\d+)/fiberassign/fiberassign\-(\d+)\.fits$')
+        tileidre = re.compile(r'/(\d+)/fiberassign/fiberassign\-(\d+)\.fits')
         for f in tile_files:
             m = tileidre.search(f)
             if m is None:

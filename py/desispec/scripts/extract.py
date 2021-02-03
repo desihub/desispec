@@ -20,6 +20,7 @@ from specter.extract import ex2d
 
 from desiutil.log import get_logger
 from desiutil.iers import freeze_iers
+from desiutil import depend
 
 from desispec import io
 from desispec.frame import Frame
@@ -260,8 +261,26 @@ def main_mpi(args, comm=None, timing=None):
     img.meta['WAVEMAX'] = (raw_wstop, 'Last wavelength [Angstroms]')
     img.meta['WAVESTEP']= (raw_dw, 'Wavelength step size [Angstroms]')
     img.meta['SPECTER'] = (specter.__version__, 'https://github.com/desihub/specter')
-    img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
-    img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
+    img.meta['IN_PSF']  = (io.shorten_filename(psf_file), 'Input spectral PSF')
+    img.meta['IN_IMG']  = (io.shorten_filename(input_file), 'Input image')
+    depend.add_dependencies(img.meta)
+
+    #- Check if input PSF was itself a traceshifted version of another PSF
+    orig_psf = None
+    if rank == 0:
+        try:
+            psfhdr = fits.getheader(psf_file, 'PSF')
+            orig_psf = psfhdr['IN_PSF']
+        except KeyError:
+            #- could happen due to PSF format not having "PSF" extension,
+            #- or due to PSF header not having 'IN_PSF' keyword.  Either is OK
+            pass
+
+    if comm is not None:
+        orig_psf = comm.bcast(orig_psf, root=0)
+
+    if orig_psf is not None:
+        img.meta['ORIG_PSF'] = orig_psf
 
     #- If not using MPI, use a single call to each of these and then end this function call
     #  Otherwise, continue on to splitting things up for the different ranks

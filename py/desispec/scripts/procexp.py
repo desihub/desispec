@@ -7,6 +7,7 @@ spectro-photometric calibration depending on input.
 from desispec.io import read_frame, write_frame
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
+from desispec.io import shorten_filename
 from desispec.io.fluxcalibration import read_flux_calibration
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -36,6 +37,8 @@ def parse(options=None):
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--no-sky-throughput-correction', action='store_true',
                         help = 'Do NOT apply a throughput correction when subtraction the sky')
+    parser.add_argument('--no-zero-ivar', action='store_true',
+                        help = 'Do NOT set ivar=0 for masked pixels')
 
     args = None
     if options is None:
@@ -81,9 +84,9 @@ def main(args):
 
             # use a copy the frame (not elegant but robust)
             copied_frame = copy.deepcopy(frame)
-            
+
             # first subtract sky without throughput correction
-            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False)
+            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False, zero_ivar = (not args.no_zero_ivar))
 
             # then find cosmics
             log.info("cosmics ray 1D rejection after sky subtraction")
@@ -91,13 +94,13 @@ def main(args):
 
             # copy mask
             frame.mask = copied_frame.mask
-            
+
             # and (re-)subtract sky, but just the correction term
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction) )
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = (not args.no_zero_ivar) )
 
         else :
             # subtract sky
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction) )
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = (not args.no_zero_ivar) )
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
 
@@ -113,6 +116,11 @@ def main(args):
         frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
+    # record inputs
+    frame.meta['IN_FRAME'] = shorten_filename(args.infile)
+    frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
+    frame.meta['IN_SKY']   = shorten_filename(args.sky)
+    frame.meta['IN_CALIB'] = shorten_filename(args.calib)
 
     # save output
     write_frame(args.outfile, frame, units='10**-17 erg/(s cm2 Angstrom)')

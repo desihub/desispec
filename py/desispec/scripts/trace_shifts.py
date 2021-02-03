@@ -17,6 +17,7 @@ import specter.psf
 from desispec.xytraceset import XYTraceSet
 from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_image
+from desispec.io import shorten_filename
 from desiutil.log import get_logger
 from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
 
@@ -351,6 +352,8 @@ def main(args) :
         image.ivar *= (image.mask==0)
     
     tset = fit_trace_shifts(image=image,args=args)
+    tset.meta['IN_PSF'] = shorten_filename(args.psf)
+    tset.meta['IN_IMAGE'] = shorten_filename(args.image)
     
     if args.outpsf is not None :
         write_traces_in_psf(args.psf,args.outpsf,tset)

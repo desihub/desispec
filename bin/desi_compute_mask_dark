@@ -66,7 +66,7 @@ for filename in args.image :
         primary_header = fitsfile[1].header
     exptime = primary_header["EXPTIME"]
     fitsfile.close()
-    
+
     # Get the bias
     if args.bias is not None:
         biasfile = pyfits.open(args.bias)
@@ -74,7 +74,7 @@ for filename in args.image :
         log.info("read given bias image file")
     else:
         log.info("No bias image given, will try to find one automatically")
-        
+
     # read raw data and preprocess them
     img = io.read_raw(filename, args.camera,
                       bias_img = bias_img,
@@ -90,7 +90,7 @@ for filename in args.image :
     shape=img.pix.shape
     log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
     images.append(img.pix/exptime)
-    
+
 images=np.array(images)
 
 
@@ -113,7 +113,7 @@ if args.savestat:
 
     hdulist.writeto(args.outfilestat, overwrite=True)
     log.info("Done writing statistics file")
-    
+
 
 #Create the masks
 mask   = np.zeros(shape, dtype=np.int32)
@@ -159,7 +159,7 @@ if args.mask!=None:
 mask_percent = np.sum(mask>0)*100/np.product(mask.shape)
 #Write fits file with header info
 
-hdu = pyfits.PrimaryHDU(mask)
+hdu = pyfits.PrimaryHDU(mask.astype("int16"))
 hdu.header["MINMED"] = (args.minmed, 'Minimum percentile threshold for good median')
 hdu.header["MAXMED"] = (args.maxmed, 'Maximum percentile threshold for good median')
 hdu.header["MINIQR"] = (args.miniqr, 'Minimum percentile threshold for good IQR')
@@ -171,7 +171,8 @@ hdu.header["MASKFRAC"] = (mask_percent, 'Percent of pixels blocked')
 hdu.header["BIAS"] = (args.bias, 'Path to bias image')
 hdu.header["OLDMASK"] = (args.mask, 'Path to input mask')
 hdu.header["DARKS"] = (" ".join(args.image), 'paths to raw darks')
-
+hdu.header["EXTNAME"] = "MASK"
+hdu.header["BUNIT"] = ""
 
 hdu.writeto(args.outfile, overwrite=True)
 log.info("Saved masks file")

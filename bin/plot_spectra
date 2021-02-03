@@ -14,18 +14,24 @@ import redrock.templates
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description="Display spectra, looping over targets if targetid not set, and optionally show best fit from redrock"
 )
-parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*", 
+parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
                     help = 'path to spectra file(s)')
-parser.add_argument('-t','--targetid', type = int, default = None, required = False, 
+parser.add_argument('-t','--targetid', type = int, default = None, required = False,
                     help = 'plot specific targetid')
-parser.add_argument('--rebin',type = int, default = None, required = False, 
+parser.add_argument('--rebin',type = int, default = None, required = False,
                     help = 'rebin')
-parser.add_argument('--zbest',type = str, default = None, required = False, 
+parser.add_argument('--zbest',type = str, default = None, required = False,
                     help = 'zbest file')
-parser.add_argument('--spectype',type = str, default = None, required = False, 
+parser.add_argument('--spectype',type = str, default = None, required = False,
                     help = 'spectype to select')
-parser.add_argument('--rest-frame', action='store_true', 
+parser.add_argument('--ylim', type=float, default=None, required=False, nargs=2,
+                    help = 'ymin ymax for plot')
+parser.add_argument('--title', type=str, default=None, required=False,
+                    help = 'plot title')
+parser.add_argument('--rest-frame', action='store_true',
                     help = 'show rest-frame wavelength')
+parser.add_argument('--errors', action='store_true',
+                    help = 'show error bars')
 
 
 args        = parser.parse_args()
@@ -52,12 +58,12 @@ if ( targetids is None ) and ( args.targetid is not None ) :
 zbest=None
 if  args.zbest is not None :
     zbest=Table.read(args.zbest,"ZBEST")
- 
+
 if ( targetids is None ) and ( zbest is not None ) and ( args.spectype is not None ):
     selection = np.where((zbest["SPECTYPE"]==args.spectype)&(zbest["ZWARN"]==0))[0]
     targetids=np.unique(spectra[0].fibermap["TARGETID"][selection])
 
-if targetids is None :        
+if targetids is None :
     targetids=np.unique(spectra[0].fibermap["TARGETID"])
 
 
@@ -78,7 +84,7 @@ lines = {
 }
 
 
-           
+
 for tid in targetids :
     line="TARGETID={}".format(tid)
 
@@ -95,29 +101,32 @@ for tid in targetids :
             mx = resample_flux(spectra[0].wave[band], tx.wave*(1+zbest['Z'][j]), model)
             k=np.where(spectra[0].fibermap["TARGETID"]==tid)[0][0]
             model_flux[band] = spectra[0].R[band][k].dot(mx)
-            
-    fig=plt.figure(figsize=[10,6])    
-    ax = fig.add_subplot(111)   
+
+    fig=plt.figure(figsize=[10,6])
+    ax = fig.add_subplot(111)
     print(line)
     for spec in spectra :
         jj=np.where(spec.fibermap["TARGETID"]==tid)[0]
-        
+
         wavescale=1.
         if args.rest_frame :
             wavescale = 1./(1+zbest['Z'][j])
-            
+
         for j in jj :
             for b in spec._bands :
-                
-                i=np.where(spec.ivar[b][j]*(spec.mask[b][j]==0)>0)[0]
+
+                i=np.where(spec.ivar[b][j]*(spec.mask[b][j]==0)>1./100.**2)[0]
                 if i.size<10 : continue
                 if args.rebin is not None and args.rebin>0:
                     rwave=np.linspace(spec.wave[b][0],spec.wave[b][-1],spec.wave[b].size//args.rebin)
                     rflux,rivar = resample_flux(rwave,spec.wave[b],spec.flux[b][j],ivar=spec.ivar[b][j]*(spec.mask[b][j]==0))
                     plt.plot(wavescale*rwave,rflux)
                 else :
-                    plt.plot(wavescale*spec.wave[b][i],spec.flux[b][j,i])
-                
+                    if args.errors :
+                        plt.errorbar(wavescale*spec.wave[b][i],spec.flux[b][j,i],1./np.sqrt(spec.ivar[b][j,i]))
+                    else :
+                        plt.plot(wavescale*spec.wave[b][i],spec.flux[b][j,i])
+
                 c=np.polyfit(spec.wave[b][i],spec.flux[b][j,i],3)
                 pol=np.poly1d(c)(spec.wave[b][i])
 
@@ -137,15 +146,19 @@ for tid in targetids :
     else :
         plt.xlabel("wavelength [A]")
     plt.grid()
-    props = dict(boxstyle='round', facecolor='yellow', alpha=0.2)    
+    props = dict(boxstyle='round', facecolor='yellow', alpha=0.2)
     bla="TID = {}".format(tid)
     if zbest is not None :
         bla+="\nZ  = {:4.3f}".format(zbest['Z'][j])
     plt.text(0.9,0.9,bla,fontsize=12, bbox=props,transform = ax.transAxes,verticalalignment='top', horizontalalignment='right')
+    if args.ylim is not None:
+        plt.ylim(args.ylim[0], args.ylim[1])
+
+    if args.title is not None:
+        plt.title(args.title)
+
     plt.tight_layout()
     plt.show()
 
 
 plt.show()
-
-

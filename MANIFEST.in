@@ -1,5 +1,6 @@
 include LICENSE.rst
 include README.rst
+include requirements.txt
 
 graft bin
 graft doc

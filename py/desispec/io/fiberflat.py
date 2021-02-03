@@ -61,7 +61,11 @@ def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
         fibermap = encode_table(fibermap)  #- unicode -> bytes
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
-    hdus[-1].header['BUNIT'] = 'Angstrom'
+    hdus[0].header['BUNIT'] = ("","adimensional quantity to divide to flatfield a frame")
+    hdus["IVAR"].header['BUNIT'] = ("","inverse variance, adimensional")
+    hdus["MEANSPEC"].header['BUNIT'] = ("electron/Angstrom")
+    hdus["WAVELENGTH"].header['BUNIT'] = 'Angstrom'
+
 
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)

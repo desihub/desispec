@@ -26,6 +26,8 @@ parser.add_argument('--vmax', type=float, default = None, required = False,
                     help = 'max value for image display')
 parser.add_argument('--other-psf', type= str, default = None, required = False,
                     help = 'other psf to compare with')
+parser.add_argument('--wavelength', type= float, default = None, required = False,
+                    help = 'compare traces for this wavelength (default is central wavelength), used only along with --other-psf option')
 
 args = parser.parse_args()
 
@@ -53,7 +55,7 @@ print(fibers)
 
 x=np.zeros((fibers.size,nw))
 y=np.zeros((fibers.size,nw))
-    
+
 
 
 
@@ -78,7 +80,7 @@ for i,fiber in enumerate(fibers) :
     if args.image is not None: color="white"
     plt.plot(x,y,color=color)
 
-    
+
 if lines is not None :
     for line in lines :
         xl=np.zeros(fibers.size)
@@ -97,19 +99,30 @@ plt.tight_layout()
 
 
 if args.other_psf is not None :
+
+    if args.wavelength is not None :
+        wave_to_compare = args.wavelength
+    else :
+        wave_to_compare = np.mean(wave)
+
     plt.figure()
     otset = read_xytraceset(args.other_psf)
+    xx=np.zeros(len(fibers))
+    yy=np.zeros(len(fibers))
     dx=np.zeros(len(fibers))
     dy=np.zeros(len(fibers))
     for i,fiber in enumerate(fibers) :
-        x = tset.x_vs_wave(fiber,wave)
-        y = tset.y_vs_wave(fiber,wave)
-        ox = otset.x_vs_wave(fiber,wave)
-        oy = otset.y_vs_wave(fiber,wave)
+        x = tset.x_vs_wave(fiber,wave_to_compare)
+        y = tset.y_vs_wave(fiber,wave_to_compare)
+        ox = otset.x_vs_wave(fiber,wave_to_compare)
+        oy = otset.y_vs_wave(fiber,wave_to_compare)
         dx[i]=np.mean(x-ox)
         dy[i]=np.mean(y-oy)
+        xx[i]=np.mean(x)
+        yy[i]=np.mean(y)
+    plt.subplot(111,title="lambda={:d}A <y>={:d}".format(int(wave_to_compare),int(np.mean(yy))))
     plt.plot(fibers,dx,"-",label="dx")
-    plt.plot(fibers,dy,"-",label="dy") 
+    plt.plot(fibers,dy,"-",label="dy")
     plt.xlabel("fiber")
     plt.ylabel("delta")
     plt.legend()

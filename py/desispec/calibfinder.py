@@ -10,9 +10,8 @@ import os
 import numpy as np
 import yaml
 import os.path
-from desispec.util import parse_fibers
+from desispec.util import parse_fibers, header2night
 from desiutil.log import get_logger
-
 
 def parse_date_obs(value):
     '''
@@ -24,6 +23,69 @@ def parse_date_obs(value):
     dateobs=int(Y*10000+M*100+D)
     return dateobs
 
+_sp2sm = None
+_sm2sp = None
+def _load_smsp():
+    """
+    Loads $DESI_SPECTRO_CALIB/spec/smsp.txt into global _sp2sm and _sm2sp dicts
+    """
+    global _sp2sm
+    global _sm2sp
+
+    tmp_sp2sm = dict()
+    tmp_sm2sp = dict()
+
+    filename = os.getenv('DESI_SPECTRO_CALIB') + "/spec/smsp.txt"
+    tmp = np.loadtxt(filename, dtype=str)
+    for sp, sm in tmp:
+        p = int(sp[2:])
+        m = int(sm[2:])
+        tmp_sp2sm[str(sp)] = str(sm)
+        tmp_sm2sp[str(sm)] = str(sp)
+        tmp_sp2sm[p] = m
+        tmp_sm2sp[m] = p
+
+    #- Assign to global variables only after successful loading and parsing
+    _sp2sm = tmp_sp2sm
+    _sm2sp = tmp_sm2sp
+
+def sp2sm(sp):
+    """
+    Converts spectrograph sp logical number to sm hardware number
+
+    Args:
+        sp : spectrograph int 0-9 or str sp[0-9]
+
+    Returns "smM" if input is str "spP", or int M if input is int P
+
+    Note: uses $DESI_SPECTRO_CALIB/spec/smsp.txt
+
+    TODO: add support for different mappings based on night
+    """
+    global _sp2sm
+    if _sp2sm is None:
+        _load_smsp()
+
+    return _sp2sm[sp]
+
+def sm2sp(sm, night=None):
+    """
+    Converts spectrograph sm hardware number to sp logical number
+
+    Args:
+        sm : spectrograph sm number 1-10 or str sm[1-10]
+
+    Returns "spP" if input is str "smM", or int P if input is int M
+
+    Note: uses $DESI_SPECTRO_CALIB/spec/smsp.txt
+
+    TODO: add support for different mappings based on night
+    """
+    global _sm2sp
+    if _sm2sp is None:
+        _load_smsp()
+
+    return _sm2sp[sm]
 
 def findcalibfile(headers,key,yaml_file=None) :
     """
@@ -107,15 +169,8 @@ class CalibFinder() :
             specid=int(header["SPECID"])
         else :
             specid=None
-        
-        if "NIGHT" in header:
-            dateobs = int(header["NIGHT"])
-        elif "DATE-OBS" in header:
-            dateobs=parse_date_obs(header["DATE-OBS"])
-        else:
-            msg = "Need either NIGHT or DATE-OBS in header"
-            log.error(msg)
-            raise KeyError(msg)
+
+        dateobs = header2night(header)
 
         detector=header["DETECTOR"].strip()
         if "CCDCFG" in header :

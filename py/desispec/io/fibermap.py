@@ -17,8 +17,8 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
-from desispec.io.util import fitsheader, write_bintable, makepath
-from desispec.io.meta import rawdata_root
+from desispec.io.util import fitsheader, write_bintable, makepath, addkeys
+from desispec.io.meta import rawdata_root, findfile
 
 from desispec.maskbits import fibermask
 
@@ -66,6 +66,9 @@ target_columns = [
     ('FIBERTOTFLUX_Z', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
     ('FIBERTOTFLUX_W1', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
     ('FIBERTOTFLUX_W2', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    ('GAIA_PHOT_G_MEAN_MAG',      'f4', 'mag', 'Gaia G band mag'),
+    ('GAIA_PHOT_BP_MEAN_MAG',      'f4', 'mag', 'Gaia BP band mag'),
+    ('GAIA_PHOT_RP_MEAN_MAG',      'f4', 'mag', 'Gaia RP band mag'),
     ('MW_TRANSMISSION_G', 'f4', '', 'Milky Way dust transmission in g [0-1]'),
     ('MW_TRANSMISSION_R', 'f4', '', 'Milky Way dust transmission in r [0-1]'),
     ('MW_TRANSMISSION_Z', 'f4', '', 'Milky Way dust transmission in z [0-1]'),
@@ -200,6 +203,7 @@ fibermap_columns.extend([
     # ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
     ('NUM_ITER',        'i4', '', 'Number of positioner iterations'),
     ('SPECTROID',       'i4', '', 'Hardware ID of spectrograph'),
+    ('EXPTIME','f4','s','Exposure time'),
 ])
 
 #- fibermap_comments[colname] = 'comment to include in FITS header'
@@ -319,23 +323,27 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     Raises FileNotFoundError if no fibermap is found
     """
+    log = get_logger()
     if nightdir is None:
         nightdir = os.path.join(rawdata_root(), str(night))
 
     expdir = f'{nightdir}/{expid:08d}'
 
     if tileid is not None:
-        faglob = nightdir+'/*/fiberassign-{:06d}.fits'.format(tileid)
+        faglob = nightdir+'/*/fiberassign-{:06d}.fits*'.format(tileid)
     else:
-        faglob = nightdir+'/*/fiberassign*.fits'
+        faglob = nightdir+'/*/fiberassign*.fits*'
 
     fafile = None
     for filename in sorted(glob.glob(faglob)):
-        dirname = os.path.dirname(filename)
-        if dirname <= expdir:
-            fafile = filename
+        if filename.endswith('.fits.gz') or filename.endswith('.fits'):
+            dirname = os.path.dirname(filename)
+            if dirname <= expdir:
+                fafile = filename
+            else:
+                break
         else:
-            break
+            log.debug(f'Ignoring {filename}')
 
     if fafile is None:
         raise FileNotFoundError(
@@ -356,6 +364,13 @@ def assemble_fibermap(night, expid, force=False):
     """
 
     log = get_logger()
+
+    #- raw data file for header
+    rawfile = findfile('raw', night, expid)
+    try:
+        rawheader = fits.getheader(rawfile, 'SPEC')
+    except KeyError:
+        rawheader = fits.getheader(rawfile, 'SPS')
 
     #- Find fiberassign file
     fafile = find_fiberassign_file(night, expid)
@@ -380,6 +395,10 @@ def assemble_fibermap(night, expid, force=False):
     #- And guide file
     dirname, filename = os.path.split(fafile)
     globfiles = glob.glob(dirname+'/guide-????????.fits.fz')
+    if len(globfiles) == 0:
+        #- try falling back to acquisition image
+        globfiles = glob.glob(dirname+'/guide-????????-0000.fits.fz')
+
     if len(globfiles) == 1:
         guidefile = globfiles[0]
     elif len(globfiles) == 0:
@@ -396,6 +415,7 @@ def assemble_fibermap(night, expid, force=False):
 
     #- Preflight announcements
     log.info(f'Night {night} spectro expid {expid}')
+    log.info(f'Raw data file {rawfile}')
     log.info(f'Fiberassign file {fafile}')
     log.info(f'Platemaker coordinates file {coordfile}')
     log.info(f'Guider file {guidefile}')
@@ -406,7 +426,18 @@ def assemble_fibermap(night, expid, force=False):
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
 
+    #- Read platemaker (pm) coordinates file and count positioning iterations
     if coordfile is not None:
+        pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
+        numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
+        if numiter == 0:
+            log.warning('No positioning iters in coordinates file thus no FVC/platemaker info')
+    else:
+        pm = None
+        numiter = 0
+
+    #- If there were positioning iterations, merge that info with fiberassign
+    if (pm is not None) and (numiter > 0):
         pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
         pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
         keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
@@ -415,7 +446,6 @@ def assemble_fibermap(night, expid, force=False):
         log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
 
         #- Count offset iterations by counting columns with name OFFSET_{n}
-        # numiter = len([col for col in pm.colnames if col.startswith('FVC_X_')])
         numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
 
         #- Create fibermap table to merge with fiberassign file
@@ -454,9 +484,13 @@ def assemble_fibermap(night, expid, force=False):
         fibermap['_BADPOS'][bad] = True
 
         #- Missing columns from coordinates file...
-        log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
-        fibermap['FIBER_RA'] = np.zeros(len(pm))
-        fibermap['FIBER_DEC'] = np.zeros(len(pm))
+        if ('FIBER_RA' in pm.colnames) and ('FIBER_DEC' in pm.colnames):
+            fibermap['FIBER_RA'] = pm['FIBER_RA']
+            fibermap['FIBER_DEC'] = pm['FIBER_DEC']
+        else:
+            log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
+            fibermap['FIBER_RA'] = np.zeros(len(pm))
+            fibermap['FIBER_DEC'] = np.zeros(len(pm))
 
         fibermap = join(fa, fibermap, join_type='left')
 
@@ -469,9 +503,9 @@ def assemble_fibermap(night, expid, force=False):
         fibermap.remove_column('_BADPOS')
 
     else:
-        #- No coordinates file; just use fiberassign + dummy columns
+        #- No coordinates file or no positioning iterations;
+        #- just use fiberassign + dummy columns
         fibermap = fa
-        # Include NUM_ITER that is added if coord file exists
         fibermap['NUM_ITER'] = 0
         fibermap['FIBER_X'] = 0.0
         fibermap['FIBER_Y'] = 0.0
@@ -498,30 +532,32 @@ def assemble_fibermap(night, expid, force=False):
                 fibermap[targetcol][iidesi] |= mask
                 fibermap['DESI_TARGET'][ii] |= mask
 
+    #- Add header information from rawfile
+    log.debug(f'Adding header keywords from {rawfile}')
+    skipkeys = ['EXPTIME',]
+    addkeys(fibermap.meta, rawheader, skipkeys=skipkeys)
+    fibermap['EXPTIME'] = rawheader['EXPTIME']
     #- Add header info from guide file
+    #- sometimes full header is in HDU 0, other times HDU 1...
     if guidefile is not None:
-        hdr = fits.getheader(guidefile, 0)
+        log.debug(f'Adding header keywords from {guidefile}')
+        guideheader = fits.getheader(guidefile, 0)
+        if 'TILEID' not in guideheader:
+            guideheader = fits.getheader(guidefile, 1)
 
-        skipkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
-                    'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
-                    'XTENSTION', 'TFIELDS']
-        if fibermap.meta['TILEID'] != hdr['TILEID']:
+        if fibermap.meta['TILEID'] != guideheader['TILEID']:
             raise RuntimeError('fiberassign tile {} != guider tile {}'.format(
-                fibermap.meta['TILEID'], hdr['TILEID']))
+                fibermap.meta['TILEID'], guideheader['TILEID']))
 
-        for key, value in hdr.items():
-            if key not in skipkeys \
-                   and not key.startswith('TTYPE') \
-                   and not key.startswith('TFORM') \
-                   and not key.startswith('TUNIT'):
-
-                if key not in fibermap.meta:
-                    fibermap.meta[key] = value
-                elif fibermap.meta[key] != hdr[key]:
-                    fmval = fibermap.meta[key]
-                    log.warning(f'fibermap[{key}] {fmval} != guide[{key}] {value}')
+        addkeys(fibermap.meta, guideheader, skipkeys=skipkeys)
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
+
+    #- Early data raw headers had bad >8 char 'FIBERASSIGN' keyword
+    if 'FIBERASSIGN' in fibermap.meta:
+        log.warning('Renaming header keyword FIBERASSIGN -> FIBASSGN')
+        fibermap.meta['FIBASSGN'] = fibermap.meta['FIBERASSIGN']
+        del fibermap.meta['FIBERASSIGN']
 
     #- Record input guide and coordinates files
     if guidefile is not None:

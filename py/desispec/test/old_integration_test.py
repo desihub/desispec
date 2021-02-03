@@ -121,7 +121,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     for expid, program in enumerate(programs):
         rawfile = io.findfile('desi', night, expid)
         outdir = os.path.dirname(io.findfile('preproc', night, expid, 'b0'))
-        cmd = "desi_preproc --infile {} --outdir {}".format(rawfile, outdir)
+        cmd = "desi_preproc --cameras b0,r0,z0 --infile {} --outdir {} --ncpu 1".format(rawfile, outdir)
 
         inputs = [rawfile,]
         outputs = list()

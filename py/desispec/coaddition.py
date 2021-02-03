@@ -29,10 +29,10 @@ def coadd_fibermap(fibermap) :
 
     log = get_logger()
     log.debug("'coadding' fibermap")
-    
+
     targets = np.unique(fibermap["TARGETID"])
     ntarget = targets.size
-    
+
 
     jj=np.zeros(ntarget,dtype=int)
     for i,tid in enumerate(targets) :
@@ -41,6 +41,7 @@ def coadd_fibermap(fibermap) :
 
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
+    tfmap['COADD_EXPTIME'] = np.zeros(len(tfmap), dtype=np.float32) - 1
 
     # smarter values for some columns
     for k in ['DELTA_X','DELTA_Y'] :
@@ -50,12 +51,15 @@ def coadd_fibermap(fibermap) :
             tfmap.add_column(xx,name='RMS_'+k)
     for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
         if k in fibermap.colnames :
-            xx = Column(np.arange(ntarget))
-            tfmap.add_column(xx,name='FIRST_'+k)
-            xx = Column(np.arange(ntarget))
-            tfmap.add_column(xx,name='LAST_'+k)
-            xx = Column(np.arange(ntarget))
-            tfmap.add_column(xx,name='NUM_'+k)
+            if not 'FIRST_'+k in tfmap.dtype.names :
+                xx = Column(np.arange(ntarget))
+                tfmap.add_column(xx,name='FIRST_'+k)
+            if not 'LAST_'+k in tfmap.dtype.names :
+                xx = Column(np.arange(ntarget))
+                tfmap.add_column(xx,name='LAST_'+k)
+            if not 'NUM_'+k in tfmap.dtype.names :
+                xx = Column(np.arange(ntarget))
+                tfmap.add_column(xx,name='NUM_'+k)
 
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
@@ -71,7 +75,8 @@ def coadd_fibermap(fibermap) :
         allamps_flagged = ( (targ_fibstatuses & fiberstatus_amp_bits) == fiberstatus_amp_bits )
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
-
+        if 'EXPTIME' in fibermap.colnames :
+            tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
         for k in ['DELTA_X','DELTA_Y'] :
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]
@@ -96,10 +101,10 @@ def coadd_fibermap(fibermap) :
 def coadd(spectra, cosmics_nsig=0.) :
     """
     Coaddition the spectra for each target and each camera. The input spectra is modified.
-    
+
     Args:
        spectra: desispec.spectra.Spectra object
-         
+
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmics rays
     """
@@ -128,10 +133,10 @@ def coadd(spectra, cosmics_nsig=0.) :
             if len(jj) == 0:
                 continue
 
-            if cosmics_nsig is not None and cosmics_nsig > 0 :
+            if cosmics_nsig is not None and cosmics_nsig > 0  and len(jj)>2 :
                 # interpolate over bad measurements
                 # to be able to compute gradient next
-                # to a bad pixel and identify oulier
+                # to a bad pixel and identify outlier
                 # many cosmics residuals are on edge
                 # of cosmic ray trace, and so can be
                 # next to a masked flux bin
@@ -143,12 +148,12 @@ def coadd(spectra, cosmics_nsig=0.) :
                     else :
                         ttivar = spectra.ivar[b][j]
                     good = (ttivar>0)
-                    bad  = (ttivar<=0)
-                    ttflux = spectra.flux[b][j]
+                    bad  = ~good
+                    ttflux = spectra.flux[b][j].copy()
                     ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
-                    ttivar = spectra.ivar[b][j]
+                    ttivar = spectra.ivar[b][j].copy()
                     ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
-                    ttvar = 1./ttivar
+                    ttvar = 1./(ttivar+(ttivar==0))
                     ttflux[1:] = ttflux[1:]-ttflux[:-1]
                     ttvar[1:]  = ttvar[1:]+ttvar[:-1]
                     ttflux[0]  = 0
@@ -160,20 +165,25 @@ def coadd(spectra, cosmics_nsig=0.) :
                 ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
             else :
                 ivarjj=spectra.ivar[b][jj]
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
                 grad=np.array(grad)
-                gradivar=1/np.array(gradvar)
+                gradvar=np.array(gradvar)
+                gradivar=(gradvar>0)/np.array(gradvar+(gradvar==0))
                 nspec=grad.shape[0]
                 meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
                 deltagrad=grad-meangrad
                 chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
-                
-                for l in np.where(chi2>cosmics_nsig**2)[0]  :
-                    k=np.argmax(gradivar[:,l]*deltagrad[:,l]**2)
-                    #k=np.argmax(flux[:,j])
-                    log.debug("masking spec {} wave={}".format(k,spectra.wave[b][l]))
-                    ivarjj[k][l]=0.
-            
+
+                bad  = (chi2>cosmics_nsig**2)
+                nbad = np.sum(bad)
+                if nbad>0 :
+                    log.info("masking {} values for targetid={}".format(nbad,tid))
+                    badindex=np.where(bad)[0]
+                    for bi in badindex  :
+                        k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
+                        ivarjj[k,bi]=0.
+                        log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
+
             tivar[i]=np.sum(ivarjj,axis=0)
             tflux[i]=np.sum(ivarjj*spectra.flux[b][jj],axis=0)
             for r in range(spectra.resolution_data[b].shape[1]) :
@@ -202,14 +212,14 @@ def coadd(spectra, cosmics_nsig=0.) :
 def coadd_cameras(spectra,cosmics_nsig=0.) :
 
     #check_alignement_of_camera_wavelength(spectra)
-    
+
     log = get_logger()
-    
+
     # ordering
     mwave=[np.mean(spectra.wave[b]) for b in spectra.bands]
     sbands=np.array(spectra.bands)[np.argsort(mwave)] # bands sorted by inc. wavelength
     log.debug("wavelength sorted cameras= {}".format(sbands))
-    
+
     # create wavelength array
     wave=None
     tolerance=0.0001 #A , tolerance
@@ -230,20 +240,20 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
             log.error("Cannot directly coadd the camera spectra because wavelength are not aligned, use --lin-step or --log10-step to resample to a common grid")
             sys.exit(12)
         number_of_overlapping_cameras[windices] += 1
-    
-    # targets    
+
+    # targets
     targets = np.unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
     log.debug("number of targets= {}".format(ntarget))
-    
-    
+
+
     # ndiag = max of all cameras
     ndiag=0
     for b in sbands :
         ndiag=max(ndiag,spectra.resolution_data[b].shape[1])
     log.debug("ndiag= {}".format(ndiag))
-    
-    
+
+
     b = sbands[0]
     flux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
     ivar=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
@@ -253,9 +263,9 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
     else :
         ivar_unmasked=ivar
         mask=None
-    
+
     rdata=np.zeros((ntarget,ndiag,nwave),dtype=spectra.resolution_data[b].dtype)
-    
+
     for b in spectra.bands :
         log.debug("coadding band '{}'".format(b))
 
@@ -274,7 +284,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
             if len(jj) == 0:
                 continue
 
-            if cosmics_nsig is not None and cosmics_nsig > 0 :
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2 :
                 # interpolate over bad measurements
                 # to be able to compute gradient next
                 # to a bad pixel and identify oulier
@@ -289,12 +299,12 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
                     else :
                         ttivar = spectra.ivar[b][j]
                     good = (ttivar>0)
-                    bad  = (ttivar<=0)
-                    ttflux = spectra.flux[b][j]
+                    bad  = ~good
+                    ttflux = spectra.flux[b][j].copy()
                     ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
-                    ttivar = spectra.ivar[b][j]
+                    ttivar = spectra.ivar[b][j].copy()
                     ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
-                    ttvar = 1./ttivar
+                    ttvar = 1./(ttivar+(ttivar==0))
                     ttflux[1:] = ttflux[1:]-ttflux[:-1]
                     ttvar[1:]  = ttvar[1:]+ttvar[:-1]
                     ttflux[0]  = 0
@@ -307,39 +317,42 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
                 ivarjj=spectra.ivar[b][jj]*(spectra.mask[b][jj]==0)
             else :
                 ivarjj=spectra.ivar[b][jj]
-            
-            if cosmics_nsig is not None and cosmics_nsig > 0 and len(grad)>1  :
+
+            if cosmics_nsig is not None and cosmics_nsig > 0 and len(jj)>2  :
                 grad=np.array(grad)
                 gradivar=1/np.array(gradvar)
                 nspec=grad.shape[0]
                 meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
                 deltagrad=grad-meangrad
                 chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
-                
-                for l in np.where(chi2>cosmics_nsig**2)[0]  :
-                    k=np.argmax(gradivar[:,l]*deltagrad[:,l]**2)
-                    log.debug("masking spec {} wave={}".format(k,spectra.wave[b][l]))
-                    ivarjj[k][l]=0.
+                bad  = (chi2>cosmics_nsig**2)
+                nbad = np.sum(bad)
+                if nbad>0 :
+                    log.info("masking {} values for targetid={}".format(nbad,tid))
+                    badindex=np.where(bad)[0]
+                    for bi in badindex  :
+                        k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
+                        ivarjj[k,bi]=0.
+                        log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
 
-            
             ivar[i,windices] += np.sum(ivarjj,axis=0)
             flux[i,windices] += np.sum(ivarjj*spectra.flux[b][jj],axis=0)
             for r in range(band_ndiag) :
                 rdata[i,r+(ndiag-band_ndiag)//2,windices] += np.sum((spectra.ivar[b][jj]*spectra.resolution_data[b][jj,r]),axis=0)
             if spectra.mask is not None :
                 # this deserves some attention ...
-                
+
                 tmpmask=np.bitwise_and.reduce(spectra.mask[b][jj],axis=0)
-                
+
                 # directly copy mask where no overlap
                 jj=(number_of_overlapping_cameras[windices]==1)
                 mask[i,windices[jj]] = tmpmask[jj]
-                
+
                 # 'and' in overlapping regions
                 jj=(number_of_overlapping_cameras[windices]>1)
                 mask[i,windices[jj]] = mask[i,windices[jj]] & tmpmask[jj]
-                
-                
+
+
     for i,tid in enumerate(targets) :
         ok=(ivar[i]>0)
         if np.sum(ok)>0 :
@@ -352,7 +365,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
         fibermap = spectra.fibermap
     else:
         fibermap = coadd_fibermap(spectra.fibermap)
-        
+
     bands=""
     for b in sbands :
         bands+=b
@@ -362,7 +375,7 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
         dmask=None
     res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
                 fibermap=fibermap,meta=spectra.meta,extra=spectra.extra,scores=None)
-    
+
     return res
 
 def get_resampling_matrix(global_grid,local_grid,sparse=False):
@@ -384,7 +397,7 @@ def get_resampling_matrix(global_grid,local_grid,sparse=False):
 
     assert local_grid[0] >= global_grid[0],'Local grid extends below global grid.'
     assert local_grid[-1] <= global_grid[-1],'Local grid extends above global grid.'
-    
+
     # Lookup the global-grid bracketing interval (xlo,xhi) for each local grid point.
     # Note that this gives xlo = global_grid[-1] if local_grid[0] == global_grid[0]
     # but this is fine since the coefficient of xlo will be zero.
@@ -401,7 +414,7 @@ def get_resampling_matrix(global_grid,local_grid,sparse=False):
     return scipy.sparse.csc_matrix(matrix)
 
 
-    
+
 def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
     """Decorrelate an inverse covariance using the matrix square root.
 
@@ -409,8 +422,8 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
     Bolton & Schlegel 2009 (BS) http://arxiv.org/abs/0911.2689.
 
     with the divide and conquer approach, i.e. per diagonal block of the matrix, with an
-    overlapping 'skin' from one block to another. 
-    
+    overlapping 'skin' from one block to another.
+
     Args:
         Cinv: Square 2D array: input inverse covariance matrix
         Cinvf: 1D array: input
@@ -419,7 +432,7 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
         ivar: 1D array: output flux inverse variance (has to be allocated)
         rdata: 2D array: output resolution matrix per diagonal (has to be allocated)
     """
-    
+
     chw=max(10,int(50/wavebin)) #core is 2*50+1 A
     skin=max(2,int(10/wavebin)) #skin is 10A
     nn=Cinv.shape[0]
@@ -450,7 +463,7 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
         tR = (Q/s[:,np.newaxis])
         tR_it = scipy.linalg.inv(tR.T)
         tivar = s**2
-        
+
         flux[b1:e1] = (tR_it.dot(Cinvf[b:e])/tivar)[bb:ee]
         ivar[b1:e1] = (s[bb:ee])**2
         for j in range(b1,e1) :
@@ -459,7 +472,7 @@ def decorrelate_divide_and_conquer(Cinv,Cinvf,wavebin,flux,ivar,rdata) :
             # j is the wavelength index
             # it could be the transposed, I am following what it is specter.ex2d, L209
             rdata[k,j] = tR[j-b+dd[k],j-b]
-    
+
 def spectroperf_resample_spectrum_singleproc(spectra,target_index,wave,wavebin,resampling_matrix,ndiag,flux,ivar,rdata) :
     cinv = None
     for b in spectra.bands :
@@ -499,16 +512,16 @@ def spectroperf_resample_spectrum_multiproc(shm_in_wave,shm_in_flux,shm_in_ivar,
         in_flux.append( np.array(shm_in_flux[b],copy=False).reshape((ntarget,in_nwave[b])) )
         in_ivar.append( np.array(shm_in_ivar[b],copy=False).reshape((ntarget,in_nwave[b])) )
         in_rdata.append( np.array(shm_in_rdata[b],copy=False).reshape((ntarget,in_ndiag[b],in_nwave[b])) )
-        
+
 
     # output shared memory
-    
+
     flux  = np.array(shm_flux,copy=False).reshape(ntarget,nwave)
     ivar  = np.array(shm_ivar,copy=False).reshape(ntarget,nwave)
     rdata = np.array(shm_rdata,copy=False).reshape(ntarget,ndiag,nwave)
-    
+
     for target_index in target_indices :
-    
+
         cinv = None
         for b in range(nbands) :
             twave=in_wave[b]
@@ -547,7 +560,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     b=spectra.bands[0]
     ntarget=spectra.flux[b].shape[0]
     nwave=wave.size
-    
+
     if spectra.mask is not None :
         mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
     else :
@@ -557,8 +570,8 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
     ndiag = 0
     for b in spectra.bands :
         ndiag = max(ndiag,spectra.resolution_data[b].shape[1])
-        
-    
+
+
     dw=np.gradient(wave)
     wavebin=np.min(dw[dw>0.]) # min wavelength bin size
     log.debug("min wavelength bin= {:2.1f} A; ndiag= {:d}".format(wavebin,ndiag))
@@ -603,17 +616,17 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
             shm_in_rdata.append( multiprocessing.Array('d',spectra.resolution_data[b].ravel(),lock=False) )
             in_nwave.append(spectra.wave[b].size)
             in_ndiag.append(spectra.resolution_data[b].shape[1])
-        
+
         # output
         shm_flux=multiprocessing.Array('d',ntarget*nwave,lock=False)
         shm_ivar=multiprocessing.Array('d',ntarget*nwave,lock=False)
         shm_rdata=multiprocessing.Array('d',ntarget*ndiag*nwave,lock=False)
-        
+
         # manipulate shared memory as np arrays
         flux  = np.array(shm_flux,copy=False).reshape(ntarget,nwave)
         ivar  = np.array(shm_ivar,copy=False).reshape(ntarget,nwave)
         rdata = np.array(shm_rdata,copy=False).reshape(ntarget,ndiag,nwave)
-        
+
         # split targets per process
         target_indices = np.array_split(np.arange(ntarget),nproc)
 
@@ -635,7 +648,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
         for proc in procs :
             proc.join()
         log.info("all done!")
-    
+
     bands=""
     for b in spectra.bands : bands += b
 
@@ -651,7 +664,7 @@ def spectroperf_resample_spectra(spectra, wave, nproc=1) :
 def fast_resample_spectra(spectra, wave) :
     """
     Fast resampling of spectra file.
-    The output resolution = Id. The neighboring 
+    The output resolution = Id. The neighboring
     flux bins are correlated.
 
     Args:
@@ -664,8 +677,8 @@ def fast_resample_spectra(spectra, wave) :
 
     log = get_logger()
     log.debug("Resampling to wave grid: {}".format(wave))
-    
-    
+
+
     nwave=wave.size
     b=spectra.bands[0]
     ntarget=spectra.flux[b].shape[0]
@@ -689,7 +702,7 @@ def fast_resample_spectra(spectra, wave) :
         bands += b
     for i in range(ntarget) :
         ok=(ivar[i]>0)
-        flux[i,ok]/=ivar[i,ok]    
+        flux[i,ok]/=ivar[i,ok]
     if spectra.mask is not None :
         dmask={bands:mask,}
     else :
@@ -697,17 +710,17 @@ def fast_resample_spectra(spectra, wave) :
     res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
                 fibermap=spectra.fibermap,meta=spectra.meta,extra=spectra.extra,scores=spectra.scores)
     return res
-    
+
 def resample_spectra_lin_or_log(spectra, linear_step=0, log10_step=0, fast=False, wave_min=None, wave_max=None, nproc=1) :
     """
     Resampling of spectra file.
-    
+
 
     Args:
        spectra: desispec.spectra.Spectra object
        linear_step: if not null the ouput wavelenght grid will be linear with this step
        log10_step: if not null the ouput wavelenght grid will be logarthmic with this step
-       
+
     Options:
        fast: simple resampling. fast but at the price of correlated output flux bins and no information on resolution
        wave_min: if set, use this min wavelength

@@ -6,6 +6,7 @@ from desispec.io import read_fiberflat
 from desispec.io import write_sky
 from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
+from desispec.io import shorten_filename
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.qa import qa_plots
@@ -36,7 +37,11 @@ def parse(options=None):
                         help = 'Focal plane variation degree')
     parser.add_argument('--chromatic-variation-deg', type = int, default = 0, required = False,
                         help = 'wavelength degree for chromatic x angular variation. If -1, use independent focal plane polynomial corrections for each wavelength (i.e. many more parameters)')
-    
+    parser.add_argument('--adjust-wavelength', action='store_true',
+                        help = 'adjust wavelength calibration of sky model on sky lines to improve sky subtraction for all fibers')
+    parser.add_argument('--adjust-lsf', action='store_true',
+                        help = 'adjust LSF width of sky model on sky lines to improve sky subtraction for all fibers')
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -55,7 +60,7 @@ def main(args) :
     frame = read_frame(args.infile)
     specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
 
-    if args.cosmics_nsig>0 : # Reject cosmics         
+    if args.cosmics_nsig>0 : # Reject cosmics
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
 
     # read fiberflat
@@ -65,8 +70,12 @@ def main(args) :
     apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),angular_variation_deg=args.angular_variation_deg,chromatic_variation_deg=args.chromatic_variation_deg)
-    
+    skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),\
+                           angular_variation_deg=args.angular_variation_deg,\
+                           chromatic_variation_deg=args.chromatic_variation_deg,\
+                           adjust_wavelength=args.adjust_wavelength,\
+                           adjust_lsf=args.adjust_lsf)
+
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
         log.info("performing skysub QA")
@@ -81,6 +90,10 @@ def main(args) :
         # Figure(s)
         if args.qafig is not None:
             qa_plots.frame_skyres(args.qafig, frame, skymodel, qaframe)
+
+    # record inputs
+    frame.meta['IN_FRAME'] = shorten_filename(args.infile)
+    frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
 
     # write result
     write_sky(args.outfile, skymodel, frame.meta)

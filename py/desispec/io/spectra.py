@@ -13,21 +13,25 @@ import os
 import re
 import warnings
 import time
+import glob
 
 import numpy as np
 import astropy.units as u
 import astropy.io.fits as fits
+import astropy.table
 from astropy.table import Table
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
+from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns
 
 from .frame import read_frame
 from .fibermap import fibermap_comments
 
-from ..spectra import Spectra
+from ..spectra import Spectra, stack
+from .meta import specprod_root
 
 def write_spectra(outfile, spec, units=None):
     """
@@ -313,3 +317,110 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
         extra=extra, single=single, scores=fr.scores)
 
     return spec
+
+def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
+        single=False, targets=None, fibers=None, zbest=True):
+    """
+    Read and return combined spectra for a tile/night
+
+    Args:
+        tileid (int) : Tile ID
+        night (int or str) : YEARMMDD night or tile group, e.g. 'deep' or 'all'
+
+    Options:
+        specprod (str) : overrides $SPECPROD
+        reduxdir (str) : overrides $DESI_SPECTRO_REDUX/$SPECPROD
+        coadd (bool) : if True, read coadds instead of per-exp spectra
+        single (bool) : if True, use float32 instead of double precision
+        targets (array-like) : filter by TARGETID
+        fibers (array-like) : filter by FIBER
+        zbest (bool) : if True, also return row-matched zbest redshift catalog
+
+    Returns: spectra or (spectra, zbest)
+        combined Spectra obj for all matching targets/fibers filter
+        row-matched zbest catalog (if zbest=True)
+
+    Raises:
+        ValueError if no files or matching spectra are found
+
+    Note: the returned spectra are not necessarily in the same order as
+    the `targets` or `fibers` input filters
+    """
+    log = get_logger()
+    if reduxdir is None:
+        #- will automatically use $SPECPROD if specprod=None
+        reduxdir = specprod_root(specprod)
+
+    tiledir = os.path.join(reduxdir, 'tiles', str(tileid), str(night))
+
+    if coadd:
+        log.debug(f'Reading coadds from {tiledir}')
+        prefix = 'coadd'
+    else:
+        log.debug(f'Reading spectra from {tiledir}')
+        prefix = 'spectra'
+
+    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{night}.fits')
+
+    if len(specfiles) == 0:
+        raise ValueError(f'No spectra found in {tiledir}')
+
+    specfiles = sorted(specfiles)
+
+    spectra = list()
+    zbests = list()
+    for filename in specfiles:
+        log.debug(f'reading {os.path.basename(filename)}')
+        sp = read_spectra(filename, single=single)
+        if targets is not None:
+            keep = np.in1d(sp.fibermap['TARGETID'], targets)
+            sp = sp[keep]
+        if fibers is not None:
+            keep = np.in1d(sp.fibermap['FIBER'], fibers)
+            sp = sp[keep]
+
+        if sp.num_spectra() > 0:
+            spectra.append(sp)
+            if zbest:
+                #- Read matching zbest file for this spectra/coadd file
+                zbfile = os.path.basename(filename).replace(prefix, 'zbest', 1)
+                log.debug(f'Reading {zbfile}')
+                zbfile = os.path.join(tiledir, zbfile)
+                zb = Table.read(zbfile, 'ZBEST')
+
+                #- Trim zb to only have TARGETIDs in filtered spectra sp
+                keep = np.in1d(zb['TARGETID'], sp.fibermap['TARGETID'])
+                zb = zb[keep]
+
+                #- spectra files can have multiple entries per TARGETID,
+                #- while zbest files have only 1.  Expand to match spectra.
+                #- Note: astropy.table.join changes the order
+                if len(sp.fibermap) > len(zb):
+                    zbx = Table()
+                    zbx['TARGETID'] = sp.fibermap['TARGETID']
+                    zbx = astropy.table.join(zbx, zb, keys='TARGETID')
+                else:
+                    zbx = zb
+
+                #- Sort the zbx Table to match the order of sp['TARGETID']
+                ii = np.argsort(sp.fibermap['TARGETID'])
+                jj = np.argsort(zbx['TARGETID'])
+                kk = np.argsort(ii[jj])
+                zbx = zbx[kk]
+
+                #- Confirm that we got all that expanding and sorting correct
+                assert np.all(sp.fibermap['TARGETID'] == zbx['TARGETID'])
+                zbests.append(zbx)
+
+    if len(spectra) == 0:
+        raise ValueError('No spectra found matching filters')
+
+    spectra = stack(spectra)
+
+    if zbest:
+        zbests = astropy.table.vstack(zbests)
+        assert np.all(spectra.fibermap['TARGETID'] == zbests['TARGETID'])
+        return (spectra, zbests)
+    else:
+        return spectra
+

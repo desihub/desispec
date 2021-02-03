@@ -1,13 +1,15 @@
 import argparse
 import os,glob
 import re
-from astropy.io import fits
+from astropy.io import fits,ascii
 import time,datetime
 import numpy as np
 import psutil
 from os import listdir
 from collections import OrderedDict
-
+from desispec.workflow.exptable import get_exposure_table_pathname
+from desispec.workflow.proctable import get_processing_table_pathname, get_processing_table_name
+from desispec.workflow.tableio import load_table
 
 ########################
 ### Helper Functions ###
@@ -282,7 +284,7 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
     night: like 20200131
     output: The string to be added to the html file
     """
-    night_info = calculate_one_night(night,use_short_sci)
+    night_info = calculate_one_night_use_file(night,use_short_sci)
 
     ngood,ninter,nbad,nnull,nover,n_notnull = 0,0,0,0,0,0
     main_body = ""
@@ -320,7 +322,7 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
                                                                                                          nbad=nbad)        
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
-    nightly_table_str += "<table id='c'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th>"
+    nightly_table_str += "<table id='c'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
     nightly_table_str += "<th>PSF File</th><th>FFlat file</th><th>frame file</th><th>sframe file</th><th>sky file</th>"
     nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th></tr>"
 
@@ -328,6 +330,183 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
     nightly_table_str += "</tbody></table></div>\n"
     nightly_table_str += '<!--End {}-->\n\n'.format(night)
     return nightly_table_str
+
+
+def calculate_one_night_use_file(night, use_short_sci=False):
+    """
+    For a given night, return the file counts and other other information for each exposure taken on that night
+    input: night
+    output: a dictionary containing the statistics with expid as key name
+    FLAVOR: FLAVOR of this exposure
+    OBSTYPE: OBSTYPE of this exposure
+    EXPTIME: Exposure time
+    SPECTROGRAPHS: a list of spectrographs used
+    n_spectrographs: number of spectrographs
+    n_psf: number of PSF files
+    n_ff:  number of fiberflat files
+    n_frame: number of frame files
+    n_sframe: number of sframe files
+    n_cframe: number of cframe files
+    n_sky: number of sky files
+    """
+    cams_per_spgrph = 3
+
+    totals_by_type = {}
+    totals_by_type['ARC'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': 0,               'sframe': 0}
+    totals_by_type['FLAT'] =   {'psf': cams_per_spgrph, 'ff': cams_per_spgrph, 'frame': cams_per_spgrph, 'sframe': 0}
+    totals_by_type['SKY'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': cams_per_spgrph}
+    totals_by_type['TWILIGHT']={'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': 0}
+    totals_by_type['ZERO'] =   {'psf': 0,               'ff': 0,               'frame': 0,               'sframe': 0}
+    totals_by_type['SCIENCE'], totals_by_type['NONE'] = totals_by_type['SKY'], totals_by_type['SKY']
+
+    #table_dir =  os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'),'processing_tables')
+    #file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
+    #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
+    file_exptable=get_exposure_table_pathname(night)
+    try: # Try reading tables first. Switch to counting files if not failed. 
+        d_exp =  ascii.read(file_exptable, data_start=2, delimiter=',')
+        #d_processing = load_table(file_processing)
+        #d_unprocessed = load_table(file_unprocessed)
+    except:
+        return calculate_one_night(night, use_short_sci=use_short_sci)
+
+    expids = list(d_exp['EXPID'])
+    expids.sort(reverse=True)
+
+    fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
+
+    logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
+    if os.path.exists(logpath):
+        cmd="fix_permissions.sh -a {}".format(logpath)
+        os.system(cmd)
+
+    webpage = os.getenv('DESI_DASHBOARD')
+    logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}') # search for the log file 
+    logfiletemplate = os.path.join(logpath,'{}-{}-{}-{}{}.{}')
+
+    output = OrderedDict()
+    d_exp.add_index('EXPID')
+
+    for expid in expids:
+        zfild_expid = str(expid).zfill(8)
+        """
+        filename = os.path.join(os.getenv('DESI_SPECTRO_DATA'), str(night), zfild_expid,
+                                'desi-' + str(expid).zfill(8) + '.fits.fz')
+        h1 = fits.getheader(filename, 1)
+
+        header_info = {keyword: 'Unknown' for keyword in ['FLAVOR', 'SPCGRPHS', 'EXPTIME', 'OBSTYPE']}
+        for keyword in header_info.keys():
+            if keyword in h1.keys():
+                header_info[keyword] = h1[keyword]
+        """
+        flavor='NULL'
+        obstype = str(d_exp.loc[expid]['OBSTYPE']).upper().strip()
+        exptime = d_exp.loc[expid]['EXPTIME']
+        spcgrphs = str(d_exp.loc[expid]['CAMWORD'])[1:] #spcgrphs = str(d_exp.loc[expid]['SPECTROGRAPHS'])
+        tileid = str(d_exp.loc[expid]['TILEID'])
+        if obstype == 'SCIENCE':
+            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/'+tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
+        elif obstype == 'OTHER' or obstype == 'ZERO':
+            continue
+        else:
+            tileid_str =  tileid
+        #import pdb;pdb.set_trace()
+        file_psf = glob.glob(fileglob.format(zfild_expid, 'psf-[brz]?-????????.fits'))
+        file_fit_psf = glob.glob(fileglob.format(zfild_expid, 'fit-psf-[brz]?-????????.fits'))
+        file_fiberflat = glob.glob(fileglob.format(zfild_expid, 'fiberflat-[brz]?-????????.fits'))
+        file_frame = glob.glob(fileglob.format(zfild_expid, 'frame-??-????????.fits'))
+        file_sframe = glob.glob(fileglob.format(zfild_expid, 'sframe-??-????????.fits'))
+        file_cframe = glob.glob(fileglob.format(zfild_expid, 'cframe-??-????????.fits'))
+        file_sky = glob.glob(fileglob.format(zfild_expid, 'sky*.fits'))
+        if obstype in totals_by_type.keys():
+            n_tots = totals_by_type[obstype]
+        else:
+            n_tots = totals_by_type['NONE']
+
+        n_spgrph = int(len(list(spcgrphs)))
+        row_color = "NULL"
+        npsfs = len(file_psf) + len(file_fit_psf)
+        nframes = len(file_frame)
+        ncframes = len(file_cframe)
+        nfiberflat = len(file_fiberflat)
+        nsframe = len(file_sframe)
+        nsky = len(file_sky)
+
+        if obstype.lower() == 'arc':
+            nfiles = npsfs
+            n_tot_spgrphs = n_spgrph * n_tots['psf']
+        elif obstype.lower() == 'flat':
+            nfiles = nframes
+            n_tot_spgrphs = n_spgrph * n_tots['frame']
+        elif obstype.lower() == 'science':
+            nfiles = ncframes
+            n_tot_spgrphs = n_spgrph * n_tots['sframe']
+        else:
+            nfiles = 0
+            n_tot_spgrphs = 0
+
+        if n_tots['psf'] == 0:
+            row_color = 'NULL'
+        elif not use_short_sci and obstype.upper() == 'SCIENCE' and float(exptime)< 60.:
+            row_color = 'NULL'
+        elif nfiles == 0:
+            row_color = 'BAD'
+        elif nfiles < n_tot_spgrphs:
+            row_color = 'INCOMPLETE'
+        elif nfiles == n_tot_spgrphs:
+            row_color = 'GOOD'
+        else:
+            row_color = 'OVERFUL'
+
+        hlink1 = '----'
+        hlink2 = '----'
+
+        if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
+            lognames = glob.glob(logfileglob.format(obstype.lower(), night,zfild_expid,'log'))
+            newest_jobid = '00000000'
+            spectrographs = ''
+
+            for log in lognames:
+                jobid = log[-12:-4]
+                if int(jobid) > int(newest_jobid):
+                    newest_jobid = jobid
+                    spectrographs = log.split('-')[-2]
+            if newest_jobid != '00000000' and len(spectrographs)!=0:
+                logname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
+                logname_only = logname.split('/')[-1]
+
+                slurmname = logfiletemplate.format(obstype.lower(), night,zfild_expid,spectrographs,'','slurm')
+                slurmname_only = slurmname.split('/')[-1]
+
+                relpath_log = os.path.join('links',night[:-2],logname_only)
+                relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
+
+                if not os.path.exists(os.path.join(webpage,relpath_log)):
+                    cmd = "ln -s {} {}".format(logname,os.path.join(webpage,relpath_log))
+                    os.system(cmd)
+                if not os.path.exists(os.path.join(webpage, relpath_slurm)):
+                    cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, relpath_slurm))
+                    os.system(cmd)
+
+                hlink1 = _hyperlink(relpath_slurm, 'Slurm')
+                hlink2 = _hyperlink(relpath_log, 'Log')
+
+        output[str(expid)] = [row_color, \
+                              expid, \
+                              flavor,\
+                              obstype,\
+                              exptime, \
+                              'SP: '+spcgrphs.replace('SP',''), \
+                              tileid_str, \
+                              _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
+                              _str_frac( nfiberflat, n_spgrph * n_tots['ff']), \
+                              _str_frac( nframes,             n_spgrph * n_tots['frame']), \
+                              _str_frac( nsframe,    n_spgrph * n_tots['sframe']), \
+                              _str_frac( nsky,       n_spgrph * n_tots['sframe']), \
+                              _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
+                              hlink1, \
+                              hlink2         ]
+    return output
 
 
 def calculate_one_night(night, use_short_sci=False):

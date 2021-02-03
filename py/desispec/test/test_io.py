@@ -32,11 +32,15 @@ class TestIO(unittest.TestCase):
         cls.origEnv = {'SPECPROD': None,
                        "DESI_ROOT": None,
                        "DESI_SPECTRO_DATA": None,
-                       "DESI_SPECTRO_REDUX": None}
+                       "DESI_SPECTRO_REDUX": None,
+                       "DESI_SPECTRO_CALIB": None,
+                       }
         cls.testEnv = {'SPECPROD':'dailytest',
                        "DESI_ROOT": cls.testDir,
                        "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
-                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux')}
+                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
+                       "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
+                       }
         cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
         cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
                                     cls.testEnv['SPECPROD'])
@@ -876,6 +880,116 @@ class TestIO(unittest.TestCase):
             decoded = decode_camword(camword)
             for ii in range(len(decoded)):
                 self.assertEqual(str(decoded[ii]),str(cameras[ii]))
+
+    def test_replace_prefix(self):
+        """Test desispec.io.util.replace_prefix
+        """
+        from ..io.util import replace_prefix
+        oldfile = '/blat/foo/blat-foo-blat.fits'
+        newfile = '/blat/foo/quat-foo-blat.fits'
+        self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+        oldfile = 'blat-foo-blat.fits'
+        newfile = 'quat-foo-blat.fits'
+        self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+
+    def test_find_fibermap(self):
+        '''Test finding (non)gzipped fiberassign files'''
+        from ..io.fibermap import find_fiberassign_file
+        night = 20101020
+        nightdir = os.path.join(self.datadir, str(night))
+        os.makedirs(nightdir)
+        os.makedirs(f'{nightdir}/00012345')
+        os.makedirs(f'{nightdir}/00012346')
+        os.makedirs(f'{nightdir}/00012347')
+        os.makedirs(f'{nightdir}/00012348')
+        fafile = f'{nightdir}/00012346/fiberassign-001111.fits'
+        fafilegz = f'{nightdir}/00012347/fiberassign-001122.fits'
+
+        fx = open(fafile, 'w'); fx.close()
+        fx = open(fafilegz, 'w'); fx.close()
+
+        a = find_fiberassign_file(night, 12346)
+        self.assertEqual(a, fafile)
+
+        a = find_fiberassign_file(night, 12347)
+        self.assertEqual(a, fafilegz)
+
+        a = find_fiberassign_file(night, 12348)
+        self.assertEqual(a, fafilegz)
+
+        a = find_fiberassign_file(night, 12348, tileid=1111)
+        self.assertEqual(a, fafile)
+
+        with self.assertRaises(IOError) as ex:
+            find_fiberassign_file(night, 12345)
+
+        with self.assertRaises(IOError) as ex:
+            find_fiberassign_file(night, 12348, tileid=4444)
+
+    def test_addkeys(self):
+        """test desispec.io.util.addkeys"""
+        from ..io.util import addkeys
+        h1 = dict(A=1, B=1, NAXIS=2)
+        h2 = dict(A=2, C=2, EXTNAME='blat', TTYPE1='F8')
+        addkeys(h1, h2)
+        self.assertEqual(h1['A'], 1)  #- h2['A'] shouldn't override
+        self.assertEqual(h1['C'], 2)  #- h2['C'] was added to h1
+        self.assertNotIn('EXTNAME', h1)  #- reserved keywords not added
+        self.assertNotIn('TTYPE1', h1)  #- reserved keywords not added
+        h3 = dict(X=3, Y=3, Z=3)
+        addkeys(h1, h3, skipkeys=['X', 'Y'])
+        self.assertNotIn('X', h1)
+        self.assertNotIn('Y', h1)
+        self.assertEqual(h1['Z'], 3)
+
+    def test_parse_cameras(self):
+        """test desispec.io.util.parse_cameras"""
+        from ..io.util import parse_cameras
+        self.assertEqual(parse_cameras('0,1,2,3,4'),        'a01234')
+        self.assertEqual(parse_cameras('01234'),            'a01234')
+        self.assertEqual(parse_cameras('15'),               'a15')
+        self.assertEqual(parse_cameras('a01234'),           'a01234')
+        self.assertEqual(parse_cameras('a012345b6'),        'a012345b6')
+        self.assertEqual(parse_cameras('a01234b5z5r5'),     'a012345')
+        self.assertEqual(parse_cameras('a01234b56z56r5'),   'a012345b6z6')
+        self.assertEqual(parse_cameras('0,1,2,3,4,b5'),     'a01234b5')
+        self.assertEqual(parse_cameras('b1,r1,z1,b2,r2'),   'a1b2r2')
+        self.assertEqual(parse_cameras('0,1,2,a3,b4,5,6'),  'a012356b4')
+        self.assertEqual(parse_cameras('a1234,b5,r5,z5'),   'a12345')
+        self.assertEqual(parse_cameras('a01234,b5,r5,z56'), 'a012345z6')
+        self.assertEqual(parse_cameras(None), None)
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2']), 'a1b2')
+
+    def test_shorten_filename(self):
+        """Test desispec.io.meta.shorten_filename"""
+        from ..io.meta import shorten_filename, specprod_root
+
+        specprod = specprod_root()
+        longname = os.path.join(specprod, 'blat/foo.fits')
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, 'SPECPROD/blat/foo.fits')
+
+        #- if SPECPROD not set, don't shorten but don't fail
+        del os.environ['SPECPROD']
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+
+        #- if no matching prefix, don't shorten but don't fail
+        longname = '/bar/blat/foo.fits'
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+
+        #- with and without DESI_SPECTRO_CALIB
+        calibdir = os.getenv('DESI_SPECTRO_CALIB')
+        longname = os.path.join(calibdir, 'blat/foo.fits')
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, 'SPCALIB/blat/foo.fits')
+
+        del os.environ['DESI_SPECTRO_CALIB']
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+        os.environ['DESI_SPECTRO_CALIB'] = self.testEnv['DESI_SPECTRO_CALIB']
 
 def test_suite():
     """Allows testing of only this module with the command::

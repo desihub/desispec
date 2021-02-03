@@ -2,12 +2,125 @@
 desispec Change Log
 ===================
 
-0.34.8 (unreleased)
+0.36.2 (unreleased)
 -------------------
 
-* Fix dark CCD calibration corrections (PR `#1002`_).
+* No changes yet
+
+0.36.1 (2021-01-04)
+-------------------
+
+* Fix PSF traceshifts when a fiber is completely masked (PR `#1080`_).
+* Robust to NaN in desi_average_flux_calibration (commit f1de1ac).
+* Increase arc and flat runtimes (commit 7cb294c).
+
+.. _`#1080`: https://github.com/desihub/desispec/issues/1080
+
+0.36.0 (2020-12-23)
+-------------------
+
+This is the primary tag for the Mt. Blanc spectro pipeline run.
+
+* Major updates:
+
+  * Coadd fluxes in multi-exp standard stars before fitting (PR `#1059`_).
+  * New model of CCD pixel-level variance (PR `#1062`_).
+  * Adjust sky-line variance based on model chi2 (PR `#1062`_).
+
+* Smaller (but important) updates:
+
+  * Fixes assemble_fibermap for older data
+    (PR `#1047`_, bug introduced in PR `#1045`_).
+  * Use EBV instead of MW_TRANSMISSION_G/R/Z from fiberassign (PR `#1048`_).
+  * Fallback to using FA_TYPE if no stdstars in (SVn\_)DESI_TARGET
+    (PR `#1050`_).
+  * Use GitHub Actions for testing instead of Travis (PR `#1053`_).
+  * Fix stdstar absolute symlinks (PR `#1056`_).
+  * Adjust nodes per job (PR `#1056`_ and `#1068`_).
+  * Workflow options for bad exposures and new end-of-cals manifests
+    (PR `#1057`_).
+  * stdstar robustness if petal is disabled (PR `#1060`_).
+  * improved camera argument parsing (PR `#1061`_).
+  * Fix unphysical spike at edge of calibration vectors (PR `#1065`_).
+  * Add header keywords for input calib provenance (PR `#1069`_).
+  * More logging about stdstar selection cuts (PR `#1070`_).
+  * Only uses fiberassign .fits and .fits.gz (but not .fits.orig) (PR `#1072`_).
+  * Support "unpositioned" exposures; propagate FIBER_RA/DEC if present
+    (PR `#1073`_).
+  * Use desi_spectro_calib tag 0.2.1
+
+.. _`#1047`: https://github.com/desihub/desispec/issues/1047
+.. _`#1048`: https://github.com/desihub/desispec/issues/1048
+.. _`#1050`: https://github.com/desihub/desispec/issues/1050
+.. _`#1053`: https://github.com/desihub/desispec/issues/1053
+.. _`#1056`: https://github.com/desihub/desispec/issues/1056
+.. _`#1057`: https://github.com/desihub/desispec/issues/1057
+.. _`#1059`: https://github.com/desihub/desispec/issues/1059
+.. _`#1060`: https://github.com/desihub/desispec/issues/1060
+.. _`#1061`: https://github.com/desihub/desispec/issues/1061
+.. _`#1062`: https://github.com/desihub/desispec/issues/1062
+.. _`#1065`: https://github.com/desihub/desispec/issues/1065
+.. _`#1068`: https://github.com/desihub/desispec/issues/1068
+.. _`#1069`: https://github.com/desihub/desispec/issues/1069
+.. _`#1070`: https://github.com/desihub/desispec/issues/1070
+.. _`#1072`: https://github.com/desihub/desispec/issues/1072
+.. _`#1073`: https://github.com/desihub/desispec/issues/1073
+
+
+0.35.0 (2020-12-11)
+-------------------
+
+* Major updates:
+
+  * New opts to model image variance and improve sky subtraction (PR `#1008`_).
+  * Refactor desi_proc and daily processing workflow
+    (PRs `#1012`_, `#1014`_, `#1030`_)
+  * New bias+dark model ("non-linear dark y1D") in desi_spectro_calib 0.2.0
+    (PR `#1029`_)
+
+* Smaller (but important) updates:
+
+  * etc/desispec.modules uses desi_spectro_calib 0.2.0
+  * Default saturation 2**16-1; updated keywords (PR `#1046`_).
+  * Fix preproc header keyword propagation (PR `#1045`_).
+  * Add support for gzipped fiberassign files (PR `#1042`_).
+  * Fix tests on single-core machines (PR `#1035`_).
+  * `desi_paste_preproc` for future use combining short+long arcs (PR `#1034`_).
+  * `desi_proc` more robust to `specex` failures (PR `#1033`_).
+  * Add parallelism to `desi_preproc` (PRs `#1032`_, `#1036`_, `#1038`_).
+  * Fix specex empty path bug (PR `#1031`_).
+  * Better qproc warnings for test slit exposures (PR `#1028`_).
+  * `desi_focus` focus scan analysis (PR `#1027`_).
+  * Fix/add BUNIT header keyword (PR `#1023`_).
+  * Adds `desi_compute_broadband_pixel_flatfield` (PR `#1022`_).
+  * Update desi_proc timing logging (PR `#1003`_, `#1026`_).
+  * desispec.module sets MPICH_GNI_FORK_MODE=FULLCOPY for MPI+multiprocessing
+    (PR `#1007`_).
+  * Fix dark CCD calibration corrections (PR `#1002`_).
 
 .. _`#1002`: https://github.com/desihub/desispec/issues/1002
+.. _`#1003`: https://github.com/desihub/desispec/issues/1003
+.. _`#1007`: https://github.com/desihub/desispec/issues/1007
+.. _`#1008`: https://github.com/desihub/desispec/issues/1008
+.. _`#1012`: https://github.com/desihub/desispec/issues/1012
+.. _`#1014`: https://github.com/desihub/desispec/issues/1014
+.. _`#1022`: https://github.com/desihub/desispec/issues/1022
+.. _`#1023`: https://github.com/desihub/desispec/issues/1023
+.. _`#1026`: https://github.com/desihub/desispec/issues/1026
+.. _`#1027`: https://github.com/desihub/desispec/issues/1027
+.. _`#1028`: https://github.com/desihub/desispec/issues/1028
+.. _`#1029`: https://github.com/desihub/desispec/issues/1029
+.. _`#1030`: https://github.com/desihub/desispec/issues/1030
+.. _`#1031`: https://github.com/desihub/desispec/issues/1031
+.. _`#1032`: https://github.com/desihub/desispec/issues/1032
+.. _`#1033`: https://github.com/desihub/desispec/issues/1033
+.. _`#1034`: https://github.com/desihub/desispec/issues/1034
+.. _`#1035`: https://github.com/desihub/desispec/issues/1035
+.. _`#1036`: https://github.com/desihub/desispec/issues/1036
+.. _`#1038`: https://github.com/desihub/desispec/issues/1038
+.. _`#1042`: https://github.com/desihub/desispec/issues/1042
+.. _`#1045`: https://github.com/desihub/desispec/issues/1045
+.. _`#1046`: https://github.com/desihub/desispec/issues/1046
 
 0.34.7 (2020-09-01)
 -------------------
