@@ -4,14 +4,22 @@ spectro-photometric calibration depending on input.  Optionally, includes
 tsnr in the scores hdu.
 """
 
-from desispec.io import read_frame
+from desispec.io import read_frame, write_frame
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
-from desispec.io import shorten_filename
 from desispec.io import read_fibermap
 from desispec.io.fluxcalibration import read_flux_calibration
-from desiutil.log import get_logger
+from desispec.io import shorten_filename
+
+from desispec.fiberflat import apply_fiberflat	
+from desispec.sky import subtract_sky	
+from desispec.fluxcalibration import apply_flux_calibration	
+from desispec.cosmics import reject_cosmic_rays_1d
+from desispec.specscore import compute_and_append_frame_scores, append_frame_scores
+from desispec.fiberbitmasking import get_fiberbitmasked_frame
+
 from desispec.tsnr import calc_tsnr
+from desiutil.log import get_logger
 
 import argparse
 import sys
@@ -124,9 +132,12 @@ def main(args):
     if args.tsnr:
         log.info("calculating tsnr")
         results = calc_tsnr(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
-        comments = {k:"from calc_frame_tsnr" for k in results.keys()}
-        append_frame_scores(frame,results,comments,overwrite=True)
 
+        frame.meta['ALPHA'] = results.pop('ALPHA')
+
+        comments = {k:"from calc_frame_tsnr" for k in results.keys()}
+        append_frame_scores(frame,results,comments,overwrite=True) 
+        
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
