@@ -164,9 +164,9 @@ def standardize_tabletype(tabletype):
     Returns:
          tabletype, str. Standardized tabletype values. Either "exptable", "proctable", "unproctable".
     """
-    if tabletype.lower() in ['exp', 'exposure', 'etable', 'exptable', 'exptab']:
+    if tabletype.lower() in ['exp', 'exposure', 'etable', 'exptable', 'exptab', 'exposuretable', 'exposure_table']:
         tabletype = 'exptable'
-    elif tabletype.lower() in ['proc', 'processing', 'proctable', 'proctab', 'int', 'ptable', 'interal']:
+    elif tabletype.lower() in ['proc', 'processing', 'proctable', 'proctab', 'int', 'ptable', 'internal']:
         tabletype = 'proctable'
     elif tabletype.lower() in ['unproc', 'unproctable', 'unproctab', 'unprocessed', 'unprocessing']:
         tabletype = 'unproctable'

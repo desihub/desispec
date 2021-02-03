@@ -140,8 +140,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Determine where the exposure table will be written
     if exp_table_path is None:
-        exp_table_path = get_exposure_table_path(night=night)
-    os.makedirs(exp_table_path,exist_ok=True)
+        exp_table_path = get_exposure_table_path(night=night, usespecprod=True)
+    os.makedirs(exp_table_path, exist_ok=True)
     name = get_exposure_table_name(night=night, extension=tab_filetype)
     exp_table_pathname = pathjoin(exp_table_path, name)
 

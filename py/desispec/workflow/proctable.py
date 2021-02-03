@@ -19,10 +19,14 @@ from desiutil.log import get_logger
 ###############################################
 ## To eventually being turned into a full-fledged data model. For now a brief description.
 # EXPID, int, the exposure ID's assosciate with the job. Always a np.array, even if a single exposure.
-# NIGHT, int, the night of the observation.
 # OBSTYPE, string, the obstype as defined by ICS.
-# CAMWORD, string, typically 'a'+ str(spectrographs) meaning all cameras of the available spectrographs.
 # TILEID, int, the TILEID of the tile the exposure observed.
+# NIGHT, int, the night of the observation.
+# BADAMPS, string, semicolon list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
+# LASTSTEP, string, the last step the pipeline should run through for the given exposure. Inclusive of last step.
+# EXPFLAG, np.ndarray, set of flags that describe that describe the exposure.
+# PROCCAMWORD, string, The result of difference_camword(CAMWORD,BADCAMWWORD) from those exposure table entries.
+#                      This summarizes the cameras that should be processed for the given exposure/job
 # CALIBRATOR, int, A 0 signifies that the job is not assosciated with a calibration exposure. 1 means that it is.
 # INTID, int, an internally generated ID for a single job within a production. Only unique within a production and
 #             not guaranteed will not necessarily be the same between different production runs (e.g. between a daily
@@ -63,40 +67,42 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
 
-    colnames1 = ['EXPID'              , 'NIGHT' , 'OBSTYPE', 'CAMWORD'    , 'TILEID']
-    coltypes1 = [np.ndarray           , int     , 'S10'    , 'S40'        , int     ]
-    coldefault1 = [np.ndarray(shape=0), 20000101, 'unknown', 'a0123456789', -99     ]
+    colnames1 = ['EXPID'              , 'OBSTYPE', 'TILEID', 'NIGHT' ]
+    coltypes1 = [np.ndarray           , 'S10'    , int     , int     ]
+    coldeflt1 = [np.ndarray(shape=0)  , 'unknown', -99     , 20000101]
 
-    colnames2 = ['CALIBRATOR', 'INTID', 'OBSDESC', 'JOBDESC', 'LATEST_QID', 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
-    coltypes2 = [ np.int8    ,  int   , 'S16'    , 'S12'    , int         ,  int         , 'S10'   , 'S40'       ]
-    coldefault2 = [ 0        ,  -99   , 'unknown', 'unknown', -99         , -99          , 'U'     , 'unknown'   ]
+    colnames1 += ['BADAMPS', 'LASTSTEP', 'EXPFLAG'               ]
+    coltypes1 += ['S30'    , 'S30'     ,  np.ndarray             ]
+    coldeflt1 += [''       , 'all'     ,  np.array([], dtype=str)]
 
-    colnames3 =   ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
-    coltypes3 =   [np.ndarray                     , np.ndarray                     , np.ndarray                     ]
-    coldefault3 = [np.ndarray(shape=0).astype(int), np.ndarray(shape=0).astype(int), np.ndarray(shape=0).astype(int)]
+    colnames2 = [ 'PROCCAMWORD'    ,'CALIBRATOR', 'INTID', 'OBSDESC', 'JOBDESC', 'LATEST_QID']
+    coltypes2 = [ 'S40'            , np.int8    ,  int   , 'S16'    , 'S12'    , int         ]
+    coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , 'unknown', 'unknown', -99         ]
 
-    #     colnames1 = ['INTERNAL_ID', 'EXPID'    , 'NIGHT', 'INT_DEP_IDS', 'JOBNAME', 'TYPE']
-    #     coltypes1 = [ int         ,  list      ,  int    , list        , 'S30'    , 'S10']
+    colnames2 += [ 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
+    coltypes2 += [  int         , 'S10'   , 'S40'       ]
+    coldeflt2 += [ -99          , 'U'     , 'unknown'   ]
 
-    #     colnames2 = ['LATEST_QID', 'LAST_SUBMIT_DATE', 'STATUS', 'LATEST_DEP_QID', 'ALL_QIDS']
-    #     coltypes2 = [ int        , 'S20'             , 'S10'   ,  list           ,  list      ]
+    colnames2 += ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
+    coltypes2 += [np.ndarray                     , np.ndarray                     , np.ndarray                     ]
+    coldeflt2 += [np.ndarray(shape=0).astype(int), np.ndarray(shape=0).astype(int), np.ndarray(shape=0).astype(int)]
 
-    colnames = colnames1 + colnames2 + colnames3
-    coldtypes = coltypes1 + coltypes2 + coltypes3
-    coldefaults = coldefault1 + coldefault2 + coldefault3
+    colnames = colnames1 + colnames2
+    coldtypes = coltypes1 + coltypes2
+    coldeflts = coldeflt1 + coldeflt2
 
     if return_default_values:
         if overlap_only:
-            return colnames1, coltypes1, coldefault1
+            return colnames1, coltypes1, coldeflt1
         elif unique_only:
-            return (colnames2 + colnames3), (coltypes2 + coltypes3), (coldefault2 + coldefault3)
+            return colnames2, coltypes2, coldeflt2
         else:
-            return colnames, coldtypes, coldefaults
+            return colnames, coldtypes, coldeflts
     else:
         if overlap_only:
             return colnames1, coltypes1
         elif unique_only:
-            return (colnames2 + colnames3), (coltypes2 + coltypes3)
+            return colnames2, coltypes2
         else:
             return colnames, coldtypes
 

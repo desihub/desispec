@@ -52,32 +52,28 @@ def get_exposure_table_column_defs(return_default_values=False):
 
     Returns:
         colnames, list. List of column names for an exposure table.
-        coldtypes, list. List of column datatypes for the names in colnames.
+        coltypes, list. List of column datatypes for the names in colnames.
         coldeflts, list. Optionally returned if return_default_values is True. List of default values for the
                          corresponding colnames.
     """
     ## Define the column names for the exposure table and their respective datatypes, split in two
     ##     only for readability's sake
-    colnames1 = ['EXPID', 'EXPTIME', 'OBSTYPE', 'CAMWORD', 'TILEID', 'TARGTRA', 'TARGTDEC', 'NIGHT']
-    coltypes1 = [int,     float,     'S8',      'S30',     int,      float,     float,      int     ]
-    coldeflt1 = [-99,     0.0,       'unknown', 'a0123456789', -99, 89.99,    -89.99,      20000101]
+    colnames  = ['EXPID', 'EXPTIME', 'OBSTYPE', 'CAMWORD'    , 'TILEID', 'TARGTRA', 'TARGTDEC', 'NIGHT' ]
+    coltypes  = [int    ,  float   , 'S8'     , 'S30'        ,  int    ,  float   ,  float    ,  int     ]
+    coldeflt  = [-99    ,  0.0     , 'unknown', 'a0123456789',  -99    ,  89.99   ,  -89.99   ,  20000101]
 
-    colnames2 = ['PURPOSE', 'FA_SURV', 'SEQNUM', 'SEQTOT', 'PROGRAM', 'MJD-OBS']
-    coltypes2 = ['S30',     'S10',     int,      int,     'S60',     float]
-    coldeflt2 = ['',        '',        1,        1,       'unknown', 50000.0]
+    colnames += ['PURPOSE', 'FA_SURV', 'SEQNUM', 'SEQTOT', 'PROGRAM', 'MJD-OBS']
+    coltypes += ['S30'    , 'S10'    ,  int    ,  int    , 'S60'    ,  float   ]
+    coldeflt += [''       , ''       ,  1      ,  1      , 'unknown',  50000.0 ]
 
-    colnames3 = ['BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'EXPFLAG',    'HEADERERR',  'COMMENTS']
-    coltypes3 = ['S30',        'S30',      'S30',     np.ndarray,   np.ndarray,   np.ndarray]
-    coldeflt3 = ['',            '',        'all',   np.array([], dtype=str), np.array([], dtype=str), np.array([], dtype=str)]
-
-    colnames = colnames1 + colnames2 + colnames3
-    coldtypes = coltypes1 + coltypes2 + coltypes3
-    coldeflts = coldeflt1 + coldeflt2 + coldeflt3
+    colnames += ['BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'EXPFLAG'  , 'HEADERERR', 'COMMENTS']
+    coltypes += ['S30'       , 'S30'    , 'S30'     , np.ndarray , np.ndarray , np.ndarray]
+    coldeflt += [''          , ''       , 'all'     , np.array([], dtype=str), np.array([], dtype=str), np.array([], dtype=str)]
 
     if return_default_values:
-        return colnames, coldtypes, coldeflts
+        return colnames, coltypes, coldeflt
     else:
-        return colnames, coldtypes
+        return colnames, coltypes
 
 def default_exptypes_for_exptable():
     """
@@ -170,7 +166,7 @@ def get_exposure_table_path(night=None, usespecprod=True):
 
     Args:
         night, int or str or None. The night corresponding to the exposure table. If None, no monthly subdirectory is used.
-        usespecprod, bool. Whether to use the master version or the version in a specprod.
+        usespecprod, bool. Whether to use the master version in the exposure table repo or the version in a specprod.
 
     Returns:
          str. The full path to the directory where the exposure table should be written (or is already written). This
