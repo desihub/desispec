@@ -162,8 +162,23 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     '''
     Model Var = alpha * rdnoise component + sky.
 
-    Calcualte the best-fit alpha using the sky fibers
+    Calculate the best-fit alpha using the sky fibers
     available to the frame.
+
+    input:
+        frame: desispec frame instance (should be uncalibrated, i.e. e/A).
+        fibermap: desispec fibermap instance.
+        rdnoise_sigma:  e.g. RDNOISE value per Quadrant (float). 
+        npix_1d:  equivalent to 1D nea [pixels], calculated using read_nea().
+        angperpix:  angstroms per pixel (float),
+        fiberflat: desispec fiberflat instance.
+        skymodel: desispec Sky instance.
+        alpha:  nuisanve parameter to reweight rdnoise vs sky contribution to variance (float).
+        components:  if True, return individual contributions to variance, else return total variance. 
+
+    returns:
+       alpha:  nuisance parameter to reweight rdnoise vs sky contribution to variance (float), obtained 
+               as the best fit to the uncalibrated sky fibers VAR.
     '''
 
     sky_indx = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
