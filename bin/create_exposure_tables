@@ -19,6 +19,8 @@ def get_parser():
     parser.add_argument("-o","--exp-table-path", type=str, default=None,  help="path to save exposure tables, without monthly subdirectory")
     parser.add_argument("--overwrite-files", action="store_true", help="overwrite existing exposure tables")
     parser.add_argument("--verbose", action="store_true", help="print verbose output")
+    parser.add_argument("--no-specprod", action="store_true", help="Create exposure table in repository location "+\
+                                                                     "rather than the SPECPROD location.")
 
     return parser
 

@@ -72,7 +72,8 @@ def split_str(val, joinsymb='|'):
         return val
 
 
-def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwrite=True, verbose=False, write_empty=False):
+def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwrite=True, verbose=False,
+                write_empty=False, use_specprod=True):
     """
     Workflow function to write exposure, processing, and unprocessed tables. It allows for multi-valued table cells, which are
     reduced to strings using the joinsymb. It writes to a temp file before moving the fully written file to the
@@ -88,7 +89,8 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
         write_empty, bool. Whether to write an empty table to disk. The default is False. Warning: code is less robust
                            to column datatypes on read/write if the table is empty. May cause issues if this is set to True.
-
+        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
+                            table in the SPECPROD rather than the exptab repository. Default is True.
     Returns:
         Nothing.
     """
@@ -101,7 +103,7 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         tabletype = standardize_tabletype(tabletype)
 
     if tablename is None:
-        tablename = translate_type_to_pathname(tabletype)
+        tablename = translate_type_to_pathname(tabletype, use_specprod=use_specprod)
 
     if not write_empty and len(origtable) == 0:
         log.warning(f'NOT writing zero length table to {tablename}')
@@ -170,13 +172,15 @@ def standardize_tabletype(tabletype):
         tabletype = 'unproctable'
     return tabletype
 
-def translate_type_to_pathname(tabletype):
+def translate_type_to_pathname(tabletype, use_specprod=True):
     """
     Given the type of table it returns the proper file pathname
 
     Args:
         tabletype, str. Allows for a flexible number of input options, but should refer to either the 'exposure',
                          'processing', or 'unprocessed' table types.
+        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
+                            table in the SPECPROD rather than the exptab repository. Default is True.
 
     Returns:
          tablename, str. Full pathname including extension of the table type. Uses environment variables to determine
@@ -186,7 +190,7 @@ def translate_type_to_pathname(tabletype):
     from desispec.workflow.proctable import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
     tabletype = standardize_tabletype(tabletype)
     if tabletype == 'exptable':
-        tablename = get_exposure_table_pathname()
+        tablename = get_exposure_table_pathname(night=None,usespecprod=use_specprod)
     elif tabletype == 'proctable':
         tablename = get_processing_table_pathname()
     elif tabletype == 'unproctable':
@@ -195,7 +199,7 @@ def translate_type_to_pathname(tabletype):
         tablename = pathjoin(tablepath, tablename)
     return tablename
 
-def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, process_mixins=True):
+def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, process_mixins=True, use_specprod=True):
     """
     Workflow function to read in exposure, processing, and unprocessed tables. It allows for multi-valued table cells, which are
     generated from strings using the joinsymb. It reads from the file given by tablename (or the default for table of
@@ -214,6 +218,8 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                               Warning: The exposure and processing tables have default data types which are multi-value.
                               If this is set to False, the default data types will be incorrect and issues are likely
                               to arise.
+        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
+                            table in the SPECPROD rather than the exptab repository. Default is True.
 
     Returns:
         table, Table. Either exposure table or processing table that was loaded from tablename (or from default name
@@ -231,7 +237,7 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
             log.error("Must specify either tablename or tabletype in load_table()")
             return None
         else:
-            tablename = translate_type_to_pathname(tabletype)
+            tablename = translate_type_to_pathname(tabletype, use_specprod=use_specprod)
     else:
         if tabletype is None:
             log.info("tabletype not given in load_table(), trying to guess based on filename")

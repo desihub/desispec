@@ -15,7 +15,7 @@ from desispec.workflow.tableio import load_table, write_table
 
 
 def create_processing_tables(nights=None, prodname=None, exp_table_path=None, proc_table_path=None,
-                             obstypes=None, overwrite_files=False, verbose=False,
+                             obstypes=None, overwrite_files=False, verbose=False, no_specprod_exptab=False,
                              exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
@@ -28,6 +28,7 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
         obstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
         overwrite_files: boolean. Whether to overwrite processing tables if they exist. True overwrites.
         verbose: boolean. Whether to give verbose output information or not. True prints more information.
+        no_specprod_exptab: boolean. Read exposure table in repository location rather than the SPECPROD location.
         exp_filetype: str. The file extension (without the '.') of the exposure tables.
         prod_filetype: str. The file extension (without the '.') of the processing tables.
         joinsymb: str. Symbol to use to indicate the separation of array values when converting to and from strings for
@@ -46,7 +47,8 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
         obstypes = default_exptypes_for_proctable()
     ## Define where to find the data
     if exp_table_path is None:
-        exp_table_path = get_exposure_table_path()
+        usespecprod = (not no_specprod_exptab)
+        exp_table_path = get_exposure_table_path(night=None,usespecprod=usespecprod)
 
     if prodname is None:
         prodname = define_variable_from_environment(env_name='SPECPROD',

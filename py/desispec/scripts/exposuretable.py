@@ -15,7 +15,7 @@ from desispec.workflow.tableio import write_table
 
 
 def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obstypes=None, \
-                           exp_filetype='csv', verbose=False, overwrite_files=False):
+                           exp_filetype='csv', verbose=False, no_specprod=False, overwrite_files=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -25,8 +25,9 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
         exp_table_path: str. Full path to where to exposure tables should be saved, WITHOUT the monthly directory included.
         obstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the exposure table.
         exp_filetype: str. The file extension (without the '.') of the exposure tables.
-        overwrite_files: boolean. Whether to overwrite processing tables if they exist. True overwrites.
         verbose: boolean. Whether to give verbose output information or not. True prints more information.
+        no_specprod: boolean. Create exposure table in repository location rather than the SPECPROD location
+        overwrite_files: boolean. Whether to overwrite processing tables if they exist. True overwrites.
 
     Returns: Nothing
     """
@@ -36,8 +37,9 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
                                                         var_descr="The data path")
 
     ## Define where to save the data
+    usespecprod = (not no_specprod)
     if exp_table_path is None:
-        exp_table_path = get_exposure_table_path(night=None)
+        exp_table_path = get_exposure_table_path(night=None,usespecprod=usespecprod)
     if obstypes is None:
         obstypes = default_exptypes_for_exptable()
 

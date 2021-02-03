@@ -21,7 +21,8 @@ def get_parser():
     parser.add_argument("--overwrite-files", action="store_true", help="overwrite existing exposure tables")
     parser.add_argument("--verbose", action="store_true", help="print verbose output")
     parser.add_argument("--joinsymb", type=str, default='|', help="String that separates entries multivalue column rows when saving to csv")
-
+    parser.add_argument("--no-specprod-exptab", action="store_true", help="Read exposure table in repository location "+\
+                                                                     "rather than the SPECPROD location.")
     return parser
 
 
