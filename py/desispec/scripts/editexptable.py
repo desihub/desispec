@@ -148,23 +148,27 @@ def deconstruct_document_in_comments(entry):
     val1,val2 = values.split("->")
     return key, val1, val2
 
-def edit_exposure_table(night, exp_str, colname, value, append_string=False, overwrite_value=False,
+def edit_exposure_table(exp_str, colname, value, night=None, tablepath=None,
+                        append_string=False, overwrite_value=False, use_spec_prod=True,
                         read_user_version=False, write_user_version=False, overwrite_file=True):#, joinsymb='|'):
     ## Don't edit fixed columns
     colname = colname.upper()
+    if tablepath is None and night is None:
+        raise ValueError("Must specify night or the path to the table.")
     if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
     if append_string and overwrite_value:
         raise ValueError("Cannot append_str and overwrite_value.")
 
     ## Get the file locations
-    path = get_exposure_table_path(night=night)
-    name = get_exposure_table_name(night=night)#, extension='.csv')
-    pathname = pathjoin(path, name)
-    if read_user_version or write_user_version:
-        user_pathname = os.path.join(path, name.replace('.csv', '_' + str(os.environ['USER']) + '.csv'))
+    if tablepath is not None:
+        path, name = os.path.split(tablepath)
     else:
-        user_pathname = None
+        path = get_exposure_table_path(night=night, usespecprod=use_spec_prod)
+        name = get_exposure_table_name(night=night)#, extension='.csv')
+
+    pathname = pathjoin(path, name)
+    user_pathname = os.path.join(path, name.replace('.csv', '_' + str(os.environ['USER']) + '.csv'))
 
     ## Read in the table
     if read_user_version and os.path.isfile(user_pathname):
