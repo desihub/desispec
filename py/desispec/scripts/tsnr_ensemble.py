@@ -122,7 +122,7 @@ class template_ensemble(object):
             # Retain only spectral features < 100. Angstroms.                                                                                                                                                                                 
             # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.                                                                                                                                                                        
             for i, ff in enumerate(self.ensemble_flux[band]):
-                sflux                     = convolve(ff, Box1DKernel(13), boundary='extend')
+                sflux                     = convolve(ff, Box1DKernel(125), boundary='extend')
                 dflux[i,:]                = ff - sflux
 
             self.ensemble_dflux[band]     = dflux
