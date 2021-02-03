@@ -12,6 +12,9 @@ import sys
 import copy
 import astropy.io.fits as fits
 
+
+log                = get_logger()
+
 # https://github.com/desihub/desispec/issues/1006
 sampling           = 500
 
@@ -66,8 +69,6 @@ def process_one(w, psf, ifiber):
     return  [nea, angperpix]
 
 def main(args):
-    log  = get_logger()
-
     cam  = args.infile.split('/')[-1].split('-')[1]
     band = cam[0]
     
@@ -97,21 +98,12 @@ def main(args):
     neas = np.array(neas)
     angperpix = np.array(angperpix)
 
-    # Patch failures:  PSF *not* normalized to unity close to end of red spectral range.
-    log.info('Patching failures of psf norm. with median nea.')
-    
-    med_nea = np.median(neas)
-    med_angperpix = np.median(angperpix)
-
-    neas[neas == -99.] = med_nea
-    angperpix[angperpix == -99.] = med_angperpix
-
     # Convert to float 32 for smaller files.
     neas = neas.astype(np.float32)
     angperpix = angperpix.astype(np.float32)
 
-    print('MEDIAN NEA: {:.3f}'.format(np.median(neas)))
-    print('MEDIAN ANG PER PIX: {:.3f}'.format(np.median(angperpix)))
+    log.info('MEDIAN NEA: {:.3f}'.format(np.median(neas)))
+    log.info('MEDIAN ANG PER PIX: {:.3f}'.format(np.median(angperpix)))
     
     hdr  = fits.Header()
     hdr['MASTERPSF'] = args.infile
