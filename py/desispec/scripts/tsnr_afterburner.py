@@ -1,3 +1,8 @@
+'''
+Calculate stand alone tsnr tables for a given desispec prod.
+'''
+
+
 import os
 import glob
 import itertools
@@ -16,6 +21,7 @@ from   desispec.io.fluxcalibration import read_flux_calibration
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr
 from   astropy.table import Table, vstack
+from   desiutil.depend import getdep
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Apply fiberflat, sky subtraction and calibration.")
@@ -38,160 +44,162 @@ def parse(options=None):
 
 args=parse()
 
-#
-log = get_logger()
+def main():
+    log = get_logger()
 
-# Set SPEC_PROD also.
-calibdir = os.environ['DESI_SPECTRO_CALIB']
+    log.info('outdir = {}'.format(args.outdir))
+    log.info('prod = {}'.format(args.prod))
+    log.info('camera = {}'.format(args.camera))
+    log.info('summary_only = {}'.format(args.summary_only))
+    log.info('expids = {}'.format(args.expids))
 
-log.info('outdir = {}'.format(args.outdir))
-log.info('prod = {}'.format(args.prod))
-log.info('camera = {}'.format(args.camera))
-log.info('summary_only = {}'.format(args.summary_only))
-log.info('expids = {}'.format(args.expids))
+    petals = np.arange(10).astype(str)
 
-log.info('$DESI_SPECTRO_CALIB = {}'.format(calibdir))
-
-petals = np.arange(10).astype(str)
-
-if args.camera is None:
-    cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
-else:
-    cameras = [args.camera]
-
-if args.expids is not None:
-    expids = [np.int(x) for x in args.expids.split(',')]
-else:
-    expids = None
+    if args.camera is None:
+        cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
+    else:
+        cameras = [args.camera]
+    if args.expids is not None:
+        expids = [np.int(x) for x in args.expids.split(',')]
+    else:
+        expids = None
     
-# 
-cframes = {}
+    cframes = {}
 
-for cam in cameras:
-    cframes[cam] = list(glob.glob('{}/exposures/*/*/cframe-{}-*.fits'.format(args.prod, cam)))
+    for cam in cameras:
+        cframes[cam] = list(glob.glob('{}/exposures/*/*/cframe-{}-*.fits'.format(args.prod, cam)))
 
-sci_frames = {}
+    sci_frames = {}
 
-for cam in cameras:
-    sci_frames[cam] = []
+    for cam in cameras:
+        sci_frames[cam] = []
     
-    for cframe in cframes[cam]:
-        hdul = fits.open(cframe)
-        hdr  = hdul[0].header 
+        for cframe in cframes[cam]:
+            hdul = fits.open(cframe)
+            hdr  = hdul[0].header 
         
-        flavor = hdr['FLAVOR']
-        prog = hdr['PROGRAM']
-        expid = hdr['EXPID']
+            flavor = hdr['FLAVOR']
+            prog = hdr['PROGRAM']
+            expid = hdr['EXPID']
         
-        if expids is not None:
-            if expid not in expids:
-                continue
+            if expids is not None:
+                if expid not in expids:
+                    continue
             
-        if flavor == 'science':
-            sci_frames[cam].append(cframe)
+            if flavor == 'science':
+                sci_frames[cam].append(cframe)
 
-        hdul.close()
+            hdul.close()
         
-    log.info('{} science frames to reduce for {}.'.format(len(sci_frames[cam]), cam))
+        log.info('{} science frames to reduce for {}.'.format(len(sci_frames[cam]), cam))
     
-for cam in cameras:
-    summary  = None
+    for cam in cameras:
+        summary  = None
     
-    for kk, x in enumerate(sci_frames[cam]):
-        hdul = fits.open(x)
-        hdr  = hdul[0].header
+        for kk, x in enumerate(sci_frames[cam]):
+            hdul = fits.open(x)
+            hdr  = hdul[0].header
 
-        flavor = hdr['FLAVOR']
-        prog = hdr['PROGRAM']
+            flavor = hdr['FLAVOR']
+            prog = hdr['PROGRAM']
         
-        parts = prog.split(' ')
+            parts = prog.split(' ')
 
-        if parts[0] == 'SV1':
-            parts  = x.split('/')
+            if parts[0] == 'SV1':
+                parts  = x.split('/')
                 
-            night  = parts[9]
-            expid  = np.int(parts[10])
+                night  = parts[-3]
+                expid  = np.int(parts[-2])
+            
+                name   = parts[-1]
 
-            name   = parts[-1]
+                parts  = name.split('-')
+                camera = parts[1]
+            
+                calib  = findfile('fluxcalib', night=night, expid=expid, camera=camera, specprod_dir=None)
+            
+                cframe = fits.open(x)
+                hdr    = cframe[0].header['FIBERFLT']
 
-            parts  = name.split('-')
-            camera = parts[1]
-            
-            calib  = findfile('fluxcalib', night=night, expid=expid, camera=camera, specprod_dir=None)
-            calib  = calib.replace('SPCALIB', calibdir)
-            
-            cframe = fits.open(x)
-            hdr    = cframe[0].header['FIBERFLT']
-            flat   = hdr.replace('SPECPROD', args.prod)
-            flat   = flat.replace('SPCALIB', calibdir)
-            
-            tileid = cframe[0].header['TILEID']
+                if 'SPECPROD' in hdr:
+                    flat   = hdr.replace('SPECPROD', args.prod)
+                
+                elif 'SPCALIB' in hdr:
+                    flat   = hdr.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
+
+                else:
+                    raise ValueError('Failed on flat retrieval for {}.'.format(hdr))
+                
+                tileid = cframe[0].header['TILEID']
         
-            iin = x.replace('cframe', 'frame')
-            sky = x.replace('cframe', 'sky')
-            psf = sky.replace('sky', 'psf')
-            nea = '/project/projectdirs/desi/users/mjwilson/master_nea/masternea_{}.fits'.format(camera)  
-            ens = '/project/projectdirs/desi/users/mjwilson/tsnr-ensemble/'
-            out = args.outdir + '/tsnr/{}/{:08d}/tsnr-{}-{:08d}.fits'.format(night, expid, camera, expid)
-
-            if (not args.summary_only) & os.path.exists(out):
-                continue
-            
-            Path(os.path.dirname(out)).mkdir(parents=True, exist_ok=True)
+                iin = x.replace('cframe', 'frame')
+                sky = x.replace('cframe', 'sky')
+                psf = sky.replace('sky', 'psf')
+                out = args.outdir + '/tsnr/{}/{:08d}/tsnr-{}-{:08d}.fits'.format(night, expid, camera, expid)
                 
-            frame=read_frame(iin)
-            fiberflat=read_fiberflat(flat)
-            fluxcalib=read_flux_calibration(calib)
-            skymodel=read_sky(sky)
+                if (not args.summary_only) & os.path.exists(out):
+                    continue
             
-            results = calc_tsnr(frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
-
-            if not args.summary_only:
-                # Write individual.
-                table=Table()
+                Path(os.path.dirname(out)).mkdir(parents=True, exist_ok=True)
                 
-                for k in results:
-                    if k != 'ALPHA':
-                        table[k] = results[k].astype(np.float32)
+                frame=read_frame(iin)
+                fiberflat=read_fiberflat(flat)
+                fluxcalib=read_flux_calibration(calib)
+                skymodel=read_sky(sky)
+            
+                results = calc_tsnr(frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
 
-                table['FIBER']       = frame.fibermap['FIBER']
-                table['TARGETID']    = frame.fibermap['TARGETID']
+                if not args.summary_only:
+                    # Write individual.
+                    table=Table()
                 
-                table.meta['NIGHT']  = night
-                table.meta['EXPID']  = '{:08d}'.format(expid)
-                table.meta['ALPHA']  = results['ALPHA']
-                table.meta['TILEID'] = tileid
-            
-                table.write(out, format='fits', overwrite=True)
+                    for k in results:
+                        if k != 'ALPHA':
+                            table[k] = results[k].astype(np.float32)
 
-                log.info('Successfully written {}.'.format(out))
+                    table['FIBER']       = frame.fibermap['FIBER']
+                    table['TARGETID']    = frame.fibermap['TARGETID']
                 
-            # Append to summary. 
-            entry = Table(data=np.array(['{:08d}'.format(expid)]), names=['EXPID'])
+                    table.meta['NIGHT']  = night
+                    table.meta['EXPID']  = '{:08d}'.format(expid)
+                    table.meta['ALPHA']  = results['ALPHA']
+                    table.meta['TILEID'] = tileid
             
-            entry['NIGHT']  = night
-            entry['CAMERA'] = camera
+                    table.write(out, format='fits', overwrite=True)
 
-            keys = list(results.keys())
+                    log.info('Successfully written {}.'.format(out))
+                
+                # Append to summary. 
+                entry = Table(data=np.array(['{:08d}'.format(expid)]), names=['EXPID'])
             
-            for k in keys:
-                if 'TSNR' in k:
-                    sk = k.split('_')[0]    
-                    results[sk] = results[k]
-                    del results[k]
+                entry['NIGHT']  = night
+                entry['CAMERA'] = camera
+
+                keys = list(results.keys())
+            
+                for k in keys:
+                    if 'TSNR' in k:
+                        sk = k.split('_')[0]    
+                        results[sk] = results[k]
+                        del results[k]
                                 
-            for k in results:                                                                                                                                                                                                
-                entry[k] = np.median(results[k].astype(np.float32))
+                for k in results:                                                                                                                                                                                                
+                    entry[k] = np.median(results[k].astype(np.float32))
                 
-            if summary is None:
-                summary = entry
+                if summary is None:
+                    summary = entry
 
-            else:
-                summary = vstack((summary, entry))
+                else:
+                    summary = vstack((summary, entry))
                 
-            log.info('{:08d}  {}: Reduced {} of {}.'.format(expid, cam, kk, len(sci_frames[cam])))
+                log.info('{:08d}  {}: Reduced {} of {}.'.format(expid, cam, kk, len(sci_frames[cam])))
 
         hdul.close()
         
-    # 
-    summary.write('/global/cscratch1/sd/mjwilson/trash/afterburner/tsnr/summary_{}.fits'.format(cam), format='fits', overwrite=True)
+    summary.write(args.outdir + '/summary_{}.fits'.format(cam), format='fits', overwrite=True)
+
+    log.info('Successfully written {}.'.format(args.outdir + '/summary_{}.fits'.format(cam)))
+
+    
+if __name__ == '__main__':
+    main()
