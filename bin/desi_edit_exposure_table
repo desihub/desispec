@@ -19,8 +19,8 @@ def get_parser():
     parser.add_argument("-c", "--colname", type=str, help="Name of the column you want to edit.")
     parser.add_argument("-v", "--value", type=str, help="The value you want to place in the given 'colname' column. Can "+
                                                     "only be a single string, float, int, etc. Per script call.")
-    parser.add_argument("--append-value", type=str, default='true', help="Append the value to existing (must be a "+
-                                                                    "string or column array.")
+    # parser.add_argument("--append-value", type=str, default='true', help="Append the value to existing (must be an "+
+    #                                                                 "array.")
     parser.add_argument("--overwrite-value", action="store_true", help="Change column value even if value isn't the "+
                                                                        "default value.")
     parser.add_argument("--read-user-version", action="store_true", help="Read user version of the exposure tables "+

@@ -34,11 +34,11 @@ def parse_int_list(input_string, intable=None, only_unique=True):
         out_array = np.unique(out_array)
     return out_array.astype(int)
 
-def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=True, overwrite_value=False, joinsymb=';'):
+def change_exposure_table_rows(exptable, exp_str, colname, value, overwrite_value=False, joinsymb=';'):
     ## Make sure colname exists before proceeding
     ## Don't edit fixed columns
     colname = colname.upper()
-    if colname in ['EXPID','CAMWORD']:
+    if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
     if colname not in exptable.colnames:
         raise ValueError(f"Colname {colname} not in exposure table")
@@ -70,6 +70,10 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
                 raise ValueError("Each BADAMPS entry must be a semicolon separated list of {camera}{petal}{amp} "+
                                  f"(e.g. r7A;b8B). Given: {amp}")
 
+    ## Inform user on whether reporting will be done
+    if colname in columns_not_to_report():
+        print("Won't do comment reporting for user defined column.")
+
     ## Get column names and definitions
     colnames,coldtypes,coldeflts = get_exposure_table_column_defs(return_default_values=True)
     colnames,coldtypes,coldeflts = np.array(colnames),np.array(coldtypes),np.array(coldeflts,dtype=object)
@@ -77,50 +81,38 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_value=T
     cur_default = coldeflts[colnames==colname][0]
 
     ## Assign new value
-    isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
+    #isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
     isarr = (cur_dtype in [list, np.array, np.ndarray])
+
+    if not overwrite_value and isarr:
+        print(f"Overwrite_value not set, so appending {value} to array.")
+
     for rownum in row_numbers:
-        if isstr and str(exptable[colname][rownum]).strip() != '':
-            if append_value:
-                exptable[colname][rownum] += f'{joinsymb}{value}'
-            elif overwrite_value:
-                exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
-                exptable[colname][rownum] = f'{value}'
-            else:
-                exp = exptable[rownum]['EXPID']
-                raise ValueError \
-                    (f"In exposure: {exp}. Asked to overwrite non-empty cell without overwrite_value or append_value enabled Skipping.")
-        elif isarr and len(exptable[colname][rownum])>0:
-            if append_value:
-                exptable[colname][rownum] = np.append(exptable[colname][rownum], value)
-            elif overwrite_value:
+        if isarr:
+            if overwrite_value and len(exptable[colname][rownum])>0:
                 exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
                 exptable[colname][rownum] = np.append(cur_default, value)
             else:
-                exp = exptable[rownum]['EXPID']
-                raise ValueError \
-                    (f"In exposure: {exp}. Asked to overwrite non-empty cell without overwrite_value or append_value enabled. Skipping.")
-        elif exptable[colname][rownum] != cur_default:
-            if append_value:
-                exp = exptable[rownum]['EXPID']
-                raise ValueError(
-                    f"In exposure: {exp}. Cannot append to non-empty cell with type: {cur_dtype}. Skipping.")
-            elif overwrite_value:
+                exptable[colname][rownum] = np.append(exptable[colname][rownum], value)
+        else:
+            if overwrite_value or exptable[colname][rownum] == cur_default:
                 exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
                 exptable[colname][rownum] = value
             else:
                 exp = exptable[rownum]['EXPID']
                 raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype} without overwrite_value enabled. Skipping.")
-        else:
-            exptable[rownum] = document_in_comments(exptable[rownum], colname, value)
-            exptable[colname][rownum] = value
-            
+
     return exptable
+
+def columns_not_to_report():
+    return ['COMMENTS','HEADERERR','BADCANWORD','BADAMPS','LASTSTEP','EXPFLAG']
+
+def columns_not_to_edit():
+    return ['EXPID','CAMWORD']
 
 def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
     colname = colname.upper()
-    if colname in ['COMMENTS','HEADERERR','BADCANWORD','BADAMPS','LASTSTEP','EXPFLAG']:
-        print("Won't do comment reporting for user defined column.")
+    if colname in columns_not_to_report():
         return tablerow
 
     existing_entries = [colname in term for term in tablerow[comment_col]]
@@ -151,11 +143,11 @@ def deconstruct_document_in_comments(entry):
     val1,val2 = values.split("->")
     return key, val1, val2
 
-def edit_exposure_table(night, exp_str, colname, value, append_value=True, overwrite_value=False,
+def edit_exposure_table(night, exp_str, colname, value, overwrite_value=False,
                         read_user_version=False, write_user_version=False, overwrite_file=True):#, joinsymb='|'):
     ## Don't edit fixed columns
     colname = colname.upper()
-    if colname in ['EXPID','CAMWORD']:
+    if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
 
     ## Get the file locations
@@ -178,7 +170,7 @@ def edit_exposure_table(night, exp_str, colname, value, append_value=True, overw
         return
 
     ## Do the modification
-    outtable = change_exposure_table_rows(exptable, exp_str, colname, value, append_value, overwrite_value)#, joinsymb)
+    outtable = change_exposure_table_rows(exptable, exp_str, colname, value, overwrite_value)#, joinsymb)
 
     ## Write out the table
     if write_user_version:
