@@ -106,7 +106,7 @@ def main(args):
     log.info('MEDIAN ANG PER PIX: {:.3f}'.format(np.median(angperpix)))
     
     hdr  = fits.Header()
-    hdr['MASTERPSF'] = args.infile
+    hdr['MASTPSF'] = args.infile
     hdr['CAMERA'] = cam
     
     hdu0 = fits.PrimaryHDU()
