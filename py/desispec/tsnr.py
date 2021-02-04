@@ -70,10 +70,10 @@ def read_nea(path):
                     yielding angstrom per pixel. 
     '''
     
-    nea=fits.open(path)
-    wave=nea['WAVELENGTH'].data
-    angperpix=nea['ANGPERPIX'].data
-    nea=nea['NEA'].data
+    with fits.open(path, memmap=False) as fx:
+        wave=fx['WAVELENGTH'].data
+        angperpix=fx['ANGPERPIX'].data
+        nea=fx['NEA'].data
 
     fiber = np.arange(len(nea))
 
@@ -203,9 +203,15 @@ def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
     '''
     Compute template SNR values for a given frame and append to the scores.     
 
+    Args:
+        frame : uncalibrated Frame object for one camera
+        fiberflat : FiberFlat object
+        sky : SkyModel object
+        fluxcalib : FluxCalib object
+
     returns:
-        Dictionary, with keys labelling tracer (bgs, elg, etc.), of values holding nfiber 
-        length array of the tsnr values for this camera.  
+        Dictionary, with keys labelling tracer (bgs, elg, etc.), of values
+        holding nfiber length array of the tsnr values for this camera.
 
     Note:  Assumes DESIMODEL is set and up to date. 
     '''

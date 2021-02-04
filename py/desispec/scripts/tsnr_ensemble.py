@@ -12,7 +12,6 @@ import argparse
 import os.path                       as     path
 import numpy                         as     np
 import astropy.io.fits               as     fits
-import desisim.templates
 
 from   astropy.convolution           import convolve, Box1DKernel
 from   pathlib                       import Path
@@ -62,6 +61,12 @@ class template_ensemble(object):
             generated nmodel templates.  Optionally, provide redshifts and mags. to condition appropriately at cose 
             of runtime.    
             '''
+            # Only import desisim if code is run, not at module import
+            # to minimize desispec -> desisim -> desispec dependency loop
+            import desisim.templates
+
+            tracer = tracer.lower()  # support ELG or elg, etc.
+
             # https://arxiv.org/pdf/1611.00036.pdf
             if tracer == 'elg':
                 maker = desisim.templates.ELG(wave=wave)
