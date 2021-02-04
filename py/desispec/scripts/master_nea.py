@@ -50,7 +50,10 @@ def process_one(w, psf, ifiber):
     '''
 
     # If beyond the wavelength limit, return nea at the limit.
+    wmin   = psf.wavelength(ifiber, - 0.5)
     wmax   = psf.wavelength(ifiber, psf.npix_y - 0.5)
+
+    w      = np.maximum(w, wmin)
     w      = np.minimum(w, wmax)
     
     psf_2d = psf.pix(ispec=ifiber, wavelength=w)
