@@ -11,7 +11,8 @@ from collections import OrderedDict
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.exptable import default_exptypes_for_exptable
 
-from desispec.workflow.utils import pathjoin
+from desispec.workflow.utils import define_variable_from_environment, pathjoin
+from desispec.io.util import difference_camwords
 from desiutil.log import get_logger
 
 ###############################################
@@ -67,9 +68,9 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     ## Define the column names for the internal production table and their respective datatypes, split in two
     ##     only for readability's sake
 
-    colnames1 = ['EXPID'              , 'OBSTYPE', 'TILEID', 'NIGHT' ]
-    coltypes1 = [np.ndarray           , 'S10'    , int     , int     ]
-    coldeflt1 = [np.ndarray(shape=0)  , 'unknown', -99     , 20000101]
+    colnames1 = ['EXPID'                        , 'OBSTYPE', 'TILEID', 'NIGHT' ]
+    coltypes1 = [np.ndarray                     , 'S10'    , int     , int     ]
+    coldeflt1 = [np.ndarray(shape=0).astype(int), 'unknown', -99     , 20000101]
 
     colnames1 += ['BADAMPS', 'LASTSTEP', 'EXPFLAG'               ]
     coltypes1 += ['S30'    , 'S30'     ,  np.ndarray             ]
@@ -77,11 +78,11 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
 
     colnames2 = [ 'PROCCAMWORD'    ,'CALIBRATOR', 'INTID', 'OBSDESC', 'JOBDESC', 'LATEST_QID']
     coltypes2 = [ 'S40'            , np.int8    ,  int   , 'S16'    , 'S12'    , int         ]
-    coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , 'unknown', 'unknown', -99         ]
+    coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', -99         ]
 
     colnames2 += [ 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
     coltypes2 += [  int         , 'S10'   , 'S40'       ]
-    coldeflt2 += [ -99          , 'U'     , 'unknown'   ]
+    coldeflt2 += [ -99          , 'U'     , ''   ]
 
     colnames2 += ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
     coltypes2 += [np.ndarray                     , np.ndarray                     , np.ndarray                     ]
@@ -116,12 +117,12 @@ def default_exptypes_for_proctable():
     ## Define the science types to be included in the exposure table (case insensitive)
     return ['arc','flat','twilight','science','sci','dither']
 
-def get_processing_table_name(prodname=None, prodmod=None, extension='csv'):
+def get_processing_table_name(specprod=None, prodmod=None, extension='csv'):
     """
-    Defines the default processing name given the prodname of the production and the optional extension.
+    Defines the default processing name given the specprod of the production and the optional extension.
 
     Args:
-        prodname, str or None. The name of the production. If None, it will be taken from the environment variable.
+        specprod, str or None. The name of the production. If None, it will be taken from the environment variable.
         prodmod, str. Additional str that can be added to the production table name to further differentiate it.
                       Used in daily workflow to add the night to the name and make it unique from other nightly tables.
         extension, str. The extension (and therefore data format) without a leading period of the saved table.
@@ -130,10 +131,9 @@ def get_processing_table_name(prodname=None, prodmod=None, extension='csv'):
     Returns:
         str. The processing table name given the input night and extension.
     """
-    if prodname is None and 'SPECPROD' in os.environ:
-        prodname = os.environ['SPECPROD']
-    else:
-        prodname = 'unknown'
+    if specprod is None:
+        specprod = define_variable_from_environment(env_name='SPECPROD',
+                                                    var_descr="Use SPECPROD for unique processing table directories")
 
     if prodmod is not None:
         prodname_modifier = '-' + str(prodmod)
@@ -142,36 +142,37 @@ def get_processing_table_name(prodname=None, prodmod=None, extension='csv'):
     else:
         prodname_modifier = ''
 
-    return f'processing_table_{prodname}{prodname_modifier}.{extension}'
+    return f'processing_table_{specprod}{prodname_modifier}.{extension}'
 
 
-def get_processing_table_path(prodname=None):
+def get_processing_table_path(specprod=None):
     """
-    Defines the default path to save a processing table. If prodname is not given, the environment variable
+    Defines the default path to save a processing table. If specprod is not given, the environment variable
     'SPECPROD' must exist.
 
     Args:
-        prodname, str or None. The name of the production. If None, it will be taken from the environment variable.
+        specprod, str or None. The name of the production. If None, it will be taken from the environment variable.
 
     Returns:
          str. The full path to the directory where the processing table should be written (or is already written). This
               does not including the filename.
     """
-    if prodname is None and 'SPECPROD' in os.environ:
-        prodname = os.environ['SPECPROD']
-    else:
-        prodname = 'unknown'
+    if specprod is None:
+        specprod = define_variable_from_environment(env_name='SPECPROD',
+                                                    var_descr="Use SPECPROD for unique processing table directories")
 
-    path = pathjoin(os.environ['DESI_SPECTRO_REDUX'], prodname, 'processing_tables')
+    basedir = define_variable_from_environment(env_name='DESI_SPECTRO_REDUX',
+                                                  var_descr="The specprod path")
+    path = pathjoin(basedir, specprod, 'processing_tables')
     return path
 
 
-def get_processing_table_pathname(prodname=None, prodmod=None, extension='csv'):  # base_path,prodname
+def get_processing_table_pathname(specprod=None, prodmod=None, extension='csv'):  # base_path,specprod
     """
     Defines the default pathname to save a processing table.
 
     Args:
-        prodname, str or None. The name of the production. If None, it will be taken from the environment variable.
+        specprod, str or None. The name of the production. If None, it will be taken from the environment variable.
         prodmod, str. Additional str that can be added to the production table name to further differentiate it.
                       Used in daily workflow to add the night to the name and make it unique from other nightly tables.
         extension, str. The extension (and therefore data format) without a leading period of the saved table.
@@ -181,13 +182,12 @@ def get_processing_table_pathname(prodname=None, prodmod=None, extension='csv'):
          str. The full pathname where the processing table should be written (or is already written). This
               includes the filename.
     """
-    if prodname is None and 'SPECPROD' in os.environ:
-        prodname = os.environ['SPECPROD']
-    else:
-        prodname = 'unknown'
+    if specprod is None:
+        specprod = define_variable_from_environment(env_name='SPECPROD',
+                                                    var_descr="Use SPECPROD for unique processing table directories")
 
-    path = get_processing_table_path(prodname)
-    table_name = get_processing_table_name(prodname, prodmod, extension)
+    path = get_processing_table_path(specprod)
+    table_name = get_processing_table_name(specprod, prodmod, extension)
     return pathjoin(path, table_name)
 
 def instantiate_processing_table(colnames=None, coldtypes=None, rows=None):
@@ -243,23 +243,23 @@ def exptable_to_proctable(input_exptable, obstypes=None):
     ## Define the column names for the exposure table and their respective datatypes
     colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
 
-    for col in ['COMMENTS']: #'HEADERERR',
-        if col in exptable.colnames:
-            for ii, arr in enumerate(exptable[col]):
-                for item in arr:
-                    clean_item = item.strip(' \t')
-                    if len(clean_item) > 6:
-                        keyval = None
-                        for symb in [':', '=']:
-                            if symb in clean_item:
-                                keyval = [val.strip(' ') for val in clean_item.split(symb)]
-                                break
-                        if keyval is not None and len(keyval) == 2 and keyval[0].upper() in exptable.colnames:
-                            key, newval = keyval[0].upper(), keyval[1]
-                            expid, oldval = exptable['EXPID'][ii], exptable[key][ii]
-                            log.info(
-                                f'Found a requested correction to ExpID {expid}: Changing {key} val from {oldval} to {newval}')
-                            exptable[key][ii] = newval
+    # for col in ['COMMENTS']: #'HEADERERR',
+    #     if col in exptable.colnames:
+    #         for ii, arr in enumerate(exptable[col]):
+    #             for item in arr:
+    #                 clean_item = item.strip(' \t')
+    #                 if len(clean_item) > 6:
+    #                     keyval = None
+    #                     for symb in [':', '=']:
+    #                         if symb in clean_item:
+    #                             keyval = [val.strip(' ') for val in clean_item.split(symb)]
+    #                             break
+    #                     if keyval is not None and len(keyval) == 2 and keyval[0].upper() in exptable.colnames:
+    #                         key, newval = keyval[0].upper(), keyval[1]
+    #                         expid, oldval = exptable['EXPID'][ii], exptable[key][ii]
+    #                         log.info(
+    #                             f'Found a requested correction to ExpID {expid}: Changing {key} val from {oldval} to {newval}')
+    #                         exptable[key][ii] = newval
 
     good_exps = (exptable['EXPFLAG'] == 0)
     good_types = np.array([val in obstypes for val in exptable['OBSTYPE']]).astype(bool)
@@ -296,90 +296,34 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
     Returns:
         prow, dict. The output processing table row.
     """
-    if type(erow) in [dict, OrderedDict]:
-        ecols = erow.keys()
-    else:
-        ecols = erow.colnames
+    erow = dict(erow)
 
     ## Define the column names for the exposure table and their respective datatypes
     #if colnames is None:
     colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
-    colnames, coldtypes, coldefaults = np.array(colnames,dtype=object), np.array(coldtypes,dtype=object), np.array(coldefaults,dtype=object)
+    colnames, coldtypes, coldefaults = np.array(colnames,dtype=object), \
+                                       np.array(coldtypes,dtype=object), \
+                                       np.array(coldefaults,dtype=object)
 
     prow = dict()
     for nam, typ, defval in zip(colnames, coldtypes, coldefaults):
-        if nam == 'OBSDESC':
+        if nam == 'PROCCAMWORD':
+            if 'BADCAMWORD' in erow.keys():
+                badcamword = erow['BADCAMWORD']
+            else:
+                badcamword = ''
+            prow[nam] = difference_camwords(erow['CAMWORD'],badcamword)
+        elif nam == 'OBSDESC':
             if nam in colnames:
                 prow[nam] = coldefaults[colnames == nam][0]
             else:
-                prow[nam] = 'unknown'
-            for word in ['dither', 'acquisition', 'focus']:
-                if 'PROGRAM' in ecols and word in erow['PROGRAM'].lower():
+                prow[nam] = ''
+            for word in ['dither', 'acquisition', 'focus', 'test']:
+                if 'PROGRAM' in erow.keys() and word in erow['PROGRAM'].lower():
                     prow[nam] = word
         elif nam == 'EXPID':
             prow[nam] = np.array([erow[nam]])
-        elif nam in ecols:
-            prow[nam] = erow[nam]
-        else:
-            prow[nam] = defval
-    return prow
-
-def erow_to_prow_with_overrides(input_erow):#, colnames=None, coldtypes=None, coldefaults=None):
-    """
-    Converts an exposure table row to a processing table row. The columns unique to a processing table
-    are filled with default values. If comments are made in COMMENTS or HEADERERR, those will be adjusted in the values
-    stored in the processing table row.
-
-    Args:
-        input_erow, Table.Row or dict. An exposure table row. The row will be converted to a row of an processing table.
-                                       If comments are made in COMMENTS or HEADERERR, those will be adjusted in
-                                       the values stored in the processing table.
-
-    Returns:
-        prow, dict. The output processing table row.
-    """
-    log = get_logger()
-    erow = input_erow.copy()
-    if type(erow) in [dict, OrderedDict]:
-        ecols = erow.keys()
-    else:
-        ecols = erow.colnames
-
-    for col in ['COMMENTS']: #'HEADERERR',
-        if col in ecols:
-            for item in erow[col]:
-                clean_item = item.strip(' \t')
-                if len(clean_item) > 6:
-                    keyval = None
-                    for symb in [':', '=']:
-                        if symb in clean_item:
-                            keyval = [val.strip(' ') for val in clean_item.split(symb)]
-                            break
-                    if keyval is not None and len(keyval) == 2 and keyval[0].upper() in ecols:
-                        key, newval = keyval[0].upper(), keyval[1]
-                        expid, oldval = erow['EXPID'], erow[key]
-                        log.info(
-                            f'Found a requested correction to ExpID {expid}: Changing {key} val from {oldval} to {newval}')
-                        erow[key] = newval
-
-    ## Define the column names for the exposure table and their respective datatypes
-    # if colnames is None:
-    colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
-    colnames, coldtypes, coldefaults = np.array(colnames,dtype=object), np.array(coldtypes,dtype=object), np.array(coldefaults,dtype=object)
-
-    prow = dict()
-    for nam, typ, defval in zip(colnames, coldtypes, coldefaults):
-        if nam == 'OBSDESC':
-            if nam in colnames:
-                prow[nam] = coldefaults[colnames == nam][0]
-            else:
-                prow[nam] = 'unknown'
-            for word in ['dither', 'acquisition', 'focus']:
-                if 'PROGRAM' in ecols and word in erow['PROGRAM'].lower():
-                    prow[nam] = word
-        elif nam == 'EXPID':
-            prow[nam] = np.array([erow[nam]])
-        elif nam in ecols:
+        elif nam in erow.keys():
             prow[nam] = erow[nam]
         else:
             prow[nam] = defval

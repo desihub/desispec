@@ -358,10 +358,7 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
     Returns:
         pathname: str, the default script name for a desi_proc batch script file
     """
-    if np.isscalar(cameras):
-        camword = cameras
-    else:
-        camword = create_camword(cameras)
+    camword = parse_cameras(cameras)
     if type(exp) is not str:
         if np.isscalar(exp):
             expstr = '{:08d}'.format(exp)

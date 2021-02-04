@@ -129,7 +129,7 @@ def get_last_step_options():
     Returns:
         list. A list of LASTSTEP's that can be included in an exposure table.
     """
-    return ['ignore', 'skysub', 'fluxcal', 'all']
+    return ['ignore', 'skysub', 'stdstarfit', 'fluxcal', 'all']
 
 def night_to_month(night):
     """
@@ -190,7 +190,7 @@ def get_exposure_table_path(night=None, usespecprod=True):
         path = pathjoin(basedir,'exposure_tables',month)
         return path
 
-def get_exposure_table_pathname(night, usespecprod=True, extension='csv'):#base_path,prodname
+def get_exposure_table_pathname(night, usespecprod=True, extension='csv'):#base_path,specprod
     """
     Defines the default pathname to save an exposure table.
 
@@ -202,8 +202,6 @@ def get_exposure_table_pathname(night, usespecprod=True, extension='csv'):#base_
          str. The full pathname where the exposure table should be written (or is already written). This
               includes the filename.
     """
-    # if night is None and 'PROD_NIGHT' in os.environ:
-    #     night = os.environp['PROD_NIGHT']
     path = get_exposure_table_path(night, usespecprod=usespecprod)
     table_name = get_exposure_table_name(night, extension)
     return pathjoin(path,table_name)
@@ -494,10 +492,21 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     if "FA_SURV" in req_dict and "FA_SURV" in colnames:
         outdict['FA_SURV'] = req_dict['FA_SURV']
 
-    ## As an example of future flag possibilites, flag science exposures are
-    ##    garbage if less than 60 seconds
-    if outdict['OBSTYPE'].lower() == 'science' and float(outdict['EXPTIME']) < 60:
-        outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exp')
+    ## Flag the exposure based on PROGRAM information
+    if 'system test' in outdict['PROGRAM'].lower():
+        outdict['LASTSTEP'] = 'ignore'
+        outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
+        log.info(f"Exposure {exp} identified as system test. Not processing.")
+    elif obstype == 'science' and float(outdict['EXPTIME']) < 59.0:
+        outdict['LASTSTEP'] = 'skysub'
+        outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
+        log.info(f"Science exposure {exp} with EXPTIME less than 59s. Processing through sky subtraction.")
+    elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
+        outdict['LASTSTEP'] = 'fluxcal'
+        log.info(f"Science exposure {exp} identified as undithered. Processing through flux calibration.")
+    elif obstype == 'science' and 'dither' in outdict['PROGRAM']:
+        outdict['LASTSTEP'] = 'skysub'
+        log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
 
     ## For Things defined in both request and data, if they don't match, flag in the
     ##     output file for followup/clarity

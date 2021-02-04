@@ -13,7 +13,7 @@ def get_parser():
     """
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("-n", "--nights", type=str,  help="nights as comma separated string")
-    parser.add_argument("-p", "--prodname", type=str, default=None, help="name of the production run")
+    parser.add_argument("-p", "--specprod", type=str, default=None, help="name of the production run")
     parser.add_argument("-i", "--exp-table-path", type=str, default=None, help="data path to exposure tables, without the month subdirectory.")
     parser.add_argument("-o","--proc-table-path", type=str, default=None,  help="path to save processing tables")
     parser.add_argument("--obstypes", type=str, default=None, help="comma separated list of exposure types to include in "+\

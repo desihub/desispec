@@ -224,22 +224,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     etable.add_row(erow)
                     unproc_table.add_row(erow)
                     continue
+                elif erow['LASTSTEP'] == 'ignore':
+                    print("\n{} identified by the pipeline as soemthign to ignore. Not processing.".format(exp))
+                    etable.add_row(erow)
+                    unproc_table.add_row(erow)
                 elif erow['OBSTYPE'] not in procobstypes:
                     print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
-                    etable.add_row(erow)
-                    unproc_table.add_row(erow)
-                    continue
-                elif 'system test' in erow['PROGRAM'].lower():
-                    erow['LASTSTEP'] = 'ignore'
-                    erow['EXPFLAG'] = np.append(erow['EXPFLAG'], 'test')
-                    print("\nExposure identified as system test. Not processing.")
-                    etable.add_row(erow)
-                    unproc_table.add_row(erow)
-                    continue
-                elif str(erow['OBSTYPE']).lower() == 'science' and float(erow['EXPTIME']) < 59.0:
-                    erow['LASTSTEP'] = 'skysub'
-                    erow['EXPFLAG'] = np.append(erow['EXPFLAG'], 'short_exposure')
-                    print("\nScience exposure with EXPTIME less than 59s. Not processing.")
                     etable.add_row(erow)
                     unproc_table.add_row(erow)
                     continue
@@ -261,9 +251,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                                                                                    queue=queue)
 
                 prow = erow_to_prow(erow)
-
-                if camword is not None:
-                    prow['CAMWORD'] = camword
                 prow['INTID'] = internal_id
                 internal_id += 1
                 prow = define_and_assign_dependency(prow, arcjob, flatjob)
@@ -276,7 +263,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     flats.append(prow)
                 elif curtype == 'arc' and arcjob is None:
                     arcs.append(prow)
-                elif curtype == 'science' and (prow['OBSDESC'] != 'dither'):
+                elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
                     sciences.append(prow)
 
                 lasttile = curtile
