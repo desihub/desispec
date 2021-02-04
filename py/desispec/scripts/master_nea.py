@@ -113,8 +113,6 @@ def main(args):
 
         results = [process_one(w, psf, ifiber) for w in wave]
         results = np.array(results)
-        
-        log.info('Solved for row {} of {}.'.format(ifiber, nspec))
             
         neas.append(results[:,0].tolist())
         angperpix.append(results[:,1].tolist())
