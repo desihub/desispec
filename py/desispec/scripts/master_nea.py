@@ -23,9 +23,9 @@ def parse(options=None):
 			help = 'dir. of output maser nea file for a given camera')
     parser.add_argument('--sampling', type=int, default=500, required=False,
                         help = 'Sampling in wavelength bins, typically 0.8A')
-    parser.add_argument('--blue_lim', type=float, default=3600., required=False,
+    parser.add_argument('--blue_lim', type=float, default=3520., required=False,
                         help = 'Blue wavelength limit [Angstroms]')
-    parser.add_argument('--red_lim', type=float, default=9824., required=False,
+    parser.add_argument('--red_lim', type=float, default=9950., required=False,
                         help = 'Red wavelength limit [Angstroms]')
     args = None
     if options is None:
