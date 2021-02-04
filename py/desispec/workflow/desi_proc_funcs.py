@@ -62,8 +62,8 @@ def get_shared_desi_proc_parser():
                         " use the most recent calibrations from *past* nights. If not set, uses default calibs instead.")
     parser.add_argument("--no-model-pixel-variance", action="store_true",
                         help="Do not use a model of the variance in preprocessing")
-    parser.add_argument("--adjust-sky-wavelength", action="store_true", help="Adjust wavelength of sky lines")
-    parser.add_argument("--adjust-sky-lsf", action="store_true", help="Adjust width of sky lines")
+    parser.add_argument("--no-sky-wavelength-adjustment", action="store_true", help="Do not adjust wavelength of sky lines")
+    parser.add_argument("--no-sky-lsf-adjustment", action="store_true", help="Do not adjust width of sky lines")
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
 

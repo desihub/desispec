@@ -53,3 +53,20 @@ def load_legacy_survey_filter(band,photsys) :
     
     filter_response=speclite.filters.load_filter(filternamemap)
     return filter_response
+
+def load_gaia_filter(band,dr=2):
+    """
+    Uses speclite.filters to load the filter transmission
+    Returns speclite.filters.FilterResponse object
+
+    Args:
+        band: filter pass-band in "G","BP","RP"
+        dr: 2 or 3 
+    """
+    if band.upper() not in ["G","BP","RP"]:
+        raise ValueError("unknown band '{}'".format(band))
+    if dr!=2:
+        raise ValueError("currently only DR2 is supported")
+    filternamemap = f'gaiadr{dr}-{band}'
+    filter_response=speclite.filters.load_filter(filternamemap)
+    return filter_response

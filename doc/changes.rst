@@ -2,10 +2,44 @@
 desispec Change Log
 ===================
 
-0.36.2 (unreleased)
+0.37.0 (unreleased)
 -------------------
 
-* No changes yet
+Major updates:
+
+* Support Gaia stdstars (PR `#1105`_, `#1109`_, `#1114`_).
+* Fix cosmics masking in coaddition (PR `#1113`_).
+* Improved sky modeling (PR `#1125`_).
+
+Smaller (but important) updates:
+
+* Standardize getting NIGHT from raw data headers (PR `#1083`_, `#1120`_).
+* Use acquisition guide file if full guide file isn't available (PR `#1084`_).
+* Updates to flux calibration averages used by nightwatch (PR `#1085`_).
+* New read_tile_spectra and Spectra class slicing (PR `#1107`_).
+* Add token to fix coverage tests (PR `#1112`_).
+* Flux calibration robustness for low transmission exposures (PR `#1116`_).
+* Apply heliocentric correction to fiberflat (PR `#1118`_).
+* Robustness and feature updates to dark model generation
+  (PR `#1119`_, `#1123`_)
+* More flexible CCD calibration configuration (PR `#1121`_).
+
+.. _`#1083`: https://github.com/desihub/desispec/issues/1083
+.. _`#1084`: https://github.com/desihub/desispec/issues/1084
+.. _`#1085`: https://github.com/desihub/desispec/issues/1085
+.. _`#1105`: https://github.com/desihub/desispec/issues/1105
+.. _`#1107`: https://github.com/desihub/desispec/issues/1107
+.. _`#1109`: https://github.com/desihub/desispec/issues/1109
+.. _`#1112`: https://github.com/desihub/desispec/issues/1112
+.. _`#1113`: https://github.com/desihub/desispec/issues/1113
+.. _`#1114`: https://github.com/desihub/desispec/issues/1114
+.. _`#1116`: https://github.com/desihub/desispec/issues/1116
+.. _`#1118`: https://github.com/desihub/desispec/issues/1118
+.. _`#1119`: https://github.com/desihub/desispec/issues/1119
+.. _`#1120`: https://github.com/desihub/desispec/issues/1120
+.. _`#1121`: https://github.com/desihub/desispec/issues/1121
+.. _`#1123`: https://github.com/desihub/desispec/issues/1123
+.. _`#1125`: https://github.com/desihub/desispec/issues/1125
 
 0.36.1 (2021-01-04)
 -------------------

@@ -20,7 +20,7 @@ jobs:
                 python-version: [3.7, 3.8]  # fitsio does not like Python < 3.7
                 # astropy-version: ['<3.0', '<4.1']  #, '<5.0']
         env:
-            DESIUTIL_VERSION: 3.1.0
+            DESIUTIL_VERSION: 3.1.1
             DESIMODEL_DATA: branches/test-0.12
 
         steps:
@@ -51,7 +51,7 @@ jobs:
                 os: [ubuntu-latest]
                 python-version: [3.8]
         env:
-            DESIUTIL_VERSION: 3.1.0
+            DESIUTIL_VERSION: 3.1.1
             DESIMODEL_DATA: branches/test-0.12
 
         steps:
