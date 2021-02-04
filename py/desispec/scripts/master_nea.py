@@ -15,15 +15,14 @@ import astropy.io.fits as fits
 
 log                = get_logger()
 
-# https://github.com/desihub/desispec/issues/1006
-sampling           = 500
-
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate master NEA file for a given camera.")
     parser.add_argument('-i','--infile', type = str, default = None, required=True,
                         help = 'path of DESI psf fits file.')
     parser.add_argument('--outdir', type = str, default = None, required=True,
 			help = 'dir. of output maser nea file for a given camera')
+    parser.add_argument('--sampling', type=int, default=500, required=False,
+                        help = 'Sampling in wavelength bins, typically 0.8A')
     parser.add_argument('--blue_lim', type=float, default=3600., required=False,
                         help = 'Blue wavelength limit [Angstroms]')
     parser.add_argument('--red_lim', type=float, default=9824., required=False,
@@ -49,6 +48,10 @@ def process_one(w, psf, ifiber):
         list of 1D nea value [pixles] and 
         angstroms per pix. for this fiber and wavelength. 
     '''
+
+    # If beyond the wavelength limit, return nea at the limit.
+    wmax   = psf.wavelength(ifiber, psf.npix_y - 0.5)
+    w      = np.minimum(w, wmax)
     
     psf_2d = psf.pix(ispec=ifiber, wavelength=w)
     psf_1d = np.sum(psf_2d, axis=0)
@@ -69,24 +72,38 @@ def process_one(w, psf, ifiber):
     return  [nea, angperpix]
 
 def main(args):
+    wdelta = 0.8
+    
     cam  = args.infile.split('/')[-1].split('-')[1]
     band = cam[0]
     
     log.info("calculating master nea for camera {}.".format(cam))
 
-    wmin, wmax, wdelta = args.blue_lim, args.red_lim, 0.8
-    fullwave           = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
-    cslice             = {"b": slice(0, 2751, sampling), "r": slice(2700, 5026, sampling), "z": slice(4900, 7781, sampling)}
-
-    log.info('Assuming blue wavelength of {} A.'.format(wmin))
-    log.info('Assuming  red wavelength of {} A.'.format(wmax))
+    sample_length = args.sampling * wdelta
     
+    # https://github.com/desihub/desispec/blob/8dccacdd9b35efc2a5c771269fc2b28dc742caef/bin/desi_proc#L703
+    # Note: Extend by one sampling length to ensure limit remains interpolation. 
+    if cam.startswith('b'):
+        wave = np.round(np.arange(args.blue_lim, 5800. + wdelta + sample_length, wdelta), 1) 
+
+    elif cam.startswith('r'):
+        wave = np.round(np.arange(5760., 7620.0 + wdelta + sample_length, wdelta), 1)
+
+    elif cam.startswith('z'):
+        wave = np.round(np.arange(7520., args.red_lim + wdelta + sample_length, wdelta), 1)
+
+    else:
+        raise ValueError('Erroneous camera found: {}'.format(cam))
+        
+    log.info('Assuming blue wavelength of {} A.'.format(wave.min()))
+    log.info('Assuming  red wavelength of {} A.'.format(wave.max()))
+    log.info('Assuming {} A sampling'.format(sample_length))
+
+    wave = wave[::args.sampling]
+        
     psf   = GaussHermitePSF(args.infile)
     nspec = psf.nspec 
-    
-    # Sampled to every 50x 0.8A (in sclice).
-    wave = fullwave[cslice[band]]
-
+        
     neas = []
     angperpix = []
     
