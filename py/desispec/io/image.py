@@ -11,7 +11,8 @@ import warnings
 import numpy as np
 
 from desispec.image import Image
-from desispec.io.util import fitsheader, native_endian, makepath, iotime_message
+from desispec.io.util import fitsheader, native_endian, makepath
+from . import iotime
 from astropy.io import fits
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
@@ -76,8 +77,8 @@ def write_image(outfile, image, meta=None):
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', outfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -99,8 +100,8 @@ def read_image(filename):
         else:
             readnoise = fx['IMAGE'].header['RDNOISE']
 
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     return Image(image, ivar, mask=mask, readnoise=readnoise,
                  camera=camera, meta=meta)

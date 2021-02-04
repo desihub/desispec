@@ -1,4 +1,73 @@
-#!/usr/bin/env python
+import os
+import re
+import datetime
+
+def format(readwrite, filename, duration):
+    """Return standardized I/O timing message string for logging
+
+    Args:
+        readwrite (str): either "read" or "write"
+        filename (str): filename that was read or written
+        duration (float): time in seconds to perform I/O operations
+
+    Returns: I/O timing message to log
+
+    Note: this function does not call log.info() itself so that the logging
+    source file and line number can be associated with the I/O function itself
+    instead of this utility formatting function.
+    """
+    basename = os.path.basename(filename)
+    timestamp = datetime.datetime.now().isoformat()
+    msg = f"iotime {duration:.3f} sec to {readwrite} {basename} at {timestamp}"
+    return msg
+
+_iotime_regex = re.compile(r'(.*)iotime ([\d.]+) sec to (read|write) (.*) at (.*)')
+_log_regex = re.compile(r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL):(\w+\.py):(\d+):(\w+):(.*)')
+
+def parse(line):
+    """Parse a line for an iotime message produced by `format`
+    
+    Args:
+        line (str): the line to parse
+
+    Returns None if no match, or dict with keys function,duration,readwrite,filename,timestamp    
+    """
+    m = _iotime_regex.match(line)
+    if m is not None:
+        prefix, duration, readwrite, filename, timestamp = m.groups()
+        duration = float(duration)
+        logmatch = _log_regex.match(line)
+        if prefix == '' or logmatch is None:
+            function = 'unknown'
+        else:
+            function = logmatch.group(4)
+            
+        return dict(
+            function=function, duration=duration, readwrite=readwrite,
+            filename=filename, timestamp=timestamp)
+    else:
+        return None
+
+def parse_logfile(logfile):
+    """
+    Read iotime log entries from logfile
+
+    Return Table with columns function duration readwrite filename timestamp datetime
+    """
+    from astropy.table import Table
+    from astropy.time import Time
+
+    rows = list()
+    with open(logfile) as fx:
+        for line in fx:
+            row = parse(line)
+            if row is not None:
+                rows.append(row)
+
+    timing = Table(rows=rows)
+    timing['datetime'] = Time(timing['timestamp']).datetime
+
+    return timing
 
 """
 Utilities for parsing and plotting I/O timing from logfiles
@@ -8,29 +77,6 @@ import re
 import numpy as np
 from astropy.table import Table, vstack
 from astropy.time import Time
-
-def read_iotimes(logfile):
-    """
-    Read iotime log entries from logfile
-
-    Return Table with columns FUNC IOTIME RW FILENAME ISOTIME DATETIME
-    """
-
-    iolog = re.compile(r'.*:(.*): iotime ([\d.]+) sec to (\b(?:read|write)) (.*) at (.*)')
-
-    rows = list()
-    with open(logfile) as fx:
-        for line in fx:
-            m = iolog.match(line)
-            if m is not None:
-                func, iotime, readwrite, filename, isotime = m.groups()
-                rows.append((func, float(iotime), readwrite, filename, isotime))
-
-    timing = Table(rows=rows,
-                   names=('FUNC', 'IOTIME', 'RW', 'FILENAME', 'ISOTIME'))
-    timing['DATETIME'] = Time(timing['ISOTIME']).datetime
-
-    return timing
 
 def _ordered_unique_names(names):
     """Return unique list of names, ordered by first appearance in list
@@ -58,12 +104,12 @@ def hist_iotimes(timing, tmax=10, plottitle=None):
     Returns matplotlib Figure
     """
     import matplotlib.pyplot as plt
-    funcnames = _ordered_unique_names(timing['FUNC'])
+    funcnames = _ordered_unique_names(timing['function'])
     nfunc = len(funcnames)
     fig = plt.figure(figsize=(6,8))
     for i, func in enumerate(funcnames):
-        jj = timing['FUNC'] == func
-        t = timing['IOTIME'][jj].clip(0, tmax)
+        jj = timing['function'] == func
+        t = timing['duration'][jj].clip(0, tmax)
         plt.subplot(nfunc, 1, i+1)
         plt.hist(t, 25, (0, tmax+1e-3))
         plt.text(tmax, 1, func, ha='right')
@@ -95,14 +141,14 @@ def plot_iotimes(timing, plottitle=None, outfile=None):
     Returns matplotlib figure; does *not* call plt.show()
     """
     import matplotlib.pyplot as plt
-    funcnames = _ordered_unique_names(timing['FUNC'])
+    funcnames = _ordered_unique_names(timing['function'])
     nfunc = len(funcnames)
     fig = plt.figure()
 
     for i, func in enumerate(funcnames):
-        ii = timing['FUNC'] == func
+        ii = timing['function'] == func
         marker = ('.', 'x', '+', 's', '^', 'v')[i//10]
-        plt.plot(timing['DATETIME'][ii], timing['IOTIME'][ii], marker,
+        plt.plot(timing['datetime'][ii], timing['duration'][ii], marker,
                  label=func)
 
     plt.xlabel('datestamp of I/O')
@@ -110,7 +156,7 @@ def plot_iotimes(timing, plottitle=None, outfile=None):
 
     #- Allow room for large legend
     plt.legend(ncol=2, fontsize='small')
-    tmax = np.max(timing['IOTIME'])
+    tmax = np.max(timing['duration'])
     plt.ylim(-0.5, 2*tmax)
 
     if plottitle is not None:
@@ -134,7 +180,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     import matplotlib.pyplot as plt
-    timing = vstack([read_iotimes(logfile) for logfile in args.logfiles])
+    timing = vstack([parse_logfile(logfile) for logfile in args.logfiles])
     hist_iotimes(timing)
     plot_iotimes(timing)
     plt.show()

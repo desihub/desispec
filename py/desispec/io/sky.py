@@ -10,7 +10,7 @@ import time
 from astropy.io import fits
 from desiutil.log import get_logger
 
-from .util import iotime_message
+from . import iotime
 
 def write_sky(outfile, skymodel, header=None):
     """Write sky model.
@@ -57,8 +57,8 @@ def write_sky(outfile, skymodel, header=None):
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', outfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -94,8 +94,8 @@ def read_sky(filename) :
     else :
         throughput_corrections = None
     fx.close()
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr,stat_ivar=stat_ivar,\
                         throughput_corrections=throughput_corrections)

@@ -19,7 +19,8 @@ from desiutil.log import get_logger
 
 from ..frame import Frame
 from .meta import findfile, get_nights, get_exposures
-from .util import fitsheader, native_endian, makepath, iotime_message
+from .util import fitsheader, native_endian, makepath
+from . import iotime
 
 def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     """Write a frame fits file and returns path to file written.
@@ -114,8 +115,8 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     t0 = time.time()
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', outfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -215,8 +216,8 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         scores_comments = None
 
     fx.close()
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     if nspec is not None:
         flux = flux[0:nspec]

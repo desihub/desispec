@@ -12,7 +12,8 @@ from astropy.io import fits
 
 from ..xytraceset import XYTraceSet
 from desiutil.log import get_logger
-from .util import makepath, iotime_message
+from .util import makepath
+from . import iotime
 
 def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
     log=get_logger()
@@ -153,8 +154,8 @@ def read_xytraceset(filename) :
         raise ValueError("XCOEF and YCOEF don't have same number of fibers %d %d"%(xcoef.shape[0],ycoef.shape[0]))
     
     fits_file.close()
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
     
     if wsigmacoef is not None :
         log.warning("Converting deprecated WSIGMA coefficents (in Ang.) into YSIG (in CCD pixels)")
@@ -209,9 +210,9 @@ def write_xytraceset(outfile,xytraceset) :
     t0 = time.time()
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
-    iotime = time.time() - t0
+    duration = time.time() - t0
     log.info("wrote a xytraceset in {}".format(outfile))
-    log.info(iotime_message('write', outfile, iotime))
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 

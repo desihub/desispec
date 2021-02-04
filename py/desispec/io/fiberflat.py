@@ -18,7 +18,8 @@ from desiutil.log import get_logger
 
 from ..fiberflat import FiberFlat
 from .meta import findfile
-from .util import fitsheader, native_endian, makepath, iotime_message
+from .util import fitsheader, native_endian, makepath
+from . import iotime
 
 def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     """Write fiberflat object to outfile
@@ -72,8 +73,8 @@ def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     t0 = time.time()
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', outfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -111,7 +112,7 @@ def read_fiberflat(filename):
         else:
             fibermap = None
 
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header, fibermap=fibermap)

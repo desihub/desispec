@@ -25,7 +25,8 @@ from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 from desiutil.log import get_logger
 
-from .util import fitsheader, native_endian, add_columns, iotime_message
+from .util import fitsheader, native_endian, add_columns
+from . import iotime
 
 from .frame import read_frame
 from .fibermap import fibermap_comments
@@ -149,8 +150,8 @@ def write_spectra(outfile, spec, units=None):
     t0 = time.time()
     all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
     os.rename("{}.tmp".format(outfile), outfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', outfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -248,8 +249,8 @@ def read_spectra(infile, single=False):
                 extra[band][type] = native_endian(hdus[h].data.astype(ftype))
 
     hdus.close()
-    iotime = time.time() - t0
-    log.info(iotime_message('read', infile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', infile, duration))
 
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,

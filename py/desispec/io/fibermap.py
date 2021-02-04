@@ -18,8 +18,9 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
-from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, iotime_message
+from desispec.io.util import fitsheader, write_bintable, makepath, addkeys
 from desispec.io.meta import rawdata_root, findfile
+from . import iotime
 
 from desispec.maskbits import fibermask
 
@@ -286,9 +287,9 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
         t0 = time.time()
         write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
                        extname=extname, clobber=clobber)
-        iotime = time.time() - t0
+        duration = time.time() - t0
 
-    log.info(iotime_message('write', outfile, iotime))
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -305,7 +306,7 @@ def read_fibermap(filename):
     log = get_logger()
     t0 = time.time()
     fibermap = Table.read(filename, 'FIBERMAP')
-    iotime = time.time() - t0
+    duration = time.time() - t0
 
     #- support old simulated fiberassign files
     if 'DESIGN_X' in fibermap.colnames:
@@ -313,7 +314,7 @@ def read_fibermap(filename):
     if 'DESIGN_Y' in fibermap.colnames:
         fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
 
-    log.info(iotime_message('read', filename, iotime))
+    log.info(iotime.format('read', filename, duration))
 
     return fibermap
 

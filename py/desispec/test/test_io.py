@@ -27,6 +27,7 @@ class TestIO(unittest.TestCase):
         cls.testDir = tempfile.mkdtemp()
         cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
         cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
+        cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
         # cls.testbrfile appears to be unused by this class.
         cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
         cls.origEnv = {'SPECPROD': None,
@@ -56,14 +57,15 @@ class TestIO(unittest.TestCase):
             rmtree(self.reduxdir)
 
     def tearDown(self):
-        if os.path.exists(self.testfile):
-            os.remove(self.testfile)
+        for testfile in [self.testfile, self.testyfile, self.testbrfile, self.testlog]:
+            if os.path.exists(testfile):
+                os.remove(testfile)
 
     @classmethod
     def tearDownClass(cls):
         """Cleanup test files if they exist.
         """
-        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile]:
+        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile, cls.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
 
@@ -990,6 +992,38 @@ class TestIO(unittest.TestCase):
         shortname = shorten_filename(longname)
         self.assertEqual(shortname, longname)
         os.environ['DESI_SPECTRO_CALIB'] = self.testEnv['DESI_SPECTRO_CALIB']
+
+    def test_iotime(self):
+        from ..io import iotime
+        msg = iotime.format('write', 'blat.fits', 1.23)
+        p = iotime.parse(msg)
+        self.assertEqual(p['readwrite'], 'write')
+        self.assertEqual(p['filename'], 'blat.fits')
+        self.assertEqual(p['duration'], 1.23)
+        self.assertEqual(p['function'], 'unknown')
+
+        p = iotime.parse('INFO:blat.py:42:blat: '+msg)
+        self.assertEqual(p['readwrite'], 'write')
+        self.assertEqual(p['filename'], 'blat.fits')
+        self.assertEqual(p['duration'], 1.23)
+        self.assertEqual(p['function'], 'blat')
+
+        p = iotime.parse('hello')
+        self.assertEqual(p, None)
+
+        with open(self.testlog, 'w') as logfile:
+            logfile.write('INFO:blat.py:42:blat: hello\n')
+            logfile.write('DEBUG:blat.py:43:blat: {}\n'.format(
+                iotime.format('write', 'foo.fits', 1.23)))
+            logfile.write('DEBUG:blat.py:44:blat: {}\n'.format(
+                iotime.format('read', 'foo.fits', 2.56)))
+            logfile.write('ERROR:blat.py:45:blat: goodbye\n')
+
+        t = iotime.parse_logfile(self.testlog)
+        self.assertEqual(list(t['function']), ['blat', 'blat'])
+        self.assertEqual(list(t['readwrite']), ['write', 'read'])
+        self.assertEqual(list(t['duration']), [1.23, 2.56])
+
 
 def test_suite():
     """Allows testing of only this module with the command::

@@ -14,7 +14,8 @@ import numpy,scipy
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
 
-from .util import fitsheader, native_endian, makepath, iotime_message
+from .util import fitsheader, native_endian, makepath
+from . import iotime
 
 def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """Writes the normalized flux for the best models.
@@ -61,8 +62,8 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     tmpfile = norm_modelfile+".tmp"
     hdulist.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, norm_modelfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', norm_modelfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', norm_modelfile, duration))
 
 
 def read_stdstar_models(filename):
@@ -82,8 +83,8 @@ def read_stdstar_models(filename):
         fibers = native_endian(fx['FIBERS'].data)
         metadata = fx['METADATA'].data
 
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     return flux, wave, fibers, metadata
 
@@ -116,8 +117,8 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', outfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -136,8 +137,8 @@ def read_flux_calibration(filename):
         wave = native_endian(fx["WAVELENGTH"].data.astype('f8'))
         header = fx[0].header
 
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask)
     fluxcalib.header = header
@@ -174,8 +175,8 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
-    iotime = time.time() - t0
-    log.info(iotime_message('write', outfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -204,8 +205,8 @@ def read_average_flux_calibration(filename):
         else :
             seeing_term_uncertainty = None
 
-    iotime = time.time() - t0
-    log.info(iotime_message('read', filename, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     afluxcalib = AverageFluxCalib(wave=wave,
                                   average_calib=average_calib,
@@ -263,7 +264,7 @@ def read_stdstar_templates(stellarmodelfile):
     fluxData=native_endian(phdu[0].data)
 
     phdu.close()
-    iotime = time.time() - t0
-    log.info(iotime_message('read', stellarmodelfile, iotime))
+    duration = time.time() - t0
+    log.info(iotime.format('read', stellarmodelfile, duration))
 
     return wavebins,fluxData,templateid,teff,logg,feh
