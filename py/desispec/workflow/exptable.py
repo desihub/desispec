@@ -10,7 +10,7 @@ from desispec.workflow.utils import define_variable_from_environment, pathjoin, 
 from desispec.workflow.desi_proc_funcs import load_raw_data_header, cameras_from_raw_data
 from desiutil.log import get_logger
 from desispec.util import header2night
-from desispec.io.util import create_camword
+from desispec.io.util import create_camword, parse_badamps
 
 #############################################
 ##### Exposure Table Column Definitions #####
@@ -274,13 +274,29 @@ def deconstruct_keyval_reporting(entry):
     return key, val1, val2
 
 def validate_badamps(badamps,joinsymb=';'):
-    badamps = badamps.replace(' ', '')
+    """
+    Checks and transforms badamps string for consistency with the for need in an exposure or processing table
+    for use in the Pipeline. Specifically ensure they come in (camera,petal,amplifier) sets,
+    with appropriate checking of those values to make sure they're valid. Returns the input string
+    except removing whitespace and replacing potential character separaters with joinsymb (default ';').
+
+    Args:
+        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (semicolon
+                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'.
+        joinsymb, str. The symbol separating entries in the str list given by badamps.
+
+    Returns:
+        badamps, str. Input badamps string of {camera}{petal}{amp} entries separated by symbol given with
+                      joinsymb (semicolon by default). I.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'.
+                      Differs from input in that other symbols used to separate terms are replaaced by joinsymb
+                      and whitespace is removed.
+
+    """
+    badamps = badamps.replace(' ', '').strip()
     for symb in [',', ':', '|', '.']:
         badamps = badamps.replace(symb, joinsymb)
-    for amp in badamps.split(joinsymb):
-        if len(amp) != 3 or not amp[1].isnumeric():
-            raise ValueError("Each BADAMPS entry must be a semicolon separated list of {camera}{petal}{amp} " +
-                             f"(e.g. r7A;b8B). Given: {amp}")
+    ## test that the string can be parsed
+    throw = parse_badamps(badamps, joinsymb=joinsymb)
     return badamps
 
 def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, coldefaults=None, verbosely=False):

@@ -4,6 +4,7 @@ from desispec.workflow.exptable import get_exposure_table_name,get_exposure_tabl
                                        keyval_change_reporting, deconstruct_keyval_reporting, validate_badamps
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.utils import pathjoin
+from desispec.io.util import parse_badamps
 
 import os
 import numpy as np
