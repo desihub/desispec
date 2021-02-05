@@ -20,7 +20,7 @@ from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, a
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
-from desispec.io.util import difference_camwords
+from desispec.io.util import difference_camwords, parse_badamps
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              expobstypes=None, procobstypes=None, camword=None, badcamword='', badamps='',
@@ -107,6 +107,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         finalcamword = difference_camwords(finalcamword,badcamword)
 
     if badcamword != '':
+        ## Check to make sure the badcamword will parse before trying to use it in the pipeline
+        throw = parse_badamps(badcamword)
+        ## Inform the user what will be done with it.
         print(f"Modifying camword of data to be processed with badcamword: {badcamword}. "+\
               f"Camword to be processed: {finalcamword}")
 
@@ -238,6 +241,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     etable.add_row(erow)
                     unproc_table.add_row(erow)
                     continue
+                else:
+                    etable.add_row(erow)
 
                 curtype,curtile = get_type_and_tile(erow)
 

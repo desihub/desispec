@@ -12,7 +12,7 @@ from collections import OrderedDict
 from desispec.workflow.exptable import default_exptypes_for_exptable
 
 from desispec.workflow.utils import define_variable_from_environment, pathjoin
-from desispec.io.util import difference_camwords
+from desispec.io.util import difference_camwords, parse_badamps, create_camword, decode_camword
 from desiutil.log import get_logger
 
 ###############################################
@@ -296,6 +296,7 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
     Returns:
         prow, dict. The output processing table row.
     """
+    log = get_logger()
     erow = dict(erow)
 
     ## Define the column names for the exposure table and their respective datatypes
@@ -327,4 +328,19 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
             prow[nam] = erow[nam]
         else:
             prow[nam] = defval
+
+    ## For obstypes that aren't science, BADAMPS loses it's relevance. For processing,
+    ## convert those into bad cameras in BADCAMWORD, so the cameras aren't processed.
+    ## Otherwise we'll have nightly calibrations with only half the fibers useful.
+    if prow['OBSTYPE'] != 'science' and prow['BADAMPS'] != '':
+        badcams = []
+        for (camera, petal, amplifier) in parse_badamps(prow['BADAMPS']):
+            badcams.append(f'{camera}{petal}')
+        newbadcamword = create_camword(badcams)
+        log.info("For nonsscience exposure: {}, converting BADAMPS={} to bad cameras={}.".format( erow['EXPID'],
+                                                                                                  prow['BADAMPS'],
+                                                                                                  newbadcamword    ) )
+        prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],newbadcamword)
+        prow['BADAMPS'] = ''
+
     return prow

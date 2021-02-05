@@ -17,7 +17,7 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
-from desispec.io.util import fitsheader, write_bintable, makepath, addkeys
+from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
 from desispec.io.meta import rawdata_root, findfile
 
 from desispec.maskbits import fibermask
@@ -572,15 +572,7 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
     if badamps is not None:
         maskbits = {'b':fibermask.BADAMPB, 'r':fibermask.BADAMPR, 'z':fibermask.BADAMPZ}
         ampoffsets = {'A': 0, 'B':250, 'C':0, 'D':250}
-        for cpa in badamps.split(';'):
-            cpa = cpa.strip()
-            camera, petal, amplifier = cpa[0].lower(), cpa[1], cpa[2].upper()
-            if camera not in ['b','r','z']:
-                raise ValueError(f"For badamps, camera must be b, r, or z. Received: {camera}")
-            if petal not in petal.isnumeric():
-                raise ValueError(f"For badamps, petal must be between 0 and 9. Received: {petal}")
-            if amplifier not in ['A','B','C', 'D']:
-                raise ValueError(f"For badamps, amplifier must be A, B, C, and D. Received: {amplifier}")
+        for (camera, petal, amplifier) in parse_badamps(badamps):
             maskbit = maskbits[camera]
             ampoffset = ampoffsets[amplifier]
             fibermin = int(petal)*500 + ampoffset

@@ -521,6 +521,35 @@ def difference_camwords(fullcamword,badcamword):
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
 
+def parse_badamps(badamps,joinsymb=';'):
+    """
+    Parses badamps string from an exposure or processing table into the (camera,petal,amplifier) sets,
+    with appropriate checking of those values to make sure they're valid.
+
+    Args:
+        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (semicolon
+                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'.
+        joinsymb, str. The symbol separating entries in the str list given by badamps.
+
+    Returns:
+        cam_petal_amps, list. A list where each entry is a length 3 tuple of (camera,petal,amplifier).
+                              Camera is a lowercase string in [b, r, z]. Petal is an int from 0 to 9.
+                              Amplifier is an upper case string in [A, B, C, D].
+
+    """
+    cam_petal_amps = []
+    for cpa in badamps.split(joinsymb):
+        cpa = cpa.strip()
+        camera, petal, amplifier = cpa[0].lower(), cpa[1], cpa[2].upper()
+        if camera not in ['b', 'r', 'z']:
+            raise ValueError(f"For badamps, camera must be b, r, or z. Received: {camera}")
+        if not petal.isnumeric():
+            raise ValueError(f"For badamps, petal must be between 0 and 9. Received: {petal}")
+        if amplifier not in ['A', 'B', 'C', 'D']:
+            raise ValueError(f"For badamps, amplifier must be A, B, C, and D. Received: {amplifier}")
+        cam_petal_amps.append((camera, int(petal), amplifier))
+    return cam_petal_amps
+
 def get_speclog(nights, rawdir=None):
     """
     Scans raw data headers to return speclog of observations. Slow.
