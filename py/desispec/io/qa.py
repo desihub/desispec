@@ -109,7 +109,7 @@ def load_qa_frame(filename, frame_meta=None, flavor=None):
         # Check against frame, if provided
         if frame_meta is not None:
             for key in ['camera','expid','night','flavor']:
-                assert getattr(qaframe, key) == frame_meta[key.upper()]
+                assert str(getattr(qaframe, key)) == str(frame_meta[key.upper()])
     else:  # Init
         if frame_meta is None:
             log.error("QA file {:s} does not exist.  Expecting frame input".format(filename))
