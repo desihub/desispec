@@ -872,7 +872,7 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
     # Night
     ylbl -= yoff
-    ax.text(xlbl+0.1, ylbl, 'Night: '+qaframe.night,
+    ax.text(xlbl+0.1, ylbl, f'Night: {qaframe.night}',
             transform=ax.transAxes, ha='left', fontsize='x-small')
     # Rest
     for key in sorted(qaframe.qa_data[qaflavor]['METRICS'].keys()):
@@ -1055,7 +1055,7 @@ def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None
         if cc == 0:
             title = '{:s} :: {:s}'.format(qatype,metric)
             if night is not None:
-                title = night+' '+title
+                title = str(night)+' '+title
             #
             ax.set_title(title)
         # Horizontal line?
