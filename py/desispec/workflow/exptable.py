@@ -31,7 +31,7 @@ from desispec.io.util import create_camword
 # PROGRAM, string, The program as given by ICS.
 # MJD-OBS, float, The MJD-OBS as given by ICS. Modified Julian Date of the observation.
 # BADCAMWORD, string, camword defining the bad cameras that should not be processed.
-# BADAMPS, string, semicolon list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
+# BADAMPS, string, semicolon separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
 # LASTSTEP, string, the last step the pipeline should run through for the given exposure. Inclusive of last step.
 # EXPFLAG, np.ndarray, set of flags that describe that describe the exposure.
 # HEADERERR, np.ndarray, In the csv given as a "|" separated list of key=value pairs describing columns in the table that should

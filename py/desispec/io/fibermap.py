@@ -348,7 +348,7 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     return fafile
 
-def assemble_fibermap(night, expid, force=False):
+def assemble_fibermap(night, expid, badamps=None, force=False):
     """
     Create a fibermap for a given night and expid
 
@@ -357,6 +357,7 @@ def assemble_fibermap(night, expid, force=False):
         expid (int): exposure ID
 
     Options:
+        badamps (str): semicolon separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
         force (bool): create fibermap even if missing coordinates/guide files
     """
 
@@ -566,6 +567,28 @@ def assemble_fibermap(night, expid, force=False):
         fibermap.meta['COORDFIL'] = os.path.basename(coordfile)
     else:
         fibermap.meta['COORDFIL'] = 'MISSING'
+
+    #- Lastly, mask the fibers defined by badamps
+    if badamps is not None:
+        maskbits = {'b':fibermask.BADAMPB, 'r':fibermask.BADAMPR, 'z':fibermask.BADAMPZ}
+        ampoffsets = {'A': 0, 'B':250, 'C':0, 'D':250}
+        for cpa in badamps.split(';'):
+            cpa = cpa.strip()
+            camera, petal, amplifier = cpa[0].lower(), cpa[1], cpa[2].upper()
+            if camera not in ['b','r','z']:
+                raise ValueError(f"For badamps, camera must be b, r, or z. Received: {camera}")
+            if petal not in petal.isnumeric():
+                raise ValueError(f"For badamps, petal must be between 0 and 9. Received: {petal}")
+            if amplifier not in ['A','B','C', 'D']:
+                raise ValueError(f"For badamps, amplifier must be A, B, C, and D. Received: {amplifier}")
+            maskbit = maskbits[camera]
+            ampoffset = ampoffsets[amplifier]
+            fibermin = int(petal)*500 + ampoffset
+            fibermax = fibermin + 250
+            ampfibs = np.arange(fibermin,fibermax)
+            log.info(f'Masking fibers from {fibermin} to {fibermax} for camera {camera} because of badamp entry {cpa}')
+            ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
+            fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table

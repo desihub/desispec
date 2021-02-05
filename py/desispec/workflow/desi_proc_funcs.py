@@ -76,6 +76,8 @@ def add_desi_proc_singular_terms(parser):
     #parser.add_argument("-n", "--night", type=int, help="YEARMMDD night")
     parser.add_argument("-e", "--expid", type=int, help="Exposure ID")
     parser.add_argument("-i", "--input", type=str, help="input raw data file")
+    parser.add_argument("--badamps", type=str, help="semicolon separated list of {camera}{petal}{amp}" + \
+                                                    ", i.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'")
 
     parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
     parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
@@ -85,7 +87,6 @@ def add_desi_proc_singular_terms(parser):
                         help="Do not do any science reductions prior to stdstar fitting")
     parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard stars")
     parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
-
     return parser
 
 def add_desi_proc_joint_fit_terms(parser):
