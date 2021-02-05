@@ -124,6 +124,8 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --noprestdstarfit --nostdstarfit'
     specs = str(prow['CAMWORD'])
     cmd += ' --cameras={} -n {} -e {}'.format(specs, prow['NIGHT'], prow['EXPID'][0])
+    if prow['BADAMPS'] != '':
+        cmd += ' --badamps={}'.format(prow['BADAMPS'])
     return cmd
 
 def desi_proc_joint_fit_command(prow, queue=None):

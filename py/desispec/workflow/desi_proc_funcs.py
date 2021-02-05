@@ -76,9 +76,8 @@ def add_desi_proc_singular_terms(parser):
     #parser.add_argument("-n", "--night", type=int, help="YEARMMDD night")
     parser.add_argument("-e", "--expid", type=int, help="Exposure ID")
     parser.add_argument("-i", "--input", type=str, help="input raw data file")
-    parser.add_argument("--badamps", type=str, help="semicolon separated list of {camera}{petal}{amp}" + \
-                                                    ", i.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'")
-
+    parser.add_argument("--badamps", type=str, default=None, help="semicolon separated list of {camera}{petal}{amp}"+\
+                                                                  ", i.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'")
     parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
     parser.add_argument("--nofiberflat", action="store_true", help="Do not apply fiberflat")
     parser.add_argument("--noskysub", action="store_true",
