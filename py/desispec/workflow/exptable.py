@@ -275,7 +275,7 @@ def deconstruct_keyval_reporting(entry):
 
 def validate_badamps(badamps,joinsymb=';'):
     """
-    Checks and transforms badamps string for consistency with the for need in an exposure or processing table
+    Checks (and transforms) badamps string for consistency with the for need in an exposure or processing table
     for use in the Pipeline. Specifically ensure they come in (camera,petal,amplifier) sets,
     with appropriate checking of those values to make sure they're valid. Returns the input string
     except removing whitespace and replacing potential character separaters with joinsymb (default ';').
