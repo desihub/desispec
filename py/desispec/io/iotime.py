@@ -173,7 +173,8 @@ def plot_iotimes(timing, plottitle=None, outfile=None):
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser = argparse.ArgumentParser(
+            description='parse batch logfiles and make I/O timing plots')
     parser.add_argument("--logfiles", type=str, nargs="*", required=True,
                         help="input log files")
 
