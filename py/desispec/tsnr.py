@@ -3,8 +3,6 @@ import numpy as np
 import astropy.io.fits as fits
 import glob
 import numpy as np
-import pylab as pl
-import matplotlib.pyplot as plt
 
 from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
@@ -196,7 +194,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     def alpha_X2(alpha):
         _var = calc_alphavar(alpha)
         _ivar =  1. / _var
-        X2 = (frame.ivar[sky_indx,:] - _ivar[:, :])**2.
+        X2 = (frame.ivar[sky_indx,:] - _ivar)**2.
         return np.sum(X2 * maskfactor)
 
     res = minimize(alpha_X2, x0=[1.])
@@ -285,10 +283,6 @@ def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
         result = result**2.
 
         result /= denom
-
-        plt.imshow(result * maskfactor, aspect='auto')
-        pl.title(tracer + ':  {:.3f} to {:.3f}'.format(result.min(), result.max()))
-        pl.show()
         
         # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
         tsnrs[tracer] = np.sum(result * maskfactor, axis=1)
