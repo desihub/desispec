@@ -5,14 +5,15 @@ desispec.io.xytraceset
 I/O routines for XYTraceSet objects
 """
 
-
 import os.path
+import time
 import numpy as np
 from astropy.io import fits
 
 from ..xytraceset import XYTraceSet
 from desiutil.log import get_logger
 from .util import makepath
+from . import iotime
 
 def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
     log=get_logger()
@@ -85,7 +86,6 @@ def read_xytraceset(filename) :
     from specter.util.traceset import TraceSet,fit_traces
 
     log=get_logger()
-
     
     xcoef=None
     ycoef=None
@@ -96,9 +96,9 @@ def read_xytraceset(filename) :
     wavemax=None
      
     log.info("reading traces in '%s'"%filename)
-    
+
+    t0 = time.time()
     fits_file = fits.open(filename)
-    
     
     # npix_y, needed for boxcar extractions
     npix_y=0
@@ -154,6 +154,8 @@ def read_xytraceset(filename) :
         raise ValueError("XCOEF and YCOEF don't have same number of fibers %d %d"%(xcoef.shape[0],ycoef.shape[0]))
     
     fits_file.close()
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
     
     if wsigmacoef is not None :
         log.warning("Converting deprecated WSIGMA coefficents (in Ang.) into YSIG (in CCD pixels)")
@@ -173,8 +175,7 @@ def read_xytraceset(filename) :
         
     return XYTraceSet(xcoef,ycoef,wavemin,wavemax,npix_y,xsigcoef=xsigcoef,ysigcoef=ysigcoef)
 
-   
-   
+
 def write_xytraceset(outfile,xytraceset) :
     """
     Write a traceset fits file and returns path to file written.
@@ -205,9 +206,14 @@ def write_xytraceset(outfile,xytraceset) :
             hdus[hdu].header["WAVEMIN"] = xytraceset.wavemin
             hdus[hdu].header["WAVEMAX"] = xytraceset.wavemax
             hdus[hdu].header["NPIX_Y"]  = xytraceset.npix_y
+
+    t0 = time.time()
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    duration = time.time() - t0
     log.info("wrote a xytraceset in {}".format(outfile))
+    log.info(iotime.format('write', outfile, duration))
+
     return outfile
 
    

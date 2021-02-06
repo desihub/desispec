@@ -6,6 +6,7 @@ TODO: move into datamodel after we have verified the format
 '''
 
 import os.path
+import time
 from astropy.io import fits
 import numpy as np
 
@@ -13,6 +14,7 @@ from desiutil.depend import add_dependencies
 
 import desispec.io
 import desispec.io.util
+from . import iotime
 from desispec.util import header2night
 import desispec.preproc
 from desiutil.log import get_logger
@@ -36,7 +38,8 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
     
     log = get_logger()
-    
+
+    t0 = time.time()
     fx = fits.open(filename, memmap=False)
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
@@ -124,6 +127,8 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         kwargs.pop("fill_header")
 
     fx.close()
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
 
@@ -310,6 +315,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         dataHDU = fits.ImageHDU(rawdata, header=header, name=extname)
 
     #- Actually write or update the file
+    t0 = time.time()
     if os.path.exists(filename):
         hdus = fits.open(filename, mode='append', memmap=False)
         if extname in hdus:
@@ -325,3 +331,6 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         hdus.append(fits.PrimaryHDU(None, header=primary_header))
         hdus.append(dataHDU)
         hdus.writeto(filename)
+
+    duration = time.time() - t0
+    log.info(iotime.format('write', filename, duration))

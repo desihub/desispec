@@ -6,6 +6,8 @@ Utility functions for desispec IO.
 """
 import os
 import glob
+import time
+import datetime
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -583,4 +585,3 @@ def addkeys(hdr1, hdr2, skipkeys=None):
             hdr1[key] = value
         else:
             log.debug(f'Skipping {key}')
-
