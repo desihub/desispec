@@ -1,6 +1,11 @@
+"""
+iotime: Utilities for parsing and plotting I/O timing from logfiles
+"""
+
 import os
 import re
 import datetime
+import numpy as np
 
 def format(readwrite, filename, duration):
     """Return standardized I/O timing message string for logging
@@ -68,15 +73,6 @@ def parse_logfile(logfile):
     timing['datetime'] = Time(timing['timestamp']).datetime
 
     return timing
-
-"""
-Utilities for parsing and plotting I/O timing from logfiles
-"""
-
-import re
-import numpy as np
-from astropy.table import Table, vstack
-from astropy.time import Time
 
 def _ordered_unique_names(names):
     """Return unique list of names, ordered by first appearance in list
@@ -181,6 +177,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     import matplotlib.pyplot as plt
+    from astropy.table import Table, vstack
     timing = vstack([parse_logfile(logfile) for logfile in args.logfiles])
     hist_iotimes(timing)
     plot_iotimes(timing)
