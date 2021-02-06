@@ -18,7 +18,7 @@ from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores, append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
-from desispec.tsnr import calc_tsnr
+from desispec.tsnr import calc_tsnr2
 from desiutil.log import get_logger
 
 import argparse
@@ -43,8 +43,8 @@ def parse(options=None):
                         help = 'Do NOT apply a throughput correction when subtraction the sky')
     parser.add_argument('--no-zero-ivar', action='store_true',
                         help = 'Do NOT set ivar=0 for masked pixels')
-    parser.add_argument('--tsnr', action='store_true',
-                        help = 'compute template SNR')
+    parser.add_argument('--no-tsnr', action='store_true',
+                        help = 'Do not compute template SNR')
 
     args = None
     if options is None:
@@ -53,7 +53,6 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-
 def main(args):
     log = get_logger()
 
@@ -61,13 +60,13 @@ def main(args):
         log.critical('no --fiberflat, --sky, or --calib; nothing to do ?!?')
         sys.exit(12)
 
-    if args.tsnr and (args.calib is None) :
+    if (not args.no_tsnr) and (args.calib is None) :
         log.critical('need --fiberflat --sky and --calib to compute template SNR')
         sys.exit(12)
 
     frame = read_frame(args.infile)
 
-    if args.tsnr :
+    if not args.no_tsnr :
         # tsnr alpha calc. requires uncalibrated + no substraction rame.
         uncalibrated_frame = copy.deepcopy(frame)
 
@@ -129,11 +128,11 @@ def main(args):
         frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
-    if args.tsnr:
+    if not args.no_tsnr:
         log.info("calculating tsnr")
-        results = calc_tsnr(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
+        results, alpha = calc_tsnr2(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
 
-        frame.meta['ALPHA'] = results.pop('ALPHA')
+        frame.meta['TSNRALPH'] = alpha
 
         comments = {k:"from calc_frame_tsnr" for k in results.keys()}
         append_frame_scores(frame,results,comments,overwrite=True) 

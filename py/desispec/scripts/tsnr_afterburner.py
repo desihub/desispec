@@ -19,7 +19,7 @@ from   desispec.io import read_frame
 from   desispec.io import read_fibermap
 from   desispec.io.fluxcalibration import read_flux_calibration
 from   desiutil.log import get_logger
-from   desispec.tsnr import calc_tsnr
+from   desispec.tsnr import calc_tsnr2
 from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 
@@ -147,22 +147,21 @@ def main():
                 fluxcalib=read_flux_calibration(calib)
                 skymodel=read_sky(sky)
             
-                results = calc_tsnr(frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
+                results, alpha = calc_tsnr2(frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
 
                 if not args.summary_only:
                     # Write individual.
                     table=Table()
                 
                     for k in results:
-                        if k != 'ALPHA':
-                            table[k] = results[k].astype(np.float32)
+                        table[k] = results[k].astype(np.float32)
 
                     table['FIBER']       = frame.fibermap['FIBER']
                     table['TARGETID']    = frame.fibermap['TARGETID']
                 
                     table.meta['NIGHT']  = night
                     table.meta['EXPID']  = '{:08d}'.format(expid)
-                    table.meta['ALPHA']  = results['ALPHA']
+                    table.meta['TSNRALPH']  = alpha
                     table.meta['TILEID'] = tileid
             
                     table.write(out, format='fits', overwrite=True)

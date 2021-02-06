@@ -199,9 +199,9 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 
     return alpha
 
-def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
     '''
-    Compute template SNR values for a given frame and append to the scores.     
+    Compute template SNR^2 values for a given frame
 
     Args:
         frame : uncalibrated Frame object for one camera
@@ -209,9 +209,10 @@ def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
         sky : SkyModel object
         fluxcalib : FluxCalib object
 
-    returns:
-        Dictionary, with keys labelling tracer (bgs, elg, etc.), of values
-        holding nfiber length array of the tsnr values for this camera.
+    returns (tsnr2, alpha):
+        `tsnr2` dictionary, with keys labeling tracer (bgs,elg,etc.), of values
+        holding nfiber length array of the tsnr^2 values for this camera, and
+        `alpha`, the relative weighting btwn rdnoise & sky terms to model var.
 
     Note:  Assumes DESIMODEL is set and up to date. 
     '''
@@ -256,7 +257,7 @@ def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
 
     # Relative weighting between rdnoise & sky terms to model var.
     alpha = calc_alpha(frame, fibermap=frame.fibermap, rdnoise_sigma=rdnoise, npix_1d=npix, angperpix=angperpix, angperspecbin=angperspecbin, fiberflat=fiberflat, skymodel=skymodel)
-    log.info("ALPHA = {:4.3f}".format(alpha))
+    log.info("TSNR ALPHA = {:4.3f}".format(alpha))
 
     tsnrs = {}
     for tracer in ensemble.keys():
@@ -282,10 +283,8 @@ def calc_tsnr(frame, fiberflat, skymodel, fluxcalib) :
 
     results=dict()
     for tracer in tsnrs.keys():
-        key = tracer.upper() + 'TSNR_{}'.format(band.upper())
+        key = 'TSNR2_{}_{}'.format(tracer.upper(), band.upper())
         results[key]=tsnrs[tracer]
-        log.info('TSNR {} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
+        log.info('{} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
 
-    results['ALPHA'] = alpha
-        
-    return results
+    return results, alpha
