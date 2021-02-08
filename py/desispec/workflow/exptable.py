@@ -31,7 +31,8 @@ from desispec.io.util import create_camword, parse_badamps
 # PROGRAM, string, The program as given by ICS.
 # MJD-OBS, float, The MJD-OBS as given by ICS. Modified Julian Date of the observation.
 # BADCAMWORD, string, camword defining the bad cameras that should not be processed.
-# BADAMPS, string, semicolon separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
+# BADAMPS, string, comma separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
+#                  in the csv this is saved as a semicolon separated list
 # LASTSTEP, string, the last step the pipeline should run through for the given exposure. Inclusive of last step.
 # EXPFLAG, np.ndarray, set of flags that describe that describe the exposure.
 # HEADERERR, np.ndarray, In the csv given as a "|" separated list of key=value pairs describing columns in the table that should
@@ -273,31 +274,46 @@ def deconstruct_keyval_reporting(entry):
     val1,val2 = values.split("->")
     return key, val1, val2
 
-def validate_badamps(badamps,joinsymb=';'):
+def validate_badamps(badamps,joinsymb=','):
     """
     Checks (and transforms) badamps string for consistency with the for need in an exposure or processing table
     for use in the Pipeline. Specifically ensure they come in (camera,petal,amplifier) sets,
     with appropriate checking of those values to make sure they're valid. Returns the input string
-    except removing whitespace and replacing potential character separaters with joinsymb (default ';').
+    except removing whitespace and replacing potential character separaters with joinsymb (default ',').
+    Returns None if None is given.
 
     Args:
-        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (semicolon
-                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'.
+        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (comma
+                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
         joinsymb, str. The symbol separating entries in the str list given by badamps.
 
     Returns:
         newbadamps, str. Input badamps string of {camera}{petal}{amp} entries separated by symbol given with
-                      joinsymb (semicolon by default). I.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'.
+                      joinsymb (comma by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
                       Differs from input in that other symbols used to separate terms are replaaced by joinsymb
                       and whitespace is removed.
 
     """
+    if badamps is None:
+        return badamps
+
     log = get_logger()
+    ## Possible other joining symbols to automatically replace
+    symbs = [';', ':', '|', '.', ',','-','_']
+
+    ## Not necessary, as joinsymb would just be replaced with itself, but this is good better form
+    if joinsymb in symbs:
+        symbs.remove(joinsymb)
+
+    ## Remove whitespace and replace possible joining symbols with the designated one.
     newbadamps = badamps.replace(' ', '').strip()
-    for symb in [',', ':', '|', '.']:
+    for symb in symbs:
         newbadamps = newbadamps.replace(symb, joinsymb)
-    ## test that the string can be parsed
+
+    ## test that the string can be parsed. Raises exception if it fails to parse
     throw = parse_badamps(newbadamps, joinsymb=joinsymb)
+
+    ## Inform user of the result
     if badamps == newbadamps:
         log.info(f'Badamps given as: {badamps} verified to work')
     else:

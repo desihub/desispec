@@ -5,8 +5,10 @@ import sys
 import numpy as np
 from astropy.table import Table, vstack
 from astropy.io import fits
+from desispec.io.util import parse_cameras, difference_camwords
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, night_to_month
+from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, \
+                                        night_to_month, validate_badamps
 
 from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin, get_printable_banner
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, exptable_to_proctable, \
@@ -15,7 +17,7 @@ from desispec.workflow.tableio import load_table, write_table
 
 
 def create_processing_tables(nights=None, prodname=None, exp_table_path=None, proc_table_path=None,
-                             obstypes=None, overwrite_files=False, verbose=False, no_specprod_exptab=False,
+                             obstypes=None, verwrite_files=False, verbose=False, no_specprod_exptab=False,
                              exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.

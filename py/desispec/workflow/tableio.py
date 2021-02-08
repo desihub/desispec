@@ -9,7 +9,7 @@ from astropy.table import Table
 from desispec.workflow.utils import pathjoin
 from desiutil.log import get_logger
 
-def ensure_scalar(val, joinsymb='|'):
+def ensure_scalar(val, joinsymb='|',comma_replacement=';'):
     """
     Ensures that the object in val is a scalar that can be save to a Table cell (i.e. row of a column or
     column of a row). If the it is an array or list, it uses joinsymb to turn them into a single string.
@@ -19,19 +19,27 @@ def ensure_scalar(val, joinsymb='|'):
                                                 it is already a scalar).
         joinsymb, str. A string symbol *other than comma* that will be used to join the multiple values of a list
                        or array.
+        comma_replacement, str. A string symbol that should be used to replace any existing commas in the data, such
+                                that the value can be saved in a csv format.
 
     Returns:
         val or outstr, any scalar type or string. The output string which is a scalar quantity capable of being
                                                   written to a single table cell (in a csv or fits file, for example).
     """
-    if val is None or type(val) in [str, np.str, np.str_, np.ma.core.MaskedConstant] or np.isscalar(val):
+    if type(val) in [str, np.str, np.str_]:
+        if ',' in val:
+            val = val.replace(',', comma_replacement)
+        return val
+    elif val is None or type(val) is np.ma.core.MaskedConstant or np.isscalar(val):
         return val
     else:
         val = np.atleast_1d(val).astype(str)
         outstr = joinsymb.join(val) + joinsymb
+        if ',' in outstr:
+            outstr = outstr.replace(',', comma_replacement)
         return outstr
 
-def split_str(val, joinsymb='|'):
+def split_str(val, joinsymb='|',comma_replacement=';'):
     """
     Attempts to intelligently interpret an input scalar. If it is a string it looks to see if it was a list or array
     objects that was joined to be a single string using joinsymb. If it identifies that, it will split that into the
@@ -41,6 +49,9 @@ def split_str(val, joinsymb='|'):
         val, any datatype. The input to be checked to see if it is in fact a list/array that was joined into a string
                            for saving in a Table.
         joinsymb, str. The symbol used to join values in a list/array when saving. Should not be a comma.
+        comma_replacement, str. Replace instances of this symbol with commas when loading ONLY scalar columns in a table,
+                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+                                on the command line. Comment arrays do not need to be converted back and forth.
 
     Returns:
         val or split_list, any datatype or np.array.
@@ -57,6 +68,8 @@ def split_str(val, joinsymb='|'):
             elif val.lower() == 'false':
                 return False
             else:
+                if comma_replacement in val:
+                    val = val.replace(comma_replacement, ',')
                 return val
         else:
             val = val.strip(joinsymb)

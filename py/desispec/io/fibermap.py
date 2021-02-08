@@ -357,7 +357,7 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
         expid (int): exposure ID
 
     Options:
-        badamps (str): semicolon separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
+        badamps (str): comma separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
         force (bool): create fibermap even if missing coordinates/guide files
     """
 

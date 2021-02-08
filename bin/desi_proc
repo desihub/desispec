@@ -51,7 +51,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
-
+from desispec.workflow.exptable import validate_badamps
 stop_imports = time.time()
 
 #########################################
@@ -103,6 +103,10 @@ known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
     'TESTARC', 'TESTFLAT', 'PIXFLAT', 'SKY', 'TWILIGHT', 'OTHER']
 if args.obstype not in known_obstype:
     raise RuntimeError('obstype {} not in {}'.format(args.obstype, known_obstype))
+
+## Make sure badamps is formatted properly
+if args.badamps is not None:
+    args.badamps = validate_badamps(args.badamps)
 
 timer.stop('preflight')
 

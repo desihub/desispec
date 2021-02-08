@@ -41,8 +41,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                       Examples: a0123456789, a1, a2b3r3, a2b3r4z3.
         badcamword: str. Camword that, if set, will be removed from the camword defined in camword if given, or the camword
                          inferred from the data if camword is not given.
-        badamps: str. Semicolon seperated list of bad amplifiers that should not be processed. Should be of the
-                      form "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
+        badamps: str. Comma seperated list of bad amplifiers that should not be processed. Should be of the
+                      form "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
         override_night: str or int. 8 digit night, e.g. 20200314, of data to run on. If None, it runs on the current night.
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".

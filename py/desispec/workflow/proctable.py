@@ -23,7 +23,8 @@ from desiutil.log import get_logger
 # OBSTYPE, string, the obstype as defined by ICS.
 # TILEID, int, the TILEID of the tile the exposure observed.
 # NIGHT, int, the night of the observation.
-# BADAMPS, string, semicolon list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D;z8A'
+# BADAMPS, string, comma list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
+#                  in the csv this is saved as a semicolon separated list
 # LASTSTEP, string, the last step the pipeline should run through for the given exposure. Inclusive of last step.
 # EXPFLAG, np.ndarray, set of flags that describe that describe the exposure.
 # PROCCAMWORD, string, The result of difference_camword(CAMWORD,BADCAMWWORD) from those exposure table entries.

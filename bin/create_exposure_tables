@@ -21,7 +21,21 @@ def get_parser():
     parser.add_argument("--verbose", action="store_true", help="print verbose output")
     parser.add_argument("--no-specprod", action="store_true", help="Create exposure table in repository location "+\
                                                                      "rather than the SPECPROD location.")
-
+    parser.add_argument("--cameras", type=str, required=False, default='',
+                        help="Explicitly define the cameras for which you want" +
+                             " to reduce the data. Should be a comma separated list." +
+                             " Only numbers assumes you want to reduce r, b, and z " +
+                             "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--bad-cameras", type=str, required=False, default='',
+                        help="Explicitly define the cameras that you don't want" +
+                             " to reduce the data. Should be a comma separated list." +
+                             " Only numbers assumes you want to reduce r, b, and z " +
+                             "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--badamps", type=str, required=False, default='',
+                        help="Define amplifiers that you know to be bad and should not" +
+                             " be processed. Should be a list separated by comma or semicolon." +
+                             " Saved list will converted to semicolons. Each entry should be of " +
+                             "the form {camera}{spectrograph}{amp}, i.e. [brz][0-9][A-D].")
     return parser
 
 

@@ -124,7 +124,7 @@ def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
         tablerow[comment_col] = np.append(tablerow[comment_col], reporting)
     return tablerow
 
-def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=False, overwrite_value=False, joinsymb=';'):
+def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=False, overwrite_value=False, joinsymb=','):
     """
     Changes the column named colname to value of value for rows of exposure table in exptable that correspond to the
     exposures defined in exp_str.

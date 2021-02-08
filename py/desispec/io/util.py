@@ -521,14 +521,15 @@ def difference_camwords(fullcamword,badcamword):
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
 
-def parse_badamps(badamps,joinsymb=';'):
+def parse_badamps(badamps,joinsymb=','):
     """
     Parses badamps string from an exposure or processing table into the (camera,petal,amplifier) sets,
     with appropriate checking of those values to make sure they're valid.
+    Returns empty list if badamps is None.
 
     Args:
-        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (semicolon
-                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'.
+        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (comma
+                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
         joinsymb, str. The symbol separating entries in the str list given by badamps.
 
     Returns:
@@ -538,11 +539,14 @@ def parse_badamps(badamps,joinsymb=';'):
 
     """
     cam_petal_amps = []
+    if badamps is None:
+        return cam_petal_amps
+
     for cpa in badamps.split(joinsymb):
         cpa = cpa.strip()
         if len(cpa) != 3:
-            raise ValueError("Each BADAMPS entry must be a semicolon separated list of {camera}{petal}{amp} " +
-                             f"(e.g. r7A;b8B). Given: {cpa}")
+            raise ValueError("Each BADAMPS entry must be a comma separated list of {camera}{petal}{amp} " +
+                             f"(e.g. r7A,b8B). Given: {cpa}")
         camera, petal, amplifier = cpa[0].lower(), cpa[1], cpa[2].upper()
         if camera not in ['b', 'r', 'z']:
             raise ValueError(f"For badamps, camera must be b, r, or z. Received: {camera}")
