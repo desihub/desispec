@@ -68,39 +68,51 @@ class template_ensemble(object):
             tracer = tracer.lower()  # support ELG or elg, etc.
 
             # https://arxiv.org/pdf/1611.00036.pdf
-            if tracer == 'elg':
-                maker = desisim.templates.ELG(wave=wave)
-                zrange = (0.6, 1.6)
-                magrange = (22.4, 23.4)
-                tfilter='decam2014-r'
+            # 
+            if tracer == 'bgs':
+                normfilter_south='decam2014-r'
 
-                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, trans_filter=tfilter, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+                maker    = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
+                zrange   = (0.01, 0.4)
+                magrange = (19.5, 20.0)
+
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+            elif tracer == 'lrg':
+                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
+                normfilter_south='decam2014-z'
+
+                maker    = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
+                zrange   = (0.6, 1.0)
+
+                # zfifber of (20.5, 21.5) translated to z.
+                # https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=6007;filename=SV_Target_Selection_For_LRG.pdf;version=1
+                # Slide 1.
+                magrange = (20.0, 20.5)	
+
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+            
+            if tracer == 'elg':
+                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
+                normfilter_south='decam2014-g'
+                
+                maker    = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
+                zrange   = (1.0,   1.5)
+                magrange = (22.9, 23.4)
+
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
                 
             elif tracer == 'qso':
-                maker = desisim.templates.QSO(wave=wave)
-                zrange = (0.5, 3.0)
-                magrange = (21.5, 22.5)
-                tfilter='decam2014-r'
+                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1422
+                normfilter_south='decam2014-r'
+                
+                maker    = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
+                zrange   = (1.0,   2.0)
+                magrange = (22.0, 22.5)
 
                 # Does not recognize trans filter. 
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-                
-            elif tracer == 'lrg':
-                maker = desisim.templates.LRG(wave=wave)
-                zrange = (0.7, 0.9)
-                magrange = (20.5, 21.3)
-                tfilter='decam2014-z'
-
-                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, trans_filter=tfilter, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-                
-            elif tracer == 'bgs':
-                maker = desisim.templates.BGS(wave=wave)
-                zrange = (0.01, 0.4)
-                magrange = (19.8, 20.0)
-                tfilter='decam2014-r'
-
-                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, trans_filter=tfilter, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-                
+                                
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
 

@@ -36,9 +36,9 @@ def get_ensemble(dirpath, bands, smooth=True):
     flux = {}
     ivar = {}
     mask = {}
-    res = {}
+    res  = {}
 
-    ensembles = {}
+    ensembles  = {}
 
     for path in paths:
         tracer = path.split('/')[-1].split('-')[2].replace('.fits','')
@@ -52,9 +52,9 @@ def get_ensemble(dirpath, bands, smooth=True):
             if smooth:
                 flux[band] = convolve(flux[band][0,:], Box1DKernel(125), boundary='extend')
                 flux[band] = flux[band].reshape(1, len(flux[band]))
-
+                
         ensembles[tracer] = Spectra(bands, wave, flux, ivar)
-
+        
     return  ensembles
 
 def read_nea(path):
@@ -154,10 +154,10 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
     # is valid only when the Poisson noise is negligible. It increases with the spectral flux.
 
     if components:
-        return (alpha * rdnoise_variance, fiberflat.fiberflat * skymodel.flux)
+        return (alpha * rdnoise_variance, fiberflat.fiberflat * np.abs(skymodel.flux))
 
     else:
-        return alpha * rdnoise_variance + fiberflat.fiberflat * skymodel.flux
+        return alpha * rdnoise_variance + fiberflat.fiberflat * np.abs(skymodel.flux)
 
 def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel):
     '''
@@ -185,6 +185,9 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     sky_indx = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
     rd_var, sky_var = var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel, alpha=1.0, components=True)
 
+    maskfactor = np.ones_like(frame.mask[sky_indx,:], dtype=np.float)
+    maskfactor[frame.mask[sky_indx,:] > 0] = 0.0
+    
     def calc_alphavar(alpha):
         return alpha * rd_var[sky_indx,:] + sky_var[sky_indx,:]
 
@@ -192,11 +195,17 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
         _var = calc_alphavar(alpha)
         _ivar =  1. / _var
         X2 = (frame.ivar[sky_indx,:] - _ivar)**2.
-        return np.sum(X2)
+        return np.sum(X2 * maskfactor)
 
     res = minimize(alpha_X2, x0=[1.])
     alpha = res.x[0]
 
+    try:
+        assert  alpha >= 0.0
+
+    except AssertionError:
+        log.critical('Best-fit alpha for tsnr calc. is negative.')
+        
     return alpha
 
 def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
@@ -259,9 +268,14 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
     alpha = calc_alpha(frame, fibermap=frame.fibermap, rdnoise_sigma=rdnoise, npix_1d=npix, angperpix=angperpix, angperspecbin=angperspecbin, fiberflat=fiberflat, skymodel=skymodel)
     log.info("TSNR ALPHA = {:4.3f}".format(alpha))
 
+    maskfactor = np.ones_like(frame.mask, dtype=np.float)
+    maskfactor[frame.mask > 0] = 0.0
+    
     tsnrs = {}
-    for tracer in ensemble.keys():
 
+    denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
+    
+    for tracer in ensemble.keys():
         wave = ensemble[tracer].wave[band]
         dflux = ensemble[tracer].flux[band]
 
@@ -275,11 +289,10 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
         result = dflux * fiberflat.fiberflat
         result = result**2.
 
-        denom   = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
         result /= denom
-
+        
         # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
-        tsnrs[tracer] = np.sum(result, axis=1)
+        tsnrs[tracer] = np.sum(result * maskfactor, axis=1)
 
     results=dict()
     for tracer in tsnrs.keys():
