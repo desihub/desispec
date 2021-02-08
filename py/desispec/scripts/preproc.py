@@ -259,6 +259,13 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
 
     if outfile is None:
         night = img.meta['NIGHT']
+        if not 'EXPID' in img.meta.keys() :
+            if 'EXPNUM' in img.meta.keys() :
+                img.meta['EXPID']=img.meta['EXPNUM']
+            else :
+                mess="no EXPID nor EXPNUM in img.meta, cannot create output filename"
+                log.error(mess)
+                raise KeyError(mess)
         expid = img.meta['EXPID']
         outfile = io.findfile('preproc', night=night,expid=expid,camera=camera,
                               outdir=outdir)
