@@ -9,14 +9,17 @@ IO routines for fiberflat.
 from __future__ import absolute_import
 # The line above will help with 2to3 support.
 import os
+import time
 from astropy.io import fits
 
 from desiutil.io import encode_table
 from desiutil.depend import add_dependencies
+from desiutil.log import get_logger
 
 from ..fiberflat import FiberFlat
 from .meta import findfile
 from .util import fitsheader, native_endian, makepath
+from . import iotime
 
 def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     """Write fiberflat object to outfile
@@ -32,6 +35,7 @@ def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     Returns:
         filepath of file that was written
     """
+    log = get_logger()
     outfile = makepath(outfile, 'fiberflat')
 
     if header is None:
@@ -66,9 +70,12 @@ def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     hdus["MEANSPEC"].header['BUNIT'] = ("electron/Angstrom")
     hdus["WAVELENGTH"].header['BUNIT'] = 'Angstrom'
 
-
+    t0 = time.time()
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
+
     return outfile
 
 
@@ -91,6 +98,8 @@ def read_fiberflat(filename):
         night, expid, camera = filename
         filename = findfile('fiberflat', night, expid, camera)
 
+    log = get_logger()
+    t0 = time.time()
     with fits.open(filename, uint=True, memmap=False) as fx:
         header    = fx[0].header
         fiberflat = native_endian(fx[0].data.astype('f8'))
@@ -102,5 +111,8 @@ def read_fiberflat(filename):
             fibermap = fx['FIBERMAP'].data
         else:
             fibermap = None
+
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header, fibermap=fibermap)

@@ -8,6 +8,7 @@ import os
 import sys
 import glob
 import warnings
+import time
 
 import numpy as np
 from astropy.table import Table, Column, join
@@ -19,6 +20,7 @@ from desiutil.depend import add_dependencies
 
 from desispec.io.util import fitsheader, write_bintable, makepath, addkeys
 from desispec.io.meta import rawdata_root, findfile
+from . import iotime
 
 from desispec.maskbits import fibermask
 
@@ -270,6 +272,7 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
     Returns:
         write_fibermap (str): full path to filename of fibermap file written.
     """
+    log = get_logger()
     outfile = makepath(outfile)
 
     #- astropy.io.fits incorrectly generates warning about 2D arrays of strings
@@ -284,8 +287,12 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
+        t0 = time.time()
         write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
                        extname=extname, clobber=clobber)
+        duration = time.time() - t0
+
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -299,11 +306,18 @@ def read_fibermap(filename):
     #- Implementation note: wrapping Table.read() with this function allows us
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
+    log = get_logger()
+    t0 = time.time()
     fibermap = Table.read(filename, 'FIBERMAP')
+    duration = time.time() - t0
+
+    #- support old simulated fiberassign files
     if 'DESIGN_X' in fibermap.colnames:
         fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
     if 'DESIGN_Y' in fibermap.colnames:
         fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
+
+    log.info(iotime.format('read', filename, duration))
 
     return fibermap
 

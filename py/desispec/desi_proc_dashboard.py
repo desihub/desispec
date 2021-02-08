@@ -323,7 +323,7 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
     nightly_table_str += "<table id='c'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
-    nightly_table_str += "<th>PSF File</th><th>FFlat file</th><th>frame file</th><th>sframe file</th><th>sky file</th>"
+    nightly_table_str += "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>"
     nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th></tr>"
 
     nightly_table_str += main_body
@@ -365,7 +365,7 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     file_exptable=get_exposure_table_pathname(night)
     try: # Try reading tables first. Switch to counting files if not failed. 
         d_exp =  ascii.read(file_exptable, data_start=2, delimiter=',')
-        #d_processing = load_table(file_processing)
+        #d_processing = load_table(file_processing) # commented out temporarily, might used later
         #d_unprocessed = load_table(file_unprocessed)
     except:
         return calculate_one_night(night, use_short_sci=use_short_sci)
@@ -499,8 +499,8 @@ def calculate_one_night_use_file(night, use_short_sci=False):
                               'SP: '+spcgrphs.replace('SP',''), \
                               tileid_str, \
                               _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
-                              _str_frac( nfiberflat, n_spgrph * n_tots['ff']), \
                               _str_frac( nframes,             n_spgrph * n_tots['frame']), \
+                              _str_frac( nfiberflat, n_spgrph * n_tots['ff']), \
                               _str_frac( nsframe,    n_spgrph * n_tots['sframe']), \
                               _str_frac( nsky,       n_spgrph * n_tots['sframe']), \
                               _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
@@ -561,7 +561,7 @@ def calculate_one_night(night, use_short_sci=False):
                                 'desi-' + str(expid).zfill(8) + '.fits.fz')
         h1 = fits.getheader(filename, 1)
 
-        header_info = {keyword: 'Unknown' for keyword in ['FLAVOR', 'SPCGRPHS', 'EXPTIME', 'OBSTYPE']}
+        header_info = {keyword: 'Unknown' for keyword in ['FLAVOR', 'SPCGRPHS', 'EXPTIME', 'OBSTYPE','TILEID']}
         for keyword in header_info.keys():
             if keyword in h1.keys():
                 header_info[keyword] = h1[keyword]
@@ -581,6 +581,13 @@ def calculate_one_night(night, use_short_sci=False):
             n_tots = totals_by_type['NONE']
 
         n_spgrph = int(len(header_info['SPCGRPHS'].split(',')))
+        tileid = str(header_info['TILEID'])
+        if obstype == 'SCIENCE':
+            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/'+tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
+        elif obstype == 'OTHER' or obstype == 'ZERO':
+            continue
+        else:
+            tileid_str =  tileid
 
         row_color = "NULL"
         npsfs = len(file_psf) + len(file_fit_psf)        
@@ -650,9 +657,10 @@ def calculate_one_night(night, use_short_sci=False):
                               obstype,\
                               header_info['EXPTIME'], \
                               'SP: '+header_info['SPCGRPHS'].replace('SP',''), \
+                              tileid_str, \
                               _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
-                              _str_frac( len(file_fiberflat), n_spgrph * n_tots['ff']), \
                               _str_frac( nframes,             n_spgrph * n_tots['frame']), \
+                              _str_frac( len(file_fiberflat), n_spgrph * n_tots['ff']), \
                               _str_frac( len(file_sframe),    n_spgrph * n_tots['sframe']), \
                               _str_frac( len(file_sky),       n_spgrph * n_tots['sframe']), \
                               _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
@@ -721,7 +729,7 @@ def _initialize_page(color_profile):
     """
     for ctype,cdict in color_profile.items():
         font = cdict['font']
-        background = cdict['background']
+        background = ''#cdict['background'] # no background for a whole table after implementing color codes for processing columns
         html_page += 'table tr#'+str(ctype)+'  {background-color:'+str(background)+'; color:'+str(font)+';}\n'
 
     html_page += '</style>\n'
@@ -736,17 +744,34 @@ def _closing_str():
     return closing
 
 def _table_row(elements,idlabel=None):
+    color_profile = return_color_profile()
     if idlabel is None:
         row_str = '<tr>'
     else:
         row_str = '<tr id="'+str(idlabel)+'">'
     for elem in elements:
-        row_str += _table_element(elem)
+        chars = str(elem).split('/')
+        if len(chars)==2: # m/n
+            if chars[0]=='0' and chars[1]=='0':
+                row_str += _table_element_style(elem,'background-color:'+color_profile['GOOD']['background']+';color:gray')
+            elif chars[0]=='0' and chars[1]!='0':
+                row_str += _table_element_style(elem,'background-color:'+color_profile['BAD']['background'])
+            elif chars[0]!='0' and int(chars[0])<int(chars[1]):
+                row_str += _table_element_style(elem,'background-color:'+color_profile['INCOMPLETE']['background'])
+            elif chars[0]!='0' and int(chars[0])==int(chars[1]):
+                row_str += _table_element_style(elem,'background-color:'+color_profile['GOOD']['background']) # Medium Aqua Green
+
+
+        else:
+            row_str += _table_element(elem)
     row_str += '</tr>'#\n'
     return row_str
 
 def _table_element(elem):
     return '<td>{}</td>'.format(elem)
+
+def _table_element_style(elem,style):
+    return '<td style="{}">{}</td>'.format(style,elem)
 
 def _hyperlink(rel_path,displayname):
     hlink =  '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>'.format(rel_path,displayname)

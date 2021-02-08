@@ -10,6 +10,7 @@ import numpy as np
 
 import fitsio
 from astropy.io import fits
+from astropy.table import Table
 import healpy as hp
 
 import desimodel.footprint
@@ -453,6 +454,8 @@ def frames2spectra(frames, pix=None, nside=64):
         SpectraLite object with subset of spectra from frames that are in
         the requested healpix pixel `pix`
     '''
+    log = get_logger()
+
     #- First make sure that the given set of frames is complete
     #- If not, fill in missing cameras so that the stack works properly
     add_missing_frames(frames)
@@ -555,6 +558,25 @@ def frames2spectra(frames, pix=None, nside=64):
             else:
                 outmap['FIBERSTATUS'] |= banddict[band]['FIBERSTATUS']
         merged_over_cams_fmaps.append(outmap)
+
+    #- Convert to Tables to facilitate column add/drop/reorder
+    for i, fm in enumerate(merged_over_cams_fmaps):
+        if not isinstance(fm, Table):
+            merged_over_cams_fmaps[i] = Table(fm)
+
+    #- Standardize all fibermaps to have the same columns in same order
+    if len(merged_over_cams_fmaps) > 1:
+        colnames = list(merged_over_cams_fmaps[0].colnames)
+        for fm in merged_over_cams_fmaps[1:]:
+            for drop in set(colnames) - set(fm.colnames):
+                log.warning(f"Ignoring {drop}, missing from some fibermaps")
+                colnames.remove(drop)
+            #- Also warn about columns that were never in original list
+            for drop in set(fm.colnames) - set(colnames):
+                log.warning(f"Ignoring {drop}, missing from some fibermaps")
+
+        for i in range(len(merged_over_cams_fmaps)):
+            merged_over_cams_fmaps[i] = merged_over_cams_fmaps[i][colnames]
 
     #- Combine all the individual fibermaps from the exposures and spectrographs
     fibermap = np.hstack(merged_over_cams_fmaps)
