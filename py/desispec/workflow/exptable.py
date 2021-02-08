@@ -286,18 +286,23 @@ def validate_badamps(badamps,joinsymb=';'):
         joinsymb, str. The symbol separating entries in the str list given by badamps.
 
     Returns:
-        badamps, str. Input badamps string of {camera}{petal}{amp} entries separated by symbol given with
+        newbadamps, str. Input badamps string of {camera}{petal}{amp} entries separated by symbol given with
                       joinsymb (semicolon by default). I.e. [brz][0-9][ABCD]. Example: 'b7D;z8A'.
                       Differs from input in that other symbols used to separate terms are replaaced by joinsymb
                       and whitespace is removed.
 
     """
-    badamps = badamps.replace(' ', '').strip()
+    log = get_logger()
+    newbadamps = badamps.replace(' ', '').strip()
     for symb in [',', ':', '|', '.']:
-        badamps = badamps.replace(symb, joinsymb)
+        newbadamps = newbadamps.replace(symb, joinsymb)
     ## test that the string can be parsed
-    throw = parse_badamps(badamps, joinsymb=joinsymb)
-    return badamps
+    throw = parse_badamps(newbadamps, joinsymb=joinsymb)
+    if badamps == newbadamps:
+        log.info(f'Badamps given as: {badamps} verified to work')
+    else:
+        log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}') 
+    return newbadamps
 
 def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, coldefaults=None, verbosely=False):
     """

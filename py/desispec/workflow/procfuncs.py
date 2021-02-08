@@ -102,7 +102,7 @@ def desi_proc_command(prow, queue=None):
     and determines the proper command line call to process the data defined by the input row/dict.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'CPROCAMWORD'.
+        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
         queue, str. The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
 
     Returns:
@@ -122,7 +122,7 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
-    specs = str(prow['CAMWORD'])
+    specs = str(prow['PROCCAMWORD'])
     cmd += ' --cameras={} -n {} -e {}'.format(specs, prow['NIGHT'], prow['EXPID'][0])
     if prow['BADAMPS'] != '':
         cmd += ' --badamps={}'.format(prow['BADAMPS'])

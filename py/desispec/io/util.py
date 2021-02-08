@@ -542,7 +542,7 @@ def parse_badamps(badamps,joinsymb=';'):
         cpa = cpa.strip()
         if len(cpa) != 3:
             raise ValueError("Each BADAMPS entry must be a semicolon separated list of {camera}{petal}{amp} " +
-                             f"(e.g. r7A;b8B). Given: {amp}")
+                             f"(e.g. r7A;b8B). Given: {cpa}")
         camera, petal, amplifier = cpa[0].lower(), cpa[1], cpa[2].upper()
         if camera not in ['b', 'r', 'z']:
             raise ValueError(f"For badamps, camera must be b, r, or z. Received: {camera}")

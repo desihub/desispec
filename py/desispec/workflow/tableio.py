@@ -168,7 +168,7 @@ def standardize_tabletype(tabletype):
         tabletype = 'exptable'
     elif tabletype.lower() in ['proc', 'processing', 'proctable', 'proctab', 'int', 'ptable', 'internal']:
         tabletype = 'proctable'
-    elif tabletype.lower() in ['unproc', 'unproctable', 'unproctab', 'unprocessed', 'unprocessing']:
+    elif tabletype.lower() in ['unproc', 'unproctable', 'unproctab', 'unprocessed', 'unprocessing', 'unproc_table']:
         tabletype = 'unproctable'
     return tabletype
 

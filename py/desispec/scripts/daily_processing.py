@@ -107,8 +107,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         finalcamword = difference_camwords(finalcamword,badcamword)
 
     if badcamword != '':
-        ## Check to make sure the badcamword will parse before trying to use it in the pipeline
-        throw = parse_badamps(badcamword)
         ## Inform the user what will be done with it.
         print(f"Modifying camword of data to be processed with badcamword: {badcamword}. "+\
               f"Camword to be processed: {finalcamword}")
@@ -160,7 +158,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Combine the table names and types for easier passing to io functions
     table_pathnames = [exp_table_pathname, proc_table_pathname, unproc_table_pathname]
-    table_types = ['etable','ptable','unproc_table']
+    table_types = ['exptable','proctable','unproctable']
 
     ## Load in the files defined above
     etable, ptable, unproc_table = load_tables(tablenames=table_pathnames, \
