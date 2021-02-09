@@ -225,8 +225,8 @@ class template_ensemble(object):
         hdr['FILTER']   = config.filter
         hdr['ZLO']      = config.zlo
         hdr['ZHI']      = config.zhi
-        hdr['MEDMAG']   = magrange[0]
-        hdr['LIMMAG']   = magrange[1]
+        hdr['MEDMAG']   = config.med_mag
+        hdr['LIMMAG']   = config.limit_mag
         hdr['PSFFLOSS'] = config.psf_fiberloss
         hdr['WGTFLOSS'] = config.wgt_fiberloss
         hdr['SMOOTH']   = smooth
