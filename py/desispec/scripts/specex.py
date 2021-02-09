@@ -17,7 +17,7 @@ from ctypes.util import find_library
 from astropy.io import fits
 
 from desiutil.log import get_logger
-from desispec.pybindspecex import run_specex
+from specex.specex import run_specex
 
 modext = "so"
 if sys.platform == "darwin":
