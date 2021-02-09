@@ -90,8 +90,7 @@ class template_ensemble(object):
             normfilter_south=config.filter
 
             zrange   = (config.zlo, config.zhi)
-            magrange = (config.med_mag, config.limit_mag)
-
+ 
             # Variance normalized as for psf, so we need an additional linear flux loss so account for
             # the relative factors.
             rel_loss = -(config.wgt_fiberloss - config.psf_fiberloss) / 2.5
@@ -101,31 +100,57 @@ class template_ensemble(object):
             log.info('{} filter: {}'.format(tracer, config.filter))
             log.info('{} zrange: {} - {}'.format(tracer,   zrange[0],   zrange[1]))
             log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
-            log.info('Relative fiberloss to PSF: {:.3f}'.format(rel_loss))
+
+            # Calibration vector assumes PSF mtype. 
+            log.info('Relative fiberloss to psf morphtype: {:.3f}'.format(rel_loss))
 
             if tracer == 'bgs':
-                maker    = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
+                # Cut on mag. 
+                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1312
+                magrange = (config.med_mag, config.limit_mag)
+                
+                maker = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
+                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.  
+                flux *= rel_loss
+                
             elif tracer == 'lrg':
+                # Cut on fib. mag. with desisim.templates setting FIBERFLUX to FLUX. 
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
-                maker    = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
+                magrange = (config.med_fibmag, config.limit_fibmag)
+                
+                maker = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-            
+
+                # Take factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                # Note:  Oppostive to other tracers as templates normalized to fibermag.  
+                flux /=	rel_loss
+                
             elif tracer == 'elg':
+                # Cut on mag. 
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
-                maker    = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
+                magrange = (config.med_mag, config.limit_mag)
+                
+                maker = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                flux *=	rel_loss
                 
             elif tracer == 'qso':
+                # Cut on mag. 
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1422
-                maker    = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
+                magrange = (config.med_mag, config.limit_mag)
+                
+                maker = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-                                
+
+                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                flux *=	rel_loss
+                
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
-
-            flux *= rel_loss
             
             return  wave, flux, meta, objmeta
         
