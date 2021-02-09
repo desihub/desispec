@@ -15,7 +15,7 @@ from desispec.workflow.tableio import write_table
 
 
 
-def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obstypes=None, \
+def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp_table_path=None, obstypes=None, \
                            exp_filetype='csv', cameras='', bad_cameras='', badamps='',
                            verbose=False, no_specprod=False, overwrite_files=False):
     """
@@ -23,6 +23,9 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
 
     Args:
         nights: str, int, or comma separated list. The night(s) to generate procesing tables for.
+        night_range: str, comma separated pair of nights in form YYYYMMDD,YYYYMMDD for first_night,last_night
+                          specifying the beginning and end of a range of nights to be generated.
+                          last_night should be inclusive.
         path_to_data: str. The path to the raw data and request*.json and manifest* files.
         exp_table_path: str. Full path to where to exposure tables should be saved, WITHOUT the monthly directory included.
         obstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the exposure table.
@@ -41,20 +44,56 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
                       form {camera}{spectrograph}{amp}, i.e. [brz][0-9][A-D].
     Returns: Nothing
     """
+    if nights is None and night_range is None:
+        raise ValueError("Must specify either nights or night_range")
+    elif nights is not None and night_range is not None:
+        raise ValueError("Must only specify either nights or night_range, not both")
+    elif night_range is not None:
+        if ',' not in night_range:
+            raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
+        nightpair = night_range.split(',')
+        if len(nightpair) != 2 or not nightpair[0].isnumeric() or not nightpair[1].isnumeric():
+            raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
+        nights = list(range(int(nightpair[0]),int(nightpair[1])+1))
+    else:
+        nights = [ int(val) for val in nights.strip("\n\t ").split(",") ]
+
+    for night in nights.copy():
+        if night % 100 > 31:
+            nights.remove(night)
+        elif (night % 10000) // 100 > 12:
+            nights.remove(night)
+        elif night < 20191100:
+            nights.remove(night)
+
+    if obstypes is not None:
+        obstypes = [ val.strip('\t ') for val in obstypes.split(",") ]
+    else:
+        obstypes = default_exptypes_for_exptable()
+
+    print("Nights: ", nights)
+    print("Obs types: ", obstypes)
+
     ## Deal with cameras and amps, if given
-    camword = parse_cameras(cameras)
-    badcamword = parse_cameras(bad_cameras)
+    camword = cameras
+    if camword != '':
+        camword = parse_cameras(camword)
+    badcamword = bad_cameras
+    if badcamword != '':
+        badcamword = parse_cameras(badcamword)
 
     ## Warn people if changing camword
     finalcamword = 'a0123456789'
-    if camword is not None and badcamword == '':
-        badcamword = difference_camwords(finalcamword, camword)
+    if camword is not None and badcamword is None:
+        badcamword = difference_camwords(finalcamword,camword)
         finalcamword = camword
-    elif camword is not None and badcamword != '':
+    elif camword is not None and badcamword is not None:
         finalcamword = difference_camwords(camword, badcamword)
         badcamword = difference_camwords('a0123456789', finalcamword)
-    elif badcamword != '':
-        finalcamword = difference_camwords(finalcamword, badcamword)
+    elif badcamword is not None:
+        finalcamword = difference_camwords(finalcamword,badcamword)
+    else:
+        badcamword = ''
 
     if badcamword != '':
         ## Inform the user what will be done with it.
@@ -62,7 +101,10 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
               f"Camword to be processed: {finalcamword}")
 
     ## Make sure badamps is formatted properly
-    badamps = validate_badamps(badamps)
+    if badamps is None:
+        badamps = ''
+    else:
+        badamps = validate_badamps(badamps)
 
     ## Define where to find the data
     if path_to_data is None:
@@ -73,8 +115,6 @@ def create_exposure_tables(nights, path_to_data=None, exp_table_path=None, obsty
     usespecprod = (not no_specprod)
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path(night=None,usespecprod=usespecprod)
-    if obstypes is None:
-        obstypes = default_exptypes_for_exptable()
 
     ## Make the save directory exists
     os.makedirs(exp_table_path, exist_ok=True)

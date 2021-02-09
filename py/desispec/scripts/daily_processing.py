@@ -23,7 +23,7 @@ from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.io.util import difference_camwords, parse_badamps
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
-                             expobstypes=None, procobstypes=None, camword=None, badcamword='', badamps='',
+                             expobstypes=None, procobstypes=None, camword=None, badcamword=None, badamps=None,
                              override_night=None, tab_filetype='csv', queue='realtime', exps_to_ignore=None,
                              data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False,
                              verbose=False):
@@ -97,14 +97,16 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Warn people if changing camword
     finalcamword = 'a0123456789'
-    if camword is not None and badcamword == '':
+    if camword is not None and badcamword is None:
         badcamword = difference_camwords(finalcamword,camword)
         finalcamword = camword
-    elif camword is not None and badcamword != '':
+    elif camword is not None and badcamword is not None:
         finalcamword = difference_camwords(camword, badcamword)
         badcamword = difference_camwords('a0123456789', finalcamword)
-    elif badcamword != '':
+    elif badcamword is not None:
         finalcamword = difference_camwords(finalcamword,badcamword)
+    else:
+        badcamword = ''
 
     if badcamword != '':
         ## Inform the user what will be done with it.
@@ -112,7 +114,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
               f"Camword to be processed: {finalcamword}")
 
     ## Make sure badamps is formatted properly
-    badamps = validate_badamps(badamps)
+    if badamps is None:
+        badamps = ''
+    else:
+        badamps = validate_badamps(badamps)
 
     ## Define the set of exposures to ignore
     if exps_to_ignore is None:

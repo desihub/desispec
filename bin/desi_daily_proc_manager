@@ -21,17 +21,17 @@ def parse_args():#options=None):
     parser = argparse.ArgumentParser(description="Perform daily processing of spectral" +
                                                  "data using the DESI pipeline.")
 
-    parser.add_argument("--cameras", type=str, required=False, default='',
+    parser.add_argument("--cameras", type=str, required=False, default=None,
                         help="Explicitly define the cameras for which you want" +
                              " to reduce the data. Should be a comma separated list." +
                              " Only numbers assumes you want to reduce r, b, and z " +
                              "for that camera. Otherwise specify separately [brz][0-9].")
-    parser.add_argument("--bad-cameras", type=str, required=False, default='',
+    parser.add_argument("--bad-cameras", type=str, required=False, default=None,
                         help="Explicitly define the cameras that you don't want" +
                              " to reduce the data. Should be a comma separated list." +
                              " Only numbers assumes you want to reduce r, b, and z " +
                              "for that camera. Otherwise specify separately [brz][0-9].")
-    parser.add_argument("--badamps", type=str, required=False, default='',
+    parser.add_argument("--badamps", type=str, required=False, default=None,
                         help="Define amplifiers that you know to be bad and should not" +
                              " be processed. Should be a list separated by comma or semicolon." +
                              " Saved list will converted to semicolons. Each entry should be of " +
