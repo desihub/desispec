@@ -4,6 +4,7 @@ is written, in order to efficiently generate tile depths.
 
 Currently assumes redshift and mag. ranges derived from FDR, but uniform in both.
 '''
+import os
 import sys
 import copy
 import yaml
@@ -20,6 +21,8 @@ from   pathlib                       import Path
 from   desiutil.dust                 import mwdust_transmission
 from   desiutil.log                  import get_logger
 from   pkg_resources                 import resource_filename
+from   scipy.interpolate             import interp1d
+
 
 np.random.seed(seed=314)
 
@@ -37,9 +40,12 @@ def parse(options=None):
                         help='Tracer to generate of [bgs, lrg, elg, qso].')
     parser.add_argument('--configdir', type = str, default = None, required=False,
                         help='Directory to config files if not desispec repo.')
+    parser.add_argument('--smooth', type=float, default=100., required=False,
+                        help='Smoothing scale [A] for DFLUX calc.')
+    parser.add_argument('--Nz', action='store_true',
+                        help = 'Apply tracer Nz weighting in stacking of ensemble.')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
 			help='Directory to write to.')
-    
     args = None
 
     if options is None:
@@ -63,11 +69,19 @@ class template_ensemble(object):
     (z, m, OII, etc.) space.                                                                                                                                                                                                                                                                                                                                                                                                                                                       
     If conditioned, uses deepfield redshifts and (currently r) magnitudes to condition simulated templates.                                                                                                                               
     '''
-    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None):
+    
+    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None, Nz=False, smooth=100.):
         if log is None:
             log = get_logger()
-        
-        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None, configdir=None):
+
+        if configdir == None:
+            cpath = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
+        else:
+            cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
+
+        config = Config(cpath)
+            
+        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None, config=None):
             '''
             Dedicated wrapeper for desisim.templates.GALAXY.make_templates call, stipulating templates in a
             redshift range suggested by the FDR.  Further, assume fluxes close to the expected (within ~0.5 mags.)
@@ -79,14 +93,6 @@ class template_ensemble(object):
             '''
             # https://arxiv.org/pdf/1611.00036.pdf
             #
-
-            if configdir == None:
-                cpath = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
-            else:
-                cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
-                
-            config = Config(cpath) 
-
             normfilter_south=config.filter
 
             zrange   = (config.zlo, config.zhi)
@@ -158,16 +164,23 @@ class template_ensemble(object):
             log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
             
             return  wave, flux, meta, objmeta
-        
-        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel, configdir=configdir)
+
+
+        ## 
+        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel, config=config)
                 
         self.ensemble_flux             = {}
         self.ensemble_dflux            = {}
         self.ensemble_meta             = meta
         self.ensemble_objmeta          = objmeta
         self.ensemble_dflux_stack      = {}
+
+        ##
+        smoothing = np.ceil(smooth / wdelta).astype(np.int)
+
+        log.info('Applying {:.3f} AA smoothing ({:d} pixels)'.format(smooth, smoothing))
         
-        # Generate template (d)fluxes for brz bands.                                                                                                                                                                                          
+        # Generate template (d)fluxes for brz bands.                                                                                                                                                                                         
         for band in ['b', 'r', 'z']:
             band_wave                     = wave[cslice[band]]
 
@@ -180,25 +193,50 @@ class template_ensemble(object):
             # Retain only spectral features < 100. Angstroms.                                                                                                                                                                                 
             # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.                                                                                                                                                                        
             for i, ff in enumerate(self.ensemble_flux[band]):
-                sflux                     = convolve(ff, Box1DKernel(125), boundary='extend')
+                sflux                     = convolve(ff, Box1DKernel(smoothing), boundary='extend')
                 dflux[i,:]                = ff - sflux
 
             self.ensemble_dflux[band]     = dflux
 
+        zs = meta['REDSHIFT'].data
+            
+        if Nz:
+            log.info('Applying FDR N(Z) weights.')
+            
+            # Get tracer N(z) [Total number per sq deg per dz=0.1 redshift bin].
+            zmin, zmax, N = np.loadtxt(os.environ['DESIMODEL'] + '/data/targets/nz_{}.dat'.format(tracer), unpack=True, usecols = (0,1,2))
+            zmid = 0.5 * (zmin + zmax)
+
+            interp  = interp1d(zmid, N, kind='linear', copy=True, bounds_error=True, fill_value=None, assume_sorted=False)
+            weights = interp(zs)
+            
+        else:
+            log.info('Assuming uniform in z stack.')
+            
+            weights = np.ones_like(zs)
+            
         # Stack ensemble.
         for band in ['b', 'r', 'z']:
-            self.ensemble_dflux_stack[band] = np.sqrt(np.mean(self.ensemble_dflux[band]**2., axis=0).reshape(1, len(self.ensemble_dflux[band].T)))
+            self.ensemble_dflux_stack[band] = np.sqrt(np.average(self.ensemble_dflux[band]**2., weights=weights, axis=0).reshape(1, len(self.ensemble_dflux[band].T)))
 
         hdr = fits.Header()
-        hdr['NMODEL'] = nmodel
-        hdr['TRACER'] = tracer
-
+        hdr['NMODEL']   = nmodel
+        hdr['TRACER']   = tracer
+        hdr['FILTER']   = config.filter
+        hdr['ZLO']      = config.zlo
+        hdr['ZHI']      = config.zhi
+        hdr['PSFFLOSS'] = config.psf_fiberloss
+        hsr['WGTFLOSS'] = config.wgt_fiberloss
+        
         hdu_list = [fits.PrimaryHDU(header=hdr)]
 
         for band in ['b', 'r', 'z']:
             hdu_list.append(fits.ImageHDU(wave[cslice[band]], name='WAVE_{}'.format(band.upper())))
             hdu_list.append(fits.ImageHDU(self.ensemble_dflux_stack[band], name='DFLUX_{}'.format(band.upper())))
 
+        if Nz:
+            hdu_list.append(fits.ImageHDU(np.c_[zs, weights], name='WEIGHTS'))
+            
         hdu_list = fits.HDUList(hdu_list)
             
         hdu_list.writeto('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer), overwrite=True)
@@ -210,7 +248,7 @@ def main():
 
     args = parse()
     
-    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir)
+    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir, Nz=args.Nz, smooth=args.smooth)
 
 if __name__ == '__main__':
     main()
