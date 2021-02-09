@@ -94,6 +94,10 @@ if rank > 0:
 else:
     args, hdr, camhdr = update_args_with_headers(args)
 
+## Make sure badamps is formatted properly
+if comm is not None and rank == 0 and args.badamps is not None:
+    args.badamps = validate_badamps(args.badamps)
+
 if comm is not None:
     args = comm.bcast(args, root=0)
     hdr = comm.bcast(hdr, root=0)
@@ -104,10 +108,6 @@ known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
 if args.obstype not in known_obstype:
     raise RuntimeError('obstype {} not in {}'.format(args.obstype, known_obstype))
 
-## Make sure badamps is formatted properly
-if args.badamps is not None:
-    args.badamps = validate_badamps(args.badamps)
-
 timer.stop('preflight')
 
 #-------------------------------------------------------------------------
@@ -116,7 +116,7 @@ timer.stop('preflight')
 if args.batch:
     #exp_str = '{:08d}'.format(args.expid)
     jobdesc = args.obstype.lower()
-    if args.obstype.lower() == 'science':
+    if args.obstype == 'SCIENCE':
         # if not doing pre-stdstar fitting or stdstar fitting and if there is
         # no flag stopping flux calibration, set job to poststdstar
         if args.noprestdstarfit and args.nostdstarfit and (not args.nofluxcalib):

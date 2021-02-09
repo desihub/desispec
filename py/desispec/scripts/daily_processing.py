@@ -194,7 +194,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             ## Open relevant raw data files to understand what we're dealing with
             erow = summarize_exposure(path_to_data, night, exp, expobstypes, colnames, coldefaults, verbosely=False)
-            print(f"\nFound: {erow}")
 
             ## If there was an issue, continue. If it's a string summarizing the end of some sequence, use that info.
             ## If the exposure is assosciated with data, process that data.
@@ -218,29 +217,27 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             else:
                 erow['BADCAMWORD'] = badcamword
                 erow['BADAMPS'] = badamps
+                unproc = False
                 if exp in exps_to_ignore:
                     print("\n{} given as exposure id to ignore. Not processing.".format(exp))
                     erow['LASTSTEP'] = 'ignore'
                     # erow['EXPFLAG'] = np.append(erow['EXPFLAG'], )
-                    etable.add_row(erow)
-                    unproc_table.add_row(erow)
-                    continue
+                    unproc = True
                 elif erow['LASTSTEP'] == 'ignore':
-                    print("\n{} identified by the pipeline as soemthign to ignore. Not processing.".format(exp))
-                    etable.add_row(erow)
-                    unproc_table.add_row(erow)
+                    print("\n{} identified by the pipeline as something to ignore. Not processing.".format(exp))
+                    unproc = True
                 elif erow['OBSTYPE'] not in procobstypes:
                     print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
-                    etable.add_row(erow)
-                    unproc_table.add_row(erow)
-                    continue
+                    unproc = True
                 elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
                     print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
-                    etable.add_row(erow)
+                    unproc = True
+
+                print(f"\nFound: {erow}")
+                etable.add_row(erow)
+                if unproc:
                     unproc_table.add_row(erow)
                     continue
-                else:
-                    etable.add_row(erow)
 
                 curtype,curtile = get_type_and_tile(erow)
 

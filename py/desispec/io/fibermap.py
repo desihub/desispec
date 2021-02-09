@@ -578,7 +578,9 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
             fibermin = int(petal)*500 + ampoffset
             fibermax = fibermin + 250
             ampfibs = np.arange(fibermin,fibermax)
-            log.info(f'Masking fibers from {fibermin} to {fibermax} for camera {camera} because of badamp entry {cpa}')
+            truefmax = fibermax - 1
+            log.info(f'Masking fibers from {fibermin} to {truefmax} for camera {camera} because of badamp entry '+\
+                     f'{camera}{petal}{amplifier}')
             ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
             fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
 
