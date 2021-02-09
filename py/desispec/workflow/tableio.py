@@ -86,7 +86,7 @@ def split_str(val, joinsymb='|',comma_replacement=';'):
 
 
 def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwrite=True, verbose=False,
-                write_empty=False, use_specprod=True):
+                comma_replacement=';', write_empty=False, use_specprod=True):
     """
     Workflow function to write exposure, processing, and unprocessed tables. It allows for multi-valued table cells, which are
     reduced to strings using the joinsymb. It writes to a temp file before moving the fully written file to the
@@ -102,6 +102,9 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
         write_empty, bool. Whether to write an empty table to disk. The default is False. Warning: code is less robust
                            to column datatypes on read/write if the table is empty. May cause issues if this is set to True.
+        comma_replacement, str. Replace instances of this symbol with commas when loading scalar columns in a table,
+                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+                                on the command line.
         use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
                             table in the SPECPROD rather than the exptab repository. Default is True.
     Returns:
@@ -144,6 +147,13 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
                     log.info(f'{nam} is {ndim} dimensions, changing to string')
                 col = [ensure_scalar(row, joinsymb=joinsymb) for row in table[nam]]
                 # replace_cols[nam] = Table.Column(name=nam,data=col)
+                if type(table[nam]) is Table.MaskedColumn:
+                    col = Table.MaskedColumn(name=nam, data=col)
+                else:
+                    col = Table.Column(name=nam, data=col)
+                table.replace_column(nam, col)
+            elif type(table[nam][0]) in [str, np.str, np.str_]:
+                col = [row.replace(',', comma_replacement) for row in table[nam]]
                 if type(table[nam]) is Table.MaskedColumn:
                     col = Table.MaskedColumn(name=nam, data=col)
                 else:
@@ -315,11 +325,8 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                 if dtyp in [list, np.array, np.ndarray]:
                     newcol.shape = (len(col),)
                     for ii in range(len(col)):
-                        try:
-                            newcol[ii] = np.atleast_1d(newcol[ii])
-                        except:
-                            import pdb
-                            pdb.set_trace()
+                        newcol[ii] = np.atleast_1d(newcol[ii])
+
                 outcolumns.append(newcol)
             table = Table(outcolumns)
         else:
@@ -355,7 +362,8 @@ def guess_default_by_dtype(typ):
     else:
         return -99
 
-def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mixins=True ,verbose=False):
+def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mixins=True,
+                   comma_replacement=';', verbose=False):
     """
     Used with load_table to process a Table.Column after being read in. It fills in masked values with defaults,
     and identifies and splits mixin columns (columns that should be a list/array) back into their list/array from
@@ -375,6 +383,9 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
                               Warning: The exposure and processing tables have default data types which are multi-value.
                               If this is set to False, the default data types will be incorrect and issues are likely
                               to arise.
+        comma_replacement, str. Replace instances of this symbol with commas when loading scalar columns in a table,
+                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+                                on the command line.
         verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
 
 
@@ -423,6 +434,8 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
             col.append(split_str(rowdat, joinsymb=joinsymb))
         elif array_like:
             col.append(np.array([rowdat]))
+        elif type(rowdat) in [str, np.str, np.str_] and ',' in rowdat:
+            col.append(rowdat.replace(comma_replacement, ','))
         else:
             col.append(rowdat)
 

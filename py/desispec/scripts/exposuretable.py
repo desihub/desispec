@@ -56,7 +56,7 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
             raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
         nights = np.arange(int(nightpair[0]),int(nightpair[1])+1)
     else:
-        nights = [ int(val) for val in nights.strip("\n\t ").split(",") ]
+        nights = np.array([ int(val) for val in nights.strip("\n\t ").split(",") ])
 
     nights = nights[( (nights > 20191100) & (nights % 100 < 32) & ( (nights % 10000)//100 < 13) )].tolist()
     for night in nights.copy():
