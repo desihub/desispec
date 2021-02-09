@@ -6,6 +6,7 @@ Currently assumes redshift and mag. ranges derived from FDR, but uniform in both
 '''
 import sys
 import copy
+import yaml
 import pickle
 import desisim
 import argparse
@@ -18,7 +19,7 @@ from   astropy.convolution           import convolve, Box1DKernel
 from   pathlib                       import Path
 from   desiutil.dust                 import mwdust_transmission
 from   desiutil.log                  import get_logger
-
+from   pkg_resources                 import resource_filename
 
 np.random.seed(seed=314)
 
@@ -44,6 +45,16 @@ def parse(options=None):
         args = parser.parse_args(options)
 
     return args
+
+class Config(object):
+    def __init__(self, tracer):
+        yaml_path = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
+
+        with open(yaml_path) as f:
+            d = yaml.load(f, Loader=yaml.FullLoader)
+        
+        for key in d:
+            setattr(self, key, d[key])
         
 class template_ensemble(object):
     '''                                                                                                                                                                                                                                   
@@ -51,7 +62,10 @@ class template_ensemble(object):
     (z, m, OII, etc.) space.                                                                                                                                                                                                                                                                                                                                                                                                                                                       
     If conditioned, uses deepfield redshifts and (currently r) magnitudes to condition simulated templates.                                                                                                                               
     '''
-    def __init__(self, outdir, tracer='elg', nmodel=5):        
+    def __init__(self, outdir, tracer='elg', nmodel=5, log=None):
+        if log is None:
+            log = get_logger()
+        
         def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None):
             '''
             Dedicated wrapeper for desisim.templates.GALAXY.make_templates call, stipulating templates in a
@@ -63,49 +77,38 @@ class template_ensemble(object):
             of runtime.    
             '''
             # https://arxiv.org/pdf/1611.00036.pdf
-            # 
+            #
+
+            config = Config(tracer) 
+
+            normfilter_south=config.filter
+
+            zrange   = (config.zlo, config.zhi)
+            magrange = (config.med_mag, config.limit_mag)
+
+            log.info('nmodel: {:d}'.format(nmodel))
+            
+            log.info('{} filter: {}'.format(tracer, config.filter))
+            log.info('{} zrange: {} - {}'.format(tracer,   zrange[0],   zrange[1]))
+            log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
+            
             if tracer == 'bgs':
-                normfilter_south='decam2014-r'
-
                 maker    = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (0.01, 0.4)
-                magrange = (19.5, 20.0)
-
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
             elif tracer == 'lrg':
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
-                normfilter_south='decam2014-z'
-
                 maker    = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (0.6, 1.0)
-
-                # zfifber of (20.5, 21.5) translated to z.
-                # https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=6007;filename=SV_Target_Selection_For_LRG.pdf;version=1
-                # Slide 1.
-                magrange = (20.0, 20.5)	
-
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
             
             if tracer == 'elg':
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
-                normfilter_south='decam2014-g'
-                
                 maker    = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (1.0,   1.5)
-                magrange = (22.9, 23.4)
-
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
                 
             elif tracer == 'qso':
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1422
-                normfilter_south='decam2014-r'
-                
                 maker    = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (1.0,   2.0)
-                magrange = (22.0, 22.5)
-
-                # Does not recognize trans filter. 
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
                                 
             else:
@@ -156,13 +159,15 @@ class template_ensemble(object):
         hdu_list = fits.HDUList(hdu_list)
             
         hdu_list.writeto('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer), overwrite=True)
-                                    
+
+        log.info('Successfully written to {}.'.format('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer)))
+        
 def main():
     log = get_logger()
 
     args = parse()
     
-    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel)
+    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log)
 
 if __name__ == '__main__':
     main()
