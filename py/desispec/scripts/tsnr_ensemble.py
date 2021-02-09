@@ -35,8 +35,11 @@ def parse(options=None):
                         help='Number of galaxies in the ensemble.')
     parser.add_argument('--tracer', type = str, default = 'bgs', required=True,
                         help='Tracer to generate of [bgs, lrg, elg, qso].')
+    parser.add_argument('--configdir', type = str, default = None, required=False,
+                        help='Directory to config files if not desispec repo.')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
 			help='Directory to write to.')
+    
     args = None
 
     if options is None:
@@ -47,10 +50,8 @@ def parse(options=None):
     return args
 
 class Config(object):
-    def __init__(self, tracer):
-        yaml_path = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
-
-        with open(yaml_path) as f:
+    def __init__(self, cpath):
+        with open(cpath) as f:
             d = yaml.load(f, Loader=yaml.FullLoader)
         
         for key in d:
@@ -79,7 +80,12 @@ class template_ensemble(object):
             # https://arxiv.org/pdf/1611.00036.pdf
             #
 
-            config = Config(tracer) 
+            if args.configdir == None:
+                cpath = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
+            else:
+                cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
+                
+            config   = Config(cpath) 
 
             normfilter_south=config.filter
 
