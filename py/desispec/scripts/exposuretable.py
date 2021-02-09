@@ -54,16 +54,16 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         nightpair = night_range.split(',')
         if len(nightpair) != 2 or not nightpair[0].isnumeric() or not nightpair[1].isnumeric():
             raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
-        nights = list(range(int(nightpair[0]),int(nightpair[1])+1))
+        nights = np.arange(int(nightpair[0]),int(nightpair[1])+1)
     else:
         nights = [ int(val) for val in nights.strip("\n\t ").split(",") ]
 
+    nights = nights[( (nights > 20191100) & (nights % 100 < 32) & ( (nights % 10000)//100 < 13) )].tolist()
     for night in nights.copy():
-        if night % 100 > 31:
+        month = night_to_month(night)
+        if month in ['04','06','09','11'] and night % 100 > 30:
             nights.remove(night)
-        elif (night % 10000) // 100 > 12:
-            nights.remove(night)
-        elif night < 20191100:
+        if month == '02' and night % 100 > 29:
             nights.remove(night)
 
     if obstypes is not None:
@@ -119,35 +119,37 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
     ## Make the save directory exists
     os.makedirs(exp_table_path, exist_ok=True)
 
-    ## Create an astropy table for each night. Define the columns and datatypes, but leave each with 0 rows
-    # colnames, coldtypes = get_exposure_table_column_defs()
-    # nightly_tabs = { night : Table(names=colnames,dtype=coldtypes) for night in nights }
-    nightly_tabs = { night : instantiate_exposure_table() for night in nights }
-
     ## Loop over nights
     colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
     for night in nights:
+        if str(night) not in listpath(path_to_data):
+            print(f'Night: {night} not in data directory {path_to_data}. Skipping')
+            continue
+
         print(get_printable_banner(input_str=night))
+
+        ## Create an astropy exposure table for the night
+        nightly_tab = instantiate_exposure_table()
 
         ## Loop through all exposures on disk
         for exp in listpath(path_to_data,str(night)):
             rowdict = summarize_exposure(path_to_data, night=night, exp=exp, obstypes=obstypes, \
                                          colnames=colnames, coldefaults=coldefaults, verbosely=verbose)
-            rowdict['BADCAMWORD'] = badcamword
-            rowdict['BADAMPS'] = badamps
+            if rowdict is not None and type(rowdict) is not str:
+                rowdict['BADCAMWORD'] = badcamword
+                rowdict['BADAMPS'] = badamps
+                ## Add the dictionary of column values as a new row
+                nightly_tab.add_row(rowdict)
             if verbose:
                 print("Rowdict:\n",rowdict,"\n\n")
-            if rowdict is not None and type(rowdict) is not str:
-                ## Add the dictionary of column values as a new row
-                nightly_tabs[night].add_row(rowdict)
 
-        if len(nightly_tabs[night]) > 0:
+        if len(nightly_tab) > 0:
             month = night_to_month(night)
             exptab_path = pathjoin(exp_table_path,month)
             os.makedirs(exptab_path,exist_ok=True)
             exptab_name = get_exposure_table_name(night, extension=exp_filetype)
             exptab_name = pathjoin(exptab_path, exptab_name)
-            write_table(nightly_tabs[night], exptab_name, overwrite=overwrite_files)
+            write_table(nightly_tab, exptab_name, overwrite=overwrite_files)
         else:
             print('No rows to write to a file.')
 
@@ -155,4 +157,3 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         ## Flush the outputs
         sys.stdout.flush()
         sys.stderr.flush()
-    return nightly_tabs
