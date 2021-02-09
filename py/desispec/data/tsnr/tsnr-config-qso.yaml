@@ -1,0 +1,10 @@
+filter: decam2014-r
+limit_fibmag: 22.962
+limit_mag: 22.689
+med_fibmag: 21.884
+med_mag: 21.611
+psf_fiberloss: 0.272
+psf_frac: 1.0
+wgt_fiberloss: 0.272
+zhi: 1.933
+zlo: 0.559

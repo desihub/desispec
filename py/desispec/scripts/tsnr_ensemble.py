@@ -6,6 +6,7 @@ Currently assumes redshift and mag. ranges derived from FDR, but uniform in both
 '''
 import sys
 import copy
+import yaml
 import pickle
 import desisim
 import argparse
@@ -17,7 +18,7 @@ from   astropy.convolution           import convolve, Box1DKernel
 from   pathlib                       import Path
 from   desiutil.dust                 import mwdust_transmission
 from   desiutil.log                  import get_logger
-
+from   pkg_resources                 import resource_filename
 
 np.random.seed(seed=314)
 
@@ -33,8 +34,11 @@ def parse(options=None):
                         help='Number of galaxies in the ensemble.')
     parser.add_argument('--tracer', type = str, default = 'bgs', required=True,
                         help='Tracer to generate of [bgs, lrg, elg, qso].')
+    parser.add_argument('--configdir', type = str, default = None, required=False,
+                        help='Directory to config files if not desispec repo.')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
 			help='Directory to write to.')
+    
     args = None
 
     if options is None:
@@ -43,6 +47,14 @@ def parse(options=None):
         args = parser.parse_args(options)
 
     return args
+
+class Config(object):
+    def __init__(self, cpath):
+        with open(cpath) as f:
+            d = yaml.load(f, Loader=yaml.FullLoader)
+        
+        for key in d:
+            setattr(self, key, d[key])
         
 class template_ensemble(object):
     '''                                                                                                                                                                                                                                   
@@ -50,8 +62,11 @@ class template_ensemble(object):
     (z, m, OII, etc.) space.                                                                                                                                                                                                                                                                                                                                                                                                                                                       
     If conditioned, uses deepfield redshifts and (currently r) magnitudes to condition simulated templates.                                                                                                                               
     '''
-    def __init__(self, outdir, tracer='elg', nmodel=5):        
-        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None):
+    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None):
+        if log is None:
+            log = get_logger()
+        
+        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None, configdir=None):
             '''
             Dedicated wrapeper for desisim.templates.GALAXY.make_templates call, stipulating templates in a
             redshift range suggested by the FDR.  Further, assume fluxes close to the expected (within ~0.5 mags.)
@@ -68,57 +83,88 @@ class template_ensemble(object):
             tracer = tracer.lower()  # support ELG or elg, etc.
 
             # https://arxiv.org/pdf/1611.00036.pdf
-            # 
-            if tracer == 'bgs':
-                normfilter_south='decam2014-r'
+            #
 
-                maker    = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (0.01, 0.4)
-                magrange = (19.5, 20.0)
-
-                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-
-            elif tracer == 'lrg':
-                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
-                normfilter_south='decam2014-z'
-
-                maker    = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (0.6, 1.0)
-
-                # zfifber of (20.5, 21.5) translated to z.
-                # https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=6007;filename=SV_Target_Selection_For_LRG.pdf;version=1
-                # Slide 1.
-                magrange = (20.0, 20.5)	
-
-                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-            
-            if tracer == 'elg':
-                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
-                normfilter_south='decam2014-g'
+            if configdir == None:
+                cpath = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
+            else:
+                cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
                 
-                maker    = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (1.0,   1.5)
-                magrange = (22.9, 23.4)
+            config = Config(cpath) 
 
+            normfilter_south=config.filter
+
+            zrange   = (config.zlo, config.zhi)
+ 
+            # Variance normalized as for psf, so we need an additional linear flux loss so account for
+            # the relative factors.
+            psf_loss = -config.psf_fiberloss / 2.5
+            psf_loss = 10.**psf_loss
+            
+            rel_loss = -(config.wgt_fiberloss - config.psf_fiberloss) / 2.5
+            rel_loss = 10.**rel_loss
+
+            log.info('{} nmodel: {:d}'.format(tracer, nmodel))            
+            log.info('{} filter: {}'.format(tracer, config.filter))
+            log.info('{} zrange: {} - {}'.format(tracer,   zrange[0],   zrange[1]))
+
+            # Calibration vector assumes PSF mtype.
+            log.info('psf fiberloss: {:.3f}'.format(psf_loss))
+            log.info('Relative fiberloss to psf morphtype: {:.3f}'.format(rel_loss))
+
+            if tracer == 'bgs':
+                # Cut on mag. 
+                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1312
+                magrange = (config.med_mag, config.limit_mag)
+                
+                maker = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.  
+                flux *= rel_loss
+                
+            elif tracer == 'lrg':
+                # Cut on fib. mag. with desisim.templates setting FIBERFLUX to FLUX. 
+                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
+                magrange = (config.med_fibmag, config.limit_fibmag)
+                
+                maker = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+                # Take factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                # Note:  Oppostive to other tracers as templates normalized to fibermag.  
+                flux /=	psf_loss
+                
+            elif tracer == 'elg':
+                # Cut on mag. 
+                # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
+                magrange = (config.med_mag, config.limit_mag)
+                
+                maker = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                flux *=	rel_loss
                 
             elif tracer == 'qso':
+                # Cut on mag. 
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1422
-                normfilter_south='decam2014-r'
+                magrange = (config.med_mag, config.limit_mag)
                 
-                maker    = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
-                zrange   = (1.0,   2.0)
-                magrange = (22.0, 22.5)
-
-                # Does not recognize trans filter. 
+                maker = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
-                                
+
+                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                flux *=	rel_loss
+                
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
 
+            log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
+            
             return  wave, flux, meta, objmeta
         
-        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel)
+        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel, configdir=configdir)
                 
         self.ensemble_flux             = {}
         self.ensemble_dflux            = {}
@@ -161,13 +207,15 @@ class template_ensemble(object):
         hdu_list = fits.HDUList(hdu_list)
             
         hdu_list.writeto('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer), overwrite=True)
-                                    
+
+        log.info('Successfully written to {}.'.format('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer)))
+        
 def main():
     log = get_logger()
 
     args = parse()
     
-    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel)
+    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir)
 
 if __name__ == '__main__':
     main()
