@@ -93,15 +93,18 @@ class template_ensemble(object):
  
             # Variance normalized as for psf, so we need an additional linear flux loss so account for
             # the relative factors.
+            psf_loss = -config.psf_fiberloss / 2.5
+            psf_loss = 10.**psf_loss
+            
             rel_loss = -(config.wgt_fiberloss - config.psf_fiberloss) / 2.5
             rel_loss = 10.**rel_loss
 
             log.info('{} nmodel: {:d}'.format(tracer, nmodel))            
             log.info('{} filter: {}'.format(tracer, config.filter))
             log.info('{} zrange: {} - {}'.format(tracer,   zrange[0],   zrange[1]))
-            log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
 
-            # Calibration vector assumes PSF mtype. 
+            # Calibration vector assumes PSF mtype.
+            log.info('psf fiberloss: {:.3f}'.format(psf_loss))
             log.info('Relative fiberloss to psf morphtype: {:.3f}'.format(rel_loss))
 
             if tracer == 'bgs':
@@ -125,7 +128,7 @@ class template_ensemble(object):
 
                 # Take factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
                 # Note:  Oppostive to other tracers as templates normalized to fibermag.  
-                flux /=	rel_loss
+                flux /=	psf_loss
                 
             elif tracer == 'elg':
                 # Cut on mag. 
@@ -151,6 +154,8 @@ class template_ensemble(object):
                 
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
+
+            log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
             
             return  wave, flux, meta, objmeta
         
