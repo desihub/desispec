@@ -226,7 +226,7 @@ class template_ensemble(object):
         hdr['ZLO']      = config.zlo
         hdr['ZHI']      = config.zhi
         hdr['PSFFLOSS'] = config.psf_fiberloss
-        hsr['WGTFLOSS'] = config.wgt_fiberloss
+        hdr['WGTFLOSS'] = config.wgt_fiberloss
         
         hdu_list = [fits.PrimaryHDU(header=hdr)]
 
