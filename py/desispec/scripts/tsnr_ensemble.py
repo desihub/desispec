@@ -63,11 +63,11 @@ class template_ensemble(object):
     (z, m, OII, etc.) space.                                                                                                                                                                                                                                                                                                                                                                                                                                                       
     If conditioned, uses deepfield redshifts and (currently r) magnitudes to condition simulated templates.                                                                                                                               
     '''
-    def __init__(self, outdir, tracer='elg', nmodel=5, log=None):
+    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None):
         if log is None:
             log = get_logger()
         
-        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None):
+        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None, configdir=None):
             '''
             Dedicated wrapeper for desisim.templates.GALAXY.make_templates call, stipulating templates in a
             redshift range suggested by the FDR.  Further, assume fluxes close to the expected (within ~0.5 mags.)
@@ -80,24 +80,29 @@ class template_ensemble(object):
             # https://arxiv.org/pdf/1611.00036.pdf
             #
 
-            if args.configdir == None:
+            if configdir == None:
                 cpath = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
             else:
                 cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
                 
-            config   = Config(cpath) 
+            config = Config(cpath) 
 
             normfilter_south=config.filter
 
             zrange   = (config.zlo, config.zhi)
             magrange = (config.med_mag, config.limit_mag)
 
-            log.info('nmodel: {:d}'.format(nmodel))
-            
+            # Variance normalized as for psf, so we need an additional linear flux loss so account for
+            # the relative factors.
+            rel_loss = -(config.wgt_fiberloss - config.psf_fiberloss) / 2.5
+            rel_loss = 10.**rel_loss
+
+            log.info('{} nmodel: {:d}'.format(tracer, nmodel))            
             log.info('{} filter: {}'.format(tracer, config.filter))
             log.info('{} zrange: {} - {}'.format(tracer,   zrange[0],   zrange[1]))
             log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
-            
+            log.info('Relative fiberloss to PSF: {:.3f}'.format(rel_loss))
+
             if tracer == 'bgs':
                 maker    = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
@@ -107,7 +112,7 @@ class template_ensemble(object):
                 maker    = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
             
-            if tracer == 'elg':
+            elif tracer == 'elg':
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
                 maker    = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
@@ -120,9 +125,11 @@ class template_ensemble(object):
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
 
+            flux *= rel_loss
+            
             return  wave, flux, meta, objmeta
         
-        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel)
+        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel, configdir=configdir)
                 
         self.ensemble_flux             = {}
         self.ensemble_dflux            = {}
@@ -173,7 +180,7 @@ def main():
 
     args = parse()
     
-    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log)
+    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir)
 
 if __name__ == '__main__':
     main()
