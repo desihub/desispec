@@ -107,7 +107,7 @@ class template_ensemble(object):
 
             log.info('{} nmodel: {:d}'.format(tracer, nmodel))            
             log.info('{} filter: {}'.format(tracer, config.filter))
-            log.info('{} zrange: {} - {}'.format(tracer,   zrange[0],   zrange[1]))
+            log.info('{} zrange: {} - {}'.format(tracer, zrange[0], zrange[1]))
 
             # Calibration vector assumes PSF mtype.
             log.info('psf fiberloss: {:.3f}'.format(psf_loss))
@@ -225,8 +225,11 @@ class template_ensemble(object):
         hdr['FILTER']   = config.filter
         hdr['ZLO']      = config.zlo
         hdr['ZHI']      = config.zhi
+        hdr['MEDMAG']   = magrange[0]
+        hdr['LIMMAG']   = magrange[1]
         hdr['PSFFLOSS'] = config.psf_fiberloss
         hdr['WGTFLOSS'] = config.wgt_fiberloss
+        hdr['SMOOTH']   = smooth
         
         hdu_list = [fits.PrimaryHDU(header=hdr)]
 
