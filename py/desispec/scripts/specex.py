@@ -25,44 +25,12 @@ if sys.platform == "darwin":
 
 specexdata = None
 
-libspecexname = "libspecex.{}".format(modext)
-if "LIBSPECEX_DIR" in os.environ:
-    libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"],
-        "libspecex.{}".format(modext))
-    specexdata = os.path.join(
-        os.path.dirname(os.environ["LIBSPECEX_DIR"]), "data"
-    )
-elif "SPECEX" in os.environ:
-    specexdata = os.path.join(os.environ["SPECEX"], "data")
-
-libspecex = None
-try:
-    libspecex = ct.CDLL(libspecexname)
-except:
-    path = find_library("specex")
-    if path is not None:
-        libspecex = ct.CDLL(path)
-        specexdata = os.path.join(
-            os.path.dirname(os.path.dirname(path)), "data"
-        )
-
-if libspecex is not None:
-    libspecex.cspecex_desi_psf_fit.restype = ct.c_int
-    libspecex.cspecex_desi_psf_fit.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-    libspecex.cspecex_psf_merge.restype = ct.c_int
-    libspecex.cspecex_psf_merge.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-    libspecex.cspecex_spot_merge.restype = ct.c_int
-    libspecex.cspecex_spot_merge.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-
+if 'SPECEXDATA' in os.environ:
+    specexdata = os.environ['SPECEXDATA']
+else:
+    from pkg_resources import resource_filename
+    specexdata = resource_filename('specex', 'data')
+lamp_lines_file = os.path.join(specexdata,'specex_linelist_desi.txt')
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
@@ -103,8 +71,7 @@ def main(args, comm=None):
 
     imgfile = args.input_image
     outfile = args.output_psf
-
-
+        
     nproc = 1
     rank = 0
     if comm is not None:
