@@ -13,6 +13,8 @@ rex_fiberloss: 0.571
 rex_frac: 0.397
 ser_fiberloss: 1.033
 ser_frac: 0.014
+sv1_tracer: LRG_IR
+tracer: LRG
 wgt_fiberloss: 0.727
 zhi: 0.966
 zlo: 0.685

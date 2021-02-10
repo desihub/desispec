@@ -5,6 +5,8 @@ med_fibmag: 21.884
 med_mag: 21.611
 psf_fiberloss: 0.272
 psf_frac: 1.0
+sv1_tracer: QSO_RF_4PASS
+tracer: QSO
 wgt_fiberloss: 0.272
 zhi: 1.933
 zlo: 0.559
