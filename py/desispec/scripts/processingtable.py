@@ -16,7 +16,7 @@ from desispec.workflow.proctable import default_exptypes_for_proctable, get_proc
 from desispec.workflow.tableio import load_table, write_table
 
 
-def create_processing_tables(nights=None, prodname=None, exp_table_path=None, proc_table_path=None,
+def create_processing_tables(nights=None, night_range=None, prodname=None, exp_table_path=None, proc_table_path=None,
                              obstypes=None, verwrite_files=False, verbose=False, no_specprod_exptab=False,
                              exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
     """
@@ -24,6 +24,9 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
 
     Args:
         nights: str, int, or comma separated list. The night(s) to generate procesing tables for.
+        night_range: str, comma separated pair of nights in form YYYYMMDD,YYYYMMDD for first_night,last_night
+                          specifying the beginning and end of a range of nights to be generated.
+                          last_night should be inclusive.
         prodname: str. The name of the current production. If used, this will overwrite the SPECPROD environment variable.
         exp_table_path: str. Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
         proc_table_path: str. Full path to where to processing tables to be written.
@@ -42,11 +45,37 @@ def create_processing_tables(nights=None, prodname=None, exp_table_path=None, pr
         Requires exposure tables to exist on disk. Either in the default location or at the location specified
         using the function arguments.
     """
-    if nights is None:
-        print("Need to provide nights to create processing tables for. If you want all nights, use 'all'")
+    if nights is None and night_range is None:
+        raise ValueError("Must specify either nights or night_range")
+    elif nights is not None and night_range is not None:
+        raise ValueError("Must only specify either nights or night_range, not both")
 
-    if obstypes is None:
+    if nights is None or nights == 'all':
+        nights = list()
+        for n in listpath(os.getenv('DESI_SPECTRO_DATA')):
+            # - nights are 20YYMMDD
+            if re.match('^20\d{6}$', n):
+                nights.append(n)
+    else:
+        nights = [int(val.strip()) for val in nights.split(",")]
+
+    nights = np.array(nights)
+
+    if night_range is not None:
+        if ',' not in night_range:
+            raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
+        nightpair = night_range.split(',')
+        if len(nightpair) != 2 or not nightpair[0].isnumeric() or not nightpair[1].isnumeric():
+            raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
+        first_night, last_night = nightpair
+        nights = nights[np.where(int(first_night) <= nights.astype(int))[0]]
+        nights = nights[np.where(int(last_night) >= nights.astype(int))[0]]
+
+    if obstypes is not None:
+        obstypes = [ val.strip('\t ') for val in obstypes.split(",") ]
+    else:
         obstypes = default_exptypes_for_proctable()
+
     ## Define where to find the data
     if exp_table_path is None:
         usespecprod = (not no_specprod_exptab)

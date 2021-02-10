@@ -2,6 +2,7 @@
 import os
 import sys
 import numpy as np
+import re
 from astropy.table import Table
 from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
@@ -48,23 +49,27 @@ def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         raise ValueError("Must specify either nights or night_range")
     elif nights is not None and night_range is not None:
         raise ValueError("Must only specify either nights or night_range, not both")
-    elif night_range is not None:
+
+    if nights is None or nights=='all':
+        nights = list()
+        for n in listpath(os.getenv('DESI_SPECTRO_DATA')):
+            #- nights are 20YYMMDD
+            if re.match('^20\d{6}$', n):
+                nights.append(n)
+    else:
+        nights = [ int(val.strip()) for val in nights.split(",") ]
+
+    nights = np.array(nights)
+
+    if night_range is not None:
         if ',' not in night_range:
             raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
         nightpair = night_range.split(',')
         if len(nightpair) != 2 or not nightpair[0].isnumeric() or not nightpair[1].isnumeric():
             raise ValueError("night_range must be a comma separated pair of nights in form YYYYMMDD,YYYYMMDD")
-        nights = np.arange(int(nightpair[0]),int(nightpair[1])+1)
-    else:
-        nights = np.array([ int(val) for val in nights.strip("\n\t ").split(",") ])
-
-    nights = nights[( (nights > 20191100) & (nights % 100 < 32) & ( (nights % 10000)//100 < 13) )].tolist()
-    for night in nights.copy():
-        month = night_to_month(night)
-        if month in ['04','06','09','11'] and night % 100 > 30:
-            nights.remove(night)
-        if month == '02' and night % 100 > 29:
-            nights.remove(night)
+        first_night, last_night = nightpair
+        nights = nights[np.where(int(first_night)<=nights.astype(int))[0]]
+        nights = nights[np.where(int(last_night)>=nights.astype(int))[0]]
 
     if obstypes is not None:
         obstypes = [ val.strip('\t ') for val in obstypes.split(",") ]
