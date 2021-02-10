@@ -13,7 +13,7 @@ from desiutil.log import get_logger
 from scipy.optimize import minimize
 
 
-def get_ensemble(dirpath, bands, smooth=True):
+def get_ensemble(dirpath, bands, smooth=125):
     '''                                                                                                              
     Function that takes a frame object and a bitmask and                                                               
     returns ivar (and optionally mask) array(s) that have fibers with                                                  
@@ -49,8 +49,9 @@ def get_ensemble(dirpath, bands, smooth=True):
             flux[band] = dat['DFLUX_{}'.format(band.upper())].data
             ivar[band] = 1.e99 * np.ones_like(flux[band])
 
-            if smooth:
-                flux[band] = convolve(flux[band][0,:], Box1DKernel(125), boundary='extend')
+            # 125: 100. A in 0.8 pixel.
+            if smooth > 0:
+                flux[band] = convolve(flux[band][0,:], Box1DKernel(smooth), boundary='extend')
                 flux[band] = flux[band].reshape(1, len(flux[band]))
                 
         ensembles[tracer] = Spectra(bands, wave, flux, ivar)
