@@ -141,14 +141,15 @@ class TestBinScripts(unittest.TestCase):
             fibermap['DESI_TARGET'][i] = desi_mask.SKY
             fibermap['OBJTYPE'][i+1] = 'TGT'
             fibermap['DESI_TARGET'][i+1] = desi_mask.STD_FAINT
-            fibermap['GAIA_PHOT_G_MEAN_MAG'][i+1] =15
-            fibermap['GAIA_PHOT_BP_MEAN_MAG'][i+1] =15
-            fibermap['GAIA_PHOT_RP_MEAN_MAG'][i+1] =15
-            if not gaia_only:
-                fibermap['FLUX_G'][i+1] =100
-                fibermap['FLUX_R'][i+1] =100
-                fibermap['FLUX_Z'][i+1] =100
-            
+            fibermap['GAIA_PHOT_G_MEAN_MAG'][i+1] = 15
+            fibermap['GAIA_PHOT_BP_MEAN_MAG'][i+1] = 15
+            fibermap['GAIA_PHOT_RP_MEAN_MAG'][i+1] = 15
+            if gaia_only:
+                fibermap['PHOTSYS'] = 'G'
+            else:
+                fibermap['FLUX_G'][i+1] = 100
+                fibermap['FLUX_R'][i+1] = 100
+                fibermap['FLUX_Z'][i+1] = 100
         return fibermap
 
     def _write_fibermap(self):
