@@ -7,7 +7,7 @@ desispec Change Log
 
 Major updates:
 
-* Support Gaia stdstars (PR `#1105`_, `#1109`_, `#1114`_).
+* Support Gaia stdstars (PR `#1105`_, `#1109`_, `#1114`_, `#1133`_).
 * Fix cosmics masking in coaddition (PR `#1113`_).
 * Improved sky modeling (PR `#1125`_).
 
@@ -23,6 +23,9 @@ Smaller (but important) updates:
 * Robustness and feature updates to dark model generation
   (PR `#1119`_, `#1123`_)
 * More flexible CCD calibration configuration (PR `#1121`_).
+* Processing dashboard useability updates (PR `#1127`_).
+* NIGHT int vs. str bugfix in QA (PR `#1129`_).
+* Support coaddition of fibermaps with different columns (PR `#1130`_).
 
 .. _`#1083`: https://github.com/desihub/desispec/issues/1083
 .. _`#1084`: https://github.com/desihub/desispec/issues/1084
@@ -40,6 +43,10 @@ Smaller (but important) updates:
 .. _`#1121`: https://github.com/desihub/desispec/issues/1121
 .. _`#1123`: https://github.com/desihub/desispec/issues/1123
 .. _`#1125`: https://github.com/desihub/desispec/issues/1125
+.. _`#1127`: https://github.com/desihub/desispec/issues/1127
+.. _`#1129`: https://github.com/desihub/desispec/issues/1129
+.. _`#1130`: https://github.com/desihub/desispec/issues/1130
+.. _`#1133`: https://github.com/desihub/desispec/issues/1133
 
 0.36.1 (2021-01-04)
 -------------------
