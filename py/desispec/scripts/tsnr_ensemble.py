@@ -22,6 +22,7 @@ from   desiutil.dust                 import mwdust_transmission
 from   desiutil.log                  import get_logger
 from   pkg_resources                 import resource_filename
 from   scipy.interpolate             import interp1d
+from   astropy.table                 import Table, vstack
 
 
 np.random.seed(seed=314)
@@ -42,6 +43,8 @@ def parse(options=None):
                         help='Directory to config files if not desispec repo.')
     parser.add_argument('--smooth', type=float, default=100., required=False,
                         help='Smoothing scale [A] for DFLUX calc.')
+    parser.add_argument('--metadir', type=str, default=None, required=False,
+                        help='Path to meta files.  If provided, --Nz is ignored.')
     parser.add_argument('--Nz', action='store_true',
                         help = 'Apply tracer Nz weighting in stacking of ensemble.')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
@@ -70,18 +73,29 @@ class template_ensemble(object):
     If conditioned, uses deepfield redshifts and (currently r) magnitudes to condition simulated templates.                                                                                                                               
     '''
     
-    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None, Nz=False, smooth=100.):
+    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None, Nz=False, smooth=100., metadir=None):
         if log is None:
             log = get_logger()
 
         if configdir == None:
             cpath = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
         else:
-            cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
+            cpath = configdir + '/tsnr-config-{}.yaml'.format(tracer)
 
         config = Config(cpath)
+
+        if metadir != None:
+            inmeta = Table.read(metadir + '/meta_{}.fits'.format(tracer.upper()))
+
+            while len(inmeta) < nmodel:
+                inmeta = vstack((inmeta, inmeta))
             
-        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None, config=None):
+            inmeta = inmeta[:nmodel]
+
+        else:
+            inmeta = None
+            
+        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, config=None, meta=None):
             '''
             Dedicated wrapeper for desisim.templates.GALAXY.make_templates call, stipulating templates in a
             redshift range suggested by the FDR.  Further, assume fluxes close to the expected (within ~0.5 mags.)
@@ -111,8 +125,19 @@ class template_ensemble(object):
 
             # Calibration vector assumes PSF mtype.
             log.info('psf fiberloss: {:.3f}'.format(psf_loss))
-            log.info('Relative fiberloss to psf morphtype: {:.3f}'.format(rel_loss))
+            log.info('relative fiberloss to psf morphtype: {:.3f}'.format(rel_loss))
 
+            if meta is not None:
+                log.info('populating redshifts and magnitudes with input meta.')
+                log.info('ignoring zrange and mag range.')
+                
+                redshifts = meta['REDSHIFT']
+                mags = meta['MAG']
+                fibmags = meta['FIBMAG']
+
+            else:
+                redshifts = mags = fibmags = None
+                
             if tracer == 'bgs':
                 # Cut on mag. 
                 # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1312
@@ -130,7 +155,7 @@ class template_ensemble(object):
                 magrange = (config.med_fibmag, config.limit_fibmag)
                 
                 maker = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
-                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+                flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=fibmags, south=True, zrange=zrange, magrange=magrange)
 
                 # Take factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
                 # Note:  Oppostive to other tracers as templates normalized to fibermag.  
@@ -167,7 +192,7 @@ class template_ensemble(object):
 
 
         ## 
-        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel, config=config)
+        _, flux, meta, objmeta         = tracer_maker(wave, tracer=tracer, nmodel=nmodel, config=config, meta=inmeta)
                 
         self.ensemble_flux             = {}
         self.ensemble_dflux            = {}
@@ -201,6 +226,8 @@ class template_ensemble(object):
         zs = meta['REDSHIFT'].data
             
         if Nz:
+            zs = meta['REDSHIFT'].data
+            
             log.info('Applying FDR N(Z) weights.')
             
             # Get tracer N(z) [Total number per sq deg per dz=0.1 redshift bin].
@@ -230,6 +257,13 @@ class template_ensemble(object):
         hdr['PSFFLOSS'] = config.psf_fiberloss
         hdr['WGTFLOSS'] = config.wgt_fiberloss
         hdr['SMOOTH']   = smooth
+
+        if meta is not None:
+            hdr['META'] = 'TRUE'
+        elif Nz:
+            hdr['FDR']  = 'TRUE'
+        else:
+            pass
         
         hdu_list = [fits.PrimaryHDU(header=hdr)]
 
@@ -251,7 +285,7 @@ def main():
 
     args = parse()
     
-    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir, Nz=args.Nz, smooth=args.smooth)
+    template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir, Nz=args.Nz, smooth=args.smooth, metadir=args.metadir)
 
 if __name__ == '__main__':
     main()
