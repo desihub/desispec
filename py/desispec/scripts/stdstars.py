@@ -440,12 +440,14 @@ def main(args) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
-        
+    if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all(): 
+        log.error('Unknown PHOTSYS found')
+        raise Exception('Unknown PHOTSYS found')
     # Fetching Filter curves
     model_filters = dict()
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
-            if photsys != '':
+            if photsys in ['N','S']:
                 model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
     if len(model_filters) == 0:
         log.info('No Legacy survey photometry identified in fibermap')
