@@ -170,6 +170,7 @@ def main(args, comm=None):
         com.extend(['-a', imgfile])
         com.extend(['--in-psf', inpsffile])
         com.extend(['--out-psf', outbundlefits])
+        com.extend(['--lamp-lines', lamp_lines_file])
         com.extend(['--first-bundle', "{}".format(b)])
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
