@@ -195,20 +195,24 @@ def main(args) :
 
             #- Confirm that all fluxes have entries but trust targeting bits
             #- to get basic magnitude range correct
-            keep = np.ones(len(frame_starindices), dtype=bool)
+            keep_legacy = np.ones(len(frame_starindices), dtype=bool)
 
             for colname in ['FLUX_G', 'FLUX_R', 'FLUX_Z']:  #- and W1 and W2?
-                keep &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
-                keep &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
+                keep_legacy &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
+                keep_legacy &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
             keep_gaia = np.ones(len(frame_starindices), dtype=bool)
 
             for colname in ['G', 'BP', 'RP']:  #- and W1 and W2?
                 keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] > 10
                 keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] < 20
-            n_legacy_std = keep.sum() 
+            n_legacy_std = keep_legacy.sum() 
             n_gaia_std = keep_gaia.sum()
-            keep = keep | keep_gaia
-            # accept both types of standards
+            keep = keep_legacy | keep_gaia
+            # accept both types of standards for the time being
+
+            # keep the indices for gaia/legacy subsets
+            gaia_indices = keep_gaia[keep]
+            legacy_indices = keep_legacy[keep]
             
             frame_starindices = frame_starindices[keep]
 
@@ -288,11 +292,18 @@ def main(args) :
         ref_mag_name = 'GAIA-G'
         color_band1, color_band2  = ['GAIA-'+ _ for _ in color[5:].split('-')]
         log.info("Using Gaia standards with color {} and normalizing to {}".format(color, ref_mag_name))
+        # select appropriate subset of standards
+        starindices = starindices[gaia_indices]
+        starfibers = starfibers[gaia_indices]
     else:
         ref_mag_name = 'R'
         color_band1, color_band2  = color.split('-')
         log.info("Using Legacy standards with color {} and normalizing to {}".format(color, ref_mag_name))
+        # select appropriate subset of standards
+        starindices = starindices[legacy_indices]
+        starfibers = starfibers[legacy_indices]
     
+        
     # excessive check but just in case
     if not color in ['G-R', 'R-Z', 'GAIA-BP-RP', 'GAIA-G-RP']:
         raise ValueError('Unknown color {}'.format(color))
@@ -440,12 +451,14 @@ def main(args) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
-        
+    if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all(): 
+        log.error('Unknown PHOTSYS found')
+        raise Exception('Unknown PHOTSYS found')
     # Fetching Filter curves
     model_filters = dict()
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
-            if photsys != '':
+            if photsys in ['N','S']:
                 model_filters[band+photsys] = load_legacy_survey_filter(band=band,photsys=photsys)
     if len(model_filters) == 0:
         log.info('No Legacy survey photometry identified in fibermap')
