@@ -17,20 +17,6 @@ from ctypes.util import find_library
 from astropy.io import fits
 
 from desiutil.log import get_logger
-from specex.specex import run_specex
-
-modext = "so"
-if sys.platform == "darwin":
-    modext = "bundle"
-
-specexdata = None
-
-if 'SPECEXDATA' in os.environ:
-    specexdata = os.environ['SPECEXDATA']
-else:
-    from pkg_resources import resource_filename
-    specexdata = resource_filename('specex', 'data')
-lamp_lines_file = os.path.join(specexdata,'specex_linelist_desi.txt')
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
@@ -69,6 +55,9 @@ def main(args, comm=None):
 
     log = get_logger()
 
+    #- only import when running, to avoid requiring specex install for import
+    from specex.specex import run_specex
+
     imgfile = args.input_image
     outfile = args.output_psf
         
@@ -83,6 +72,15 @@ def main(args, comm=None):
         hdr = fits.getheader(imgfile)
     if comm is not None:
         hdr = comm.bcast(hdr, root=0)
+
+    #- Locate line list in $SPECEXDATA or specex/data
+    if 'SPECEXDATA' in os.environ:
+        specexdata = os.environ['SPECEXDATA']
+    else:
+        from pkg_resources import resource_filename
+        specexdata = resource_filename('specex', 'data')
+
+    lamp_lines_file = os.path.join(specexdata,'specex_linelist_desi.txt')
 
     if args.input_psf is not None:
         inpsffile = args.input_psf
@@ -241,6 +239,9 @@ def main(args, comm=None):
 
 
 def compatible(head1, head2) :
+    """
+    Return bool for whether two FITS headers are compatible for merging PSFs
+    """
     log = get_logger()
     for k in ["PSFTYPE", "NPIX_X", "NPIX_Y", "HSIZEX", "HSIZEY", "FIBERMIN",
         "FIBERMAX", "NPARAMS", "LEGDEG", "GHDEGX", "GHDEGY"] :
@@ -251,6 +252,13 @@ def compatible(head1, head2) :
 
 
 def merge_psf(inputs, output):
+    """
+    Merge individual per-bundle PSF files into full PSF
+
+    Args:
+        inputs: list of input PSF filenames
+        output: output filename
+    """
 
     log = get_logger()
 
@@ -305,13 +313,22 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
-    psf_hdulist.writeto(output,overwrite=True)
+    tmpfile = output+'.tmp'
+    psf_hdulist.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, output)
     log.info("Wrote PSF {}".format(output))
 
     return
 
 
 def mean_psf(inputs, output):
+    """
+    Average multiple input PSF files into an output PSF file
+
+    Args:
+        inputs: list of input PSF files
+        output: output filename
+    """
 
     log = get_logger()
 
@@ -329,7 +346,6 @@ def mean_psf(inputs, output):
     bundle_rchi2=[]
     nbundles=None
     nfibers_per_bundle=None
-
 
     for input in inputs :
         log.info("Adding {}".format(input))
@@ -498,7 +514,9 @@ def mean_psf(inputs, output):
                 hdulist[hdu].header["comment"] = "inc {}".format(input)
 
     # save output PSF
-    hdulist.writeto(output, overwrite=True)
+    tmpfile = output+'.tmp'
+    hdulist.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, output)
     log.info("wrote {}".format(output))
 
     return
