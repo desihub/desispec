@@ -17,7 +17,7 @@ from desispec.workflow.proctable import default_exptypes_for_proctable, get_proc
 from desispec.workflow.tableio import load_table, write_table
 
 
-def create_processing_tables(nights=None, night_range=None, prodname=None, exp_table_path=None, proc_table_path=None,
+def create_processing_tables(nights=None, night_range=None, exp_table_path=None, proc_table_path=None,
                              obstypes=None, overwrite_files=False, verbose=False, no_specprod_exptab=False,
                              exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
     """
@@ -28,7 +28,6 @@ def create_processing_tables(nights=None, night_range=None, prodname=None, exp_t
         night_range: str, comma separated pair of nights in form YYYYMMDD,YYYYMMDD for first_night,last_night
                           specifying the beginning and end of a range of nights to be generated.
                           last_night should be inclusive.
-        prodname: str. The name of the current production. If used, this will overwrite the SPECPROD environment variable.
         exp_table_path: str. Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
         proc_table_path: str. Full path to where to processing tables to be written.
         obstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
@@ -81,10 +80,6 @@ def create_processing_tables(nights=None, night_range=None, prodname=None, exp_t
     if exp_table_path is None:
         usespecprod = (not no_specprod_exptab)
         exp_table_path = get_exposure_table_path(night=None,usespecprod=usespecprod)
-
-    if prodname is None:
-        prodname = define_variable_from_environment(env_name='SPECPROD',
-                                                    var_descr="The production name")
 
     ## Define where to save the data
     if proc_table_path is None:

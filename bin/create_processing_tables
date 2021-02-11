@@ -17,7 +17,6 @@ def get_parser():
                                                                       "for first_night,last_night specifying the beginning"+\
                                                                       "and end of a range of nights to be generated. "+\
                                                                       "last_night should be inclusive.")
-    parser.add_argument("-p", "--specprod", type=str, default=None, help="name of the production run")
     parser.add_argument("-i", "--exp-table-path", type=str, default=None, help="data path to exposure tables, without the month subdirectory.")
     parser.add_argument("-o","--proc-table-path", type=str, default=None,  help="path to save processing tables")
     parser.add_argument("--obstypes", type=str, default=None, help="comma separated list of exposure types to include in "+\
