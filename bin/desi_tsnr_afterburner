@@ -1,7 +1,7 @@
+#!/usr/bin/env python
 '''
 Calculate stand alone tsnr tables for a given desispec prod.
 '''
-
 
 import os
 import glob
@@ -35,6 +35,8 @@ def parse(options=None):
                         help = 'Write only summary file.')
     parser.add_argument('--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to be reduced.')
+    parser.add_argument('--night', type = int, default = None, required=False,
+                        help = 'Restrict to this night only..')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -66,9 +68,13 @@ def main():
     
     cframes = {}
 
-    for cam in cameras:
-        cframes[cam] = list(glob.glob('{}/exposures/*/*/cframe-{}-*.fits'.format(args.prod, cam)))
-
+    if args.night is None:
+        for cam in cameras:
+            cframes[cam] = list(glob.glob('{}/exposures/*/*/cframe-{}-*.fits'.format(args.prod, cam)))
+    else:
+        for cam in cameras:
+            cframes[cam] = list(glob.glob('{}/exposures/{:d}/*/cframe-{}-*.fits'.format(args.prod, args.night, cam)))
+            
     sci_frames = {}
 
     for cam in cameras:
@@ -194,10 +200,12 @@ def main():
                 log.info('{:08d}  {}: Reduced {} of {}.'.format(expid, cam, kk, len(sci_frames[cam])))
 
         hdul.close()
-        
-    summary.write(args.outdir + '/summary_{}.fits'.format(cam), format='fits', overwrite=True)
 
-    log.info('Successfully written {}.'.format(args.outdir + '/summary_{}.fits'.format(cam)))
+    # Write summary files only if prod run, not comma sep. exp list. 
+    if args.expids is None:
+        summary.write(args.outdir + '/summary_{}.fits'.format(cam), format='fits', overwrite=True)
+
+        log.info('Successfully written {}.'.format(args.outdir + '/summary_{}.fits'.format(cam)))
 
     
 if __name__ == '__main__':
