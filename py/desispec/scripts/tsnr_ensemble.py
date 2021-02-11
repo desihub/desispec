@@ -1,8 +1,9 @@
 '''
-Generate Master TSNR ensemble DFLUX files.  See doc. 4723.  Note: in this instance, ensemble avg. of flux 
-is written, in order to efficiently generate tile depths.  
+Generate Master TSNR ensemble DFLUX files.  See doc. 4723.  Note: in this
+instance, ensemble avg. of flux is written, in order to efficiently generate
+tile depths.
 
-Currently assumes redshift and mag. ranges derived from FDR, but uniform in both.
+Currently assumes redshift and mag ranges derived from FDR, but uniform in both.
 '''
 import os
 import sys
@@ -63,13 +64,32 @@ class Config(object):
             setattr(self, key, d[key])
         
 class template_ensemble(object):
-    '''                                                                                                                                                                                                                                   
-    Generate an ensemble of templates to sample tSNR for a range of points in                                                                                                                                                             
-    (z, m, OII, etc.) space.                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-    If conditioned, uses deepfield redshifts and (currently r) magnitudes to condition simulated templates.                                                                                                                               
+    '''
+    Generate an ensemble of templates to sample tSNR for a range of points in
+    (z, m, OII, etc.) space.
+
+    If conditioned, uses deepfield redshifts and (currently r) magnitudes
+    to condition simulated templates.
     '''
     
-    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None, Nz=False, smooth=100.):
+    def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None,
+                 Nz=False, smooth=100.):
+        """
+        Generate a template ensemble for template S/N measurements (tSNR)
+
+        Args:
+            outdir: output directory
+
+        Options:
+            tracer: 'bgs', 'lrg', 'elg', or 'qso'
+            nmodel: number of template models to generate
+            log: logger to use
+            configdir: directory to override tsnr-config-{tracer}.yaml files
+            Nz (bool): if True, apply FDR N(z) weights
+            smooth: smoothing scale for <F - smooth(F)>
+
+        Writes {outdir}/tsnr-ensemle-{tracer}.fits files
+        """
         if log is None:
             log = get_logger()
 
@@ -80,15 +100,18 @@ class template_ensemble(object):
 
         config = Config(cpath)
             
-        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None, mags=None, config=None):
+        def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None,
+                         mags=None, config=None):
             '''
-            Dedicated wrapeper for desisim.templates.GALAXY.make_templates call, stipulating templates in a
-            redshift range suggested by the FDR.  Further, assume fluxes close to the expected (within ~0.5 mags.)
+            Dedicated wrapper for desisim.templates.GALAXY.make_templates call,
+            stipulating templates in a redshift range suggested by the FDR.
+            Further, assume fluxes close to the expected (within ~0.5 mags.)
             in the appropriate band.   
 
-            Class init will write ensemble stack to disk at outdir, for a given tracer [bgs, lrg, elg, qso], having 
-            generated nmodel templates.  Optionally, provide redshifts and mags. to condition appropriately at cose 
-            of runtime.    
+            Class init will write ensemble stack to disk at outdir, for a given
+            tracer [bgs, lrg, elg, qso], having generated nmodel templates.
+            Optionally, provide redshifts and mags. to condition appropriately
+            at cost of runtime.
             '''
             # Only import desisim if code is run, not at module import
             # to minimize desispec -> desisim -> desispec dependency loop
@@ -102,8 +125,8 @@ class template_ensemble(object):
 
             zrange   = (config.zlo, config.zhi)
  
-            # Variance normalized as for psf, so we need an additional linear flux loss so account for
-            # the relative factors.
+            # Variance normalized as for psf, so we need an additional linear
+            # flux loss so account for the relative factors.
             psf_loss = -config.psf_fiberloss / 2.5
             psf_loss = 10.**psf_loss
             
@@ -126,7 +149,8 @@ class template_ensemble(object):
                 maker = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
-                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.  
+                # Additional factor rel. to psf.; TSNR put onto instrumental
+                # e/A given calibration vector that includes psf-like loss.
                 flux *= rel_loss
                 
             elif tracer == 'lrg':
@@ -137,7 +161,8 @@ class template_ensemble(object):
                 maker = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
-                # Take factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                # Take factor rel. to psf.; TSNR put onto instrumental
+                # e/A given calibration vector that includes psf-like loss.
                 # Note:  Oppostive to other tracers as templates normalized to fibermag.  
                 flux /=	psf_loss
                 
@@ -149,7 +174,8 @@ class template_ensemble(object):
                 maker = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
-                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                # Additional factor rel. to psf.; TSNR put onto instrumental
+                # e/A given calibration vector that includes psf-like loss.
                 flux *=	rel_loss
                 
             elif tracer == 'qso':
@@ -160,7 +186,8 @@ class template_ensemble(object):
                 maker = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
-                # Additional factor rel. to psf.; TSNR put onto instrumental e/A given calibration vector that includes psf-like loss.
+                # Additional factor rel. to psf.; TSNR put onto instrumental
+                # e/A given calibration vector that includes psf-like loss.
                 flux *=	rel_loss
                 
             else:
@@ -184,24 +211,21 @@ class template_ensemble(object):
         smoothing = np.ceil(smooth / wdelta).astype(np.int)
 
         log.info('Applying {:.3f} AA smoothing ({:d} pixels)'.format(smooth, smoothing))
-        
-        # Generate template (d)fluxes for brz bands.                                                                                                                                                                                         
+ 
+        # Generate template (d)fluxes for brz bands.
         for band in ['b', 'r', 'z']:
-            band_wave                     = wave[cslice[band]]
+            band_wave                 = wave[cslice[band]]
+            in_band                   = np.isin(wave, band_wave)
+            self.ensemble_flux[band]  = flux[:, in_band]
+            dflux                     = np.zeros_like(self.ensemble_flux[band])
 
-            in_band                       = np.isin(wave, band_wave)
-
-            self.ensemble_flux[band]      = flux[:, in_band]
-
-            dflux                         = np.zeros_like(self.ensemble_flux[band])
-        
-            # Retain only spectral features < 100. Angstroms.                                                                                                                                                                                 
-            # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.                                                                                                                                                                        
+            # Retain only spectral features < 100. Angstroms.
+            # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.
             for i, ff in enumerate(self.ensemble_flux[band]):
-                sflux                     = convolve(ff, Box1DKernel(smoothing), boundary='extend')
-                dflux[i,:]                = ff - sflux
+                sflux                 = convolve(ff, Box1DKernel(smoothing), boundary='extend')
+                dflux[i,:]            = ff - sflux
 
-            self.ensemble_dflux[band]     = dflux
+            self.ensemble_dflux[band] = dflux
 
         zs = meta['REDSHIFT'].data
             
