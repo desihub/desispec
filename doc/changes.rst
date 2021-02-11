@@ -2,12 +2,19 @@
 desispec Change Log
 ===================
 
-0.37.1 (unreleased)
+0.38.1 (unreleased)
 -------------------
 
 * No changes yet
 
-0.37.0 (2021-02-11)
+0.38.0 (2021-02-10)
+-------------------
+
+* Change how specex PSF fitting is called; requires specex>=0.7.0 (PR `#1082`_)
+
+.. _`#1082`: https://github.com/desihub/desispec/issues/1082
+
+0.37.0 (2021-02-10)
 -------------------
 
 Major updates:
