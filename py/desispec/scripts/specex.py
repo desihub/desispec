@@ -18,51 +18,6 @@ from astropy.io import fits
 
 from desiutil.log import get_logger
 
-modext = "so"
-if sys.platform == "darwin":
-    modext = "bundle"
-
-specexdata = None
-
-libspecexname = "libspecex.{}".format(modext)
-if "LIBSPECEX_DIR" in os.environ:
-    libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"],
-        "libspecex.{}".format(modext))
-    specexdata = os.path.join(
-        os.path.dirname(os.environ["LIBSPECEX_DIR"]), "data"
-    )
-elif "SPECEX" in os.environ:
-    specexdata = os.path.join(os.environ["SPECEX"], "data")
-
-libspecex = None
-try:
-    libspecex = ct.CDLL(libspecexname)
-except:
-    path = find_library("specex")
-    if path is not None:
-        libspecex = ct.CDLL(path)
-        specexdata = os.path.join(
-            os.path.dirname(os.path.dirname(path)), "data"
-        )
-
-if libspecex is not None:
-    libspecex.cspecex_desi_psf_fit.restype = ct.c_int
-    libspecex.cspecex_desi_psf_fit.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-    libspecex.cspecex_psf_merge.restype = ct.c_int
-    libspecex.cspecex_psf_merge.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-    libspecex.cspecex_spot_merge.restype = ct.c_int
-    libspecex.cspecex_spot_merge.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-
-
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
         "one frame with specex")
@@ -100,10 +55,12 @@ def main(args, comm=None):
 
     log = get_logger()
 
+    #- only import when running, to avoid requiring specex install for import
+    from specex.specex import run_specex
+
     imgfile = args.input_image
     outfile = args.output_psf
-
-
+        
     nproc = 1
     rank = 0
     if comm is not None:
@@ -115,6 +72,15 @@ def main(args, comm=None):
         hdr = fits.getheader(imgfile)
     if comm is not None:
         hdr = comm.bcast(hdr, root=0)
+
+    #- Locate line list in $SPECEXDATA or specex/data
+    if 'SPECEXDATA' in os.environ:
+        specexdata = os.environ['SPECEXDATA']
+    else:
+        from pkg_resources import resource_filename
+        specexdata = resource_filename('specex', 'data')
+
+    lamp_lines_file = os.path.join(specexdata,'specex_linelist_desi.txt')
 
     if args.input_psf is not None:
         inpsffile = args.input_psf
@@ -202,6 +168,7 @@ def main(args, comm=None):
         com.extend(['-a', imgfile])
         com.extend(['--in-psf', inpsffile])
         com.extend(['--out-psf', outbundlefits])
+        com.extend(['--lamp-lines', lamp_lines_file])
         com.extend(['--first-bundle', "{}".format(b)])
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
@@ -220,14 +187,7 @@ def main(args, comm=None):
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
-        argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) \
-            for i in range(argc)]
-        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in \
-            map(ct.addressof, arg_buffers) ]
-        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
-
-        retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
+        retval = run_specex(com)
 
         if retval != 0:
             comstr = " ".join(com)
@@ -279,6 +239,9 @@ def main(args, comm=None):
 
 
 def compatible(head1, head2) :
+    """
+    Return bool for whether two FITS headers are compatible for merging PSFs
+    """
     log = get_logger()
     for k in ["PSFTYPE", "NPIX_X", "NPIX_Y", "HSIZEX", "HSIZEY", "FIBERMIN",
         "FIBERMAX", "NPARAMS", "LEGDEG", "GHDEGX", "GHDEGY"] :
@@ -289,6 +252,13 @@ def compatible(head1, head2) :
 
 
 def merge_psf(inputs, output):
+    """
+    Merge individual per-bundle PSF files into full PSF
+
+    Args:
+        inputs: list of input PSF filenames
+        output: output filename
+    """
 
     log = get_logger()
 
@@ -343,13 +313,22 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
-    psf_hdulist.writeto(output,overwrite=True)
+    tmpfile = output+'.tmp'
+    psf_hdulist.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, output)
     log.info("Wrote PSF {}".format(output))
 
     return
 
 
 def mean_psf(inputs, output):
+    """
+    Average multiple input PSF files into an output PSF file
+
+    Args:
+        inputs: list of input PSF files
+        output: output filename
+    """
 
     log = get_logger()
 
@@ -367,7 +346,6 @@ def mean_psf(inputs, output):
     bundle_rchi2=[]
     nbundles=None
     nfibers_per_bundle=None
-
 
     for input in inputs :
         log.info("Adding {}".format(input))
@@ -536,7 +514,9 @@ def mean_psf(inputs, output):
                 hdulist[hdu].header["comment"] = "inc {}".format(input)
 
     # save output PSF
-    hdulist.writeto(output, overwrite=True)
+    tmpfile = output+'.tmp'
+    hdulist.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, output)
     log.info("wrote {}".format(output))
 
     return
