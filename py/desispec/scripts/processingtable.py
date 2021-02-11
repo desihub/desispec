@@ -3,6 +3,7 @@
 import os
 import sys
 import numpy as np
+import re
 from astropy.table import Table, vstack
 from astropy.io import fits
 from desispec.io.util import parse_cameras, difference_camwords
@@ -17,7 +18,7 @@ from desispec.workflow.tableio import load_table, write_table
 
 
 def create_processing_tables(nights=None, night_range=None, prodname=None, exp_table_path=None, proc_table_path=None,
-                             obstypes=None, verwrite_files=False, verbose=False, no_specprod_exptab=False,
+                             obstypes=None, overwrite_files=False, verbose=False, no_specprod_exptab=False,
                              exp_filetype='csv', prod_filetype='csv', joinsymb='|'):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
