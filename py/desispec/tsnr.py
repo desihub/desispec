@@ -209,6 +209,10 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
         
     return alpha
 
+#- Cache files from desimodel to avoid reading them N>>1 times
+_camera_nea_angperpix = None
+_band_ensemble = None
+
 def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
     '''
     Compute template SNR^2 values for a given frame
@@ -226,6 +230,8 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
 
     Note:  Assumes DESIMODEL is set and up to date. 
     '''
+    global _camera_nea_angperpix
+    global _band_ensemble
     
     log=get_logger()
 
@@ -244,13 +250,28 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
         log.error("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
         raise RuntimeError("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
 
-    neafilename=os.path.join(os.environ["DESIMODEL"],"data/specpsf/nea/masternea_{}.fits".format(camera))
-    log.info("read NEA file {}".format(neafilename))
-    nea, angperpix=read_nea(neafilename)
+    if _camera_nea_angperpix is None:
+        _camera_nea_angperpix = dict()
 
-    ensembledir=os.path.join(os.environ["DESIMODEL"],"data/tsnr")
-    log.info("read TSNR ensemble files in {}".format(ensembledir))
-    ensemble=get_ensemble(ensembledir, bands=[band,])
+    if camera in _camera_nea_angperpix:
+        nea, angperpix = _camera_nea_angperpix[camera]
+    else:
+        neafilename=os.path.join(os.environ["DESIMODEL"],
+                                 f"data/specpsf/nea/masternea_{camera}.fits")
+        log.info("read NEA file {}".format(neafilename))
+        nea, angperpix = read_nea(neafilename)
+        _camera_nea_angperpix[camera] = nea, angperpix
+
+    if _band_ensemble is None:
+        _band_ensemble = dict()
+
+    if band in _band_ensemble:
+        ensemble = _band_ensemble[band]
+    else:
+        ensembledir=os.path.join(os.environ["DESIMODEL"],"data/tsnr")
+        log.info("read TSNR ensemble files in {}".format(ensembledir))
+        ensemble = get_ensemble(ensembledir, bands=[band,])
+        _band_ensemble[band] = ensemble
 
     nspec, nwave = fluxcalib.calib.shape
 

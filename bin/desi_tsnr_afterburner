@@ -24,19 +24,19 @@ from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Apply fiberflat, sky subtraction and calibration.")
+    parser = argparse.ArgumentParser(description="Calculate template S/N ratio for exposures")
     parser.add_argument('--outdir', type = str, default = None, required=True,
                         help = 'Dir. to write to.')
-    parser.add_argument('--prod', type = str, default = None, required=True,
+    parser.add_argument('--prod', type = str, default = None, required=False,
                         help = 'Path to reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/')
-    parser.add_argument('--camera', type = str, default = None, required=False,
-                        help = 'Camera to reduce.')
+    parser.add_argument('--cameras', type = str, default = None, required=False,
+                        help = 'Cameras to reduce (comma separated).')
     parser.add_argument('--summary_only', type = int, default = 0, required=False,
                         help = 'Write only summary file.')
     parser.add_argument('--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to be reduced.')
     parser.add_argument('--night', type = int, default = None, required=False,
-                        help = 'Restrict to this night only..')
+                        help = 'Restrict to this night only.')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -44,37 +44,38 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-args=parse()
 
 def main():
     log = get_logger()
 
+    args=parse()
+    if args.prod is None:
+        args.prod = specprod_root()
+
     log.info('outdir = {}'.format(args.outdir))
     log.info('prod = {}'.format(args.prod))
-    log.info('camera = {}'.format(args.camera))
+    log.info('cameras = {}'.format(args.cameras))
     log.info('summary_only = {}'.format(args.summary_only))
     log.info('expids = {}'.format(args.expids))
 
     petals = np.arange(10).astype(str)
 
-    if args.camera is None:
+    if args.cameras is None:
         cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
     else:
-        cameras = [args.camera]
+        cameras = args.cameras.split(',')
     if args.expids is not None:
         expids = [np.int(x) for x in args.expids.split(',')]
     else:
         expids = None
     
-    cframes = {}
-
     if args.night is None:
-        for cam in cameras:
-            cframes[cam] = list(glob.glob('{}/exposures/*/*/cframe-{}-*.fits'.format(args.prod, cam)))
-    else:
-        for cam in cameras:
-            cframes[cam] = list(glob.glob('{}/exposures/{:d}/*/cframe-{}-*.fits'.format(args.prod, args.night, cam)))
-            
+        args.night = '*'
+
+    cframes = {}
+    for cam in cameras:
+        cframes[cam] = sorted(glob.glob('{}/exposures/{}/*/cframe-{}-*.fits'.format(args.prod, args.night, cam)))
+ 
     sci_frames = {}
 
     for cam in cameras:
@@ -98,46 +99,32 @@ def main():
             hdul.close()
         
         log.info('{} science frames to reduce for {}.'.format(len(sci_frames[cam]), cam))
-    
+
+    summary  = list()
     for cam in cameras:
-        summary  = None
-    
         for kk, x in enumerate(sci_frames[cam]):
-            hdul = fits.open(x)
-            hdr  = hdul[0].header
+            cframe = fits.open(x)
+            hdr  = cframe[0].header
+            if hdr['PROGRAM'].startswith('SV1'):
+                night  = hdr['NIGHT']
+                expid  = hdr['EXPID']
+                camera = hdr['CAMERA']
+                tileid = hdr['TILEID']
 
-            flavor = hdr['FLAVOR']
-            prog = hdr['PROGRAM']
-        
-            parts = prog.split(' ')
+                calib  = findfile('fluxcalib', night=night, expid=expid,
+                                  camera=camera, specprod_dir=args.prod)
+            
+                flat = cframe[0].header['FIBERFLT']
 
-            if parts[0] == 'SV1':
-                parts  = x.split('/')
+                if 'SPECPROD' in flat:
+                    flat = flat.replace('SPECPROD', args.prod)
                 
-                night  = parts[-3]
-                expid  = np.int(parts[-2])
-            
-                name   = parts[-1]
-
-                parts  = name.split('-')
-                camera = parts[1]
-            
-                calib  = findfile('fluxcalib', night=night, expid=expid, camera=camera, specprod_dir=None)
-            
-                cframe = fits.open(x)
-                hdr    = cframe[0].header['FIBERFLT']
-
-                if 'SPECPROD' in hdr:
-                    flat   = hdr.replace('SPECPROD', args.prod)
-                
-                elif 'SPCALIB' in hdr:
-                    flat   = hdr.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
+                elif 'SPCALIB' in flat:
+                    flat = flat.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
 
                 else:
                     raise ValueError('Failed on flat retrieval for {}.'.format(hdr))
                 
-                tileid = cframe[0].header['TILEID']
-        
                 iin = x.replace('cframe', 'frame')
                 sky = x.replace('cframe', 'sky')
                 psf = sky.replace('sky', 'psf')
@@ -166,46 +153,47 @@ def main():
                     table['TARGETID']    = frame.fibermap['TARGETID']
                 
                     table.meta['NIGHT']  = night
-                    table.meta['EXPID']  = '{:08d}'.format(expid)
-                    table.meta['TSNRALPH']  = alpha
+                    table.meta['EXPID']  = expid
                     table.meta['TILEID'] = tileid
-            
-                    table.write(out, format='fits', overwrite=True)
+                    table.meta['CAMERA'] = camera
+                    table.meta['TSNRALPH']  = alpha
+                    table.meta['EXTNAME'] = 'TSNR2'
 
-                    log.info('Successfully written {}.'.format(out))
+                    tmpfile = out+'.tmp'
+                    table.write(tmpfile, format='fits', overwrite=True)
+                    os.rename(tmpfile, out)
+
+                    log.info('Successfully wrote {}.'.format(out))
                 
                 # Append to summary. 
-                entry = Table(data=np.array(['{:08d}'.format(expid)]), names=['EXPID'])
-            
-                entry['NIGHT']  = night
+                entry = dict()
+                entry['NIGHT'] = np.int32(night)
+                entry['EXPID'] = np.int32(expid)
+                entry['TILEID'] = tileid
                 entry['CAMERA'] = camera
+                for key in results:
+                    #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
+                    short_key = '_'.join(key.split('_')[0:2])
+                    entry[short_key]=np.median(results[key]).astype(np.float32)
 
-                keys = list(results.keys())
-            
-                for k in keys:
-                    if 'TSNR' in k:
-                        sk = k.split('_')[0]    
-                        results[sk] = results[k]
-                        del results[k]
-                                
-                for k in results:                                                                                                                                                                                                
-                    entry[k] = np.median(results[k].astype(np.float32))
-                
-                if summary is None:
-                    summary = entry
+                summary.append(entry)
 
-                else:
-                    summary = vstack((summary, entry))
-                
-                log.info('{:08d}  {}: Reduced {} of {}.'.format(expid, cam, kk, len(sci_frames[cam])))
+                log.info('{} {:08d} {}: Reduced {} of {}.'.format(
+                    night, expid, cam, kk, len(sci_frames[cam])))
 
-        hdul.close()
+        cframe.close()
 
     # Write summary files only if prod run, not comma sep. exp list. 
     if args.expids is None:
-        summary.write(args.outdir + '/summary_{}.fits'.format(cam), format='fits', overwrite=True)
+        colnames = list(summary[0].keys())
+        summary = Table(rows=summary, names=colnames)
+        summary.meta['EXTNAME'] = 'TSNR2'
+        summary_outfile = args.outdir+'/tsnr_summary.fits'
+        tmpfile = summary_outfile+'.tmp'
+        summary.write(tmpfile, format='fits', overwrite=True)
+        os.rename(tmpfile, summary_outfile)
 
-        log.info('Successfully written {}.'.format(args.outdir + '/summary_{}.fits'.format(cam)))
+        log.info('Successfully wrote {}'.format(summary_outfile))
 
     
 if __name__ == '__main__':
