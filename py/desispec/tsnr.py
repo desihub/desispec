@@ -14,18 +14,20 @@ from scipy.optimize import minimize
 
 
 def get_ensemble(dirpath, bands, smooth=125):
-    '''                                                                                                              
-    Function that takes a frame object and a bitmask and                                                               
-    returns ivar (and optionally mask) array(s) that have fibers with                                                  
-    offending bits in fibermap['FIBERSTATUS'] set to                                                                   
-    0 in ivar and optionally flips a bit in mask.                                                                      
-                                                                                                                       
-    input:                                                                                                             
+    '''
+    Function that takes a frame object and a bitmask and
+    returns ivar (and optionally mask) array(s) that have fibers with
+    offending bits in fibermap['FIBERSTATUS'] set to
+    0 in ivar and optionally flips a bit in mask.
+
+    Args:
         dirpath: path to the dir. with ensemble dflux files. 
         bands:  bands to expect, typically [BRZ] - case ignored.
+
+    Options:
         smooth:  Further convolve the residual ensemble flux. 
-                                                                                                                       
-    returns:                                                                                                            
+
+    Returns:
         Dictionary with keys labelling each tracer (bgs, lrg, etc.) for which each value
         is a Spectra class instance with wave, flux for BRZ arms.  Note flux is the high 
         frequency residual for the ensemble.  See doc. 4723.
@@ -245,7 +247,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
     psfpath=findcalibfile([frame.meta],"PSF")
     psf=GaussHermitePSF(psfpath)
 
-    # Returns bivariate splie to be evaluated at (fiber, wave).
+    # Returns bivariate spline to be evaluated at (fiber, wave).
     if not "DESIMODEL" in os.environ :
         log.error("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
         raise RuntimeError("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
@@ -301,7 +303,11 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
         wave = ensemble[tracer].wave[band]
         dflux = ensemble[tracer].flux[band]
 
-        np.allclose(frame.wave, wave)
+        if len(frame.wave) != len(wave) or not np.allclose(frame.wave, wave):
+            log.warning(f'Resampling {tracer} ensemble wavelength to match input {camera} frame')
+            dflux = np.interp(frame.wave, wave, dflux,
+                              left=dflux[0], right=dflux[-1])
+            wave = frame.wave
 
         # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
         # Broadcast.
