@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.37.0 (unreleased)
+0.37.1 (unreleased)
+-------------------
+
+* No changes yet
+
+0.37.0 (2021-02-11)
 -------------------
 
 Major updates:
