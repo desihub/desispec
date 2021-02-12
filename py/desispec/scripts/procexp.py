@@ -1,21 +1,25 @@
-
 """
 This script processes an exposure by applying fiberflat, sky subtraction,
-spectro-photometric calibration depending on input.
+spectro-photometric calibration depending on input.  Optionally, includes
+tsnr in the scores hdu.
 """
 
 from desispec.io import read_frame, write_frame
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
-from desispec.io import shorten_filename
+from desispec.io import read_fibermap
 from desispec.io.fluxcalibration import read_flux_calibration
-from desispec.fiberflat import apply_fiberflat
-from desispec.sky import subtract_sky
-from desispec.fluxcalibration import apply_flux_calibration
-from desiutil.log import get_logger
+from desispec.io import shorten_filename
+
+from desispec.fiberflat import apply_fiberflat	
+from desispec.sky import subtract_sky	
+from desispec.fluxcalibration import apply_flux_calibration	
 from desispec.cosmics import reject_cosmic_rays_1d
-from desispec.specscore import compute_and_append_frame_scores
+from desispec.specscore import compute_and_append_frame_scores, append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
+
+from desispec.tsnr import calc_tsnr2
+from desiutil.log import get_logger
 
 import argparse
 import sys
@@ -32,13 +36,15 @@ def parse(options=None):
     parser.add_argument('--calib', type = str, default = None,
                         help = 'path of DESI calibration fits file')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
-                        help = 'path of DESI sky fits file')
+                        help = 'path of output fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--no-sky-throughput-correction', action='store_true',
                         help = 'Do NOT apply a throughput correction when subtraction the sky')
     parser.add_argument('--no-zero-ivar', action='store_true',
                         help = 'Do NOT set ivar=0 for masked pixels')
+    parser.add_argument('--no-tsnr', action='store_true',
+                        help = 'Do not compute template SNR')
 
     args = None
     if options is None:
@@ -47,16 +53,22 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-
 def main(args):
-
     log = get_logger()
 
     if (args.fiberflat is None) and (args.sky is None) and (args.calib is None):
         log.critical('no --fiberflat, --sky, or --calib; nothing to do ?!?')
         sys.exit(12)
 
+    if (not args.no_tsnr) and (args.calib is None) :
+        log.critical('need --fiberflat --sky and --calib to compute template SNR')
+        sys.exit(12)
+
     frame = read_frame(args.infile)
+
+    if not args.no_tsnr :
+        # tsnr alpha calc. requires uncalibrated + no substraction rame.
+        uncalibrated_frame = copy.deepcopy(frame)
 
     #- Raw scores already added in extraction, but just in case they weren't
     #- it is harmless to rerun to make sure we have them.
@@ -116,6 +128,15 @@ def main(args):
         frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
+    if not args.no_tsnr:
+        log.info("calculating tsnr")
+        results, alpha = calc_tsnr2(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
+
+        frame.meta['TSNRALPH'] = alpha
+
+        comments = {k:"from calc_frame_tsnr" for k in results.keys()}
+        append_frame_scores(frame,results,comments,overwrite=True) 
+        
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
