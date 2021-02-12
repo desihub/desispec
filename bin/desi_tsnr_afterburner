@@ -131,7 +131,7 @@ def main():
                 psf = sky.replace('sky', 'psf')
 
                 if args.details_dir is not None:
-                    out = f'{args.details_dir}/tsnr/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
+                    out = f'{args.details_dir}/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
                 else:
                     out = None
                 
