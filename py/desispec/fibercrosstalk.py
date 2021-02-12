@@ -14,6 +14,9 @@ from scipy.signal import fftconvolve
 
 from desiutil.log import get_logger
 
+from desispec.io import read_xytraceset
+from desispec.calibfinder import findcalibfile
+
 def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,asymptotic_power_law_index = 2.5):
     """
     Computes the fiber crosstalk convolution kernels assuming a power law PSF tail
@@ -34,7 +37,7 @@ def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,
         kernels[fiber_offset]=kern
     return kernels
 
-def compute_contamination(frame,dfiber,kernel,params) :
+def compute_contamination(frame,dfiber,kernel,params,xyset) :
 
     cam = frame.meta["camera"][0].upper()
     if cam == "Z" :
@@ -49,15 +52,26 @@ def compute_contamination(frame,dfiber,kernel,params) :
 
         contamination=np.zeros(frame.flux.shape)
 
+
+        central_y = xyset.npix_y//2
+        nfiber_per_bundle = 25
+
         # dfiber = from_fiber - into_fiber
         # into_fiber = from_fiber - dfiber
         minfiber = max(0,-dfiber)
         maxfiber = min(frame.flux.shape[0],frame.flux.shape[0]-dfiber)
         for index,into_fiber in enumerate(np.arange(minfiber,maxfiber)) :
             from_fiber = into_fiber + dfiber
+
+            if from_fiber//nfiber_per_bundle != into_fiber//nfiber_per_bundle : continue # not same bundle
+
             fraction = P0 + P1*(into_fiber/250-1) + (P2 + P3*(into_fiber/250-1)) * (frame.wave>W0)*(np.abs(frame.wave-W0)/(W1-W0))**WP
             jj=(frame.ivar[from_fiber]>0)&(frame.mask[from_fiber]==0)
-            tmp=np.interp(frame.wave,frame.wave[jj],frame.flux[from_fiber,jj],left=0,right=0)
+
+            from_fiber_central_wave = xyset.wave_vs_y(from_fiber,central_y)
+            into_fiber_central_wave = xyset.wave_vs_y(into_fiber,central_y)
+
+            tmp=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.flux[from_fiber,jj],left=0,right=0)
             convolved_flux=fftconvolve(tmp,kernel,mode="same")
             contamination[into_fiber] = fraction * convolved_flux
         return contamination
@@ -69,7 +83,7 @@ def compute_contamination(frame,dfiber,kernel,params) :
 
 
 
-def correct_fiber_crosstalk(frame):
+def correct_fiber_crosstalk(frame,xyset=None):
     """Apply a fiber cross talk correction. Modifies frame.flux and frame.ivar.
 
     Args:
@@ -78,12 +92,15 @@ def correct_fiber_crosstalk(frame):
     log=get_logger()
 
     parameter_filename = resource_filename('desispec', "data/fiber-crosstalk.yaml")
-    log.info("reading parameters in {}".format(parameter_filename))
+    log.info("read parameters in {}".format(parameter_filename))
     stream = open(parameter_filename, 'r')
     params = yaml.safe_load(stream)
     stream.close()
-
     log.debug("params= {}".format(params))
+
+    if xyset is None :
+        psf_filename = findcalibfile([frame.meta,],"PSF")
+        xyset  = read_xytraceset(psf_filename)
 
     log.info("compute kernels")
     kernels = compute_crosstalk_kernels()
@@ -93,7 +110,7 @@ def correct_fiber_crosstalk(frame):
     for dfiber in [-2,-1,1,2] :
         log.info("FIBER{:+d}".format(dfiber))
         kernel = kernels[np.abs(dfiber)]
-        contamination += compute_contamination(frame,dfiber,kernel,params)
+        contamination += compute_contamination(frame,dfiber,kernel,params,xyset)
 
     import matplotlib.pyplot as plt
     for fiber in range(500) :
