@@ -98,7 +98,25 @@ def main(args):
 
         flux[ii] = xflux
         ivar[ii] = xivar
-        R[ii] = xR
+        if R.shape[1] < xR.shape[1] :
+            # not same number of diagonals, it can happen
+            # make sure it's the same wavelength array size
+            assert(R.shape[2]==xR.shape[2])
+            newR = np.zeros((R.shape[0],xR.shape[1],R.shape[2]))
+            ddiag=xR.shape[1]-R.shape[1]
+            offset=ddiag//2
+            newR[:,offset:-offset,:] = R
+            R=newR
+
+        if R.shape[1] > xR.shape[1] :
+            # make sure it's the same wavelength array size
+            assert(R.shape[2]==xR.shape[2])
+            ddiag=R.shape[1]-xR.shape[1]
+            offset=ddiag//2
+            R[ii,offset:-offset,:] = xR
+        else :
+            R[ii] = xR
+
         mask[ii] = xmask
         chi2pix[ii] = xchi2pix
 
