@@ -55,17 +55,17 @@ def night_to_starting_iid(night=None):
 #################################################
 def batch_script_name(prow):
     """
-    Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, JOBDESC, CAMWORD defined)
+    Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, JOBDESC, PROCCAMWORD defined)
     and determines the script file pathname as defined by desi_proc's helper functions.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'CAMWORD'.
+        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
 
     Returns:
         scriptfile, str. The complete pathname to the script file, as it is defined within the desi_proc ecosystem.
     """
     pathname = get_desi_proc_batch_file_pathname(night = prow['NIGHT'], exp=prow['EXPID'], \
-                                             jobdesc=prow['JOBDESC'], cameras=prow['CAMWORD'])
+                                             jobdesc=prow['JOBDESC'], cameras=prow['PROCCAMWORD'])
     scriptfile =  pathname + '.slurm'
     return scriptfile
 
@@ -98,11 +98,11 @@ def create_and_submit(prow, queue='realtime', dry_run=False, joint=False):
 
 def desi_proc_command(prow, queue=None):
     """
-    Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, JOBDESC, CAMWORD defined)
+    Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, JOBDESC, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'CAMWORD'.
+        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
         queue, str. The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
 
     Returns:
@@ -122,17 +122,19 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
-    specs = str(prow['CAMWORD'])
+    specs = str(prow['PROCCAMWORD'])
     cmd += ' --cameras={} -n {} -e {}'.format(specs, prow['NIGHT'], prow['EXPID'][0])
+    if prow['BADAMPS'] != '':
+        cmd += ' --badamps={}'.format(prow['BADAMPS'])
     return cmd
 
 def desi_proc_joint_fit_command(prow, queue=None):
     """
-    Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, CAMWORD defined)
+    Wrapper script that takes a processing table row (or dictionary with NIGHT, EXPID, OBSTYPE, PROCCAMWORD defined)
     and determines the proper command line call to process the data defined by the input row/dict.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'CAMWORD'.
+        prow, Table.Row or dict. Must include keyword accessible definitions for 'NIGHT', 'EXPID', 'JOBDESC', and 'PROCCAMWORD'.
         queue, str. The name of the NERSC Slurm queue to submit to. Default is None (which leaves it to the desi_proc default).
 
     Returns:
@@ -148,7 +150,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
     descriptor = prow['OBSTYPE'].lower()
         
     night = prow['NIGHT']
-    specs = str(prow['CAMWORD'])
+    specs = str(prow['PROCCAMWORD'])
     expids = prow['EXPID']
     expid_str = ','.join([str(eid) for eid in expids])
 
@@ -194,7 +196,7 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
     else:
         log.info("Running: {}".format(cmd.split()))
         scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
-                                                       cameras=prow['CAMWORD'], jobdesc=prow['JOBDESC'], \
+                                                       cameras=prow['PROCCAMWORD'], jobdesc=prow['JOBDESC'], \
                                                        queue=queue, cmdline=cmd)
         log.info("Outfile is: {}".format(scriptpathname))
 
@@ -454,7 +456,7 @@ def parse_previous_tables(etable, ptable, night):
         if lasttype.lower() == 'science':
             for row in ptable[::-1]:
                 if row['OBSTYPE'].lower() == 'science' and row['TILEID'] == lasttile and \
-                   row['JOBDESC'] == 'prestdstar' and row['OBSDESC'] != 'dither':
+                   row['JOBDESC'] == 'prestdstar' and row['LASTSTEP'] != 'skysub':
                     sciences.append(row)
                 else:
                     break
@@ -641,6 +643,8 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False):
         log.info(" ")
         log.info(f"Submitting individual science exposures now that joint fitting of standard stars is submitted.\n")
         for row in prows:
+            if row['LASTSTEP'] == 'stdstarfit':
+                continue
             ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
             if dry_run:
                 time.sleep(1)

@@ -18,7 +18,7 @@ from desitarget.targetmask import desi_mask
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
-from desispec.io.util import fitsheader, write_bintable, makepath, addkeys
+from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
 from desispec.io.meta import rawdata_root, findfile
 from . import iotime
 
@@ -365,7 +365,7 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     return fafile
 
-def assemble_fibermap(night, expid, force=False):
+def assemble_fibermap(night, expid, badamps=None, force=False):
     """
     Create a fibermap for a given night and expid
 
@@ -374,6 +374,7 @@ def assemble_fibermap(night, expid, force=False):
         expid (int): exposure ID
 
     Options:
+        badamps (str): comma separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
         force (bool): create fibermap even if missing coordinates/guide files
     """
 
@@ -583,6 +584,22 @@ def assemble_fibermap(night, expid, force=False):
         fibermap.meta['COORDFIL'] = os.path.basename(coordfile)
     else:
         fibermap.meta['COORDFIL'] = 'MISSING'
+
+    #- Lastly, mask the fibers defined by badamps
+    if badamps is not None:
+        maskbits = {'b':fibermask.BADAMPB, 'r':fibermask.BADAMPR, 'z':fibermask.BADAMPZ}
+        ampoffsets = {'A': 0, 'B':250, 'C':0, 'D':250}
+        for (camera, petal, amplifier) in parse_badamps(badamps):
+            maskbit = maskbits[camera]
+            ampoffset = ampoffsets[amplifier]
+            fibermin = int(petal)*500 + ampoffset
+            fibermax = fibermin + 250
+            ampfibs = np.arange(fibermin,fibermax)
+            truefmax = fibermax - 1
+            log.info(f'Masking fibers from {fibermin} to {truefmax} for camera {camera} because of badamp entry '+\
+                     f'{camera}{petal}{amplifier}')
+            ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
+            fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table

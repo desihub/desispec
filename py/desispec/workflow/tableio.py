@@ -9,7 +9,7 @@ from astropy.table import Table
 from desispec.workflow.utils import pathjoin
 from desiutil.log import get_logger
 
-def ensure_scalar(val, joinsymb='|'):
+def ensure_scalar(val, joinsymb='|',comma_replacement=';'):
     """
     Ensures that the object in val is a scalar that can be save to a Table cell (i.e. row of a column or
     column of a row). If the it is an array or list, it uses joinsymb to turn them into a single string.
@@ -19,19 +19,27 @@ def ensure_scalar(val, joinsymb='|'):
                                                 it is already a scalar).
         joinsymb, str. A string symbol *other than comma* that will be used to join the multiple values of a list
                        or array.
+        comma_replacement, str. A string symbol that should be used to replace any existing commas in the data, such
+                                that the value can be saved in a csv format.
 
     Returns:
         val or outstr, any scalar type or string. The output string which is a scalar quantity capable of being
                                                   written to a single table cell (in a csv or fits file, for example).
     """
-    if val is None or type(val) in [str, np.str, np.str_, np.ma.core.MaskedConstant] or np.isscalar(val):
+    if type(val) in [str, np.str, np.str_]:
+        if ',' in val:
+            val = val.replace(',', comma_replacement)
+        return val
+    elif val is None or type(val) is np.ma.core.MaskedConstant or np.isscalar(val):
         return val
     else:
         val = np.atleast_1d(val).astype(str)
         outstr = joinsymb.join(val) + joinsymb
+        if ',' in outstr:
+            outstr = outstr.replace(',', comma_replacement)
         return outstr
 
-def split_str(val, joinsymb='|'):
+def split_str(val, joinsymb='|',comma_replacement=';'):
     """
     Attempts to intelligently interpret an input scalar. If it is a string it looks to see if it was a list or array
     objects that was joined to be a single string using joinsymb. If it identifies that, it will split that into the
@@ -41,6 +49,9 @@ def split_str(val, joinsymb='|'):
         val, any datatype. The input to be checked to see if it is in fact a list/array that was joined into a string
                            for saving in a Table.
         joinsymb, str. The symbol used to join values in a list/array when saving. Should not be a comma.
+        comma_replacement, str. Replace instances of this symbol with commas when loading ONLY scalar columns in a table,
+                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+                                on the command line. Comment arrays do not need to be converted back and forth.
 
     Returns:
         val or split_list, any datatype or np.array.
@@ -57,6 +68,8 @@ def split_str(val, joinsymb='|'):
             elif val.lower() == 'false':
                 return False
             else:
+                if comma_replacement in val:
+                    val = val.replace(comma_replacement, ',')
                 return val
         else:
             val = val.strip(joinsymb)
@@ -72,7 +85,8 @@ def split_str(val, joinsymb='|'):
         return val
 
 
-def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwrite=True, verbose=False, write_empty=False):
+def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwrite=True, verbose=False,
+                comma_replacement=';', write_empty=False, use_specprod=True):
     """
     Workflow function to write exposure, processing, and unprocessed tables. It allows for multi-valued table cells, which are
     reduced to strings using the joinsymb. It writes to a temp file before moving the fully written file to the
@@ -88,7 +102,11 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
         write_empty, bool. Whether to write an empty table to disk. The default is False. Warning: code is less robust
                            to column datatypes on read/write if the table is empty. May cause issues if this is set to True.
-
+        comma_replacement, str. Replace instances of this symbol with commas when loading scalar columns in a table,
+                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+                                on the command line.
+        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
+                            table in the SPECPROD rather than the exptab repository. Default is True.
     Returns:
         Nothing.
     """
@@ -97,8 +115,11 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
         log.error("Pathname or type of table is required to save the table")
         return
 
+    if tabletype is not None:
+        tabletype = standardize_tabletype(tabletype)
+
     if tablename is None:
-        tablename = translate_type_to_pathname(tabletype)
+        tablename = translate_type_to_pathname(tabletype, use_specprod=use_specprod)
 
     if not write_empty and len(origtable) == 0:
         log.warning(f'NOT writing zero length table to {tablename}')
@@ -131,6 +152,13 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
                 else:
                     col = Table.Column(name=nam, data=col)
                 table.replace_column(nam, col)
+            elif type(table[nam][0]) in [str, np.str, np.str_]:
+                col = [row.replace(',', comma_replacement) for row in table[nam]]
+                if type(table[nam]) is Table.MaskedColumn:
+                    col = Table.MaskedColumn(name=nam, data=col)
+                else:
+                    col = Table.Column(name=nam, data=col)
+                table.replace_column(nam, col)
 
         # for nam, col in replace_cols.items():
         #     t.replace_column(nam,col)
@@ -148,14 +176,34 @@ def write_table(origtable, tablename=None, tabletype=None, joinsymb='|', overwri
     if verbose:
         log.info("Written table: ", table.info)
 
+def standardize_tabletype(tabletype):
+    """
+    Given the user defined type of table it returns the proper 'tabletype' expected by the pipeline
 
-def translate_type_to_pathname(tabletype):
+    Args:
+        tabletype, str. Allows for a flexible number of input options, but should refer to either the 'exposure',
+                         'processing', or 'unprocessed' table types.
+
+    Returns:
+         tabletype, str. Standardized tabletype values. Either "exptable", "proctable", "unproctable".
+    """
+    if tabletype.lower() in ['exp', 'exposure', 'etable', 'exptable', 'exptab', 'exposuretable', 'exposure_table']:
+        tabletype = 'exptable'
+    elif tabletype.lower() in ['proc', 'processing', 'proctable', 'proctab', 'int', 'ptable', 'internal']:
+        tabletype = 'proctable'
+    elif tabletype.lower() in ['unproc', 'unproctable', 'unproctab', 'unprocessed', 'unprocessing', 'unproc_table']:
+        tabletype = 'unproctable'
+    return tabletype
+
+def translate_type_to_pathname(tabletype, use_specprod=True):
     """
     Given the type of table it returns the proper file pathname
 
     Args:
         tabletype, str. Allows for a flexible number of input options, but should refer to either the 'exposure',
                          'processing', or 'unprocessed' table types.
+        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
+                            table in the SPECPROD rather than the exptab repository. Default is True.
 
     Returns:
          tablename, str. Full pathname including extension of the table type. Uses environment variables to determine
@@ -163,18 +211,18 @@ def translate_type_to_pathname(tabletype):
     """
     from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_pathname, get_exposure_table_name
     from desispec.workflow.proctable import get_processing_table_path, get_processing_table_pathname, get_processing_table_name
-    if tabletype.lower() in ['exp', 'exposure', 'etable']:
-        tablename = get_exposure_table_pathname()
-    elif tabletype.lower() in ['proc', 'processing', 'int', 'ptable', 'interal']:
+    tabletype = standardize_tabletype(tabletype)
+    if tabletype == 'exptable':
+        tablename = get_exposure_table_pathname(night=None,usespecprod=use_specprod)
+    elif tabletype == 'proctable':
         tablename = get_processing_table_pathname()
-    elif tabletype.lower() in ['unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
+    elif tabletype == 'unproctable':
         tablepath = get_processing_table_path()
         tablename = get_processing_table_name().replace("processing", 'unprocessed')
         tablename = pathjoin(tablepath, tablename)
     return tablename
 
-
-def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, process_mixins=True):
+def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, process_mixins=True, use_specprod=True):
     """
     Workflow function to read in exposure, processing, and unprocessed tables. It allows for multi-valued table cells, which are
     generated from strings using the joinsymb. It reads from the file given by tablename (or the default for table of
@@ -193,6 +241,8 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                               Warning: The exposure and processing tables have default data types which are multi-value.
                               If this is set to False, the default data types will be incorrect and issues are likely
                               to arise.
+        use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
+                            table in the SPECPROD rather than the exptab repository. Default is True.
 
     Returns:
         table, Table. Either exposure table or processing table that was loaded from tablename (or from default name
@@ -202,26 +252,25 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
     from desispec.workflow.proctable import instantiate_processing_table, get_processing_table_column_defs
     log = get_logger()
 
+    if tabletype is not None:
+        tabletype = standardize_tabletype(tabletype)
+
     if tablename is None:
         if tabletype is None:
             log.error("Must specify either tablename or tabletype in load_table()")
             return None
         else:
-            tablename = translate_type_to_pathname(tabletype)
+            tablename = translate_type_to_pathname(tabletype, use_specprod=use_specprod)
     else:
         if tabletype is None:
             log.info("tabletype not given in load_table(), trying to guess based on filename")
-            filename = os.path.split(tablename)[1]
-            if 'exposure' in filename:
-                tabletype = 'exposure'
-            elif 'unprocessed' in filename or 'unproc' in filename:
-                tabletype = 'unproc'
-            elif 'processing' in filename:
-                tabletype = 'processing'
-            elif 'etable' in filename or 'exp' in filename:
-                tabletype = 'exposure'
-            elif 'ptable' in filename or 'proc' in filename:
-                tabletype = 'processing'
+            filename = os.path.split(tablename)[-1]
+            if 'exp' in filename or 'etable' in filename:
+                tabletype = 'exptable'
+            elif 'unproc' in filename:
+                tabletype = 'unproctable'
+            elif 'proc' in filename or 'ptable' in filename:
+                tabletype = 'proctable'
 
             if tabletype is None:
                 log.warning(f"Couldn't identify type based on filename {filename}")
@@ -232,11 +281,11 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
         log.info(f"Found table: {tablename}")
     elif tabletype is not None:
         log.info(f'Table {tablename} not found, creating new table of type {tabletype}')
-        if tabletype.lower() in ['exp', 'exposure', 'etable']:
+        if tabletype == 'exptable':
             return instantiate_exposure_table()
-        elif tabletype.lower() in ['unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
+        elif tabletype == 'unproctable':
             return instantiate_exposure_table()
-        elif tabletype.lower() in ['proc', 'processing', 'int', 'ptable', 'interal']:
+        elif tabletype == 'proctable':
             return instantiate_processing_table()
         else:
             log.warning(f"Couldn't create type {tabletype}, unknown table type")
@@ -252,9 +301,9 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
         if verbose:
             log.info("Raw loaded table: ", table.info)
 
-        if tabletype.lower() in ['exp', 'exposure', 'etable', 'unproc', 'unproc_table', 'unprocessed', 'unprocessing']:
+        if tabletype in ['exptable', 'unproctable']:
             colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
-        elif tabletype.lower() in ['proc', 'processing', 'int', 'ptable', 'interal']:
+        elif tabletype == 'proctable':
             colnames, coltypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
         else:
             colnames = table.colnames
@@ -276,11 +325,8 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                 if dtyp in [list, np.array, np.ndarray]:
                     newcol.shape = (len(col),)
                     for ii in range(len(col)):
-                        try:
-                            newcol[ii] = np.atleast_1d(newcol[ii])
-                        except:
-                            import pdb
-                            pdb.set_trace()
+                        newcol[ii] = np.atleast_1d(newcol[ii])
+
                 outcolumns.append(newcol)
             table = Table(outcolumns)
         else:
@@ -316,7 +362,8 @@ def guess_default_by_dtype(typ):
     else:
         return -99
 
-def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mixins=True ,verbose=False):
+def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mixins=True,
+                   comma_replacement=';', verbose=False):
     """
     Used with load_table to process a Table.Column after being read in. It fills in masked values with defaults,
     and identifies and splits mixin columns (columns that should be a list/array) back into their list/array from
@@ -336,6 +383,9 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
                               Warning: The exposure and processing tables have default data types which are multi-value.
                               If this is set to False, the default data types will be incorrect and issues are likely
                               to arise.
+        comma_replacement, str. Replace instances of this symbol with commas when loading scalar columns in a table,
+                                as e.g. BADAMPS is used in the pipeline and symbols like ';' are problematic
+                                on the command line.
         verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
 
 
@@ -384,6 +434,8 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
             col.append(split_str(rowdat, joinsymb=joinsymb))
         elif array_like:
             col.append(np.array([rowdat]))
+        elif type(rowdat) in [str, np.str, np.str_] and ',' in rowdat:
+            col.append(rowdat.replace(comma_replacement, ','))
         else:
             col.append(rowdat)
 

@@ -37,10 +37,10 @@ def get_nightly_end_time():
         end_night: int. The number of hours after midnight that signifies the end of a night of observing.
     """
     month = time.localtime().tm_mon
-    if np.abs(month - 6) < 2:
-        end_night = 10
+    if np.abs(month - 6) > 2:
+        end_night = 9
     else:
-        end_night = 8
+        end_night = 7
     return end_night  # local Tucson time the following morning
 
 

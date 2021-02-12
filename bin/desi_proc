@@ -51,7 +51,7 @@ from desiutil.log import get_logger, DEBUG, INFO
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
-
+from desispec.workflow.exptable import validate_badamps
 stop_imports = time.time()
 
 #########################################
@@ -94,6 +94,10 @@ if rank > 0:
 else:
     args, hdr, camhdr = update_args_with_headers(args)
 
+## Make sure badamps is formatted properly
+if comm is not None and rank == 0 and args.badamps is not None:
+    args.badamps = validate_badamps(args.badamps)
+
 if comm is not None:
     args = comm.bcast(args, root=0)
     hdr = comm.bcast(hdr, root=0)
@@ -112,7 +116,7 @@ timer.stop('preflight')
 if args.batch:
     #exp_str = '{:08d}'.format(args.expid)
     jobdesc = args.obstype.lower()
-    if args.obstype.lower() == 'science':
+    if args.obstype == 'SCIENCE':
         # if not doing pre-stdstar fitting or stdstar fitting and if there is
         # no flag stopping flux calibration, set job to poststdstar
         if args.noprestdstarfit and args.nostdstarfit and (not args.nofluxcalib):
@@ -174,6 +178,8 @@ if rank == 0 and args.obstype == 'SCIENCE':
         log.info('Creating fibermap {}'.format(fibermap))
         cmd = 'assemble_fibermap -n {} -e {} -o {}'.format(
                 args.night, args.expid, fibermap)
+        if args.badamps is not None:
+            cmd += ' --badamps={}'.format(args.badamps)
         runcmd(cmd, inputs=[], outputs=[fibermap])
 
     fibermap_ok = os.path.exists(fibermap)
