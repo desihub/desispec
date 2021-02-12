@@ -203,11 +203,12 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     res = minimize(alpha_X2, x0=[1.])
     alpha = res.x[0]
 
-    try:
-        assert  alpha >= 0.0
-
-    except AssertionError:
-        log.critical('Best-fit alpha for tsnr calc. is negative.')
+    if 0.8 < alpha < 1.0:
+        log.warning(f'tSNR alpha {alpha:.4f} < 1.0')
+    elif alpha <= 0.8:
+        msg = f'tSNR alpha {alpha:.4f} < 0.8'
+        log.error(msg)
+        raise ValueError(msg)
         
     return alpha
 
@@ -249,8 +250,9 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
 
     # Returns bivariate spline to be evaluated at (fiber, wave).
     if not "DESIMODEL" in os.environ :
-        log.error("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
-        raise RuntimeError("requires the environment variable DESIMODEL to get the NEA and the SNR templates")
+        msg = "requires $DESIMODEL to get the NEA and the SNR templates"
+        log.error(msg)
+        raise RuntimeError(msg)
 
     if _camera_nea_angperpix is None:
         _camera_nea_angperpix = dict()
@@ -289,8 +291,20 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
         log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
 
     # Relative weighting between rdnoise & sky terms to model var.
-    alpha = calc_alpha(frame, fibermap=frame.fibermap, rdnoise_sigma=rdnoise, npix_1d=npix, angperpix=angperpix, angperspecbin=angperspecbin, fiberflat=fiberflat, skymodel=skymodel)
-    log.info("TSNR ALPHA = {:4.3f}".format(alpha))
+    try:
+        alpha = calc_alpha(frame, fibermap=frame.fibermap,
+                    rdnoise_sigma=rdnoise, npix_1d=npix,
+                    angperpix=angperpix, angperspecbin=angperspecbin,
+                    fiberflat=fiberflat, skymodel=skymodel)
+        log.info(f"TSNR ALPHA = {alpha:.3f}")
+    except ValueError:
+        log.error(f'Bad alpha={alpha:.4f} value; setting tSNR=0.0')
+        results=dict()
+        for tracer in ensemble.keys():
+            key = 'TSNR2_{}_{}'.format(tracer.upper(), band.upper())
+            results[key]=np.zeros(nspec)
+
+        return results, alpha
 
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
