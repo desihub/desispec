@@ -24,19 +24,20 @@ from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Calculate template S/N ratio for exposures")
-    parser.add_argument('--outdir', type = str, default = None, required=True,
-                        help = 'Dir. to write to.')
+    parser = argparse.ArgumentParser(
+                description="Calculate template S/N ratio for exposures")
+    parser.add_argument('--outfile', type=str, default=None, required=False,
+                        help = 'Output summary file')
+    parser.add_argument('--details-dir', type=str, required=False,
+                        help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
     parser.add_argument('--prod', type = str, default = None, required=False,
-                        help = 'Path to reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/')
+                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/')
     parser.add_argument('--cameras', type = str, default = None, required=False,
-                        help = 'Cameras to reduce (comma separated).')
-    parser.add_argument('--summary_only', type = int, default = 0, required=False,
-                        help = 'Write only summary file.')
+                        help = 'Cameras to reduce (comma separated)')
     parser.add_argument('--expids', type = str, default = None, required=False,
-                        help = 'Comma separated list of exp ids to be reduced.')
+                        help = 'Comma separated list of exp ids to process')
     parser.add_argument('--night', type = int, default = None, required=False,
-                        help = 'Restrict to this night only.')
+                        help = 'Restrict to this night only')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -52,10 +53,10 @@ def main():
     if args.prod is None:
         args.prod = specprod_root()
 
-    log.info('outdir = {}'.format(args.outdir))
+    log.info('outfile = {}'.format(args.outfile))
+    log.info('details-dir = {}'.format(args.details_dir))
     log.info('prod = {}'.format(args.prod))
     log.info('cameras = {}'.format(args.cameras))
-    log.info('summary_only = {}'.format(args.summary_only))
     log.info('expids = {}'.format(args.expids))
 
     petals = np.arange(10).astype(str)
@@ -100,7 +101,7 @@ def main():
         
         log.info('{} science frames to reduce for {}.'.format(len(sci_frames[cam]), cam))
 
-    summary  = list()
+    summary_rows  = list()
     for cam in cameras:
         for kk, x in enumerate(sci_frames[cam]):
             cframe = fits.open(x)
@@ -128,24 +129,25 @@ def main():
                 iin = x.replace('cframe', 'frame')
                 sky = x.replace('cframe', 'sky')
                 psf = sky.replace('sky', 'psf')
-                out = args.outdir + '/tsnr/{}/{:08d}/tsnr-{}-{:08d}.fits'.format(night, expid, camera, expid)
-                
-                if (not args.summary_only) & os.path.exists(out):
-                    continue
-            
-                Path(os.path.dirname(out)).mkdir(parents=True, exist_ok=True)
-                
-                frame=read_frame(iin)
-                fiberflat=read_fiberflat(flat)
-                fluxcalib=read_flux_calibration(calib)
-                skymodel=read_sky(sky)
-            
-                results, alpha = calc_tsnr2(frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
 
-                if not args.summary_only:
-                    # Write individual.
-                    table=Table()
+                if args.details_dir is not None:
+                    out = f'{args.details_dir}/tsnr/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
+                else:
+                    out = None
                 
+                if out is not None and os.path.exists(out):
+                    log.info(f'Using previously generated {out}')
+                    table = Table.read(out)
+                else:
+                    frame=read_frame(iin, skip_resolution=True)
+                    fiberflat=read_fiberflat(flat)
+                    fluxcalib=read_flux_calibration(calib)
+                    skymodel=read_sky(sky)
+            
+                    results, alpha = calc_tsnr2(frame, fiberflat=fiberflat,
+                            skymodel=skymodel, fluxcalib=fluxcalib)
+
+                    table=Table()
                     for k in results:
                         table[k] = results[k].astype(np.float32)
 
@@ -159,41 +161,91 @@ def main():
                     table.meta['TSNRALPH']  = alpha
                     table.meta['EXTNAME'] = 'TSNR2'
 
+                #- Write per-expid per-camera output if requested
+                if out is not None:
+                    Path(os.path.dirname(out)).mkdir(parents=True,exist_ok=True)
                     tmpfile = out+'.tmp'
                     table.write(tmpfile, format='fits', overwrite=True)
                     os.rename(tmpfile, out)
-
                     log.info('Successfully wrote {}.'.format(out))
                 
                 # Append to summary. 
                 entry = dict()
                 entry['NIGHT'] = np.int32(night)
                 entry['EXPID'] = np.int32(expid)
-                entry['TILEID'] = tileid
+                entry['TILEID'] = np.int32(tileid)
                 entry['CAMERA'] = camera
-                for key in results:
-                    #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
-                    short_key = '_'.join(key.split('_')[0:2])
-                    entry[short_key]=np.median(results[key]).astype(np.float32)
+                for key in table.colnames:
+                    if key.startswith('TSNR2_'):
+                        #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
+                        short_key = '_'.join(key.split('_')[0:2])
+                        entry[short_key]=np.median(table[key]).astype(np.float32)
 
-                summary.append(entry)
+                entry['ALPHA'] = table.meta['TSNRALPH']
+
+                summary_rows.append(entry)
 
                 log.info('{} {:08d} {}: Reduced {} of {}.'.format(
                     night, expid, cam, kk, len(sci_frames[cam])))
 
         cframe.close()
 
-    # Write summary files only if prod run, not comma sep. exp list. 
-    if args.expids is None:
-        colnames = list(summary[0].keys())
-        summary = Table(rows=summary, names=colnames)
-        summary.meta['EXTNAME'] = 'TSNR2'
-        summary_outfile = args.outdir+'/tsnr_summary.fits'
-        tmpfile = summary_outfile+'.tmp'
-        summary.write(tmpfile, format='fits', overwrite=True)
-        os.rename(tmpfile, summary_outfile)
+    #- If not writing a summary file, we're done
+    if args.outfile is None:
+        return
 
-        log.info('Successfully wrote {}'.format(summary_outfile))
+    #- Create camera summary table; specify names to preserve column order
+    colnames = list(summary_rows[0].keys())
+    cam_summary = Table(rows=summary_rows, names=colnames)
+    cam_summary.meta['EXTNAME'] = 'TSNR2_FRAME'
+
+    tsnr2_colnames = [x for x in cam_summary.colnames if x.startswith('TSNR2_')]
+
+    #- which rows go with which petals:
+    ispetal = dict()
+    for petal in range(10):
+        ii  = (cam_summary['CAMERA'] == 'b'+str(petal))
+        ii |= (cam_summary['CAMERA'] == 'r'+str(petal))
+        ii |= (cam_summary['CAMERA'] == 'z'+str(petal))
+        ispetal[petal] = ii
+
+    #- Distill into exposure summary per-petal
+    rows = list()
+    for night, expid, tileid in sorted(set(zip(
+            cam_summary['NIGHT'],
+            cam_summary['EXPID'],
+            cam_summary['TILEID']
+            ))):
+        #- TILEID and NIGHT are unique to EXPID, so only filter on EXPID
+        ii = (cam_summary['EXPID'] == expid)
+
+        row = dict(NIGHT=night, EXPID=expid, TILEID=tileid)
+
+        #- Per EXPID TSNR2 is summed over cameras, averaged over petals
+        for colname in tsnr2_colnames:
+            tsnr2_petal = list()  #- TSNR^2 summed over cameras, per petal
+            for petal in range(10):
+                jj = ii & ispetal[petal]
+                if np.any(jj):
+                    tsnr2_petal.append(np.sum(cam_summary[colname][jj]))
+
+            row[colname] = np.mean(tsnr2_petal)
+
+        rows.append(row)
+
+    colnames = list(rows[0].keys())
+    exp_summary = Table(rows=rows, names=colnames)
+    exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
+
+    hdus = fits.HDUList()
+    hdus.append(fits.convenience.table_to_hdu(exp_summary))
+    hdus.append(fits.convenience.table_to_hdu(cam_summary))
+
+    tmpfile = args.outfile+'.tmp'
+    hdus.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, args.outfile)
+
+    log.info('Successfully wrote {}'.format(args.outfile))
 
     
 if __name__ == '__main__':
