@@ -60,6 +60,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
             raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
 
     #- Check if NIGHT keyword is present and valid; fix if needed
+    #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
     try:
         tmp = int(primary_header['NIGHT'])
     except (KeyError, ValueError, TypeError):
@@ -68,7 +69,11 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     try:
         tmp = int(header['NIGHT'])
     except (KeyError, ValueError, TypeError):
-        header['NIGHT'] = primary_header['NIGHT']
+        try:
+            header['NIGHT'] = header2night(header)
+        except (KeyError, ValueError, TypeError):
+            #- early teststand data only have NIGHT/timestamps in primary hdr
+            header['NIGHT'] = primary_header['NIGHT']
 
     #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
     primary_header['NIGHT'] = int(primary_header['NIGHT'])
