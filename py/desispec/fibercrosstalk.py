@@ -40,46 +40,61 @@ def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,
 def compute_contamination(frame,dfiber,kernel,params,xyset) :
 
     cam = frame.meta["camera"][0].upper()
-    if cam == "Z" :
+
+
+    if cam == "B" or cam == "R" :
+        W0=params[cam]["W0"]
+        W1=params[cam]["W1"]
+        DFIBER="FIBER{:+d}".format(dfiber)
+        P0=params[cam][DFIBER]["P0"]
+        P1=params[cam][DFIBER]["P1"]
+    elif cam == "Z" :
         W0=params[cam]["W0"]
         W1=params[cam]["W1"]
         WP=params[cam]["WP"]
+        WP2=params[cam]["WP2"]
         DFIBER="FIBER{:+d}".format(dfiber)
         P0=params[cam][DFIBER]["P0"]
         P1=params[cam][DFIBER]["P1"]
         P2=params[cam][DFIBER]["P2"]
         P3=params[cam][DFIBER]["P3"]
-
-        contamination=np.zeros(frame.flux.shape)
-
-
-        central_y = xyset.npix_y//2
-        nfiber_per_bundle = 25
-
-        # dfiber = from_fiber - into_fiber
-        # into_fiber = from_fiber - dfiber
-        minfiber = max(0,-dfiber)
-        maxfiber = min(frame.flux.shape[0],frame.flux.shape[0]-dfiber)
-        for index,into_fiber in enumerate(np.arange(minfiber,maxfiber)) :
-            from_fiber = into_fiber + dfiber
-
-            if from_fiber//nfiber_per_bundle != into_fiber//nfiber_per_bundle : continue # not same bundle
-
-            fraction = P0 + P1*(into_fiber/250-1) + (P2 + P3*(into_fiber/250-1)) * (frame.wave>W0)*(np.abs(frame.wave-W0)/(W1-W0))**WP
-            jj=(frame.ivar[from_fiber]>0)&(frame.mask[from_fiber]==0)
-
-            from_fiber_central_wave = xyset.wave_vs_y(from_fiber,central_y)
-            into_fiber_central_wave = xyset.wave_vs_y(into_fiber,central_y)
-
-            tmp=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.flux[from_fiber,jj],left=0,right=0)
-            convolved_flux=fftconvolve(tmp,kernel,mode="same")
-            contamination[into_fiber] = fraction * convolved_flux
-        return contamination
-
+        P4=params[cam][DFIBER]["P4"]
+        P5=params[cam][DFIBER]["P5"]
     else :
         mess = "not implemented!"
         log.critical(mess)
         raise RuntimeError(mess)
+
+    contamination=np.zeros(frame.flux.shape)
+    central_y = xyset.npix_y//2
+    nfiber_per_bundle = 25
+
+    # dfiber = from_fiber - into_fiber
+    # into_fiber = from_fiber - dfiber
+    minfiber = max(0,-dfiber)
+    maxfiber = min(frame.flux.shape[0],frame.flux.shape[0]-dfiber)
+    for index,into_fiber in enumerate(np.arange(minfiber,maxfiber)) :
+        from_fiber = into_fiber + dfiber
+
+        if from_fiber//nfiber_per_bundle != into_fiber//nfiber_per_bundle : continue # not same bundle
+
+        if cam == "B" or cam == "R" :
+            fraction = P0*(W1-frame.wave)/(W1-W0) +P1*(frame.wave-W0)/(W1-W0)
+        elif cam == "Z" :
+            dw=(frame.wave>W0)*(np.abs(frame.wave-W0)/(W1-W0))
+            fraction = P0 + P1*(into_fiber/250-1) + (P2 + P3*(into_fiber/250-1)) * dw**WP + (P4 + P5*(into_fiber/250-1)) * dw**WP2
+        fraction *= (fraction>0)
+        jj=(frame.ivar[from_fiber]>0)&(frame.mask[from_fiber]==0)
+
+        from_fiber_central_wave = xyset.wave_vs_y(from_fiber,central_y)
+        into_fiber_central_wave = xyset.wave_vs_y(into_fiber,central_y)
+
+        tmp=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.flux[from_fiber,jj],left=0,right=0)
+        convolved_flux=fftconvolve(tmp,kernel,mode="same")
+        contamination[into_fiber] = fraction * convolved_flux
+    return contamination
+
+
 
 
 
@@ -111,10 +126,5 @@ def correct_fiber_crosstalk(frame,xyset=None):
         log.info("FIBER{:+d}".format(dfiber))
         kernel = kernels[np.abs(dfiber)]
         contamination += compute_contamination(frame,dfiber,kernel,params,xyset)
-
-    import matplotlib.pyplot as plt
-    for fiber in range(500) :
-        plt.plot(frame.wave,contamination[fiber])
-    plt.show()
 
     frame.flux -= contamination
