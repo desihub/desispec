@@ -1,6 +1,11 @@
-# parameters of the fiber crosstalk
-# fitted on Mt Blanc data release
-# using ....
+# Parameters of the fiber crosstalk fitted on Mt Blanc data release with :
+# desi_compute_fiber_crosstalk -i $DESI_SPECTRO_REDUX/blanc/exposures/202012{14,15,16,17,18,19,20,21,23}/000*/sframe-b?-*.fits -o fiber-crosstalk-bundles-202012-b09.fits
+# desi_compute_fiber_crosstalk -i $DESI_SPECTRO_REDUX/blanc/exposures/202012{14,15,16,17,18,19,20,21,23}/000*/sframe-r?-*.fits -o fiber-crosstalk-bundles-202012-r09.fits
+# desi_compute_fiber_crosstalk -i $DESI_SPECTRO_REDUX/blanc/exposures/202012{14,15,16,17,18,19,20,21,23}/000*/sframe-z?-*.fits -o fiber-crosstalk-bundles-202012-z09.fits
+# desi_fit_fiber_crosstalk -i fiber-crosstalk-bundles-202012-b09.fits --camera b -o param-b.yaml
+# desi_fit_fiber_crosstalk -i fiber-crosstalk-bundles-202012-r09.fits --camera r -o param-r.yaml
+# desi_fit_fiber_crosstalk -i fiber-crosstalk-bundles-202012-z09.fits --camera z -o param-z.yaml
+# This file is used in desispec.fibercrosstalk
 
 B:
  # fiber cross talk model
