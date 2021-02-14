@@ -319,8 +319,9 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
 
         if len(frame.wave) != len(wave) or not np.allclose(frame.wave, wave):
             log.warning(f'Resampling {tracer} ensemble wavelength to match input {camera} frame')
-            dflux = np.interp(frame.wave, wave, dflux,
-                              left=dflux[0], right=dflux[-1])
+            tmp = np.interp(frame.wave, wave, dflux[0],
+                            left=dflux[0,0], right=dflux[0,-1])
+            dflux = tmp.reshape([1,len(tmp)])
             wave = frame.wave
 
         # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
