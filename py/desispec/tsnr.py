@@ -184,7 +184,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
        alpha:  nuisance parameter to reweight rdnoise vs sky contribution to variance (float), obtained 
                as the best fit to the uncalibrated sky fibers VAR.
     '''
-
+    log = get_logger()
     sky_indx = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
     rd_var, sky_var = var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel, alpha=1.0, components=True)
 
