@@ -24,6 +24,18 @@ from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 
 
 def assign_survey(night, conf):
+    """
+    Takes a desi production configuration (yaml) dictionary and determines
+    the survey corresponding to a given night based on the contents of the conf
+    dictionary, if psosible. Otherwise returns None.
+
+    Args:
+        night, int. The night you want to know the survey it corresponds to.
+        conf, dict. Dictionary that returned when the configuration yaml file was read in.
+
+    Returns:
+        survey, str. The survey the night was taken under, according to the conf file.
+    """
     for survey in conf['DateRanges']:
         first, last = conf['DateRanges'][survey]
         if night >= first and night <= last:
@@ -31,16 +43,15 @@ def assign_survey(night, conf):
     else:
         return None
 
-# def get_all_nights():
-#     nights = list()
-#     for n in listpath(os.getenv('DESI_SPECTRO_DATA')):
-#         # - nights are 202YMMDD
-#         if re.match('^202\d{5}$', n):
-#             nights.append(n)
-#     return nights
-
 def get_all_nights():
-    nights = list(range(20200210,20200230))+list(range(20200301,20200316))+list(range(20201201,20201224))
+    """
+    Returns a full list of all nights availabel in the DESI Raw data directory
+    """
+    nights = list()
+    for n in listpath(os.getenv('DESI_SPECTRO_DATA')):
+        # - nights are 202YMMDD
+        if re.match('^202\d{5}$', n):
+            nights.append(int(n))
     return nights
 
 def submit_production(production_yaml, dry_run=False, error_if_not_available=False):
