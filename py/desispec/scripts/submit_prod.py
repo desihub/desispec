@@ -56,17 +56,17 @@ def get_all_nights():
 
 def submit_production(production_yaml, dry_run=False, error_if_not_available=False):
     """
-        Interprets a production_yaml file and submits the respective nights for processing
-        within the defined production.
+    Interprets a production_yaml file and submits the respective nights for processing
+    within the defined production.
 
-        Args:
-            production_yaml, str. Pathname of the yaml file that defines the production.
-            dry_run, bool. Default is False. Should the jobs written to the processing table actually be submitted
-                                                 for processing.
-            error_if_not_available, bool. Default is True. Raise as error if the required exposure table doesn't exist,
-                                          otherwise prints an error and returns.
-        Returns:
-            None.
+    Args:
+        production_yaml, str. Pathname of the yaml file that defines the production.
+        dry_run, bool. Default is False. Should the jobs written to the processing table actually be submitted
+                                             for processing.
+        error_if_not_available, bool. Default is True. Raise as error if the required exposure table doesn't exist,
+                                      otherwise prints an error and returns.
+    Returns:
+        None.
     """
     if not os.path.exists(production_yaml):
         raise IOError(f"Prod Yaml file doesn't exist: {production_yaml} not found. Exiting.")
@@ -119,9 +119,7 @@ def submit_night(night, procobstypes=None, dry_run=False, queue='realtime',
         error_if_not_available, bool. Default is True. Raise as error if the required exposure table doesn't exist,
                                       otherwise prints an error and returns.
     Returns:
-        processing_table, Table. The output processing table. Each row corresponds with an exposure that should be
-                                 processed.
-        unprocessed_table, Table. The output unprocessed table. Each row is an exposure that should not be processed.
+        None.
     """
     log = get_logger()
 
