@@ -91,7 +91,9 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
             print(f'Processing {survey} night: {night}')
             submit_night(night, procobstypes=None, dry_run=dry_run, queue='realtime',
                          error_if_not_available=error_if_not_available)
-
+            print(f"Completed {night}. Sleeping for 30s")
+            time.sleep(30)
+            
     print("Skipped the following nights that were not assigned to a survey:")
     print(non_survey_nights, '\n\n\n')
     print("All nights submitted")
@@ -225,7 +227,9 @@ def submit_night(night, procobstypes=None, dry_run=False, queue='realtime',
         tableng = len(ptable)
         if tableng > 0 and ii % 10 == 0:
             write_table(ptable, tablename=proc_table_pathname)
-            time.sleep(1)
+            if not dry_run:
+                print("\n","Sleeping 10s to slow down the queue submission rate")
+                time.sleep(10)
 
         ## Flush the outputs
         sys.stdout.flush()
