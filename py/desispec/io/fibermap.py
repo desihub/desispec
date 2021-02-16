@@ -441,6 +441,13 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
 
+    #- also read extra keywords from HDU 0
+    fa_hdr0 = fits.getheader(fafile, 0)
+    if 'OUTDIR' in fa_hdr0:
+        fa_hdr0.rename_keyword('OUTDIR', 'FAOUTDIR')
+    skipkeys = ['SIMPLE', 'EXTEND', 'COMMENT', 'EXTNAME', 'BITPIX', 'NAXIS']
+    addkeys(fa.meta, fa_hdr0, skipkeys=skipkeys)
+
     #- Read platemaker (pm) coordinates file and count positioning iterations
     if coordfile is not None:
         pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
