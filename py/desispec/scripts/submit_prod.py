@@ -89,7 +89,7 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
             continue
         else:
             print(f'Processing {survey} night: {night}')
-            submit_night(night, procobstypes=None, dry_run=dry_run, queue='realtime',
+            submit_night(night, procobstypes=None, dry_run=dry_run, queue=conf['queue'],
                          error_if_not_available=error_if_not_available)
             print(f"Completed {night}. Sleeping for 30s")
             time.sleep(30)
@@ -233,7 +233,7 @@ def submit_night(night, procobstypes=None, dry_run=False, queue='realtime',
         sys.stdout.flush()
         sys.stderr.flush()
 
-    if tableng > 0:
+    if len(ptable) > 0:
         ## No more data coming in, so do bottleneck steps if any apply
         ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
                                                                                        arcjob, flatjob, lasttype,
