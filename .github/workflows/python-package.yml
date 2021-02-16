@@ -97,7 +97,7 @@ jobs:
               with:
                 python-version: ${{ matrix.python-version }}
             - name: Install Python dependencies
-              run: python -m pip install --upgrade pip wheel Sphinx
+              run: python -m pip install --upgrade pip wheel Sphinx<3.5
             - name: Test the documentation
               run: sphinx-build -W --keep-going -b html doc doc/_build/html
 
