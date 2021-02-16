@@ -462,7 +462,7 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     #   In specter.extract.ex2d one has flux /= dwave                                     
     #   to convert the measured total number of electrons per                            
     #   wavelength node to an electron 'density'                                             
-    frame.meta['BUNIT'] = 'count/Angstrom'
+    frame.meta['BUNIT'] = 'electron/Angstrom'
     
     #- Add scores to frame                                                               
     if not args.no_scores :
