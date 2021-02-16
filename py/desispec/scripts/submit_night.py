@@ -17,7 +17,7 @@ from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile
 from desispec.workflow.queue import update_from_queue
 
 
-def submit_night(night, procobstypes=None, dry_run=False, queue='realtime',
+def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime',
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
                  error_if_not_available=True):
     """
@@ -26,7 +26,7 @@ def submit_night(night, procobstypes=None, dry_run=False, queue='realtime',
 
     Args:
         night, int. The night of data to be processed. Exposure table must exist.
-        procobstypes, list or np.array. Optional. A list of exposure OBSTYPE's that should be processed (and therefore
+        proc_obstypes, list or np.array. Optional. A list of exposure OBSTYPE's that should be processed (and therefore
                                               added to the processing table).
         dry_run, bool. Default is False. Should the jobs written to the processing table actually be submitted
                                              for processing.
@@ -41,8 +41,8 @@ def submit_night(night, procobstypes=None, dry_run=False, queue='realtime',
     """
     log = get_logger()
 
-    if procobstypes is None:
-        procobstypes = default_exptypes_for_proctable()
+    if proc_obstypes is None:
+        proc_obstypes = default_exptypes_for_proctable()
 
     ## Determine where the exposure table will be written
     if exp_table_path is None:
@@ -79,7 +79,7 @@ def submit_night(night, procobstypes=None, dry_run=False, queue='realtime',
     nersc_end = nersc_end_time(night=true_night)
 
     good_exps = np.array([col.lower() != 'ignore' for col in etable['LASTSTEP']]).astype(bool)
-    good_types = np.array([val in procobstypes for val in etable['OBSTYPE']]).astype(bool)
+    good_types = np.array([val in proc_obstypes for val in etable['OBSTYPE']]).astype(bool)
     good_exptimes = []
     for erow in etable:
         if erow['OBSTYPE'] == 'science' and erow['EXPTIME'] < 60:

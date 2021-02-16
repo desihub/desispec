@@ -80,7 +80,7 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
             continue
         else:
             print(f'Processing {survey} night: {night}')
-            submit_night(night, procobstypes=None, dry_run=dry_run, queue=conf['queue'],
+            submit_night(night, proc_obstypes=None, dry_run=dry_run, queue=conf['queue'],
                          error_if_not_available=error_if_not_available)
             print(f"Completed {night}. Sleeping for 30s")
             time.sleep(30)
