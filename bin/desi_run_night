@@ -9,7 +9,7 @@ def parse_args():  # options=None):
     """
     Creates an arguments parser for the desi run production
     """
-    parser = argparse.ArgumentParser(description="Submit a full production run of the DESI data pipeline for processing.")
+    parser = argparse.ArgumentParser(description="Submit a one past night of data for processing with the DESI data pipeline.")
 
     parser.add_argument("-n","--night", type=str, required=True, help="The night you want processed.")
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
