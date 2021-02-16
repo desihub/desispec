@@ -75,11 +75,11 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
     specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD')
 
     all_nights = get_all_nights()
-
+    non_survey_nights = []
     for night in all_nights:
         survey = assign_survey(night,conf)
         if survey is None:
-            print(f'Night={night} not assigned to a survey. Skipping.','\n\n\n')
+            non_survey_nights.append(night)
             continue
         elif survey in conf['ProcessData'] and conf['ProcessData'][survey] is False:
             print(f'Asked not to process survey: {survey}, Not processing night={night}.','\n\n\n')
@@ -92,6 +92,8 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
             submit_night(night, procobstypes=None, dry_run=dry_run, queue='realtime',
                          error_if_not_available=error_if_not_available)
 
+    print("Skipped the following nights that were not assigned to a survey:")
+    print(non_survey_nights, '\n\n\n')
     print("All nights submitted")
 
 
