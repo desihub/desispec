@@ -111,6 +111,40 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     log.info("SUCCESS: {}".format(cmd))
     return 0
 
+def mpi_count_failures(num_cmd, num_err, comm=None):
+    """
+    Sum num_cmd and num_err across MPI ranks
+
+    Args:
+        num_cmd (int): number of commands run
+        num_err (int): number of failures
+
+    Options:
+        comm: mpi4py communicator
+
+    Returns:
+        sum(num_cmd), sum(num_err) summed across all MPI ranks
+
+    If ``comm`` is None, returns input num_cmd, num_err
+    """
+    if comm is None:
+        return num_cmd, num_err
+
+    rank = comm.rank
+    size = comm.size
+
+    if num_cmd is None:
+        num_cmd = 0
+    if num_err is None:
+        num_err = 0
+
+    num_cmd_all = np.sum(comm.gather(num_cmd, root=0))
+    num_err_all = np.sum(comm.gather(num_err, root=0))
+
+    num_cmd_all = comm.bcast(num_cmd_all, root=0)
+    num_err_all = comm.bcast(num_err_all, root=0)
+    return num_cmd_all, num_err_all
+
 
 def sprun(com, capture=False, input=None):
     """Run a command with subprocess and handle errors.
