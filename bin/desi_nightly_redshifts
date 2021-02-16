@@ -96,6 +96,8 @@ for TILEID in $TILEIDS; do
             done
 	fi
     fi
+    echo Waiting for spectra file creation to finish for TILE ${TILEID} at $(date)
+    wait
 done
 
 #- Wait for the spectra file creation to finish
@@ -129,6 +131,8 @@ for TILEID in $TILEIDS; do
             fi
         done
     fi
+    echo Waiting for coadds to finish for TILE ${TILEID} at $(date)
+    wait
 done
 
 echo Waiting for coadds to finish at $(date)
@@ -160,6 +164,8 @@ for TILEID in $TILEIDS; do
             fi
         done
     fi
+    echo Waiting for redshifts to finish for TILE ${TILEID} at $(date)
+    wait
 done
 
 #- Wait for the various redrock commands to finish
