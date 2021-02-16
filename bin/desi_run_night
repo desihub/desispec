@@ -16,9 +16,9 @@ def parse_args():  # options=None):
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
     # File and dir defs
-    parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
-                        help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
-                             "Overwrites the environment variable SPECPROD")
+    #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
+    #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
+    #                         "Overwrites the environment variable SPECPROD")
     parser.add_argument("-q", "--queue", type=str, required=False, default='realtime',
                         help="The queue to submit jobs to. Default is realtime.")
     parser.add_argument("--exp-table-path", type=str, required=False, default=None,
