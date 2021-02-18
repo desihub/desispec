@@ -6,6 +6,8 @@ import numpy as np
 from astropy.table import Table
 import matplotlib.pyplot as plt
 
+from desispec.fibercrosstalk import read_crosstalk_parameters,eval_crosstalk
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Fits the optical crosstalk obtained with desi_compute_fiber_crosstalk""")
 
@@ -15,6 +17,10 @@ parser.add_argument('--camera', type = str, default = None, required=True,
                         help = 'b,r or z')
 parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'output yaml file with fit parameters')
+parser.add_argument('--only-norm', action='store_true',
+                        help = 'only fit a normalization factor')
+parser.add_argument('--batch', action='store_true',
+                        help = 'do not show plots')
 
 args = parser.parse_args()
 
@@ -23,7 +29,45 @@ table=Table.read(filename)
 
 wave=table["WAVELENGTH"]
 
-cam=args.camera.upper()
+camera=args.camera.upper()
+
+bfibers=(np.arange(20)+0.5)*25 # fiber number for bundle
+dfiber = np.array([-2,-1,1,2])
+
+
+if args.only_norm :
+    print("only fit a normalization factor")
+    params = read_crosstalk_parameters()
+    file=open(args.outfile,"w")
+    file.write("{}:\n".format(args.camera.upper()))
+    print("{}:".format(args.camera.upper()))
+    for df in dfiber :
+
+        xtalk  = eval_crosstalk(args.camera,wave,bfibers,df,params,apply_scale=False)
+
+        a=0.
+        b=0.
+        for bundle in range(20) :
+
+            bfiber = bfibers[bundle]
+
+            vals=table["CROSSTALK-B{:02d}-F{:+d}".format(bundle,df)]
+            ivar=table["CROSSTALKIVAR-B{:02d}-F{:+d}".format(bundle,df)]
+
+            a += np.sum(ivar*xtalk[bundle]**2)
+            b += np.sum(ivar*xtalk[bundle]*vals)
+
+        if a>0 :
+            scale=b/a
+        else :
+            scale=0
+        if scale<0 : scale=0.
+        print(" F{:+d}:\n  SCALE: {:4.3f}".format(df,scale))
+        file.write(" F{:+d}:\n  SCALE: {:4.3f}\n".format(df,scale))
+    file.close()
+    sys.exit(0)
+
+cam=camera[0]
 
 if cam=="B" :
     # model is
@@ -50,8 +94,6 @@ if cam=="Z" :
     WP2=4.
     npar=6
 
-bfibers=(np.arange(20)+0.5)*25 # fiber number for bundle
-dfiber = np.array([-2,-1,1,2])
 
 
 params={}
@@ -92,7 +134,7 @@ for df in dfiber :
     Ai = np.linalg.inv(A)
     P  = Ai.dot(B)
 
-    key="FIBER{:+d}".format(df)
+    key="F{:+d}".format(df)
     params[key]={}
 
     for j in range(npar) :
@@ -102,9 +144,8 @@ for df in dfiber :
 
 
 file=open(args.outfile,"w")
-file.write("{}:".format(cam))
+file.write("{}:\n".format(camera))
 if cam=="B" or cam=="R" :
-    file.write("# fiber cross talk model\n")
     file.write("# XTALK = P0*(W1-WAVE)/(W1-W0)+P1*(WAVE-W0)/(W1-W0)\n")
     file.write(" W0: {}\n".format(W0))
     file.write(" W1: {}\n".format(W1))
@@ -138,7 +179,7 @@ for k1 in params :
     for k2 in params[k1] :
         print("  P{}: {}\n".format(k2,params[k1][k2]))
 
-    df=int(k1.replace("FIBER",""))
+    df=int(k1.replace("F",""))
     print("df=",df)
 
     title=k1
@@ -181,4 +222,5 @@ for k1 in params :
     plt.xlabel("fiber")
     plt.ylabel("fiber crosstalk")
 
-plt.show()
+if not args.batch :
+    plt.show()

@@ -15,7 +15,7 @@ from desiutil.log import get_logger
 from desispec.io import read_frame,read_xytraceset
 from desispec.interpolation import resample_flux
 from desispec.calibfinder import findcalibfile
-from desispec.fibercrosstalk import compute_fiber_crosstalk_kernels
+from desispec.fibercrosstalk import compute_crosstalk_kernels
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -43,10 +43,12 @@ def main(args) :
 
 
     # precompute convolution kernels
-    kernels = compute_fiber_crosstalk_kernels()
+    kernels = compute_crosstalk_kernels()
 
     A = None
     B = None
+
+    dfiber=np.array([-2,-1,1,2])
 
     # one measurement per fiber bundle
     nfiber_per_bundle = 25
@@ -93,12 +95,25 @@ def main(args) :
                 if otherfiber>=frame.nspec : continue
                 if otherfiber//nfiber_per_bundle != skyfiberbundle : continue # not same bundle
 
-                medsnr=np.median(np.sqrt(frame.ivar[otherfiber])*(frame.mask[otherfiber]==0)*frame.flux[otherfiber])
+
+                snr=np.sqrt(frame.ivar[otherfiber])*frame.flux[otherfiber]
+                medsnr=np.median(snr)
                 if medsnr<3. : continue # need good SNR to model cross talk
 
-                # interpolate over masked array and shift
-                good=(frame.ivar[otherfiber]>0)&(frame.mask[otherfiber]==0)
-                if np.sum(good)==0 : continue
+                if np.sum(snr==0)>100 :
+                    log.warning("ignore fiber {} from {} with many masked pixel".format(otherfiber,filename))
+                    continue
+
+                if np.any(snr>1000.) :
+                    log.error("signal to noise is too high in fiber {} from {}".format(otherfiber,filename))
+                    continue
+
+                # interpolate over masked pixels or low snr pixels and shift
+                medivar=np.median(frame.ivar[otherfiber])
+                good=(frame.ivar[otherfiber]>0.01*medivar)
+                if np.sum(good)==0 :
+                    log.error("no good values left in fiber {} from {}".format(otherfiber,filename))
+                    continue
 
                 # account for change of wavelength for same y coordinate
                 otherfiber_central_wave = tset.wave_vs_y(otherfiber,central_y)
