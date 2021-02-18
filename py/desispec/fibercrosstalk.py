@@ -21,6 +21,11 @@ def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,
     """
     Computes the fiber crosstalk convolution kernels assuming a power law PSF tail
     Returns a dictionnary of kernels, with key the positive fiber offset 1,2,.... Each entry is an 1D array.
+
+    Optionnal arguments:
+       max_fiber_offset : positive int, maximum fiber offset, 2 by default
+       fiber_separation_in_pixels : float, distance between neighboring fiber traces in the CCD in pixels, default=7.3
+       asymptotic_power_law_index : float, power law index of PSF tail
     """
     # assume PSF tail shape (tuned to measured PSF tail in NIR)
     asymptotic_power_law_index = 2.5
@@ -38,7 +43,23 @@ def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,
     return kernels
 
 def eval_crosstalk(camera,wave,fibers,dfiber,params,apply_scale=True,nfiber_per_bundle=25) :
+    """
+    Computes the crosstalk as a function of wavelength from a fiber offset dfiber (positive and negative) for an input set of fibers
 
+    Args:
+      camera : str, camera identifier (b8,r7,z3, ...)
+      wave : 1D array, wavelength
+      fibers : list or 1D array of int, list of contaminated fibers
+      dfiber : int, positive or negative fiber offset, contaminating fibers = contaminated fibers + dfiber
+      params : nested dictionnary, parameters of the crosstalk model
+
+    Optionnal:
+      apply_scale : boolean, apply or not the scale factor if found in the list of parameters
+      nfiber_per_bundle : number of fibers per bundle, only the fibers in the same bundle are considered
+
+    Returns:
+      2D array of crosstalk fraction (between 0 and 1) of shape ( len(fibers),len(wave) )
+    """
     log = get_logger()
 
     camera=camera.upper()
@@ -98,7 +119,18 @@ def eval_crosstalk(camera,wave,fibers,dfiber,params,apply_scale=True,nfiber_per_
 
 
 def compute_contamination(frame,dfiber,kernel,params,xyset) :
+    """
+    Computes the contamination of a frame from a given fiber offset
+    Args:
+       frame : a desispec.frame.Frame object
+       dfiber : int, fiber offset (-2,-1,1,2)
+       kernel : 1D numpy array, convolution kernel
+       params : nested dictionnary, parameters of the crosstalk model
+       xyset : desispec.xytraceset.XYTraceSet object with trace coordinates to shift the spectra
 
+    Returns:
+       the contamination of the frame, 2D numpy array of same shape as frame.flux
+    """
     camera = frame.meta["camera"]
     fibers = np.arange(frame.nspec,dtype=int)
     xtalk  = eval_crosstalk(camera,frame.wave,fibers,dfiber,params)
@@ -131,6 +163,11 @@ def compute_contamination(frame,dfiber,kernel,params,xyset) :
 
 
 def read_crosstalk_parameters() :
+    """
+    Reads the crosstalk parameters in desispec/data/fiber-crosstalk.yaml
+    Returns:
+       nested dictionary with parameters per camera
+    """
     log=get_logger()
     parameter_filename = resource_filename('desispec', "data/fiber-crosstalk.yaml")
     log.info("read parameters in {}".format(parameter_filename))
@@ -144,7 +181,11 @@ def correct_fiber_crosstalk(frame,xyset=None):
     """Apply a fiber cross talk correction. Modifies frame.flux and frame.ivar.
 
     Args:
-        frame : `desispec.Frame` object
+        frame : desispec.frame.Frame object
+
+    Optionnal:
+        xyset : desispec.xytraceset.XYTraceSet object with trace coordinates to shift the spectra
+                (automatically found with calibration finder otherwise)
     """
     log=get_logger()
 
