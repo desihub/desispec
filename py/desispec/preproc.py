@@ -438,6 +438,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     header = header.copy()
     depend.setdep(header, 'DESI_SPECTRO_CALIB', os.getenv('DESI_SPECTRO_CALIB'))
 
+    for key in ['DESI_SPECTRO_REDUX', 'SPECPROD']:
+        if key in os.environ:
+            depend.setdep(header, key, os.environ[key])
+
     cfinder = None
 
     if ccd_calibration_filename is not False:

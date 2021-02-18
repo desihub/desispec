@@ -184,7 +184,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
        alpha:  nuisance parameter to reweight rdnoise vs sky contribution to variance (float), obtained 
                as the best fit to the uncalibrated sky fibers VAR.
     '''
-
+    log = get_logger()
     sky_indx = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
     rd_var, sky_var = var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel, alpha=1.0, components=True)
 
@@ -319,8 +319,11 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
 
         if len(frame.wave) != len(wave) or not np.allclose(frame.wave, wave):
             log.warning(f'Resampling {tracer} ensemble wavelength to match input {camera} frame')
-            dflux = np.interp(frame.wave, wave, dflux,
-                              left=dflux[0], right=dflux[-1])
+            tmp = np.zeros([dflux.shape[0], len(frame.wave)])
+            for i in range(dflux.shape[0]):
+                tmp[i] = np.interp(frame.wave, wave, dflux[i],
+                            left=dflux[i,0], right=dflux[i,-1])
+            dflux = tmp
             wave = frame.wave
 
         # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.

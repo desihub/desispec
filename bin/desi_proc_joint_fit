@@ -4,6 +4,7 @@ import time
 start_imports = time.time()
 
 import sys, os, argparse, re
+import traceback
 import subprocess
 from copy import deepcopy
 import json
@@ -19,7 +20,7 @@ from desispec.io.util import create_camword
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
-from desispec.util import runcmd
+from desispec.util import runcmd, mpi_count_failures
 import desispec.scripts.extract
 import desispec.scripts.specex
 
@@ -164,6 +165,7 @@ if comm is not None:
 
 if args.obstype in ['ARC']:
     timer.start('psfnight')
+    num_cmd = num_err = 0
     if rank == 0:
         for camera in args.cameras:
             psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
@@ -175,20 +177,49 @@ if args.obstype in ['ARC']:
                     dirname = os.path.dirname(psfnightfile)
                     if not os.path.isdir(dirname):
                         os.makedirs(dirname)
-                    desispec.scripts.specex.mean_psf(psfs, psfnightfile)
+                    num_cmd += 1
+
+                    #- generic try/except so that any failure doesn't leave
+                    #- MPI rank 0 hanging while others are waiting for it
+                    try:
+                        desispec.scripts.specex.mean_psf(psfs, psfnightfile)
+                    except:
+                        log.error('specex.meanpsf failed for {}'.format(os.path.basename(psfnightfile)))
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                        log.error(''.join(lines))
+                        sys.stdout.flush()
+
+                    if not os.path.exists(psfnightfile):
+                        log.error(f'Failed to create {psfnightfile}')
+                        num_err += 1
                 else:
                     log.info("Fewer than 4 psfs were provided, can't compute psfnight. Exiting ...")
-
+                    num_cmd += 1
+                    num_err += 1
 
     timer.stop('psfnight')
 
+    num_cmd, num_err = mpi_count_failures(num_cmd, num_err, comm=comm)
+    if rank == 0:
+        if num_err > 0:
+            log.error(f'{num_err}/{num_cmd} psfnight commands failed')
 
-                    
+    if num_err>0 and num_err==num_cmd:
+        sys.stdout.flush()
+        if rank == 0:
+            log.critical('All psfnight commands failed')
+        sys.exit(1)
+
+
 # -------------------------------------------------------------------------
 # - Average and auto-calib fiberflats of night if applicable
 
 if args.obstype in ['FLAT']:
     timer.start('fiberflatnight')
+    #- Track number of commands run and number of errors for exit code
+    num_cmd = 0
+    num_err = 0
     if rank == 0:
         fiberflatnightfile = findfile('fiberflatnight', args.night, args.expids[0], args.cameras[0])
         fiberflatdirname = os.path.dirname(fiberflatnightfile)
@@ -233,7 +264,10 @@ if args.obstype in ['FLAT']:
                             cmd = "desi_average_fiberflat --program '{}' --outfile {} -i ".format(pg, ofile)
                             for flat in flats_for_this_camera:
                                 cmd += " {} ".format(flat)
-                            runcmd(cmd, inputs=flats_for_this_camera, outputs=[ofile, ])
+                            num_cmd += 1
+                            err = runcmd(cmd, inputs=flats_for_this_camera, outputs=[ofile, ])
+                            if err:
+                                num_err += 1
                             if os.path.isfile(ofile):
                                 average_flats[camera].append(ofile)
                             else:
@@ -256,17 +290,28 @@ if args.obstype in ['FLAT']:
                         cmd = "desi_autocalib_fiberflat --night {} --arm {} -i ".format(args.night, camera_arm)
                         for flat in flats_for_this_arm:
                             cmd += " {} ".format(flat)
-                        runcmd(cmd, inputs=flats_for_this_arm, outputs=[])
+                        num_cmd += 1
+                        err = runcmd(cmd, inputs=flats_for_this_arm, outputs=[])
+                        if err:
+                            num_err += 1
                     else:
                         log.error(f'No flats found for arm {camera_arm}')
 
                 log.info("Done with fiber flats per night")
 
     timer.stop('fiberflatnight')  
+    num_cmd, num_err = mpi_count_failures(num_cmd, num_err, comm=comm)
     if comm is not None:
         comm.barrier()
 
+    if rank == 0:
+        if num_err > 0:
+            log.error(f'{num_err}/{num_cmd} fiberflat commands failed')
 
+    if num_err>0 and num_err==num_cmd:
+        if rank == 0:
+            log.critical('All fiberflat commands failed')
+        sys.exit(1)
 
                     
 ##################### Note #############################
@@ -296,6 +341,7 @@ if args.obstype in ['SCIENCE']:
     #fx.close()
 
     timer.start('stdstarfit')
+    num_err = num_cmd = 0
     if rank == 0:
         log.info('Starting stdstar fitting at {}'.format(time.asctime()))
         
@@ -373,11 +419,24 @@ if args.obstype in ['SCIENCE']:
             cmd += " --maxstdstars {}".format(args.maxstdstars)
 
         inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
-        runcmd(cmd, inputs=inputs, outputs=[stdfile])
+        num_cmd += 1
+        err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+        if err:
+            num_err += 1
 
     timer.stop('stdstarfit')
+    num_cmd, num_err = mpi_count_failures(num_cmd, num_err, comm=comm)
     if comm is not None:
         comm.barrier()
+
+    if rank == 0 and num_err > 0:
+        log.error(f'{num_err}/{num_cmd} stdstar commands failed')
+
+    sys.stdout.flush()
+    if num_err>0 and num_err==num_cmd:
+        if rank == 0:
+            log.critical('All stdstar commands failed')
+        sys.exit(1)
 
     if rank==0 and len(args.expids) > 1:
         for sp in spectro_nums:

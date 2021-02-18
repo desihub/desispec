@@ -203,7 +203,7 @@ class CalibFinder() :
             raise IOError("Calibration directory {} not found".format(self.directory))
 
         
-        if dateobs < 20191211 : # old spectro identifiers
+        if dateobs < 20191211 or detector == 'SIM': # old spectro identifiers
             cameraid = camera
             spectro=int(camera[-1])
             if yaml_file is None :

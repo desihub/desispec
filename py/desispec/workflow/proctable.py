@@ -298,7 +298,10 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
         prow, dict. The output processing table row.
     """
     log = get_logger()
-    erow = dict(erow)
+    if type(erow) is dict:
+        row_names = list(erow.keys())
+    else:
+        row_names = erow.colnames
 
     ## Define the column names for the exposure table and their respective datatypes
     #if colnames is None:
@@ -310,7 +313,7 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
     prow = dict()
     for nam, typ, defval in zip(colnames, coldtypes, coldefaults):
         if nam == 'PROCCAMWORD':
-            if 'BADCAMWORD' in erow.keys():
+            if 'BADCAMWORD' in row_names:
                 badcamword = erow['BADCAMWORD']
             else:
                 badcamword = ''
@@ -321,11 +324,11 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
             else:
                 prow[nam] = ''
             for word in ['dither', 'acquisition', 'focus', 'test']:
-                if 'PROGRAM' in erow.keys() and word in erow['PROGRAM'].lower():
+                if 'PROGRAM' in row_names and word in erow['PROGRAM'].lower():
                     prow[nam] = word
         elif nam == 'EXPID':
             prow[nam] = np.array([erow[nam]])
-        elif nam in erow.keys():
+        elif nam in row_names:
             prow[nam] = erow[nam]
         else:
             prow[nam] = defval

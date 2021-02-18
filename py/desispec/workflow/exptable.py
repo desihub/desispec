@@ -496,6 +496,9 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         ## If tileid or TARGT and not science, just replace with default
         elif key in ['TILEID','TARGTRA','TARGTDEC'] and obstype not in ['science']:
             outdict[key] = default
+        ## If trying to assign purpose and it's before that was defined, just give default
+        elif key in ['PURPOSE'] and int(night) < 20201201:
+            outdict[key] = default
         ## if something else, flag as missing metadata and replace with default
         else:
             if 'metadata_missing' not in outdict['EXPFLAG']:

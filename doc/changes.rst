@@ -2,10 +2,35 @@
 desispec Change Log
 ===================
 
-0.38.1 (unreleased)
+0.39.1 (2021-02-16)
 -------------------
 
-* No changes yet
+* No changes yet.
+
+0.39.0 (2021-02-16)
+-------------------
+
+Tag for software release 21.2 and Cascades run.
+
+Major updates:
+
+* Update exposure table formats and pipeline workflow (PR `#1135`_, `#1139`_).
+* Add template S/N (TSNR) depth calculations (PR `#1136`_).
+
+Smaller updates:
+
+* Propagate fiberassign HDU 0 keywords into fibermap header in addition to
+  ``FIBERASSIGN`` (HDU 1) keywords (PR `#1137`_).
+* ``desi_proc_joint_fit`` exit with error code if all cameras fail
+  (PR `#1140`_).
+*  Frame units "electron/Angstrom" instead of "count/Angstrom" (PR `#1142`_).
+
+.. _`#1135`: https://github.com/desihub/desispec/issues/1135
+.. _`#1136`: https://github.com/desihub/desispec/issues/1136
+.. _`#1137`: https://github.com/desihub/desispec/issues/1137
+.. _`#1139`: https://github.com/desihub/desispec/issues/1139
+.. _`#1140`: https://github.com/desihub/desispec/issues/1140
+.. _`#1142`: https://github.com/desihub/desispec/issues/1142
 
 0.38.0 (2021-02-10)
 -------------------

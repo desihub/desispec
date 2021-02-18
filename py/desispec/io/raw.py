@@ -18,7 +18,7 @@ from . import iotime
 from desispec.util import header2night
 import desispec.preproc
 from desiutil.log import get_logger
-from desispec.calibfinder import parse_date_obs, CalibFinder 
+from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
 
 def read_raw(filename, camera, fibermapfile=None, **kwargs):
@@ -36,7 +36,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
 
     Returns Image object with member variables pix, ivar, mask, readnoise
     '''
-    
+
     log = get_logger()
 
     t0 = time.time()
@@ -54,12 +54,13 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         if len(fx)>hdu+1 :
             if hdu > 0:
                 log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
-            hdu +=1 
+            hdu +=1
         else :
             log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
             raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
 
     #- Check if NIGHT keyword is present and valid; fix if needed
+    #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
     try:
         tmp = int(primary_header['NIGHT'])
     except (KeyError, ValueError, TypeError):
@@ -68,7 +69,11 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     try:
         tmp = int(header['NIGHT'])
     except (KeyError, ValueError, TypeError):
-        header['NIGHT'] = header2night(header)
+        try:
+            header['NIGHT'] = header2night(header)
+        except (KeyError, ValueError, TypeError):
+            #- early teststand data only have NIGHT/timestamps in primary hdr
+            header['NIGHT'] = primary_header['NIGHT']
 
     #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
     primary_header['NIGHT'] = int(primary_header['NIGHT'])
@@ -104,7 +109,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
             hdus=[0,]
             if "PLC" in fx :
                 hdus.append("PLC")
-        
+
         if hdus is not None :
             log.info("will add header keywords from hdus %s"%str(hdus))
             for hdu in hdus :
@@ -118,7 +123,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
                     for key in hdu_header:
                         if ( key not in skipkeys ) and ( key not in header ) :
                             log.debug("adding {} = {}".format(key,hdu_header[key]))
-                            header[key] = hdu_header[key]                        
+                            header[key] = hdu_header[key]
                         else :
                             log.debug("key %s already in header or in skipkeys"%key)
                 else :
@@ -182,34 +187,37 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     else :
         petal_loc = int(camera[1])
         log.debug('Since 20191211, camera {} is PETAL_LOC={}'.format(camera, petal_loc))
-    
-    ii = (fibermap['PETAL_LOC'] == petal_loc)
-    fibermap = fibermap[ii]
 
-    ## Mask fibers
-    cfinder = CalibFinder([header,primary_header])
-    mod_fibers = fibermap['FIBER'].data % 500
+    if 'PETAL_LOC' in fibermap.dtype.names : # not the case in early teststand data
+        ii = (fibermap['PETAL_LOC'] == petal_loc)
+        fibermap = fibermap[ii]
 
-    ## Mask blacklisted fibers
-    fiberblacklist = cfinder.fiberblacklist()
-    for fiber in fiberblacklist:
-        loc = np.where(mod_fibers==fiber)[0]
-        fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
+    if 'FIBER' in fibermap.dtype.names : # not the case in early teststand data
 
-    # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
-    camname = camera.upper()[0]
-    if camname == 'B':
-        badamp_bit = maskbits.fibermask.BADAMPB
-    elif camname == 'R':
-        badamp_bit = maskbits.fibermask.BADAMPR
-    else:
-        #elif camname == 'Z':
-        badamp_bit = maskbits.fibermask.BADAMPZ
+        ## Mask fibers
+        cfinder = CalibFinder([header,primary_header])
+        mod_fibers = fibermap['FIBER'].data % 500
 
-    fibers_to_exclude = cfinder.fibers_to_exclude()
-    for fiber in fibers_to_exclude:
-        loc = np.where(mod_fibers==fiber)[0]
-        fibermap['FIBERSTATUS'][loc] |= badamp_bit        
+        ## Mask blacklisted fibers
+        fiberblacklist = cfinder.fiberblacklist()
+        for fiber in fiberblacklist:
+            loc = np.where(mod_fibers==fiber)[0]
+            fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
+
+        # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
+        camname = camera.upper()[0]
+        if camname == 'B':
+            badamp_bit = maskbits.fibermask.BADAMPB
+        elif camname == 'R':
+            badamp_bit = maskbits.fibermask.BADAMPR
+        else:
+            #elif camname == 'Z':
+            badamp_bit = maskbits.fibermask.BADAMPZ
+
+        fibers_to_exclude = cfinder.fibers_to_exclude()
+        for fiber in fibers_to_exclude:
+            loc = np.where(mod_fibers==fiber)[0]
+            fibermap['FIBERSTATUS'][loc] |= badamp_bit
 
     img.fibermap = fibermap
 

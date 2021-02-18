@@ -262,7 +262,7 @@ def main_mpi(args, comm=None, timing=None):
     img.meta['WAVESTEP']= (raw_dw, 'Wavelength step size [Angstroms]')
     img.meta['SPECTER'] = (specter.__version__, 'https://github.com/desihub/specter')
     img.meta['IN_PSF']  = (io.shorten_filename(psf_file), 'Input spectral PSF')
-    img.meta['IN_IMG']  = (io.shorten_filename(input_file), 'Input image')
+    img.meta['IN_IMG']  = io.shorten_filename(input_file)
     depend.add_dependencies(img.meta)
 
     #- Check if input PSF was itself a traceshifted version of another PSF
@@ -462,7 +462,7 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     #   In specter.extract.ex2d one has flux /= dwave                                     
     #   to convert the measured total number of electrons per                            
     #   wavelength node to an electron 'density'                                             
-    frame.meta['BUNIT'] = 'count/Angstrom'
+    frame.meta['BUNIT'] = 'electron/Angstrom'
     
     #- Add scores to frame                                                               
     if not args.no_scores :

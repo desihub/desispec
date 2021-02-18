@@ -321,12 +321,13 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                 col, dtyp = process_column(data, typ, mask=mask, default=default, joinsymb=joinsymb, \
                                            process_mixins=process_mixins, verbose=verbose)
 
-                newcol = Table.Column(name=nam ,data=col ,dtype=dtyp)
                 if dtyp in [list, np.array, np.ndarray]:
-                    newcol.shape = (len(col),)
+                    out = np.ndarray(shape=(len(col),),dtype=object)
                     for ii in range(len(col)):
-                        newcol[ii] = np.atleast_1d(newcol[ii])
-
+                        out[ii] = np.atleast_1d(col[ii])
+                    newcol = Table.Column(name=nam, data=out, dtype=dtyp)
+                else:
+                    newcol = Table.Column(name=nam, data=col, dtype=dtyp)    
                 outcolumns.append(newcol)
             table = Table(outcolumns)
         else:
