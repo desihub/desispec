@@ -5,7 +5,9 @@ desispec Change Log
 0.39.1 (2021-02-16)
 -------------------
 
-* No changes yet.
+* Add fiber crosstalk correction (PR `#1138`_).
+
+.. _`#1138`: https://github.com/desihub/desispec/issues/1138
 
 0.39.0 (2021-02-16)
 -------------------
