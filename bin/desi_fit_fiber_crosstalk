@@ -190,6 +190,7 @@ for k1 in params :
 
     P=params[k1]
     wvals=[]
+    werrs=[]
     wmodels=[]
     for bundle in range(20) :
         bfiber = bfibers[bundle]
@@ -205,18 +206,23 @@ for k1 in params :
         vals=table["CROSSTALK-B{:02d}-F{:+d}".format(bundle,df)]
         wvals.append(vals)
         wmodels.append(ct)
-        plt.plot(wave,vals,".",color=colors[bundle])
+
+        ivar=table["CROSSTALKIVAR-B{:02d}-F{:+d}".format(bundle,df)]
+        errs=(ivar>0)/np.sqrt(ivar+(ivar==0))
+        werrs.append(errs)
+        plt.errorbar(wave,vals,errs,fmt=".",color=colors[bundle])
 
     plt.grid()
     plt.xlabel("wavelenth")
     plt.ylabel("fiber crosstalk")
     plt.figure(title+"-bis")
     wvals=np.array(wvals)
+    werrs=np.array(werrs)
     wmodels=np.array(wmodels)
 
     colors = plt.cm.jet(np.linspace(0,1,wave.size))
     for i,w in enumerate(wave) :
-        plt.plot(bfibers,wvals[:,i],".",color=colors[i])
+        plt.errorbar(bfibers,wvals[:,i],werrs[:,i],fmt=".",color=colors[i])
         plt.plot(bfibers,wmodels[:,i],"-",color=colors[i])
     plt.grid()
     plt.xlabel("fiber")
