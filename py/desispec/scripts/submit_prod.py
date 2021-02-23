@@ -64,6 +64,16 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
     conf = yaml.safe_load(open(production_yaml, 'rb'))
     specprod = str(conf['name']).lower()
     specprod = verify_variable_with_environment(var=specprod, var_name='specprod', env_name='SPECPROD')
+    if 'reservation' in conf:
+        reservation = str(conf['reservation'])
+        if reservation.lower() == 'none':
+            reservation = None
+    else:
+        reservation = None
+    if 'queue' in conf:
+        queue = conf['queue']
+    else:
+        queue = 'realtime'
 
     all_nights = get_all_nights()
     non_survey_nights = []
@@ -80,8 +90,8 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
             continue
         else:
             print(f'Processing {survey} night: {night}')
-            submit_night(night, proc_obstypes=None, dry_run=dry_run, queue=conf['queue'],
-                         error_if_not_available=error_if_not_available)
+            submit_night(night, proc_obstypes=None, dry_run=dry_run, queue=queue,
+                         reservation=reservation, error_if_not_available=error_if_not_available)
             print(f"Completed {night}. Sleeping for 30s")
             time.sleep(30)
 
