@@ -41,6 +41,8 @@ def main(args) :
 
     log= get_logger()
 
+    skylines=np.array([5578.94140625,5656.60644531,6302.08642578,6365.50097656,6618.06054688,7247.02929688,7278.30273438,7318.26904297,7342.94482422,7371.50878906,8346.74902344,8401.57617188,8432.42675781,8467.62011719,8770.36230469,8780.78027344,8829.57421875,8838.796875,8888.29394531,8905.66699219,8922.04785156,8960.48730469,9326.390625,9378.52734375,9442.37890625,9479.48242188,9569.9609375,9722.59082031,9793.796875])
+    skymask=None
 
     # precompute convolution kernels
     kernels = compute_crosstalk_kernels()
@@ -58,10 +60,17 @@ def main(args) :
 
         # read a frame and fiber the sky fibers
         frame = read_frame(filename)
+
+        if skymask is None :
+            skymask=np.ones(frame.wave.size)
+            for line in skylines :
+                skymask[np.abs(frame.wave-line)<2]=0
+
         skyfibers = np.where(frame.fibermap["OBJTYPE"]=="SKY")[0]
         log.info("{} sky fibers in {}".format(skyfibers.size,filename))
 
         frame.ivar *= (frame.mask==0)
+        frame.ivar *= skymask
 
         # also open trace set to determine the shift
         # to apply to adjacent spectra
@@ -80,6 +89,9 @@ def main(args) :
         if A is None :
             A = np.zeros((nbundles,dfiber.size,dfiber.size,frame.wave.size))
             B = np.zeros((nbundles,dfiber.size,frame.wave.size))
+            fA = np.zeros((dfiber.size,dfiber.size,frame.wave.size))
+            fB = np.zeros((dfiber.size,frame.wave.size))
+            ninput=np.zeros((nbundles,dfiber.size))
         else :
             assert(A.shape[3]==frame.wave.size)
 
@@ -87,7 +99,18 @@ def main(args) :
             cflux = np.zeros((dfiber.size,frame.wave.size))
             skyfiberbundle=skyfiber//nfiber_per_bundle
 
+            nbad=np.sum(frame.ivar[skyfiber]==0)
+            if nbad>200 :
+                if nbad<2000:
+                    log.warning("ignore skyfiber {} from {} with {} masked pixel".format(skyfiber,filename,nbad))
+                continue
+
             skyfiber_central_wave = tset.wave_vs_y(skyfiber,central_y)
+
+            should_consider = False
+            must_exclude    = False
+            fA *= 0.
+            fB *= 0.
 
             for i,df in enumerate(dfiber) :
                 otherfiber = df+skyfiber
@@ -98,31 +121,39 @@ def main(args) :
 
                 snr=np.sqrt(frame.ivar[otherfiber])*frame.flux[otherfiber]
                 medsnr=np.median(snr)
-                if medsnr<3. : continue # need good SNR to model cross talk
+                if medsnr>2 :  # need good SNR to model cross talk
+                    should_consider = True # in which case we need all of the contaminants to the sky fiber ...
 
-                if np.sum(snr==0)>100 :
-                    log.warning("ignore fiber {} from {} with many masked pixel".format(otherfiber,filename))
-                    continue
+                nbad=np.sum(snr==0)
+                if nbad>200 :
+                    if nbad<2000:
+                        log.warning("ignore fiber {} from {} with {} masked pixel".format(otherfiber,filename,nbad))
+                    must_exclude = True # because 1 bad fiber
+                    break
 
                 if np.any(snr>1000.) :
-                    log.error("signal to noise is too high in fiber {} from {}".format(otherfiber,filename))
-                    continue
+                    log.error("signal to noise is suspiciously too high in fiber {} from {}".format(otherfiber,filename))
+                    must_exclude = True # because 1 bad fiber
+                    break
 
                 # interpolate over masked pixels or low snr pixels and shift
                 medivar=np.median(frame.ivar[otherfiber])
-                good=(frame.ivar[otherfiber]>0.01*medivar)
-                if np.sum(good)==0 :
-                    log.error("no good values left in fiber {} from {}".format(otherfiber,filename))
-                    continue
+                good=(frame.ivar[otherfiber]>0.01*medivar)# interpolate over brigh sky lines
 
                 # account for change of wavelength for same y coordinate
                 otherfiber_central_wave = tset.wave_vs_y(otherfiber,central_y)
                 flux = np.interp(frame.wave+(otherfiber_central_wave-skyfiber_central_wave),frame.wave[good],frame.flux[otherfiber][good])
                 kern=kernels[np.abs(df)]
                 cflux[i] = fftconvolve(flux,kern,mode="same")
-                B[skyfiberbundle,i] += frame.ivar[skyfiber]*cflux[i]*frame.flux[skyfiber]
+                fB[i] = frame.ivar[skyfiber]*cflux[i]*frame.flux[skyfiber]
                 for j in range(i+1) :
-                    A[skyfiberbundle,i,j] += frame.ivar[skyfiber]*cflux[i]*cflux[j]
+                    fA[i,j] = frame.ivar[skyfiber]*cflux[i]*cflux[j]
+
+            if should_consider and ( not must_exclude ) :
+                for i in range(dfiber.size) :
+                    ninput[skyfiberbundle,i] += int(np.sum(fB[i])!=0) # to monitor
+                B[skyfiberbundle] += fB
+                A[skyfiberbundle] += fA
 
     for bundle in range(nbundles) :
         for i in range(dfiber.size) :
@@ -160,6 +191,10 @@ def main(args) :
             table[key]=crosstalk_ivar[bundle,i]
     table.write(args.outfile,overwrite=True)
     log.info("wrote {}".format(args.outfile))
+
+    log.info("number of sky fibers used per bundle:")
+    for bundle in range(nbundles) :
+        log.info("bundle {}: {}".format(bundle,ninput[bundle]))
 
     if args.plot :
         for bundle in range(nbundles) :
