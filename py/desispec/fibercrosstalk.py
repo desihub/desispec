@@ -118,7 +118,7 @@ def eval_crosstalk(camera,wave,fibers,dfiber,params,apply_scale=True,nfiber_per_
     return xtalk
 
 
-def compute_contamination(frame,dfiber,kernel,params,xyset) :
+def compute_contamination(frame,dfiber,kernel,params,xyset,fractional_error=0.1) :
     """
     Computes the contamination of a frame from a given fiber offset
     Args:
@@ -127,15 +127,17 @@ def compute_contamination(frame,dfiber,kernel,params,xyset) :
        kernel : 1D numpy array, convolution kernel
        params : nested dictionnary, parameters of the crosstalk model
        xyset : desispec.xytraceset.XYTraceSet object with trace coordinates to shift the spectra
-
-    Returns:
-       the contamination of the frame, 2D numpy array of same shape as frame.flux
+    Optionnal:
+       fractionnal_error : float, consider this systematic relative error on the correction
+    Returns: contamination , contamination_var
+       the contamination of the frame, 2D numpy array of same shape as frame.flux, and its variance
     """
     camera = frame.meta["camera"]
     fibers = np.arange(frame.nspec,dtype=int)
     xtalk  = eval_crosstalk(camera,frame.wave,fibers,dfiber,params)
 
     contamination=np.zeros(frame.flux.shape)
+    contamination_var=np.zeros(frame.flux.shape)
     central_y = xyset.npix_y//2
     nfiber_per_bundle = 25
 
@@ -156,9 +158,14 @@ def compute_contamination(frame,dfiber,kernel,params,xyset) :
         into_fiber_central_wave = xyset.wave_vs_y(into_fiber,central_y)
 
         tmp=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.flux[from_fiber,jj],left=0,right=0)
+        tmp_ivar=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.ivar[from_fiber,jj],left=0,right=0)
+        tmp_var=1./(tmp_ivar+(tmp_ivar==0))
         convolved_flux=fftconvolve(tmp,kernel,mode="same")
+        convolved_var=fftconvolve(tmp_var,kernel**2,mode="same") # valid when assuming white noise (which is supposed to be the case)
         contamination[into_fiber] = fraction * convolved_flux
-    return contamination
+        # here we make the bad approximation that the noise from the contaminant is uncorrelated
+        contamination_var[into_fiber] = (fractional_error*contamination[into_fiber])**2 + fraction**2 * convolved_var
+    return contamination , contamination_var
 
 
 
@@ -198,11 +205,16 @@ def correct_fiber_crosstalk(frame,xyset=None):
     log.info("compute kernels")
     kernels = compute_crosstalk_kernels()
 
-    contamination = np.zeros(frame.flux.shape)
+    contamination     = np.zeros(frame.flux.shape)
+    contamination_var = np.zeros(frame.flux.shape)
 
     for dfiber in [-2,-1,1,2] :
         log.info("F{:+d}".format(dfiber))
         kernel = kernels[np.abs(dfiber)]
-        contamination += compute_contamination(frame,dfiber,kernel,params,xyset)
+        cont,var = compute_contamination(frame,dfiber,kernel,params,xyset)
+        contamination     += cont
+        contamination_var += var
 
     frame.flux -= contamination
+    frame_var  = 1./(frame.ivar + (frame.ivar==0))
+    frame.ivar = (frame.ivar>0)/( frame_var + contamination_var )
