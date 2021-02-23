@@ -75,16 +75,16 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
     else:
         queue = 'realtime'
 
-    if 'IGNOREEXISTING' in conf:
-        ignore_existing = conf['IGNOREEXISTING']
+    if 'OVERWRITEEXISTING' in conf:
+        overwrite_existing = conf['OVERWRITEEXISTING']
     else:
-        ignore_existing = False
+        overwrite_existing = False
 
     print(f'Using queue: {queue}')
     if reservation is not None:
         print(f'Using reservation: {reservation}')
-    if ignore_existing:
-        print("Ignoring the fact that file exists and submitting those nights anyway")
+    if overwrite_existing:
+        print("Ignoring the fact that files exists and submitting those nights anyway")
         
     all_nights = get_all_nights()
     non_survey_nights = []
@@ -102,7 +102,7 @@ def submit_production(production_yaml, dry_run=False, error_if_not_available=Fal
         else:
             print(f'Processing {survey} night: {night}')
             submit_night(night, proc_obstypes=None, dry_run=dry_run, queue=queue, reservation=reservation,
-                         ignore_existing=ignore_existing, error_if_not_available=error_if_not_available)
+                         overwrite_existing=overwrite_existing, error_if_not_available=error_if_not_available)
             print(f"Completed {night}. Sleeping for 30s")
             time.sleep(30)
 

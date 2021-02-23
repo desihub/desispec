@@ -19,7 +19,7 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 
 def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', reservation=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
-                 error_if_not_available=True, ignore_existing=False):
+                 error_if_not_available=True, overwrite_existing=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -35,8 +35,9 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
-        error_if_not_available, bool. Default is True. Raise as error if the required exposure table doesn't exist,
+        error_if_not_available: bool. Default is True. Raise as error if the required exposure table doesn't exist,
                                       otherwise prints an error and returns.
+        overwrite_existing: bool. True if you want to submit jobs even if scripts already exist.
     Returns:
         None.
     """
@@ -66,14 +67,14 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
     batchdir = get_desi_proc_batch_file_path(night=night)
-    if not ignore_existing:
+    if not overwrite_existing:
         if os.path.exists(batchdir) and len(os.listdir(batchdir)) > 0:
             print(f"ERROR: Batch jobs already exist for night {night} and not given flag "+
-                  "ignore_existing. Exiting this night.")
+                  "overwrite_existing. Exiting this night.")
             return
         elif os.path.exists(proc_table_pathname):
             print(f"ERROR: Processing table: {proc_table_pathname} already exists and and not "+
-                  "given flag ignore_existing. Exiting this night.")
+                  "given flag overwrite_existing. Exiting this night.")
             return
 
     ## Determine where the unprocessed data table will be written

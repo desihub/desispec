@@ -35,8 +35,8 @@ def parse_args():  # options=None):
     parser.add_argument("--error-if-not-available", action="store_true",
                         help="Raise an error instead of reporting and moving on if an exposure "+\
                              "table doesn't exist.")
-    parser.add_argument("--ignore-existing", action="store_true",
-                        help="If you should submit jobs even if scripts exist.")
+    parser.add_argument("--overwrite-existing", action="store_true",
+                        help="Give this flag if you want to submit jobs even if scripts already exist.")
 
     args = parser.parse_args()
 
