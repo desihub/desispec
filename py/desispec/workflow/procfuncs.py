@@ -69,7 +69,7 @@ def batch_script_name(prow):
     scriptfile =  pathname + '.slurm'
     return scriptfile
 
-def create_and_submit(prow, queue='realtime', dry_run=False, joint=False, strictly_successful=False):
+def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False, strictly_successful=False):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
@@ -78,6 +78,7 @@ def create_and_submit(prow, queue='realtime', dry_run=False, joint=False, strict
         prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
                                  desispect.workflow.proctable.get_processing_table_column_defs()
         queue, str. The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         dry_run, bool. If true, this is a simulated run and the scripts will not be written or submitted. Output will
                        relevant for testing will be printed as though scripts are being submitted. Default is False.
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
@@ -96,7 +97,7 @@ def create_and_submit(prow, queue='realtime', dry_run=False, joint=False, strict
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
     prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint)
-    prow = submit_batch_script(prow, dry_run=dry_run, strictly_successful=strictly_successful)
+    prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
     return prow
 
 def desi_proc_command(prow, queue=None):
@@ -207,7 +208,7 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
     return prow
 
 
-def submit_batch_script(prow, dry_run=False, strictly_successful=False):
+def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successful=False):
     """
     Wrapper script that takes a processing table row and three modifier keywords and submits the scripts to the Slurm
     scheduler.
@@ -217,6 +218,7 @@ def submit_batch_script(prow, dry_run=False, strictly_successful=False):
                                  desispect.workflow.proctable.get_processing_table_column_defs()
         dry_run, bool. If true, this is a simulated run and the scripts will not be written or submitted. Output will
                        relevant for testing will be printed as though scripts are being submitted. Default is False.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
@@ -234,6 +236,7 @@ def submit_batch_script(prow, dry_run=False, strictly_successful=False):
     jobname = batch_script_name(prow)
     dependencies = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
+
     if dependencies is not None:
         jobtype = prow['JOBDESC']
         if strictly_successful:
@@ -270,12 +273,14 @@ def submit_batch_script(prow, dry_run=False, strictly_successful=False):
         # script_path = pathjoin(batchdir, script)
         batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
         script_path = pathjoin(batchdir, jobname)
-        if dep_str == '':
-            current_qid = subprocess.check_output(['sbatch', '--parsable', f'{script_path}'],
-                                                  stderr=subprocess.STDOUT, text=True)
-        else:
-            current_qid = subprocess.check_output(['sbatch', '--parsable',f'{dep_str}',f'{script_path}'],
-                                                  stderr=subprocess.STDOUT, text=True)
+        batch_params = ['sbatch', '--parsable']
+        if dep_str != '':
+            batch_params.append(f'{dep_str}')
+        if reservation is not None:
+            batch_params.append(f'--reservation={reservation}')
+        batch_params.append(f'{script_path}')
+
+        current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
 
     log.info(f'Submitted {jobname}  with dependencies {dep_str}. Returned qid: {current_qid}')
@@ -302,7 +307,7 @@ def define_and_assign_dependency(prow, arcjob, flatjob):
         arcjob, Table.Row, dict, or NoneType. Processing row corresponding to psfnight for the night of the data in prow.
                                               This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
                                               If None, it assumes the dependency doesn't exist and no dependency is assigned.
-        flatkpb, Table.Row, dict, or NoneType. Processing row corresponding to nightlyflat for the night of the data in prow.
+        flatjob, Table.Row, dict, or NoneType. Processing row corresponding to nightlyflat for the night of the data in prow.
                                                This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
                                                If None, it assumes the dependency doesn't exist and no dependency is assigned.
 
@@ -476,7 +481,7 @@ def parse_previous_tables(etable, ptable, night):
 
 
 def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None, start_time=None, end_time=None,
-                                   ptab_name=None, dry_run=False):
+                                   ptab_name=None, dry_run=False,reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -498,6 +503,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
         ptab_name, str, the full pathname where the processing table should be saved.
         dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
                        information is printed to help with testing.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
     Returns:
         proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
                            been updated for those jobs that needed to be resubmitted.
@@ -515,11 +521,11 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
         if proc_table['STATUS'][rown] in resubmission_states:
             proc_table, submits = recursive_submit_failed(rown, proc_table, \
                                                                    submits, id_to_row_map, ptab_name,
-                                                                   resubmission_states, dry_run)
+                                                                   resubmission_states, reservation, dry_run)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
-                            resubmission_states=None, dry_run=False):
+                            resubmission_states=None, reservation=None, dry_run=False):
     """
     Given a row of a processing table and the full processing table, this resubmits the given job.
     Before submitting a job, it checks the dependencies for failures in the processing table. If a dependency needs to
@@ -536,6 +542,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         resubmission_states, list or array of strings, each element should be a capitalized string corresponding to a
                                                        possible Slurm scheduler state, where you wish for jobs with that
                                                        outcome to be resubmitted
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
                        information is printed to help with testing.
     Returns:
@@ -557,8 +564,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
             if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
-                proc_table, submits = recursive_submit_failed(id_to_row_map[idep], \
-                                                              proc_table, submits, id_to_row_map)
+                proc_table, submits = recursive_submit_failed(id_to_row_map[idep], proc_table, submits,
+                                                              id_to_row_map, reservation=reservation, dry_run=dry_run)
             qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
 
         qdeps = np.atleast_1d(qdeps)
@@ -568,7 +575,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
             log.info("Error: number of qdeps should be 1 or more")
             log.info(f'Rown {rown}, ideps {ideps}')
 
-    proc_table[rown] = submit_batch_script(proc_table[rown], dry_run=dry_run)
+    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation, dry_run=dry_run)
     submits += 1
 
     if dry_run:
@@ -595,7 +602,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
 #########################################
 ########     Joint fit     ##############
 #########################################
-def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False, strictly_successful=False):
+def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_run=False, strictly_successful=False):
     """
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
     joint fitting job given by descriptor. If the joint fitting job is standard star fitting, the post standard star fits
@@ -608,6 +615,7 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False, stri
                                                      inputs to the joint fit.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
         queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         descriptor, str. Description of the joint fitting job. Can either be 'science' or 'stdstarfit', 'arc' or 'psfnight',
                          or 'flat' or 'nightlyflat'.
         dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
@@ -642,7 +650,8 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False, stri
     log.info(f"Joint fit criteria found. Running {descriptor}.\n")
     joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
     internal_id += 1
-    joint_prow = create_and_submit(joint_prow, queue=queue, joint=True, dry_run=dry_run, strictly_successful=strictly_successful)
+    joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
+                                   strictly_successful=strictly_successful)
     ptable.add_row(joint_prow)
 
     if descriptor == 'stdstarfit':
@@ -659,7 +668,8 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False, stri
             row['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
             internal_id += 1
             row = assign_dependency(row, joint_prow)
-            row = create_and_submit(row, queue=queue, dry_run=dry_run, strictly_successful=strictly_successful)
+            row = create_and_submit(row, queue=queue, reservation=reservation, dry_run=dry_run,
+                                    strictly_successful=strictly_successful)
             ptable.add_row(row)
     else:
         ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
@@ -672,7 +682,8 @@ def joint_fit(ptable, prows, internal_id, queue, descriptor, dry_run=False, stri
 
 
 ## wrapper functions for joint fitting
-def science_joint_fit(ptable, sciences, internal_id, queue='realtime', dry_run=False, strictly_successful=False):
+def science_joint_fit(ptable, sciences, internal_id, queue='realtime',
+                      reservation=None, dry_run=False, strictly_successful=False):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the stdstarfit joint fit.
 
@@ -680,11 +691,12 @@ def science_joint_fit(ptable, sciences, internal_id, queue='realtime', dry_run=F
         Arg 'sciences' is mapped to the prows argument of joint_fit.
         The joint_fit argument descriptor is pre-defined as 'stdstarfit'.
     """
-    return joint_fit(ptable=ptable, prows=sciences, internal_id=internal_id, queue=queue, descriptor='stdstarfit',
-                     dry_run=dry_run, strictly_successful=strictly_successful)
+    return joint_fit(ptable=ptable, prows=sciences, internal_id=internal_id, queue=queue, reservation=reservation,
+                     descriptor='stdstarfit', dry_run=dry_run, strictly_successful=strictly_successful)
 
 
-def flat_joint_fit(ptable, flats, internal_id, queue='realtime', dry_run=False, strictly_successful=False):
+def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
+                   reservation=None, dry_run=False, strictly_successful=False):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the nightlyflat joint fit.
 
@@ -692,11 +704,12 @@ def flat_joint_fit(ptable, flats, internal_id, queue='realtime', dry_run=False, 
         Arg 'flats' is mapped to the prows argument of joint_fit.
         The joint_fit argument descriptor is pre-defined as 'nightlyflat'.
     """
-    return joint_fit(ptable=ptable, prows=flats, internal_id=internal_id, queue=queue, descriptor='nightlyflat',
-                     dry_run=dry_run, strictly_successful=strictly_successful)
+    return joint_fit(ptable=ptable, prows=flats, internal_id=internal_id, queue=queue, reservation=reservation,
+                     descriptor='nightlyflat', dry_run=dry_run, strictly_successful=strictly_successful)
 
 
-def arc_joint_fit(ptable, arcs, internal_id, queue='realtime', dry_run=False, strictly_successful=False):
+def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
+                  reservation=None, dry_run=False, strictly_successful=False):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the psfnight joint fit.
 
@@ -704,8 +717,8 @@ def arc_joint_fit(ptable, arcs, internal_id, queue='realtime', dry_run=False, st
         Arg 'arcs' is mapped to the prows argument of joint_fit.
         The joint_fit argument descriptor is pre-defined as 'psfnight'.
     """
-    return joint_fit(ptable=ptable, prows=arcs, internal_id=internal_id, queue=queue, descriptor='psfnight',
-                     dry_run=dry_run, strictly_successful=strictly_successful)
+    return joint_fit(ptable=ptable, prows=arcs, internal_id=internal_id, queue=queue, reservation=reservation,
+                     descriptor='psfnight', dry_run=dry_run, strictly_successful=strictly_successful)
 
 
 def make_joint_prow(prows, descriptor, internal_id):
@@ -751,7 +764,7 @@ def make_joint_prow(prows, descriptor, internal_id):
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob, \
                                   lasttype, last_not_dither, internal_id, dry_run=False,
-                                  queue='realtime', strictly_successful=False):
+                                  queue='realtime', reservation=None, strictly_successful=False):
     """
     Takes all the state-ful data from daily processing and determines whether a joint fit needs to be submitted. Places
     the decision criteria into a single function for easier maintainability over time. These are separate from the
@@ -775,6 +788,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
                        information is printed to help with testing.
         queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
@@ -789,19 +803,19 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
                           from the input such that it represents the smallest unused ID.
     """
     if lasttype == 'science' and last_not_dither:
-        ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run,
-                                                         queue=queue, strictly_successful=strictly_successful)
+        ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
+                                                         reservation=reservation, strictly_successful=strictly_successful)
         if tilejob is not None:
             sciences = []
     elif lasttype == 'flat' and flatjob is None and len(flats) > 11:
         ## Note here we have an assumption about the number of expected flats being greater than 10
-        ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run,
-                                                      queue=queue, strictly_successful=strictly_successful)
+        ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
+                                                      reservation=reservation, strictly_successful=strictly_successful)
         internal_id += 1
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
         ## Note here we have an assumption about the number of expected arcs being greater than 4
-        ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run,
-                                                    queue=queue, strictly_successful=strictly_successful)
+        ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
+                                                    reservation=reservation, strictly_successful=strictly_successful)
         internal_id += 1
     return ptable, arcjob, flatjob, sciences, internal_id
 
