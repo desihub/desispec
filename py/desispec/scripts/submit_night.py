@@ -15,11 +15,11 @@ from desispec.workflow.proctable import default_exptypes_for_proctable, get_proc
 from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile, \
                                         define_and_assign_dependency, create_and_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue
+from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 
-
-def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime',
+def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', reservation=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
-                 error_if_not_available=True):
+                 error_if_not_available=True, overwrite_existing=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -33,9 +33,11 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime',
         exp_table_path: str. Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
         proc_table_path: str. Full path to where to processing tables to be written.
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
+        reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
-        error_if_not_available, bool. Default is True. Raise as error if the required exposure table doesn't exist,
+        error_if_not_available: bool. Default is True. Raise as error if the required exposure table doesn't exist,
                                       otherwise prints an error and returns.
+        overwrite_existing: bool. True if you want to submit jobs even if scripts already exist.
     Returns:
         None.
     """
@@ -62,6 +64,18 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime',
     os.makedirs(proc_table_path, exist_ok=True)
     name = get_processing_table_name(prodmod=night, extension=tab_filetype)
     proc_table_pathname = pathjoin(proc_table_path, name)
+
+    ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
+    batchdir = get_desi_proc_batch_file_path(night=night)
+    if not overwrite_existing:
+        if os.path.exists(batchdir) and len(os.listdir(batchdir)) > 0:
+            print(f"ERROR: Batch jobs already exist for night {night} and not given flag "+
+                  "overwrite_existing. Exiting this night.")
+            return
+        elif os.path.exists(proc_table_pathname):
+            print(f"ERROR: Processing table: {proc_table_pathname} already exists and and not "+
+                  "given flag overwrite_existing. Exiting this night.")
+            return
 
     ## Determine where the unprocessed data table will be written
     unproc_table_pathname = pathjoin(proc_table_path, name.replace('processing', 'unprocessed'))
@@ -115,6 +129,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime',
                                                                                            internal_id,
                                                                                            dry_run=dry_run,
                                                                                            queue=queue,
+                                                                                           reservation=reservation,
                                                                                            strictly_successful=True)
 
         prow = erow_to_prow(erow)
@@ -122,7 +137,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime',
         internal_id += 1
         prow = define_and_assign_dependency(prow, arcjob, flatjob)
         print(f"\nProcessing: {prow}\n")
-        prow = create_and_submit(prow, dry_run=dry_run, queue=queue, strictly_successful=True)
+        prow = create_and_submit(prow, dry_run=dry_run, queue=queue, reservation=reservation, strictly_successful=True)
         ptable.add_row(prow)
 
         ## Note: Assumption here on number of flats
@@ -158,6 +173,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime',
                                                                                        last_not_dither, \
                                                                                        internal_id, dry_run=dry_run,
                                                                                        queue=queue,
+                                                                                       reservation=reservation,
                                                                                        strictly_successful=True)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run)
