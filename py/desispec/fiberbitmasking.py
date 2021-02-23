@@ -17,9 +17,9 @@ from desispec.maskbits import specmask
 def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
     """
     Wrapper script of get_fiberbitmasked_frame_arrays that will
-    return a modified version of the frame instead of just the 
+    return a modified version of the frame instead of just the
     flux and ivar
-    NOTE: The input "frame" variable itself is modified and returned, 
+    NOTE: The input "frame" variable itself is modified and returned,
           not a copy.
     """
     ivar,mask = get_fiberbitmasked_frame_arrays(frame,bitmask,ivar_framemask,return_mask=True)
@@ -30,7 +30,7 @@ def get_fiberbitmasked_frame(frame,bitmask=None,ivar_framemask=True):
 def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,return_mask=False):
     """
     Function that takes a frame object and a bitmask and
-    returns ivar (and optionally mask) array(s) that have fibers with 
+    returns ivar (and optionally mask) array(s) that have fibers with
     offending bits in fibermap['FIBERSTATUS'] set to
     0 in ivar and optionally flips a bit in mask.
 
@@ -44,11 +44,11 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
                  FIBERSTATUS applied.
 
     output:
-        ivar: frame.ivar where the fibers with FIBERSTATUS & bitmask > 0                               
+        ivar: frame.ivar where the fibers with FIBERSTATUS & bitmask > 0
               set to zero ivar
-        mask: (optional) frame.mask logically OR'ed with BADFIBER bit in cases with 
+        mask: (optional) frame.mask logically OR'ed with BADFIBER bit in cases with
               a bad FIBERSTATUS
-    
+
     example bitmask list:
         bitmask = [fmsk.BROKENFIBER,fmsk.BADTARGET,fmsk.BADFIBER,\
                     fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
@@ -62,17 +62,17 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         ivar *= (frame.mask==0)
 
     fmap = Table(frame.fibermap)
-    
+
     if frame.fibermap is None:
         log = get_logger()
         log.warning("No fibermap was given, so no FIBERSTATUS check applied.")
-        
+
     if bitmask is None or frame.fibermap is None:
         if return_mask:
             return ivar, mask
         else:
             return ivar
-        
+
     if type(bitmask) in [int,np.int32]:
         bad = bitmask
     elif type(bitmask) == str:
@@ -84,14 +84,15 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         bad = bitmask[0]
         for bit in bitmask[1:]:
             bad |= bit
-            
-    # find if any fibers have an intersection with the bad bits                                           
+
+    # find if any fibers have an intersection with the bad bits
     badfibers = fmap['FIBER'][ (fmap['FIBERSTATUS'] & bad) > 0 ].data
     badfibers = badfibers % 500
-    # For the bad fibers, loop through and nullify them                                                   
-    for fiber in badfibers:                                                
+    # For the bad fibers, loop through and nullify them
+    for fiber in badfibers:
         mask[fiber] |= specmask.BADFIBER
-        ivar[fiber] = 0.
+        if ivar_framemask :
+            ivar[fiber] = 0.
 
     if return_mask:
         return ivar,mask
@@ -105,8 +106,8 @@ def get_fiberbitmask_comparison_value(kind='fluxcalib'):
         relevant fibermask bits for that given reduction step
 
         input:
-             kind: str : string designating which combination of bits to use based on the operation 
-    
+             kind: str : string designating which combination of bits to use based on the operation
+
         possible values are:
               "all", "sky" (or "skysub"), "flat", "flux" (or "fluxcalib"), "star" (or "stdstars")
     """
@@ -126,12 +127,12 @@ def get_fiberbitmask_comparison_value(kind='fluxcalib'):
                     " Using 'fluxcalib' fiberbitmask.")
         return get_fluxcalib_fiberbitmask_val()
 
-    
+
 def get_skysub_fiberbitmask_val():
     #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
-    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED)    
+    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED)
     return get_all_fiberbitmask_val()
-    
+
 def get_flat_fiberbitmask_val():
     #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
     #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC)
@@ -142,7 +143,7 @@ def get_fluxcalib_fiberbitmask_val():
     #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
     #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC | fmsk.BADFLAT)
     return get_all_fiberbitmask_val()
-    
+
 def get_stdstars_fiberbitmask_val():
     #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
     #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC | fmsk.BADFLAT)
@@ -168,7 +169,7 @@ def get_all_fiberbitmask_with_amp(band):
     else:
         log = get_logger()
         log.error("Didn't recognize band={}".format(band))
-        amp_mask = np.int32(0)                  
+        amp_mask = np.int32(0)
 
     return ( nonamp_mask | amp_mask )
 

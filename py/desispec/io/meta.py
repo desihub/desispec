@@ -429,6 +429,9 @@ def shorten_filename(filename):
       * $DESI_SPECTRO_CALIB -> SPCALIB
       * $DESI_SPECTRO_REDUX/$SPECPROD -> SPECPROD
     """
+
+    if filename is None : return "None"
+
     spcalib = os.getenv('DESI_SPECTRO_CALIB')
     if spcalib is not None and filename.startswith(spcalib):
         return filename.replace(spcalib, 'SPCALIB', 1)
