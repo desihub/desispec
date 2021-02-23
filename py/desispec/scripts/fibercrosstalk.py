@@ -16,6 +16,7 @@ from desispec.io import read_frame,read_xytraceset
 from desispec.interpolation import resample_flux
 from desispec.calibfinder import findcalibfile
 from desispec.fibercrosstalk import compute_crosstalk_kernels
+from desispec.maskbits import specmask
 
 def parse(options=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -69,7 +70,7 @@ def main(args) :
         skyfibers = np.where(frame.fibermap["OBJTYPE"]=="SKY")[0]
         log.info("{} sky fibers in {}".format(skyfibers.size,filename))
 
-        frame.ivar *= (frame.mask==0)
+        frame.ivar *= ((frame.mask==0)|(frame.mask==specmask.BADFIBER)) # ignore BADFIBER which is a statement on the positioning
         frame.ivar *= skymask
 
         # also open trace set to determine the shift
@@ -121,7 +122,7 @@ def main(args) :
 
                 snr=np.sqrt(frame.ivar[otherfiber])*frame.flux[otherfiber]
                 medsnr=np.median(snr)
-                if medsnr>2 :  # need good SNR to model cross talk
+                if medsnr>2. :  # need good SNR to model cross talk
                     should_consider = True # in which case we need all of the contaminants to the sky fiber ...
 
                 nbad=np.sum(snr==0)
@@ -189,12 +190,18 @@ def main(args) :
             table[key]=crosstalk[bundle,i]
             key="CROSSTALKIVAR-B{:02d}-F{:+d}".format(bundle,df)
             table[key]=crosstalk_ivar[bundle,i]
+            key="NINPUT-B{:02d}-F{:+d}".format(bundle,df)
+            table[key]=np.repeat(ninput[bundle,i],wave.size)
+
     table.write(args.outfile,overwrite=True)
     log.info("wrote {}".format(args.outfile))
 
     log.info("number of sky fibers used per bundle:")
     for bundle in range(nbundles) :
         log.info("bundle {}: {}".format(bundle,ninput[bundle]))
+
+
+
 
     if args.plot :
         for bundle in range(nbundles) :
