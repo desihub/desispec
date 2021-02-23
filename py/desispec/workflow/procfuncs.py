@@ -283,7 +283,8 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
         current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
 
-    log.info(f'Submitted {jobname}  with dependencies {dep_str}. Returned qid: {current_qid}')
+    log.info(batch_params)
+    log.info(f'Submitted {jobname} with dependencies {dep_str}  and reservation={reservation}. Returned qid: {current_qid}')
 
     prow['LATEST_QID'] = current_qid
     prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
