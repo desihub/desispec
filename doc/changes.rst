@@ -2,15 +2,28 @@
 desispec Change Log
 ===================
 
-0.39.1 (2021-02-16)
+0.39.2 (unreleased)
 -------------------
 
 * No changes yet.
 
+0.39.1 (2021-02-23)
+-------------------
+
+Cascades update tag to add functionality for using a queue reservation and for
+debugging, without algorithmically impacting what has already been run
+with the 0.39.0 tag.
+
+* Add ``desi_run_night --reservation`` option (PR `#1145`_).
+* Fix ``desi_process_exposure --no-zero-ivar`` option (PR `#1146`_).
+
+.. _`#1145`: https://github.com/desihub/desispec/issues/1145
+.. _`#1146`: https://github.com/desihub/desispec/issues/1146
+
 0.39.0 (2021-02-16)
 -------------------
 
-Tag for software release 21.2 and Cascades run.
+Initial tag for Cascades run.
 
 Major updates:
 
