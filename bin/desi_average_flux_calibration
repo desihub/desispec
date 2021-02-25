@@ -68,6 +68,24 @@ if __name__ == '__main__':
             seeing.append(float(header["seeing"]))
 
         cal=read_flux_calibration(filename)
+        if np.any(np.isnan(cal.calib)) :
+            log.error("calib has nan")
+            continue
+
+        mcalib = np.median(cal.calib,axis=0)
+
+        # undo the heliocentric/barycentric correction
+        #- check for heliocentric correction
+        if 'HELIOCOR' in header.keys() :
+            heliocor=header['HELIOCOR']
+            log.info("Undo the heliocentric correction scale factor {} of the calib".format(heliocor))
+            # wavelength are in solar system frame
+            # first divide the multiplicative factor to have wavelength in KPNO frame
+            wave_in_kpno_system = cal.wave/heliocor
+
+            # now we want the wave grid cal.wave to be in the KPNO frame,
+            # we have to resample the calib vector
+            mcalib = np.interp(cal.wave,wave_in_kpno_system,mcalib)
 
         if wave is None :
             wave=cal.wave
@@ -77,10 +95,6 @@ if __name__ == '__main__':
         if exptime <= 2. : # arbitrary cutoff
             print("skip exptime=",exptime)
             continue
-        if np.any(np.isnan(cal.calib)) :
-            print("ERROR calib has nan")
-            continue
-        mcalib = np.median(cal.calib,axis=0)
 
         calibs.append(mcalib/exptime)
 
