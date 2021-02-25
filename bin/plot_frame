@@ -37,6 +37,7 @@ parser.add_argument('--vmax', type = float, default=None, help = 'max value for 
 parser.add_argument('--radial', action = 'store_true', help = 'show radial focal plane view with median flux per fiber (requires option --focal-plane)')
 parser.add_argument('--wmin', type = float, default=None, help = 'min of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
 parser.add_argument('--wmax', type = float, default=None, help = 'max of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
+parser.add_argument('--no-mask', action = 'store_true', help = 'ignore mask')
 
 
 args   = parser.parse_args()
@@ -109,6 +110,9 @@ for filename in args.infile :
             print("not all requested fibers are in frame")
             fibers = fibers[np.in1d(fibers,fibers_in_frame)]
             print("will show only {}".format(fibers))
+
+    if args.no_mask :
+        frame.mask*=0
 
     for i,fiber in enumerate(fibers) :
 
