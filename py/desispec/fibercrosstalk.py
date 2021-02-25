@@ -16,6 +16,7 @@ from desiutil.log import get_logger
 
 from desispec.io import read_xytraceset
 from desispec.calibfinder import findcalibfile
+from desispec.maskbits import specmask
 
 def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,asymptotic_power_law_index = 2.5):
     """
@@ -118,7 +119,7 @@ def eval_crosstalk(camera,wave,fibers,dfiber,params,apply_scale=True,nfiber_per_
     return xtalk
 
 
-def compute_contamination(frame,dfiber,kernel,params,xyset,fractional_error=0.1) :
+def compute_contamination(frame,dfiber,kernel,params,xyset,fiberflat=None,fractional_error=0.1) :
     """
     Computes the contamination of a frame from a given fiber offset
     Args:
@@ -128,10 +129,13 @@ def compute_contamination(frame,dfiber,kernel,params,xyset,fractional_error=0.1)
        params : nested dictionnary, parameters of the crosstalk model
        xyset : desispec.xytraceset.XYTraceSet object with trace coordinates to shift the spectra
     Optionnal:
+       fiberflat : desispec.fiberflat.FiberFlat object, if the frame has already been fiber flatfielded
        fractionnal_error : float, consider this systematic relative error on the correction
     Returns: contamination , contamination_var
        the contamination of the frame, 2D numpy array of same shape as frame.flux, and its variance
     """
+    log = get_logger()
+
     camera = frame.meta["camera"]
     fibers = np.arange(frame.nspec,dtype=int)
     xtalk  = eval_crosstalk(camera,frame.wave,fibers,dfiber,params)
@@ -144,6 +148,10 @@ def compute_contamination(frame,dfiber,kernel,params,xyset,fractional_error=0.1)
     # dfiber = from_fiber - into_fiber
     # into_fiber = from_fiber - dfiber
 
+    # do a simplified achromatic correction for the fiberflat here
+    if fiberflat is not None :
+        medflat=np.median(fiberflat.fiberflat,axis=1)
+
     for index,into_fiber in enumerate(fibers) :
         from_fiber = into_fiber + dfiber
 
@@ -152,19 +160,34 @@ def compute_contamination(frame,dfiber,kernel,params,xyset,fractional_error=0.1)
 
         fraction = xtalk[index]
 
-        jj=(frame.ivar[from_fiber]>0)&(frame.mask[from_fiber]==0)
+        jj=(frame.ivar[from_fiber]>0)&((frame.mask[from_fiber]==0)|(frame.mask[from_fiber]==specmask.BADFIBER))
 
         from_fiber_central_wave = xyset.wave_vs_y(from_fiber,central_y)
         into_fiber_central_wave = xyset.wave_vs_y(into_fiber,central_y)
 
+        nok=np.sum(jj)
+        if nok<10 :
+            log.warning("skip contaminating fiber {} because only {} valid flux values".format(from_fiber,nok))
+            continue
         tmp=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.flux[from_fiber,jj],left=0,right=0)
+        if fiberflat is not None :
+            tmp *= medflat[from_fiber] # apply median transmission of the contaminating fiber, i.e. undo the fiberflat correction
+
         tmp_ivar=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.ivar[from_fiber,jj],left=0,right=0)
         tmp_var=1./(tmp_ivar+(tmp_ivar==0))
         convolved_flux=fftconvolve(tmp,kernel,mode="same")
         convolved_var=fftconvolve(tmp_var,kernel**2,mode="same") # valid when assuming white noise (which is supposed to be the case)
         contamination[into_fiber] = fraction * convolved_flux
+
         # here we make the bad approximation that the noise from the contaminant is uncorrelated
         contamination_var[into_fiber] = (fractional_error*contamination[into_fiber])**2 + fraction**2 * convolved_var
+
+    if fiberflat is not None :
+        # apply the fiberflat correction of the contaminated fibers
+        for fiber in range(contamination.shape[0]) :
+            if medflat[fiber]>0.1 :
+                contamination[fiber] = contamination[fiber] / medflat[fiber]
+
     return contamination , contamination_var
 
 
@@ -184,13 +207,14 @@ def read_crosstalk_parameters() :
     log.debug("params= {}".format(params))
     return params
 
-def correct_fiber_crosstalk(frame,xyset=None):
+def correct_fiber_crosstalk(frame,fiberflat=None,xyset=None):
     """Apply a fiber cross talk correction. Modifies frame.flux and frame.ivar.
 
     Args:
         frame : desispec.frame.Frame object
 
     Optionnal:
+    fiberflat : desispec.fiberflat.FiberFlat object
         xyset : desispec.xytraceset.XYTraceSet object with trace coordinates to shift the spectra
                 (automatically found with calibration finder otherwise)
     """
@@ -211,7 +235,7 @@ def correct_fiber_crosstalk(frame,xyset=None):
     for dfiber in [-2,-1,1,2] :
         log.info("F{:+d}".format(dfiber))
         kernel = kernels[np.abs(dfiber)]
-        cont,var = compute_contamination(frame,dfiber,kernel,params,xyset)
+        cont,var = compute_contamination(frame,dfiber,kernel,params,xyset,fiberflat)
         contamination     += cont
         contamination_var += var
 
