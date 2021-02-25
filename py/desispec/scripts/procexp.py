@@ -81,10 +81,6 @@ def main(args):
         log.info("cosmics ray 1D rejection")
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
 
-    if args.xtalk :
-        log.info("fiber crosstalk correction")
-        correct_fiber_crosstalk(frame)
-
     if args.fiberflat!=None :
         log.info("apply fiberflat")
         # read fiberflat
@@ -93,6 +89,13 @@ def main(args):
         # apply fiberflat to all fibers
         apply_fiberflat(frame, fiberflat)
         compute_and_append_frame_scores(frame,suffix="FFLAT")
+    else :
+        fiberflat = None
+
+    if args.xtalk :
+        zero_ivar = False
+    else :
+        zero_ivar = (not args.no_zero_ivar)
 
     if args.sky!=None :
 
@@ -105,7 +108,7 @@ def main(args):
             copied_frame = copy.deepcopy(frame)
 
             # first subtract sky without throughput correction
-            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False, zero_ivar = (not args.no_zero_ivar))
+            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False, zero_ivar = zero_ivar)
 
             # then find cosmics
             log.info("cosmics ray 1D rejection after sky subtraction")
@@ -115,13 +118,20 @@ def main(args):
             frame.mask = copied_frame.mask
 
             # and (re-)subtract sky, but just the correction term
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = (not args.no_zero_ivar) )
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
 
         else :
             # subtract sky
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = (not args.no_zero_ivar) )
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
+
+    if args.xtalk :
+        log.info("fiber crosstalk correction")
+        correct_fiber_crosstalk(frame,fiberflat)
+
+        if not args.no_zero_ivar :
+            frame.ivar *= (frame.mask==0)
 
     if args.calib!=None :
         log.info("calibrate")
