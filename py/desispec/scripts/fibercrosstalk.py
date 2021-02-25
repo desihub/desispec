@@ -188,7 +188,7 @@ def main(args) :
 
                 scflux=np.sum(cflux,axis=0)
                 mscflux=np.sum(skyfiberivar*scflux)/np.sum(skyfiberivar)
-                if mscflux < 500 :
+                if mscflux < 200 :
                     continue
 
 
