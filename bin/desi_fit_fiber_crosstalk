@@ -88,7 +88,7 @@ if cam=="Z" :
     # XTALK = P0 + P1*(FIBER/250-1) + (P2 + P3*(FIBER/250-1)) * DW**WP + (P4 + P5*(FIBER/250-1)) * DW**WP2
     # with DW=(WAVE>W0)*((WAVE-W0)/(W1-W0))
     W0=8900
-    W1=9000
+    W1=9800
     dwave=(wave-W0)/(W1-W0)
     WP=2.
     WP2=4.
