@@ -208,9 +208,10 @@ for k1 in params :
         wmodels.append(ct)
 
         ivar=table["CROSSTALKIVAR-B{:02d}-F{:+d}".format(bundle,df)]
-        errs=(ivar>0)/np.sqrt(ivar+(ivar==0))
+        errs=(ivar>0)/np.sqrt(ivar*(ivar>0)+(ivar<=0))
         werrs.append(errs)
-        plt.errorbar(wave,vals,errs,fmt=".",color=colors[bundle])
+        ok=(ivar>0)&(errs<0.1)
+        plt.errorbar(wave[ok],vals[ok],errs[ok],fmt=".",color=colors[bundle])
 
     plt.grid()
     plt.xlabel("wavelenth")
@@ -222,7 +223,8 @@ for k1 in params :
 
     colors = plt.cm.jet(np.linspace(0,1,wave.size))
     for i,w in enumerate(wave) :
-        plt.errorbar(bfibers,wvals[:,i],werrs[:,i],fmt=".",color=colors[i])
+        ok=(werrs[:,i]>0)&(werrs[:,i]<0.1)
+        plt.errorbar(bfibers[ok],wvals[ok,i],werrs[ok,i],fmt=".",color=colors[i])
         plt.plot(bfibers,wmodels[:,i],"-",color=colors[i])
     plt.grid()
     plt.xlabel("fiber")
