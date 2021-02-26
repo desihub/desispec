@@ -4,7 +4,7 @@ desispec.scripts.trace_shifts
 """
 from __future__ import absolute_import, division
 
-import sys
+import sys,os
 import argparse
 import numpy as np
 from scipy.signal import fftconvolve
@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import scipy.ndimage
 
 from desiutil.log import get_logger
-from desispec.io import read_frame,read_xytraceset
+from desispec.io import read_frame,read_xytraceset,read_fiberflat
 from desispec.interpolation import resample_flux
 from desispec.calibfinder import findcalibfile
 from desispec.fibercrosstalk import compute_crosstalk_kernels
@@ -66,7 +66,11 @@ def main(args) :
 
     xtalks=[]
 
+
+
     previous_psf_filename = None
+    previous_fiberflat_filename = None
+
     for filename in args.infile :
 
         # read a frame and fiber the sky fibers
@@ -75,6 +79,33 @@ def main(args) :
         if out_wave is None :
             dwave=(frame.wave[-1]-frame.wave[0])/40
             out_wave=np.linspace(frame.wave[0]+dwave/2,frame.wave[-1]-dwave/2,40)
+
+        # find fiberflat
+        if "FIBERFLT" in frame.meta.keys() :
+            flatname = frame.meta["FIBERFLT"]
+            if flatname.find("SPCALIB")>=0 :
+                flatname = flatname.replace("SPCALIB",os.environ["DESI_SPECTRO_CALIB"]+"/")
+            if flatname.find("SPECPROD")>=0 :
+                # this one is harder :-(
+                dirname=os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(filename))))
+                flatname = flatname.replace("SPECPROD",dirname+"/")
+
+        else :
+            flatname = findcalibfile([frame.meta,],"FIBERFLAT")
+        if flatname is not None :
+            if previous_fiberflat_filename is not None and previous_fiberflat_filename == flatname :
+                log.info("Using same fiberflat")
+            else :
+                if not os.path.isfile(flatname) :
+                    log.error("Cannot open fiberflat file {}".format(flatname))
+                    raise IOError("Cannot open fiberflat file {}".format(flatname))
+                log.info("Using fiberflat {}".format(flatname))
+                fiberflat = read_fiberflat(flatname)
+                medflat=np.median(fiberflat.fiberflat,axis=1)
+                previous_fiberflat_filename = flatname
+        else :
+            medflat=None
+            log.warning("No fiberflat")
 
         skyfibers = np.where((frame.fibermap["OBJTYPE"]=="SKY")&(frame.fibermap["FIBERSTATUS"]==0))[0]
         log.info("{} sky fibers in {}".format(skyfibers.size,filename))
@@ -123,6 +154,8 @@ def main(args) :
             use_median_filter = False # not needed
             median_filter_width=30
             skyfiberflux,skyfiberivar = resample_flux(out_wave,frame.wave,frame.flux[skyfiber],frame.ivar[skyfiber])
+            if medflat is not None :
+                skyfiberflux *= medflat[skyfiber] # apply relative transmission of fiber, i.e. undo the fiberflat correction
 
             if use_median_filter :
                 good=(skyfiberivar>0)
@@ -161,6 +194,9 @@ def main(args) :
                 # account for change of wavelength for same y coordinate
                 otherfiber_central_wave = tset.wave_vs_y(otherfiber,central_y)
                 flux = np.interp(frame.wave+(otherfiber_central_wave-skyfiber_central_wave),frame.wave[good],frame.flux[otherfiber][good])
+                if medflat is not None :
+                    flux *= medflat[otherfiber] # apply relative transmission of fiber, i.e. undo the fiberflat correction
+
                 if use_median_filter :
                     flux = scipy.ndimage.filters.median_filter(flux,median_filter_width,mode='constant')
                 kern=kernels[np.abs(df)]
