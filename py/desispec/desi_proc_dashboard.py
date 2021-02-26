@@ -85,7 +85,7 @@ def parse(options):
     # File I/O
     parser.add_argument('--redux-dir', type=str, help="Product directory, point to $DESI_SPECTRO_REDUX by default ")
     parser.add_argument('--output-dir', type=str, help="output portal directory for the html pages, which defaults to your home directory ")
-    parser.add_argument('--output-name', type=str, default='dashboard', help="name of the html page (to be placed in --output-dir).")
+    parser.add_argument('--output-name', type=str, default='dashboard.html', help="name of the html page (to be placed in --output-dir).")
     parser.add_argument('--specprod',type=str, help="overwrite the environment keyword for $SPECPROD")
     parser.add_argument("-e", "--skip-expid-file", type=str, required=False,
                         help="Relative pathname for file containing expid's to skip. "+\
@@ -267,7 +267,7 @@ def main(args):
     #strTable += js_import_str(os.getenv('DESI_DASHBOARD'))
     strTable += js_str()
     strTable += _closing_str()
-    with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name+'.html'),'w') as hs:
+    with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name),'w') as hs:
         hs.write(strTable)
     ##########################
     #### Fix Permission ######
@@ -683,7 +683,7 @@ def calculate_one_night(night, use_short_sci=False):
 
                 hlink1 = _hyperlink(relpath_slurm, 'Slurm')
                 hlink2 = _hyperlink(relpath_log, 'Log')
-
+        status = 'unprocessed'
         output[str(expid)] = [row_color, \
                               expid, \
                               header_info['FLAVOR'],\
@@ -698,7 +698,7 @@ def calculate_one_night(night, use_short_sci=False):
                               _str_frac( len(file_sky),       n_spgrph * n_tots['sframe']), \
                               _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
                               hlink1, \
-                              hlink2         ]
+                              hlink2, status         ]
     return output
 
 
