@@ -45,9 +45,6 @@ def main(args) :
 
     log= get_logger()
 
-    skylines=np.array([5578.94140625,5656.60644531,6302.08642578,6365.50097656,6618.06054688,7247.02929688,7278.30273438,7318.26904297,7342.94482422,7371.50878906,8346.74902344,8401.57617188,8432.42675781,8467.62011719,8770.36230469,8780.78027344,8829.57421875,8838.796875,8888.29394531,8905.66699219,8922.04785156,8960.48730469,9326.390625,9378.52734375,9442.37890625,9479.48242188,9569.9609375,9722.59082031,9793.796875])
-    skymask=None
-
     # precompute convolution kernels
     kernels = compute_crosstalk_kernels()
 
@@ -79,16 +76,10 @@ def main(args) :
             dwave=(frame.wave[-1]-frame.wave[0])/40
             out_wave=np.linspace(frame.wave[0]+dwave/2,frame.wave[-1]-dwave/2,40)
 
-        if skymask is None :
-            skymask=np.ones(frame.wave.size)
-            for line in skylines :
-                skymask[np.abs(frame.wave-line)<2]=0
-
         skyfibers = np.where((frame.fibermap["OBJTYPE"]=="SKY")&(frame.fibermap["FIBERSTATUS"]==0))[0]
         log.info("{} sky fibers in {}".format(skyfibers.size,filename))
 
         frame.ivar *= ((frame.mask==0)|(frame.mask==specmask.BADFIBER)) # ignore BADFIBER which is a statement on the positioning
-        frame.ivar *= skymask
 
         # also open trace set to determine the shift
         # to apply to adjacent spectra
@@ -180,18 +171,12 @@ def main(args) :
                 for j in range(i+1) :
                     fA[i,j] = skyfiberivar*cflux[i]*cflux[j]
 
-
-
             if should_consider and ( not must_exclude ) :
-
-
 
                 scflux=np.sum(cflux,axis=0)
                 mscflux=np.sum(skyfiberivar*scflux)/np.sum(skyfiberivar)
-                if mscflux < 200 :
+                if mscflux < 100 :
                     continue
-
-
 
                 if with_cst :
                     i=dfiber.size
@@ -209,9 +194,8 @@ def main(args) :
                 msky=np.sum(skyfiberivar*skyfiberflux)/np.sum(skyfiberivar)
                 ra=frame.fibermap["TARGET_RA"][skyfiber]
                 dec=frame.fibermap["TARGET_DEC"][skyfiber]
-                #log.info("skyfiber = {}, xtalk = {:4.3f} +- {:4.3f}, ra = {:5.4f} , dec = {:5.4f}, sky fiber flux= {:4.3f}, cont= {:4.3f}".format(skyfiber,xtalk,err,ra,dec,msky,mcont))
 
-                if np.abs(xtalk)>0.01 and np.abs(xtalk)/err>5 :
+                if np.abs(xtalk)>0.02 and np.abs(xtalk)/err>5 :
                     log.warning("discard skyfiber = {}, xtalk = {:4.3f} +- {:4.3f}, ra = {:5.4f} , dec = {:5.4f}, sky fiber flux= {:4.3f}, cont= {:4.3f}".format(skyfiber,xtalk,err,ra,dec,msky,mscflux))
                     continue
 
