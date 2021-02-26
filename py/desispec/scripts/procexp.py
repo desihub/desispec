@@ -142,7 +142,7 @@ def main(args):
 
         # Ensure that ivars are set to 0 for all values if any designated
         # fibermask bit is set. Also flips a bits for each frame.mask value using specmask.BADFIBER
-        frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
+        frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=(not args.no_zero_ivar))
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
     if not args.no_tsnr:
