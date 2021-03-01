@@ -5,16 +5,13 @@ from __future__ import absolute_import, division
 from desispec.io import read_frame
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
-from desispec.io import write_qa_frame
 from desispec.io import shorten_filename
 from desispec.io.fluxcalibration import read_stdstar_models
 from desispec.io.fluxcalibration import write_flux_calibration
-from desispec.io.qa import load_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.fluxcalibration import compute_flux_calibration, isStdStar
 from desiutil.log import get_logger
-from desispec.qa import qa_plots
 from desitarget.targets import main_cmx_or_sv
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
@@ -131,7 +128,7 @@ def main(args) :
             # This should't happen
             log.error('The color {} was not computed in the models'.format(color))
             sys.exit(16)
- 
+
     if args.delta_color_cut > 0 :
         log.info("apply cut |delta color|<{}".format(args.delta_color_cut))
         good = (np.abs(model_metadata["MODEL_"+color]-model_metadata["DATA_"+color])<args.delta_color_cut)
@@ -197,6 +194,11 @@ def main(args) :
 
     # QA
     if (args.qafile is not None):
+
+        from desispec.io import write_qa_frame
+        from desispec.io.qa import load_qa_frame
+        from desispec.qa import qa_plots
+
         log.info("performing fluxcalib QA")
         # Load
         qaframe = load_qa_frame(args.qafile, frame_meta=frame.meta, flavor=frame.meta['FLAVOR'])
