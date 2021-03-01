@@ -68,7 +68,8 @@ def safe_read_key(header,key) :
         value=header[key.ljust(8).upper()]
     return value
 
-def dust_transmission(wave,ebv) :
+def dust_transmission(wave,ebv_sfd) :
+    ebv = .86 * ebv_sfd
     Rv = 3.1
     extinction = ext_odonnell(wave,Rv=Rv)
     return 10**(-Rv*extinction*ebv/2.5)
