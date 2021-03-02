@@ -203,6 +203,10 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     res = minimize(alpha_X2, x0=[1.])
     alpha = res.x[0]
 
+    #- From JG PR #1164:
+    # Noisy values of alpha can occur for observations dominated by sky noise
+    # where it is not possible to calibrated the read noise. For those
+    # exposures, the precise value of alpha does not impact the SNR estimation.
     if alpha < 0.8 :
         log.warning(f'tSNR forcing best fit alpha = {alpha:.4f} to 0.8')
         alpha = 0.8
@@ -288,21 +292,11 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
         log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
 
     # Relative weighting between rdnoise & sky terms to model var.
-    try:
-        alpha = calc_alpha(frame, fibermap=frame.fibermap,
-                    rdnoise_sigma=rdnoise, npix_1d=npix,
-                    angperpix=angperpix, angperspecbin=angperspecbin,
-                    fiberflat=fiberflat, skymodel=skymodel)
-        log.info(f"TSNR ALPHA = {alpha:.3f}")
-    except ValueError:
-        log.error('Bad alpha value; setting tSNR=0.0')
-        alpha=0.
-        results=dict()
-        for tracer in ensemble.keys():
-            key = 'TSNR2_{}_{}'.format(tracer.upper(), band.upper())
-            results[key]=np.zeros(nspec)
-
-        return results, alpha
+    alpha = calc_alpha(frame, fibermap=frame.fibermap,
+                rdnoise_sigma=rdnoise, npix_1d=npix,
+                angperpix=angperpix, angperspecbin=angperspecbin,
+                fiberflat=fiberflat, skymodel=skymodel)
+    log.info(f"TSNR ALPHA = {alpha:.3f}")
 
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
