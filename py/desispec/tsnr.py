@@ -203,12 +203,9 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     res = minimize(alpha_X2, x0=[1.])
     alpha = res.x[0]
 
-    if 0.8 < alpha < 1.0:
-        log.warning(f'tSNR alpha {alpha:.4f} < 1.0')
-    elif alpha <= 0.8:
-        msg = f'tSNR alpha {alpha:.4f} < 0.8'
-        log.error(msg)
-        raise ValueError(msg)
+    if alpha < 0.8 :
+        log.warning(f'tSNR forcing best fit alpha = {alpha:.4f} to 0.8')
+        alpha = 0.8
 
     return alpha
 
