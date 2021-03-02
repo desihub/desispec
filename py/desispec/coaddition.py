@@ -175,19 +175,21 @@ def coadd(spectra, cosmics_nsig=0.) :
                 gradvar=np.array(gradvar)
                 gradivar=(gradvar>0)/np.array(gradvar+(gradvar==0))
                 nspec=grad.shape[0]
-                meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
-                deltagrad=grad-meangrad
-                chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
+                sgradivar=np.sum(gradivar)
+                if sgradivar>0 :
+                    meangrad=np.sum(gradivar*grad,axis=0)/sgradivar
+                    deltagrad=grad-meangrad
+                    chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
 
-                bad  = (chi2>cosmics_nsig**2)
-                nbad = np.sum(bad)
-                if nbad>0 :
-                    log.info("masking {} values for targetid={}".format(nbad,tid))
-                    badindex=np.where(bad)[0]
-                    for bi in badindex  :
-                        k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
-                        ivarjj[k,bi]=0.
-                        log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
+                    bad  = (chi2>cosmics_nsig**2)
+                    nbad = np.sum(bad)
+                    if nbad>0 :
+                        log.info("masking {} values for targetid={}".format(nbad,tid))
+                        badindex=np.where(bad)[0]
+                        for bi in badindex  :
+                            k=np.argmax(gradivar[:,bi]*deltagrad[:,bi]**2)
+                            ivarjj[k,bi]=0.
+                            log.debug("masking spec {} wave={}".format(k,spectra.wave[b][bi]))
 
             tivar[i]=np.sum(ivarjj,axis=0)
             tflux[i]=np.sum(ivarjj*spectra.flux[b][jj],axis=0)
