@@ -2,10 +2,28 @@
 desispec Change Log
 ===================
 
-0.39.2 (unreleased)
+0.39.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.39.2 (2021-03-02)
+-------------------
+
+Cascades update tag to fix coadd and tSNR crashes, and postfacto tag
+``desi_spectro_calib`` version in desispec module file.
+
+* Processing dashboard useability updates (PR `#1152`_).
+* Undo heliocentric correction in throughput analysis not used for
+  production processing (PR `#1154`_).
+* Fix coadd crash (PR `#1163`_).
+* Fix tSNR alpha<0.8 crash (PR `#1164`_).
+* Updated desi_spectro_calib version to 0.2.4.
+
+.. _`#1152`: https://github.com/desihub/desispec/issues/1152
+.. _`#1154`: https://github.com/desihub/desispec/issues/1154
+.. _`#1163`: https://github.com/desihub/desispec/issues/1163
+.. _`#1164`: https://github.com/desihub/desispec/issues/1164
 
 0.39.1 (2021-02-23)
 -------------------
