@@ -149,10 +149,15 @@ def coadd(spectra, cosmics_nsig=0.) :
                         ttivar = spectra.ivar[b][j]
                     good = (ttivar>0)
                     bad  = ~good
+                    if np.sum(good)==0 :
+                        continue
+                    nbad = np.sum(bad)
                     ttflux = spectra.flux[b][j].copy()
-                    ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
+                    if nbad>0 :
+                        ttflux[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttflux[good])
                     ttivar = spectra.ivar[b][j].copy()
-                    ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
+                    if nbad>0 :
+                        ttivar[bad] = np.interp(spectra.wave[b][bad],spectra.wave[b][good],ttivar[good])
                     ttvar = 1./(ttivar+(ttivar==0))
                     ttflux[1:] = ttflux[1:]-ttflux[:-1]
                     ttvar[1:]  = ttvar[1:]+ttvar[:-1]
