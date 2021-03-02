@@ -16,6 +16,7 @@ from desispec.frame import Frame
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
+from desispec.fiberfluxcorr import point_source_fiber_flux_correction
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
@@ -837,7 +838,7 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0) :
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1,reference_seeing_fwhm=1.1) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
@@ -849,6 +850,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       input_model_flux : 2D[nstd, nwave] array of model fluxes
       input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
+      exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
+      reference_seeing_fwhm : (optional) reference seeing FWHM in arcsec considered for the fiber flux computation
 
     Returns:
          desispec.FluxCalib object
@@ -908,6 +911,13 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     tframe.mask = add_margin_2d_dim1(frame.mask,margin)
     tframe.resolution_data = add_margin_3d_dim2(frame.resolution_data,margin)
     tframe.R = np.array( [Resolution(r) for r in tframe.resolution_data] )
+
+    #- Compute point source flux correction and fiber flux correction
+    point_source_correction = point_source_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
+
+    #- Apply point source flux correction
+    tframe.flux *= point_source_correction[:,None]
+
 
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
@@ -1252,6 +1262,9 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     mask = tframe.mask.copy()
 
     mccalibration = R.dot(calibration)
+
+    #- Apply point source flux correction
+    ccalibration /= point_source_correction[:,None]
 
     # trim back
     ccalibration=ccalibration[:,margin:-margin]
