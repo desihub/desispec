@@ -3,7 +3,7 @@
 Calculate stand alone tsnr tables for a given desispec prod.
 '''
 
-import os
+import os,sys
 import glob
 import itertools
 import argparse
@@ -26,18 +26,20 @@ from   desiutil.depend import getdep
 def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Calculate template S/N ratio for exposures")
-    parser.add_argument('--outfile', type=str, default=None, required=False,
+    parser.add_argument('-o','--outfile', type=str, default=None, required=True,
                         help = 'Output summary file')
-    parser.add_argument('--details-dir', type=str, required=False,
+    parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
     parser.add_argument('--prod', type = str, default = None, required=False,
-                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/')
+                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ ,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
     parser.add_argument('--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to process')
-    parser.add_argument('--night', type = int, default = None, required=False,
-                        help = 'Restrict to this night only')
+    parser.add_argument('--nights', type = str, default = None, required=False,
+                        help = 'Comma separated list of nights to process')
+    parser.add_argument('--recompute', action='store_true',
+                        help = 'Recompute TSNR values')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -46,153 +48,43 @@ def parse(options=None):
     return args
 
 
-def main():
+
+def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir) :
+
+    calib  = findfile('fluxcalib', night=night, expid=expid,
+                      camera=camera, specprod_dir=specprod_dir)
+    flat = cframe_hdulist[0].header['FIBERFLT']
+
+    if 'SPECPROD' in flat:
+        flat = flat.replace('SPECPROD', specprod_dir)
+    elif 'SPCALIB' in flat:
+        flat = flat.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
+    else:
+        raise ValueError('Failed on flat retrieval for {}.'.format(hdr))
+
+    iin = cframe_filename.replace('cframe', 'frame')
+    sky = cframe_filename.replace('cframe', 'sky')
+    psf = cframe_filename.replace('cframe', 'psf')
+
+    frame=read_frame(iin, skip_resolution=True)
+    fiberflat=read_fiberflat(flat)
+    fluxcalib=read_flux_calibration(calib)
+    skymodel=read_sky(sky)
+
+    results, alpha = calc_tsnr2(frame, fiberflat=fiberflat,
+                                skymodel=skymodel, fluxcalib=fluxcalib)
+
+    table=Table()
+    for k in results:
+        table[k] = results[k].astype(np.float32)
+    table["TSNR_ALPHA_"+camera[0].upper()] = np.repeat(alpha,len(table))
+
+    return table
+
+
+def write_summary(summary_rows,output_filename) :
+
     log = get_logger()
-
-    args=parse()
-    if args.prod is None:
-        args.prod = specprod_root()
-
-    log.info('outfile = {}'.format(args.outfile))
-    log.info('details-dir = {}'.format(args.details_dir))
-    log.info('prod = {}'.format(args.prod))
-    log.info('cameras = {}'.format(args.cameras))
-    log.info('expids = {}'.format(args.expids))
-
-    petals = np.arange(10).astype(str)
-
-    if args.cameras is None:
-        cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
-    else:
-        cameras = args.cameras.split(',')
-    if args.expids is not None:
-        expids = [np.int(x) for x in args.expids.split(',')]
-    else:
-        expids = None
-    
-    if args.night is None:
-        args.night = '*'
-
-    cframes = {}
-    for cam in cameras:
-        cframes[cam] = sorted(glob.glob('{}/exposures/{}/*/cframe-{}-*.fits'.format(args.prod, args.night, cam)))
- 
-    sci_frames = {}
-
-    for cam in cameras:
-        sci_frames[cam] = []
-    
-        for cframe in cframes[cam]:
-            hdul = fits.open(cframe)
-            hdr  = hdul[0].header 
-        
-            flavor = hdr['FLAVOR']
-            prog = hdr['PROGRAM']
-            expid = hdr['EXPID']
-        
-            if expids is not None:
-                if expid not in expids:
-                    continue
-            
-            if flavor == 'science':
-                sci_frames[cam].append(cframe)
-
-            hdul.close()
-        
-        log.info('{} science frames to reduce for {}.'.format(len(sci_frames[cam]), cam))
-
-    summary_rows  = list()
-    for cam in cameras:
-        for kk, x in enumerate(sci_frames[cam]):
-            cframe = fits.open(x)
-            hdr  = cframe[0].header
-            if hdr['PROGRAM'].startswith('SV1'):
-                night  = hdr['NIGHT']
-                expid  = hdr['EXPID']
-                camera = hdr['CAMERA']
-                tileid = hdr['TILEID']
-
-                calib  = findfile('fluxcalib', night=night, expid=expid,
-                                  camera=camera, specprod_dir=args.prod)
-            
-                flat = cframe[0].header['FIBERFLT']
-
-                if 'SPECPROD' in flat:
-                    flat = flat.replace('SPECPROD', args.prod)
-                
-                elif 'SPCALIB' in flat:
-                    flat = flat.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
-
-                else:
-                    raise ValueError('Failed on flat retrieval for {}.'.format(hdr))
-                
-                iin = x.replace('cframe', 'frame')
-                sky = x.replace('cframe', 'sky')
-                psf = sky.replace('sky', 'psf')
-
-                if args.details_dir is not None:
-                    out = f'{args.details_dir}/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
-                else:
-                    out = None
-                
-                if out is not None and os.path.exists(out):
-                    log.info(f'Using previously generated {out}')
-                    table = Table.read(out)
-                else:
-                    frame=read_frame(iin, skip_resolution=True)
-                    fiberflat=read_fiberflat(flat)
-                    fluxcalib=read_flux_calibration(calib)
-                    skymodel=read_sky(sky)
-            
-                    results, alpha = calc_tsnr2(frame, fiberflat=fiberflat,
-                            skymodel=skymodel, fluxcalib=fluxcalib)
-
-                    table=Table()
-                    for k in results:
-                        table[k] = results[k].astype(np.float32)
-
-                    table['FIBER']       = frame.fibermap['FIBER']
-                    table['TARGETID']    = frame.fibermap['TARGETID']
-                
-                    table.meta['NIGHT']  = night
-                    table.meta['EXPID']  = expid
-                    table.meta['TILEID'] = tileid
-                    table.meta['CAMERA'] = camera
-                    table.meta['TSNRALPH']  = alpha
-                    table.meta['EXTNAME'] = 'TSNR2'
-
-                #- Write per-expid per-camera output if requested
-                if out is not None:
-                    Path(os.path.dirname(out)).mkdir(parents=True,exist_ok=True)
-                    tmpfile = out+'.tmp'
-                    table.write(tmpfile, format='fits', overwrite=True)
-                    os.rename(tmpfile, out)
-                    log.info('Successfully wrote {}.'.format(out))
-                
-                # Append to summary. 
-                entry = dict()
-                entry['NIGHT'] = np.int32(night)
-                entry['EXPID'] = np.int32(expid)
-                entry['TILEID'] = np.int32(tileid)
-                entry['CAMERA'] = camera
-                for key in table.colnames:
-                    if key.startswith('TSNR2_'):
-                        #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
-                        short_key = '_'.join(key.split('_')[0:2])
-                        entry[short_key]=np.median(table[key]).astype(np.float32)
-
-                entry['ALPHA'] = table.meta['TSNRALPH']
-
-                summary_rows.append(entry)
-
-                log.info('{} {:08d} {}: Reduced {} of {}.'.format(
-                    night, expid, cam, kk, len(sci_frames[cam])))
-
-        cframe.close()
-
-    #- If not writing a summary file, we're done
-    if args.outfile is None:
-        return
 
     #- Create camera summary table; specify names to preserve column order
     colnames = list(summary_rows[0].keys())
@@ -241,12 +133,180 @@ def main():
     hdus.append(fits.convenience.table_to_hdu(exp_summary))
     hdus.append(fits.convenience.table_to_hdu(cam_summary))
 
-    tmpfile = args.outfile+'.tmp'
+    tmpfile = output_filename+'.tmp'
     hdus.writeto(tmpfile, overwrite=True)
-    os.rename(tmpfile, args.outfile)
+    os.rename(tmpfile,  output_filename)
 
-    log.info('Successfully wrote {}'.format(args.outfile))
+    log.info('Successfully wrote {}'.format(output_filename))
 
-    
+
+def main():
+    log = get_logger()
+
+    args=parse()
+    if args.prod is None:
+        args.prod = specprod_root()
+    elif args.prod.find("/")<0 :
+        args.prod = specprod_root(args.prod)
+
+    if not args.outfile.endswith(".fits") :
+        print("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
+        sys.exit(1)
+
+    log.info('outfile = {}'.format(args.outfile))
+    if args.details_dir is not None : log.info('details-dir = {}'.format(args.details_dir))
+
+    log.info('prod = {}'.format(args.prod))
+
+
+    if args.cameras is None:
+        petals  = np.arange(10).astype(str)
+        cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
+    else:
+        cameras = args.cameras.split(',')
+
+    if args.expids is not None:
+        expids = [np.int(x) for x in args.expids.split(',')]
+    else:
+        expids = None
+
+    if args.nights is None:
+        dirnames = sorted(glob.glob('{}/exposures/*'.format(args.prod)))
+        nights=[]
+        for dirname in dirnames :
+            try :
+                night=int(os.path.basename(dirname))
+                nights.append(night)
+            except ValueError as e :
+                log.warning("ignore {}".format(dirname))
+    else :
+        nights=[int(val) for val in args.nights.split(",")]
+
+    log.info('cameras = {}'.format(cameras))
+    log.info("nights = {}".format(nights))
+    if expids is not None : log.info('expids = {}'.format(expids))
+
+
+    # starting computing
+    # one night at a time
+
+    summary_rows  = list()
+
+    for night in nights :
+
+        night_summary_rows  = list()
+
+        dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
+        night_expids=[]
+        for dirname in dirnames :
+            try :
+                expid=int(os.path.basename(dirname))
+                night_expids.append(expid)
+            except ValueError as e :
+                log.warning("ignore {}".format(dirname))
+        if expids is not None :
+            night_expids = np.intersect1d(expids,night_expids)
+            if night_expids.size == 0 :
+                continue
+        log.info("{} {}".format(night,night_expids))
+
+
+        for expid in night_expids :
+
+            for camera in cameras:
+                cframe_filename = '{}/exposures/{}/{:08d}/cframe-{}-{:08d}.fits'.format(args.prod, night, expid, camera, expid)
+                if not os.path.isfile(cframe_filename) :
+                    continue
+
+                cframe_hdulist = fits.open(cframe_filename)
+                hdr    = cframe_hdulist[0].header
+                flavor = hdr['FLAVOR']
+                if flavor != 'science':
+                    continue
+
+                log.info("Processing {}".format(cframe_filename))
+
+                prog   = hdr['PROGRAM']
+                tileid = hdr['TILEID']
+
+                table = None
+                compute_tsnr = True
+
+                #- check if already computed in cframe
+                if "SCORES" in cframe_hdulist :
+                    table = Table(cframe_hdulist["SCORES"].data)
+                    key = "TSNR2_ELG_"+camera[0].upper()
+                    if key in table.colnames and not args.recompute :
+                        log.debug("Use TSNR values in cframe file")
+                        compute_tsnr = False
+
+                #- check if already computed in details file
+                table_output_filename = None
+                if args.details_dir is not None:
+                    table_output_filename= f'{args.details_dir}/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
+                    if os.path.isfile(table_output_filename):
+                        log.debug(f'Using previously generated {table_output_filename}')
+                        table = Table.read(table_output_filename)
+                        compute_tsnr = False
+
+                #- compute tsnr
+                if compute_tsnr :
+
+                    tsnr_table = compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir=args.prod)
+
+                    if table is None :
+                        table = tsnr_table
+                    else :
+                        for k in tsnr_table.columns :
+                            table[k] = tsnr_table[k]
+
+                fibermap = cframe_hdulist["FIBERMAP"].data
+                table['FIBER']       = fibermap['FIBER']
+                table['TARGETID']    = fibermap['TARGETID']
+                table.meta['NIGHT']  = night
+                table.meta['EXPID']  = expid
+                table.meta['TILEID'] = tileid
+                table.meta['CAMERA'] = camera
+                table.meta['EXTNAME'] = 'TSNR2'
+
+                #- Write per-expid per-camera output if requested
+                if compute_tsnr and table_output_filename is not None :
+                    Path(os.path.dirname(table_output_filename)).mkdir(parents=True,exist_ok=True)
+                    tmpfile = table_output_filename +'.tmp'
+                    table.write(tmpfile, format='fits', overwrite=True)
+                    os.rename(tmpfile, table_output_filename)
+                    log.debug('Successfully wrote {}.'.format(table_output_filename))
+
+                #- Append to summary.
+                entry = dict()
+                entry['NIGHT'] = np.int32(night)
+                entry['EXPID'] = np.int32(expid)
+                entry['TILEID'] = np.int32(tileid)
+                entry['CAMERA'] = camera
+                for key in table.colnames:
+                    if key.startswith('TSNR2_'):
+                        #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
+                        short_key = '_'.join(key.split('_')[0:2])
+                        entry[short_key]=np.median(table[key]).astype(np.float32)
+                    if key.startswith('TSNR2_ALPHA'):
+                        entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
+
+                summary_rows.append(entry)
+                night_summary_rows.append(entry)
+                cframe_hdulist.close()
+
+        # end of loop on exposures for a night
+
+        # write one summary per night
+        #output_filename="{}-night-{}.fits".format(args.outfile.replace(".fits",""),night)
+        #write_summary(night_summary_rows,output_filename)
+
+    # end of loop on nights
+    write_summary(summary_rows,args.outfile)
+
+
+
+
+
 if __name__ == '__main__':
     main()
