@@ -2,10 +2,24 @@
 desispec Change Log
 ===================
 
-0.39.3 (unreleased)
+0.39.4 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.39.3 (2020-03-04)
+-------------------
+
+Cascades update tag for final catalog creation.
+
+Note: datamodel changes to coadd SCORES and FIBERMAP
+
+* Propagate TSNR2 into coadd SCORES; update coadd FIBERMAP columns (PR `#1166`_)
+* ``bin/desi_tsnr_afterburner`` use pre-calculated TSNR2 from frame files
+  unless requested to recalculate (PR `#1167`_).
+
+.. _`#1166`: https://github.com/desihub/desispec/issues/1166
+.. _`#1167`: https://github.com/desihub/desispec/issues/1167
 
 0.39.2 (2021-03-02)
 -------------------
