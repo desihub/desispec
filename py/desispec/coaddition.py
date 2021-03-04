@@ -44,21 +44,26 @@ def coadd_fibermap(fibermap) :
     tfmap['COADD_EXPTIME'] = np.zeros(len(tfmap), dtype=np.float32) - 1
 
     # smarter values for some columns
-    mean_rms_cols = [
+    mean_cols = [
         'DELTA_X', 'DELTA_Y',
         'FIBER_X', 'FIBER_Y',
         'FIBER_RA', 'FIBER_DEC',
         'FIBERASSIGN_X', 'FIBERASSIGN_Y'
         ]
-    for k in mean_rms_cols:
+    rms_cols = ['DELTA_X', 'DELTA_Y']  #- rms_cols must also be in mean_cols
+    for k in mean_cols:
         if k in fibermap.colnames :
             if k.endswith('_RA') or k.endswith('_DEC'):
                 dtype = np.float64
             else:
                 dtype = np.float32
-            xx = Column(np.zeros(ntarget, dtype=dtype))
-            tfmap.add_column(xx,name='MEAN_'+k)
-            tfmap.add_column(xx,name='RMS_'+k)
+            if k in mean_cols:
+                xx = Column(np.zeros(ntarget, dtype=dtype))
+                tfmap.add_column(xx,name='MEAN_'+k)
+            if k in rms_cols:
+                xx = Column(np.zeros(ntarget, dtype=dtype))
+                tfmap.add_column(xx,name='RMS_'+k)
+
             tfmap.remove_column(k)
 
     first_last_cols = ['NIGHT','EXPID','TILEID','SPECTROID','FIBER','MJD']
@@ -94,11 +99,16 @@ def coadd_fibermap(fibermap) :
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
-        for k in mean_rms_cols:
+        for k in mean_cols:
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]
                 tfmap['MEAN_'+k][i] = np.mean(vals)
-                tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)) # inc. mean offset, not same as std
+
+        for k in rms_cols:
+            if k in fibermap.colnames :
+                vals=fibermap[k][jj]
+                # RMS includes mean offset, not same as std
+                tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2))
 
         for k in first_last_cols:
             if k in fibermap.colnames :
