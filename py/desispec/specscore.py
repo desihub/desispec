@@ -19,7 +19,7 @@ def _auto_detect_camera(frame) :
     elif mwave>=tophat_wave["z"][0] : return "z"
     else : return "r"
 
-def compute_coadd_scores(coadd, update_coadd=True):
+def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
     """Compute scores for a coadded Spectra object
 
     Args:
@@ -27,9 +27,13 @@ def compute_coadd_scores(coadd, update_coadd=True):
 
     Options:
         update_coadd: if True, update coadd.scores
+        specscores: scores Table from the uncoadded spectra including a TARGETID column
 
     Returns tuple of dictionaries (scores, comments); see compute_frame_scores
+
+    ``specscores`` is used to update TSNR2 scores by summing inputs
     """
+    log = get_logger()
     scores = dict()
     comments = dict()
     if coadd.bands == ['brz']:
@@ -53,6 +57,39 @@ def compute_coadd_scores(coadd, update_coadd=True):
                         suffix='COADD', flux_per_angstrom=True)
                 scores.update(bandscores)
                 comments.update(bandcomments)
+
+    if specscores is not None:
+        #- Derive which TSNR2_XYZ_[BRZ] columns exist
+        tsnrkeys = list()
+        tsnrtypes = list()
+        num_targets = coadd.num_targets()
+        for colname in specscores.dtype.names:
+            if colname.startswith('TSNR2_'):
+                _, targtype, band = colname.split('_')
+                scores[colname] = np.zeros(num_targets)
+                comments[colname] = f'{targtype} {band} template (S/N)^2'
+                tsnrkeys.append(colname)
+
+                if targtype not in tsnrtypes:
+                    tsnrtypes.append(targtype)
+
+        if len(tsnrkeys) == 0:
+            log.warning('No TSNR2_* scores found to coadd')
+        else:
+            #- Add TSNR2_*_B/R/Z columns summed across exposures
+            for i, tid in enumerate(coadd.target_ids()):
+                jj = specscores['TARGETID'] == tid
+                for colname in tsnrkeys:
+                    scores[colname][i] = np.sum(specscores[colname][jj])
+
+            #- Additionally sum across B/R/Z
+            for targtype in tsnrtypes:
+                col = f'TSNR2_{targtype}'
+                scores[col] = np.zeros(num_targets)
+                comments[col] = f'{targtype} template (S/N)^2 summed over B,R,Z'
+                for band in ['B', 'R', 'Z']:
+                    colbrz = f'TSNR2_{targtype}_{band}'
+                    scores[col] += scores[colbrz]
 
     if update_coadd:
         if hasattr(coadd, 'scores') and coadd.scores is not None:

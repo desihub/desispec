@@ -145,9 +145,6 @@ def main(args=None):
         log.info("resampling ...")
         spectra = resample_spectra_lin_or_log(spectra, log10_step=args.log10_step, wave_min =args.wave_min, wave_max =args.wave_max, fast = args.fast, nproc = args.nproc)
 
-    #- Add scores (S/N, flux, etc.)
-    compute_coadd_scores(spectra, update_coadd=True)
-
     #- Add input files to header
     if spectra.meta is None:
         spectra.meta = dict()

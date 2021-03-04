@@ -24,6 +24,7 @@ from desispec.interpolation import resample_flux
 from desispec.spectra import Spectra
 from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
+from desispec.specscore import compute_coadd_scores
 
 def coadd_fibermap(fibermap) :
 
@@ -213,8 +214,15 @@ def coadd(spectra, cosmics_nsig=0.) :
             spectra.mask[b] = tmask
         spectra.resolution_data[b] = trdata
 
+    if spectra.scores is not None:
+        orig_scores = spectra.scores.copy()
+        orig_scores['TARGETID'] = spectra.fibermap['TARGETID']
+    else:
+        orig_scores = None
+
     spectra.fibermap=coadd_fibermap(spectra.fibermap)
     spectra.scores=None
+    compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
 def coadd_cameras(spectra,cosmics_nsig=0.) :
 
@@ -376,12 +384,22 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
     bands=""
     for b in sbands :
         bands+=b
+
     if spectra.mask is not None :
         dmask={bands:mask,}
     else :
         dmask=None
+
     res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
                 fibermap=fibermap,meta=spectra.meta,extra=spectra.extra,scores=None)
+
+    if spectra.scores is not None:
+        orig_scores = spectra.scores.copy()
+        orig_scores['TARGETID'] = spectra.fibermap['TARGETID']
+    else:
+        orig_scores = None
+
+    compute_coadd_scores(res, orig_scores, update_coadd=True)
 
     return res
 
