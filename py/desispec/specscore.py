@@ -36,6 +36,10 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
     log = get_logger()
     scores = dict()
     comments = dict()
+
+    scores['TARGETID'] = coadd.target_ids()
+    comments['TARGETID'] = 'DESI Unique Target ID'
+
     if coadd.bands == ['brz']:
         #- i.e. this is a coadd across cameras
         fr = Frame(coadd.wave['brz'], coadd.flux['brz'], coadd.ivar['brz'],
@@ -90,6 +94,11 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
                 for band in ['B', 'R', 'Z']:
                     colbrz = f'TSNR2_{targtype}_{band}'
                     scores[col] += scores[colbrz]
+
+    #- convert to float32
+    for col in scores.keys():
+        if scores[col].dtype == np.float64:
+            scores[col] = scores[col].astype(np.float32)
 
     if update_coadd:
         if hasattr(coadd, 'scores') and coadd.scores is not None:
