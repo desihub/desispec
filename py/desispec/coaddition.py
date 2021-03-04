@@ -34,7 +34,6 @@ def coadd_fibermap(fibermap) :
     targets = np.unique(fibermap["TARGETID"])
     ntarget = targets.size
 
-
     jj=np.zeros(ntarget,dtype=int)
     for i,tid in enumerate(targets) :
         jj[i]=np.where(fibermap["TARGETID"]==tid)[0][0]
@@ -45,21 +44,38 @@ def coadd_fibermap(fibermap) :
     tfmap['COADD_EXPTIME'] = np.zeros(len(tfmap), dtype=np.float32) - 1
 
     # smarter values for some columns
-    for k in ['DELTA_X','DELTA_Y'] :
+    mean_rms_cols = [
+        'DELTA_X', 'DELTA_Y',
+        'FIBER_X', 'FIBER_Y',
+        'FIBER_RA', 'FIBER_DEC',
+        'FIBERASSIGN_X', 'FIBERASSIGN_Y'
+        ]
+    for k in mean_rms_cols:
         if k in fibermap.colnames :
-            tfmap.rename_column(k,'MEAN_'+k)
-            xx = Column(np.zeros(ntarget))
+            if k.endswith('_RA') or k.endswith('_DEC'):
+                dtype = np.float64
+            else:
+                dtype = np.float32
+            xx = Column(np.zeros(ntarget, dtype=dtype))
+            tfmap.add_column(xx,name='MEAN_'+k)
             tfmap.add_column(xx,name='RMS_'+k)
-    for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
+            tfmap.remove_column(k)
+
+    first_last_cols = ['NIGHT','EXPID','TILEID','SPECTROID','FIBER','MJD']
+    for k in first_last_cols:
         if k in fibermap.colnames :
+            if k in ['MJD']:
+                dtype = np.float32
+            else:
+                dtype = np.int32
             if not 'FIRST_'+k in tfmap.dtype.names :
-                xx = Column(np.arange(ntarget))
+                xx = Column(np.arange(ntarget, dtype=dtype))
                 tfmap.add_column(xx,name='FIRST_'+k)
             if not 'LAST_'+k in tfmap.dtype.names :
-                xx = Column(np.arange(ntarget))
+                xx = Column(np.arange(ntarget, dtype=dtype))
                 tfmap.add_column(xx,name='LAST_'+k)
             if not 'NUM_'+k in tfmap.dtype.names :
-                xx = Column(np.arange(ntarget))
+                xx = Column(np.arange(ntarget, dtype=np.int16))
                 tfmap.add_column(xx,name='NUM_'+k)
 
     for i,tid in enumerate(targets) :
@@ -78,24 +94,28 @@ def coadd_fibermap(fibermap) :
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
-        for k in ['DELTA_X','DELTA_Y'] :
+        for k in mean_rms_cols:
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]
                 tfmap['MEAN_'+k][i] = np.mean(vals)
                 tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)) # inc. mean offset, not same as std
 
-        for k in ['NIGHT','EXPID','TILEID','SPECTROID','FIBER'] :
+        for k in first_last_cols:
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]
                 tfmap['FIRST_'+k][i] = np.min(vals)
                 tfmap['LAST_'+k][i] = np.max(vals)
                 tfmap['NUM_'+k][i] = np.unique(vals).size
-        for k in ['FIBERASSIGN_X', 'FIBERASSIGN_Y','FIBER_RA', 'FIBER_DEC'] :
-            if k in fibermap.colnames :
-                tfmap[k][i]=np.mean(fibermap[k][jj])
+
         for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR','DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
             if k in fibermap.colnames :
                 tfmap[k][i]=np.sum(fibermap[k][jj])
+
+    #- Remove some columns that apply to individual exp but not coadds
+    #- (even coadds of the same tile)
+    for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER']:
+        if k in tfmap.colnames:
+            tfmap.remove_column(k)
 
     return tfmap
 
