@@ -261,6 +261,43 @@ class SpectraLite(object):
         self.meta = None
         self.extra = None
 
+    def target_ids(self):
+        """
+        Return list of unique target IDs.
+
+        The target IDs are sorted by the order that they first appear.
+
+        Returns (array):
+            an array of integer target IDs.
+        """
+        uniq, indices = np.unique(self.fibermap["TARGETID"], return_index=True)
+        return uniq[indices.argsort()]
+
+    def num_spectra(self):
+        """
+        Get the number of spectra contained in this group.
+
+        Returns (int):
+            Number of spectra contained in this group.
+        """
+        if self.fibermap is not None:
+            return len(self.fibermap)
+        else:
+            return 0
+
+
+    def num_targets(self):
+        """
+        Get the number of distinct targets.
+
+        Returns (int):
+            Number of unique targets with spectra in this object.
+        """
+        if self.fibermap is not None:
+            return len(np.unique(self.fibermap["TARGETID"]))
+        else:
+            return 0
+
     def __add__(self, other):
         '''
         concatenate two SpectraLite objects into one

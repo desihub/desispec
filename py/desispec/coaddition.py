@@ -11,10 +11,7 @@ import scipy.sparse
 import scipy.linalg
 import scipy.sparse.linalg
 
-from astropy.table import Column
-
-# for debugging
-import astropy.io.fits as pyfits
+from astropy.table import Table, Column
 
 import multiprocessing
 
@@ -245,7 +242,7 @@ def coadd(spectra, cosmics_nsig=0.) :
         spectra.resolution_data[b] = trdata
 
     if spectra.scores is not None:
-        orig_scores = spectra.scores.copy()
+        orig_scores = Table(spectra.scores.copy())
         orig_scores['TARGETID'] = spectra.fibermap['TARGETID']
     else:
         orig_scores = None
