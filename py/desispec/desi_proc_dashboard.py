@@ -657,6 +657,7 @@ def calculate_one_night(night, use_short_sci=False):
         else:
             nfiles = 0
             n_tot_spgrphs = 0
+            nstdstar_expected = 0
             
         if n_tots['psf'] == 0:
             row_color = 'NULL'
