@@ -1,39 +1,147 @@
 #!/usr/bin/env python
-# See top-level LICENSE.rst file for Copyright information
 
 """
-Copy a DESI production from one directory to another
-
-Currently this only copies the directory tree and the extracted frame files.
-This script will be expanded to support copying through any level of
-processing, including the metadata of how we got to that processing step.
+Create a nested directory tree with file symlinks to "copy" one prod to another
 
 Stephen Bailey
-April 2015
+March 2021
 """
-from __future__ import absolute_import, division, print_function
 
-import os
+import os, sys, glob
 import shutil
 import optparse
 
-parser = optparse.OptionParser(usage = "%prog [options] indir outdir")
-# parser.add_option("-i", "--input", type="string",  help="input data")
-# parser.add_option("-x", "--xxx",   help="some flag", action="store_true")
-opts, args = parser.parse_args()
+import numpy as np
+from astropy.table import Table
 
+from desiutil.log import get_logger
+
+parser = optparse.OptionParser(usage = "%prog [options] indir outdir")
+parser.add_option("--explist", help="file with NIGHT EXPID to copy")
+parser.add_option("--fullcopy", action="store_true",
+        help="Copy files instead of linking")
+parser.add_option("--abspath", action="store_true",
+        help="Link to absolute path instead of relative path")
+
+opts, args = parser.parse_args()
 inroot, outroot = args
+log = get_logger()
+
+#- Get list of NIGHT EXPID to copy
+if opts.explist is not None:
+    explist = Table.read(opts.explist, format='ascii')
+else:
+    rows = list()
+    for dirname in sorted(glob.glob(f'{inroot}/exposures/20??????/????????')):
+        nightdir, expid = os.path.split(dirname)
+        try:
+            night = int(os.path.basename(nightdir))
+            expid = int(expid)
+            rows.append((night, expid))
+        except ValueError:
+            pass
+
+    explist = Table(rows=rows, names=('NIGHT', 'EXPID'))
+
+num_nights = len(np.unique(explist['NIGHT']))
+num_expids = len(np.unique(explist['EXPID']))
+assert num_expids == len(explist)
+log.info(f'Linking {num_expids} exposures on {num_nights} nights')
+
+#- What type of copy or link are we making?
+if opts.fullcopy:
+    link = shutil.copy2
+    log.debug('Performing full copy of selected NIGHT/EXPID')
+else:
+    link = os.symlink
+    log.debug('Creating symlinks')
+
+inroot = os.path.abspath(inroot)
+outroot = os.path.abspath(outroot)
+log.info(f'Creating links in {outroot} to files in {inroot}')
 
 if not os.path.exists(outroot):
     os.makedirs(outroot)
 
-#- Copy exposures
-for indir, subdirs, filenames in os.walk(inroot+'/exposures'):
-    outdir = indir.replace(inroot, outroot)
-    print(outdir)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+def link_dirfiles(indir, outdir, abspath=False):
+    """
+    Create relative links in outdir to all files in indir
+    """
+    os.makedirs(outdir, exist_ok=True)
+    if abspath:
+        srcpath = indir
+    else:
+        srcpath = os.path.relpath(indir, outdir)
 
-    for name in filenames:
-        if name.startswith('frame-'):
-            shutil.copy2(indir+'/'+name, outdir+'/'+name)
+    for infile in sorted(glob.glob(f'{indir}/*.*')):
+        basename = os.path.basename(infile)
+        src = os.path.join(srcpath, basename)
+        dst = os.path.join(outdir, basename)
+        link(src, dst)
+
+#- calibnight: link all files for requested nights
+for night in np.unique(explist['NIGHT']):
+    log.info(f'calibnight/{night}')
+    indir = f'{inroot}/calibnight/{night}'
+    outdir = f'{outroot}/calibnight/{night}'
+    link_dirfiles(indir, outdir, opts.abspath)
+
+#- preproc, exposures: link all files for requested night/expid
+for subdir in ['preproc', 'exposures']:
+    for night, expid in explist['NIGHT', 'EXPID']:
+        log.info(f'{subdir}/{night}/{expid:08d}')
+        indir = f'{inroot}/{subdir}/{night}/{expid:08d}'
+        outdir = f'{outroot}/{subdir}/{night}/{expid:08d}'
+        link_dirfiles(indir, outdir, opts.abspath)
+
+#- exposure tables: trim to requested exposures
+for night in np.unique(explist['NIGHT']):
+    yearmm = night//100
+    infile = f'{inroot}/exposure_tables/{yearmm}/exposure_table_{night}.csv'
+    outfile = f'{outroot}/exposure_tables/{yearmm}/exposure_table_{night}.csv'
+    exptab = Table.read(infile, format='ascii.csv')
+    keep = np.in1d(exptab['EXPID'], explist['EXPID'])
+    exptab = exptab[keep]
+    os.makedirs(os.path.dirname(outfile), exist_ok=True)
+    log.info(os.path.basename(outfile))
+    exptab.write(outfile, format='ascii.csv')
+
+#- processing tables: trim to requested exposures
+for night in np.unique(explist['NIGHT']):
+    night_expids = explist['EXPID'][explist['NIGHT'] == night]
+    tmp = glob.glob(f'{inroot}/processing_tables/processing_table_*-{night}.csv')
+    if len(tmp) == 1:
+        infile = tmp[0]
+    elif len(tmp) == 0:
+        log.error(f'Unable to find processing table for {night}')
+        continue
+    elif len(tmp) == 0:
+        log.error(f'Multiple processing tables for {night} ?!?')
+        continue
+
+    outfile = '{}/processing_tables/{}'.format(
+            outroot, os.path.basename(infile))
+    proctab = Table.read(infile, format='ascii.csv')
+
+    #- Convert string "expid1|expid2" entries into keep or not
+    keep = np.zeros(len(proctab), dtype=bool)
+    for i, expstr in enumerate(proctab['EXPID']):
+        expids = list()
+        for tmp in expstr.split('|'):
+            try:
+                xx = int(tmp)
+                expids.append(xx)
+            except ValueError:
+                pass
+
+        if np.any(np.in1d(expids, night_expids)):
+            keep[i] = True
+
+    proctab = proctab[keep]
+
+    os.makedirs(os.path.dirname(outfile), exist_ok=True)
+    log.info(os.path.basename(outfile))
+    proctab.write(outfile, format='ascii.csv')
+
+log.info(f'Production copied into {outroot}')
+
