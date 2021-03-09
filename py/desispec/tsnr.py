@@ -168,6 +168,48 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
     else:
         return alpha * rdnoise_variance + fiberflat.fiberflat * np.abs(skymodel.flux)
 
+def gen_mask(frame, skymodel, hw=5.):
+    log = get_logger()
+    
+    maskfactor = np.ones_like(frame.mask, dtype=np.float)
+    maskfactor[frame.mask > 0] = 0.0
+    
+    # https://github.com/desihub/desispec/blob/294cfb66428aa8be3797fd046adbd0a2267c4409/py/desispec/sky.py#L1267                                                                                                      
+    skyline=np.array([5199.4,5578.4,5656.4,5891.4,5897.4,6302.4,6308.4,6365.4,6500.4,6546.4,\
+                      6555.4,6618.4,6663.4,6679.4,6690.4,6765.4,6831.4,6836.4,6865.4,6925.4,\
+                      6951.4,6980.4,7242.4,7247.4,7278.4,7286.4,7305.4,7318.4,7331.4,7343.4,\
+                      7360.4,7371.4,7394.4,7404.4,7440.4,7526.4,7714.4,7719.4,7752.4,7762.4,\
+                      7782.4,7796.4,7810.4,7823.4,7843.4,7855.4,7862.4,7873.4,7881.4,7892.4,\
+                      7915.4,7923.4,7933.4,7951.4,7966.4,7982.4,7995.4,8016.4,8028.4,8064.4,\
+                      8280.4,8284.4,8290.4,8298.4,8301.4,8313.4,8346.4,8355.4,8367.4,8384.4,\
+                      8401.4,8417.4,8432.4,8454.4,8467.4,8495.4,8507.4,8627.4,8630.4,8634.4,\
+                      8638.4,8652.4,8657.4,8662.4,8667.4,8672.4,8677.4,8683.4,8763.4,8770.4,\
+                      8780.4,8793.4,8829.4,8835.4,8838.4,8852.4,8870.4,8888.4,8905.4,8922.4,\
+                      8945.4,8960.4,8990.4,9003.4,9040.4,9052.4,9105.4,9227.4,9309.4,9315.4,\
+                      9320.4,9326.4,9340.4,9378.4,9389.4,9404.4,9422.4,9442.4,9461.4,9479.4,\
+                      9505.4,9521.4,9555.4,9570.4,9610.4,9623.4,9671.4,9684.4,9693.4,9702.4,\
+                      9714.4,9722.4,9740.4,9748.4,9793.4,9802.4,9814.4,9820.4])
+    
+    maskfactor *= (skymodel.ivar > 0.0)
+    maskfactor *= (frame.ivar > 0.0)
+    
+    if hw > 0.0:
+        log.info('TSNR Masking bright lines in alpha calc. (half width: {:.3f})'.format(hw))
+        
+        for line in skyline :
+            if line<=frame.wave[0] or line>=frame.wave[-1]:
+                continue
+
+            ii=np.where((frame.wave>=line-hw)&(frame.wave<=line+hw))[0]
+
+            maskfactor[:,ii]=0.0
+
+    # Mask collimator, [4300-4500A]
+    ii=np.where((frame.wave>=4300.)&(frame.wave<=4500.))[0]
+    maskfactor[:,ii]=0.0
+            
+    return maskfactor
+            
 def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel):
     '''
     Model Var = alpha * rdnoise component + sky.
@@ -194,16 +236,17 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
     sky_indx = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
     rd_var, sky_var = var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel, alpha=1.0, components=True)
 
-    maskfactor = np.ones_like(frame.mask[sky_indx,:], dtype=np.float)
-    maskfactor[frame.mask[sky_indx,:] > 0] = 0.0
-
+    maskfactor = gen_mask(frame, skymodel)
+    maskfactor = maskfactor[sky_indx,:]
+    
     def calc_alphavar(alpha):
         return alpha * rd_var[sky_indx,:] + sky_var[sky_indx,:]
 
     def alpha_X2(alpha):
         _var = calc_alphavar(alpha)
         _ivar =  1. / _var
-        X2 = (frame.ivar[sky_indx,:] - _ivar)**2.
+        X2 = np.abs(frame.ivar[sky_indx,:] - _ivar)
+
         return np.sum(X2 * maskfactor)
 
     res = minimize(alpha_X2, x0=[1.])
@@ -307,13 +350,14 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
                 rdnoise_sigma=rdnoise, npix_1d=npix,
                 angperpix=angperpix, angperspecbin=angperspecbin,
                 fiberflat=fiberflat, skymodel=skymodel)
-    log.info(f"TSNR ALPHA = {alpha:.3f}")
+
+    log.info(f"TSNR ALPHA = {alpha:.6f}")
 
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
 
     tsnrs = {}
-
+    
     denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
     for tracer in ensemble.keys():
