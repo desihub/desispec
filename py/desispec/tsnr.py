@@ -355,6 +355,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib) :
 
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
+    maskfactor *= (frame.ivar > 0.0)
 
     tsnrs = {}
     
