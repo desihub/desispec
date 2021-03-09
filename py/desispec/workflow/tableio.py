@@ -233,8 +233,8 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                         *.temp.{ext} and then moved to *.{ext}. If None, it looks up the default for typetable. If
                         tabletype is None it uses this to try and identify the tabletype and uses that to get the
                         default column names and types.
-        tabletype, str. Used if tablename is None to get the default name for the type of table. Also used to get the
-                        column datatypes and defaults.
+        tabletype, str. 'exptable', 'proctable', or 'unproctable'. Used if tablename is None to get the default name
+                        for the type of table. Also used to get the column datatypes and defaults.
         joinsymb, str. The symbol used to join values in a list/array when saving. Should not be a comma.
         verbose, bool. Whether to give verbose amounts of information (True) or succinct/no outputs (False). Default is False.
         process_mixins, bool. Whether to look for and try to split strings into lists/arrays. The default is True.
