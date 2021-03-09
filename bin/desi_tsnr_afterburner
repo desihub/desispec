@@ -31,7 +31,7 @@ def parse(options=None):
     parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
     parser.add_argument('--prod', type = str, default = None, required=False,
-                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ ,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
     parser.add_argument('--expids', type = str, default = None, required=False,
@@ -40,6 +40,8 @@ def parse(options=None):
                         help = 'Comma separated list of nights to process')
     parser.add_argument('--recompute', action='store_true',
                         help = 'Recompute TSNR values')
+    parser.add_argument('--alpha_only', action='store_true',
+                        help = 'Only compute the alpha for tsnr.')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -49,7 +51,7 @@ def parse(options=None):
 
 
 
-def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir) :
+def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir, alpha_only=False) :
 
     calib  = findfile('fluxcalib', night=night, expid=expid,
                       camera=camera, specprod_dir=specprod_dir)
@@ -72,13 +74,13 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
     skymodel=read_sky(sky)
 
     results, alpha = calc_tsnr2(frame, fiberflat=fiberflat,
-                                skymodel=skymodel, fluxcalib=fluxcalib)
-
+                                skymodel=skymodel, fluxcalib=fluxcalib, alpha_only=alpha_only)
+    
     table=Table()
     for k in results:
         table[k] = results[k].astype(np.float32)
-    table["TSNR_ALPHA_"+camera[0].upper()] = np.repeat(alpha,len(table))
-
+    table["TSNR2_ALPHA_"+camera[0].upper()] = np.repeat(alpha,len(frame.flux))
+    
     return table
 
 
@@ -121,7 +123,7 @@ def write_summary(summary_rows,output_filename) :
                 if np.any(jj):
                     tsnr2_petal.append(np.sum(cam_summary[colname][jj]))
 
-            row[colname] = np.mean(tsnr2_petal)
+            row[colname] = np.median(tsnr2_petal)
 
         rows.append(row)
 
@@ -233,34 +235,34 @@ def main():
                 compute_tsnr = True
 
                 #- check if already computed in cframe
-                if "SCORES" in cframe_hdulist :
+                if "SCORES" in cframe_hdulist and not args.recompute:
                     table = Table(cframe_hdulist["SCORES"].data)
                     key = "TSNR2_ELG_"+camera[0].upper()
-                    if key in table.colnames and not args.recompute :
+                    if key in table.colnames :
                         log.debug("Use TSNR values in cframe file")
                         compute_tsnr = False
 
                 #- check if already computed in details file
                 table_output_filename = None
-                if args.details_dir is not None:
+                if args.details_dir is not None and not args.recompute :
                     table_output_filename= f'{args.details_dir}/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
                     if os.path.isfile(table_output_filename):
                         log.debug(f'Using previously generated {table_output_filename}')
                         table = Table.read(table_output_filename)
                         compute_tsnr = False
-
+                        
                 #- compute tsnr
                 if compute_tsnr :
-
-                    tsnr_table = compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir=args.prod)
-
+                    tsnr_table = compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir=args.prod, alpha_only=args.alpha_only)
+                    
                     if table is None :
                         table = tsnr_table
                     else :
                         for k in tsnr_table.columns :
                             table[k] = tsnr_table[k]
-
+                            
                 fibermap = cframe_hdulist["FIBERMAP"].data
+
                 table['FIBER']       = fibermap['FIBER']
                 table['TARGETID']    = fibermap['TARGETID']
                 table.meta['NIGHT']  = night
@@ -290,7 +292,7 @@ def main():
                         entry[short_key]=np.median(table[key]).astype(np.float32)
                     if key.startswith('TSNR2_ALPHA'):
                         entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
-
+                        
                 summary_rows.append(entry)
                 night_summary_rows.append(entry)
                 cframe_hdulist.close()
