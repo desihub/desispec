@@ -121,7 +121,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
         curtype, curtile = get_type_and_tile(erow)
 
-        if (curtype != lasttype) or (curtile != lasttile) and lasttype is not None:
+        if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
             ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
                                                                                            sciences, arcjob,
                                                                                            flatjob, lasttype,

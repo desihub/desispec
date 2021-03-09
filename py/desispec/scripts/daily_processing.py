@@ -246,7 +246,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
                 curtype,curtile = get_type_and_tile(erow)
 
-                if (curtype != lasttype) or (curtile != lasttile):
+                if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
                     ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
                                                                                                    sciences, arcjob,
                                                                                                    flatjob, lasttype,
