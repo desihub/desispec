@@ -803,7 +803,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
                           from the input such that it represents the smallest unused ID.
     """
-    if lasttype == 'science' and last_not_dither:
+    if lasttype == 'science':
         ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
                                                          reservation=reservation, strictly_successful=strictly_successful)
         if tilejob is not None:
