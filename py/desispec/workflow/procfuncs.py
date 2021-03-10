@@ -649,6 +649,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
 
     log.info(" ")
     log.info(f"Joint fit criteria found. Running {descriptor}.\n")
+
     joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
     internal_id += 1
     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
@@ -804,20 +805,29 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
                           from the input such that it represents the smallest unused ID.
     """
     if lasttype == 'science':
+        from collections import Counter
+        tiles = np.array([sci['TILEID'] for sci in sciences])
+        counts = Counter(tiles)
+        if len(counts.most_common()) > 1:
+            log = get_logger()
+            most_common, nmost_common = counts.most_common()[0]
+            if most_common == -99:
+                most_common, nmost_common = counts.most_common()[1]
+            log.warning(f"Given multiple tiles to jointly fit: {counts}. Only processing the most common non-default" +
+                        f" tile: {most_common} with {nmost_common} exposures")
+            sciences = (np.array(sciences)[tiles == most_common]).tolist()
         ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
                                                          reservation=reservation, strictly_successful=strictly_successful)
         if tilejob is not None:
             sciences = []
-    elif lasttype == 'flat' and flatjob is None and len(flats) > 11:
-        ## Note here we have an assumption about the number of expected flats being greater than 10
+    elif lasttype == 'flat' and flatjob is None and len(flats)>11:
+        ## Note here we have an assumption about the number of expected flats being greater than 11
         ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
                                                       reservation=reservation, strictly_successful=strictly_successful)
-        internal_id += 1
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
         ## Note here we have an assumption about the number of expected arcs being greater than 4
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
                                                     reservation=reservation, strictly_successful=strictly_successful)
-        internal_id += 1
     return ptable, arcjob, flatjob, sciences, internal_id
 
 
