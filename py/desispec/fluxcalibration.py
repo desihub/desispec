@@ -913,11 +913,12 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     tframe.R = np.array( [Resolution(r) for r in tframe.resolution_data] )
 
     #- Compute point source flux correction and fiber flux correction
+    log.info("compute point source flux correction")
     point_source_correction = point_source_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
+    log.info("point source correction mean = {} rms = {}".format(np.mean(point_source_correction),np.std(point_source_correction)))
 
     #- Apply point source flux correction
     tframe.flux *= point_source_correction[:,None]
-
 
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
@@ -1273,13 +1274,19 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     mccalibration=mccalibration[margin:-margin]
     stdstars.wave=stdstars.wave[margin:-margin]
 
+    fibercorr = dict()
+    fibercorr_comments = dict()
+    fibercorr["POINT_SOURCE"]=point_source_correction
+    fibercorr_comments["POINT_SOURCE"]="point source correction already applied to flux vector"
+
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration)
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration, fibercorr=fibercorr)
 
 
 
 class FluxCalib(object):
-    def __init__(self, wave, calib, ivar, mask, meancalib=None):
+    def __init__(self, wave, calib, ivar, mask, meancalib=None,
+                 fibercorr=None, fibercorr_comments=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -1288,7 +1295,8 @@ class FluxCalib(object):
             ivar : 2D[nspec, nwave] inverse variance of calib
             mask : 2D[nspec, nwave] mask of calib (0=good)
             meancalib : 1D[nwave] mean convolved calibration (optional)
-
+            fibercorr : dictionary of 1D arrays of size nspec (optional)
+            fibercorr_comments : dictionnary of string (explaining the fibercorr)
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
@@ -1307,6 +1315,8 @@ class FluxCalib(object):
         self.ivar = ivar
         self.mask = util.mask32(mask)
         self.meancalib = meancalib
+        self.fibercorr = fibercorr
+        self.fibercorr_comments= fibercorr_comments
 
         self.meta = dict(units='photons/(erg/s/cm^2)')
 

@@ -13,6 +13,7 @@ import numpy,scipy
 
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
+from desiutil.io import encode_table
 
 from .util import fitsheader, native_endian, makepath
 from . import iotime
@@ -114,6 +115,19 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     hx.append( fits.ImageHDU(fluxcalib.wave.astype('f4'), name='WAVELENGTH') )
     hx[-1].header['BUNIT'] = 'Angstrom'
 
+    if fluxcalib.fibercorr is not None :
+        tbl = encode_table(fluxcalib.fibercorr)  #- unicode -> bytes
+        tbl.meta['EXTNAME'] = 'FIBERCORR'
+        hx.append( fits.convenience.table_to_hdu(tbl) )
+        if fluxcalib.fibercorr_comments is not None : # add comments in header
+            hdu=hx['FIBERCORR']
+            for i in range(1,999):
+                key = 'TTYPE'+str(i)
+                if key in hdu.header:
+                    value = hdu.header[key]
+                    if value in fluxcalib.fibercorr_comments.keys() :
+                        hdu.header[key] = (value, fluxcalib.fibercorr_comments[value])
+
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
@@ -184,7 +198,7 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
 def read_average_flux_calibration(filename):
     """Read average flux calibration file; returns an AverageFluxCalib object
     """
-    
+
     # Avoid a circular import conflict at package install/build_sphinx time.
     from ..averagefluxcalibration import AverageFluxCalib
     log = get_logger()
