@@ -170,11 +170,11 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
 
 def gen_mask(frame, skymodel, hw=5.):
     log = get_logger()
-    
+
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
-    
-    # https://github.com/desihub/desispec/blob/294cfb66428aa8be3797fd046adbd0a2267c4409/py/desispec/sky.py#L1267                                                                                                      
+
+    # https://github.com/desihub/desispec/blob/294cfb66428aa8be3797fd046adbd0a2267c4409/py/desispec/sky.py#L1267
     skyline=np.array([5199.4,5578.4,5656.4,5891.4,5897.4,6302.4,6308.4,6365.4,6500.4,6546.4,\
                       6555.4,6618.4,6663.4,6679.4,6690.4,6765.4,6831.4,6836.4,6865.4,6925.4,\
                       6951.4,6980.4,7242.4,7247.4,7278.4,7286.4,7305.4,7318.4,7331.4,7343.4,\
@@ -189,13 +189,13 @@ def gen_mask(frame, skymodel, hw=5.):
                       9320.4,9326.4,9340.4,9378.4,9389.4,9404.4,9422.4,9442.4,9461.4,9479.4,\
                       9505.4,9521.4,9555.4,9570.4,9610.4,9623.4,9671.4,9684.4,9693.4,9702.4,\
                       9714.4,9722.4,9740.4,9748.4,9793.4,9802.4,9814.4,9820.4])
-    
+
     maskfactor *= (skymodel.ivar > 0.0)
     maskfactor *= (frame.ivar > 0.0)
-    
+
     if hw > 0.0:
         log.info('TSNR Masking bright lines in alpha calc. (half width: {:.3f})'.format(hw))
-        
+
         for line in skyline :
             if line<=frame.wave[0] or line>=frame.wave[-1]:
                 continue
@@ -207,9 +207,9 @@ def gen_mask(frame, skymodel, hw=5.):
     # Mask collimator, [4300-4500A]
     ii=np.where((frame.wave>=4300.)&(frame.wave<=4500.))[0]
     maskfactor[:,ii]=0.0
-            
+
     return maskfactor
-            
+
 def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel):
     '''
     Model Var = alpha * rdnoise component + sky.
@@ -238,7 +238,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 
     maskfactor = gen_mask(frame, skymodel)
     maskfactor = maskfactor[sky_indx,:]
-    
+
     def calc_alphavar(alpha):
         return alpha * rd_var[sky_indx,:] + sky_var[sky_indx,:]
 
@@ -335,8 +335,11 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     #
     ebv = frame.fibermap['EBV']
 
-    log.info("TSNR MEDIAN EBV = {:.3f}".format(np.median(ebv)))
-    
+    if np.sum(ebv!=0)>0 :
+        log.info("TSNR MEDIAN EBV = {:.3f}".format(np.median(ebv[ebv!=0])))
+    else :
+        log.info("TSNR MEDIAN EBV = 0")
+
     # Evaluate.
     npix = nea(fibers, frame.wave)
     angperpix = angperpix(fibers, frame.wave)
@@ -355,13 +358,13 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
 
     if alpha_only:
         return {}, alpha
-    
+
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
     maskfactor *= (frame.ivar > 0.0)
 
     tsnrs = {}
-    
+
     denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
     for tracer in ensemble.keys():
