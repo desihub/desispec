@@ -979,4 +979,4 @@ if rank == 0:
         os.rename(tmpfile, args.timingfile)
 
 if rank == 0:
-    log.info('All done at {}'.format(time.asctime))
+    log.info('All done at {}'.format(time.asctime()))
