@@ -8,6 +8,7 @@ import glob
 import itertools
 import argparse
 import astropy.io.fits as fits
+import fitsio
 import numpy as np
 import multiprocessing
 
@@ -63,6 +64,7 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
     if 'SPECPROD' in flat:
         flat = flat.replace('SPECPROD', specprod_dir)
     elif 'SPCALIB' in flat:
+        hdr  = fitsio.read_header(cframe_filename)
         flat = flat.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
     else:
         raise ValueError('Failed on flat retrieval for {}.'.format(hdr))
@@ -108,15 +110,16 @@ def write_summary(summary_rows,output_filename) :
 
     #- Distill into exposure summary per-petal
     rows = list()
-    for night, expid, tileid in sorted(set(zip(
+    for night, expid, tileid, exptime in sorted(set(zip(
             cam_summary['NIGHT'],
             cam_summary['EXPID'],
-            cam_summary['TILEID']
+            cam_summary['TILEID'],
+            cam_summary['EXPTIME']
             ))):
         #- TILEID and NIGHT are unique to EXPID, so only filter on EXPID
         ii = (cam_summary['EXPID'] == expid)
 
-        row = dict(NIGHT=night, EXPID=expid, TILEID=tileid)
+        row = dict(NIGHT=night, EXPID=expid, TILEID=tileid, EXPTIME=exptime)
 
         #- Per EXPID TSNR2 is summed over cameras, averaged over petals
         for colname in tsnr2_colnames:
@@ -216,6 +219,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['NIGHT'] = np.int32(night)
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(tileid)
+    entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
     entry['CAMERA'] = camera
     for key in table.colnames:
         if key.startswith('TSNR2_'):
@@ -287,7 +291,7 @@ def main():
 
     summary_rows  = list()
 
-    for night in nights :
+    for count,night in enumerate(nights) :
 
         dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
         night_expids=[]
@@ -313,18 +317,32 @@ def main():
         if args.nproc == 1 :
             for func_arg in func_args :
                 entry = func(**func_arg)
-                summary_rows.append(entry)
+                if entry is not None :
+                    summary_rows.append(entry)
         else :
             log.info("Multiprocessing with {} procs".format(args.nproc))
             pool = multiprocessing.Pool(args.nproc)
             results  =  pool.map(_func, func_args)
             for entry in results :
-                summary_rows.append(entry)
+                if entry is not None :
+                    summary_rows.append(entry)
             pool.close()
             pool.join()
 
+
+        # write result after every other night
+        if len(summary_rows)>0 :
+
+            print("summary_rows = ",summary_rows)
+
+            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+            write_summary(summary_rows,tmpfilename)
+            log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
+
+
     # end of loop on nights
     write_summary(summary_rows,args.outfile)
+
 
 
 
