@@ -9,6 +9,7 @@ import itertools
 import argparse
 import astropy.io.fits as fits
 import numpy as np
+import multiprocessing
 
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat
@@ -42,6 +43,8 @@ def parse(options=None):
                         help = 'Recompute TSNR values')
     parser.add_argument('--alpha_only', action='store_true',
                         help = 'Only compute the alpha for tsnr.')
+    parser.add_argument('--nproc', type = int, default = 1,
+                        help = 'Multiprocessing.')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -141,6 +144,97 @@ def write_summary(summary_rows,output_filename) :
     log.info('Successfully wrote {}'.format(output_filename))
 
 
+def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
+
+    log = get_logger()
+
+    cframe_filename = '{}/exposures/{}/{:08d}/cframe-{}-{:08d}.fits'.format(prod, night, expid, camera, expid)
+    if not os.path.isfile(cframe_filename) :
+        return None
+
+    cframe_hdulist = fits.open(cframe_filename)
+    hdr    = cframe_hdulist[0].header
+    flavor = hdr['FLAVOR']
+    if flavor != 'science':
+        return None
+
+    log.info("Processing {}".format(cframe_filename))
+
+    prog   = hdr['PROGRAM']
+    tileid = hdr['TILEID']
+
+    table = None
+    compute_tsnr = True
+
+    #- check if already computed in cframe
+    if "SCORES" in cframe_hdulist and not recompute:
+        table = Table(cframe_hdulist["SCORES"].data)
+        key = "TSNR2_ELG_"+camera[0].upper()
+        if key in table.colnames :
+            log.debug("Use TSNR values in cframe file")
+            compute_tsnr = False
+
+    #- check if already computed in details file
+    table_output_filename = None
+    if details_dir is not None and not recompute :
+        table_output_filename= f'{details_dir}/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
+        if os.path.isfile(table_output_filename):
+            log.debug(f'Using previously generated {table_output_filename}')
+            table = Table.read(table_output_filename)
+            compute_tsnr = False
+
+    #- compute tsnr
+    if compute_tsnr :
+        tsnr_table = compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir=prod, alpha_only=alpha_only)
+
+        if table is None :
+            table = tsnr_table
+        else :
+            for k in tsnr_table.columns :
+                table[k] = tsnr_table[k]
+
+    fibermap = cframe_hdulist["FIBERMAP"].data
+
+    table['FIBER']       = fibermap['FIBER']
+    table['TARGETID']    = fibermap['TARGETID']
+    table.meta['NIGHT']  = night
+    table.meta['EXPID']  = expid
+    table.meta['TILEID'] = tileid
+    table.meta['CAMERA'] = camera
+    table.meta['EXTNAME'] = 'TSNR2'
+
+    #- Write per-expid per-camera output if requested
+    if compute_tsnr and table_output_filename is not None :
+        Path(os.path.dirname(table_output_filename)).mkdir(parents=True,exist_ok=True)
+        tmpfile = table_output_filename +'.tmp'
+        table.write(tmpfile, format='fits', overwrite=True)
+        os.rename(tmpfile, table_output_filename)
+        log.debug('Successfully wrote {}.'.format(table_output_filename))
+
+    #- Append to summary.
+    entry = dict()
+    entry['NIGHT'] = np.int32(night)
+    entry['EXPID'] = np.int32(expid)
+    entry['TILEID'] = np.int32(tileid)
+    entry['CAMERA'] = camera
+    for key in table.colnames:
+        if key.startswith('TSNR2_'):
+            #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
+            short_key = '_'.join(key.split('_')[0:2])
+            ok=(table[key]!=0)
+            if np.sum(ok)>0 :
+                entry[short_key]=np.median(table[key][ok]).astype(np.float32)
+            else :
+                entry[short_key]=np.float32(0.)
+        if key.startswith('TSNR2_ALPHA'):
+            entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
+
+    cframe_hdulist.close()
+    return entry
+
+def _func(arg) :
+    return func(**arg)
+
 def main():
     log = get_logger()
 
@@ -195,8 +289,6 @@ def main():
 
     for night in nights :
 
-        night_summary_rows  = list()
-
         dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
         night_expids=[]
         for dirname in dirnames :
@@ -211,100 +303,25 @@ def main():
                 continue
         log.info("{} {}".format(night,night_expids))
 
-
+        #pool = multiprocessing.Pool(ncpu)
+        func_args = []
         for expid in night_expids :
-
             for camera in cameras:
-                cframe_filename = '{}/exposures/{}/{:08d}/cframe-{}-{:08d}.fits'.format(args.prod, night, expid, camera, expid)
-                if not os.path.isfile(cframe_filename) :
-                    continue
+                func_args.append({'prod':args.prod,'night':night,'expid':expid,'camera':camera,
+                                  'recompute':args.recompute,'alpha_only':args.alpha_only,'details_dir':args.details_dir})
 
-                cframe_hdulist = fits.open(cframe_filename)
-                hdr    = cframe_hdulist[0].header
-                flavor = hdr['FLAVOR']
-                if flavor != 'science':
-                    continue
-
-                log.info("Processing {}".format(cframe_filename))
-
-                prog   = hdr['PROGRAM']
-                tileid = hdr['TILEID']
-
-                table = None
-                compute_tsnr = True
-
-                #- check if already computed in cframe
-                if "SCORES" in cframe_hdulist and not args.recompute:
-                    table = Table(cframe_hdulist["SCORES"].data)
-                    key = "TSNR2_ELG_"+camera[0].upper()
-                    if key in table.colnames :
-                        log.debug("Use TSNR values in cframe file")
-                        compute_tsnr = False
-
-                #- check if already computed in details file
-                table_output_filename = None
-                if args.details_dir is not None and not args.recompute :
-                    table_output_filename= f'{args.details_dir}/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
-                    if os.path.isfile(table_output_filename):
-                        log.debug(f'Using previously generated {table_output_filename}')
-                        table = Table.read(table_output_filename)
-                        compute_tsnr = False
-
-                #- compute tsnr
-                if compute_tsnr :
-                    tsnr_table = compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir=args.prod, alpha_only=args.alpha_only)
-
-                    if table is None :
-                        table = tsnr_table
-                    else :
-                        for k in tsnr_table.columns :
-                            table[k] = tsnr_table[k]
-
-                fibermap = cframe_hdulist["FIBERMAP"].data
-
-                table['FIBER']       = fibermap['FIBER']
-                table['TARGETID']    = fibermap['TARGETID']
-                table.meta['NIGHT']  = night
-                table.meta['EXPID']  = expid
-                table.meta['TILEID'] = tileid
-                table.meta['CAMERA'] = camera
-                table.meta['EXTNAME'] = 'TSNR2'
-
-                #- Write per-expid per-camera output if requested
-                if compute_tsnr and table_output_filename is not None :
-                    Path(os.path.dirname(table_output_filename)).mkdir(parents=True,exist_ok=True)
-                    tmpfile = table_output_filename +'.tmp'
-                    table.write(tmpfile, format='fits', overwrite=True)
-                    os.rename(tmpfile, table_output_filename)
-                    log.debug('Successfully wrote {}.'.format(table_output_filename))
-
-                #- Append to summary.
-                entry = dict()
-                entry['NIGHT'] = np.int32(night)
-                entry['EXPID'] = np.int32(expid)
-                entry['TILEID'] = np.int32(tileid)
-                entry['CAMERA'] = camera
-                for key in table.colnames:
-                    if key.startswith('TSNR2_'):
-                        #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
-                        short_key = '_'.join(key.split('_')[0:2])
-                        ok=(table[key]!=0)
-                        if np.sum(ok)>0 :
-                            entry[short_key]=np.median(table[key][ok]).astype(np.float32)
-                        else :
-                            entry[short_key]=np.float32(0.)
-                    if key.startswith('TSNR2_ALPHA'):
-                        entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
-
+        if args.nproc == 1 :
+            for func_arg in func_args :
+                entry = func(**func_arg)
                 summary_rows.append(entry)
-                night_summary_rows.append(entry)
-                cframe_hdulist.close()
-
-        # end of loop on exposures for a night
-
-        # write one summary per night
-        #output_filename="{}-night-{}.fits".format(args.outfile.replace(".fits",""),night)
-        #write_summary(night_summary_rows,output_filename)
+        else :
+            log.info("Multiprocessing with {} procs".format(args.nproc))
+            pool = multiprocessing.Pool(args.nproc)
+            results  =  pool.map(_func, func_args)
+            for entry in results :
+                summary_rows.append(entry)
+            pool.close()
+            pool.join()
 
     # end of loop on nights
     write_summary(summary_rows,args.outfile)
