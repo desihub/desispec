@@ -75,12 +75,12 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
 
     results, alpha = calc_tsnr2(frame, fiberflat=fiberflat,
                                 skymodel=skymodel, fluxcalib=fluxcalib, alpha_only=alpha_only)
-    
+
     table=Table()
     for k in results:
         table[k] = results[k].astype(np.float32)
     table["TSNR2_ALPHA_"+camera[0].upper()] = np.repeat(alpha,len(frame.flux))
-    
+
     return table
 
 
@@ -122,8 +122,7 @@ def write_summary(summary_rows,output_filename) :
                 jj = ii & ispetal[petal]
                 if np.any(jj):
                     tsnr2_petal.append(np.sum(cam_summary[colname][jj]))
-
-            row[colname] = np.median(tsnr2_petal)
+            row[colname] = np.mean(tsnr2_petal) # mean of petals (each being median of valid fibers)
 
         rows.append(row)
 
@@ -250,17 +249,17 @@ def main():
                         log.debug(f'Using previously generated {table_output_filename}')
                         table = Table.read(table_output_filename)
                         compute_tsnr = False
-                        
+
                 #- compute tsnr
                 if compute_tsnr :
                     tsnr_table = compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir=args.prod, alpha_only=args.alpha_only)
-                    
+
                     if table is None :
                         table = tsnr_table
                     else :
                         for k in tsnr_table.columns :
                             table[k] = tsnr_table[k]
-                            
+
                 fibermap = cframe_hdulist["FIBERMAP"].data
 
                 table['FIBER']       = fibermap['FIBER']
@@ -289,10 +288,14 @@ def main():
                     if key.startswith('TSNR2_'):
                         #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
                         short_key = '_'.join(key.split('_')[0:2])
-                        entry[short_key]=np.median(table[key]).astype(np.float32)
+                        ok=(table[key]!=0)
+                        if np.sum(ok)>0 :
+                            entry[short_key]=np.median(table[key][ok]).astype(np.float32)
+                        else :
+                            entry[short_key]=np.float32(0.)
                     if key.startswith('TSNR2_ALPHA'):
                         entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
-                        
+
                 summary_rows.append(entry)
                 night_summary_rows.append(entry)
                 cframe_hdulist.close()
