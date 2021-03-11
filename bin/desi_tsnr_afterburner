@@ -11,6 +11,8 @@ import astropy.io.fits as fits
 import fitsio
 import numpy as np
 import multiprocessing
+import yaml
+from   pkg_resources import resource_filename
 
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat
@@ -28,8 +30,10 @@ from   desiutil.depend import getdep
 def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Calculate template S/N ratio for exposures")
-    parser.add_argument('-o','--outfile', type=str, default=None, required=True,
+    parser.add_argument('-o','--outfile', type=str, default=None, required=False,
                         help = 'Output summary file')
+    parser.add_argument('--append', action = 'store_true',
+                        help = 'Append pre-existing output summary file')
     parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
     parser.add_argument('--prod', type = str, default = None, required=False,
@@ -46,6 +50,8 @@ def parse(options=None):
                         help = 'Only compute the alpha for tsnr.')
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
+    parser.add_argument('--efftime-config', type = str, default = None, required=False,
+                        help = 'Use this config file instead of default data/tsnr/tsnr-efftime.yaml')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -89,7 +95,7 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
     return table
 
 
-def write_summary(summary_rows,output_filename) :
+def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table) :
 
     log = get_logger()
 
@@ -135,6 +141,22 @@ def write_summary(summary_rows,output_filename) :
     colnames = list(rows[0].keys())
     exp_summary = Table(rows=rows, names=colnames)
     exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
+
+    if preexisting_tsnr2_expid_table is not None :
+        log.debug("Append to preexisting")
+        exp_summary = vstack([preexisting_tsnr2_expid_table,exp_summary])
+    if preexisting_tsnr2_frame_table is not None :
+        log.debug("Append to preexisting")
+        cam_summary = vstack([preexisting_tsnr2_frame_table,cam_summary])
+
+
+
+    log.info("Add effective times from TSNR2 values")
+    exp_summary['ELG_EFFTIME_DARK']   = efftime_config["TSNR2_ELG_TO_EFFTIME_DARK"]   * exp_summary['TSNR2_ELG']
+    exp_summary['BGS_EFFTIME_BRIGHT'] = efftime_config["TSNR2_BGS_TO_EFFTIME_BRIGHT"] * exp_summary['TSNR2_BGS']
+
+
+
 
     hdus = fits.HDUList()
     hdus.append(fits.convenience.table_to_hdu(exp_summary))
@@ -285,6 +307,20 @@ def main():
     log.info("nights = {}".format(nights))
     if expids is not None : log.info('expids = {}'.format(expids))
 
+    efftime_config_filename = args.efftime_config
+    if efftime_config_filename is None :
+        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
+    with open(efftime_config_filename) as f:
+        efftime_config = yaml.load(f, Loader=yaml.FullLoader)
+    log.info("Eff. time scale factors = {}".format(efftime_config))
+
+    preexisting_tsnr2_expid_table = None
+    preexisting_tsnr2_frame_table = None
+    if args.append and os.path.isfile(args.outfile) :
+        log.info("Will append pre-existing table {}".format(args.outfile))
+        preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
+        preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
+
 
     # starting computing
     # one night at a time
@@ -336,13 +372,15 @@ def main():
             print("summary_rows = ",summary_rows)
 
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-            write_summary(summary_rows,tmpfilename)
+            write_summary(summary_rows,tmpfilename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table)
             log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
 
 
     # end of loop on nights
-    write_summary(summary_rows,args.outfile)
-
+    if len(summary_rows)>0 :
+        write_summary(summary_rows,args.outfile,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table)
+    else :
+        log.error("no valid exposures added")
 
 
 
