@@ -16,7 +16,7 @@ from desiutil.log import get_logger
 
 from desispec.io import read_xytraceset
 from desispec.calibfinder import findcalibfile
-from desispec.maskbits import specmask
+from desispec.maskbits import specmask,fibermask
 
 def compute_crosstalk_kernels(max_fiber_offset=2,fiber_separation_in_pixels=7.3,asymptotic_power_law_index = 2.5):
     """
@@ -152,14 +152,22 @@ def compute_contamination(frame,dfiber,kernel,params,xyset,fiberflat=None,fracti
     if fiberflat is not None :
         medflat=np.median(fiberflat.fiberflat,axis=1)
 
+    # we can use the signal from the following fibers to compute the cross talk
+    # because the only think that is bad about them is their position in the focal plane.
+    would_be_ok = fibermask.STUCKPOSITIONER|fibermask.BADTARGET|fibermask.MISSINGPOSITION|fibermask.BADPOSITION
+    fiberstatus = frame.fibermap["FIBERSTATUS"]
+    fiber_should_be_considered = (fiberstatus==(fiberstatus&would_be_ok))
+
     for index,into_fiber in enumerate(fibers) :
         from_fiber = into_fiber + dfiber
 
         if from_fiber not in fibers : continue
         if from_fiber//nfiber_per_bundle != into_fiber//nfiber_per_bundle : continue # not same bundle
+        if not fiber_should_be_considered[from_fiber] : continue
 
         fraction = xtalk[index]
 
+        # keep fibers with mask=BADFIBER because we already discarded the fiber with bad status
         jj=(frame.ivar[from_fiber]>0)&((frame.mask[from_fiber]==0)|(frame.mask[from_fiber]==specmask.BADFIBER))
 
         from_fiber_central_wave = xyset.wave_vs_y(from_fiber,central_y)
