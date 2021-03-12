@@ -45,7 +45,9 @@ def parse(options=None):
                         help = 'Do NOT set ivar=0 for masked pixels')
     parser.add_argument('--no-tsnr', action='store_true',
                         help = 'Do not compute template SNR')
-
+    parser.add_argument('--alpha_only', action='store_true',
+                        help = 'Only compute alpha of tsnr calc.')
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -130,7 +132,7 @@ def main(args):
 
     if not args.no_tsnr:
         log.info("calculating tsnr")
-        results, alpha = calc_tsnr2(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib)
+        results, alpha = calc_tsnr2(uncalibrated_frame, fiberflat=fiberflat, skymodel=skymodel, fluxcalib=fluxcalib, alpha_only=args.alpha_only)
 
         frame.meta['TSNRALPH'] = alpha
 
