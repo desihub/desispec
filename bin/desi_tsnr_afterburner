@@ -379,6 +379,13 @@ def main():
     # end of loop on nights
     if len(summary_rows)>0 :
         write_summary(summary_rows,args.outfile,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table)
+
+        # remove temporary file if successful
+        if os.path.isfile(args.outfile) :
+            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+            if os.path.isfile(tmpfilename) :
+                log.info("rm temporary file {}".format(tmpfilename))
+                os.unlink(tmpfilename)
     else :
         log.error("no valid exposures added")
 
