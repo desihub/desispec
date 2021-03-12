@@ -169,6 +169,14 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
         return alpha * rdnoise_variance + fiberflat.fiberflat * np.abs(skymodel.flux)
 
 def gen_mask(frame, skymodel, hw=5.):
+    """
+    Generate a mask for the alpha computation, masking out bright sky lines.
+    Args:
+        frame : uncalibrated Frame object for one camera
+        skymodel : SkyModel object
+        hw : (optional) float, half width of mask around sky lines in A
+    Returns an array of same shape as frame, here mask=1 is good, 0 is bad
+    """
     log = get_logger()
 
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
