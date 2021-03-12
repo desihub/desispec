@@ -387,11 +387,13 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
     #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
     file_exptable=get_exposure_table_pathname(night)
-    try: # Try reading tables first. Switch to counting files if not failed. 
+    try: # Try reading tables first. Switch to counting files if not failed.
+        #import pdb;pdb.set_trace()
         d_exp =  ascii.read(file_exptable, data_start=2, delimiter=',')
         d_processing = load_table(file_processing) # commented out temporarily, might used later
         #d_unprocessed = load_table(file_unprocessed)
     except:
+        print('Error reading exptable or processing table, using brutal force method of scaning files.')
         return calculate_one_night(night, use_short_sci=use_short_sci)
     expid_processing=[]
 
@@ -713,6 +715,7 @@ def calculate_one_night(night, use_short_sci=False):
 
                 hlink1 = _hyperlink(relpath_slurm, 'Slurm')
                 hlink2 = _hyperlink(relpath_log, 'Log')
+        print('set to unprocessed because not using exptable')
         status = 'unprocessed'
         output[str(expid)] = [row_color, \
                               expid, \
