@@ -168,6 +168,8 @@ def main(args, comm=None) :
         ncpu = 1
         if rank == 0:
             log.info('disabling multiprocess (forcing ncpu = 1)')
+    else:
+        ncpu = args.ncpu
 
     if ncpu > 1:
         if rank == 0:
