@@ -12,6 +12,7 @@ from desispec.util import parse_fibers
 from desispec.qproc.io import read_qframe
 from desispec.io import read_fibermap,read_frame
 from desispec.interpolation import resample_flux
+from desispec.fluxcalibration import isStdStar
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
@@ -37,6 +38,7 @@ parser.add_argument('--vmax', type = float, default=None, help = 'max value for 
 parser.add_argument('--radial', action = 'store_true', help = 'show radial focal plane view with median flux per fiber (requires option --focal-plane)')
 parser.add_argument('--wmin', type = float, default=None, help = 'min of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
 parser.add_argument('--wmax', type = float, default=None, help = 'max of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
+parser.add_argument('--std-stars', action = 'store_true', help = 'show only the std stars')
 
 
 args   = parser.parse_args()
@@ -51,7 +53,7 @@ if args.focal_plane :
     y=list()
     z=list()
     medflux=None
-    
+
 for filename in args.infile :
 
     print(filename)
@@ -60,7 +62,10 @@ for filename in args.infile :
         fibers = parse_fibers(args.fibers)
     else :
         fibers = None
-    
+
+
+
+
     # frame or qframe ...
     head=fitsio.read_header(filename,"WAVELENGTH")
     naxis=head["NAXIS"]
@@ -68,6 +73,12 @@ for filename in args.infile :
         frame = read_qframe(filename)
     else :
         frame = read_frame(filename)
+
+    if args.std_stars :
+        selection = isStdStar(frame.fibermap)
+        fibers = frame.fibermap["FIBER"][selection]
+        print("showing std stars fibers: {}".format(fibers))
+
 
     if args.focal_plane and frame.fibermap is not None :
         x.append(frame.fibermap["FIBERASSIGN_X"])
@@ -81,35 +92,35 @@ for filename in args.infile :
             e=np.where(frame.wave<=args.wmax)[0][-1]+1
         else :
             e=frame.wave.size-200 # to avoid edge of camera with variable dichroic transmission
-        
+
         vals = np.median(frame.flux[:,b:e],axis=1)*(frame.fibermap["FIBERSTATUS"]==0)
         z.append(vals)
         continue
-    
+
 
     if frame.fibermap is not None :
         fibers_in_frame = frame.fibermap["FIBER"]
     else :
         fibers_in_frame = np.arange(frame.flux.shape[0])
-        
-        
+
+
     if fibers is None :
         fibers = fibers_in_frame
     else :
         selection = np.in1d(fibers_in_frame,fibers)
-        
+
 
         if np.sum(selection)==0 :
             print("empty selection")
             print("fibers are in the range [{},{}] (included)".format(np.min(fibers_in_frame),np.max(fibers_in_frame)))
             sys.exit(12)
-        
+
         frame = frame[selection]
         if len(fibers) > np.sum(selection) :
             print("not all requested fibers are in frame")
             fibers = fibers[np.in1d(fibers,fibers_in_frame)]
             print("will show only {}".format(fibers))
-    
+
     for i,fiber in enumerate(fibers) :
 
         jj=np.where((frame.ivar[i]>0)&(frame.mask[i]==0))[0]
@@ -182,7 +193,7 @@ if args.focal_plane :
         vmax = args.vmax
     else :
         vmax=mz+3*rmsz
-    
+
     plt.scatter(x[ii],y[ii],c=z[ii],vmin=vmin,vmax=vmax,s=9)
     plt.axis("off")
     plt.colorbar()
@@ -191,13 +202,12 @@ if args.focal_plane :
 if args.outfile is not None :
     fig.savefig(args.outfile)
     print("wrote {}".format(args.outfile))
-    
+
 if args.focal_plane and args.radial :
     plt.figure("radial")
     r=np.sqrt(x**2+y**2)
     plt.plot(r[ii],z[ii],".",alpha=0.6)
     plt.ylim([vmin,vmax])
-        
+
 if not args.batch :
     plt.show()
-
