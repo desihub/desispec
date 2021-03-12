@@ -32,8 +32,8 @@ def parse(options=None):
                 description="Calculate template S/N ratio for exposures")
     parser.add_argument('-o','--outfile', type=str, default=None, required=False,
                         help = 'Output summary file')
-    parser.add_argument('--append', action = 'store_true',
-                        help = 'Append pre-existing output summary file')
+    parser.add_argument('--update', action = 'store_true',
+                        help = 'Update pre-existing output summary file (replace or append)')
     parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
     parser.add_argument('--prod', type = str, default = None, required=False,
@@ -108,6 +108,39 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
     return table
 
 
+def update_table(table1,table2,keys) :
+    """ Replace or append rows of table1 with content of table2 indexed by keys
+
+    Args:
+        table1: astropy.table.Table
+        table2: astropy.table.Table
+        keys: list of str
+
+    Returns astropy.table.Table
+    """
+
+    log = get_logger()
+
+    v1=table1[keys[0]]
+    v2=table2[keys[0]]
+    if len(keys)>1 : # I don't know how of a better generic way to create a joined index
+        v1=v1.astype("str")
+        v2=v2.astype("str")
+        for k in keys[1:] :
+            v1=[i+j for i,j in zip(v1,table1[k].astype(str))]
+            v2=[i+j for i,j in zip(v2,table2[k].astype(str))]
+
+    replace = np.in1d(v1,v2)
+    keep = ~replace
+
+    log.info("keep {} entries, replace {}, add {}".format(np.sum(keep),np.sum(replace),len(table2)-np.sum(replace)))
+
+    if np.sum(keep)>0 :
+        return vstack([table1[keep],table2])
+    else :
+        return table2
+
+
 def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table) :
     """ Writes summar file.
 
@@ -166,13 +199,11 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
 
     if preexisting_tsnr2_expid_table is not None :
-        log.debug("Append to preexisting")
-        exp_summary = vstack([preexisting_tsnr2_expid_table,exp_summary])
+        log.debug("Update to preexisting")
+        exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
     if preexisting_tsnr2_frame_table is not None :
-        log.debug("Append to preexisting")
-        cam_summary = vstack([preexisting_tsnr2_frame_table,cam_summary])
-
-
+        log.debug("Update to preexisting")
+        cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
 
     log.info("Add effective times from TSNR2 values")
     exp_summary['ELG_EFFTIME_DARK']   = efftime_config["TSNR2_ELG_TO_EFFTIME_DARK"]   * exp_summary['TSNR2_ELG']
@@ -404,9 +435,6 @@ def main():
 
         # write result after every other night
         if len(summary_rows)>0 :
-
-            print("summary_rows = ",summary_rows)
-
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
             write_summary(summary_rows,tmpfilename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table)
             log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
