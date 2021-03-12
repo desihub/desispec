@@ -176,11 +176,13 @@ def main(args, comm=None) :
         if rank == 0:
             log.info('multiprocess parallelizing with {} processes'.format(ncpu))
 
-    if args.ignoregpu and desispec.fluxcalibration.use_gpu:
-        desispec.fluxcalibration.use_gpu = False
+    if args.ignoregpu and desispec.fluxcalibration.is_gpu_available:
+        # Nothing to do here, GPU is ignored by default
         if rank == 0:
             log.info('ignoring GPU')
-    elif desispec.fluxcalibration.use_gpu:
+    elif desispec.fluxcalibration.is_gpu_available:
+        # Opt-in to GPU usage
+        desispec.fluxcalibration.use_gpu = True
         if rank == 0:
             log.info('using GPU')
     else:

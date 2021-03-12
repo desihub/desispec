@@ -31,7 +31,9 @@ try:
     _cupy_available = cupy.is_available()
 except ImportError:
     _cupy_available = False
-use_gpu = _cupy_available
+is_gpu_available = _cupy_available
+# GPU is ignored by default
+use_gpu = False
 
 try:
     from scipy import constants
