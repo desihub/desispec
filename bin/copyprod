@@ -9,6 +9,7 @@ March 2021
 
 import os, sys, glob
 import shutil
+from collections import Counter
 import optparse
 
 import numpy as np
@@ -23,6 +24,8 @@ parser.add_option("--fullcopy", action="store_true",
         help="Copy files instead of linking")
 parser.add_option("--abspath", action="store_true",
         help="Link to absolute path instead of relative path")
+parser.add_option("--filter-exptables", action="store_true",
+        help="Filter exposure_tables to ignore entries not in input explist")
 
 opts, args = parser.parse_args()
 inroot, outroot = args
@@ -100,39 +103,51 @@ for night in np.unique(explist['NIGHT']):
     yearmm = night//100
     infile = f'{inroot}/exposure_tables/{yearmm}/exposure_table_{night}.csv'
     outfile = f'{outroot}/exposure_tables/{yearmm}/exposure_table_{night}.csv'
-    exptab = load_table(infile, tabletype='exptable')
-    ignore = np.in1d(exptab['EXPID'], explist['EXPID'], invert=True)
-    exptab['LASTSTEP'][ignore] = 'ignore'
     os.makedirs(os.path.dirname(outfile), exist_ok=True)
-    write_table(exptab, outfile, tabletype='exptable')
+    if opts.filter_exptables:
+        exptab = load_table(infile, tabletype='exptable')
+        ignore = np.in1d(exptab['EXPID'], explist['EXPID'], invert=True)
+        if np.any(ignore):
+            msg = f'Night {night} ignoring '
+            msg += ', '.join([f'{n} {obstype}' for obstype, n in Counter(exptab['OBSTYPE'][ignore]).items()])
+            msg += ' exposures not included in explist'
+            log.warning(msg)
 
-#- processing tables: trim to requested exposures
-for night in np.unique(explist['NIGHT']):
-    night_expids = explist['EXPID'][explist['NIGHT'] == night]
-    tmp = glob.glob(f'{inroot}/processing_tables/processing_table_*-{night}.csv')
-    if len(tmp) == 1:
-        infile = tmp[0]
-    elif len(tmp) == 0:
-        log.error(f'Unable to find processing table for {night}')
-        continue
-    elif len(tmp) == 0:
-        log.error(f'Multiple processing tables for {night} ?!?')
-        continue
+        exptab['LASTSTEP'][ignore] = 'ignore'
+        write_table(exptab, outfile, tabletype='exptable')
+    else:
+        log.info(f'Night {night} copying exposure tables unchanged')
+        shutil.copy2(infile, outfile)
 
-    outfile = '{}/processing_tables/{}'.format(
-            outroot, os.path.basename(infile))
-    proctab = load_table(infile, tabletype='proctable')
 
-    #- Convert string "expid1|expid2" entries into keep or not
-    keep = np.zeros(len(proctab), dtype=bool)
-    for i, expids in enumerate(proctab['EXPID']):
-        if np.any(np.in1d(expids, night_expids)):
-            keep[i] = True
-
-    proctab = proctab[keep]
-
-    os.makedirs(os.path.dirname(outfile), exist_ok=True)
-    write_table(proctab, outfile, tabletype='proctable')
+#- processing tables: trim to requested exposures.
+#- Disabled for now while we figure out exactly what we want.
+# for night in np.unique(explist['NIGHT']):
+#     night_expids = explist['EXPID'][explist['NIGHT'] == night]
+#     tmp = glob.glob(f'{inroot}/processing_tables/processing_table_*-{night}.csv')
+#     if len(tmp) == 1:
+#         infile = tmp[0]
+#     elif len(tmp) == 0:
+#         log.error(f'Unable to find processing table for {night}')
+#         continue
+#     elif len(tmp) == 0:
+#         log.error(f'Multiple processing tables for {night} ?!?')
+#         continue
+# 
+#     outfile = '{}/processing_tables/{}'.format(
+#             outroot, os.path.basename(infile))
+#     proctab = load_table(infile, tabletype='proctable')
+# 
+#     #- Convert string "expid1|expid2" entries into keep or not
+#     keep = np.zeros(len(proctab), dtype=bool)
+#     for i, expids in enumerate(proctab['EXPID']):
+#         if np.any(np.in1d(expids, night_expids)):
+#             keep[i] = True
+# 
+#     proctab = proctab[keep]
+# 
+#     os.makedirs(os.path.dirname(outfile), exist_ok=True)
+#     write_table(proctab, outfile, tabletype='proctable')
 
 log.info(f'Production copied into {outroot}')
 
