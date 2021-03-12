@@ -62,6 +62,19 @@ def parse(options=None):
 
 
 def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir, alpha_only=False) :
+    """
+    Computes TSNR values
+    Args:
+       cframe_filename: str, cframe file path
+       cframe_hdulist: astropy.fits.HDUlist object
+       night: int
+       expid: int
+       camera: str
+       specprod_dir: str, production directory
+       alpha_only: bool, set to True to only recompute alpha
+
+    Returns: astropy.table.Table obkect with TSNR values
+    """
 
     calib  = findfile('fluxcalib', night=night, expid=expid,
                       camera=camera, specprod_dir=specprod_dir)
@@ -96,7 +109,17 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
 
 
 def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table) :
+    """ Writes summar file.
 
+    Args:
+      summary_rows: list of dictionnaries
+      output_filename: str, output filename
+      efftime_config: dictionnary with scaling factors from TSNR2 to effective exp. time
+      preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
+      preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
+
+    Returns nothing
+    """
     log = get_logger()
 
     #- Create camera summary table; specify names to preserve column order
@@ -170,7 +193,20 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
 
 
 def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
+    """
+    Compute TSNR for this night exposure camera (code in separate function for multiprocessing)
 
+    Args:
+        prod: str, production dir name
+        night: int, night
+        expid: int, expid
+        camera: str, camera
+        recompute: bool, recompute tsnr if true even if present in frame
+        alpha_only: bool, only recompute alpha
+        details_dir: str or None, save details per frame in this directory if not None
+
+    Returns a dictionnary with NIGHT,EXPID,TILEID,EXPTIME,CAMERA, and the TSNR2 values for this camera
+    """
     log = get_logger()
 
     cframe_filename = '{}/exposures/{}/{:08d}/cframe-{}-{:08d}.fits'.format(prod, night, expid, camera, expid)
