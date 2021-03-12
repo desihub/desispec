@@ -383,7 +383,7 @@ def main():
 
     preexisting_tsnr2_expid_table = None
     preexisting_tsnr2_frame_table = None
-    if args.append and os.path.isfile(args.outfile) :
+    if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
         preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
         preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
