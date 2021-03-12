@@ -181,14 +181,12 @@ def compute_contamination(frame,dfiber,kernel,params,xyset,fiberflat=None,fracti
         if fiberflat is not None :
             tmp *= medflat[from_fiber] # apply median transmission of the contaminating fiber, i.e. undo the fiberflat correction
 
-        tmp_ivar=np.interp(frame.wave+from_fiber_central_wave-into_fiber_central_wave,frame.wave[jj],frame.ivar[from_fiber,jj],left=0,right=0)
-        tmp_var=1./(tmp_ivar+(tmp_ivar==0))
         convolved_flux=fftconvolve(tmp,kernel,mode="same")
-        convolved_var=fftconvolve(tmp_var,kernel**2,mode="same") # valid when assuming white noise (which is supposed to be the case)
         contamination[into_fiber] = fraction * convolved_flux
 
-        # here we make the bad approximation that the noise from the contaminant is uncorrelated
-        contamination_var[into_fiber] = (fractional_error*contamination[into_fiber])**2 + fraction**2 * convolved_var
+        # we cannot easily use the variance of the contaminant spectrum
+        # we consider only a fractional error to reflect systematic errors in the fiber cross-talk correction
+        contamination_var[into_fiber] = (fractional_error*contamination[into_fiber])**2
 
     if fiberflat is not None :
         # apply the fiberflat correction of the contaminated fibers
