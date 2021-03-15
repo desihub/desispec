@@ -1,93 +1,27 @@
 #!/usr/bin/env python
 
 
-import sys,string
-import astropy.io.fits as pyfits
 import argparse
-import numpy as np
-from pkg_resources import resource_exists, resource_filename
-
-from desiutil.log import get_logger
-from desispec.preproc import _parse_sec_keyword, _overscan
-from desispec.calibfinder import CalibFinder
-
-
+from desispec.ccdcalib import compute_bias_file
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute a master bias from a set of raw data bias images",
 epilog='''This is simply a median of the input raw images.'''
 )
-parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
+parser.add_argument('-i','--image', type = str, default = None, nargs="*",
                     help = 'path of image fits files')
-parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+parser.add_argument('-o','--outfile', type=str, default = None, required = True,
                     help = 'output median image filename')
 parser.add_argument('--camera',type = str, required = True,
                     help = 'camera name BX,RX,ZX with X from 0 to 9')
-
+parser.add_argument('--explistfile', type=str, default=None, required=False,
+                    help = 'Read NIGHT EXPID from file (one per line)')
 
 args        = parser.parse_args()
-log = get_logger()
 
-log.info("read images ...")
-images=[]
-shape=None
-for filename in args.image :
-    log.info("reading %s"%filename)
-    fitsfile=pyfits.open(filename)
+if (args.image is not None) and (args.explistfile is not None):
+    print('ERROR: specify --image or --explistfile but not both')
+    sys.exit(1)
 
-    primary_header=fitsfile[0].header
-    image_header=fitsfile[args.camera].header
-
-    # subtract overscan region
-    cfinder=CalibFinder([image_header,primary_header])
-    
-    image=fitsfile[args.camera].data.astype("float64")
-    
-    if cfinder and cfinder.haskey("AMPLIFIERS") :
-        amp_ids=list(cfinder.value("AMPLIFIERS"))
-    else :
-        amp_ids=['A','B','C','D']
-    
-    n0=image.shape[0]//2
-    n1=image.shape[1]//2
-
-    for a,amp in enumerate(amp_ids) :
-        ii = _parse_sec_keyword(image_header['BIASSEC'+amp])
-        overscan_image = image[ii].copy()
-        overscan,rdnoise = _overscan(overscan_image)
-        log.info("amp {} overscan = {}".format(amp,overscan))
-        if ii[0].start < n0 and ii[1].start < n1 :
-            image[:n0,:n1] -= overscan
-        elif ii[0].start < n0 and ii[1].start >= n1 :
-            image[:n0,n1:] -= overscan
-        elif ii[0].start >= n0 and ii[1].start < n1 :
-            image[n0:,:n1] -= overscan
-        elif ii[0].start >= n0 and ii[1].start >= n1 :
-            image[n0:,n1:] -= overscan
-
-
-    if shape is None :
-        shape=image.shape
-    images.append(image.ravel())
-
-    fitsfile.close()
-
-images=np.array(images)
-print(images.shape)
-
-# compute a mask
-log.info("compute median image ...")
-medimage=np.median(images,axis=0) #.reshape(shape)
-log.info("compute mask ...")
-ares=np.abs(images-medimage)
-nsig=4.
-mask=(ares<nsig*1.4826*np.median(ares,axis=0))
-# average (not median)
-log.info("compute average ...")
-meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
-meanimage=meanimage.reshape(shape)
-
-log.info("write result in %s ..."%args.outfile)
-pyfits.writeto(args.outfile,meanimage,overwrite="True")
-
-log.info("done")
+compute_bias_file(args.image, args.outfile, args.camera,
+                  explistfile=args.explistfile)

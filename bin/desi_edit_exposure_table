@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+## Import some helper functions, you can see their definitions by uncomenting the bash shell command
+from desispec.scripts.editexptable import edit_exposure_table
+
+
+def get_parser():
+    """
+    Creates an arguments parser for the edit_exposure_table script
+    """
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser.add_argument("-n", "--night", type=str, default='none', help="Night that the exposures took place.")
+    parser.add_argument("-e", "--exp-str", type=str,  help="Exposures string. It can be a single exposure, comma "+
+                                                            "separated list. Also understands ranges using '-','..', "+
+                                                            "or ':' (even within a larger list). Ranges are *inclusive*.")
+    parser.add_argument("-c", "--colname", type=str, help="Name of the column you want to edit.")
+    parser.add_argument("-v", "--value", type=str, help="The value you want to place in the given 'colname' column. Can "+
+                                                    "only be a single string, float, int, etc. Per script call.")
+    parser.add_argument("-p", "--tablepath", type=str, default='none', help="Path to the table. If not specified, it "+
+                                                                            "will look in default location.")
+    parser.add_argument("--append-string", action="store_true", help="Append the given value to existing string")
+    parser.add_argument("--overwrite-value", action="store_true", help="Change column value even if value isn't the "+
+                                                                       "default value.")
+    parser.add_argument("--read-user-version", action="store_true", help="Read user version of the exposure tables "+
+                                               "if it exists. This is for debug tweaking a table to suitability "+
+                                               "before overwriting the original. Appends username to filename.")
+    parser.add_argument("--write-user-version", action="store_true", help="Write user version of the exposure tables "+
+                                               "if it exists. This is for debug tweaking a table to suitability "+
+                                               "before overwriting the original. Appends username to filename.")
+    parser.add_argument("--use-spec-prod", type=str, default='true', help="Look for exposure table under SPECPROD location "+
+                                                                     "rather than the repo location.")
+    parser.add_argument("--overwrite-file", type=str, default='true', help="overwrite existing exposure tables")
+    #parser.add_argument("-j", "--joinsymb", type=str, help="The join symbol used for lists isntead of a comma.")
+
+    return parser
+
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+    ## Set tablepath and night to None if not given
+    if args.tablepath.lower() == 'none':
+        args.tablepath = None
+    if args.night.lower() == 'none':
+        args.night = None
+    ## Convert default-true flags to bools
+    args.use_spec_prod = (args.use_spec_prod.lower() == 'true')
+    args.overwrite_file = (args.overwrite_file.lower() == 'true')
+    edit_exposure_table(**args.__dict__)

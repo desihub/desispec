@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import sys
 import os
 import re
+import time
 import argparse
 import numpy as np
 
@@ -16,51 +17,6 @@ from ctypes.util import find_library
 from astropy.io import fits
 
 from desiutil.log import get_logger
-
-modext = "so"
-if sys.platform == "darwin":
-    modext = "bundle"
-
-specexdata = None
-
-libspecexname = "libspecex.{}".format(modext)
-if "LIBSPECEX_DIR" in os.environ:
-    libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"],
-        "libspecex.{}".format(modext))
-    specexdata = os.path.join(
-        os.path.dirname(os.environ["LIBSPECEX_DIR"]), "data"
-    )
-elif "SPECEX" in os.environ:
-    specexdata = os.path.join(os.environ["SPECEX"], "data")
-
-libspecex = None
-try:
-    libspecex = ct.CDLL(libspecexname)
-except:
-    path = find_library("specex")
-    if path is not None:
-        libspecex = ct.CDLL(path)
-        specexdata = os.path.join(
-            os.path.dirname(os.path.dirname(path)), "data"
-        )
-
-if libspecex is not None:
-    libspecex.cspecex_desi_psf_fit.restype = ct.c_int
-    libspecex.cspecex_desi_psf_fit.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-    libspecex.cspecex_psf_merge.restype = ct.c_int
-    libspecex.cspecex_psf_merge.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-    libspecex.cspecex_spot_merge.restype = ct.c_int
-    libspecex.cspecex_spot_merge.argtypes = [
-        ct.c_int,
-        ct.POINTER(ct.POINTER(ct.c_char))
-    ]
-
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
@@ -82,6 +38,10 @@ def parse(options=None):
                         "specex_desi_psf_fit")
     parser.add_argument("--debug", action = 'store_true',
                         help="debug mode")
+    parser.add_argument("--broken-fibers", type=str, required=False, default=None,
+                        help="comma separated list of broken fibers")
+    parser.add_argument("--disable-merge", action = 'store_true',
+                        help="disable merging fiber bundles")
 
     args = None
     if options is None:
@@ -95,14 +55,37 @@ def main(args, comm=None):
 
     log = get_logger()
 
+    #- only import when running, to avoid requiring specex install for import
+    from specex.specex import run_specex
+
     imgfile = args.input_image
     outfile = args.output_psf
+        
+    nproc = 1
+    rank = 0
+    if comm is not None:
+        nproc = comm.size
+        rank = comm.rank
+
+    hdr=None
+    if rank == 0 :
+        hdr = fits.getheader(imgfile)
+    if comm is not None:
+        hdr = comm.bcast(hdr, root=0)
+
+    #- Locate line list in $SPECEXDATA or specex/data
+    if 'SPECEXDATA' in os.environ:
+        specexdata = os.environ['SPECEXDATA']
+    else:
+        from pkg_resources import resource_filename
+        specexdata = resource_filename('specex', 'data')
+
+    lamp_lines_file = os.path.join(specexdata,'specex_linelist_desi.txt')
 
     if args.input_psf is not None:
         inpsffile = args.input_psf
     else:
         from desispec.calibfinder import findcalibfile
-        hdr = fits.getheader(imgfile)
         inpsffile = findcalibfile([hdr,], 'PSF')
 
     optarray = []
@@ -137,20 +120,14 @@ def main(args, comm=None):
 
     # Now we assign bundles to processes
 
-    nproc = 1
-    rank = 0
-    if comm is not None:
-        nproc = comm.size
-        rank = comm.rank
 
     mynbundle = int(nbundle / nproc)
-    myfirstbundle = 0
     leftover = nbundle % nproc
     if rank < leftover:
         mynbundle += 1
-        myfirstbundle = rank * mynbundle
+        myfirstbundle = bundles[0] + rank * mynbundle
     else:
-        myfirstbundle = ((mynbundle + 1) * leftover) + \
+        myfirstbundle = bundles[0] + ((mynbundle + 1) * leftover) + \
             (mynbundle * (rank - leftover))
 
     if rank == 0:
@@ -162,6 +139,8 @@ def main(args, comm=None):
         log.info("specex:  bundlesize = {}".format(bundlesize))
         log.info("specex:  specmin = {}".format(specmin))
         log.info("specex:  specmax = {}".format(specmax))
+        if args.broken_fibers :
+            log.info("specex:  broken fibers = {}".format(args.broken_fibers))
 
     # get the root output file
 
@@ -173,8 +152,12 @@ def main(args, comm=None):
 
     outdir = os.path.dirname(outroot)
     if rank == 0:
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
+        if outdir != "" :
+            if not os.path.isdir(outdir):
+                os.makedirs(outdir)
+
+    cam = hdr["camera"].lower().strip()
+    band = cam[0]
 
     failcount = 0
 
@@ -185,10 +168,18 @@ def main(args, comm=None):
         com.extend(['-a', imgfile])
         com.extend(['--in-psf', inpsffile])
         com.extend(['--out-psf', outbundlefits])
+        com.extend(['--lamp-lines', lamp_lines_file])
         com.extend(['--first-bundle', "{}".format(b)])
         com.extend(['--last-bundle', "{}".format(b)])
         com.extend(['--first-fiber', "{}".format(bspecmin[b])])
         com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
+        if band == "z" :
+            com.extend(['--legendre-deg-wave', "{}".format(3)])
+            com.extend(['--fit-continuum'])
+        else :
+            com.extend(['--legendre-deg-wave', "{}".format(1)])
+        if args.broken_fibers :
+            com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
         if args.debug :
             com.extend(['--debug'])
 
@@ -196,14 +187,7 @@ def main(args, comm=None):
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
-        argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) \
-            for i in range(argc)]
-        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in \
-            map(ct.addressof, arg_buffers) ]
-        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
-
-        retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
+        retval = run_specex(com)
 
         if retval != 0:
             comstr = " ".join(com)
@@ -224,13 +208,25 @@ def main(args, comm=None):
 
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
-        merge_psf(inputs,outfits)
+        if args.disable_merge :
+            log.info("don't merge")
+        else :
+            #- Empirically it appears that files written by one rank sometimes
+            #- aren't fully buffer-flushed and closed before getting here,
+            #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
+            log.info('5 sec pause before merging')
+            sys.stdout.flush()
+            time.sleep(5.)
 
-        if failcount == 0:
-            # only remove the per-bundle files if the merge was good
-            for f in inputs :
-                if os.path.isfile(f):
-                    os.remove(f)
+            merge_psf(inputs,outfits)
+
+            log.info('done merging')
+
+            if failcount == 0:
+                # only remove the per-bundle files if the merge was good
+                for f in inputs :
+                    if os.path.isfile(f):
+                        os.remove(f)
 
     if comm is not None:
         failcount = comm.bcast(failcount, root=0)
@@ -243,6 +239,9 @@ def main(args, comm=None):
 
 
 def compatible(head1, head2) :
+    """
+    Return bool for whether two FITS headers are compatible for merging PSFs
+    """
     log = get_logger()
     for k in ["PSFTYPE", "NPIX_X", "NPIX_Y", "HSIZEX", "HSIZEY", "FIBERMIN",
         "FIBERMAX", "NPARAMS", "LEGDEG", "GHDEGX", "GHDEGY"] :
@@ -253,6 +252,13 @@ def compatible(head1, head2) :
 
 
 def merge_psf(inputs, output):
+    """
+    Merge individual per-bundle PSF files into full PSF
+
+    Args:
+        inputs: list of input PSF filenames
+        output: output filename
+    """
 
     log = get_logger()
 
@@ -307,13 +313,22 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
-    psf_hdulist.writeto(output,overwrite=True)
+    tmpfile = output+'.tmp'
+    psf_hdulist.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, output)
     log.info("Wrote PSF {}".format(output))
 
     return
 
 
 def mean_psf(inputs, output):
+    """
+    Average multiple input PSF files into an output PSF file
+
+    Args:
+        inputs: list of input PSF files
+        output: output filename
+    """
 
     log = get_logger()
 
@@ -331,7 +346,9 @@ def mean_psf(inputs, output):
     bundle_rchi2=[]
     nbundles=None
     nfibers_per_bundle=None
+
     for input in inputs :
+        log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
             log.warning("missing {}".format(input))
             continue
@@ -371,10 +388,10 @@ def mean_psf(inputs, output):
 
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
-    log.info("bundle_rchi2= {}".format(str(bundle_rchi2)))
+    log.debug("bundle_rchi2= {}".format(str(bundle_rchi2)))
     median_bundle_rchi2 = np.median(bundle_rchi2)
     rchi2_threshold=median_bundle_rchi2+1.
-    log.info("median chi2={} threshold={}".format(median_bundle_rchi2,
+    log.debug("median chi2={} threshold={}".format(median_bundle_rchi2,
         rchi2_threshold))
 
     WAVEMIN=refhead["WAVEMIN"]
@@ -389,9 +406,6 @@ def mean_psf(inputs, output):
     bundles=np.unique(bundle_of_fibers)
     for b in bundles :
         fibers_in_bundle[b]=np.where(bundle_of_fibers==b)[0]
-
-    for b in bundles :
-        print("{} : {}".format(b,fibers_in_bundle[b]))
 
     for entry in range(tables[0].size) :
         PARAM=tables[0][entry]["PARAM"]
@@ -433,19 +447,29 @@ def mean_psf(inputs, output):
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
 
-            if ok.size>=2 : # use median
-                log.info("bundle #{} : use median".format(bundle))
+            # We finally resorted to use a mean instead of a median here for two reasons.
+            # First, there is already a vetting of PSF bundles with good chi2 above
+            # that protects us from bad fits (we only expect outliers because of bad fits because of cosmic rays,
+            # not a glitch in hardware). Second, some of the PSF parameters have large correlations,
+            # which mean that two pairs of parameter values, like (p_a_i,p_b_i) and (p_a_j,p_b_j) (with a,b param
+            # indexes and i,j exposure indices) may give similar PSFs despite large noise in individual parameters
+            # but a median could decide to select a pair like (p_a_i,p_b_j) that could lead to a PSF inconsistent
+            # with data. Using a mean instead of a median protects us from this situation.
+
+            if ok.size>=2 : # use mean
+                log.debug("bundle #{} : use mean".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
-                    output_coeff[f]=np.median(coeff[ok,f],axis=0)
-                output_rchi2[bundle]=np.median(bundle_rchi2[ok,bundle])
+                    output_coeff[f]=np.mean(coeff[ok,f],axis=0)
+                output_rchi2[bundle]=np.mean(bundle_rchi2[ok,bundle])
+
             elif ok.size==1 : # copy
-                log.info("bundle #{} : use only one psf ".format(bundle))
+                log.debug("bundle #{} : use only one psf ".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[ok[0],f]
                 output_rchi2[bundle]=bundle_rchi2[ok[0],bundle]
 
             else : # we have a problem here, take the smallest rchi2
-                log.info("bundle #{} : take smallest chi2 ".format(bundle))
+                log.debug("bundle #{} : take smallest chi2 ".format(bundle))
                 i=np.argmin(bundle_rchi2[:,bundle])
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[i,f]
@@ -478,14 +502,21 @@ def mean_psf(inputs, output):
                     val = legval(iu,ytrace[f])
                     ytrace[f] = legfit(ou,val,deg=npar-1)
 
-            hdulist["xtrace"].data = np.median(np.array(xtrace),axis=0)
-            hdulist["ytrace"].data = np.median(np.array(ytrace),axis=0)
+            hdulist["xtrace"].data = np.mean(xtrace,axis=0)
+            hdulist["ytrace"].data = np.mean(ytrace,axis=0)
 
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
 
+    for hdu in ["XTRACE","YTRACE","PSF"] :
+        if hdu in hdulist :
+            for input in inputs :
+                hdulist[hdu].header["comment"] = "inc {}".format(input)
+
     # save output PSF
-    hdulist.writeto(output, overwrite=True)
+    tmpfile = output+'.tmp'
+    hdulist.writeto(tmpfile, overwrite=True)
+    os.rename(tmpfile, output)
     log.info("wrote {}".format(output))
 
     return

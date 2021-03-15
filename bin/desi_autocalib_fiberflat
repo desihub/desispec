@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script computes the fiber flat field correction from a DESI continuum lamp frame.
+"""
+
+import desispec.scripts.autocalib_fiberflat as autocalib_fiberflat
+
+
+if __name__ == '__main__':
+    args = autocalib_fiberflat.parse()
+    autocalib_fiberflat.main(args)

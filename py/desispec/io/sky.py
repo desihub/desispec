@@ -6,8 +6,11 @@ IO routines for sky.
 """
 from __future__ import absolute_import, division
 import os
+import time
 from astropy.io import fits
+from desiutil.log import get_logger
 
+from . import iotime
 
 def write_sky(outfile, skymodel, header=None):
     """Write sky model.
@@ -25,6 +28,7 @@ def write_sky(outfile, skymodel, header=None):
     from desiutil.depend import add_dependencies
     from .util import fitsheader, makepath
 
+    log = get_logger()
     outfile = makepath(outfile, 'sky')
 
     #- Convert header to fits.Header if needed
@@ -45,12 +49,16 @@ def write_sky(outfile, skymodel, header=None):
     hx.append( fits.ImageHDU(skymodel.wave.astype('f4'), name='WAVELENGTH') )
     if skymodel.stat_ivar is not None :
        hx.append( fits.ImageHDU(skymodel.stat_ivar.astype('f4'), name='STATIVAR') )
-
+    if skymodel.throughput_corrections is not None:
+        hx.append( fits.ImageHDU(skymodel.throughput_corrections.astype('f4'), name='THRPUTCORR') )
 
     hx[-1].header['BUNIT'] = 'Angstrom'
 
+    t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -63,11 +71,13 @@ def read_sky(filename) :
     from .meta import findfile
     from .util import native_endian
     from ..sky import SkyModel
+    log = get_logger()
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('sky', night, expid, camera)
 
+    t0 = time.time()
     fx = fits.open(filename, memmap=False, uint=True)
 
     hdr = fx[0].header
@@ -79,8 +89,15 @@ def read_sky(filename) :
         stat_ivar = native_endian(fx["STATIVAR"].data.astype('f8'))
     else :
         stat_ivar = None
+    if "THRPUTCORR" in fx :
+        throughput_corrections = native_endian(fx["THRPUTCORR"].data.astype('f8'))
+    else :
+        throughput_corrections = None
     fx.close()
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
-    skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr,stat_ivar=stat_ivar)
+    skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr,stat_ivar=stat_ivar,\
+                        throughput_corrections=throughput_corrections)
 
     return skymodel

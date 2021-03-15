@@ -83,7 +83,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
                 print("   ", x)
 
     #- run command
-    if isinstance(cmd, collections.Callable):
+    if isinstance(cmd, collections.abc.Callable):
         if args is None:
             return cmd()
         else:
@@ -96,7 +96,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
 
     log.info(time.asctime())
     if err > 0:
-        log.critical("FAILED {}".format(cmd))
+        log.critical("FAILED err={} {}".format(err, cmd))
         return err
 
     #- Check for outputs
@@ -106,10 +106,45 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             log.error("missing output "+x)
             err = 2
     if err > 0:
+        log.critical("FAILED outputs {}".format(cmd))
         return err
 
     log.info("SUCCESS: {}".format(cmd))
     return 0
+
+def mpi_count_failures(num_cmd, num_err, comm=None):
+    """
+    Sum num_cmd and num_err across MPI ranks
+
+    Args:
+        num_cmd (int): number of commands run
+        num_err (int): number of failures
+
+    Options:
+        comm: mpi4py communicator
+
+    Returns:
+        sum(num_cmd), sum(num_err) summed across all MPI ranks
+
+    If ``comm`` is None, returns input num_cmd, num_err
+    """
+    if comm is None:
+        return num_cmd, num_err
+
+    rank = comm.rank
+    size = comm.size
+
+    if num_cmd is None:
+        num_cmd = 0
+    if num_err is None:
+        num_err = 0
+
+    num_cmd_all = np.sum(comm.gather(num_cmd, root=0))
+    num_err_all = np.sum(comm.gather(num_err, root=0))
+
+    num_cmd_all = comm.bcast(num_cmd_all, root=0)
+    num_err_all = comm.bcast(num_err_all, root=0)
+    return num_cmd_all, num_err_all
 
 
 def sprun(com, capture=False, input=None):
@@ -299,6 +334,51 @@ def ymd2night(year, month, day):
     """
     return "{:04d}{:02d}{:02d}".format(year, month, day)
 
+def mjd2night(mjd):
+    """
+    Convert MJD to YEARMMDD int night of KPNO sunset
+    """
+    from astropy.time import Time
+    night = int(Time(mjd - 7/24. - 12/24., format='mjd').strftime('%Y%m%d'))
+    return night
+
+def dateobs2night(dateobs):
+    """
+    Convert DATE-OBS ISO8601 UTC string to YEARMMDD int night of KPNO sunset
+    """
+    # use astropy to flexibily handle multiple valid ISO8601 variants
+    from astropy.time import Time
+    try:
+        mjd = Time(dateobs).mjd
+    except ValueError:
+        #- only use optional dependency dateutil if needed;
+        #- it can handle some ISO8601 timezone variants that astropy can't
+        from dateutil.parser import isoparser
+        mjd = Time(isoparser().isoparse(dateobs))
+
+    return mjd2night(mjd)
+
+def header2night(header):
+    """
+    Return YEARMMDD night from FITS header, handling common problems
+    """
+    try:
+        return int(header['NIGHT'])
+    except (KeyError, ValueError, TypeError): # i.e. missing, not int, or None
+        pass
+
+    try:
+        return dateobs2night(header['DATE-OBS'])
+    except (KeyError, ValueError, TypeError): # i.e. missing, not ISO, or None
+        pass
+
+    try:
+        return mjd2night(header['MJD-OBS'])
+    except (KeyError, ValueError, TypeError): # i.e. missing, not float, or None
+        pass
+
+    raise ValueError('Unable to derive YEARMMDD from header NIGHT,DATE-OBS,MJD')
+
 def combine_ivar(ivar1, ivar2):
     """
     Returns the combined inverse variance of two inputs, making sure not to
@@ -358,3 +438,50 @@ def healpix_degrade_fixed(nside, pixel):
     subnside = 2**subfactor
     subpixel = pixel >> (factor - subfactor)
     return (subnside, subpixel)
+
+
+def parse_fibers(fiber_string) :
+    """
+    Short func that parses a string containing a comma separated list of 
+    integers, which can include ":" or ".." or "-" labeled ranges
+
+    Args:
+        fiber_string (str) : list of integers or integer ranges
+
+    Returns (array 1-D):
+        1D numpy array listing all of the integers given in the list,
+        including enumerations of ranges given.
+
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    """
+    if fiber_string is None :
+        return np.array([])
+    else:
+        fiber_string = str(fiber_string)
+
+    if len(fiber_string.strip(' \t'))==0:
+        return np.array([])
+
+    fibers=[]
+
+    log = get_logger()
+    for sub in fiber_string.split(',') :
+        sub = sub.replace(' ','')
+        if sub.isdigit() :
+            fibers.append(int(sub))
+            continue
+
+        match = False
+        for symbol in [':','..','-']:
+            if not match and symbol in sub:
+                tmp = sub.split(symbol)
+                if (len(tmp) == 2) and tmp[0].isdigit() and tmp[1].isdigit() :
+                    match = True
+                    for f in range(int(tmp[0]),int(tmp[1])) :
+                        fibers.append(f)
+
+        if not match:
+            log.warning("parsing error. Didn't understand {}".format(sub))
+            sys.exit(1)
+
+    return np.array(fibers)

@@ -155,6 +155,9 @@ def integration_test(night=None, nspec=5, clobber=False):
     parser.add_argument("--skip-psf", action="store_true", help="Skip PSF fitting step")
     args = parser.parse_args()
 
+    from desiutil.iers import freeze_iers
+    freeze_iers()
+
     log = logging.get_logger()
 
     # YEARMMDD string, rolls over at noon not midnight

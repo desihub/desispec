@@ -2,17 +2,549 @@
 desispec Change Log
 ===================
 
-0.29.1 (unreleased)
+0.39.4 (unreleased)
 -------------------
 
+* Add fiber crosstalk correction (PR `#1138`_).
+
+.. _`#1138`: https://github.com/desihub/desispec/issues/1138
+
+0.39.3 (2020-03-04)
+-------------------
+
+Cascades update tag for final catalog creation.
+
+Note: datamodel changes to coadd SCORES and FIBERMAP
+
+* Propagate TSNR2 into coadd SCORES; update coadd FIBERMAP columns (PR `#1166`_)
+* ``bin/desi_tsnr_afterburner`` use pre-calculated TSNR2 from frame files
+  unless requested to recalculate (PR `#1167`_).
+
+.. _`#1166`: https://github.com/desihub/desispec/issues/1166
+.. _`#1167`: https://github.com/desihub/desispec/issues/1167
+
+0.39.2 (2021-03-02)
+-------------------
+
+Cascades update tag to fix coadd and tSNR crashes, and postfacto tag
+``desi_spectro_calib`` version in desispec module file.
+
+* Processing dashboard useability updates (PR `#1152`_).
+* Undo heliocentric correction in throughput analysis not used for
+  production processing (PR `#1154`_).
+* Fix coadd crash (PR `#1163`_).
+* Fix tSNR alpha<0.8 crash (PR `#1164`_).
+* Updated desi_spectro_calib version to 0.2.4.
+
+.. _`#1152`: https://github.com/desihub/desispec/issues/1152
+.. _`#1154`: https://github.com/desihub/desispec/issues/1154
+.. _`#1163`: https://github.com/desihub/desispec/issues/1163
+.. _`#1164`: https://github.com/desihub/desispec/issues/1164
+
+0.39.1 (2021-02-23)
+-------------------
+
+Cascades update tag to add functionality for using a queue reservation and for
+debugging, without algorithmically impacting what has already been run
+with the 0.39.0 tag.
+
+* Add ``desi_run_night --reservation`` option (PR `#1145`_).
+* Fix ``desi_process_exposure --no-zero-ivar`` option (PR `#1146`_).
+
+.. _`#1145`: https://github.com/desihub/desispec/issues/1145
+.. _`#1146`: https://github.com/desihub/desispec/issues/1146
+
+0.39.0 (2021-02-16)
+-------------------
+
+Initial tag for Cascades run.
+
+Major updates:
+
+* Update exposure table formats and pipeline workflow (PR `#1135`_, `#1139`_).
+* Add template S/N (TSNR) depth calculations (PR `#1136`_).
+
+Smaller updates:
+
+* Propagate fiberassign HDU 0 keywords into fibermap header in addition to
+  ``FIBERASSIGN`` (HDU 1) keywords (PR `#1137`_).
+* ``desi_proc_joint_fit`` exit with error code if all cameras fail
+  (PR `#1140`_).
+*  Frame units "electron/Angstrom" instead of "count/Angstrom" (PR `#1142`_).
+
+.. _`#1135`: https://github.com/desihub/desispec/issues/1135
+.. _`#1136`: https://github.com/desihub/desispec/issues/1136
+.. _`#1137`: https://github.com/desihub/desispec/issues/1137
+.. _`#1139`: https://github.com/desihub/desispec/issues/1139
+.. _`#1140`: https://github.com/desihub/desispec/issues/1140
+.. _`#1142`: https://github.com/desihub/desispec/issues/1142
+
+0.38.0 (2021-02-10)
+-------------------
+
+* Change how specex PSF fitting is called; requires specex>=0.7.0 (PR `#1082`_)
+
+.. _`#1082`: https://github.com/desihub/desispec/issues/1082
+
+0.37.0 (2021-02-10)
+-------------------
+
+Major updates:
+
+* Support Gaia stdstars (PR `#1105`_, `#1109`_, `#1114`_, `#1133`_).
+* Fix cosmics masking in coaddition (PR `#1113`_).
+* Improved sky modeling (PR `#1125`_).
+
+Smaller (but important) updates:
+
+* Standardize getting NIGHT from raw data headers (PR `#1083`_, `#1120`_).
+* Use acquisition guide file if full guide file isn't available (PR `#1084`_).
+* Updates to flux calibration averages used by nightwatch (PR `#1085`_).
+* New read_tile_spectra and Spectra class slicing (PR `#1107`_).
+* Add token to fix coverage tests (PR `#1112`_).
+* Flux calibration robustness for low transmission exposures (PR `#1116`_).
+* Apply heliocentric correction to fiberflat (PR `#1118`_).
+* Robustness and feature updates to dark model generation
+  (PR `#1119`_, `#1123`_)
+* More flexible CCD calibration configuration (PR `#1121`_).
+* Processing dashboard useability updates (PR `#1127`_).
+* NIGHT int vs. str bugfix in QA (PR `#1129`_).
+* Support coaddition of fibermaps with different columns (PR `#1130`_).
+
+.. _`#1083`: https://github.com/desihub/desispec/issues/1083
+.. _`#1084`: https://github.com/desihub/desispec/issues/1084
+.. _`#1085`: https://github.com/desihub/desispec/issues/1085
+.. _`#1105`: https://github.com/desihub/desispec/issues/1105
+.. _`#1107`: https://github.com/desihub/desispec/issues/1107
+.. _`#1109`: https://github.com/desihub/desispec/issues/1109
+.. _`#1112`: https://github.com/desihub/desispec/issues/1112
+.. _`#1113`: https://github.com/desihub/desispec/issues/1113
+.. _`#1114`: https://github.com/desihub/desispec/issues/1114
+.. _`#1116`: https://github.com/desihub/desispec/issues/1116
+.. _`#1118`: https://github.com/desihub/desispec/issues/1118
+.. _`#1119`: https://github.com/desihub/desispec/issues/1119
+.. _`#1120`: https://github.com/desihub/desispec/issues/1120
+.. _`#1121`: https://github.com/desihub/desispec/issues/1121
+.. _`#1123`: https://github.com/desihub/desispec/issues/1123
+.. _`#1125`: https://github.com/desihub/desispec/issues/1125
+.. _`#1127`: https://github.com/desihub/desispec/issues/1127
+.. _`#1129`: https://github.com/desihub/desispec/issues/1129
+.. _`#1130`: https://github.com/desihub/desispec/issues/1130
+.. _`#1133`: https://github.com/desihub/desispec/issues/1133
+
+0.36.1 (2021-01-04)
+-------------------
+
+* Fix PSF traceshifts when a fiber is completely masked (PR `#1080`_).
+* Robust to NaN in desi_average_flux_calibration (commit f1de1ac).
+* Increase arc and flat runtimes (commit 7cb294c).
+
+.. _`#1080`: https://github.com/desihub/desispec/issues/1080
+
+0.36.0 (2020-12-23)
+-------------------
+
+This is the primary tag for the Mt. Blanc spectro pipeline run.
+
+* Major updates:
+
+  * Coadd fluxes in multi-exp standard stars before fitting (PR `#1059`_).
+  * New model of CCD pixel-level variance (PR `#1062`_).
+  * Adjust sky-line variance based on model chi2 (PR `#1062`_).
+
+* Smaller (but important) updates:
+
+  * Fixes assemble_fibermap for older data
+    (PR `#1047`_, bug introduced in PR `#1045`_).
+  * Use EBV instead of MW_TRANSMISSION_G/R/Z from fiberassign (PR `#1048`_).
+  * Fallback to using FA_TYPE if no stdstars in (SVn\_)DESI_TARGET
+    (PR `#1050`_).
+  * Use GitHub Actions for testing instead of Travis (PR `#1053`_).
+  * Fix stdstar absolute symlinks (PR `#1056`_).
+  * Adjust nodes per job (PR `#1056`_ and `#1068`_).
+  * Workflow options for bad exposures and new end-of-cals manifests
+    (PR `#1057`_).
+  * stdstar robustness if petal is disabled (PR `#1060`_).
+  * improved camera argument parsing (PR `#1061`_).
+  * Fix unphysical spike at edge of calibration vectors (PR `#1065`_).
+  * Add header keywords for input calib provenance (PR `#1069`_).
+  * More logging about stdstar selection cuts (PR `#1070`_).
+  * Only uses fiberassign .fits and .fits.gz (but not .fits.orig) (PR `#1072`_).
+  * Support "unpositioned" exposures; propagate FIBER_RA/DEC if present
+    (PR `#1073`_).
+  * Use desi_spectro_calib tag 0.2.1
+
+.. _`#1047`: https://github.com/desihub/desispec/issues/1047
+.. _`#1048`: https://github.com/desihub/desispec/issues/1048
+.. _`#1050`: https://github.com/desihub/desispec/issues/1050
+.. _`#1053`: https://github.com/desihub/desispec/issues/1053
+.. _`#1056`: https://github.com/desihub/desispec/issues/1056
+.. _`#1057`: https://github.com/desihub/desispec/issues/1057
+.. _`#1059`: https://github.com/desihub/desispec/issues/1059
+.. _`#1060`: https://github.com/desihub/desispec/issues/1060
+.. _`#1061`: https://github.com/desihub/desispec/issues/1061
+.. _`#1062`: https://github.com/desihub/desispec/issues/1062
+.. _`#1065`: https://github.com/desihub/desispec/issues/1065
+.. _`#1068`: https://github.com/desihub/desispec/issues/1068
+.. _`#1069`: https://github.com/desihub/desispec/issues/1069
+.. _`#1070`: https://github.com/desihub/desispec/issues/1070
+.. _`#1072`: https://github.com/desihub/desispec/issues/1072
+.. _`#1073`: https://github.com/desihub/desispec/issues/1073
+
+
+0.35.0 (2020-12-11)
+-------------------
+
+* Major updates:
+
+  * New opts to model image variance and improve sky subtraction (PR `#1008`_).
+  * Refactor desi_proc and daily processing workflow
+    (PRs `#1012`_, `#1014`_, `#1030`_)
+  * New bias+dark model ("non-linear dark y1D") in desi_spectro_calib 0.2.0
+    (PR `#1029`_)
+
+* Smaller (but important) updates:
+
+  * etc/desispec.modules uses desi_spectro_calib 0.2.0
+  * Default saturation 2**16-1; updated keywords (PR `#1046`_).
+  * Fix preproc header keyword propagation (PR `#1045`_).
+  * Add support for gzipped fiberassign files (PR `#1042`_).
+  * Fix tests on single-core machines (PR `#1035`_).
+  * `desi_paste_preproc` for future use combining short+long arcs (PR `#1034`_).
+  * `desi_proc` more robust to `specex` failures (PR `#1033`_).
+  * Add parallelism to `desi_preproc` (PRs `#1032`_, `#1036`_, `#1038`_).
+  * Fix specex empty path bug (PR `#1031`_).
+  * Better qproc warnings for test slit exposures (PR `#1028`_).
+  * `desi_focus` focus scan analysis (PR `#1027`_).
+  * Fix/add BUNIT header keyword (PR `#1023`_).
+  * Adds `desi_compute_broadband_pixel_flatfield` (PR `#1022`_).
+  * Update desi_proc timing logging (PR `#1003`_, `#1026`_).
+  * desispec.module sets MPICH_GNI_FORK_MODE=FULLCOPY for MPI+multiprocessing
+    (PR `#1007`_).
+  * Fix dark CCD calibration corrections (PR `#1002`_).
+
+.. _`#1002`: https://github.com/desihub/desispec/issues/1002
+.. _`#1003`: https://github.com/desihub/desispec/issues/1003
+.. _`#1007`: https://github.com/desihub/desispec/issues/1007
+.. _`#1008`: https://github.com/desihub/desispec/issues/1008
+.. _`#1012`: https://github.com/desihub/desispec/issues/1012
+.. _`#1014`: https://github.com/desihub/desispec/issues/1014
+.. _`#1022`: https://github.com/desihub/desispec/issues/1022
+.. _`#1023`: https://github.com/desihub/desispec/issues/1023
+.. _`#1026`: https://github.com/desihub/desispec/issues/1026
+.. _`#1027`: https://github.com/desihub/desispec/issues/1027
+.. _`#1028`: https://github.com/desihub/desispec/issues/1028
+.. _`#1029`: https://github.com/desihub/desispec/issues/1029
+.. _`#1030`: https://github.com/desihub/desispec/issues/1030
+.. _`#1031`: https://github.com/desihub/desispec/issues/1031
+.. _`#1032`: https://github.com/desihub/desispec/issues/1032
+.. _`#1033`: https://github.com/desihub/desispec/issues/1033
+.. _`#1034`: https://github.com/desihub/desispec/issues/1034
+.. _`#1035`: https://github.com/desihub/desispec/issues/1035
+.. _`#1036`: https://github.com/desihub/desispec/issues/1036
+.. _`#1038`: https://github.com/desihub/desispec/issues/1038
+.. _`#1042`: https://github.com/desihub/desispec/issues/1042
+.. _`#1045`: https://github.com/desihub/desispec/issues/1045
+.. _`#1046`: https://github.com/desihub/desispec/issues/1046
+
+0.34.7 (2020-09-01)
+-------------------
+
+* Switch desi_proc to use fitsio instead of astropy.io.fits to work around
+  incompatibility between mpi4py and astropy 4 (PR `#996`_).
+
+.. _`#996`: https://github.com/desihub/desispec/issues/996
+
+0.34.6 (2020-08-04)
+-------------------
+
+* Extend runtime limit for spectra regrouping task (hotfix to master).
+
+0.34.5 (2020-08-04)
+-------------------
+
+* Faster desi_zcatalog merging with target table (PR `#994`_).
+* Python 3.8 support (PR `#990`_).
+* Astropy 4.x support (PR `#989`_).
+* Update CCD mask generation code (PR `#987`_).
+* Update desispec.io.download to use data.desi.lbl.gov (PR `#972`_).
+* Use middle of exposure for barycentric correction time (PR `#971`_).
+
+.. _`#994`: https://github.com/desihub/desispec/issues/994
+.. _`#990`: https://github.com/desihub/desispec/issues/990
+.. _`#989`: https://github.com/desihub/desispec/issues/989
+.. _`#987`: https://github.com/desihub/desispec/issues/987
+.. _`#972`: https://github.com/desihub/desispec/issues/972
+.. _`#971`: https://github.com/desihub/desispec/issues/971
+
+0.34.4 (2020-04-21)
+-------------------
+
+* Add `desi_proc --batch-opts ...` option for specifying extras like
+  queue reservation (direct push to master).
+
+0.34.3 (2020-04-17)
+-------------------
+
+* Run desi_proc arc and flat jobs on max 10 nodes instead of 5 (PR `#958`_).
+
+.. _`#958`: https://github.com/desihub/desispec/issues/958
+
+0.34.2 (2020-04-16)
+-------------------
+
+* Include `data/spec-arc-lamps.dat` with installed data.
+* Mask high readnoise CCD amps (PR `#957`_).
+
+.. _`#957`: https://github.com/desihub/desispec/issues/957
+
+0.34.1 (2020-04-15)
+-------------------
+
+* Expanded scan range for y traceshifts from +-3 to +-10 A
+  (commit 26279d8 direct to master)
+* Improved traceshift robusteness for very large shifts of arcs (PR `#954`).
+* Added scripts for creating bad pixels masks from darks (PR `#946`_).
+* etc/desispec.module use desi_spectro_calib tag 0.1.1 (PR `#955`_).
+* import specter only if needed to run, not requiring it just to
+  import desispec.io (PR `#955`_).
+
+Note: `python setup.py install` of this version incorrectly doesn't copy
+`data/spec-arc-lamps.dat` into the final installed data directory;
+that is fixed in next version, and was fixed by hand in NERSC 0.34.1 install.
+
+.. _`#946`: https://github.com/desihub/desispec/issues/946
+.. _`#954`: https://github.com/desihub/desispec/issues/954
+.. _`#955`: https://github.com/desihub/desispec/issues/955
+
+0.34.0 (2020-04-13)
+-------------------
+
+Compatibility notes:
+
+  * Requires desiutil >= 2.0.3 (PR `#951`_).
+  * Backwards incompatible change to sky model format (PR `#939`_.
+
+Changes:
+
+* Refactor S/N fit for QA (PR `#917`_)
+* Speed up QA (PR `#917`_)
+* Don't mask extreme mask fiberflat >2 or <0.1 in routine autocalib_fiberflat
+  because the fiberflat includes the throughput difference between
+  spectrographs (push to master to address issue `#897`_).
+* Modify overscan methods.  Default is to no longer analyze the ORSEC region
+  (PR `#838`_).
+* Fix sky subtraction with ivar=0 (PR `#920`_).
+* Tweaks for logging nightly redshifts and srun (PR `#921`_).
+* Added calib config management utilities (PR `#926`_).
+* Coadd robustness when missing a camera (PR `#927`_).
+* Shorter desi_proc job names (PR `#928`_).
+* Set fiberstatus to mask fibers in bad regions of CCDs (PR `#930`_).
+* Fix code generating fits reserved keyword warnings (PR `#933`_, `#935`_).
+* Try fibermap header if primary header doesn't have RA,DEC (PR `#934`_).
+* Force assemble_fibermap for nights before or during 20200310 (PR `#936`_).
+* Don't fit traceshifts in y for dome and twilight flats (PR `#937`_).
+* Calculate sky model throughput corrections when making sky model instead
+  of while applying model.  Note: changes data model.  (PR `#939`_).
+* Improve averaging of fiberflats (PR `#940`_).
+* Fix incorrect multiple calls to bary_corr depending upon MPI parallelism,
+  and merge extract main and main_mpi (PR `#943`_).
+* Propagate MJD to spectra fibermap (PR `#944`_).
+* Generate spectra files by default and don't coadd across cameras (PR `#945`_).
+* Allow coadding across cameras of coadds (PR `#948`_).
+* Implement fibermaps per camera (PR `#949`_).
+* Use desiutil.iers.freeze_iers instead of desisurvey; requires desiutil>=2.0.3
+  (PR `#951`_).
+* Module file users desi_spectro_calib tag 0.1
+
+.. _`#838`: https://github.com/desihub/desispec/issues/838
+.. _`#897`: https://github.com/desihub/desispec/issues/897
+.. _`#917`: https://github.com/desihub/desispec/issues/917
+.. _`#920`: https://github.com/desihub/desispec/issues/920
+.. _`#921`: https://github.com/desihub/desispec/issues/921
+.. _`#926`: https://github.com/desihub/desispec/issues/926
+.. _`#927`: https://github.com/desihub/desispec/issues/927
+.. _`#928`: https://github.com/desihub/desispec/issues/928
+.. _`#930`: https://github.com/desihub/desispec/issues/930
+.. _`#933`: https://github.com/desihub/desispec/issues/933
+.. _`#934`: https://github.com/desihub/desispec/issues/934
+.. _`#935`: https://github.com/desihub/desispec/issues/935
+.. _`#936`: https://github.com/desihub/desispec/issues/936
+.. _`#937`: https://github.com/desihub/desispec/issues/937
+.. _`#939`: https://github.com/desihub/desispec/issues/939
+.. _`#940`: https://github.com/desihub/desispec/issues/940
+.. _`#943`: https://github.com/desihub/desispec/issues/943
+.. _`#944`: https://github.com/desihub/desispec/issues/944
+.. _`#945`: https://github.com/desihub/desispec/issues/945
+.. _`#948`: https://github.com/desihub/desispec/issues/948
+.. _`#949`: https://github.com/desihub/desispec/issues/949
+.. _`#951`: https://github.com/desihub/desispec/issues/951
+
+0.33.0 (2020-03-05)
+-------------------
+
+* Metadata bookkeeping for early CMX data (PR `#857`_)
+* Improved PSF handling in desi_proc (PR `#858`_)
+* Modeling scattered light (PR `#859`_, `#861`_, `#862`_)
+* desi_proc --calibnight option (PR `#860`_)
+* expanding flux calib stdstar bits (PR `#862`_)
+* new assemble_fibermap script (PR `#864`_, `#902`_)
+* improved sky subtraction and flux calibration robustness (PR `#865`_)
+* new desi_group_tileframes script; coadd frames directly (PR `#866`_)
+* flux calibration improvements (PR `#868`_, `#871`_, `#880`_, `#898`_)
+* more efficient desi_proc --batch parallelism packing (PR `#869`_)
+* new desi_proc_dashboard script (PR `#870`_, `#901`_)
+* new desi_dailyproc script (PR `#872`_, `#881`_, `#895`_)
+* more robustness to missing inputs (PR `#875`_, `#876`_, `#883`_)
+* groundwork for improving cosmics masking (PR `#878`_)
+* enable barycentric correction in desi_proc (PR `#879`_)
+* new plot_spectra script (PR `#890`_)
+* new desi_nightly_redshifts script (PR `#892`_)
+* Generate QA for a given night + QA bug fixes (PR `#894`_)
+* coadd metadata propagation (PR `#900`_)
+* don't use FIBERSTATUS!=0 spectra in coadds (PR `#903`_)
+* desi_proc more control options for minisv2 run (PR `#904`_)
+* Two hotfixes to master to re-enable daily processing:
+
+  * make assemble_fibermap more robust to missing input columns
+    in the platmaker coordinates files.
+  * better packing of extraction MPI ranks
+
+.. _`#857`: https://github.com/desihub/desispec/pull/857
+.. _`#858`: https://github.com/desihub/desispec/pull/858
+.. _`#859`: https://github.com/desihub/desispec/pull/859
+.. _`#860`: https://github.com/desihub/desispec/pull/860
+.. _`#861`: https://github.com/desihub/desispec/pull/861
+.. _`#862`: https://github.com/desihub/desispec/pull/862
+.. _`#864`: https://github.com/desihub/desispec/pull/864
+.. _`#865`: https://github.com/desihub/desispec/pull/865
+.. _`#866`: https://github.com/desihub/desispec/pull/869
+.. _`#868`: https://github.com/desihub/desispec/pull/868
+.. _`#869`: https://github.com/desihub/desispec/pull/869
+.. _`#870`: https://github.com/desihub/desispec/pull/870
+.. _`#871`: https://github.com/desihub/desispec/pull/871
+.. _`#872`: https://github.com/desihub/desispec/pull/872
+.. _`#875`: https://github.com/desihub/desispec/pull/875
+.. _`#876`: https://github.com/desihub/desispec/pull/876
+.. _`#878`: https://github.com/desihub/desispec/pull/878
+.. _`#879`: https://github.com/desihub/desispec/pull/879
+.. _`#880`: https://github.com/desihub/desispec/pull/880
+.. _`#881`: https://github.com/desihub/desispec/pull/881
+.. _`#883`: https://github.com/desihub/desispec/pull/883
+.. _`#890`: https://github.com/desihub/desispec/pull/890
+.. _`#892`: https://github.com/desihub/desispec/pull/892
+.. _`#894`: https://github.com/desihub/desispec/pull/894
+.. _`#895`: https://github.com/desihub/desispec/pull/895
+.. _`#898`: https://github.com/desihub/desispec/pull/898
+.. _`#900`: https://github.com/desihub/desispec/pull/900
+.. _`#901`: https://github.com/desihub/desispec/pull/901
+.. _`#902`: https://github.com/desihub/desispec/pull/902
+.. _`#903`: https://github.com/desihub/desispec/pull/903
+.. _`#904`: https://github.com/desihub/desispec/pull/904
+
+0.32.1 (2019-12-27)
+-------------------
+
+* Integration test simulate past not current date to workaound
+  pixsim header mismatch with :envvar:`DESI_SPECTRO_CALIB` calibrations.
+  (direct push to master).
+
+0.32.0 (2019-12-22)
+-------------------
+
+* Adding more desi_proc options (PR `#848`_, `#850`_).
+* Support PSF bootstrapping with broken fibers (PR `#849`_).
+* Hot fixes to desi_proc crashes (pushed directly to master).
+* Increase cframe task from 1 min to 2 min (direct to master).
+* Adapt to new spectrograph SMn naming (PR `#853`_).
+* Workaround fitsio bug by setting blank keywords to ``None``;
+  adapt to new fiberassign file names (PR `#855`_).
+
+.. _`#848`: https://github.com/desihub/desispec/pull/848
+.. _`#849`: https://github.com/desihub/desispec/pull/849
+.. _`#850`: https://github.com/desihub/desispec/pull/850
+.. _`#853`: https://github.com/desihub/desispec/pull/853
+.. _`#855`: https://github.com/desihub/desispec/pull/855
+
+
+0.31.0 (2019-10-31)
+-------------------
+
+First CMX release with bug fixes for on-sky data.
+
+* Use rrdesi --no-mpi-abort feature (PR `#823`_).
+* Added code to generate pixflats (PR `#824`_).
+* Support extractions of data without fibermaps (PR `#825`_).
+* Propagate FIBERMAP into preproc files (not just frames)
+  (PR `#825`_ and `#829`_).
+* Allow extraction wavelenghts slightly off CCD (PR `#836`_).
+* PSF I/O pause before merging (PR `#836`_).
+* Add `bin/desi_proc` single-exposure processing script (PR `#837`_).
+* Use OBSTYPE instead of FLAVOR for desi_qproc (PR `#839`_).
+* Bug fix for desi_proc double application of fiberflat (PR `#841`_).
+* desi_proc options for non-default PSF and fiberflat (PR `#842`_).
+* Correct fibermap to match what petal we are in (PR `#843`_).
+* Update database loading to match current data model (PR `#844`_).
+* Added desi_proc --batch option (PR `#845`_).
+
+.. _`#823`: https://github.com/desihub/desispec/pull/823
+.. _`#824`: https://github.com/desihub/desispec/pull/824
+.. _`#825`: https://github.com/desihub/desispec/pull/825
+.. _`#829`: https://github.com/desihub/desispec/pull/829
+.. _`#836`: https://github.com/desihub/desispec/pull/836
+.. _`#837`: https://github.com/desihub/desispec/pull/837
+.. _`#839`: https://github.com/desihub/desispec/pull/839
+.. _`#841`: https://github.com/desihub/desispec/pull/841
+.. _`#842`: https://github.com/desihub/desispec/pull/842
+.. _`#843`: https://github.com/desihub/desispec/pull/843
+.. _`#844`: https://github.com/desihub/desispec/pull/844
+.. _`#845`: https://github.com/desihub/desispec/pull/845
+
+0.30.0 (2019-10-17)
+-------------------
+
+* qproc updates (PR `#787`_).
+* QL bias (PR `#789`_).
+* Heliocentric corrections (PR `#790`_).
+* Update photometric filter usages (PR `#791`_).
 * Add gain output option to desi_compute_gain
-* Modify overscan subtraction algorithm in desi.preproc.preproc
+* Modify overscan subtraction algorithm in desi.preproc.preproc (PR `#793`_).
+* Cleanup timing parameters (PR `#794`_).
+* Pipeline docs (PR `#797`_).
+* Correct for dark trail in raw images (PR `#798`_).
+* `yaml.load()` to `yaml.save_load()` (PR `#801`_).
+* help numba know the types (PR `#802`_).
+* desi_pipe getready fix (PR `#803`_).
 * Move raw data transfer scripts to desitransfer_ (PR `#804`_).
-* Convert any expid input into an int in QA
-* Remove stray pdb lines from QA
+* spectra coaddition (PR `#805`_).
+* memory constraints and load balancing (PR `#806`_ and `#809`_).
+* preproc header keywords CCDSEC1-4 vs. A-D (PR `#807`_).
+* Add `desi_pipe status` command (PR `#810`_).
+* Convert any expid input into an int in QA (PR `#814`_).
+* Support new FIBERASSIGN_X/Y instead of DESIGN_X/Y (PR `#821`_).
+* Added hostname and jobid to task logging (PR `#822`_).
 
 .. _desitransfer: https://github.com/desihub/desitransfer
+.. _`#787`: https://github.com/desihub/desispec/pull/787
+.. _`#789`: https://github.com/desihub/desispec/pull/789
+.. _`#790`: https://github.com/desihub/desispec/pull/790
+.. _`#791`: https://github.com/desihub/desispec/pull/791
+.. _`#793`: https://github.com/desihub/desispec/pull/793
+.. _`#794`: https://github.com/desihub/desispec/pull/794
+.. _`#797`: https://github.com/desihub/desispec/pull/797
+.. _`#798`: https://github.com/desihub/desispec/pull/798
+.. _`#801`: https://github.com/desihub/desispec/pull/801
+.. _`#802`: https://github.com/desihub/desispec/pull/802
+.. _`#803`: https://github.com/desihub/desispec/pull/803
 .. _`#804`: https://github.com/desihub/desispec/pull/804
+.. _`#805`: https://github.com/desihub/desispec/pull/805
+.. _`#806`: https://github.com/desihub/desispec/pull/806
+.. _`#807`: https://github.com/desihub/desispec/pull/807
+.. _`#809`: https://github.com/desihub/desispec/pull/809
+.. _`#810`: https://github.com/desihub/desispec/pull/810
+.. _`#814`: https://github.com/desihub/desispec/pull/814
+.. _`#821`: https://github.com/desihub/desispec/pull/821
+.. _`#822`: https://github.com/desihub/desispec/pull/822
 
 0.29.0 (2019-05-30)
 -------------------

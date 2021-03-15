@@ -6,6 +6,7 @@ Spectral scores routines.
 """
 from __future__ import absolute_import
 import numpy as np
+from desispec.frame import Frame
 from desiutil.log import get_logger
 
 # Definition of hard-coded top hat filter sets for each camera B,R,Z.
@@ -17,6 +18,98 @@ def _auto_detect_camera(frame) :
     if mwave<=tophat_wave["b"][1] : return "b"
     elif mwave>=tophat_wave["z"][0] : return "z"
     else : return "r"
+
+def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
+    """Compute scores for a coadded Spectra object
+
+    Args:
+        coadd: a Spectra object from a coadd
+
+    Options:
+        update_coadd: if True, update coadd.scores
+        specscores: scores Table from the uncoadded spectra including a TARGETID column
+
+    Returns tuple of dictionaries (scores, comments); see compute_frame_scores
+
+    ``specscores`` is used to update TSNR2 scores by summing inputs
+    """
+    log = get_logger()
+    scores = dict()
+    comments = dict()
+
+    scores['TARGETID'] = coadd.target_ids()
+    comments['TARGETID'] = 'DESI Unique Target ID'
+
+    if coadd.bands == ['brz']:
+        #- i.e. this is a coadd across cameras
+        fr = Frame(coadd.wave['brz'], coadd.flux['brz'], coadd.ivar['brz'],
+                    fibermap=coadd.fibermap, meta=coadd.meta,
+                    resolution_data=coadd.resolution_data['brz'])
+        for band in ['b', 'r', 'z']:
+            bandscores, bandcomments = compute_frame_scores(fr, band=band,
+                    suffix='COADD', flux_per_angstrom=True)
+            scores.update(bandscores)
+            comments.update(bandcomments)
+    else:
+        #- otherwise try individual bands, upper or lowercase
+        for band in ['b', 'r', 'z', 'B', 'R', 'Z']:
+            if band in coadd.bands:
+                fr = Frame(coadd.wave[band], coadd.flux[band], coadd.ivar[band],
+                        fibermap=coadd.fibermap, meta=coadd.meta,
+                        resolution_data=coadd.resolution_data[band])
+                bandscores, bandcomments = compute_frame_scores(fr, band=band,
+                        suffix='COADD', flux_per_angstrom=True)
+                scores.update(bandscores)
+                comments.update(bandcomments)
+
+    if specscores is not None:
+        #- Derive which TSNR2_XYZ_[BRZ] columns exist
+        tsnrkeys = list()
+        tsnrtypes = list()
+        num_targets = coadd.num_targets()
+        for colname in specscores.dtype.names:
+            if colname.startswith('TSNR2_'):
+                _, targtype, band = colname.split('_')
+                scores[colname] = np.zeros(num_targets)
+                comments[colname] = f'{targtype} {band} template (S/N)^2'
+                tsnrkeys.append(colname)
+
+                if targtype not in tsnrtypes:
+                    tsnrtypes.append(targtype)
+
+        if len(tsnrkeys) == 0:
+            log.warning('No TSNR2_* scores found to coadd')
+        else:
+            #- Add TSNR2_*_B/R/Z columns summed across exposures
+            for i, tid in enumerate(coadd.target_ids()):
+                jj = specscores['TARGETID'] == tid
+                for colname in tsnrkeys:
+                    scores[colname][i] = np.sum(specscores[colname][jj])
+
+            #- Additionally sum across B/R/Z
+            for targtype in tsnrtypes:
+                col = f'TSNR2_{targtype}'
+                scores[col] = np.zeros(num_targets)
+                comments[col] = f'{targtype} template (S/N)^2 summed over B,R,Z'
+                for band in ['B', 'R', 'Z']:
+                    colbrz = f'TSNR2_{targtype}_{band}'
+                    scores[col] += scores[colbrz]
+
+    #- convert to float32
+    for col in scores.keys():
+        if scores[col].dtype == np.float64:
+            scores[col] = scores[col].astype(np.float32)
+
+    if update_coadd:
+        if hasattr(coadd, 'scores') and coadd.scores is not None:
+            for key in scores:
+                coadd.scores[key] = scores[key]
+                coadd.scores_comments[key] = comments[key]
+        else:
+            coadd.scores = scores
+            coadd.scores_comments = comments
+
+    return scores, comments
 
 def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     """Computes scores in spectra of a frame.

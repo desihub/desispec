@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import unittest
 import os
 import os.path
+import warnings
 from astropy.io import fits
 import numpy as np
 import shutil
@@ -31,6 +32,8 @@ class TestPreProc(unittest.TestCase):
             shutil.rmtree(self.calibdir) 
 
     def setUp(self):
+        #- catch specific warnings so that we can find and fix
+        # warnings.filterwarnings("error", ".*did not parse as fits unit.*")
         
         #- Create temporary calib directory
         self.calibdir  = os.path.join(os.environ['HOME'], 'preproc_unit_test')
@@ -45,7 +48,7 @@ class TestPreProc(unittest.TestCase):
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
         
         self.calibfile = os.path.join(self.calibdir,'test-calib-askjapqwhezcpasehadfaqp.fits')
-        self.rawfile   = os.path.join(self.calibdir,'test-raw-askjapqwhezcpasehadfaqp.fits')
+        self.rawfile   = os.path.join(self.calibdir,'desi-raw-askjapqwhezcpasehadfaqp.fits')
         self.pixfile   = os.path.join(self.calibdir,'test-pix-askjapqwhezcpasehadfaqp.fits')
 
         primary_hdr = dict()
@@ -137,7 +140,7 @@ class TestPreProc(unittest.TestCase):
             xy = parse_sec_keyword(hdr['DATASEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             self.rawimage[xy] += self.offset[amp]
-            self.rawimage[xy] += self.offset_row[amp]
+            #self.rawimage[xy] += self.offset_row[amp]
             self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
 
         #- raw data are integers, not floats
@@ -153,7 +156,7 @@ class TestPreProc(unittest.TestCase):
         for amp in ('A', 'B', 'C', 'D'):
             old_header.pop('ORSEC{}'.format(amp))
             xy = parse_sec_keyword(self.header['DATASEC'+amp])
-            old_image[xy] -= np.int32(self.offset_row[amp])
+            #old_image[xy] -= np.int32(self.offset_row[amp]) -- OR_SEC now zero
         #
         image = preproc(old_image, old_header, primary_header = self.primary_header)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
@@ -382,9 +385,9 @@ class TestPreProc(unittest.TestCase):
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
         io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b1')
         args = ['--infile', self.rawfile, '--cameras', 'b0',
-                '--pixfile', self.pixfile]
+                '--outfile', self.pixfile]
         if os.path.exists(self.pixfile):
-            os.remove(self.pixfile)            
+            os.remove(self.pixfile)
         desispec.scripts.preproc.main(args)
         img = io.read_image(self.pixfile)
         self.assertEqual(img.pix.shape, (2*self.ny, 2*self.nx))
@@ -409,7 +412,14 @@ class TestPreProc(unittest.TestCase):
 
     def test_default_mask(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header, mask=True)
-        
-                
+
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
 if __name__ == '__main__':
     unittest.main()

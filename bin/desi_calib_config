@@ -1,0 +1,428 @@
+#!/usr/bin/env python
+
+
+import sys,os
+import argparse
+import yaml
+import numpy as np
+import copy
+import traceback
+import glob
+from datetime import datetime,timedelta
+from desispec.calibfinder import CalibFinder
+from desiutil.log import get_logger
+
+class ConfigEditor(object) :
+
+    def __init__(self):
+        parser = argparse.ArgumentParser(
+            description="DESI spectroscopic calibration configuration editor",
+            usage="""desi_calib_config <command> [options]
+
+            Where supported commands are (use desi_calib_config <command> --help for details):
+            add      Create a new configuration.
+            update   Update an existing configuration.
+            test     Run a test to verify the configuration.
+            """)
+
+
+        parser.add_argument("command", help="Subcommand to run")
+        # parse_args defaults to [1:] for args, but you need to
+        # exclude the rest of the args too, or validation will fail
+        args = parser.parse_args(sys.argv[1:2])
+        if not hasattr(self, args.command):
+            print("Unrecognized command")
+            parser.print_help()
+            sys.exit(1)
+
+
+        if "DESI_SPECTRO_CALIB" not in os.environ :
+            print("Need to have the environment variable DESI_SPECTRO_CALIB set!")
+            sys.exit(12)
+
+        self.calib_dir = os.environ["DESI_SPECTRO_CALIB"]
+
+        # parse SPX SMY table
+        self.SM2SP=dict()
+        self.SP2SM=dict()
+        filename = os.path.join(self.calib_dir,"spec/smsp.txt")
+        with open(filename) as file :
+            for line in file.readlines() :
+                vals=line.strip().split(" ")
+                if len(vals)!=2 :
+                    continue
+                SP=vals[0]
+                SM=vals[1]
+                if SP[0:2].upper() != "SP" : raise ValueError("I cannot interpret correctly {} line '{}'".format(filename,line))
+                if SM[0:2].upper() != "SM" : raise ValueError("I cannot interpret correctly {} line '{}'".format(filename,line))
+                self.SM2SP[SM.upper()]=SP.upper()
+                self.SP2SM[SP.upper()]=SM.upper()
+
+        # use dispatch pattern to invoke method with same name
+        getattr(self, args.command)()
+
+    def parse_spectro(self,spectro_string):
+        if spectro_string.upper().find("SM")>=0 :
+            SM = spectro_string.upper()
+            SP = self.SM2SP[SM]
+        elif spectro_string.upper().find("SP")>=0 :
+            SP = spectro_string.upper()
+            SM = self.SP2SM[SP]
+        else :
+            raise ValueError("cannot intrepret {} as SPX or SMY".format(spectro_string))
+        return SP,SM
+
+    def parse_dict(self,dict_string) :
+        res=dict()
+        for keyval in dict_string.split(",") :
+            kv=keyval.split("=")
+            if len(kv)!=2 :
+                raise ValueError("cannot interpret {} as dictionary entry of the form key=val".format(keyval))
+            res[kv[0]]=kv[1]
+        return res
+
+    def test_yaml_file(self,yaml_filename) :
+
+        log = get_logger()
+
+        with open(yaml_filename,"r") as file:
+            data   = yaml.safe_load(file)
+
+            for camid in data :
+
+                date_begin=[]
+                date_end=[]
+                for version in data[camid] :
+                    log.debug("checking {} version {} in {}".format(camid,version,os.path.basename(yaml_filename)))
+                    # check for mandatory keys
+                    for k in ['DATE-OBS-BEGIN','DETECTOR'] :
+                        if not k in data[camid][version] :
+                            log.error("no {} in version {} of {}".format(k,version,yaml_filename))
+                            raise KeyError("no {} in version {} of {}".format(k,version,yaml_filename))
+                    # for filenames check they exist
+                    for k in ["PSF","FIBERFLAT","BIAS","DARK","MASK","PIXFLAT","FLUXCALIB"] :
+                        if k in data[camid][version] :
+                            calib_filename = os.path.join(self.calib_dir,data[camid][version][k])
+                            if not os.path.isfile(calib_filename) :
+                                log.error("cannot open {}".format(calib_filename))
+                                raise IOError("cannot open {}".format(calib_filename))
+                            else :
+                                log.debug("checked {}".format(calib_filename))
+
+                    # now cook up a header that matches this version and see if the calibfinder works with it
+                    head = dict()
+                    night = int(data[camid][version]['DATE-OBS-BEGIN'])
+                    if night < 20191211 :
+                        log.debug("skip config with DATE-OBS-BEGIN = {} < 20191211".format(night))
+                        continue
+                    yyyy = night//10000
+                    mm = (night%10000)//100
+                    dd = night%100
+                    head["DATE-OBS"]="{:04d}-{:02d}-{:02d}T18:06:21.268371-05:00".format(yyyy,mm,dd)
+                    # decoding camid ...
+                    vals=camid.split("-")
+                    sm=vals[0].upper()
+                    sp=self.SM2SP[sm]
+                    specid=int(sm.replace("SM",""))
+                    spectro=int(sp[2])
+                    band=vals[1].lower()
+                    camera="{}{}".format(band,spectro)
+                    head["CAMERA"]=camera
+                    head["SPECID"]=specid
+
+                    for k in ["DETECTOR","CCDCFG","CCDTMING","NIGHT"] :
+                        if k in data[camid][version] :
+                            head[k]=data[camid][version][k]
+                    log.debug("header={}".format(head))
+
+                    # try to get this calib
+                    cfinder = CalibFinder([head,],yaml_file=yaml_filename)
+
+
+
+
+
+    def add(self):
+        parser = argparse.ArgumentParser(description="Add a new configuration, starting from the most recent one and adding/replacing requested keywords",
+                                         usage="desi_calib_config add [options] (use --help for details).")
+
+        parser.add_argument("--spectro", type=str, required=True, default=None,
+                            help="either SPX or SMY ")
+
+        parser.add_argument("--camera-arm", required=True, default=None,
+                            help="b, r or z")
+
+        parser.add_argument("--name", required=False, default=None,
+                            help="configuration name (default is VYYYYMMDD with YYYYMMDD given by date-obsj-begin argument)")
+
+        parser.add_argument("--date-obs-begin", required=True, default=None,
+                            help="date of beginning of validity of this config YYYYMMDD (mandatory)")
+
+        parser.add_argument("--entries", required=True, default=None,
+                            help="coma separated list of key=values, like '--keyval PSF=toto.fits,FIBERFLAT=fiberflat.fits'")
+        parser.add_argument("--rm-entries", required=True, default=None,
+                            help="coma separated list of keys to remove")
+        parser.add_argument("--comments", required=False, default=None,
+                            help="add this comment")
+        parser.add_argument("-o","--ofilename", required=False, default=None,
+                            help="write to this file")
+
+        parser.add_argument("--overwrite",action="store_true",help="directly overwrite the SVN yaml file, use with care!")
+
+        parser.add_argument("--force",action="store_true",help="create a new config with the given date-obs-begin even if there is an existing one with the same date or more recent")
+
+
+        args = parser.parse_args(sys.argv[2:])
+
+        self.add_or_update(args,add_new_version=True)
+
+    def update(self):
+        parser = argparse.ArgumentParser(description="Update an existing configuration",
+                                         usage="desi_calib_config update [options] (use --help for details)")
+
+
+        parser.add_argument("--spectro", type=str, required=True, default=None,
+                            help="either SPX or SMY ")
+
+        parser.add_argument("--camera-arm", required=True, default=None,
+                            help="b, r or z")
+
+        parser.add_argument("--name", required=True, default=None,
+                            help="configuration version name")
+
+        parser.add_argument("--entries", required=True, default=None,
+                            help="coma separated list of key=values, like '--keyval PSF=toto.fits,FIBERFLAT=fiberflat.fits'")
+        parser.add_argument("--rm-entries", required=True, default=None,
+                            help="coma separated list of keys to remove")
+        parser.add_argument("--comments", required=False, default=None,
+                            help="add this comment")
+        parser.add_argument("-o","--ofilename", required=False, default=None,
+                            help="write to this file")
+
+        parser.add_argument("--overwrite",action="store_true",help="directly overwrite the SVN yaml file, use with care!")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        self.add_or_update(args,add_new_version=False)
+
+
+    def add_or_update(self,args,add_new_version):
+
+        log = get_logger()
+
+        if args.ofilename is None and not args.overwrite :
+            print("need either an output filename or --overwrite (use --help for details)")
+            sys.exit(12)
+
+        entries = self.parse_dict(args.entries)
+
+        if add_new_version :
+
+            if "DATE-OBS-BEGIN" in entries :
+                print("please remove DATE-OBS-BEGIN from the entries")
+                print("use argument --date-obs-begin instead")
+                sys.exit(12)
+
+            date=datetime.strptime(str(args.date_obs_begin), "%Y%m%d")
+            thedaybefore = date - timedelta(days=1)
+            previous_config_date_obs_end = thedaybefore.year*10000+thedaybefore.month*100+thedaybefore.day
+            log.debug("previous config DATE-OBS-END = {}".format(previous_config_date_obs_end))
+            if args.name is None :
+                args.name = "V{}".format(args.date_obs_begin)
+
+        SP,SM   = self.parse_spectro(args.spectro)
+        camera  = args.camera_arm.lower()+"{:d}".format(int(SP[-1]))
+        # yaml file
+        cameraid     = "{}-{}".format(SM.lower(),args.camera_arm.lower())
+        yaml_file = "{}/spec/{}/{}.yaml".format(self.calib_dir,SM.lower(),cameraid)
+        log.debug("yaml file is {}".format(yaml_file))
+        if not os.path.isfile(yaml_file) :
+            log.error("no file {}".format(yaml_file))
+            raise IOError("no file {}".format(yaml_file))
+
+
+        stream = open(yaml_file, 'r')
+        data   = yaml.safe_load(stream)
+        stream.close()
+        if not cameraid in data :
+            log.error("Cannot find  data for camera %s in %s"%(cameraid,yaml_file))
+            raise KeyError("Cannot find  data for camera %s in %s"%(cameraid,yaml_file))
+        data=data[cameraid]
+        dates=[]
+        versions=[]
+        for version in data :
+            dates.append(data[version]["DATE-OBS-BEGIN"])
+            versions.append(version)
+
+        if add_new_version :
+            reference_version=versions[np.argmax(dates)]
+            if args.name in versions :
+                log.error("There is already a configuration named '{}' in {}".format(args.name,yaml_file))
+                sys.exit(12)
+        else :
+            reference_version = args.name
+            if not reference_version in data :
+                log.error("No configuration named '{}' in {}".format(reference_version,yaml_file))
+                sys.exit(12)
+
+        if add_new_version :
+            if data[reference_version]["DATE-OBS-BEGIN"] >= args.date_obs_begin :
+                log.warning("There is a another version with DATE-OBS-BEGIN {} >= {}".format(data[reference_version]["DATE-OBS-BEGIN"],args.date_obs_begin))
+                if not args.force :
+                    print("Use --force to add a new version anyway")
+                    sys.exit(12)
+
+
+            log.debug("Will copy the most recent version {}".format(reference_version))
+
+        # write "by hand" because we want to keep all the comments,
+        # the indentation, and the ordering
+
+        ifile = open(yaml_file,'r')
+
+        in_reference_version = False
+        in_some_version   = False
+
+        lines_in_header = []
+        lines_in_reference_version = []
+        lines_in_other_version  = []
+
+        with open(yaml_file,'r') as ifile :
+            for line in ifile.readlines() :
+
+                in_reference_version_header = False
+                for version in versions :
+                    if line.find(version)>=0 :
+                        in_some_version = True
+                        if version == reference_version :
+                            in_reference_version = True
+                            in_reference_version_header = True
+                        else :
+                            in_reference_version = False
+                if in_reference_version_header : continue
+
+                if in_reference_version :
+                    lines_in_reference_version.append(line)
+                else :
+                    if not in_some_version :
+                        lines_in_header.append(line)
+                    else:
+                        lines_in_other_version.append(line)
+
+        if args.overwrite and args.ofilename is None :
+            args.ofilename = yaml_file
+
+        tmp_filename = args.ofilename+".tmp"
+
+        entries_to_remove = []
+        if args.rm_entries is not None :
+            entries_to_remove = args.rm_entries.split(",")
+
+        with open(tmp_filename,'w') as ofile :
+
+            # write header
+            for line in lines_in_header :
+                ofile.write(line)
+
+            if add_new_version :
+                # write new version
+                ofile.write("\n {}:\n\n".format(args.name))
+            else :
+                # update version
+                ofile.write(" {}:\n".format(reference_version))
+
+            if args.comments is not None :
+                # add comments
+                ofile.write (" # {}\n".format(args.comments))
+
+            if add_new_version :
+                ofile.write("\n")
+                ofile.write ("  DATE-OBS-BEGIN: '{}'\n".format(args.date_obs_begin))
+
+            keys = entries.keys()
+            for line in lines_in_reference_version :
+
+                if add_new_version : # otherwise we keep this
+                    if line.find("DATE-OBS-BEGIN")>=0 : continue
+                    if line.find("DATE-OBS-END")>=0 : continue
+
+                if line.find("#")>=0 :
+                    ofile.write(line)
+                    continue
+
+                is_a_new_entry=False
+                for k in keys :
+                    if line.split(":")[0].find(k)>=0 :
+                        ofile.write("  {}: {}\n".format(k,entries[k]))
+                        entries.pop(k)
+                        is_a_new_entry=True
+                        break
+                if not is_a_new_entry :
+                    if len(line.strip())>0 :
+                        k=line.split(":")[0].strip()
+                        if k in entries_to_remove :
+                            ofile.write("  # {}: (removed)\n".format(k))
+                        else :
+                            ofile.write(line)
+
+            for k in entries :
+                ofile.write("  {} : {}\n".format(k,entries[k]))
+            ofile.write("\n\n")
+
+            if add_new_version :
+                # write most recent version but change or add DATE-OBS-END
+                ofile.write(" {}:\n".format(reference_version))
+                for line in lines_in_reference_version :
+                    if line.find("DATE-OBS-END")>=0 : continue
+                    ofile.write(line)
+                    if line.find("DATE-OBS-BEGIN")>=0 :
+                        ofile.write("  DATE-OBS-END: '{}'\n".format(previous_config_date_obs_end))
+
+            # now rewrite older versions
+            for line in lines_in_other_version :
+                ofile.write(line)
+
+        # now check at least it's a valid yaml file
+        # (will raise an exception if fails)
+        try :
+            self.test_yaml_file(tmp_filename)
+        except Exception as e:
+            traceback.format_exc()
+            print(e)
+            print("Something is wrong in the yaml file, sorry about that. The output file {} has not been written.".format(args.ofilename))
+            sys.exit(12)
+        os.rename(tmp_filename,args.ofilename)
+
+        print("wrote {}".format(args.ofilename))
+
+    def test(self):
+        parser = argparse.ArgumentParser(description="Test the configurations",
+                                         usage="desi_calib_config test")
+
+        parser.add_argument("-i","--ifile", type=str, nargs="*", required=False, default=None,
+                            help="test this yaml file (s)(default is all sm*.yaml")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        if args.ifile is not None and len(args.ifile)>0 :
+            filenames = args.ifile
+        else :
+
+            filenames = np.sort(glob.glob("{}/spec/sm*/sm*.yaml".format(self.calib_dir)))
+
+        for filename in filenames :
+            try :
+                self.test_yaml_file(filename)
+                print("Checked {}".format(filename))
+            except Exception as e:
+                print("Something is wrong with {}".format(filename))
+
+
+
+
+
+
+
+
+if __name__ == '__main__':
+    p = ConfigEditor()

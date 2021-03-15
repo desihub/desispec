@@ -6,12 +6,16 @@ IO routines for flux calibration.
 """
 from __future__ import absolute_import, print_function
 import os
+import time
 from astropy.io import fits
+from astropy.table import Table
 import numpy,scipy
 
 from desiutil.depend import add_dependencies
+from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, makepath
+from . import iotime
 
 def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """Writes the normalized flux for the best models.
@@ -23,8 +27,12 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
         fibers : 1D array of fiberids for these spectra
         data : meta data table about which templates best fit
     """
+    log = get_logger()
     hdr = fitsheader(header)
     add_dependencies(hdr)
+
+    #- support input Table, np.array, and dict
+    data = Table(data)
 
     hdr['EXTNAME'] = ('FLUX', '[10**-17 erg/(s cm2 Angstrom)]')
     hdr['BUNIT'] = ('10**-17 erg/(s cm2 Angstrom)', 'Flux units')
@@ -39,7 +47,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     # metadata
     from astropy.io.fits import Column
     cols=[]
-    for k in data.keys() :
+    for k in data.colnames:
         if len(data[k].shape)==1 :
             cols.append(Column(name=k,format='D',array=data[k]))
     tbhdu=fits.BinTableHDU.from_columns(fits.ColDefs(cols), name='METADATA')
@@ -47,12 +55,15 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
 
     # add coefficients
-    if "COEFF" in data :
+    if "COEFF" in data.colnames:
         hdulist.append(fits.ImageHDU(data["COEFF"],name="COEFF"))
 
+    t0 = time.time()
     tmpfile = norm_modelfile+".tmp"
     hdulist.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, norm_modelfile)
+    duration = time.time() - t0
+    log.info(iotime.format('write', norm_modelfile, duration))
 
 
 def read_stdstar_models(filename):
@@ -64,14 +75,18 @@ def read_stdstar_models(filename):
     Returns:
         read_stdstar_models (tuple): flux[nspec, nwave], wave[nwave], fibers[nspec]
     """
+    log = get_logger()
+    t0 = time.time()
     with fits.open(filename, memmap=False) as fx:
         flux = native_endian(fx['FLUX'].data.astype('f8'))
         wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
         fibers = native_endian(fx['FIBERS'].data)
         metadata = fx['METADATA'].data
 
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
-    return flux, wave, fibers , metadata
+    return flux, wave, fibers, metadata
 
 
 def write_flux_calibration(outfile, fluxcalib, header=None):
@@ -84,6 +99,7 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     Options:
         header : dict-like object of key/value pairs to include in header
     """
+    log = get_logger()
     hx = fits.HDUList()
 
     hdr = fitsheader(header)
@@ -98,25 +114,35 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     hx.append( fits.ImageHDU(fluxcalib.wave.astype('f4'), name='WAVELENGTH') )
     hx[-1].header['BUNIT'] = 'Angstrom'
 
+    t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
+
 
 def read_flux_calibration(filename):
     """Read flux calibration file; returns a FluxCalib object
     """
     # Avoid a circular import conflict at package install/build_sphinx time.
     from ..fluxcalibration import FluxCalib
-    fx = fits.open(filename, memmap=False, uint=True)
-    calib = native_endian(fx[0].data.astype('f8'))
-    ivar = native_endian(fx["IVAR"].data.astype('f8'))
-    mask = native_endian(fx["MASK"].data)
-    wave = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+    log = get_logger()
+    t0 = time.time()
+    with fits.open(filename, memmap=False, uint=True) as fx:
+        calib = native_endian(fx[0].data.astype('f8'))
+        ivar = native_endian(fx["IVAR"].data.astype('f8'))
+        mask = native_endian(fx["MASK"].data)
+        wave = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+        header = fx[0].header
+
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask)
-    fluxcalib.header = fx[0].header
-    fx.close()
+    fluxcalib.header = header
+
     return fluxcalib
 
 
@@ -130,6 +156,7 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
     Options:
         header : dict-like object of key/value pairs to include in header
     """
+    log = get_logger()
     hx = fits.HDUList()
     hx.append( fits.PrimaryHDU(averagefluxcalib.average_calib.astype('f4')) )
     hx[-1].header['EXTNAME'] = 'FLUXCALIB'
@@ -144,8 +171,12 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
       hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction_uncertainty.astype('f4'), name='ATERM_ERR') )
     if averagefluxcalib.seeing_term_uncertainty is not None :
         hx.append( fits.ImageHDU(averagefluxcalib.seeing_term_uncertainty.astype('f4'), name='STERM_ERR') )
+
+    t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -156,23 +187,26 @@ def read_average_flux_calibration(filename):
     
     # Avoid a circular import conflict at package install/build_sphinx time.
     from ..averagefluxcalibration import AverageFluxCalib
-    fx = fits.open(filename, memmap=False, uint=True)
-    average_calib = native_endian(fx[0].data.astype('f8'))
-    atmospheric_extinction = native_endian(fx["ATERM"].data.astype('f8'))
-    seeing_term            = native_endian(fx["STERM"].data.astype('f8'))
-    pivot_airmass          = fx["ATERM"].header["PAIRMASS"]
-    pivot_seeing           = fx["STERM"].header["PSEEING"]
-    wave                   = native_endian(fx["WAVELENGTH"].data.astype('f8'))
-    if "ATERM_ERR" in fx :
-        atmospheric_extinction_uncertainty = native_endian(fx["ATERM_ERR"].data.astype('f8'))
-    else :
-        atmospheric_extinction_uncertainty = None
-    if "STERM_ERR" in fx :
-        seeing_term_uncertainty = native_endian(fx["STERM_ERR"].data.astype('f8'))
-    else :
-        seeing_term_uncertainty = None
-    
+    log = get_logger()
+    t0 = time.time()
+    with fits.open(filename, memmap=False, uint=True) as fx:
+        average_calib = native_endian(fx[0].data.astype('f8'))
+        atmospheric_extinction = native_endian(fx["ATERM"].data.astype('f8'))
+        seeing_term            = native_endian(fx["STERM"].data.astype('f8'))
+        pivot_airmass          = fx["ATERM"].header["PAIRMASS"]
+        pivot_seeing           = fx["STERM"].header["PSEEING"]
+        wave                   = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+        if "ATERM_ERR" in fx :
+            atmospheric_extinction_uncertainty = native_endian(fx["ATERM_ERR"].data.astype('f8'))
+        else :
+            atmospheric_extinction_uncertainty = None
+        if "STERM_ERR" in fx :
+            seeing_term_uncertainty = native_endian(fx["STERM_ERR"].data.astype('f8'))
+        else :
+            seeing_term_uncertainty = None
 
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     afluxcalib = AverageFluxCalib(wave=wave,
                                   average_calib=average_calib,
@@ -182,10 +216,8 @@ def read_average_flux_calibration(filename):
                                   pivot_seeing=pivot_seeing,
                                   atmospheric_extinction_uncertainty=atmospheric_extinction_uncertainty,
                                   seeing_term_uncertainty=seeing_term_uncertainty)
-    fx.close()
+
     return afluxcalib
-
-
 
 
 def read_stdstar_templates(stellarmodelfile):
@@ -203,6 +235,8 @@ def read_stdstar_templates(stellarmodelfile):
         logg : 1D[nmodel] array of surface gravity for each model
         feh : 1D[nmodel] array of metallicity for each model
     """
+    log = get_logger()
+    t0 = time.time()
     phdu=fits.open(stellarmodelfile, memmap=False)
 
     #- New templates have wavelength in HDU 2
@@ -230,5 +264,7 @@ def read_stdstar_templates(stellarmodelfile):
     fluxData=native_endian(phdu[0].data)
 
     phdu.close()
+    duration = time.time() - t0
+    log.info(iotime.format('read', stellarmodelfile, duration))
 
     return wavebins,fluxData,templateid,teff,logg,feh

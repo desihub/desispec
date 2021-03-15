@@ -5,6 +5,9 @@ desispec.io.util
 Utility functions for desispec IO.
 """
 import os
+import glob
+import time
+import datetime
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -334,3 +337,309 @@ def healpix_subdirectory(nside, pixel):
     # subnside, subpixel = healpix_degrade_fixed(nside, pixel)
     # return os.path.join("{}-{}".format(subnside, subpixel),
     #     "{}-{}".format(nside, pixel))
+
+    
+def create_camword(cameras):
+    """
+    Function that takes in a list of cameras and creates a succinct listing
+    of all spectrographs in the list with cameras. It uses "a" followed by
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.
+    b, r, and z represent the camera of the same name. All trailing numbers
+    represent the spectrographs for which that camera exists in the list.
+
+    Args:
+       cameras (1-d array or list): iterable containing strings of
+                                     cameras, e.g. 'b0','r1',...
+    Returns (str):
+       A string representing all information about the spectrographs/cameras
+       given in the input iterable, e.g. a01234678b59z9
+    """
+    log = get_logger()
+    camdict = {'r':[],'b':[],'z':[]}
+
+    for c in cameras:
+        if len(c) != 2:
+            log.error(f"Couldn't understand camera {c}.")
+            raise ValueError(f"Couldn't understand camera {c}.")
+        elif c[0] in ['r','b','z'] and c[1].isnumeric():
+            camdict[c[0]].append(c[1])
+        else:
+            camname,camnum = c[0],c[1]
+            log.error(f"Couldn't understand key {camname}{camnum}.")
+            raise ValueError(f"Couldn't understand key {camname}{camnum}.")
+
+    allcam = np.sort(list((set(camdict['r']).intersection(set(camdict['b'])).intersection(set(camdict['z'])))))
+
+    outstr = ''
+    if len(allcam) > 0:
+        outstr = 'a'+''.join(allcam)
+
+    for key in np.sort(list(camdict.keys())):
+        val = camdict[key]
+        if len(val) == 0:
+            continue
+        uniq = np.sort(list(set(val).difference(allcam)))
+        if len(uniq) > 0:
+            outstr += (key + ''.join(uniq))
+    return outstr
+
+def decode_camword(camword):
+    """
+    Function that takes in a succinct listing
+    of all spectrographs and outputs a 1-d numpy array with a list of all
+    spectrograph/camera pairs. It uses "a" followed by                                                      
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.                                             
+    b, r, and z represent the camera of the same name. All trailing numbers                                                     
+    represent the spectrographs for which that camera exists in the list.                                                       
+                                                                                                                                
+    Args:                      
+       camword (str): A string representing all information about the spectrographs/cameras                                    
+                        e.g. a01234678b59z9                                                                                                  
+    Returns (np.ndarray, 1d):  an array containing strings of                                                              
+                                cameras, e.g. 'b0','r1',...                                                                
+    """
+    log = get_logger()
+    searchstr = camword
+    camlist = []
+    while len(searchstr) > 1:
+        key = searchstr[0]
+        searchstr = searchstr[1:]
+
+        while len(searchstr) > 0 and searchstr[0].isnumeric():
+            if key == 'a':
+                camlist.append('b'+searchstr[0])
+                camlist.append('r'+searchstr[0])
+                camlist.append('z'+searchstr[0])
+            elif key in ['b','r','z']:
+                camlist.append(key+searchstr[0])
+            else:
+                log.error(f"Couldn't understand key={key} in camword={camword}.")
+                raise ValueError(f"Couldn't understand key={key} in camword={camword}.")
+            searchstr = searchstr[1:]
+    return sorted(camlist)
+
+def parse_cameras(cameras):
+    """
+    Function that takes in a representation
+    of all spectrographs and outputs a string that succinctly lists all
+    spectrograph/camera pairs. It uses "a" followed by
+    numbers to mean that "all" (b,r,z) cameras are accounted for for those numbers.
+    b, r, and z represent the camera of the same name. All trailing numbers
+    represent the spectrographs for which that camera exists in the list.
+
+    Args:
+       cameras, str. 1-d array, list: Either a str that is a comma separated list or a series of spectrographs.
+                                      Also accepts a list or iterable that is processed with create_camword().
+    Returns (str):
+       camword, str. A string representing all information about the spectrographs/cameras
+                     given in the input iterable, e.g. a01234678b59z9
+    """
+    log = get_logger()
+    if cameras is None:
+        camword = None
+    elif type(cameras) is str:
+        ## Clean the string
+        cameras = cameras.strip(' \t').lower()
+        ## Check to see if it already has cameras names specified
+        if 'a' in cameras or 'b' in cameras or 'r' in cameras or 'z' in cameras:
+            ## If there is a comma, treat each substring
+            ## else decode and re-encode the camword to get the simplest camword represention
+            if ',' in cameras:
+                camlist = []
+                ## Treat each substring as it's own substring
+                for substr in cameras.split(','):
+                    ## If len 1 and numeric, its a spectrograph name
+                    if len(substr) == 1 and substr.isnumeric():
+                        camlist.append('b' + substr)
+                        camlist.append('r' + substr)
+                        camlist.append('z' + substr)
+                    ## If larger than 2 chars and has letters, it's a camword. Decode it
+                    elif len(substr) > 2 and substr[0] in ['a','b','r','z']:
+                        camlist.extend(decode_camword(substr))
+                    ## If larger than 2 chars and no letters, it's a list of spectrographs
+                    elif len(substr) > 2 and substr[0].isnumeric():
+                        for char in substr:
+                            if char.isnumeric():
+                                camlist.append('b' + char)
+                                camlist.append('r' + char)
+                                camlist.append('z' + char)
+                    ## If len 2 and starts with a, it's the full spectrograph
+                    elif 'a' == substr[0]:
+                        camlist.append('b'+substr[1])
+                        camlist.append('r'+substr[1])
+                        camlist.append('z'+substr[1])
+                    ## else add the one camera if it is a known camera
+                    elif substr[0] in ['b','r','z']:
+                        camlist.append(substr)
+                    ## otherwise throw a message
+                    else:
+                        log.error(f"Couldn't understand substring={substr}.")
+                        raise ValueError(f"Couldn't understand substring={substr}.")
+
+                ## Encode the given list of spectrographs to the simplest camword form
+                camword = create_camword(camlist)
+            else:
+                ## decode and re-encode the camword to get the simplest camword represention
+                camword = create_camword(decode_camword(cameras))
+        ## if no letters present, then assume the comma separated list is of spectrographs
+        elif ',' in cameras:
+            camword = 'a'+cameras.replace(',','')
+        ## if no letters or commas present, then assume the string is of spectrographs without commas
+        else:
+            camword = 'a'+cameras
+    ## If it is a list or array, treat it as a camlist to encode
+    elif not np.isscalar(cameras):
+        camword = create_camword(cameras)
+    ## Otherwise give an error with the cameras given
+    else:
+        log.error(f"Couldn't understand cameras={cameras}.")
+        raise ValueError(f"Couldn't understand cameras={cameras}.")
+    if camword == '':
+        log.error(f"The returned camword was empty for input: {cameras}. Please check the supplied string for errors. ")
+        raise ValueError(f"The returned camword was empty for input: {cameras}.")
+
+    log.info(f"Converted input cameras={cameras} to camword={camword}")
+    return camword
+
+def difference_camwords(fullcamword,badcamword):
+    """
+    Returns the difference of two camwords. The second argument cameras are removed from the first argument and the
+    remainer is returned. Smart enough to ignore bad cameras if they don't exist in full camword list.
+
+    Args:
+        fullcamword, str. The camword of all cameras (including the bad ones to be removed).
+        badcamword, str. A camword defining the bad cameras you don't want to include in the final camword that is output
+
+    Returns:
+        str. A camword of cameras in fullcamword that are not in badcamword.
+    """
+    log = get_logger()
+    full_cameras = decode_camword(fullcamword)
+    bad_cameras = decode_camword(badcamword)
+    for cam in bad_cameras:
+        if cam in full_cameras:
+            full_cameras.remove(cam)
+        else:
+            log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
+    return create_camword(full_cameras)
+
+def parse_badamps(badamps,joinsymb=','):
+    """
+    Parses badamps string from an exposure or processing table into the (camera,petal,amplifier) sets,
+    with appropriate checking of those values to make sure they're valid.
+    Returns empty list if badamps is None.
+
+    Args:
+        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (comma
+                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
+        joinsymb, str. The symbol separating entries in the str list given by badamps.
+
+    Returns:
+        cam_petal_amps, list. A list where each entry is a length 3 tuple of (camera,petal,amplifier).
+                              Camera is a lowercase string in [b, r, z]. Petal is an int from 0 to 9.
+                              Amplifier is an upper case string in [A, B, C, D].
+
+    """
+    cam_petal_amps = []
+    if badamps is None:
+        return cam_petal_amps
+
+    for cpa in badamps.split(joinsymb):
+        cpa = cpa.strip()
+        if len(cpa) != 3:
+            raise ValueError("Each BADAMPS entry must be a comma separated list of {camera}{petal}{amp} " +
+                             f"(e.g. r7A,b8B). Given: {cpa}")
+        camera, petal, amplifier = cpa[0].lower(), cpa[1], cpa[2].upper()
+        if camera not in ['b', 'r', 'z']:
+            raise ValueError(f"For badamps, camera must be b, r, or z. Received: {camera}")
+        if not petal.isnumeric():
+            raise ValueError(f"For badamps, petal must be between 0 and 9. Received: {petal}")
+        if amplifier not in ['A', 'B', 'C', 'D']:
+            raise ValueError(f"For badamps, amplifier must be A, B, C, and D. Received: {amplifier}")
+        cam_petal_amps.append((camera, int(petal), amplifier))
+    return cam_petal_amps
+
+def get_speclog(nights, rawdir=None):
+    """
+    Scans raw data headers to return speclog of observations. Slow.
+
+    Args:
+        nights: list of YEARMMDD nights to scan
+
+    Options:
+        rawdir (str): overrides $DESI_SPECTRO_DATA
+
+    Returns:
+        Table with columns NIGHT,EXPID,MJD,FLAVOR,OBSTYPE,EXPTIME
+
+    Scans headers of rawdir/NIGHT/EXPID/desi-EXPID.fits.fz
+    """
+    #- only import fitsio if this function is called
+    import fitsio
+
+    if rawdir is None:
+        rawdir = os.environ['DESI_SPECTRO_DATA']
+
+    rows = list()
+    for night in nights:
+        for filename in sorted(glob.glob(f'{rawdir}/{night}/*/desi-*.fits.fz')):
+            hdr = fitsio.read_header(filename, 1)
+            rows.append([night, hdr['EXPID'], hdr['MJD-OBS'],
+                hdr['FLAVOR'], hdr['OBSTYPE'], hdr['EXPTIME']])
+
+    speclog = Table(
+        names = ['NIGHT', 'EXPID', 'MJD', 'FLAVOR', 'OBSTYPE', 'EXPTIME'],
+        rows = rows,
+    )
+
+    return speclog
+
+def replace_prefix(filepath, oldprefix, newprefix):
+    """
+    Replace prefix in filepath even if prefix is elsewhere in filepath
+
+    Args:
+        filepath : filename, optionally including path
+        oldprefix: original prefix to filename part of filepath
+        newprefix: new prefix to use for filename
+
+    Returns:
+        new filepath with replaced prefix
+
+    e.g. replace_prefix('/blat/foo/blat-bar-blat.fits', 'blat', 'quat')
+    returns '/blat/foo/quat-bar-blat.fits'
+    """
+    path, filename = os.path.split(filepath)
+    if not filename.startswith(oldprefix):
+        raise ValueError(f'{filename} does not start with {oldprefix}')
+
+    filename = filename.replace(oldprefix, newprefix, 1)
+    return os.path.join(path, filename)
+
+def addkeys(hdr1, hdr2, skipkeys=None):
+    """
+    Add new header keys from hdr2 to hdr1, skipping skipkeys
+
+    Arguments:
+        hdr1 (dict-like): destination header for keywords
+        hdr2 (dict-like): source header for keywords
+
+    Modifies hdr1 in place
+    """
+    log = get_logger()
+    #- standard keywords that should be skipped
+    stdkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
+                'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
+                'XTENSION', 'TFIELDS']
+
+    for key, value in hdr2.items():
+        if key not in stdkeys and \
+               ((skipkeys is None) or (key not in skipkeys)) \
+               and not key.startswith('TTYPE') \
+               and not key.startswith('TFORM') \
+               and not key.startswith('TUNIT') \
+               and key not in hdr1:
+            log.debug(f'Adding {key}')
+            hdr1[key] = value
+        else:
+            log.debug(f'Skipping {key}')

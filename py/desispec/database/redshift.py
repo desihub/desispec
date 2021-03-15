@@ -69,6 +69,8 @@ class Truth(SchemaMixin, Base):
     flux_z = Column(Float, nullable=False)
     flux_w1 = Column(Float, nullable=False)
     flux_w2 = Column(Float, nullable=False)
+    flux_w3 = Column(Float, nullable=False)
+    flux_w4 = Column(Float, nullable=False)
     oiiflux = Column(Float, nullable=False, default=-9999.0)
     hbetaflux = Column(Float, nullable=False, default=-9999.0)
     ewoii = Column(Float, nullable=False, default=-9999.0)
@@ -114,16 +116,22 @@ class Target(SchemaMixin, Base):
     flux_z = Column(Float, nullable=False)
     flux_w1 = Column(Float, nullable=False)
     flux_w2 = Column(Float, nullable=False)
+    flux_w3 = Column(Float, nullable=False)
+    flux_w4 = Column(Float, nullable=False)
     flux_ivar_g = Column(Float, nullable=False)
     flux_ivar_r = Column(Float, nullable=False)
     flux_ivar_z = Column(Float, nullable=False)
     flux_ivar_w1 = Column(Float, nullable=False)
     flux_ivar_w2 = Column(Float, nullable=False)
+    flux_ivar_w3 = Column(Float, nullable=False)
+    flux_ivar_w4 = Column(Float, nullable=False)
     mw_transmission_g = Column(Float, nullable=False)
     mw_transmission_r = Column(Float, nullable=False)
     mw_transmission_z = Column(Float, nullable=False)
     mw_transmission_w1 = Column(Float, nullable=False)
     mw_transmission_w2 = Column(Float, nullable=False)
+    mw_transmission_w3 = Column(Float, nullable=False)
+    mw_transmission_w4 = Column(Float, nullable=False)
     nobs_g = Column(Integer, nullable=False)
     nobs_r = Column(Integer, nullable=False)
     nobs_z = Column(Integer, nullable=False)
@@ -139,6 +147,8 @@ class Target(SchemaMixin, Base):
     allmask_g = Column(Float, nullable=False)
     allmask_r = Column(Float, nullable=False)
     allmask_z = Column(Float, nullable=False)
+    wisemask_w1 = Column(Integer, nullable=False)
+    wisemask_w2 = Column(Integer, nullable=False)
     psfdepth_g = Column(Float, nullable=False)
     psfdepth_r = Column(Float, nullable=False)
     psfdepth_z = Column(Float, nullable=False)
@@ -165,6 +175,7 @@ class Target(SchemaMixin, Base):
     fibertotflux_g = Column(Float, nullable=False)
     fibertotflux_r = Column(Float, nullable=False)
     fibertotflux_z = Column(Float, nullable=False)
+    ref_cat = Column(String, nullable=False)
     ref_id = Column(BigInteger, nullable=False)
     gaia_phot_g_mean_mag = Column(Float, nullable=False)
     gaia_phot_g_mean_flux_over_error = Column(Float, nullable=False)
@@ -172,6 +183,9 @@ class Target(SchemaMixin, Base):
     gaia_phot_bp_mean_flux_over_error = Column(Float, nullable=False)
     gaia_phot_rp_mean_mag = Column(Float, nullable=False)
     gaia_phot_rp_mean_flux_over_error = Column(Float, nullable=False)
+    gaia_phot_bp_rp_excess_factor = Column(Float, nullable=False)
+    gaia_astrometric_sigma5d_max = Column(Float, nullable=False)
+    gaia_astrometric_params_solved = Column(BigInteger, nullable=False)
     gaia_astrometric_excess_noise = Column(Float, nullable=False)
     gaia_duplicated_source = Column(Boolean, nullable=False)
     parallax = Column(Float, nullable=False)
@@ -180,15 +194,16 @@ class Target(SchemaMixin, Base):
     pmra_ivar = Column(Float, nullable=False)
     pmdec = Column(Float, nullable=False)
     pmdec_ivar = Column(Float, nullable=False)
-    brightstarinblob = Column(Boolean, nullable=False)
+    maskbits = Column(Integer, nullable=False)
     ebv = Column(Float, nullable=False)
     photsys = Column(String, nullable=False)
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
     mws_target = Column(BigInteger, nullable=False)
-    priority_init = Column(BigInteger, nullable=False)
     subpriority = Column(Float, nullable=False)
+    obsconditions = Column(BigInteger, nullable=False)
+    priority_init = Column(BigInteger, nullable=False)
     numobs_init = Column(BigInteger, nullable=False)
     hpxpixel = Column(BigInteger, nullable=False)
 
@@ -294,27 +309,30 @@ class FiberAssign(SchemaMixin, Base):
     """
 
     tileid = Column(Integer, index=True, primary_key=True)
-    fiber = Column(Integer, primary_key=True)
-    location = Column(Integer, nullable=False)
-    numtarget = Column(Integer, nullable=False)
     targetid = Column(BigInteger, index=True, nullable=False)
-    desi_target = Column(BigInteger, nullable=False)
-    bgs_target = Column(BigInteger, nullable=False)
-    mws_target = Column(BigInteger, nullable=False)
-    target_ra = Column(Float, nullable=False)
-    target_dec = Column(Float, nullable=False)
-    design_x = Column(Float, nullable=False)
-    design_y = Column(Float, nullable=False)
-    brickname = Column(String, index=True, nullable=False)
-    fiberstatus = Column(Integer, nullable=False)
-    design_q = Column(Float, nullable=False)
-    design_s = Column(Float, nullable=False)
-    lambda_ref = Column(Float, nullable=False)
-    objtype = Column(String, nullable=False)
     petal_loc = Column(Integer, nullable=False)
     device_loc = Column(Integer, nullable=False)
+    location = Column(Integer, nullable=False)
+    fiber = Column(Integer, primary_key=True)
+    fiberstatus = Column(Integer, nullable=False)
+    target_ra = Column(Float, nullable=False)
+    target_dec = Column(Float, nullable=False)
+    pmra = Column(Float, nullable=False)
+    pmdec = Column(Float, nullable=False)
+    pmra_ivar = Column(Float, nullable=False)
+    pmdec_ivar = Column(Float, nullable=False)
+    ref_epoch = Column(Float, nullable=False)
+    lambda_ref = Column(Float, nullable=False)
+    fa_target = Column(BigInteger, nullable=False)
+    fa_type = Column(Integer, nullable=False)
+    objtype = Column(String, nullable=False)
+    fiberassign_x = Column(Float, nullable=False)
+    fiberassign_y = Column(Float, nullable=False)
+    numtarget = Column(Integer, nullable=False)
     priority = Column(Integer, nullable=False)
     subpriority = Column(Float, nullable=False)
+    obsconditions = Column(BigInteger, nullable=False)
+    numobs_more = Column(Integer, nullable=False)
 
     def __repr__(self):
         return "<FiberAssign(tileid={0.tileid:d}, fiber={0.fiber:d})>".format(self)
@@ -594,7 +612,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
 
 
 def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
-                     latest_epoch=False, last_column='SUBPRIORITY'):
+                     latest_epoch=False, last_column='NUMOBS_MORE'):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -616,9 +634,9 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     latest_epoch : :class:`bool`, optional
         If set, search for the latest tile file among several epochs.
     last_column : :class:`str`, optional
-        Do not load columns past this name (default 'BRICKNAME').
+        Do not load columns past this name (default 'NUMOBS_MORE').
     """
-    fiberpath = os.path.join(datapath, 'tile*.fits')
+    fiberpath = os.path.join(datapath, 'fiberassign*.fits*')
     log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob.glob(fiberpath)
     if len(tile_files) == 0:
@@ -630,7 +648,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     #
     latest_tiles = dict()
     if latest_epoch:
-        tileidre = re.compile(r'/(\d+)/fiberassign/tile-(\d+)\.fits$')
+        tileidre = re.compile(r'/(\d+)/fiberassign/fiberassign\-(\d+)\.fits')
         for f in tile_files:
             m = tileidre.search(f)
             if m is None:
@@ -644,8 +662,8 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
                 latest_tiles[tileid] = (epoch, f)
     else:
         for f in tile_files:
-            # tile_TILEID.fits or tile-TILEID.fits
-            tileid = int(re.match('tile[\-_](\d+)\.fits',
+            # fiberassign-TILEID.fits
+            tileid = int(re.match('fiberassign\-(\d+)\.fits',
                          os.path.basename(f))[1])
             latest_tiles[tileid] = (0, f)
     log.info("Identified %d tile files for loading.", len(latest_tiles))
@@ -668,7 +686,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
                     #
                     # This replacement may be deprecated in the future.
                     #
-                    if col in ('TARGET_RA', 'TARGET_DEC', 'DESIGN_X', 'DESIGN_Y'):
+                    if col in ('TARGET_RA', 'TARGET_DEC', 'FIBERASSIGN_X', 'FIBERASSIGN_Y'):
                         data[col][bad] = -9999.0
                 assert not np.any(np.isnan(data[col]))
                 assert np.all(np.isfinite(data[col]))
@@ -894,7 +912,7 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepath': os.path.join(options.datapath, 'targets', 'truth.fits'),
+    loader = [{'filepath': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
                'tcls': Truth,
                'hdu': 'TRUTH',
                'expand': None,
@@ -903,7 +921,7 @@ def main():
                'q3c': False,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},
-              {'filepath': os.path.join(options.datapath, 'targets', 'targets.fits'),
+              {'filepath': os.path.join(options.datapath, 'targets', 'targets-dark.fits'),
                'tcls': Target,
                'hdu': 'TARGETS',
                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_comp',)},
@@ -955,7 +973,7 @@ def main():
     # Update truth table.
     #
     for h in ('BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'WD'):
-        update_truth(os.path.join(options.datapath, 'targets', 'truth.fits'),
+        update_truth(os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
                      'TRUTH_' + h)
     #
     # Load fiber assignment files.

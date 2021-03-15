@@ -13,7 +13,7 @@ from desispec.parallel import use_mpi
 comm = None
 rank = 0
 nproc = 1
-if use_mpi:
+if use_mpi():
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.rank

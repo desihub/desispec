@@ -390,7 +390,7 @@ class BoxcarExtract(pas.PipelineAlg):
     def get_default_config(self):
         return {("BoxWidth",2.5,"Boxcar halfwidth"),
                 ("PSFFile","%%PSFFile","PSFFile to use"),
-                ("DeltaW",0.5,"Binwidth of extrapolated wavelength array")
+                ("DeltaW",0.5,"Binwidth of extrapolated wavelength array"),
                 ("Nspec",500,"number of spectra to extract")
                 }
 
@@ -1163,7 +1163,7 @@ class Extract_QP(pas.PipelineAlg):
     def get_default_config(self):
         return {("FullWidth",7,"Boxcar full width"),
                 ("PSFFile","%%PSFFile","PSFFile to use"),
-                ("DeltaW",0.5,"Binwidth of extrapolated wavelength array")
+                ("DeltaW",0.5,"Binwidth of extrapolated wavelength array"),
                 ("Nspec",500,"number of spectra to extract")
                 }
 

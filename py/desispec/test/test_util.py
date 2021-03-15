@@ -5,7 +5,7 @@ Test desispec.util.*
 import os
 import unittest
 from uuid import uuid4
-import imp
+import importlib
 
 import numpy as np
 
@@ -86,6 +86,22 @@ class TestNight(unittest.TestCase):
         self.assertTrue(isinstance(ivar, np.ndarray))
         self.assertEqual(ivar.ndim, 0)
 
+    def test_parse_fibers(self):
+        """
+        test the util func parse_fibers
+        """
+        str1 = '0:10'
+        str2 = '1,2,3,4:8'
+        str3 = '1..5,6,7,8:10,11-14'
+        arr1 = np.array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9])
+        arr2  = np.array([1, 2, 3, 4, 5, 6, 7])
+        arr3 = np.array([ 1,  2,  3,  4,  6,  7,  8,  9, 11, 12, 13])
+        for instr,arr in zip([str1,str2,str3],
+                             [arr1,arr2,arr3]):
+            returned_arr = util.parse_fibers(instr)
+            self.assertEqual(len(returned_arr),len(arr))
+            for v1,v2 in zip(returned_arr,arr):
+                self.assertEqual(int(v1),int(v2))
 
 #- TODO: override log level to quiet down error messages that are supposed
 #- to be there from these tests
@@ -156,15 +172,16 @@ class TestRunCmd(unittest.TestCase):
         n = 4
         tmp = os.getenv('SLURM_CPUS_PER_TASK')
         os.environ['SLURM_CPUS_PER_TASK'] = str(n)
-        imp.reload(dpl)
+        importlib.reload(dpl)
         self.assertEqual(dpl.default_nproc, n)
         os.environ['SLURM_CPUS_PER_TASK'] = str(2*n)
-        imp.reload(dpl)
+        importlib.reload(dpl)
         self.assertEqual(dpl.default_nproc, 2*n)
         del os.environ['SLURM_CPUS_PER_TASK']
-        imp.reload(dpl)
+        importlib.reload(dpl)
         import multiprocessing
-        self.assertEqual(dpl.default_nproc, multiprocessing.cpu_count()//2)
+        
+        self.assertEqual(dpl.default_nproc, max(multiprocessing.cpu_count()//2, 1))
 
     @classmethod
     def setUpClass(cls):
@@ -182,7 +199,56 @@ class TestRunCmd(unittest.TestCase):
             if os.path.exists(filename):
                 os.remove(filename)
 
-        
+class TestUtil(unittest.TestCase):
+
+    def test_header2night(self):
+        from astropy.time import Time
+        night = 20210105
+        dateobs = '2021-01-06T04:33:55.704316928'
+        mjd = Time(dateobs).mjd
+        hdr = dict()
+
+        #- Missing NIGHT and DATE-OBS falls back to MJD-OBS
+        hdr['MJD-OBS'] = mjd
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- Missing NIGHT and MJD-OBS falls back to DATE-OBS
+        del hdr['MJD-OBS']
+        hdr['DATE-OBS'] = dateobs
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- NIGHT is NIGHT
+        del hdr['DATE-OBS']
+        hdr['NIGHT'] = night
+        self.assertEqual(util.header2night(hdr), night)
+        hdr['NIGHT'] = str(night)
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- NIGHT trumps DATE-OBS
+        hdr['NIGHT'] = night+1
+        hdr['DATE-OBS'] = dateobs
+        self.assertEqual(util.header2night(hdr), night+1)
+
+        #- Bogus NIGHT falls back to DATE-OBS
+        hdr['NIGHT'] = None
+        self.assertEqual(util.header2night(hdr), night)
+        hdr['NIGHT'] = '        '
+        self.assertEqual(util.header2night(hdr), night)
+        hdr['NIGHT'] = 'Sunday'
+        self.assertEqual(util.header2night(hdr), night)
+
+        #- Check rollover at noon KPNO (MST) = UTC 19:00
+        hdr = dict()
+        hdr['DATE-OBS'] = '2021-01-05T18:59:00'
+        self.assertEqual(util.header2night(hdr), 20210104)
+        hdr['DATE-OBS'] = '2021-01-05T19:00:01'
+        self.assertEqual(util.header2night(hdr), 20210105)
+        hdr['DATE-OBS'] = '2021-01-06T01:00:01'
+        self.assertEqual(util.header2night(hdr), 20210105)
+        hdr['DATE-OBS'] = '2021-01-06T18:59:59'
+        self.assertEqual(util.header2night(hdr), 20210105)
+
+
 if __name__ == '__main__':
     unittest.main()
         

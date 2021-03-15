@@ -4,12 +4,13 @@ Tools to regroup spectra in individual exposures by healpix on the sky
 
 from __future__ import absolute_import, division, print_function
 import glob, os, sys, time
-from collections import Counter
+from collections import Counter, OrderedDict
 
 import numpy as np
 
 import fitsio
 from astropy.io import fits
+from astropy.table import Table
 import healpy as hp
 
 import desimodel.footprint
@@ -119,7 +120,7 @@ class FrameLite(object):
     This is intended for I/O without the overheads of float32 -> float64
     conversion, correcting endianness, etc.
     '''
-    def __init__(self, wave, flux, ivar, mask, rdat, fibermap, header, scores=None):
+    def __init__(self, wave, flux, ivar, mask, resolution_data, fibermap, header, scores=None):
         '''
         Create a new FrameLite object
 
@@ -128,7 +129,7 @@ class FrameLite(object):
             flux: 2D[nspec, nwave] fluxes
             ivar: 2D[nspec, nwave] inverse variances of flux
             mask: 2D[nspec, nwave] mask of flux; 0=good
-            rdat 3D[nspec, ndiag, nwave] Resolution matrix diagonals
+            resolution_data 3D[nspec, ndiag, nwave] Resolution matrix diagonals
             fibermap: fibermap table
             header: FITS header
 
@@ -139,9 +140,10 @@ class FrameLite(object):
         self.flux = flux
         self.ivar = ivar
         self.mask = mask
-        self.rdat = rdat
+        self.resolution_data = resolution_data
         self.fibermap = fibermap
         self.header = header
+        self.meta = header  #- for compatibility with Frame objects
         self.scores = scores
 
     def __getitem__(self, index):
@@ -155,7 +157,7 @@ class FrameLite(object):
             scores = None
 
         return FrameLite(self.wave, self.flux[index], self.ivar[index],
-            self.mask[index], self.rdat[index], self.fibermap[index],
+            self.mask[index], self.resolution_data[index], self.fibermap[index],
             self.header, scores)
 
     @classmethod
@@ -169,7 +171,7 @@ class FrameLite(object):
             flux = fx['FLUX'].read()
             ivar = fx['IVAR'].read()
             mask = fx['MASK'].read()
-            rdat = fx['RESOLUTION'].read()
+            resolution_data = fx['RESOLUTION'].read()
             fibermap = fx['FIBERMAP'].read()
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
@@ -181,18 +183,26 @@ class FrameLite(object):
         night = np.tile(header['NIGHT'], nspec).astype('i4')
         expid = np.tile(header['EXPID'], nspec).astype('i4')
         tileid = np.tile(header['TILEID'], nspec).astype('i4')
+        if 'MJD-OBS' in header:
+            mjd = np.tile(header['MJD-OBS'], nspec).astype('f8')
+        elif 'MJD' in header:
+            mjd = np.tile(header['MJD'], nspec).astype('f8')
+        else:
+            mjd = np.zeros(nspec, dtype='f8')-1
+
         fibermap = np.lib.recfunctions.append_fields(
-            fibermap, ['NIGHT', 'EXPID', 'TILEID'], [night, expid, tileid],
+            fibermap, ['NIGHT', 'EXPID', 'MJD', 'TILEID'],
+            [night, expid, mjd, tileid],
             usemask=False)
 
-        return FrameLite(wave, flux, ivar, mask, rdat, fibermap, header, scores)
+        return FrameLite(wave, flux, ivar, mask, resolution_data, fibermap, header, scores)
 
 #-----
 class SpectraLite(object):
     '''
     Lightweight spectra I/O object for regrouping
     '''
-    def __init__(self, bands, wave, flux, ivar, mask, rdat, fibermap,
+    def __init__(self, bands, wave, flux, ivar, mask, resolution_data, fibermap,
             scores=None):
         '''
         Create a SpectraLite object
@@ -203,7 +213,7 @@ class SpectraLite(object):
             flux: dict of fluxes, keyed by band
             ivar: dict of inverse variances, keyed by band
             mask: dict of masks, keyed by band
-            rdat: dict of Resolution sparse diagonals, keyed by band
+            resolution_data: dict of Resolution sparse diagonals, keyed by band
             fibermap: fibermap table, applies to all bands
 
         Options:
@@ -218,22 +228,22 @@ class SpectraLite(object):
         assert set(flux.keys()) == _bands
         assert set(ivar.keys()) == _bands
         assert set(mask.keys()) == _bands
-        assert set(rdat.keys()) == _bands
+        assert set(resolution_data.keys()) == _bands
 
         #- All bands should have the same number of spectra
         nspec = len(fibermap)
-        for x in bands:
-            assert flux[x].shape[0] == nspec
-            assert ivar[x].shape[0] == nspec
-            assert mask[x].shape[0] == nspec
-            assert rdat[x].shape[0] == nspec
+        for band in bands:
+            assert flux[band].shape[0] == nspec
+            assert ivar[band].shape[0] == nspec
+            assert mask[band].shape[0] == nspec
+            assert resolution_data[band].shape[0] == nspec
 
             #- Also check wavelength dimension consistency
-            nwave = len(wave[x])
-            assert flux[x].shape[1] == nwave
-            assert ivar[x].shape[1] == nwave
-            assert mask[x].shape[1] == nwave
-            assert rdat[x].shape[2] == nwave  #- rdat[x].shape[1] is ndiag
+            nwave = len(wave[band])
+            assert flux[band].shape[1] == nwave
+            assert ivar[band].shape[1] == nwave
+            assert mask[band].shape[1] == nwave
+            assert resolution_data[band].shape[2] == nwave  #- resolution_data[band].shape[1] is ndiag
 
         #- scores and fibermap should be row matched with same length
         if scores is not None:
@@ -243,17 +253,58 @@ class SpectraLite(object):
         self.flux = flux.copy()
         self.ivar = ivar.copy()
         self.mask = mask.copy()
-        self.rdat = rdat.copy()
+        self.resolution_data = resolution_data.copy()
         self.fibermap = fibermap
         self.scores = scores
+
+        #- for compatibility with full Spectra objects
+        self.meta = None
+        self.extra = None
+
+    def target_ids(self):
+        """
+        Return list of unique target IDs.
+
+        The target IDs are sorted by the order that they first appear.
+
+        Returns (array):
+            an array of integer target IDs.
+        """
+        uniq, indices = np.unique(self.fibermap["TARGETID"], return_index=True)
+        return uniq[indices.argsort()]
+
+    def num_spectra(self):
+        """
+        Get the number of spectra contained in this group.
+
+        Returns (int):
+            Number of spectra contained in this group.
+        """
+        if self.fibermap is not None:
+            return len(self.fibermap)
+        else:
+            return 0
+
+
+    def num_targets(self):
+        """
+        Get the number of distinct targets.
+
+        Returns (int):
+            Number of unique targets with spectra in this object.
+        """
+        if self.fibermap is not None:
+            return len(np.unique(self.fibermap["TARGETID"]))
+        else:
+            return 0
 
     def __add__(self, other):
         '''
         concatenate two SpectraLite objects into one
         '''
         assert self.bands == other.bands
-        for x in self.bands:
-            assert np.all(self.wave[x] == other.wave[x])
+        for band in self.bands:
+            assert np.all(self.wave[band] == other.wave[band])
         if self.scores is not None:
             assert other.scores is not None
 
@@ -262,12 +313,12 @@ class SpectraLite(object):
         flux = dict()
         ivar = dict()
         mask = dict()
-        rdat = dict()
-        for x in self.bands:
-            flux[x] = np.vstack([self.flux[x], other.flux[x]])
-            ivar[x] = np.vstack([self.ivar[x], other.ivar[x]])
-            mask[x] = np.vstack([self.mask[x], other.mask[x]])
-            rdat[x] = np.vstack([self.rdat[x], other.rdat[x]])
+        resolution_data = dict()
+        for band in self.bands:
+            flux[band] = np.vstack([self.flux[band], other.flux[band]])
+            ivar[band] = np.vstack([self.ivar[band], other.ivar[band]])
+            mask[band] = np.vstack([self.mask[band], other.mask[band]])
+            resolution_data[band] = np.vstack([self.resolution_data[band], other.resolution_data[band]])
 
         #- Note: tables use np.hstack not np.vstack
         fibermap = np.hstack([self.fibermap, other.fibermap])
@@ -276,7 +327,7 @@ class SpectraLite(object):
         else:
             scores = None
 
-        return SpectraLite(bands, wave, flux, ivar, mask, rdat, fibermap, scores)
+        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
 
     def write(self, filename, header=None):
         '''
@@ -285,11 +336,9 @@ class SpectraLite(object):
 
         #- create directory if missing
         dirname=os.path.dirname(filename)
-        try :
-            if not os.path.isdir(dirname) :
-                os.makedirs(dirname)
-        except FileExistsError :
-            pass
+        if dirname != '':
+            os.makedirs(dirname, exist_ok=True)
+
         tmpout = filename + '.tmp'
 
         #- work around c/fitsio bug that appends spaces to string column values
@@ -311,16 +360,16 @@ class SpectraLite(object):
         #- these are written one-by-one
         if self.scores is not None:
             fitsio.write(tmpout, self.scores, extname='SCORES')
-        for x in sorted(self.bands):
-            X = x.upper()
-            fitsio.write(tmpout, self.wave[x], extname=X+'_WAVELENGTH',
+        for band in sorted(self.bands):
+            upperband = band.upper()
+            fitsio.write(tmpout, self.wave[band], extname=upperband+'_WAVELENGTH',
                     header=dict(BUNIT='Angstrom'))
-            fitsio.write(tmpout, self.flux[x], extname=X+'_FLUX',
+            fitsio.write(tmpout, self.flux[band], extname=upperband+'_FLUX',
                     header=dict(BUNIT='10**-17 erg/(s cm2 Angstrom)'))
-            fitsio.write(tmpout, self.ivar[x], extname=X+'_IVAR',
+            fitsio.write(tmpout, self.ivar[band], extname=upperband+'_IVAR',
                 header=dict(BUNIT='10**+34 (s2 cm4 Angstrom2) / erg2'))
-            fitsio.write(tmpout, self.mask[x], extname=X+'_MASK', compress='gzip')
-            fitsio.write(tmpout, self.rdat[x], extname=X+'_RESOLUTION')
+            fitsio.write(tmpout, self.mask[band], extname=upperband+'_MASK', compress='gzip')
+            fitsio.write(tmpout, self.resolution_data[band], extname=upperband+'_RESOLUTION')
 
         os.rename(tmpout, filename)
 
@@ -334,7 +383,7 @@ class SpectraLite(object):
             flux = dict()
             ivar = dict()
             mask = dict()
-            rdat = dict()
+            resolution_data = dict()
             fibermap = fx['FIBERMAP'].read()
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
@@ -342,15 +391,15 @@ class SpectraLite(object):
                 scores = None
 
             bands = ['b', 'r', 'z']
-            for x in bands:
-                X = x.upper()
-                wave[x] = fx[X+'_WAVELENGTH'].read()
-                flux[x] = fx[X+'_FLUX'].read()
-                ivar[x] = fx[X+'_IVAR'].read()
-                mask[x] = fx[X+'_MASK'].read()
-                rdat[x] = fx[X+'_RESOLUTION'].read()
+            for band in bands:
+                upperband = band.upper()
+                wave[band] = fx[upperband+'_WAVELENGTH'].read()
+                flux[band] = fx[upperband+'_FLUX'].read()
+                ivar[band] = fx[upperband+'_IVAR'].read()
+                mask[band] = fx[upperband+'_MASK'].read()
+                resolution_data[band] = fx[upperband+'_RESOLUTION'].read()
 
-        return SpectraLite(bands, wave, flux, ivar, mask, rdat, fibermap, scores)
+        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
 
 def add_missing_frames(frames):
     '''
@@ -379,129 +428,151 @@ def add_missing_frames(frames):
         if band not in wave:
             wave[band] = frame.wave
         if band not in ndiag:
-            ndiag[band] = frame.rdat.shape[1]
+            ndiag[band] = frame.resolution_data.shape[1]
 
     #- Now loop through all frames, filling in any missing bands
     bands = sorted(list(wave.keys()))
     for (night, expid, camera), frame in list(frames.items()):
-        band = camera[0]
+        frameband = camera[0]
         spectro = camera[1:]
-        for x in bands:
-            if x == band:
+        for band in bands:
+            if band == frameband:
                 continue
 
-            xcam = x+spectro
-            if (night, expid, xcam) in frames:
+            bandcam = band+spectro
+            if (night, expid, bandcam) in frames:
                 continue
 
             log.warning('Creating blank data for missing frame {}'.format(
-                (night, expid, xcam)))
-            nwave = len(wave[x])
+                (night, expid, bandcam)))
+            nwave = len(wave[band])
             nspec = frame.flux.shape[0]
             flux = np.zeros((nspec, nwave), dtype='f4')
             ivar = np.zeros((nspec, nwave), dtype='f4')
             mask = np.zeros((nspec, nwave), dtype='u4') + specmask.NODATA
-            rdat = np.zeros((nspec, ndiag[x], nwave), dtype='f4')
+            resolution_data = np.zeros((nspec, ndiag[band], nwave), dtype='f4')
 
             #- Copy the header and correct the camera keyword
-            header = fitsio.FITSHDR(frame.header)
-            header['camera'] = xcam
+            if type(frame.meta) is fits.header.Header:
+                header = fitsio.FITSHDR( OrderedDict(frame.meta) )
+            else:
+                header = fitsio.FITSHDR(frame.meta)
+            header['camera'] = bandcam
 
             #- Make new blank scores, replacing trailing band _B/R/Z
             dtype = list()
             if frame.scores is not None:
                 for name in frame.scores.dtype.names:
-                    if name.endswith('_'+band.upper()):
-                        xname = name[0:-1] + x.upper()
-                        dtype.append((xname, type(frame.scores[name][0])))
+                    if name.endswith('_'+frameband.upper()):
+                        bandname = name[0:-1] + band.upper()
+                        dtype.append((bandname, type(frame.scores[name][0])))
 
                 scores = np.zeros(nspec, dtype=dtype)
             else:
                 scores = None
 
             #- Add the blank FrameLite object
-            frames[(night,expid,xcam)] = FrameLite(
-                wave[x], flux, ivar, mask, rdat,
+            frames[(night,expid,bandcam)] = FrameLite(
+                wave[band], flux, ivar, mask, resolution_data,
                 frame.fibermap, header, scores)
 
-def frames2spectra(frames, pix, nside=64):
+def frames2spectra(frames, pix=None, nside=64):
     '''
     Combine a dict of FrameLite into a SpectraLite for healpix `pix`
 
     Args:
         frames: dict of FrameLight, keyed by (night, expid, camera)
-        pix: NESTED healpix pixel number
 
     Options:
+        pix: only include targets in this NESTED healpix pixel number
         nside: Healpix nside, must be power of 2
 
     Returns:
         SpectraLite object with subset of spectra from frames that are in
         the requested healpix pixel `pix`
     '''
-    wave = dict()
-    flux = dict()
-    ivar = dict()
-    mask = dict()
-    rdat = dict()
-    fibermap = list()
-    scores = dict()
+    log = get_logger()
 
-    bands = ['b', 'r', 'z']
-    for x in bands:
-        #- Select just the frames for this band
-        keys = sorted(frames.keys())
-        xframes = [frames[k] for k in keys if frames[k].header['CAMERA'].startswith(x)]
-        assert len(xframes) != 0
+    #- First make sure that the given set of frames is complete
+    #- If not, fill in missing cameras so that the stack works properly
+    add_missing_frames(frames)
+
+    #- Setup data structures to fill
+    wave, flux, ivar, mask = dict(), dict(), dict(), dict()
+    resolution_data, scores, fmaps = dict(), dict(), dict()
+    
+    #- Get the bands that exist in the input data
+    #- identify all of the exposures for each band
+    #- and instantiate some variables for the next loop
+    bands, allkeys =  list(),  dict()
+    for (night,expid,cam),frame in frames.items():
+        band = cam[0]
+        if band not in bands:
+            bands.append(band)
+            allkeys[band] = list()
+            flux[band] = list()
+            ivar[band] = list()
+            mask[band] = list()
+            resolution_data[band] = list()
+            scores[band] = list()
+            wave[band] = frame.wave
+        if (cam[1],night,expid) not in fmaps.keys():
+            fmaps[(cam[1],night,expid)] = dict()
+        fmaps[(cam[1],night,expid)][band] = None
+        allkeys[band].append((cam[1],night,expid,cam))
+
+    bands = sorted(bands)
+    for band in bands:
+        assert len(allkeys[band]) != 0
+        #- Select just the frames for this band using keys collected above
+        #  Sort them so we are ordered by spectrograph, then night, then exposure
+        band_keys = sorted(allkeys[band])
 
         #- Select flux, ivar, etc. for just the spectra on this healpix
-        wave[x] = xframes[0].wave
-        flux[x] = list()
-        ivar[x] = list()
-        mask[x] = list()
-        rdat[x] = list()
-        scores[x] = list()
-        for xf in xframes:
-            ra, dec = xf.fibermap['TARGET_RA'], xf.fibermap['TARGET_DEC']
-            ok = ~np.isnan(ra) & ~np.isnan(dec)
-            ra[~ok] = 0.0
-            dec[~ok] = 0.0
-            allpix = desimodel.footprint.radec2pix(nside, ra, dec)
-            ii = (allpix == pix) & ok
-            flux[x].append(xf.flux[ii])
-            ivar[x].append(xf.ivar[ii])
-            mask[x].append(xf.mask[ii])
-            rdat[x].append(xf.rdat[ii])
+        for spec,night,expid,cam in band_keys:
+            bandframe = frames[(night,expid,cam)]
+            if pix is not None:
+                ra, dec = bandframe.fibermap['TARGET_RA'], bandframe.fibermap['TARGET_DEC']
+                ok = ~np.isnan(ra) & ~np.isnan(dec)
+                ra[~ok] = 0.0
+                dec[~ok] = 0.0
+                allpix = desimodel.footprint.radec2pix(nside, ra, dec)
+                ii = (allpix == pix) & ok
+            else:
+                ii = np.ones(bandframe.flux.shape[0]).astype(bool)
+                
+            #- Careful: very similar code below for non-filtered appending
+            flux[band].append(bandframe.flux[ii])
+            ivar[band].append(bandframe.ivar[ii])
+            mask[band].append(bandframe.mask[ii])
+            resolution_data[band].append(bandframe.resolution_data[ii])
 
-            if x == bands[0]:
-                fibermap.append(xf.fibermap[ii])
+            fmaps[(spec,night,expid)][band] = bandframe.fibermap[ii]
 
-            if xf.scores is not None:
-                scores[x].append(xf.scores[ii])
+            if bandframe.scores is not None:
+                scores[band].append(bandframe.scores[ii])
 
-        flux[x] = np.vstack(flux[x])
 
-        ivar[x] = np.vstack(ivar[x])
-        mask[x] = np.vstack(mask[x])
-        rdat[x] = np.vstack(rdat[x])
-        if x == bands[0]:
-            fibermap = np.hstack(fibermap)
-
-        if len(scores[x]) > 0:
-            scores[x] = np.hstack(scores[x])
+        flux[band] = np.vstack(flux[band])
+        ivar[band] = np.vstack(ivar[band])
+        mask[band] = np.vstack(mask[band])
+        resolution_data[band] = np.vstack(resolution_data[band])
+        
+        if len(scores[band]) > 0:
+            scores[band] = np.hstack(scores[band])
 
     #- Combine scores into a single table
     #- Why doesn't np.vstack work for this? (says invalid type promotion)
     if len(scores[bands[0]]) > 0:
         if len(bands) == 1:
-            scores = scores(bands[0])
+            scores = scores[bands[0]]
         else:
             names = list()
             data = list()
-            for x in bands[1:]:
-                names.extend(scores[x].dtype.names)
-                for colname in scores[x].dtype.names:
-                    data.append(scores[x][colname])
+            for band in bands[1:]:
+                names.extend(scores[band].dtype.names)
+                for colname in scores[band].dtype.names:
+                    data.append(scores[band][colname])
 
             scores = np.lib.recfunctions.append_fields(
                     scores[bands[0]], names, data)
@@ -509,7 +580,45 @@ def frames2spectra(frames, pix, nside=64):
     else:
         scores = None
 
-    return SpectraLite(bands, wave, flux, ivar, mask, rdat, fibermap, scores)
+    #- Go in order over all exposures, pick up fibermaps. When multiple, use the first
+    #- but bitwise OR the fiberstatus.
+    merged_over_cams_fmaps = list()
+    sorted_keys = sorted(list(fmaps.keys()))
+    for key in sorted_keys:
+        banddict = fmaps[key]
+        outmap = None
+        for band in bands:
+            if banddict[band] is None:
+                continue
+            if outmap is None:
+                outmap = banddict[band]
+            else:
+                outmap['FIBERSTATUS'] |= banddict[band]['FIBERSTATUS']
+        merged_over_cams_fmaps.append(outmap)
+
+    #- Convert to Tables to facilitate column add/drop/reorder
+    for i, fm in enumerate(merged_over_cams_fmaps):
+        if not isinstance(fm, Table):
+            merged_over_cams_fmaps[i] = Table(fm)
+
+    #- Standardize all fibermaps to have the same columns in same order
+    if len(merged_over_cams_fmaps) > 1:
+        colnames = list(merged_over_cams_fmaps[0].colnames)
+        for fm in merged_over_cams_fmaps[1:]:
+            for drop in set(colnames) - set(fm.colnames):
+                log.warning(f"Ignoring {drop}, missing from some fibermaps")
+                colnames.remove(drop)
+            #- Also warn about columns that were never in original list
+            for drop in set(fm.colnames) - set(colnames):
+                log.warning(f"Ignoring {drop}, missing from some fibermaps")
+
+        for i in range(len(merged_over_cams_fmaps)):
+            merged_over_cams_fmaps[i] = merged_over_cams_fmaps[i][colnames]
+
+    #- Combine all the individual fibermaps from the exposures and spectrographs
+    fibermap = np.hstack(merged_over_cams_fmaps)
+
+    return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
 
 def update_frame_cache(frames, framekeys, specprod_dir=None):
     '''

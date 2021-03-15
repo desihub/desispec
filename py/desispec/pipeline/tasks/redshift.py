@@ -114,7 +114,7 @@ class TaskRedshift(BaseTask):
     def _run_defaults(self):
         """See BaseTask.run_defaults.
         """
-        return {}
+        return {'no-mpi-abort': True}
 
     def _option_list(self, name, opts):
         """Build the full list of options.

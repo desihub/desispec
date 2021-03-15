@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 """Test desispec.io.
 """
-from __future__ import absolute_import, division
-# The line above will help with 2to3 support.
 import unittest
+from unittest.mock import patch, MagicMock
 import os
 import sys
 import tempfile
@@ -16,12 +15,6 @@ from astropy.io import fits
 from astropy.table import Table
 from ..frame import Frame
 
-skipMock = False
-try:
-    from unittest.mock import patch
-except ImportError:
-    # Python 2
-    skipMock = True
 
 class TestIO(unittest.TestCase):
     """Test desispec.io.
@@ -34,14 +27,21 @@ class TestIO(unittest.TestCase):
         cls.testDir = tempfile.mkdtemp()
         cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
         cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
+        cls.testlog = os.path.join(cls.testDir, 'desispec_test_io.log')
         # cls.testbrfile appears to be unused by this class.
         cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
-        cls.origEnv = {'SPECPROD':None,
-            "DESI_SPECTRO_DATA":None,
-            "DESI_SPECTRO_REDUX":None}
+        cls.origEnv = {'SPECPROD': None,
+                       "DESI_ROOT": None,
+                       "DESI_SPECTRO_DATA": None,
+                       "DESI_SPECTRO_REDUX": None,
+                       "DESI_SPECTRO_CALIB": None,
+                       }
         cls.testEnv = {'SPECPROD':'dailytest',
-            "DESI_SPECTRO_DATA":os.path.join(cls.testDir,'spectro','data'),
-            "DESI_SPECTRO_REDUX":os.path.join(cls.testDir,'spectro','redux')}
+                       "DESI_ROOT": cls.testDir,
+                       "DESI_SPECTRO_DATA": os.path.join(cls.testDir, 'spectro', 'data'),
+                       "DESI_SPECTRO_REDUX": os.path.join(cls.testDir, 'spectro', 'redux'),
+                       "DESI_SPECTRO_CALIB": os.path.join(cls.testDir, 'spectro', 'calib'),
+                       }
         cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
         cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
                                     cls.testEnv['SPECPROD'])
@@ -57,14 +57,15 @@ class TestIO(unittest.TestCase):
             rmtree(self.reduxdir)
 
     def tearDown(self):
-        if os.path.exists(self.testfile):
-            os.remove(self.testfile)
+        for testfile in [self.testfile, self.testyfile, self.testbrfile, self.testlog]:
+            if os.path.exists(testfile):
+                os.remove(testfile)
 
     @classmethod
     def tearDownClass(cls):
         """Cleanup test files if they exist.
         """
-        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile]:
+        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile, cls.testlog]:
             if os.path.exists(testfile):
                 os.remove(testfile)
 
@@ -207,7 +208,6 @@ class TestIO(unittest.TestCase):
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.
     @unittest.skipIf(sys.platform == 'darwin', "Skipping memmap test on Mac.")
-    @unittest.skipIf(skipMock, "Skipping test that requires unittest.mock.")
     def test_supports_memmap(self):
         """Test utility to detect when memory-mapping is not possible.
         """
@@ -487,7 +487,20 @@ class TestIO(unittest.TestCase):
         data['TEMPLATEID'] = np.arange(nstd)
         data['CHI2DOF'] = np.ones(nstd)
         data['REDSHIFT'] = np.zeros(nstd)
+
+        #- Write with data as Table, array, and dict
         write_stdstar_models(self.testfile, flux, wave, fibers, data)
+        write_stdstar_models(self.testfile, flux, wave, fibers, np.asarray(data))
+
+        datadict = dict()
+        for colname in data.colnames:
+            datadict[colname] = data[colname]
+
+        write_stdstar_models(self.testfile, flux, wave, fibers, datadict)
+
+        #- Now write with coefficients too
+        datadict['COEFF'] = np.zeros((nstd, 3))
+        write_stdstar_models(self.testfile, flux, wave, fibers, datadict)
 
         fx, wx, fibx, metadata = read_stdstar_models(self.testfile)
         self.assertTrue(np.all(fx == flux.astype('f4').astype('f8')))
@@ -600,7 +613,7 @@ class TestIO(unittest.TestCase):
         """Test desispec.io.meta.findfile and desispec.io.download.filepath2url.
         """
         from ..io.meta import findfile
-        from ..io.download import filepath2url
+        # from ..io.download import filepath2url
 
         kwargs = dict(night=20150510, expid=2, camera='b3', spectrograph=3)
         file1 = findfile('sky', **kwargs)
@@ -611,11 +624,12 @@ class TestIO(unittest.TestCase):
 
         self.assertEqual(file1, file2)
 
-        url1 = filepath2url(file1)
-        url2 = os.path.join('https://portal.nersc.gov/project/desi',
-            'collab','spectro','redux',os.environ['SPECPROD'],'exposures',
-            str(kwargs['night']),'{expid:08d}'.format(**kwargs),
-            os.path.basename(file1))
+        # url1 = filepath2url(file1)
+        url1 = file1.replace(os.environ['DESI_ROOT'], 'https://data.desi.lbl.gov/desi')
+        url2 = os.path.join('https://data.desi.lbl.gov/desi',
+                            'spectro', 'redux', os.environ['SPECPROD'], 'exposures',
+                            str(kwargs['night']),'{expid:08d}'.format(**kwargs),
+                            os.path.basename(file1))
         self.assertEqual(url1, url2)
 
         #
@@ -634,7 +648,7 @@ class TestIO(unittest.TestCase):
         del os.environ['DESI_SPECTRO_DATA']
         x = findfile('spectra', groupname=123)
         self.assertTrue(x is not None)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(KeyError):
             x = findfile('fibermap', night='20150101', expid=123)
         os.environ['DESI_SPECTRO_DATA'] = self.testEnv['DESI_SPECTRO_DATA']
 
@@ -642,7 +656,7 @@ class TestIO(unittest.TestCase):
         del os.environ['DESI_SPECTRO_REDUX']
         x = findfile('fibermap', night='20150101', expid=123)
         self.assertTrue(x is not None)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(KeyError):
             x = findfile('spectra', groupname=123)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
@@ -670,6 +684,18 @@ class TestIO(unittest.TestCase):
             a = findfile('cframe', night=20200317, expid=18, camera='X7')
         with self.assertRaises(ValueError):
             a = findfile('cframe', night=20200317, expid=18, camera='Hasselblad')
+
+        # Test healpix versus tiles
+        a = findfile('spectra', groupname='5286')
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'spectra-64', '52', '5286',
+                         'spectra-64-5286.fits')
+        self.assertEqual(a, b)
+        a = findfile('spectra', tile=68000, night='20200314', spectrograph=2)
+        b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                         os.environ['SPECPROD'], 'tiles', '68000', '20200314',
+                         'spectra-2-68000-20200314.fits')
+        self.assertEqual(a, b)
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
@@ -766,28 +792,248 @@ class TestIO(unittest.TestCase):
         night1 = find_exposure_night(150)
         self.assertEqual(night1, '20150102')
 
-    @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
-    @unittest.skipIf(True, "NERSC is out; download will fail")
-    def test_download(self):
+    # @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'], '.netrc')), "No ~/.netrc file detected.")
+    @patch('desispec.io.download.get')
+    @patch('desispec.io.download.netrc')
+    def test_download(self, mock_netrc, mock_get):
         """Test desiutil.io.download.
         """
+        n = mock_netrc()
+        n.authenticators.return_value = ('desi', 'foo', 'not-a-real-password')
+        r = MagicMock()
+        r.status_code = 200
+        r.content = b'This is a fake file.'
+        r.headers = {'last-modified': 'Sun, 10 May 2015 11:45:22 GMT'}
+        mock_get.return_value = r
+        self.assertEqual(datetime(2015, 5, 10, 11, 45, 22).strftime('%a, %d %b %Y %H:%M:%S'),
+                         'Sun, 10 May 2015 11:45:22')
         #
         # Test by downloading a single file.  This sidesteps any issues
         # with running multiprocessing within the unittest environment.
         #
         from ..io.meta import findfile
-        from ..io.download import download
-        filename = findfile('sky',expid=2,night='20150510',camera='b0',spectrograph=0)
+        from ..io.download import download, _auth_cache
+        filename = findfile('sky', expid=2, night='20150510', camera='b0', spectrograph=0)
         paths = download(filename)
-        self.assertEqual(paths[0],filename)
+        self.assertEqual(paths[0], filename)
         self.assertTrue(os.path.exists(paths[0]))
+        mock_get.assert_called_once_with('https://data.desi.lbl.gov/desi/spectro/redux/dailytest/exposures/20150510/00000002/sky-b0-00000002.fits',
+                                         auth=_auth_cache['data.desi.lbl.gov'])
+        n.authenticators.assert_called_once_with('data.desi.lbl.gov')
         #
         # Deliberately test a non-existent file.
         #
-        filename = findfile('sky',expid=2,night='20150510',camera='b9',spectrograph=9)
+        r.status_code = 404
+        filename = findfile('sky', expid=2, night='20150510', camera='b9', spectrograph=9)
         paths = download(filename)
         self.assertIsNone(paths[0])
-        # self.assertFalse(os.path.exists(paths[0]))
+        self.assertFalse(os.path.exists(filename))
+        #
+        # Simulate a file that already exists.
+        #
+        filename = findfile('sky', expid=2, night='20150510', camera='b0', spectrograph=0)
+        paths = download(filename)
+        self.assertEqual(paths[0], filename)
+
+    def test_create_camword(self):
+        """ Test desispec.io.create_camword
+        """
+        from ..io.util import create_camword
+        # Create some lists to convert
+        cameras1 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8', 'z9']
+        cameras2 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7']
+        cameras3 = ['b0', 'b1', 'b2', 'b3', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z9']
+
+        for array_type in [list,np.array]:
+            camword1 = create_camword(array_type(cameras1))
+            self.assertEqual(camword1, 'a0123456789')
+            camword2 = create_camword(array_type(cameras2))
+            self.assertEqual(camword2, 'a01234567b89r89')
+            camword3 = create_camword(array_type(cameras3))
+            self.assertEqual(camword3, 'a01235679b8r48z4')
+
+    def test_decode_camword(self):
+        """ Test desispec.io.decode_camword
+        """
+        from ..io.util import decode_camword
+        # Create some lists to convert
+        cameras1 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8', 'z9']
+        cameras2 = ['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7']
+        cameras3 = ['b0', 'b1', 'b2', 'b3', 'b5', 'b6', 'b7', 'b8', 'b9', 'r0',\
+                    'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'z0', 'z1',\
+                    'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z9']
+
+        camword1 = 'a0123456789'
+        camword2 = 'a01234567b89r89'
+        camword3 = 'a01235679b8r48z4'
+
+        for cameras,camword in zip([cameras1,cameras2,cameras3],\
+                                   [camword1,camword2,camword3]):
+            decoded = decode_camword(camword)
+            for ii in range(len(decoded)):
+                self.assertEqual(str(decoded[ii]),str(cameras[ii]))
+
+    def test_difference_camwords(self):
+        """ Test desispec.io.difference_camwords
+        """
+        from ..io.util import difference_camwords
+        fcamwords = ['a0123456789', 'a012345678b9', 'a012345678r9z9', 'a012346789', 'a012356789r4', 'a0123456']
+        bcamwords = ['a0123', 'a019', 'b9', 'z89', 'a7r4', 'a0123456']
+        truediffs = ['a456789', 'a2345678', 'a012345678r9z9', 'a0123467b89r89', 'a01235689', '']
+        for fcw, bcw, truth in zip(fcamwords, bcamwords, truediffs):
+            diff = difference_camwords(fcw, bcw)
+            self.assertEqual(diff, truth)
+
+    def test_replace_prefix(self):
+        """Test desispec.io.util.replace_prefix
+        """
+        from ..io.util import replace_prefix
+        oldfile = '/blat/foo/blat-foo-blat.fits'
+        newfile = '/blat/foo/quat-foo-blat.fits'
+        self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+        oldfile = 'blat-foo-blat.fits'
+        newfile = 'quat-foo-blat.fits'
+        self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+
+    def test_find_fibermap(self):
+        '''Test finding (non)gzipped fiberassign files'''
+        from ..io.fibermap import find_fiberassign_file
+        night = 20101020
+        nightdir = os.path.join(self.datadir, str(night))
+        os.makedirs(nightdir)
+        os.makedirs(f'{nightdir}/00012345')
+        os.makedirs(f'{nightdir}/00012346')
+        os.makedirs(f'{nightdir}/00012347')
+        os.makedirs(f'{nightdir}/00012348')
+        fafile = f'{nightdir}/00012346/fiberassign-001111.fits'
+        fafilegz = f'{nightdir}/00012347/fiberassign-001122.fits'
+
+        fx = open(fafile, 'w'); fx.close()
+        fx = open(fafilegz, 'w'); fx.close()
+
+        a = find_fiberassign_file(night, 12346)
+        self.assertEqual(a, fafile)
+
+        a = find_fiberassign_file(night, 12347)
+        self.assertEqual(a, fafilegz)
+
+        a = find_fiberassign_file(night, 12348)
+        self.assertEqual(a, fafilegz)
+
+        a = find_fiberassign_file(night, 12348, tileid=1111)
+        self.assertEqual(a, fafile)
+
+        with self.assertRaises(IOError) as ex:
+            find_fiberassign_file(night, 12345)
+
+        with self.assertRaises(IOError) as ex:
+            find_fiberassign_file(night, 12348, tileid=4444)
+
+    def test_addkeys(self):
+        """test desispec.io.util.addkeys"""
+        from ..io.util import addkeys
+        h1 = dict(A=1, B=1, NAXIS=2)
+        h2 = dict(A=2, C=2, EXTNAME='blat', TTYPE1='F8')
+        addkeys(h1, h2)
+        self.assertEqual(h1['A'], 1)  #- h2['A'] shouldn't override
+        self.assertEqual(h1['C'], 2)  #- h2['C'] was added to h1
+        self.assertNotIn('EXTNAME', h1)  #- reserved keywords not added
+        self.assertNotIn('TTYPE1', h1)  #- reserved keywords not added
+        h3 = dict(X=3, Y=3, Z=3)
+        addkeys(h1, h3, skipkeys=['X', 'Y'])
+        self.assertNotIn('X', h1)
+        self.assertNotIn('Y', h1)
+        self.assertEqual(h1['Z'], 3)
+
+    def test_parse_cameras(self):
+        """test desispec.io.util.parse_cameras"""
+        from ..io.util import parse_cameras
+        self.assertEqual(parse_cameras('0,1,2,3,4'),        'a01234')
+        self.assertEqual(parse_cameras('01234'),            'a01234')
+        self.assertEqual(parse_cameras('15'),               'a15')
+        self.assertEqual(parse_cameras('a01234'),           'a01234')
+        self.assertEqual(parse_cameras('a012345b6'),        'a012345b6')
+        self.assertEqual(parse_cameras('a01234b5z5r5'),     'a012345')
+        self.assertEqual(parse_cameras('a01234b56z56r5'),   'a012345b6z6')
+        self.assertEqual(parse_cameras('0,1,2,3,4,b5'),     'a01234b5')
+        self.assertEqual(parse_cameras('b1,r1,z1,b2,r2'),   'a1b2r2')
+        self.assertEqual(parse_cameras('0,1,2,a3,b4,5,6'),  'a012356b4')
+        self.assertEqual(parse_cameras('a1234,b5,r5,z5'),   'a12345')
+        self.assertEqual(parse_cameras('a01234,b5,r5,z56'), 'a012345z6')
+        self.assertEqual(parse_cameras(None), None)
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2']), 'a1b2')
+
+    def test_shorten_filename(self):
+        """Test desispec.io.meta.shorten_filename"""
+        from ..io.meta import shorten_filename, specprod_root
+
+        specprod = specprod_root()
+        longname = os.path.join(specprod, 'blat/foo.fits')
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, 'SPECPROD/blat/foo.fits')
+
+        #- if SPECPROD not set, don't shorten but don't fail
+        del os.environ['SPECPROD']
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+
+        #- if no matching prefix, don't shorten but don't fail
+        longname = '/bar/blat/foo.fits'
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+
+        #- with and without DESI_SPECTRO_CALIB
+        calibdir = os.getenv('DESI_SPECTRO_CALIB')
+        longname = os.path.join(calibdir, 'blat/foo.fits')
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, 'SPCALIB/blat/foo.fits')
+
+        del os.environ['DESI_SPECTRO_CALIB']
+        shortname = shorten_filename(longname)
+        self.assertEqual(shortname, longname)
+        os.environ['DESI_SPECTRO_CALIB'] = self.testEnv['DESI_SPECTRO_CALIB']
+
+    def test_iotime(self):
+        from ..io import iotime
+        msg = iotime.format('write', 'blat.fits', 1.23)
+        p = iotime.parse(msg)
+        self.assertEqual(p['readwrite'], 'write')
+        self.assertEqual(p['filename'], 'blat.fits')
+        self.assertEqual(p['duration'], 1.23)
+        self.assertEqual(p['function'], 'unknown')
+
+        p = iotime.parse('INFO:blat.py:42:blat: '+msg)
+        self.assertEqual(p['readwrite'], 'write')
+        self.assertEqual(p['filename'], 'blat.fits')
+        self.assertEqual(p['duration'], 1.23)
+        self.assertEqual(p['function'], 'blat')
+
+        p = iotime.parse('hello')
+        self.assertEqual(p, None)
+
+        with open(self.testlog, 'w') as logfile:
+            logfile.write('INFO:blat.py:42:blat: hello\n')
+            logfile.write('DEBUG:blat.py:43:blat: {}\n'.format(
+                iotime.format('write', 'foo.fits', 1.23)))
+            logfile.write('DEBUG:blat.py:44:blat: {}\n'.format(
+                iotime.format('read', 'foo.fits', 2.56)))
+            logfile.write('ERROR:blat.py:45:blat: goodbye\n')
+
+        t = iotime.parse_logfile(self.testlog)
+        self.assertEqual(list(t['function']), ['blat', 'blat'])
+        self.assertEqual(list(t['readwrite']), ['write', 'read'])
+        self.assertEqual(list(t['duration']), [1.23, 2.56])
 
 
 def test_suite():

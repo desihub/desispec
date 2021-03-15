@@ -14,10 +14,11 @@ import glob
 import re
 import numpy as np
 
+from desiutil.log import get_logger
 from .util import healpix_subdirectory
 
 
-def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
+def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname=None,
     nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
     download=False, outdir=None, qaprod_dir=None):
     """Returns location where file should be
@@ -29,10 +30,11 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         night : YEARMMDD string
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
+        tile : integer tile (pointing) number
         groupname : spectral grouping name (brick name or healpix pixel)
         nside : healpix nside
         band : one of 'b','r','z' identifying the camera band
-        spectrograph : spectrograph number, 0-9
+        spectrograph : integer spectrograph number, 0-9
 
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
@@ -40,23 +42,60 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
-    """
 
+    Raises:
+        ValueError: for invalid file types, and other invalid input
+        KeyError: for missing environment variables
+    """
+    log = get_logger()
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
     location = dict(
+        #
+        # Raw data.
+        #
         raw = '{rawdata_dir}/{night}/{expid:08d}/desi-{expid:08d}.fits.fz',
+        fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        #
+        # preproc/
+        # Note: fibermap files will eventually move to preproc.
+        #
+        # fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
-        fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
-        frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
-        qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',
+        #
+        # exposures/
+        # Note: calib has been renamed to fluxcalib, but that has not propagated fully through the pipeline.
+        # Note: psfboot has been deprecated, but not ready to be removed yet.
+        #
+        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',
         cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
         fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits',
+        fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
+        frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
+        psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
+        qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',
         sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits',
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
-        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',
+        psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
+        #
+        # calibnight/
+        #
+        fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
+        psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
+        #
+        # spectra-{nside}/
+        # Note: coadd naming convention and location needs to be resolved, path may change.
+        #
+        zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
+        coadd = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',
+        redrock = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/redrock-{nside:d}-{groupname}.h5',
+        spectra = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/spectra-{nside:d}-{groupname}.fits',
+        zbest = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/zbest-{nside:d}-{groupname}.fits',
+        #
+        # Deprecated QA files below this point.
+        #
         qa_data = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
         qa_data_exp = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
         qa_bootcalib = '{qaprod_dir}/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
@@ -77,37 +116,39 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         ql_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfig-{camera}-{expid:08d}.png',
         ql_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfile-{camera}-{expid:08d}.json',
         ql_mergedQA_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-mergedQA-{camera}-{expid:08d}.json',
-        psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
-        psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
-        psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
-        fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
-        zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
-        spectra = '{specprod_dir}/spectra-{nside}/{hpixdir}/spectra-{nside}-{groupname}.fits',
-        redrock = '{specprod_dir}/spectra-{nside}/{hpixdir}/redrock-{nside}-{groupname}.h5',
-        coadd = '{specprod_dir}/spectra-{nside}/{hpixdir}/coadd-{nside}-{groupname}.fits',
-        zbest = '{specprod_dir}/spectra-{nside}/{hpixdir}/zbest-{nside}-{groupname}.fits',
     )
     location['desi'] = location['raw']
 
+    if tile is not None:
+        log.info("Tile-based files selected; healpix-based files and input will be ignored.")
+        location['coadd'] = '{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits'
+        location['redrock'] = '{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5'
+        location['spectra'] = '{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits'
+        location['zbest'] = '{specprod_dir}/tiles/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-{night}.fits'
+
     if groupname is not None:
         hpix = int(groupname)
+        log.debug('healpix_subdirectory(%d, %d)', nside, hpix)
         hpixdir = healpix_subdirectory(nside, hpix)
     else:
         #- set to anything so later logic will trip on groupname not hpixdir
         hpixdir = 'hpix'
+    log.debug("hpixdir = '%s'", hpixdir)
 
     #- Do we know about this kind of file?
     if filetype not in location:
-        raise IOError("Unknown filetype {}; known types are {}".format(filetype, list(location.keys())))
+        raise ValueError("Unknown filetype {}; known types are {}".format(filetype, list(location.keys())))
 
-    #- Check for missing inputs
-    required_inputs = [i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}',location[filetype])]
+    #- Check for missing inputs, deduplicate via frozenset()
+    required_inputs = frozenset([i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}', location[filetype])])
 
     if rawdata_dir is None and 'rawdata_dir' in required_inputs:
         rawdata_dir = rawdata_root()
+        log.debug("rawdata_dir = '%s'", rawdata_dir)
 
     if specprod_dir is None and 'specprod_dir' in required_inputs and outdir is None :
         specprod_dir = specprod_root()
+        log.debug("specprod_dir = '%s'", specprod_dir)
     elif outdir is not None :
         # if outdir is set, we will replace specprod_dir anyway
         # but we may need the variable to be set in the meantime
@@ -118,7 +159,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
 
     if 'specprod' in required_inputs and outdir is None :
         #- Replace / with _ in $SPECPROD so we can use it in a filename
-        specprod = os.getenv('SPECPROD').replace('/', '_')
+        specprod = os.environ['SPECPROD'].replace('/', '_')
     else:
         specprod = None
 
@@ -135,7 +176,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
 
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
-        'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
+        'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph,
         'hpixdir':hpixdir,
@@ -156,7 +197,8 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
 
     if download:
         from .download import download
-        filepath = download(filepath,single_thread=True)[0]
+        log.debug("download('%s', single_thread=True)", filepath)
+        filepath = download(filepath, single_thread=True)[0]
 
     return filepath
 
@@ -192,7 +234,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
     return files
 
 
-def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
+def get_files(filetype, night, expid, specprod_dir=None, qaprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified
@@ -212,7 +254,8 @@ def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
         dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
-    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
+    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir,
+                            qaprod_dir=qaprod_dir)
     literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
@@ -232,27 +275,28 @@ def validate_night(night):
         datetime.date: Date object representing this night.
 
     Raises:
-        RuntimeError: Badly formatted night string.
+        ValueError: Badly formatted night string.
     """
     try:
         return datetime.datetime.strptime(night,'%Y%m%d').date()
     except ValueError:
-        raise RuntimeError('Badly formatted night %s' % night)
+        raise ValueError('Badly formatted night %s' % night)
 
 
-def find_exposure_night(expid):
+def find_exposure_night(expid, specprod_dir=None):
     """ Find the night that has the exposure
     Args:
         expid: int
+        specprod_dir: str, optional
 
     Returns:
         night: str
 
     """
     # Search for the exposure folder
-    nights = get_nights()
+    nights = get_nights(specprod_dir=specprod_dir)
     for night in nights:
-        for exposure in get_exposures(night):
+        for exposure in get_exposures(night, specprod_dir=specprod_dir):
             if exposure == expid:
                 return night
 
@@ -278,7 +322,8 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
             any exposures.
 
     Raises:
-        RuntimeError: Badly formatted night date string or non-existent night.
+        ValueError: Badly formatted night date string
+        IOError: non-existent night.
     """
     date = validate_night(night)
 
@@ -292,7 +337,7 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
         night_path = os.path.join(specprod_dir, 'exposures', night)
 
     if not os.path.exists(night_path):
-        raise RuntimeError('Non-existent night {0}'.format(night))
+        raise IOError('Non-existent night {0}'.format(night))
 
     exposures = []
 
@@ -372,28 +417,60 @@ def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
     # Return
     return sorted(nights)
 
+def shorten_filename(filename):
+    """Attempt to shorten filename to fit in FITS header without CONTINUE
+
+    Args:
+        filename (str): input filename
+
+    Returns potentially shortened filename
+
+    Replaces prefixes from environment variables:
+      * $DESI_SPECTRO_CALIB -> SPCALIB
+      * $DESI_SPECTRO_REDUX/$SPECPROD -> SPECPROD
+    """
+
+    if filename is None : return "None"
+
+    spcalib = os.getenv('DESI_SPECTRO_CALIB')
+    if spcalib is not None and filename.startswith(spcalib):
+        return filename.replace(spcalib, 'SPCALIB', 1)
+
+    try:
+        specprod = specprod_root()
+    except KeyError:
+        specprod = None
+
+    if specprod is not None and filename.startswith(specprod):
+        return filename.replace(specprod, 'SPECPROD', 1)
+
+    #- no substitutions
+    return filename
 
 
 def rawdata_root():
     """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
 
     Raises:
-        AssertionError: if these environment variables aren't set.
+        KeyError: if these environment variables aren't set.
     """
-    assert 'DESI_SPECTRO_DATA' in os.environ, 'Missing $DESI_SPECTRO_DATA environment variable'
     return os.environ['DESI_SPECTRO_DATA']
 
 
-def specprod_root():
+def specprod_root(specprod=None):
     """Return directory root for spectro production, i.e.
     ``$DESI_SPECTRO_REDUX/$SPECPROD``.
 
+    Options:
+        specprod (str): overrides $SPECPROD
+
     Raises:
-        AssertionError: if these environment variables aren't set.
+        KeyError: if these environment variables aren't set.
     """
-    assert 'SPECPROD' in os.environ, 'Missing $SPECPROD environment variable'
-    assert 'DESI_SPECTRO_REDUX' in os.environ, 'Missing $DESI_SPECTRO_REDUX environment variable'
-    return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))
+    if specprod is None:
+        specprod = os.environ['SPECPROD']
+
+    return os.path.join(os.environ['DESI_SPECTRO_REDUX'], specprod)
 
 
 def qaprod_root(specprod_dir=None):
@@ -401,7 +478,7 @@ def qaprod_root(specprod_dir=None):
     ``$DESI_SPECTRO_REDUX/$SPECPROD/QA``.
 
     Raises:
-        AssertionError: if these environment variables aren't set.
+        KeyError: if these environment variables aren't set.
     """
     if specprod_dir is None:
         specprod_dir = specprod_root()

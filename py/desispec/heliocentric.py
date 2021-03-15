@@ -12,19 +12,25 @@ from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.constants
 
-kpno = EarthLocation.from_geodetic(lat=31.96403 * u.deg,\
-                                   lon=-111.59989 * u.deg,\
-                                   height =  2097 * u.m)
+# In restricted environments, such as ReadTheDocs, this throws
+# an exception.
+try:
+    kpno = EarthLocation.from_geodetic(lat=31.96403 * u.deg,
+                                       lon=-111.59989 * u.deg,
+                                       height =  2097 * u.m)
+except TypeError:
+    kpno = None
+
 
 def heliocentric_velocity_corr_kms(ra, dec, mjd) :
     """
-    Heliocentric velocity correction routine. 
+    Heliocentric velocity correction routine.
     See http://docs.astropy.org/en/stable/coordinates/velocities.html for more details.
-    The computed correction can be added to any observed radial velocity to determine 
+    The computed correction can be added to any observed radial velocity to determine
     the final heliocentric radial velocity. In other words, wavelength calibrated with
-    lamps have to be multiplied by (1+vcorr/cspeed) to bring them to the heliocentric frame. 
-    
-    Args: 
+    lamps have to be multiplied by (1+vcorr/cspeed) to bring them to the heliocentric frame.
+
+    Args:
     ra             - Right ascension [degrees] in ICRS system
     dec            - Declination [degrees]  in ICRS system
     mjd            - Decimal Modified Julian date.  Note this should probably be type DOUBLE.
@@ -36,26 +42,25 @@ def heliocentric_velocity_corr_kms(ra, dec, mjd) :
 
 
     # Note:
-    # 
+    #
     # This gives the opposite sign from the IDL routine idlutils/pro/coord/heliocentric.pro (v5_5_17)
     # Accounting for this difference in definition, the maximum difference is about ~ 0.2 km/s
-    
-    
+
+
     sc = SkyCoord(ra=ra*u.deg, dec=dec*u.deg, frame='icrs')
     obstime = Time(mjd,format="mjd")
     v_kms   = sc.radial_velocity_correction('heliocentric', obstime=obstime, location=kpno).to(u.km/u.s).value
     return v_kms
 
-
 def heliocentric_velocity_multiplicative_corr(ra, dec, mjd) :
     """
-    Heliocentric velocity correction routine. 
+    Heliocentric velocity correction routine.
     See http://docs.astropy.org/en/stable/coordinates/velocities.html for more details.
-    The computed correction can be added to any observed radial velocity to determine 
+    The computed correction can be added to any observed radial velocity to determine
     the final heliocentric radial velocity. In other words, wavelength calibrated with
-    lamps have to be multiplied by (1+vcorr/cspeed) to bring them to the heliocentric frame. 
-    
-    Args: 
+    lamps have to be multiplied by (1+vcorr/cspeed) to bring them to the heliocentric frame.
+
+    Args:
     ra             - Right ascension [degrees] in ICRS system
     dec            - Declination [degrees]  in ICRS system
     mjd            - Decimal Modified Julian date.  Note this should probably be type DOUBLE.
@@ -63,8 +68,51 @@ def heliocentric_velocity_multiplicative_corr(ra, dec, mjd) :
     Returns:
     (1+vcorr/c)    - multiplicative term to correct the wavelength
     """
-    
+
     return 1.+heliocentric_velocity_corr_kms(ra, dec, mjd)/astropy.constants.c.to(u.km/u.s).value
+
+def barycentric_velocity_corr_kms(ra, dec, mjd) :
+    """
+    Barycentric velocity correction routine.
+    See http://docs.astropy.org/en/stable/coordinates/velocities.html for more details.
+    The computed correction can be added to any observed radial velocity to determine
+    the final barycentric radial velocity. In other words, wavelength calibrated with
+    lamps have to be multiplied by (1+vcorr/cspeed) to bring them to the heliocentric frame.
+
+    Args:
+    ra             - Right ascension [degrees] in ICRS system
+    dec            - Declination [degrees]  in ICRS system
+    mjd            - Decimal Modified Julian date.  Note this should probably be type DOUBLE.
+
+    Returns:
+    vcorr          - Velocity correction term, in km/s, to add to measured
+                     radial velocity to convert it to the heliocentric frame.
+    """
+
+    sc = SkyCoord(ra=ra*u.deg, dec=dec*u.deg, frame='icrs')
+    obstime = Time(mjd,format="mjd")
+    v_kms   = sc.radial_velocity_correction(obstime=obstime, location=kpno).to(u.km/u.s).value
+    return v_kms
+
+def barycentric_velocity_multiplicative_corr(ra, dec, mjd) :
+    """
+    Barycentric velocity correction routine.
+    See http://docs.astropy.org/en/stable/coordinates/velocities.html for more details.
+    The computed correction can be added to any observed radial velocity to determine
+    the final barycentric radial velocity. In other words, wavelength calibrated with
+    lamps have to be multiplied by (1+vcorr/cspeed) to bring them to the barycentric frame.
+
+    Args:
+    ra             - Right ascension [degrees] in ICRS system
+    dec            - Declination [degrees]  in ICRS system
+    mjd            - Decimal Modified Julian date.  Note this should probably be type DOUBLE.
+
+    Returns:
+    (1+vcorr/c)    - multiplicative term to correct the wavelength
+    """
+
+    return 1.+barycentric_velocity_corr_kms(ra, dec, mjd)/astropy.constants.c.to(u.km/u.s).value
+
 
 
 
@@ -73,16 +121,16 @@ def main() :
 
     """
     Comparison test with IDL routine:
-    
+
     pro helio
     dec=20
     epoch=2000
     longitude=-111.59989
     latitude=31.96403
     altitude=2097
-    for j=0,2 do begin 
+    for j=0,2 do begin
       mjd=58600+100*j
-      jd=mjd+2400000.5 
+      jd=mjd+2400000.5
       for i=0,20 do begin
         ra=(360.*i)/20
         vkms = heliocentric(ra, dec, epoch, jd=jd, longitude=longitude, latitude=latitude, altitude=altitude)
@@ -175,4 +223,3 @@ ra,dec,mjd,vkms=      360.000      20       58800       19.006564
 
 if __name__ == "__main__" :
     main()
-

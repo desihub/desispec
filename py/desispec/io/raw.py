@@ -6,16 +6,22 @@ TODO: move into datamodel after we have verified the format
 '''
 
 import os.path
+import time
 from astropy.io import fits
 import numpy as np
 
 from desiutil.depend import add_dependencies
 
+import desispec.io
 import desispec.io.util
+from . import iotime
+from desispec.util import header2night
 import desispec.preproc
 from desiutil.log import get_logger
+from desispec.calibfinder import parse_date_obs, CalibFinder
+import desispec.maskbits as maskbits
 
-def read_raw(filename, camera, **kwargs):
+def read_raw(filename, camera, fibermapfile=None, **kwargs):
     '''
     Returns preprocessed raw data from `camera` extension of `filename`
 
@@ -24,14 +30,16 @@ def read_raw(filename, camera, **kwargs):
         camera : camera name (B0,R1, .. Z9) or FITS extension name or number
 
     Options:
+        fibermapfile : read fibermap from this file; if None create blank fm
         Other keyword arguments are passed to desispec.preproc.preproc(),
         e.g. bias, pixflat, mask.  See preproc() documentation for details.
 
     Returns Image object with member variables pix, ivar, mask, readnoise
     '''
-    
+
     log = get_logger()
-    
+
+    t0 = time.time()
     fx = fits.open(filename, memmap=False)
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
@@ -44,17 +52,54 @@ def read_raw(filename, camera, **kwargs):
         if "EXPTIME" in primary_header : break
 
         if len(fx)>hdu+1 :
-            log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
-            hdu +=1 
+            if hdu > 0:
+                log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
+            hdu +=1
         else :
             log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
             raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
-    
-    blacklist = ["EXTEND","SIMPLE","NAXIS1","NAXIS2","CHECKSUM","DATASUM","XTENSION","EXTNAME","COMMENT"]
+
+    #- Check if NIGHT keyword is present and valid; fix if needed
+    #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
+    try:
+        tmp = int(primary_header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        primary_header['NIGHT'] = header2night(primary_header)
+
+    try:
+        tmp = int(header['NIGHT'])
+    except (KeyError, ValueError, TypeError):
+        try:
+            header['NIGHT'] = header2night(header)
+        except (KeyError, ValueError, TypeError):
+            #- early teststand data only have NIGHT/timestamps in primary hdr
+            header['NIGHT'] = primary_header['NIGHT']
+
+    #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
+    primary_header['NIGHT'] = int(primary_header['NIGHT'])
+    header['NIGHT'] = int(header['NIGHT'])
+
+    if primary_header['NIGHT'] != header['NIGHT']:
+        msg = 'primary header NIGHT={} != camera header NIGHT={}'.format(
+            primary_header['NIGHT'], header['NIGHT'])
+        log.error(msg)
+        raise ValueError(msg)
+
+    #- early data have >8 char FIBERASSIGN key; rename to match current data
+    if 'FIBERASSIGN' in primary_header:
+        log.warning('renaming long header keyword FIBERASSIGN -> FIBASSGN')
+        primary_header['FIBASSGN'] = primary_header['FIBERASSIGN']
+        del primary_header['FIBERASSIGN']
+
+    if 'FIBERASSIGN' in header:
+        header['FIBASSGN'] = header['FIBERASSIGN']
+        del header['FIBERASSIGN']
+
+    skipkeys = ["EXTEND","SIMPLE","NAXIS1","NAXIS2","CHECKSUM","DATASUM","XTENSION","EXTNAME","COMMENT"]
     if 'INHERIT' in header and header['INHERIT']:
         h0 = fx[0].header
         for key in h0:
-            if ( key not in blacklist ) and ( key not in header ):
+            if ( key not in skipkeys ) and ( key not in header ):
                 header[key] = h0[key]
 
     if "fill_header" in kwargs :
@@ -64,7 +109,7 @@ def read_raw(filename, camera, **kwargs):
             hdus=[0,]
             if "PLC" in fx :
                 hdus.append("PLC")
-        
+
         if hdus is not None :
             log.info("will add header keywords from hdus %s"%str(hdus))
             for hdu in hdus :
@@ -76,19 +121,106 @@ def read_raw(filename, camera, **kwargs):
                 if hdu in fx :
                     hdu_header = fx[hdu].header
                     for key in hdu_header:
-                        if ( key not in blacklist ) and ( key not in header ) :
+                        if ( key not in skipkeys ) and ( key not in header ) :
                             log.debug("adding {} = {}".format(key,hdu_header[key]))
-                            header[key] = hdu_header[key]                        
+                            header[key] = hdu_header[key]
                         else :
-                            log.debug("key %s already in header or blacklisted"%key)
+                            log.debug("key %s already in header or in skipkeys"%key)
                 else :
                     log.warning("warning HDU %s not in fits file"%str(hdu))
 
         kwargs.pop("fill_header")
-    
+
     fx.close()
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
+
+    if fibermapfile is not None and os.path.exists(fibermapfile):
+        fibermap = desispec.io.read_fibermap(fibermapfile)
+    else:
+        log.warning('creating blank fibermap')
+        fibermap = desispec.io.empty_fibermap(5000)
+
+    #- Add image header keywords inherited from raw data to fibermap too
+    desispec.io.util.addkeys(fibermap.meta, img.meta)
+
+    #- Augment the image header with some tile info from fibermap if needed
+    for key in ['TILEID', 'TILERA', 'TILEDEC']:
+        if key in fibermap.meta:
+            if key not in img.meta:
+                log.info('Updating header from fibermap {}={}'.format(
+                    key, fibermap.meta[key]))
+                img.meta[key] = fibermap.meta[key]
+            elif img.meta[key] != fibermap.meta[key]:
+                #- complain loudly, but don't crash and don't override
+                log.error('Inconsistent {}: raw header {} != fibermap header {}'.format(key, img.meta[key], fibermap.meta[key]))
+
+
+    #- Trim to matching camera based upon PETAL_LOC, but that requires
+    #- a mapping prior to 20191211
+
+    #- HACK HACK HACK
+    #- TODO: replace this with a mapping from calibfinder, as soon as
+    #- that is implemented in calibfinder / desi_spectro_calib
+    #- HACK HACK HACK
+
+    #- From DESI-5286v5 page 3 where sp=sm-1 and
+    #- "spectro logical number" = petal_loc
+    spec_to_petal = {4:2, 2:9, 3:0, 5:3, 1:8, 0:4, 6:6, 7:7, 8:5, 9:1}
+    assert set(spec_to_petal.keys()) == set(range(10))
+    assert set(spec_to_petal.values()) == set(range(10))
+
+    #- Mapping only for dates < 20191211
+    if "NIGHT" in primary_header:
+        dateobs = int(primary_header["NIGHT"])
+    elif "DATE-OBS" in primary_header:
+        dateobs=parse_date_obs(primary_header["DATE-OBS"])
+    else:
+        msg = "Need either NIGHT or DATE-OBS in primary header"
+        log.error(msg)
+        raise KeyError(msg)
+    if dateobs < 20191211 :
+        petal_loc = spec_to_petal[int(camera[1])]
+        log.warning('Prior to 20191211, mapping camera {} to PETAL_LOC={}'.format(camera, petal_loc))
+    else :
+        petal_loc = int(camera[1])
+        log.debug('Since 20191211, camera {} is PETAL_LOC={}'.format(camera, petal_loc))
+
+    if 'PETAL_LOC' in fibermap.dtype.names : # not the case in early teststand data
+        ii = (fibermap['PETAL_LOC'] == petal_loc)
+        fibermap = fibermap[ii]
+
+    if 'FIBER' in fibermap.dtype.names : # not the case in early teststand data
+
+        ## Mask fibers
+        cfinder = CalibFinder([header,primary_header])
+        mod_fibers = fibermap['FIBER'].data % 500
+
+        ## Mask blacklisted fibers
+        fiberblacklist = cfinder.fiberblacklist()
+        for fiber in fiberblacklist:
+            loc = np.where(mod_fibers==fiber)[0]
+            fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
+
+        # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
+        camname = camera.upper()[0]
+        if camname == 'B':
+            badamp_bit = maskbits.fibermask.BADAMPB
+        elif camname == 'R':
+            badamp_bit = maskbits.fibermask.BADAMPR
+        else:
+            #elif camname == 'Z':
+            badamp_bit = maskbits.fibermask.BADAMPZ
+
+        fibers_to_exclude = cfinder.fibers_to_exclude()
+        for fiber in fibers_to_exclude:
+            loc = np.where(mod_fibers==fiber)[0]
+            fibermap['FIBERSTATUS'][loc] |= badamp_bit
+
+    img.fibermap = fibermap
+
     return img
 
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):
@@ -191,6 +323,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         dataHDU = fits.ImageHDU(rawdata, header=header, name=extname)
 
     #- Actually write or update the file
+    t0 = time.time()
     if os.path.exists(filename):
         hdus = fits.open(filename, mode='append', memmap=False)
         if extname in hdus:
@@ -206,3 +339,6 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         hdus.append(fits.PrimaryHDU(None, header=primary_header))
         hdus.append(dataHDU)
         hdus.writeto(filename)
+
+    duration = time.time() - t0
+    log.info(iotime.format('write', filename, duration))

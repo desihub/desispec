@@ -30,6 +30,8 @@ if __name__ == '__main__':
     parser.add_argument('-i','--infile', type = str, default = None, required=True, nargs='*', help = 'path to DESI frame calib fits files')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True, help = 'output calibration file')
     parser.add_argument('--plot', action = 'store_true', help = 'plot the result')
+    parser.add_argument('--no-airmass-term', action = 'store_true', help = 'do not try to estimate an airmass term')
+    parser.add_argument('--no-seeing-term', action = 'store_true', help = 'do not try to estimate a seeing term')
 
     args = parser.parse_args()
     log=get_logger()
@@ -38,39 +40,70 @@ if __name__ == '__main__':
     ###########################################################
 
     camera=None
+    arm=None
+    spec=None
     wave=None
     calibs=list()
     airmass=list()
     seeing=list()
-    
+
+    with_airmass = not args.no_airmass_term
+    with_seeing  = not args.no_seeing_term
+
     for filename in args.infile :
         log.info("reading {}".format(filename))
         header=fitsio.read_header(filename)
-        
+
         if camera is None :
             camera=header["camera"].strip().lower()
+            arm=camera[0]
+            spec=camera[-1]
         else :
-            assert(camera==header["camera"].strip().lower())
-        
+            assert(arm==header["camera"].strip().lower()[0])
+
         exptime = float(header["exptime"])
-        airmass.append(float(header["airmass"]))
-        seeing.append(float(header["seeing"]))
-        
+        if with_airmass :
+            airmass.append(float(header["airmass"]))
+        if with_seeing :
+            seeing.append(float(header["seeing"]))
+
         cal=read_flux_calibration(filename)
-        
+        if np.any(np.isnan(cal.calib)) :
+            log.error("calib has nan")
+            continue
+
+        mcalib = np.median(cal.calib,axis=0)
+
+        # undo the heliocentric/barycentric correction
+        #- check for heliocentric correction
+        if 'HELIOCOR' in header.keys() :
+            heliocor=header['HELIOCOR']
+            log.info("Undo the heliocentric correction scale factor {} of the calib".format(heliocor))
+            # wavelength are in solar system frame
+            # first divide the multiplicative factor to have wavelength in KPNO frame
+            wave_in_kpno_system = cal.wave/heliocor
+
+            # now we want the wave grid cal.wave to be in the KPNO frame,
+            # we have to resample the calib vector
+            mcalib = np.interp(cal.wave,wave_in_kpno_system,mcalib)
+
         if wave is None :
             wave=cal.wave
         else :
             assert(np.all(np.abs(wave-cal.wave)<0.0001))
-        
-        calibs.append(np.median(cal.calib,axis=0)/exptime)
-    
+
+        if exptime <= 2. : # arbitrary cutoff
+            print("skip exptime=",exptime)
+            continue
+
+        calibs.append(mcalib/exptime)
+
     calibs=np.array(calibs)
     nexp=calibs.shape[0]
 
     # compute an average calibration vector
     ###########################################################
-    
+
     scalefactor=np.ones(nexp)
     ncalibs=calibs.copy()
 
@@ -81,6 +114,7 @@ if __name__ == '__main__':
         scalefactor /= np.mean(scalefactor)
         for e in range(nexp) :
             ncalibs[e] = calibs[e]/scalefactor[e]
+
     mcalib=np.median(ncalibs,axis=0)
 
     # interpolate over brigh sky lines
@@ -104,7 +138,7 @@ if __name__ == '__main__':
     for feature in telluric_features :
         telluricmask[(wave>=feature[0])&(wave<=feature[1])]=1
 
-    
+
     # fit a smooth multiplicative component per exposure
     ###########################################################
     res=300. #A, resolution of spline
@@ -115,44 +149,57 @@ if __name__ == '__main__':
         ok=True
         for feature in telluric_features :
             ok &= ((w<feature[0])|(w>feature[1]))
-        if ok : 
+        if ok :
             twave.append(w)
     twave=np.array(twave)
-    
+
     ncalibs=calibs.copy()
     for e in range(nexp) :
         # define a spline
         dcal=calibs[e]/(mcalib+(mcalib==0))
         tck=scipy.interpolate.splrep(wave,dcal,w=(mcalib>0)*(skymask==0)*(telluricmask==0),task=-1,t=twave,k=3)
         correction = scipy.interpolate.splev(wave,tck)
-        ncalibs[e][telluricmask==0]=(mcalib*correction)[telluricmask==0] # this does not have any low frequency noise any more, except on telluric features
-    
+        if np.any(np.isnan(correction)) :
+            log.warning("correction has nan for exp={}".format(e))
+        else :
+            ncalibs[e][telluricmask==0]=(mcalib*correction)[telluricmask==0] # this does not have any low frequency noise any more, except on telluric features
+
     # fit mean + several multiplicative smooth components
     ###########################################################
     # treated as additive components in log:
-    # because there is virtually no more noise, 
+    # because there is virtually no more noise,
     # we can now take the log to separate the components,
     # without the risk of introducing a bias
-    
+
     # log of calib. vectors
     lcal = -2.5*np.log10(ncalibs*(ncalibs>0)+(ncalibs<=0))
     weight=(lcal!=0)
-    
-    # fit a model with 3 terms
+
+    # fit a model with several terms
     # mean , derivative with seeing, derivative with airmass
-    npar=3
+    npar=1
+    if with_airmass: npar +=1
+    if with_seeing: npar +=1
+
+
     B = np.zeros((npar,wave.size))
     A = np.zeros((npar,npar,wave.size))
     M = np.zeros((npar,wave.size))
     X = np.ones((npar,nexp))
-    pivot_seeing  = np.median(seeing)
-    pivot_airmass = np.median(airmass)
-    X[1] = airmass-pivot_airmass
-    X[2] = seeing-pivot_seeing
-    
-    
+    index=1
+    if with_airmass:
+        pivot_airmass = np.median(airmass)
+        X[index] = airmass-pivot_airmass
+        airmass_index = index
+        index += 1
+    if with_seeing:
+        pivot_seeing  = np.median(seeing)
+        X[index] = seeing-pivot_seeing
+        seeing_index = index
+        index += 1
+
     ME = np.zeros((npar,wave.size)) # error on model
-    
+
     lmod   = X.T.dot(M)
     res    = lcal-lmod
     for i in range(npar) :
@@ -160,7 +207,7 @@ if __name__ == '__main__':
         for j in range(i,npar) :
             A[i,j] = np.sum(weight*X[i][:,None]*X[j][:,None],axis=0)
             if j !=i : A[j,i] = A[i,j]
-            
+
     # solve the linear system per wavelength
     for i in range(wave.size) :
         if A[0,0,i]>0 :
@@ -169,23 +216,25 @@ if __name__ == '__main__':
             M[:,i] += dMi
             rms = np.std(res[:,i]-M[:,i].dot(X))
             ME[:,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
-            
-    # smooth the seeing term over telluric features, freeze it and refit the two
-    # other terms on telluric features
-    tck=scipy.interpolate.splrep(wave,M[2],task=-1,t=twave,k=3)
-    M[2] = scipy.interpolate.splev(wave,tck)
-    # this estimation of uncertainty is very approximative
-    tck=scipy.interpolate.splrep(wave,ME[2],task=-1,t=twave,k=3)
-    ME[2] = scipy.interpolate.splev(wave,tck)
-        
+
+    if with_seeing :
+        # smooth the seeing term over telluric features, freeze it and refit the two
+        # other terms on telluric features
+        tck=scipy.interpolate.splrep(wave,M[seeing_index],task=-1,t=twave,k=3)
+        M[seeing_index] = scipy.interpolate.splev(wave,tck)
+        # this estimation of uncertainty is very approximative
+        tck=scipy.interpolate.splrep(wave,ME[seeing_index],task=-1,t=twave,k=3)
+        ME[seeing_index] = scipy.interpolate.splev(wave,tck)
+
     lmod   = X.T.dot(M)
     res    = lcal-lmod
-    npar=2
-    B = np.zeros((npar,wave.size))
-    A = np.zeros((npar,npar,wave.size))
-    for i in range(npar) :
+    nparbis = npar
+    if with_seeing : nparbis -= 1
+    B = np.zeros((nparbis,wave.size))
+    A = np.zeros((nparbis,nparbis,wave.size))
+    for i in range(nparbis) :
         B[i]   = np.sum(weight*res*X[i][:,None],axis=0)
-        for j in range(i,npar) :
+        for j in range(i,nparbis) :
             A[i,j] = np.sum(weight*X[i][:,None]*X[j][:,None],axis=0)
             if j !=i : A[j,i] = A[i,j]
     # solve the linear system per wavelength
@@ -193,30 +242,47 @@ if __name__ == '__main__':
         if A[0,0,i]>0 :
             Aii=np.linalg.inv(A[:,:,i])
             dMi=Aii.dot(B[:,i])
-            M[:2,i] += dMi
-            rms = np.std(res[:,i]-M[:2,i].dot(X[:2]))
-            ME[:2,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
-    
+            M[:nparbis,i] += dMi
+            rms = np.std(res[:,i]-M[:nparbis,i].dot(X[:nparbis]))
+            ME[:nparbis,i] = np.sqrt(np.diag(Aii))*rms # approximate uncertainty on model
+
     # interpolate over sky lines
-    for c in range(3) :
+    for c in range(npar) :
         M[c]=np.interp(wave,wave[skymask==0],M[c][skymask==0])
-    
+
+
+    if with_airmass :
+        airmass_term=M[airmass_index]
+        airmass_term_uncertainty=ME[airmass_index]
+    else :
+        airmass_term=np.zeros(M[0].size)
+        airmass_term_uncertainty=np.zeros(M[0].size)
+        pivot_airmass=1
+
+    if with_seeing :
+        seeing_term=M[seeing_index]
+        seeing_term_uncertainty=ME[seeing_index]
+    else :
+        seeing_term=np.zeros(M[0].size)
+        seeing_term_uncertainty=np.zeros(M[0].size)
+        pivot_seeing=1
+
     fluxcal=AverageFluxCalib(wave=wave,
                              average_calib=10**(-0.4*M[0]),
-                             atmospheric_extinction=M[1],
-                             seeing_term=M[2],
+                             atmospheric_extinction=airmass_term,
+                             seeing_term=seeing_term,
                              pivot_airmass=pivot_airmass,
                              pivot_seeing=pivot_seeing,
-                             atmospheric_extinction_uncertainty=ME[1],
-                             seeing_term_uncertainty=ME[2])
-    
+                             atmospheric_extinction_uncertainty=airmass_term_uncertainty,
+                             seeing_term_uncertainty=seeing_term_uncertainty)
+
     # write the result ...
-    
+
     write_average_flux_calibration(args.outfile,fluxcal)
     log.info("wrote {}".format(args.outfile))
 
     if args.plot :
-        
+
         fluxcal = read_average_flux_calibration(args.outfile)
 
         plt.figure()
@@ -228,15 +294,10 @@ if __name__ == '__main__':
         a=plt.subplot(3,1,2)
         a.errorbar(fluxcal.wave,fluxcal.atmospheric_extinction,fluxcal.atmospheric_extinction_uncertainty)
         a.set_ylabel(r"Atmospheric extinction")# $d LC / d airmass$, with $LC=-2.5 log_{10}(calib)$")
-    
+
         a=plt.subplot(3,1,3)
         a.errorbar(fluxcal.wave,fluxcal.seeing_term,fluxcal.seeing_term_uncertainty)
         a.set_ylabel(r"Seeing term")# $d LC/d seeing$, with $LC=-2.5 log_{10}(calib)$ ")
         a.set_xlabel("Wavelength [A]")
-    
+
         plt.show()
-    
-    
-    
-
-

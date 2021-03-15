@@ -41,12 +41,12 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset) :
     log = get_logger()
 
     psf_fits=pyfits.open(input_psf_filename)
-    
+
     if "PSFTYPE" in psf_fits[0].header :
         psftype=psf_fits[0].header["PSFTYPE"]
     else :
         psftype=None
-    
+
     modified_x=False
     modified_y=False
 
@@ -145,7 +145,7 @@ def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, wi
         wave :  2D np.array of shape (nfibers,n0), determined from the traces
     """
 
-    
+
     tset = read_xytraceset(psf_filename)
     image = read_image(image_filename)
     qframe = qproc_boxcar_extraction(xytraceset,image,fibers=fibers,width=width)
@@ -182,13 +182,21 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
     flux=np.zeros((nfibers,nwave))
     ivar=np.zeros((nfibers,nwave))
+    n1=frame_ivar.shape[1]
     for i in range(nfibers) :
         #log.info("resampling fiber #%03d"%i)
         #flux[i],ivar[i] = resample_flux(wave, frame_wave[i],frame_flux[i],frame_ivar[i])
         # because I am oversampling, a linear interpolation is sufficient
-        flux[i] = np.interp(wave, frame_wave[i],frame_flux[i])
-        ivar[i] = np.interp(wave, frame_wave[i],frame_ivar[i])/oversampling # larger variance, approximately
 
+        # increase the masked regions.
+        for d in [-2,-1,1,2] :
+            frame_ivar[i,2:n1-2][frame_ivar[i,2+d:n1-2+d]==0]=0
+        good=(frame_ivar[i]>0)
+        if np.sum(good)>0 :
+            flux[i] = np.interp(wave, frame_wave[i][good],frame_flux[i][good],left=0,right=0)
+            ivar[i] = np.interp(wave, frame_wave[i],frame_ivar[i],left=0,right=0)/oversampling # larger variance, approximately
+        else :
+            log.warning("fiber {} has no valid data".format(i))
     t1=time.time()
     log.info("Resampled {} fibers in {:3.1f} sec".format(nfibers,t1-t0))
     return flux,ivar,wave
@@ -349,7 +357,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             if sw<=0 :
                 continue
 
-            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok],hw=3.)
+            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok]*reference_flux[ok],hw=3., calibrate=True)
 
             if err > 1 :
                 continue
@@ -402,19 +410,19 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     # boxcar extraction
 
     qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
-    
+
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
-    
+
     # median flux used as internal spectral reference
     mflux=np.median(flux,axis=0)
 
-    # measure y shifts 
+    # measure y shifts
     wavemin = xytraceset.wavemin
     wavemax = xytraceset.wavemax
-    xcoef   = xytraceset.x_vs_wave_traceset._coeff 
-    ycoef   = xytraceset.y_vs_wave_traceset._coeff 
-    
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff
+    ycoef   = xytraceset.y_vs_wave_traceset._coeff
+
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
 
 @numba.jit
@@ -632,9 +640,9 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
 
     wavemin = xytraceset.wavemin
     wavemax = xytraceset.wavemax
-    xcoef   = xytraceset.x_vs_wave_traceset._coeff 
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff
     ycoef   = xytraceset.y_vs_wave_traceset._coeff
-    
+
     tmp=np.loadtxt(spectrum_filename).T
     ref_wave=tmp[0]
     ref_spectrum=tmp[1]
@@ -644,12 +652,12 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
 
     # boxcar extraction
     qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
-        
+
     # resampling on common finer wavelength grid
 
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)
-    
-    
+
+
     # median flux used as internal spectral reference
     mflux=np.median(flux,axis=0)
     mivar=np.median(ivar,axis=0)*flux.shape[0]*(2./np.pi) # very appoximate !
@@ -718,7 +726,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
         sw= np.sum(mflux[ok]*(mflux[ok]>0))
         if sw==0 :
             continue
-        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=mivar[ok],hw=3.)
+        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=mivar[ok],hw=10.)
         bin_wave  = np.sum(mflux[ok]*(mflux[ok]>0)*wave[ok])/sw
         x,y=psf.xy(fiber_for_psf_evaluation,bin_wave)
         eps=0.1

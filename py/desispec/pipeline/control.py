@@ -24,6 +24,9 @@ from desiutil.log import get_logger
 
 from .. import io
 
+from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
+    stdouterr_redirected)
+
 from .defs import (task_states, prod_options_name,
     task_state_to_int, task_int_to_state)
 
@@ -234,7 +237,7 @@ def create(root=None, data=None, redux=None, prod=None, force=False,
         s.write("export DESI_SPECTRO_REDUX=$(dirname $proddir)\n")
         s.write("export SPECPROD=$(basename $proddir)\n\n")
         # s.write("export DESI_SPECTRO_REDUX={}\n".format(specdir))
-        # s.write("export SPECPROD={}\n".format(prodname))
+        # s.write("export SPECPROD={}\n".format(specprod))
         s.write("export DESI_SPECTRO_DB={}\n".format(dbpath))
         s.write("\n")
         if "DESI_LOGLEVEL" in os.environ:

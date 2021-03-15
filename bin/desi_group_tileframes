@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+
+"""
+Group spectra by tile
+"""
+
+import os, sys, glob
+import argparse
+import fitsio
+from desiutil.log import get_logger
+
+parser = argparse.ArgumentParser(description="Group exposures by tile")
+# parser.add_argument('-n', '--night', type=int, help = 'night to process')
+parser.add_argument('-i', '--indir', type=str, required=True,
+        help = 'input directory of exposures') 
+parser.add_argument('-o', '--outdir', type=str, required=True,
+        help = 'output tile directory')
+
+args = parser.parse_args()
+log = get_logger()
+outdirs = set()
+tilenightexp = set()
+
+args.indir = os.path.normpath(os.path.abspath(args.indir))
+args.outdir = os.path.normpath(os.path.abspath(args.outdir))
+
+cframefiles = sorted(glob.glob(f'{args.indir}/*/cframe-*.fits'))
+num_new = 0
+num_preexisting = 0
+for filename in cframefiles:
+    hdr = fitsio.read_header(filename)
+    if 'TILEID' not in hdr:
+        log.info('Skipping {} without TILEID in the header'.format(
+            os.path.basename(filename)))
+        continue
+
+    tileid = hdr['TILEID']
+    night = hdr['NIGHT']
+    expid = hdr['EXPID']
+
+    if (tileid, night, expid) not in tilenightexp:
+        log.info(f'Tile {tileid} night {night} expid {expid}')
+        tilenightexp.add( (tileid, night, expid) )
+
+    tilenightdir = os.path.join(args.outdir, str(tileid), str(night))
+    if tilenightdir not in outdirs:
+        outdirs.add(tilenightdir)
+        if not os.path.isdir(tilenightdir):
+            log.info(f'Creating {tilenightdir}')
+            os.makedirs(tilenightdir, exist_ok=True)
+
+    log.debug(f'cd {tilenightdir}')
+    os.chdir(tilenightdir)
+
+    symlink = os.path.basename(filename)
+    relpath = os.path.relpath(filename, tilenightdir)
+    if not os.path.exists(symlink):
+        log.debug(f'Creating symlink {symlink} -> {relpath}')
+        os.symlink(relpath, symlink)
+        num_new += 1
+    else:
+        num_preexisting += 1
+
+log.info(f'Created {num_new} links, {num_preexisting} already existed')
+

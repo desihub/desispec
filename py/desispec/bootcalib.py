@@ -14,7 +14,6 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 import copy
 import pdb
-import imp
 import yaml
 import glob
 import math
@@ -29,6 +28,13 @@ from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
 from astropy.table import Table, Column, vstack
 from astropy.io import fits
+
+#- support astropy 2.x sigma_clip syntax with `iters` instead of `maxiters`
+import astropy
+if astropy.__version__.startswith('2.'):
+    astropy_sigma_clip = sigma_clip
+    def sigma_clip(data, sigma=None, maxiters=5):
+        return astropy_sigma_clip(data, sigma=sigma, iters=maxiters)
 
 from desispec.util import set_backend
 set_backend()
@@ -69,6 +75,7 @@ def bootcalib(deg,flatimage,arcimage):
 
     camera=flatimage.camera
     flat=flatimage.pix
+    flat[flat<-20]=-20.
     ny=flat.shape[0]
 
     xpk,ypos,cut=find_fiber_peaks(flat)
@@ -79,7 +86,8 @@ def bootcalib(deg,flatimage,arcimage):
     #- Also need wavelength solution not just trace
 
     arc=arcimage.pix
-    arc_ivar=arcimage.ivar
+    arc[arc<-20]=-20.
+    arc_ivar=arcimage.ivar*(arcimage.mask==0)
     all_spec=extract_sngfibers_gaussianpsf(arc,arc_ivar,xfit,gauss)
     llist=load_arcline_list(camera)
     ### dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
@@ -135,7 +143,7 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     """
     # Threshold criterion
     npix = spec.size
-    spec_mask = sigma_clip(spec, sigma=4., iters=5)
+    spec_mask = sigma_clip(spec, sigma=4., maxiters=5)
     rms = np.std(spec_mask)
     thresh = rms*rms_thresh
     #print("thresh = {:g}".format(thresh))
@@ -609,9 +617,9 @@ def load_arcline_list(camera, vacuum=True,lamps=None):
         elif camera[0] == 'r':
             lamps = ['CdI','ArI','HgI','NeI','KrI']
         elif camera[0] == 'z':
-            lamps = ['CdI','ArI','HgI','NeI','KrI']
+            lamps = ['CdI','ArI','HgI','NeI','KrI','XeI']
         elif camera == 'all': # Used for specex
-            lamps = ['CdI','ArI','HgI','NeI','KrI']
+            lamps = ['CdI','ArI','HgI','NeI','KrI','XeI']
         else:
             log.error("Not ready for this camera")
 
@@ -891,7 +899,9 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         dx=[]
         flux=[]
         for y in range(ny) :
-            yflux=flat[y,begin_xpix[y]:end_xpix[y]]
+            yflux=np.zeros(2*box_radius+1)
+            tmp=flat[y,begin_xpix[y]:end_xpix[y]]
+            yflux[:tmp.size] = tmp
             syflux=np.sum(yflux)
             if syflux<minflux :
                 continue
@@ -909,7 +919,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         bflux=[]
         for b in bins :
             ok=(dx>=b)&(dx<(b+bstep))
-            if np.sum(ok)>0 :
+            if np.sum(ok)>1 :
                 bdx.append(np.mean(dx[ok]))
                 bflux.append(np.median(flux[ok]))
         if len(bdx)<10 :
@@ -987,7 +997,10 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
-            mask[iy,ix] = 1
+            try :
+                mask[iy,ix] = 1
+            except IndexError :
+                pass
         dx_img = xpix_img - np.outer(xtrc[:,ii],np.ones(flat.shape[1]))
         # Sum
         flux = np.sum(mask*flat,axis=1)
@@ -1017,7 +1030,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         while iterate & (niter < max_iter):
             # Clip
             resid = parm(fdimg) - fnimg
-            resid_mask = sigma_clip(resid, sigma=4., iters=5)
+            resid_mask = sigma_clip(resid, sigma=4., maxiters=5)
             # Fit
             gdp = ~resid_mask.mask
             parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
@@ -1044,7 +1057,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     #
     return np.array(gauss)
 
-def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
+def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False,thresh=None) :
     """Find the peaks of the fiber flat spectra
     Preforms book-keeping error checking
 
@@ -1079,17 +1092,20 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     #srt = np.sort(cutimg.flatten()) # this does not work for sparse fibers
     #thresh = srt[int(cutimg.size*0.95)] / 2. # this does not work for sparse fibers
 
-    thresh = np.max(cut)/20.
-    pixels_below_threshold=np.where(cut<thresh)[0]
-    if pixels_below_threshold.size>2 :
-        values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,iters=200)
-        if values_below_threshold.size>2 :
-            rms=np.std(values_below_threshold)
-            nsig=7
-            new_thresh=max(thresh,nsig*rms)
-            log.info("Threshold: {:f} -> {:f} ({:d}*rms: {:f})".format(thresh,new_thresh,nsig,nsig*rms))
-            thresh=new_thresh
-
+    if thresh is None :
+        thresh = np.max(cut)/20.
+        log.info("Threshold: {:f}".format(thresh))
+        pixels_below_threshold=np.where(cut<thresh)[0]
+        if pixels_below_threshold.size>2 :
+            values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,maxiters=200)
+            if values_below_threshold.size>2 :
+                rms=np.std(values_below_threshold)
+                nsig=7
+                new_thresh=max(thresh,nsig*rms)
+                log.info("Threshold: {:f} -> {:f} ({:d}*rms: {:f})".format(thresh,new_thresh,nsig,nsig*rms))
+                thresh=new_thresh
+    else :
+        log.info("Using input threshold: {:f})".format(thresh))
     #gdp = cut > thresh
     # Roll to find peaks (simple algorithm)
     #nstep = nwidth // 2
@@ -1252,9 +1268,14 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         ixt = np.round(xtrc[:,qq]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
-            mask[iy,ix] = 1
+            try :
+                mask[iy,ix] = 1
+            except IndexError :
+                pass
+        
         # Sub-image (for speed, not convenience)
         gdp = np.where(mask == 1)
+        if len(gdp[1])<2: continue
         minx = np.min(gdp[1])
         maxx = np.max(gdp[1])
         nx = (maxx-minx)+1
@@ -1521,7 +1542,7 @@ def fix_ycoeff_outliers(xcoeff, ycoeff, deg=5, tolerance=2):
 #####################################################################
 
 def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_arc=False,
-              XCOEFF=None, fiberflat_header=None, arc_header=None):
+              XCOEFF=None, fiberflat_header=None, arc_header=None, fix_ycoeff=True):
     """ Write the output to a Base PSF format
 
     Parameters
@@ -1608,7 +1629,8 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             XCOEFF[ii, :] = xleg_fit['coeff']
 
     # Fix outliers assuming that coefficients vary smoothly vs. CCD coordinates
-    YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,tolerance=2)
+    if fix_ycoeff :
+        YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,tolerance=2)
 
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)

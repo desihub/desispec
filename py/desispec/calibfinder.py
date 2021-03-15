@@ -10,10 +10,10 @@ import os
 import numpy as np
 import yaml
 import os.path
+from desispec.util import parse_fibers, header2night
 from desiutil.log import get_logger
 
-
-def _parse_date_obs(value):
+def parse_date_obs(value):
     '''
     converts DATE-OBS keywork to int
     with for instance DATE-OBS=2016-12-21T18:06:21.268371-05:00
@@ -23,6 +23,69 @@ def _parse_date_obs(value):
     dateobs=int(Y*10000+M*100+D)
     return dateobs
 
+_sp2sm = None
+_sm2sp = None
+def _load_smsp():
+    """
+    Loads $DESI_SPECTRO_CALIB/spec/smsp.txt into global _sp2sm and _sm2sp dicts
+    """
+    global _sp2sm
+    global _sm2sp
+
+    tmp_sp2sm = dict()
+    tmp_sm2sp = dict()
+
+    filename = os.getenv('DESI_SPECTRO_CALIB') + "/spec/smsp.txt"
+    tmp = np.loadtxt(filename, dtype=str)
+    for sp, sm in tmp:
+        p = int(sp[2:])
+        m = int(sm[2:])
+        tmp_sp2sm[str(sp)] = str(sm)
+        tmp_sm2sp[str(sm)] = str(sp)
+        tmp_sp2sm[p] = m
+        tmp_sm2sp[m] = p
+
+    #- Assign to global variables only after successful loading and parsing
+    _sp2sm = tmp_sp2sm
+    _sm2sp = tmp_sm2sp
+
+def sp2sm(sp):
+    """
+    Converts spectrograph sp logical number to sm hardware number
+
+    Args:
+        sp : spectrograph int 0-9 or str sp[0-9]
+
+    Returns "smM" if input is str "spP", or int M if input is int P
+
+    Note: uses $DESI_SPECTRO_CALIB/spec/smsp.txt
+
+    TODO: add support for different mappings based on night
+    """
+    global _sp2sm
+    if _sp2sm is None:
+        _load_smsp()
+
+    return _sp2sm[sp]
+
+def sm2sp(sm, night=None):
+    """
+    Converts spectrograph sm hardware number to sp logical number
+
+    Args:
+        sm : spectrograph sm number 1-10 or str sm[1-10]
+
+    Returns "spP" if input is str "smM", or int P if input is int M
+
+    Note: uses $DESI_SPECTRO_CALIB/spec/smsp.txt
+
+    TODO: add support for different mappings based on night
+    """
+    global _sm2sp
+    if _sm2sp is None:
+        _load_smsp()
+
+    return _sm2sp[sm]
 
 def findcalibfile(headers,key,yaml_file=None) :
     """
@@ -40,7 +103,10 @@ def findcalibfile(headers,key,yaml_file=None) :
     Returns path to calibration file
     """
     cfinder = CalibFinder(headers,yaml_file)
-    return cfinder.findfile(key)
+    if cfinder.haskey(key) :
+        return cfinder.findfile(key)
+    else :
+        return None
 
 class CalibFinder() :
 
@@ -96,16 +162,15 @@ class CalibFinder() :
             raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
         
         log.debug("header['CAMERA']={}".format(header['CAMERA']))
-        cameraid=header["CAMERA"].strip().lower()
+        camera=header["CAMERA"].strip().lower()
+        
+        if "SPECID" in header :
+            log.debug("header['SPECID']={}".format(header['SPECID']))
+            specid=int(header["SPECID"])
+        else :
+            specid=None
 
-        if "NIGHT" in header:
-            dateobs = int(header["NIGHT"])
-        elif "DATE-OBS" in header:
-            dateobs=_parse_date_obs(header["DATE-OBS"])
-        else:
-            msg = "Need either NIGHT or DATE-OBS in header"
-            log.error(msg)
-            raise KeyError(msg)
+        dateobs = header2night(header)
 
         detector=header["DETECTOR"].strip()
         if "CCDCFG" in header :
@@ -137,12 +202,23 @@ class CalibFinder() :
         if not os.path.isdir(self.directory):
             raise IOError("Calibration directory {} not found".format(self.directory))
 
-        spectro=int(cameraid[-1])
-        if yaml_file is None :
-            if old_version :
-                yaml_file = os.path.join(self.directory,"ccd_calibration.yaml")
-            else :
-                yaml_file = "{}/spec/sp{}/{}.yaml".format(self.directory,spectro,cameraid)
+        
+        if dateobs < 20191211 or detector == 'SIM': # old spectro identifiers
+            cameraid = camera
+            spectro=int(camera[-1])
+            if yaml_file is None :
+                if old_version :
+                    yaml_file = os.path.join(self.directory,"ccd_calibration.yaml")
+                else :
+                    yaml_file = "{}/spec/sp{}/{}.yaml".format(self.directory,spectro,cameraid)
+        else :
+            if specid is None :
+                log.error("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
+                raise RuntimeError("dateobs = {} >= 20191211 but no SPECID keyword in header!".format(dateobs))
+            log.debug("Use spectrograph hardware identifier SMY")
+            cameraid    = "sm{}-{}".format(specid,camera[0].lower())
+            if yaml_file is None :
+                yaml_file = "{}/spec/sm{}/{}.yaml".format(self.directory,specid,cameraid)
         
         if not os.path.isfile(yaml_file) :
             log.error("Cannot read {}".format(yaml_file))
@@ -154,6 +230,7 @@ class CalibFinder() :
         stream = open(yaml_file, 'r')
         data   = yaml.safe_load(stream)
         stream.close()
+
         
         if not cameraid in data :
             log.error("Cannot find data for camera %s in filename %s"%(cameraid,yaml_file))
@@ -199,7 +276,7 @@ class CalibFinder() :
             #    log.debug("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
             #   continue
 
-            log.info("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
+            log.debug("Found data version %s for camera %s in %s"%(version,cameraid,yaml_file))
             if found :
                 log.error("But we already has a match. Please fix this ambiguity in %s"%yaml_file)
                 raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%yaml_file)
@@ -212,8 +289,7 @@ class CalibFinder() :
 
         
         self.data = matching_data
-        
-
+                
     def haskey(self,key) :
         """
         Args:
@@ -241,3 +317,38 @@ class CalibFinder() :
         """
         return os.path.join(self.directory,self.data[key]) 
 
+    def fiberblacklist(self):
+        """
+        Args:
+            None
+        Returns:
+            List of blacklisted fibers from yaml file as a 1D array of intergers
+            If no blacklisted fibers, returns None
+        """
+        log = get_logger()
+        blacklistkey="FIBERBLACKLIST"
+        if not self.haskey(blacklistkey) and self.haskey("BROKENFIBERS") :
+            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
+            blacklistkey="BROKENFIBERS"
+        if self.haskey(blacklistkey):
+            fiberblacklist_str = self.value(blacklistkey)
+            fiberblacklist = parse_fibers(fiberblacklist_str)
+        else:
+             fiberblacklist = np.array([])  
+        return fiberblacklist
+
+    def fibers_to_exclude(self):
+        """                                                                                         
+        Args:                                                                                       
+            None                                                                                  
+        Returns:                                                                                    
+            List of excluded fibers from yaml file as a 1D array of intergers                    
+            If no excluded fibers, returns None                                                  
+        """
+        key = 'EXCLUDEFIBERS'
+        if not self.haskey(key) :
+            excluded = np.array([])
+        else:
+            excluded_str =  self.value(key)
+            excluded = parse_fibers(excluded_str)
+        return excluded

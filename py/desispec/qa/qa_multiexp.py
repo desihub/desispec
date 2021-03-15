@@ -94,7 +94,8 @@ class QA_MultiExp(object):
                 if self.data[night][expid]['flavor'] != 'science':
                     continue
                 # Instantiate
-                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True)
+                qaexp = qa_exposure.QA_Exposure(int(expid), night, 'science', no_load=True,
+                                                qaprod_dir=self.qaprod_dir, specprod_dir=self.specprod_dir)
                 qaexp.parse_multi_qa_dict(self.data)
                 qaexp.s2n_table()
                 # Append
@@ -172,13 +173,15 @@ class QA_MultiExp(object):
         # Load
         self.data = load_qa_multiexp(inroot)
 
-    def make_frameqa(self, make_plots=False, clobber=False):
+    def make_frameqa(self, make_plots=False, clobber=False, restrict_nights=None):
         """ Work through the exposures and make QA for all frames
 
         Parameters:
             make_plots: bool, optional
               Remake the plots too?
             clobber: bool, optional
+            restrict_nights: list, optional
+              Only perform QA on the input list of nights
         Returns:
 
         """
@@ -188,15 +191,19 @@ class QA_MultiExp(object):
 
         # Loop on nights
         for night in self.mexp_dict.keys():
+            if restrict_nights is not None:
+                if night not in restrict_nights:
+                    continue
             for exposure in self.mexp_dict[night]:
                 # Object only??
                 for camera,frame_fil in self.mexp_dict[night][exposure].items():
-                    # Load frame
+                    # QA filename
                     qafile, _ = qafile_from_framefile(frame_fil, qaprod_dir=self.qaprod_dir)
                     if os.path.isfile(qafile) and (not clobber) and (not make_plots):
                         continue
+                    # Make QA
                     qaframe_from_frame(frame_fil, make_plots=make_plots, qaprod_dir=self.qaprod_dir,
-                                       clobber=clobber)
+                                       clobber=clobber, specprod_dir=self.specprod_dir)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files to generate
@@ -228,7 +235,7 @@ class QA_MultiExp(object):
                 if len(frames_dict) == 0:
                     continue
                 # Load any frame (for the type)
-                qa_exp = QA_Exposure(exposure, night,
+                qa_exp = QA_Exposure(exposure, night, qaprod_dir=self.qaprod_dir,
                                      specprod_dir=self.specprod_dir, remove=remove)
                 # Append
                 self.qa_exps.append(qa_exp)

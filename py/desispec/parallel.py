@@ -53,19 +53,18 @@ else:
     default_nproc = max(1, _mp.cpu_count() // 2)
 
 # MPI environment availability
+def use_mpi():
+    """Return whether we can use MPI."""
+    if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
+        return False
+    else:
+        try:
+            import mpi4py.MPI as MPI
+            return True
+        except ImportError:
+            return False
 
-use_mpi = None
-"""Whether we should use MPI.  Set globally on first import."""
-
-if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
-    use_mpi = False
-else:
-    use_mpi = True
-    try:
-        import mpi4py.MPI as MPI
-    except ImportError:
-        use_mpi = False
-
+    return False
 
 # Functions for static distribution
 
@@ -459,6 +458,10 @@ def stdouterr_redirected(to=None, comm=None):
         file.close()
 
     finally:
+        # flush python handles for good measure
+        sys.stdout.flush()
+        sys.stderr.flush()
+
         # restore old stdout and stderr
         _redirect(out_to=saved_fd_out, err_to=saved_fd_err)
 

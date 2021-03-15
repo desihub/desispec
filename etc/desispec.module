@@ -76,5 +76,8 @@ setenv [string toupper $product] $PRODUCT_DIR
 #
 # Add any non-standard Module code below this point.
 #
-### setenv DESI_CCD_CALIBRATION_DATA $env(DESI_ROOT)/spectro/ccd_calibration_data/trunk
-setenv DESI_SPECTRO_CALIB $env(DESI_ROOT)/spectro/desi_spectro_calib/trunk
+setenv DESI_SPECTRO_CALIB $env(DESI_ROOT)/spectro/desi_spectro_calib/0.2.4
+
+# for MPI+multiprocessing coordination
+setenv MPICH_GNI_FORK_MODE FULLCOPY
+setenv KMP_AFFINITY disabled

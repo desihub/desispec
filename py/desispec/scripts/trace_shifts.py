@@ -17,6 +17,7 @@ import specter.psf
 from desispec.xytraceset import XYTraceSet
 from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_image
+from desispec.io import shorten_filename
 from desiutil.log import get_logger
 from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
 
@@ -42,7 +43,8 @@ Two methods are implemented.
                         help = 'path to an spectrum ASCII file for external wavelength calibration')
     parser.add_argument('--sky', action = 'store_true',
                         help = 'use sky spectrum desispec/data/spec-sky.dat for external wavelength calibration')
-    
+    parser.add_argument('--arc-lamps', action = 'store_true',
+                        help = 'use arc lamps spectrum desispec/data/spec-arc-lamps.dat for external wavelength calibration')   
     parser.add_argument('-o','--outpsf', type = str, default = None, required=True,
                         help = 'path of output PSF with shifted traces')
     parser.add_argument('--outoffsets', type = str, default = None, required=False,
@@ -126,7 +128,6 @@ def fit_trace_shifts(image,args) :
         
     
     internal_wavelength_calib    = (not args.continuum)
-    external_wavelength_calib   = args.sky | ( args.spectrum is not None )
     
     if args.auto :
         log.debug("read flavor of input image {}".format(args.image))
@@ -139,24 +140,29 @@ def fit_trace_shifts(image,args) :
         log.info("Input is a '{}' image".format(flavor))
         if flavor == "flat" : 
             internal_wavelength_calib = False
-            external_wavelength_calib = False
         elif flavor == "arc" :
             internal_wavelength_calib = True
-            external_wavelength_calib = False
+            args.arc_lamps = True
         else :
             internal_wavelength_calib = True
-            external_wavelength_calib = True
-        log.info("wavelength calib, internal={}, external={}".format(internal_wavelength_calib,external_wavelength_calib))
+            args.sky = True
+        log.info("wavelength calib, internal={}, sky={} , arc_lamps={}".format(internal_wavelength_calib,args.sky,args.arc_lamps))
     
     spectrum_filename = args.spectrum
-    if external_wavelength_calib and spectrum_filename is None :
+    if args.sky :
         srch_file = "data/spec-sky.dat"
         if not resource_exists('desispec', srch_file):
             log.error("Cannot find sky spectrum file {:s}".format(srch_file))
             raise RuntimeError("Cannot find sky spectrum file {:s}".format(srch_file))
-        else :
-            spectrum_filename=resource_filename('desispec', srch_file)
-            log.info("Use external calibration from cross-correlation with {}".format(spectrum_filename))
+        spectrum_filename=resource_filename('desispec', srch_file)
+    elif args.arc_lamps :
+        srch_file = "data/spec-arc-lamps.dat"
+        if not resource_exists('desispec', srch_file):
+            log.error("Cannot find arc lamps spectrum file {:s}".format(srch_file))
+            raise RuntimeError("Cannot find arc lamps spectrum file {:s}".format(srch_file))
+        spectrum_filename=resource_filename('desispec', srch_file)
+    if spectrum_filename is not None :
+        log.info("Use external calibration from cross-correlation with {}".format(spectrum_filename))
     
     if args.nfibers is not None :
         nfibers = args.nfibers # FOR DEBUGGING
@@ -307,7 +313,7 @@ def fit_trace_shifts(image,args) :
     
 
     # use an input spectrum as an external calibration of wavelength
-    if spectrum_filename  :
+    if spectrum_filename is not None :
         # the psf is used only to convolve the input spectrum
         # the traceset of the psf is not used here
         psf = read_specter_psf(args.psf)
@@ -337,6 +343,8 @@ def main(args) :
     
     log= get_logger()
 
+    log.info("degxx={} degxy={} degyx={} degyy={}".format(args.degxx,args.degxy,args.degyx,args.degyy))
+    
     # read preprocessed image
     image=read_image(args.image)
     log.info("read image {}".format(args.image))
@@ -344,6 +352,8 @@ def main(args) :
         image.ivar *= (image.mask==0)
     
     tset = fit_trace_shifts(image=image,args=args)
+    tset.meta['IN_PSF'] = shorten_filename(args.psf)
+    tset.meta['IN_IMAGE'] = shorten_filename(args.image)
     
     if args.outpsf is not None :
         write_traces_in_psf(args.psf,args.outpsf,tset)

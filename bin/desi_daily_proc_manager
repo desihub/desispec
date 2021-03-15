@@ -1,0 +1,140 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+import socket
+import sys
+import numpy as np
+import os
+
+from desispec.scripts.daily_processing import daily_processing_manager
+from desispec.io.util import parse_cameras
+from desispec.desi_proc_dashboard import get_skipped_expids
+
+from desispec.workflow.timing import during_operating_hours
+from desispec.workflow.utils import check_running
+
+def parse_args():#options=None):
+    """
+    Creates an arguments parser for the desi daily processing manager
+    """
+    parser = argparse.ArgumentParser(description="Perform daily processing of spectral" +
+                                                 "data using the DESI pipeline.")
+
+    parser.add_argument("--cameras", type=str, required=False, default=None,
+                        help="Explicitly define the cameras for which you want" +
+                             " to reduce the data. Should be a comma separated list." +
+                             " Only numbers assumes you want to reduce r, b, and z " +
+                             "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--bad-cameras", type=str, required=False, default=None,
+                        help="Explicitly define the cameras that you don't want" +
+                             " to reduce the data. Should be a comma separated list." +
+                             " Only numbers assumes you want to reduce r, b, and z " +
+                             "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--badamps", type=str, required=False, default=None,
+                        help="Define amplifiers that you know to be bad and should not" +
+                             " be processed. Should be a list separated by comma or semicolon." +
+                             " Saved list will converted to semicolons. Each entry should be of " +
+                             "the form {camera}{spectrograph}{amp}, i.e. [brz][0-9][A-D].")
+    parser.add_argument("--exp-obstypes", type=str, default=None, required=False,
+                        help="The basic data obstypes to save in the exposure table. " +
+                             "E.g. science, dark, twilight, flat, arc, zero.")
+    parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
+                        help="The basic data obstypes to submit for processing. " +
+                             "E.g. science, dark, twilight, flat, arc, zero.")
+    # File and dir defs
+    parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
+                        help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
+                             "Overwrites the environment variable SPECPROD")
+    parser.add_argument("-q", "--queue", type=str, required=False, default='realtime',
+                        help="The queue to submit jobs to. Default is realtime.")
+    parser.add_argument("--exp-table-path", type=str, required=False, default=None,
+                        help="Directory name where the output exposure table should be saved.")
+    parser.add_argument("--proc-table-path", type=str, required=False, default=None,
+                        help="Directory name where the output processing table should be saved.")
+    parser.add_argument("--raw-data-path", type=str, required=False, default=None,
+                        help="Directory name where the input raw data can be found.")
+    parser.add_argument("--table-file-type", type=str, required=False, default='csv',
+                        help="File format and extension for the exp and proc tables.")
+    parser.add_argument("--data-cadence-time", type=int, required=False, default=300,
+                        help="Wait time between loops in looking for new data.")
+    parser.add_argument("--queue-cadence-time", type=int, required=False, default=1800,
+                        help="Wait time between loops in checking queue statuses and resubmitting failures.")
+    parser.add_argument("--override-night", type=str,default=None,
+                        help="Specify the night to run on. Overrides the current day.")
+    parser.add_argument("--ignore-expid-list", type=str,default=None,
+                        help="Specify the expid's to ignore in a comma separated list given as a string.")
+    parser.add_argument("--ignore-expid-file", type=str,default=None,
+                        help="Specify the expid's to ignore in a text file with one expid per line.")
+    # parser.add_argument("-r", "--reduxdir", type=str, required=False,
+    #                     help="Main reduction dir where specprod dir will reside.")
+
+    # Code Flags
+    parser.add_argument("--ignore-instances", action="store_true",
+                        help="Allow script to run even if another instance is " +
+                             "running. Use with care.")
+    parser.add_argument("--ignore-cori-node", action="store_true",
+                        help="Allow script to run on nodes other than cori21")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Perform a dry run where no jobs are actually created or submitted.")
+    parser.add_argument("--continue-looping-debug",action="store_true",help= "FOR DEBUG purposes only."+
+                         "Will continue looping in search of new data until the process is terminated externally.")
+    # parser.add_argument("--force-specprod", action="store_true",
+    #                     help="Force the files to be written to custom SPECPROD " +
+    #                          "even if user is desi.")
+    # parser.add_argument("--scattered-light", action="store_true",
+    #                     help="Pass scattered light command to desi_proc. Fits and removes scattered light.")
+    # parser.add_argument("--most-recent-calib", action="store_true",
+    #                     help="Look backward in time for the most recent night with good calibration files." + \
+    #                          " If not set the defaults in DESI_SPECTRO_CALIB are used.")
+
+    # Read in command line and return
+    # if options is None:
+    #     args = parser.parse_args()
+    # else:
+    #     args = parser.parse_args(options)
+    args = parser.parse_args()
+    
+    return args
+
+
+if __name__ == '__main__':
+    args = parse_args()
+    if not during_operating_hours(dry_run=args.dry_run) and args.override_night is None:
+        from desispec.workflow.timing import get_nightly_start_time, get_nightly_end_time
+        start = get_nightly_start_time()
+        end = get_nightly_end_time()
+        print(f"Not during operating hours of {start} to {end}. Exiting")
+        sys.exit(1)
+
+    if not args.ignore_cori_node and socket.gethostname() != 'cori21':
+        print('This should only run on cori21')
+        sys.exit(1)
+
+    if not args.ignore_instances:
+        running = check_running(proc_name='desi_daily_proc_manager')
+        if not running:
+            print('OK to run')
+        else:
+            print("Process is already running. Exiting.")
+            sys.exit(1)
+
+    camword = parse_cameras(args.cameras)
+    badcamword = parse_cameras(args.bad_cameras)
+
+    exps_to_ignore = []
+    if args.ignore_expid_list is not None:
+        expids = [int(val) for val in args.ignore_expid_list.split(',')]
+        exps_to_ignore.extend(expids)
+    if args.ignore_expid_file is not None and os.path.isfile(args.ignore_expid_file):
+        expids = get_skipped_expids(args.ignore_expid_file)
+        exps_to_ignore.extend(expids)
+
+    daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
+                             proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
+                             expobstypes=args.exp_obstypes, procobstypes=args.proc_obstypes,
+                             dry_run=args.dry_run, tab_filetype=args.table_file_type, camword=camword,
+                             badcamword=badcamword, badamps=args.badamps, queue=args.queue,
+                             override_night=args.override_night, exps_to_ignore=exps_to_ignore,
+                             continue_looping_debug=args.continue_looping_debug, data_cadence_time=args.data_cadence_time,
+                             queue_cadence_time=args.queue_cadence_time)

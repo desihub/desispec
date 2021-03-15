@@ -288,8 +288,8 @@ class TestQL_QA(unittest.TestCase):
         qa1=qalib.SignalVsNoise(frame1,params)
         qa2=qalib.SignalVsNoise(frame2,params)
         self.assertTrue(np.all(qa2['MEDIAN_SNR'] > qa1['MEDIAN_SNR']))
-   
-        #- test for tracer not present 
+
+        #- test for tracer not present
         nullfibermap=desispec.io.empty_fibermap(10)
         qa=qalib.SignalVsNoise(self.frame,params)
 

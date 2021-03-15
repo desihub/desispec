@@ -13,21 +13,26 @@ import os
 import re
 import warnings
 import time
+import glob
 
 import numpy as np
 import astropy.units as u
 import astropy.io.fits as fits
+import astropy.table
 from astropy.table import Table
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
+from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns
+from . import iotime
 
 from .frame import read_frame
 from .fibermap import fibermap_comments
 
-from ..spectra import Spectra
+from ..spectra import Spectra, stack
+from .meta import specprod_root
 
 def write_spectra(outfile, spec, units=None):
     """
@@ -49,7 +54,7 @@ def write_spectra(outfile, spec, units=None):
         The absolute path to the file that was written.
 
     """
-
+    log = get_logger()
     outfile = os.path.abspath(outfile)
 
     # Create the parent directory, if necessary.
@@ -69,7 +74,10 @@ def write_spectra(outfile, spec, units=None):
     # Next is the fibermap
     fmap = spec.fibermap.copy()
     fmap.meta["EXTNAME"] = "FIBERMAP"
-    hdu = fits.convenience.table_to_hdu(fmap)
+    with warnings.catch_warnings():
+        #- nanomaggies aren't an official IAU unit but don't complain
+        warnings.filterwarnings('ignore', '.*nanomaggies.*')
+        hdu = fits.convenience.table_to_hdu(fmap)
 
     # Add comments for fibermap columns.
     for i, colname in enumerate(fmap.dtype.names):
@@ -80,7 +88,8 @@ def write_spectra(outfile, spec, units=None):
             comment = fibermap_comments[name]
             hdu.header[key] = (name, comment)
         else:
-            print('Unknown comment for {}'.format(colname))
+            pass
+            #print('Unknown comment for {}'.format(colname))
 
     all_hdus.append(hdu)
 
@@ -125,8 +134,24 @@ def write_spectra(outfile, spec, units=None):
                 hdu.data = ex[1].astype("f4")
                 all_hdus.append(hdu)
 
+    if spec.scores is not None :
+        scores_tbl = encode_table(spec.scores)  #- unicode -> bytes
+        scores_tbl.meta['EXTNAME'] = 'SCORES'
+        all_hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
+        if spec.scores_comments is not None : # add comments in header
+            hdu=all_hdus['SCORES']
+            for i in range(1,999):
+                key = 'TTYPE'+str(i)
+                if key in hdu.header:
+                    value = hdu.header[key]
+                    if value in spec.scores_comments.keys() :
+                        hdu.header[key] = (value, spec.scores_comments[value])
+
+    t0 = time.time()
     all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
     os.rename("{}.tmp".format(outfile), outfile)
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -146,7 +171,7 @@ def read_spectra(infile, single=False):
         The object containing the data read from disk.
 
     """
-
+    log = get_logger()
     ftype = np.float64
     if single:
         ftype = np.float32
@@ -155,6 +180,7 @@ def read_spectra(infile, single=False):
     if not os.path.isfile(infile):
         raise IOError("{} is not a file".format(infile))
 
+    t0 = time.time()
     hdus = fits.open(infile, mode="readonly")
     nhdu = len(hdus)
 
@@ -222,14 +248,16 @@ def read_spectra(infile, single=False):
                     extra[band] = {}
                 extra[band][type] = native_endian(hdus[h].data.astype(ftype))
 
+    hdus.close()
+    duration = time.time() - t0
+    log.info(iotime.format('read', infile, duration))
+
     # Construct the Spectra object from the data.  If there are any
     # inconsistencies in the sizes of the arrays read from the file,
     # they will be caught by the constructor.
 
     spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
         fibermap=fmap, meta=meta, extra=extra, single=single, scores=scores)
-
-    hdus.close()
 
     return spec
 
@@ -296,3 +324,110 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
         extra=extra, single=single, scores=fr.scores)
 
     return spec
+
+def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
+        single=False, targets=None, fibers=None, zbest=True):
+    """
+    Read and return combined spectra for a tile/night
+
+    Args:
+        tileid (int) : Tile ID
+        night (int or str) : YEARMMDD night or tile group, e.g. 'deep' or 'all'
+
+    Options:
+        specprod (str) : overrides $SPECPROD
+        reduxdir (str) : overrides $DESI_SPECTRO_REDUX/$SPECPROD
+        coadd (bool) : if True, read coadds instead of per-exp spectra
+        single (bool) : if True, use float32 instead of double precision
+        targets (array-like) : filter by TARGETID
+        fibers (array-like) : filter by FIBER
+        zbest (bool) : if True, also return row-matched zbest redshift catalog
+
+    Returns: spectra or (spectra, zbest)
+        combined Spectra obj for all matching targets/fibers filter
+        row-matched zbest catalog (if zbest=True)
+
+    Raises:
+        ValueError if no files or matching spectra are found
+
+    Note: the returned spectra are not necessarily in the same order as
+    the `targets` or `fibers` input filters
+    """
+    log = get_logger()
+    if reduxdir is None:
+        #- will automatically use $SPECPROD if specprod=None
+        reduxdir = specprod_root(specprod)
+
+    tiledir = os.path.join(reduxdir, 'tiles', str(tileid), str(night))
+
+    if coadd:
+        log.debug(f'Reading coadds from {tiledir}')
+        prefix = 'coadd'
+    else:
+        log.debug(f'Reading spectra from {tiledir}')
+        prefix = 'spectra'
+
+    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{night}.fits')
+
+    if len(specfiles) == 0:
+        raise ValueError(f'No spectra found in {tiledir}')
+
+    specfiles = sorted(specfiles)
+
+    spectra = list()
+    zbests = list()
+    for filename in specfiles:
+        log.debug(f'reading {os.path.basename(filename)}')
+        sp = read_spectra(filename, single=single)
+        if targets is not None:
+            keep = np.in1d(sp.fibermap['TARGETID'], targets)
+            sp = sp[keep]
+        if fibers is not None:
+            keep = np.in1d(sp.fibermap['FIBER'], fibers)
+            sp = sp[keep]
+
+        if sp.num_spectra() > 0:
+            spectra.append(sp)
+            if zbest:
+                #- Read matching zbest file for this spectra/coadd file
+                zbfile = os.path.basename(filename).replace(prefix, 'zbest', 1)
+                log.debug(f'Reading {zbfile}')
+                zbfile = os.path.join(tiledir, zbfile)
+                zb = Table.read(zbfile, 'ZBEST')
+
+                #- Trim zb to only have TARGETIDs in filtered spectra sp
+                keep = np.in1d(zb['TARGETID'], sp.fibermap['TARGETID'])
+                zb = zb[keep]
+
+                #- spectra files can have multiple entries per TARGETID,
+                #- while zbest files have only 1.  Expand to match spectra.
+                #- Note: astropy.table.join changes the order
+                if len(sp.fibermap) > len(zb):
+                    zbx = Table()
+                    zbx['TARGETID'] = sp.fibermap['TARGETID']
+                    zbx = astropy.table.join(zbx, zb, keys='TARGETID')
+                else:
+                    zbx = zb
+
+                #- Sort the zbx Table to match the order of sp['TARGETID']
+                ii = np.argsort(sp.fibermap['TARGETID'])
+                jj = np.argsort(zbx['TARGETID'])
+                kk = np.argsort(ii[jj])
+                zbx = zbx[kk]
+
+                #- Confirm that we got all that expanding and sorting correct
+                assert np.all(sp.fibermap['TARGETID'] == zbx['TARGETID'])
+                zbests.append(zbx)
+
+    if len(spectra) == 0:
+        raise ValueError('No spectra found matching filters')
+
+    spectra = stack(spectra)
+
+    if zbest:
+        zbests = astropy.table.vstack(zbests)
+        assert np.all(spectra.fibermap['TARGETID'] == zbests['TARGETID'])
+        return (spectra, zbests)
+    else:
+        return spectra
+

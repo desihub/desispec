@@ -19,7 +19,9 @@ Here is the magic to expose a set of QA products
 made at NERSC to the world:
 
 1. cp -rp QA into www area :: /project/projectdirs/desi/www
-2. fix_permissions.sh -a QA
+2. fix_permissions.sh -a QA  [This may no longer be necessary]
+
+These are then exposed at https://portal.nersc.gov/cfs/desi/rest_of_path
 
 Scripts
 =======
@@ -156,6 +158,51 @@ as Gaussian statistics.  Here is an example::
 
 
     desi_qa_sky --gauss
+
+
+desi_qa_night
++++++++++++++
+
+This script is used to analyze the QA outputs
+from a given night.  Note that we use desi_qa_prod (below)
+to generate the QA YAML files.
+
+usage
+-----
+
+Here is the usage::
+
+    usage: desi_qa_night [-h] [--expid_series] [--bright_dark BRIGHT_DARK]
+                         [--qaprod_dir QAPROD_DIR] [--specprod_dir SPECPROD_DIR]
+                         [--night NIGHT]
+
+    Generate/Analyze Production Level QA [v0.5.0]
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      --expid_series        Generate exposure series plots.
+      --bright_dark BRIGHT_DARK
+                            Restrict to bright/dark (flag: 0=all; 1=bright;
+                            2=dark; only used in time_series)
+      --qaprod_dir QAPROD_DIR
+                            Path to where QA is generated. Default is qaprod_dir
+      --specprod_dir SPECPROD_DIR
+                            Path to spectro production folder. Default is
+                            specprod_dir
+      --night NIGHT         Night; required
+
+
+Current recommendation
+----------------------
+
+First generate the QA for the given night with desi_qa_prod, e.g.::
+
+    desi_qa_prod --make_frameqa 1 --specprod_dir /global/projecta/projectdirs/desi/spectro/redux/daily --night 20200224 --qaprod_dir /global/projecta/projectdirs/desi/spectro/redux/xavier/daily/QA --slurp
+
+
+Then generate the Night plots::
+
+    desi_qa_night --specprod_dir /global/projecta/projectdirs/desi/spectro/redux/daily --qaprod_dir /global/projecta/projectdirs/desi/spectro/redux/xavier/daily/QA --night 20200224 --expid_series
 
 
 desi_qa_prod

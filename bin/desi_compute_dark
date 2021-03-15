@@ -1,25 +1,16 @@
 #!/usr/bin/env python
 
-
-import sys,string
-import astropy.io.fits as pyfits
-import argparse
-import numpy as np
-
-from desispec import io
-from desispec.preproc import masked_median
-from desiutil.log import get_logger
-
-
+from desispec.ccdcalib import compute_dark_file
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description="Compute a master dark",
                                  epilog='''
                                  Input is a list of raw dark images, possibly with various exposure times.
-                                 Raw images are preprocessed without dark,mask,gain correction and without cosmic-ray masking.
+                                 Raw images are preprocessed without dark,mask correction and without cosmic-ray masking.
+                                 However gains are applied so the output is in electrons/sec.
                                  Only an optional bias correction is applied.
                                  The result is the median of the preprocessed images divided by their exposure time.
-                                 We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.                                 ''')
+                                 We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.''')
 
 
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
@@ -29,94 +20,17 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 parser.add_argument('--camera',type = str, required = True,
                     help = 'header HDU (int or string)')
 parser.add_argument('--bias', type = str, default = None, required=False,
-                        help = 'bias image calibration file (standard preprocessing calibration is turned off)')
+                     help = 'bias image calibration file (standard preprocessing calibration is turned off)')
 
 parser.add_argument('--nocosmic', action = 'store_true',
-                        help = 'do not perform comic ray subtraction (much slower, but more accurate because median can leave traces)')
+                    help = 'do not perform comic ray subtraction (much slower, but more accurate because median can leave traces)')
 parser.add_argument('--scale', action = 'store_true',
-                        help = 'apply a scale correction to each image (needed for teststand of EM0, hopefully not later)')
+                    help = 'apply a scale correction to each image (needed for teststand of EM0, hopefully not later)')
+parser.add_argument('--exptime', type=float, default=None, required=False,
+                    help='All inputs have this exptime; write as EXPTIME in output header')
 
 args        = parser.parse_args()
-log = get_logger()
 
-log.info("read images ...")
+compute_dark_file(args.image, args.outfile, camera, bias=args.bias,
+        nocosmic=args.nocosmic, scale=args.scale, exptime=args.exptime)
 
-shape=None
-images=[]
-
-if args.nocosmic :
-    masks=None
-else :
-    masks=[]
-
-for filename in args.image :
-
-    log.info(filename)
-
-    # collect exposure times
-    fitsfile=pyfits.open(filename)
-    primary_header = fitsfile[0].header
-    if "EXPREQ" in primary_header :
-        exptime = primary_header["EXPREQ"]
-        log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
-    else :
-        exptime = primary_header["EXPTIME"]
-    fitsfile.close()
-
-    # read raw data and preprocess them
-    bias=False
-    if args.bias : bias=args.bias
-    dark=False
-    pixflat=False
-    mask=False
-
-    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=args.nocosmic,mask=mask,dark=dark,pixflat=pixflat,ccd_calibration_filename=False)
-    if shape is None :
-        shape=img.pix.shape
-    log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
-    images.append(img.pix.ravel()/exptime)
-    if masks is not None :
-        masks.append(img.mask.ravel())
-
-images=np.array(images)
-if masks is not None :
-    masks=np.array(masks)
-    smask=np.sum(masks,axis=0)
-else :
-    smask=np.zeros(images[0].shape)
-
-log.info("compute median image ...")
-medimage=masked_median(images,masks)
-
-if args.scale :
-    log.info("compute a scale per image ...")
-    sm2=np.sum((smask==0)*medimage**2)
-    ok=(medimage>0.6*np.median(medimage))*(smask==0)
-    for i,image in enumerate(images) :
-        s=np.sum((smask==0)*medimage*image)/sm2
-        #s=np.median(image[ok]/medimage[ok])
-        log.info("image %d scale = %f"%(i,s))
-        images[i] /= s
-    log.info("recompute median image after scaling ...")
-    medimage=masked_median(images,masks)
-
-if True :
-    log.info("compute mask ...")
-    ares=np.abs(images-medimage)
-    nsig=4.
-    mask=(ares<nsig*1.4826*np.median(ares,axis=0))
-    # average (not median)
-    log.info("compute average ...")
-    meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
-    meanimage=meanimage.reshape(shape)
-else :
-    meanimage=medimage.reshape(shape)
-
-log.info("write result in %s ..."%args.outfile)
-hdulist=pyfits.HDUList([pyfits.PrimaryHDU(meanimage)])
-i=0
-for filename in args.image :
-    hdulist[0].header["INPUT%03d"%i]=filename
-    i+=1
-hdulist.writeto(args.outfile, overwrite=True)
-log.info("done")

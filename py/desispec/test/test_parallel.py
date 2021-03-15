@@ -83,7 +83,7 @@ class TestParallel(unittest.TestCase):
         comm = None
         nproc = 1
         rank = 0
-        if use_mpi:
+        if use_mpi():
             import mpi4py.MPI as MPI
             comm = MPI.COMM_WORLD
             nproc = comm.size

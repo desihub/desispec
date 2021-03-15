@@ -78,7 +78,7 @@ class TaskCFrame(BaseTask):
     def _run_time(self, name, procs, db):
         """See BaseTask.run_time.
         """
-        return 1
+        return 2
 
 
     def _run_defaults(self):

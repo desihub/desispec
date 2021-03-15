@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+## Import some helper functions, you can see their definitions by uncomenting the bash shell command
+from desispec.scripts.exposuretable import create_exposure_tables
+
+
+def get_parser():
+    """
+    Creates an arguments parser for the create_exposure_tables script
+    """
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser.add_argument("-n", "--nights", type=str,  default=None, help="nights as comma separated string")
+    parser.add_argument("--night-range", type=str, default=None, help="comma separated pair of nights in form YYYYMMDD,YYYYMMDD"+\
+                                                                      "for first_night,last_night specifying the beginning"+\
+                                                                      "and end of a range of nights to be generated. "+\
+                                                                      "last_night should be inclusive.")
+    parser.add_argument("--obstypes", type=str, default=None, help="comma separated list of exposure types to include in "+\
+                                                           "the exposure table, e.g. science,arc,flat,dark,zero, ...")
+    parser.add_argument("-i", "--path-to-data", type=str, default=None, help="path to the raw input data")
+    parser.add_argument("-o","--exp-table-path", type=str, default=None,  help="path to save exposure tables, without monthly subdirectory")
+    parser.add_argument("--overwrite-files", action="store_true", help="overwrite existing exposure tables")
+    parser.add_argument("--verbose", action="store_true", help="print verbose output")
+    parser.add_argument("--no-specprod", action="store_true", help="Create exposure table in repository location "+\
+                                                                     "rather than the SPECPROD location.")
+    parser.add_argument("--cameras", type=str, required=False, default=None,
+                        help="Explicitly define the cameras for which you want" +
+                             " to reduce the data. Should be a comma separated list." +
+                             " Only numbers assumes you want to reduce r, b, and z " +
+                             "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--bad-cameras", type=str, required=False, default=None,
+                        help="Explicitly define the cameras that you don't want" +
+                             " to reduce the data. Should be a comma separated list." +
+                             " Only numbers assumes you want to reduce r, b, and z " +
+                             "for that camera. Otherwise specify separately [brz][0-9].")
+    parser.add_argument("--badamps", type=str, required=False, default=None,
+                        help="Define amplifiers that you know to be bad and should not" +
+                             " be processed. Should be a list separated by comma or semicolon." +
+                             " Saved list will converted to semicolons. Each entry should be of " +
+                             "the form {camera}{spectrograph}{amp}, i.e. [brz][0-9][A-D].")
+    return parser
+
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+
+    create_exposure_tables(**args.__dict__)

@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script computes the PSF with SpecEX using MPI.
+"""
+
+import desispec.scripts.specex as specex
+import sys
+from desispec.parallel import use_mpi
+
+comm = None
+rank = 0
+nproc = 1
+if use_mpi():
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.rank
+    nproc = comm.size
+else:
+    print("mpi4py not found, using only one process")
+
+
+if __name__ == '__main__':
+    args = specex.parse()
+    specex.main(args, comm=comm)

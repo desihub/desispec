@@ -11,7 +11,7 @@ Re-group spectral data from cframe files into healpix indexed groups.
 from desispec.parallel import use_mpi
 
 comm = None
-if use_mpi:
+if use_mpi():
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
 else:

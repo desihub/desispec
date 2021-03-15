@@ -1,0 +1,175 @@
+#!/bin/bash
+
+# experimental script for automating coadds and redshifts per night
+# Stephen Bailey
+# February 2020
+
+#-----
+#- Parse inputs
+
+print_usage () {
+    echo "desi_nightly_redshifts [--batch] YEARMMDD"
+}
+
+if [ $# -eq 0 ] || [ $1 = "--help" ] || [ $1 = "-h" ]; then
+    print_usage
+    exit
+fi
+
+#- hacky parsing "[--batch] NIGHT" or "NIGHT [--batch]"
+#- TODO: parse options for specifying queue etc
+BATCH=false
+if [ $# -eq 1 ]; then
+    NIGHT=$1
+elif [ $# -eq 2 ] && [ $1 = "--batch" ]; then
+    BATCH=true
+    NIGHT=$2
+elif [ $# -eq 2 ] && [ $2 = "--batch" ]; then
+    BATCH=true
+    NIGHT=$1
+else
+    print_usage
+    exit
+fi
+
+#-----
+#- Create a batch script if requested
+if [ $BATCH = true ]; then
+    scriptdir=$DESI_SPECTRO_REDUX/$SPECPROD/run/scripts/night/$NIGHT
+    mkdir -p $scriptdir
+    cd $scriptdir
+    batchfile=$scriptdir/coadd-redshifts-$NIGHT.slurm
+    cat > $batchfile << EOL
+#!/bin/bash
+
+#SBATCH -C haswell
+#SBATCH -N 10
+#SBATCH --qos realtime
+#SBATCH --account desi
+#SBATCH --job-name redrock-${NIGHT}
+#SBATCH --output ${scriptdir}/coadd-redshifts-${NIGHT}-%j.log
+#SBATCH --time=00:40:00
+#SBATCH --exclusive
+
+desi_nightly_redshifts $NIGHT
+EOL
+
+    echo Submitting $batchfile
+    sbatch $batchfile
+    exit
+
+fi
+
+#-----
+echo Starting $NIGHT at $(date)
+
+#- Group by tile/night
+echo -- Grouping frames for $NIGHT --
+cd $DESI_SPECTRO_REDUX/$SPECPROD
+desi_group_tileframes -i exposures/$NIGHT -o tiles
+
+#- Find what tiles we have0
+TILEIDS=$(ls tiles | sed 's/\///g')
+SPECTROGRAPHS=$(seq 0 9)
+
+#- Create Spectra-64 files
+echo -- Spectral Grouping --
+for TILEID in $TILEIDS; do
+    dir=${DESI_SPECTRO_REDUX}/${SPECPROD}/tiles/${TILEID}/${NIGHT}
+    if [ -d $dir ]; then
+        cd $dir
+	numframes=$(ls cframe-*.fits 2>/dev/null | wc -l)
+        if [ $numframes -eq 0 ]; then
+            echo tile $TILEID spectrograph $SPECTRO: no cframes
+	else
+	    for SPECTRO in $SPECTROGRAPHS; do
+		spectra=spectra-${SPECTRO}-${TILEID}-${NIGHT}.fits
+                spectralog=spectra-${SPECTRO}-${TILEID}-${NIGHT}.log
+		if [ -f $spectra ]; then
+		    echo tile $TILEID spectrograph $SPECTRO: $spectra file already exists
+		else
+		    echo tile $TILEID spectrograph $SPECTRO: generating $spectra at $(date)
+		    srun -N 1 -n 1 -c 64 desi_group_spectra \
+			 --inframes cframe-[brz]${SPECTRO}-*.fits \
+			 --outfile $spectra &> $spectralog &
+		fi
+            done
+	fi
+    fi
+    echo Waiting for spectra file creation to finish for TILE ${TILEID} at $(date)
+    wait
+done
+
+#- Wait for the spectra file creation to finish
+echo Waiting for spectra file creation to finish at $(date)
+wait
+echo spectra creation done at $(date)
+
+#- Generate coadds per-spectrograph per-tile per-night
+#- Do so for both combined brz and separate b, r, and z
+echo -- Coadds --
+for TILEID in $TILEIDS; do
+    dir=${DESI_SPECTRO_REDUX}/${SPECPROD}/tiles/${TILEID}/${NIGHT}
+    if [ -d $dir ]; then
+        cd $dir
+        for SPECTRO in $SPECTROGRAPHS; do
+	    spectra=spectra-${SPECTRO}-${TILEID}-${NIGHT}.fits
+            coadd=coadd-${SPECTRO}-${TILEID}-${NIGHT}.fits
+            colog=coadd-${SPECTRO}-${TILEID}-${NIGHT}.log
+            if [ ! -f $spectra ]; then
+                echo tile $TILEID spectrograph $SPECTRO: no spectra file
+            else
+		if [ ! -f $coadd ]; then
+                    echo tile $TILEID spectrograph $SPECTRO: generating $coadd at $(date)
+                    srun -N 1 -n 1 -c 64 desi_coadd_spectra \
+			 --nproc 16 \
+                         -i $spectra \
+			 -o $coadd &> $colog &
+	        else
+                    echo tile $TILEID spectrograph $SPECTRO: $coadd already exists
+		fi
+            fi
+        done
+    fi
+    echo Waiting for coadds to finish for TILE ${TILEID} at $(date)
+    wait
+done
+
+echo Waiting for coadds to finish at $(date)
+wait
+echo Coadds done at $(date)
+
+#- Spawn runrock in the background
+echo -- Redrock --
+for TILEID in $TILEIDS; do
+    dir=${DESI_SPECTRO_REDUX}/${SPECPROD}/tiles/${TILEID}/${NIGHT}
+    if [ -d $dir ]; then
+        cd $dir
+        for SPECTRO in $SPECTROGRAPHS; do
+	    spectra=spectra-${SPECTRO}-${TILEID}-${NIGHT}.fits
+            zbest=zbest-${SPECTRO}-${TILEID}-${NIGHT}.fits
+            rrlog=redrock-${SPECTRO}-${TILEID}-${NIGHT}.log
+            if [ ! -f $spectra ]; then
+                echo tile $TILEID spectrograph $SPECTRO: no spectra file
+            elif [ ! -f $zbest ]; then
+                echo tile $TILEID spectrograph $SPECTRO: running redrock for $zbest at $(date)
+                srun -N 1 -n 32 -c 2 rrdesi_mpi \
+                     -z $zbest \
+                     -o redrock-${SPECTRO}-${TILEID}-${NIGHT}.h5 \
+                     $spectra &> $rrlog &
+                #- Sleep a moment to not overwhelm slurm
+                sleep 2
+            else
+                echo tile $TILEID spectrograph $SPECTRO: $zbest exists
+            fi
+        done
+    fi
+    echo Waiting for redshifts to finish for TILE ${TILEID} at $(date)
+    wait
+done
+
+#- Wait for the various redrock commands to finish
+echo Waiting for redrock commands to finish at $(date)
+wait
+echo Redrock done at $(date)
+echo All done at $(date)

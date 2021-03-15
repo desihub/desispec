@@ -193,7 +193,7 @@ class TestQA(unittest.TestCase):
         write_qa_frame(outfile, qafrm0)
         self.files_written.append(outfile)
         # Load
-        qafrm2 = load_qa_frame(outfile, frm0)
+        qafrm2 = load_qa_frame(outfile, frame_meta=frm0.meta)
         assert qafrm2.night == qafrm0.night
 
 

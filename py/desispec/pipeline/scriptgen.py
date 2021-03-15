@@ -22,6 +22,9 @@ from desiutil.log import get_logger
 
 from .. import io
 
+from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
+    stdouterr_redirected)
+
 from .prod import task_read, task_write
 
 from .plan import nersc_machine, nersc_job_size

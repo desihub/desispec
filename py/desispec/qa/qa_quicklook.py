@@ -1995,7 +1995,7 @@ class Calculate_SNR(MonitoringAlg):
 
         fidboundary=None
 
-        qadict,fitsnr = qalib.SNRFit(frame,night,camera,expid,param,fidboundary=fidboundary)
+        qadict,fitsnr = qalib.orig_SNRFit(frame,night,camera,expid,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
 

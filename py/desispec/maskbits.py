@@ -40,22 +40,32 @@ from desiutil.bitmask import BitMask
 _bitdefs = yaml.safe_load("""
 #- CCD pixel mask
 ccdmask:
-    - [BAD,         0, "Pre-determined bad pixel (any reason)"]
-    - [HOT,         1, "Hot pixel"]
-    - [DEAD,        2, "Dead pixel"]
-    - [SATURATED,   3, "Saturated pixel from object"]
-    - [COSMIC,      4, "Cosmic ray"]
-    - [PIXFLATZERO, 5, "pixflat is 0"]
-    - [PIXFLATLOW,  6, "pixflat < 0.1"]
+    - [BAD,             0, "Pre-determined bad pixel (any reason)"]
+    - [HOT,             1, "Hot pixel"]
+    - [DEAD,            2, "Dead pixel"]
+    - [SATURATED,       3, "Saturated pixel from object"]
+    - [COSMIC,          4, "Cosmic ray"]
+    - [PIXFLATZERO,     5, "pixflat is 0"]
+    - [PIXFLATLOW,      6, "pixflat < 0.1"]
+    - [HIGHVAR,         7, "High variability in pixel value"]
+    - [BADREADNOISE,    8, "Very high CCD amplifier read noise"]
 
 #- Mask bits that apply to an entire fiber
 fibermask:
-    - [BADFIBER,     0, "Broken or otherwise unusable fiber"]
-    - [BADTRACE,     1, "Bad trace solution"]
-    - [BADFLAT,      2, "Bad fiber flat"]
-    - [BADARC,       3, "Bad arc solution"]
-    - [MANYBADCOL,   4, ">10% of pixels are bad columns"]
-    - [MANYREJECTED, 5, ">10% of pixels rejected in extraction"]
+    - [STUCKPOSITIONER, 1, "Stuck positioner"]
+    - [BROKENFIBER,     2, "Broken fiber"]
+    - [BADTARGET,       3, "Fiber is not a known target"]
+    - [MISSINGPOSITION, 8, "Fiber location information is missing"]
+    - [BADPOSITION,     9, "ICS flag that positioner is not at target location"]
+    - [BADFIBER,       16, "Unusable fiber"]
+    - [BADTRACE,       17, "Bad trace solution"]
+    - [BADFLAT,        18, "Bad fiber flat"]
+    - [BADARC,         19, "Bad arc solution"]
+    - [MANYBADCOL,     20, ">10% of pixels are bad columns"]
+    - [MANYREJECTED,   21, ">10% of pixels rejected in extraction"]
+    - [BADAMPB,        22, "Issues in the amplifier readouts of camera B make this unusable"]
+    - [BADAMPR,        23, "Issues in the amplifier readouts of camera R make this unusable"]
+    - [BADAMPZ,        24, "Issues in the amplifier readouts of camera Z make this unusable"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
 specmask:
@@ -68,6 +78,7 @@ specmask:
     - [BADSKY,       6, "Bad sky model"]
     - [BAD2DFIT,     7, "Bad fit of extraction 2D model to pixel data"]
     - [NODATA,       8, "No data exists"]
+    - [BADFIBER,     9, "fibermask has a non-zero bit"]
 
 #- zmask: reasons why redshift fitting failed
 """)

@@ -1,6 +1,7 @@
 import unittest, os, sys, shutil, tempfile
 import numpy as np
 from astropy.io import fits
+from copy import deepcopy
 
 if __name__ == '__main__':
     print('Run this instead:')
@@ -10,6 +11,7 @@ if __name__ == '__main__':
 from ..test.util import get_frame_data
 from ..io import findfile, write_frame, read_spectra, specprod_root
 from ..scripts import group_spectra
+from desispec.maskbits import fibermask
 
 class TestPixGroup(unittest.TestCase):
 
@@ -21,39 +23,52 @@ class TestPixGroup(unittest.TestCase):
         os.environ['DESI_SPECTRO_REDUX'] = cls.testdir
         os.environ['SPECPROD'] = 'grouptest'
 
-        cls.nspec_per_frame = 3
-        cls.nframe_per_night = 2
-        cls.nights = [20200101, 20200102, 20200103]
-
-        frame = get_frame_data(nspec=cls.nspec_per_frame)
-        frame.meta['FLAVOR'] = 'science'
+        cls.nspec_per_frame = 8 # needs to be at least 4
+        cls.nframe_per_night = 4 # needs to be at least 4
+        cls.nights = [20200101, 20200102, 20200103] # needs to be at least 3 nights
+        cls.badnight = cls.nights[-1]
+        cls.badslice = np.arange(2, int(np.min([6,cls.nspec_per_frame]) ) ).astype(int)
         
-        scores = dict()
-        for camera in ['b', 'r', 'z']:
-            X = camera.upper()
+        frames = dict()
+        meta = {'EXPID': 1.0, 'FLAVOR': 'science'}
+        frames['b'] = get_frame_data(nspec=cls.nspec_per_frame, wavemin=4500, wavemax=4600,
+                                 nwave=100, meta=meta.copy())
+        frames['r'] = get_frame_data(nspec=cls.nspec_per_frame, wavemin=6500, wavemax=6600,
+                                 nwave=100, meta=meta.copy())
+        frames['z'] = get_frame_data(nspec=cls.nspec_per_frame, wavemin=8500, wavemax=8600,
+                                 nwave=100, meta=meta.copy())
+
+        bad_nframs_on_night = {'b':  0 , 'r':  1 , 'z':  2 }
+        bad_brz_nfram = 3
+        badbits = { 'b': fibermask.BADAMPB,\
+                    'r': fibermask.BADAMPR,\
+                    'z': fibermask.BADAMPZ    }
+        badamp_brz = ( fibermask.BADAMPB & fibermask.BADAMPR & fibermask.BADAMPZ )
+        for camera in ['b0', 'r0', 'z0']:
+            X = camera[0].upper()
             dtype = [('COUNTS_'+X, int), ('FLUX_'+X, float)]
-            scores[camera] = np.zeros(cls.nspec_per_frame, dtype=dtype)
-            # scores[camera] = None
-        
-        expid = 1
-        for night in cls.nights:
-            frame.meta['NIGHT'] = night
-            frame.meta['EXPID'] = expid
-            frame.meta['TILEID'] = expid*10
-            for camera in ('b0', 'r0', 'z0'):
-                frame.meta['CAMERA'] = camera
-                frame.scores = scores[camera[0]]
-                write_frame(findfile('cframe', night, expid, camera), frame)
-
-            expid += 1
-            frame.meta['NIGHT'] = night
-            frame.meta['EXPID'] = expid
-            frame.meta['TILEID'] = expid*10
-            for camera in ('b0', 'r0', 'z0'):
-                frame.meta['CAMERA'] = camera
-                frame.scores = scores[camera[0]]
-                write_frame(findfile('cframe', night, expid, camera), frame)
-
+            bad_nfram_on_night = bad_nframs_on_night[camera[0]]
+            badbit = badbits[camera[0]]
+            frame = frames[camera[0]]
+            frame.meta['CAMERA'] = camera
+            frame.scores = np.zeros(cls.nspec_per_frame, dtype=dtype)
+            for ii,night in enumerate(cls.nights):
+                for nfram in range(cls.nframe_per_night):
+                    expid = (ii*cls.nframe_per_night) + (nfram + 1)
+                    
+                    if night == cls.badnight and \
+                       (nfram == bad_nfram_on_night or nfram == bad_brz_nfram):
+                        curframe = deepcopy(frame)
+                        curframe.fibermap['FIBERSTATUS'][cls.badslice] |= badbit
+                    else:
+                        curframe = frame
+                    
+                    curframe.meta['NIGHT'] = night
+                    curframe.meta['EXPID'] = expid
+                    curframe.meta['TILEID'] = expid*10
+                    curframe.meta['MJD-OBS'] = 55555.0+ii + 0.1*nfram
+                    write_frame(findfile('cframe', night, expid, camera), curframe)
+                    
         #- Remove one file to test missing data
         os.remove(findfile('cframe', cls.nights[0], 1, 'r0'))
 
@@ -86,8 +101,28 @@ class TestPixGroup(unittest.TestCase):
             self.assertEqual(len(spectra.fibermap), nspec)
             self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
-    def test_regroup_nights(self):
+    def test_regroup_fiberstatus_propagation(self):
         #- run on a specific set of nights
+        cmd = 'desi_group_spectra -o {} --nights {}'.format(self.outdir, self.badnight)
+        args = group_spectra.parse(cmd.split()[1:])
+        group_spectra.main(args)
+
+        specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
+        spectra = read_spectra(specfile)
+        nspec = self.nspec_per_frame * self.nframe_per_night
+
+        fibermap_array = np.array(spectra.fibermap['FIBERSTATUS'])
+        self.assertEqual(len(fibermap_array), nspec)
+        
+        self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPB) > 0 ), 2*len(self.badslice))
+        self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPR) > 0 ), 2*len(self.badslice))
+        self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPZ) > 0 ), 2*len(self.badslice))
+
+        badamp_brz = ( fibermask.BADAMPB | fibermask.BADAMPR | fibermask.BADAMPZ )
+        self.assertEqual(np.sum( (fibermap_array == badamp_brz) ), len(self.badslice))
+        
+    def test_regroup_nights(self):
+        #- run on a specific set of nights   
         num_nights = 2
         nights = ','.join([str(tmp) for tmp in self.nights[0:num_nights]])
         cmd = 'desi_group_spectra -o {} --nights {}'.format(self.outdir, nights)
@@ -97,10 +132,10 @@ class TestPixGroup(unittest.TestCase):
         specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
         spectra = read_spectra(specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
-    
+        
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
-
+        
     def test_regroup(self):
         #- self discover what nights to combine
         cmd = 'desi_group_spectra -o {}'.format(self.outdir)

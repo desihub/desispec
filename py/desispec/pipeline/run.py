@@ -23,7 +23,8 @@ from desiutil.log import get_logger
 
 from .. import io
 
-from ..parallel import stdouterr_redirected
+from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
+    stdouterr_redirected)
 
 from .prod import load_prod
 
@@ -39,7 +40,7 @@ class TimeoutError(Exception):
     pass
 
 def _timeout_handler(signum, frame):
-    raise TimeoutError
+    raise TimeoutError('Timeout at {}'.format(time.asctime()))
 
 def run_task(name, opts, comm=None, logfile=None, db=None):
     """Run a single task.
@@ -94,7 +95,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
 
     signal.alarm(int(expected_run_time * 60))
     if rank == 0:
-        log.debug("Running {} with timeout {:.1f} min".format(
+        log.info("Running {} with timeout {:.1f} min".format(
             name, expected_run_time))
 
     task_start_time = time.time()
@@ -132,6 +133,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
     if rank == 0:
         log.debug("Finished with task {} sigalarm reset".format(name))
         log.debug("Task {} returning failcount {}".format(name, failcount))
+
     return failcount
 
 

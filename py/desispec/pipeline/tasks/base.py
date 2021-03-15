@@ -15,6 +15,7 @@ import sys
 import os
 import re
 import time
+import socket
 import traceback
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
 
@@ -517,7 +518,13 @@ class BaseTask(object):
             com = self.run_cli(name, opts, nproc, db=db)
             log.info("{}: {}".format(lstr, com))
 
-            log.info("Starting {} at {}".format(name, time.asctime()))
+            hostname = socket.gethostname()
+            log.info("Starting {} at {} on {}".format(
+                name, time.asctime(), hostname))
+
+            if 'SLURM_JOB_ID' in os.environ:
+                jobid = os.getenv('SLURM_JOB_ID')
+                log.info('slurm job id {}'.format(jobid))
 
         failed = 0
         try:

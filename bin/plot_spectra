@@ -1,0 +1,164 @@
+#!/usr/bin/env python
+
+
+import sys
+import argparse
+import matplotlib.pyplot as plt
+import numpy as np
+import fitsio
+from desispec.io import read_spectra
+from desispec.interpolation import resample_flux
+from astropy.table import Table
+import redrock.templates
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                 description="Display spectra, looping over targets if targetid not set, and optionally show best fit from redrock"
+)
+parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
+                    help = 'path to spectra file(s)')
+parser.add_argument('-t','--targetid', type = int, default = None, required = False,
+                    help = 'plot specific targetid')
+parser.add_argument('--rebin',type = int, default = None, required = False,
+                    help = 'rebin')
+parser.add_argument('--zbest',type = str, default = None, required = False,
+                    help = 'zbest file')
+parser.add_argument('--spectype',type = str, default = None, required = False,
+                    help = 'spectype to select')
+parser.add_argument('--ylim', type=float, default=None, required=False, nargs=2,
+                    help = 'ymin ymax for plot')
+parser.add_argument('--title', type=str, default=None, required=False,
+                    help = 'plot title')
+parser.add_argument('--rest-frame', action='store_true',
+                    help = 'show rest-frame wavelength')
+parser.add_argument('--errors', action='store_true',
+                    help = 'show error bars')
+
+
+args        = parser.parse_args()
+
+if  args.zbest is not None :
+    #- Load redrock templates
+    templates = dict()
+    for filename in redrock.templates.find_templates():
+        tx = redrock.templates.Template(filename)
+        templates[(tx.template_type, tx.sub_type)] = tx
+
+if args.zbest is None and args.rest_frame :
+    args.rest_frame = False
+    print("cannot show rest-frame wavelength without a zbest file")
+
+spectra = []
+for filename in args.infile :
+    spectra.append(read_spectra(filename))
+
+targetids=None
+if ( targetids is None ) and ( args.targetid is not None ) :
+    targetids=[args.targetid,]
+
+zbest=None
+if  args.zbest is not None :
+    zbest=Table.read(args.zbest,"ZBEST")
+
+if ( targetids is None ) and ( zbest is not None ) and ( args.spectype is not None ):
+    selection = np.where((zbest["SPECTYPE"]==args.spectype)&(zbest["ZWARN"]==0))[0]
+    targetids=np.unique(spectra[0].fibermap["TARGETID"][selection])
+
+if targetids is None :
+    targetids=np.unique(spectra[0].fibermap["TARGETID"])
+
+
+lines = {
+    'Ha'      : 6562.8,
+    'Hb'       : 4862.68,
+    'Hg'       : 4340.464,
+    'Hd'       : 4101.734,
+    'OIII-b'       :  5006.843,
+    'OIII-a'       : 4958.911,
+    'MgII'    : 2799.49,
+    'OII'         : 3728,
+    'CIII'  : 1909.,
+    'CIV'    : 1549.06,
+    'SiIV'  : 1393.76018,
+    'LYA'         : 1215.67,
+    'LYB'         : 1025.72
+}
+
+
+
+for tid in targetids :
+    line="TARGETID={}".format(tid)
+
+    model_flux=dict()
+    if zbest is not None :
+        j=np.where(zbest["TARGETID"]==tid)[0][0]
+        line += " ZBEST={} SPECTYPE={} ZWARN={}".format(zbest["Z"][j],zbest["SPECTYPE"][j],zbest["ZWARN"][j])
+
+        tx = templates[(zbest['SPECTYPE'][j], zbest['SUBTYPE'][j])]
+        for band in spectra[0].bands:
+            model_flux[band] = np.zeros(spectra[0].wave[band].shape)
+            coeff = zbest['COEFF'][j][0:tx.nbasis]
+            model = tx.flux.T.dot(coeff).T
+            mx = resample_flux(spectra[0].wave[band], tx.wave*(1+zbest['Z'][j]), model)
+            k=np.where(spectra[0].fibermap["TARGETID"]==tid)[0][0]
+            model_flux[band] = spectra[0].R[band][k].dot(mx)
+
+    fig=plt.figure(figsize=[10,6])
+    ax = fig.add_subplot(111)
+    print(line)
+    for spec in spectra :
+        jj=np.where(spec.fibermap["TARGETID"]==tid)[0]
+
+        wavescale=1.
+        if args.rest_frame :
+            wavescale = 1./(1+zbest['Z'][j])
+
+        for j in jj :
+            for b in spec._bands :
+
+                i=np.where(spec.ivar[b][j]*(spec.mask[b][j]==0)>1./100.**2)[0]
+                if i.size<10 : continue
+                if args.rebin is not None and args.rebin>0:
+                    rwave=np.linspace(spec.wave[b][0],spec.wave[b][-1],spec.wave[b].size//args.rebin)
+                    rflux,rivar = resample_flux(rwave,spec.wave[b],spec.flux[b][j],ivar=spec.ivar[b][j]*(spec.mask[b][j]==0))
+                    plt.plot(wavescale*rwave,rflux)
+                else :
+                    if args.errors :
+                        plt.errorbar(wavescale*spec.wave[b][i],spec.flux[b][j,i],1./np.sqrt(spec.ivar[b][j,i]))
+                    else :
+                        plt.plot(wavescale*spec.wave[b][i],spec.flux[b][j,i])
+
+                c=np.polyfit(spec.wave[b][i],spec.flux[b][j,i],3)
+                pol=np.poly1d(c)(spec.wave[b][i])
+
+        print(spec.fibermap[jj])
+
+    if zbest is not None :
+        for band in spectra[0].bands:
+            plt.plot(wavescale*spectra[0].wave[band],model_flux[band],"-",alpha=0.6)
+            for elem in lines :
+                line=(1+zbest['Z'][j])*lines[elem]
+                if line>spectra[0].wave[band][0] and line<spectra[0].wave[band][-1] :
+                    plt.axvline(wavescale*line,color="red",linestyle="--",alpha=0.4)
+                    y=np.interp(wavescale*line,wavescale*spectra[0].wave[band],model_flux[band])
+                    plt.text(wavescale*(line+60),y*1.1,elem.split("-")[0],color="red")
+    if args.rest_frame :
+        plt.xlabel("rest-frame wavelength [A]")
+    else :
+        plt.xlabel("wavelength [A]")
+    plt.grid()
+    props = dict(boxstyle='round', facecolor='yellow', alpha=0.2)
+    bla="TID = {}".format(tid)
+    if zbest is not None :
+        bla+="\nZ  = {:4.3f}".format(zbest['Z'][j])
+    plt.text(0.9,0.9,bla,fontsize=12, bbox=props,transform = ax.transAxes,verticalalignment='top', horizontalalignment='right')
+    if args.ylim is not None:
+        plt.ylim(args.ylim[0], args.ylim[1])
+
+    if args.title is not None:
+        plt.title(args.title)
+
+    plt.tight_layout()
+    plt.show()
+
+
+plt.show()

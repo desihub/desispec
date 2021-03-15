@@ -76,10 +76,14 @@ def integration_test(night=None, nspec=5, clobber=False):
     Raises:
         RuntimeError if any script fails
     """
+    from desiutil.iers import freeze_iers
+    freeze_iers()
+
     log = get_logger()
     #- YEARMMDD string, rolls over at noon not midnight
+    #- Simulate 8 years ago, prior to start of survey
     if night is None:
-        night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
+        night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600-(8*365*24*3600)))
 
     #- check for required environment variables
     check_env()
@@ -117,7 +121,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     for expid, program in enumerate(programs):
         rawfile = io.findfile('desi', night, expid)
         outdir = os.path.dirname(io.findfile('preproc', night, expid, 'b0'))
-        cmd = "desi_preproc --infile {} --outdir {}".format(rawfile, outdir)
+        cmd = "desi_preproc --cameras b0,r0,z0 --infile {} --outdir {} --ncpu 1".format(rawfile, outdir)
 
         inputs = [rawfile,]
         outputs = list()

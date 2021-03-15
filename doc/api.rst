@@ -250,9 +250,6 @@ Full desispec API Reference
 .. automodule:: desispec.qproc.qsky
     :members:
 
-.. automodule:: desispec.qproc.util
-    :members:
-
 .. automodule:: desispec.quicklook
     :members:
 

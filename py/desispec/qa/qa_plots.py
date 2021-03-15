@@ -32,6 +32,8 @@ desi_params = read_params()
 
 from desispec.qa.qalib import s2n_funcs
 
+from desiutil.log import get_logger
+
 def brick_zbest(outfil, zf, qabrick):
     """ QA plots for Flux calibration in a Frame
 
@@ -108,6 +110,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     qaframe: QAFrame object
     """
     from desispec.sky import subtract_sky
+    log = get_logger()
 
     # Access metrics
     '''
@@ -127,7 +130,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
     else:
         med_res = np.median(res,axis=0)
-        wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
+        wavg_res = np.sum(res*res_ivar,0) / (np.sum(res_ivar,0) + (np.sum(res_ivar,0)==0))
 
     # Plot
     if quick_look:
@@ -173,19 +176,25 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         edges = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_EDGES"])
     else: # Generate for offline
         gd_res = res_ivar > 0.
-        devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
-        i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
-        rng = tuple( binsz*np.array([i0,i1]) )
-        nbin = i1-i0
-        hist, edges = np.histogram(devs, range=rng, bins=nbin)
+        if not np.any(gd_res):
+            log.info("No good residuals in frame_skyres plot")
+            edges = None
+        else:
+            devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
+            min_devs = np.maximum(np.min(devs), xmin*2)
+            max_devs = np.minimum(np.max(devs), xmax*2)
+            i0, i1 = int(min_devs/binsz) - 1, int(max_devs/binsz) + 1
+            rng = tuple( binsz*np.array([i0,i1]) )
+            nbin = i1-i0
+            hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
-    xhist = (edges[1:] + edges[:-1])/2.
-    ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
-    # PDF for Gaussian
-    area = binsz * np.sum(hist)
-
-    xppf = np.linspace(scipy.stats.norm.ppf(0.0001), scipy.stats.norm.ppf(0.9999), 100)
-    ax1.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
+    if edges is not None:
+        xhist = (edges[1:] + edges[:-1])/2.
+        ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
+        # PDF for Gaussian
+        area = binsz * np.sum(hist)
+        xppf = np.linspace(scipy.stats.norm.ppf(0.0001), scipy.stats.norm.ppf(0.9999), 100)
+        ax1.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
 
     ax1.set_xlabel(r'Res/$\sigma$')
     ax1.set_ylabel('N')
@@ -480,8 +489,8 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     yfiber = np.zeros(nfiber)
     for ii,fiber in enumerate(frame.fibers):
         mt = np.where(fiber == fibermap['FIBER'])[0]
-        xfiber[ii] = fibermap['DESIGN_X'][mt]
-        yfiber[ii] = fibermap['DESIGN_Y'][mt]
+        xfiber[ii] = fibermap['FIBERASSIGN_X'][mt]
+        yfiber[ii] = fibermap['FIBERASSIGN_Y'][mt]
     area = fiber_area_arcsec2(xfiber,yfiber)
     mean_area = np.mean(area)
 
@@ -550,6 +559,100 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
+def frame_s2n(s2n_dict, outfile, rescut=0.2, verbose=True):
+    """
+    Plot S/N diagnostics for a given frame
+    Replaces a previous-QL script
+
+    Args:
+        s2n_dict (dict): dictionary of qa outputs repackaged a bit
+        outfile (str): output png filename
+        rescut (float, optional): only plot residuals (+/-) less than rescut
+    """
+    from desispec.qa.qalib import s2n_flux_astro
+    # Plot
+    stypes = get_sty_otype()
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,6)
+    plt.suptitle("Signal/Noise after {}, Camera: {}, ExpID: {}".format(
+        s2n_dict['PANAME'], s2n_dict['CAMERA'], s2n_dict['EXPID']), fontsize=10, y=0.99)
+    cmap = plt.get_cmap('RdBu')
+
+    # Unpack a bit
+    objlist = s2n_dict['METRICS']['OBJLIST']
+    nfibers = len(s2n_dict['METRICS']['MEDIAN_SNR'])
+
+    # Loop over object types
+    resids = np.zeros(nfibers)
+    mags, snrs = [], []
+    ss = 0
+    for oid, otype in enumerate(objlist):
+        # Truncate
+        if ss > 5:
+            continue
+        mag = s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
+        snr = s2n_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
+        mags += mag
+        snrs += snr
+
+        # Residuals
+        fibers = s2n_dict['METRICS']['%s_FIBERID' % otype]
+        coeff = np.array(s2n_dict['METRICS']['FITCOEFF_TGT'][oid])
+        if np.any(np.isnan(coeff)):
+            continue
+        amag = np.array(mag)
+        flux = 10 ** (-0.4 * (amag - 22.5))
+        fit_snr = s2n_flux_astro(flux, *coeff) * s2n_dict['METRICS']['EXPTIME'] ** (1 / 2)
+        resids[fibers] = (s2n_dict['METRICS']['MEDIAN_SNR'][fibers] - fit_snr) / fit_snr
+
+        # Object fits
+        ax_obj = plt.subplot(gs[0, ss])
+        # Scatter
+        if otype in stypes.keys():
+            clr = stypes[otype]['color']
+        else:
+            clr = 'gray'
+        ax_obj.scatter(amag, snr, s=1, color=clr)
+
+        xval = np.linspace(np.min(amag), np.max(amag))
+        xflux = 10 ** (-0.4 * (xval - 22.5))
+        ax_obj.plot(xval, s2n_flux_astro(xflux, *coeff) * s2n_dict['METRICS']['EXPTIME'] ** (1/2),
+                    color='k')
+        #ax_obj.set_xlabel('{:s} mag ({:s})'.format(otype, s2n_dict['METRICS']['FIT_FILTER']))
+        ax_obj.set_xlabel('{:s}'.format(otype))
+        ax_obj.set_ylabel('S/N')
+        ax_obj.set_yscale('log')
+        # Increment
+        ss += 1
+
+    # Median S/N
+    ax_S2N = plt.subplot(gs[1, 0:3])
+
+    gdfibers = s2n_dict['METRICS']['MEDIAN_SNR'] > 0.
+    ax_S2N.scatter(np.arange(nfibers)[gdfibers], s2n_dict['METRICS']['MEDIAN_SNR'][gdfibers])
+    #import pdb; pdb.set_trace()
+    ax_S2N.set_xlabel('Fiber #')
+    ax_S2N.set_ylabel('Median S/N')
+    ax_S2N.set_yscale('log', nonposy='clip')
+    ax_S2N.set_ylim(0.01, 100.)
+
+    # RA, DEC with residuals
+    ax_res = plt.subplot(gs[1, 3:])
+    ax_res.set_title('Residual SNR: (calculated SNR - fit SNR) / fit SNR', fontsize=8)
+    resid_plot = ax_res.scatter(s2n_dict['METRICS']['RA'], s2n_dict['METRICS']['DEC'],
+                                s=2, c=resids, cmap=cmap, vmin=-rescut, vmax=rescut)
+    fig.colorbar(resid_plot, ticks=[-rescut, 0., rescut])
+    #fig.colorbar(resid_plot, ticks=[np.min(resids), 0, np.max(resids)])
+    ax_res.set_xlabel('RA')
+    ax_res.set_ylabel('DEC')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    _ = makepath(outfile)
+    plt.savefig(outfile)
+    if verbose:
+        print("Wrote: {:s}".format(outfile))
+    plt.close()
 
 def exposure_fiberflat(channel, expid, metric, outfile=None):
     """ Generate an Exposure level plot of a FiberFlat metric
@@ -590,8 +693,8 @@ def exposure_fiberflat(channel, expid, metric, outfile=None):
         fibermap = frame.fibermap
         gdp = fiberflat.mask == 0
         # X,Y
-        x.append([fibermap['DESIGN_X']])
-        y.append([fibermap['DESIGN_Y']])
+        x.append([fibermap['FIBERASSIGN_X']])
+        y.append([fibermap['FIBERASSIGN_Y']])
         area = fiber_area_arcsec2(x[-1], y[-1])
         mean_area = np.mean(area)
         # Metric
@@ -658,25 +761,25 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
 
 
 def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
-                 mag_mnx=[18.,23.]):
+                 specprod_dir=None):
     """ Generate an Exposure level plot of a S/N metric
     Args:
         qa_exp: QA_Exposure
         metric: str,  allowed entires are: ['resid']
-        mag_mnx: Range of magnitudes used for residual plot
+        specprod_dir: str, optional
 
     Returns:
 
     """
     from desispec.io.meta import find_exposure_night, findfile
     from desispec.io.frame import read_meta_frame, read_frame
-    from desispec.io.fiberflat import read_fiberflat
+
     log = get_logger()
 
     cclrs = get_channel_clrs()
 
     # Find exposure
-    night = find_exposure_night(qa_exp.expid)
+    night = find_exposure_night(qa_exp.expid, specprod_dir=specprod_dir)
 
 
     # Plot
@@ -700,7 +803,8 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
         for wedge in range(10):
             # Load
             camera=channel+'{:d}'.format(wedge)
-            frame_file = findfile('frame', camera=camera, night=night, expid=qa_exp.expid)
+            frame_file = findfile('frame', camera=camera, night=night, expid=qa_exp.expid,
+                                  specprod_dir=specprod_dir)
             try:
                 frame = read_frame(frame_file)
             except:
@@ -708,8 +812,8 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
             fibermap = frame.fibermap
             #
             rows = np.where(qa_exp.qa_s2n['CAMERA'] == camera)[0]
-            qa_exp.qa_s2n['X'][rows] = [fibermap['DESIGN_X'][qa_exp.qa_s2n['FIBER'][rows]]]
-            qa_exp.qa_s2n['Y'][rows] = [fibermap['DESIGN_Y'][qa_exp.qa_s2n['FIBER'][rows]]]
+            qa_exp.qa_s2n['X'][rows] = [fibermap['FIBERASSIGN_X'][qa_exp.qa_s2n['FIBER'][rows]]]
+            qa_exp.qa_s2n['Y'][rows] = [fibermap['FIBERASSIGN_Y'][qa_exp.qa_s2n['FIBER'][rows]]]
 
         # Metric
         if metric == 'resid':
@@ -768,7 +872,7 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
     # Night
     ylbl -= yoff
-    ax.text(xlbl+0.1, ylbl, 'Night: '+qaframe.night,
+    ax.text(xlbl+0.1, ylbl, f'Night: {qaframe.night}',
             transform=ax.transAxes, ha='left', fontsize='x-small')
     # Rest
     for key in sorted(qaframe.qa_data[qaflavor]['METRICS'].keys()):
@@ -869,21 +973,23 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     else:  # Show
         plt.show()
 
-def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=True, pp=None,
-                     bright_dark=0):
+def prod_time_series(qa_multi, qatype, metric, outfile=None, close=True, pp=None,
+                     bright_dark=0, exposures=False, night=None, horiz_line=None):
     """ Generate a time series plot for a production
+    Can be MJD or Exposure number
+
     Args:
-        qa_prod:
-        qatype:
-        metric:
-        xlim:
-        outfile:
-        close:
+        qa_multi: QA_Prod or QA_Night
+        qatype: str
+        metric: str
+        outfile: str, optional
+        close: bool, optional
         pp:
         bright_dark: int, optional; (flag: 0=all; 1=bright; 2=dark)
-
-    Returns:
-
+        night: str, optional
+            Only used for the Title
+        horiz_line: float, optional
+            Draw a horizontal line at input value
     """
 
     log = get_logger()
@@ -901,7 +1007,10 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     all_ax = []
     for cc, channel in enumerate(['b','r','z']):
         ax = plt.subplot(gs[cc])
-        qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
+        qa_tbl = qa_multi.get_qa_table(qatype, metric, channels=channel)
+        if len(qa_tbl) == 0:
+            log.info("QA Table is empty..  Maybe you input an incorrect metric?")
+            continue
         '''
         # Check for nans
         isnan = np.isnan(qa_arr)
@@ -930,23 +1039,42 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
             mjd = mjd[dark]
 
         # Scatter me
-        ax.scatter(mjd, qa_tbl[metric], color=clrs[channel], s=4.)
+        if exposures:
+            xval = qa_tbl['EXPID']
+            plt.xticks(rotation=90)
+        else:
+            xval = mjd
+        ax.scatter(xval, qa_tbl[metric], color=clrs[channel], s=4.)
+        # Camera
+        ax.text(0.05, 0.85, channel,
+                       transform=ax.transAxes, fontsize=13., ha='left', color=clrs[channel])
         # Axes
         ax.set_ylabel('Metric')
         if cc < 2:
             ax.get_xaxis().set_ticks([])
-        if cc ==0:
-            ax.set_title('{:s} :: {:s}'.format(qatype,metric))
+        if cc == 0:
+            title = '{:s} :: {:s}'.format(qatype,metric)
+            if night is not None:
+                title = str(night)+' '+title
+            #
+            ax.set_title(title)
+        # Horizontal line?
+        if horiz_line is not None:
+            ax.axhline(horiz_line, color='gray', ls='--')
+        # Append
         all_times.append(mjd)
         all_ax.append(ax)
 
     # Label
     #ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
-    ax.set_xlabel('MJD')
-    all_times = np.concatenate(all_times)
-    xmin, xmax = np.min(all_times), np.max(all_times)
-    for cc in range(3):
-        all_ax[cc].set_xlim(xmin,xmax)
+    if exposures:
+        ax.set_xlabel('EXPID')
+    else:
+        ax.set_xlabel('MJD')
+        all_times = np.concatenate(all_times)
+        xmin, xmax = np.min(all_times), np.max(all_times)
+        for cc in range(3):
+            all_ax[cc].set_xlim(xmin,xmax)
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
@@ -1006,7 +1134,7 @@ def prod_avg_s2n(qa_prod, outfile=None, optypes=['ELG'], xaxis='MJD',
 
     # Loop on exposure
     for qaexp in qa_prod.qa_exps:
-        if qaexp.qa_s2n is None:
+        if qaexp.qa_s2n is None or len(qaexp.qa_s2n) == 0:
             continue
         # Loop on objects to plot
         for itype, oplot in enumerate(oplots):

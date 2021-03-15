@@ -2,6 +2,20 @@
 desispec
 ========
 
+|Actions Status| |Coveralls Status| |Documentation Status|
+
+.. |Actions Status| image:: https://github.com/desihub/desispec/workflows/CI/badge.svg
+    :target: https://github.com/desihub/desispec/actions
+    :alt: GitHub Actions CI Status
+
+.. |Coveralls Status| image:: https://coveralls.io/repos/desihub/desispec/badge.svg
+    :target: https://coveralls.io/github/desihub/desispec
+    :alt: Test Coverage Status
+
+.. |Documentation Status| image:: https://readthedocs.org/projects/desispec/badge/?version=latest
+    :target: https://desispec.readthedocs.io/en/latest/
+    :alt: Documentation Status
+
 Introduction
 ------------
 
@@ -38,26 +52,8 @@ Full Documentation
 
 Please visit `desispec on Read the Docs`_
 
-.. image:: https://readthedocs.org/projects/desispec/badge/?version=latest
-    :target: http://desispec.readthedocs.org/en/latest/
-    :alt: Documentation Status
+.. _`desispec on Read the Docs`: https://desispec.readthedocs.io/en/latest/
 
-.. _`desispec on Read the Docs`: http://desispec.readthedocs.org/en/latest/
-
-Travis Build Status
--------------------
-
-.. image:: https://img.shields.io/travis/desihub/desispec.svg
-    :target: https://travis-ci.org/desihub/desispec
-    :alt: Travis Build Status
-
-
-Test Coverage Status
---------------------
-
-.. image:: https://coveralls.io/repos/desihub/desispec/badge.svg?service=github
-    :target: https://coveralls.io/github/desihub/desispec
-    :alt: Test Coverage Status
 
 License
 -------

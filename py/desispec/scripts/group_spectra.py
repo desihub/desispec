@@ -12,7 +12,7 @@ from desiutil.log import get_logger
 from .. import io
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import (get_exp2healpix_map, add_missing_frames,
-        frames2spectra, update_frame_cache)
+        frames2spectra, update_frame_cache, FrameLite)
 
 def parse(options=None):
     import argparse
@@ -24,6 +24,8 @@ def parse(options=None):
     parser.add_argument("-o", "--outdir", type=str,  help="output directory")
     parser.add_argument("--mpi", action="store_true",
             help="Use MPI for parallelism")
+    parser.add_argument("--inframes", type=str, nargs='*', help="input frame files; ignore --reduxdir, --nights, --nside")
+    parser.add_argument("--outfile", type=str, help="output to this file; only used with --inframes")
 
     if options is None:
         args = parser.parse_args()
@@ -53,6 +55,35 @@ def main(args=None, comm=None):
     else:
         rank = 0
         size = 1
+
+    #- Combining a set of frame files instead of a healpix?
+    if args.inframes is not None:
+        if rank == 0:
+            log.info('Starting at {}'.format(time.asctime()))
+            log.info('Reading {} frame files'.format(len(args.inframes)))
+            frames = dict()
+            for filename in args.inframes:
+                frame = FrameLite.read(filename)
+                night = frame.meta['NIGHT']
+                expid = frame.meta['EXPID']
+                camera = frame.meta['CAMERA']
+                frames[(night, expid, camera)] = frame
+
+            log.info('Combining into spectra')
+            spectra = frames2spectra(frames)
+            log.info('Writing {}'.format(args.outfile))
+            spectra.write(args.outfile)
+            log.info('Done at {}'.format(time.asctime()))
+
+
+        #- All done; all ranks exit
+        return 0
+
+    #- options check
+    if args.outfile is not None:
+        if rank == 0:
+            log.error('Only use --outfile with --inframes options')
+        return 1
 
     if args.nights:
         nights = [int(night) for night in args.nights.split(',')]
@@ -120,9 +151,6 @@ def main(args=None, comm=None):
         #- Load new frames to add
         log.info('pix {} has {} frames to add'.format(pix, len(framekeys)))
         update_frame_cache(frames, framekeys, specprod_dir=args.reduxdir)
-
-        #- add any missing frames
-        add_missing_frames(frames)
 
         #- convert individual FrameLite objects into SpectraLite
         newspectra = frames2spectra(frames, pix)

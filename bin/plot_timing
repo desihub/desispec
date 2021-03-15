@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+
+"""
+Plot job step timing from a timing summary json file
+"""
+
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+import dateutil.parser
+import sys
+import argparse
+
+parser = argparse.ArgumentParser(usage = "plot_timing [options]")
+parser.add_argument("infile", type=str, 
+        help="input timing json summary file")
+parser.add_argument("--mintime", type=float, default=5.0,
+        help="skip steps faster than MINTIME seconds")
+parser.add_argument("-o", "--output", type=str,
+        help="output plot filename")
+parser.add_argument("-t", "--title", type=str,
+        help="plot title")
+# parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
+
+args = parser.parse_args()
+
+with open(args.infile) as fx:
+    data = json.load(fx)
+
+def min2str(t):
+    m = int(t)
+    s = int(round((t-m)*60))
+    return f"{m}m{s}s"
+
+t0 = np.min([dateutil.parser.parse(tmp['start.min']) for tmp in data.values()])
+t0 = t0.timestamp() / 60
+# t0 = dateutil.parser.parse(data['startup']['start.min']).timestamp() / 60
+
+plt.figure(figsize=(6,3))
+i = 0
+yy = list()
+for name, stats in data.items():
+    t = dateutil.parser.parse(stats['start.min']).timestamp()/60 - t0
+    dt = stats['duration.max'] / 60
+    if dt >= args.mintime/60:
+        plt.plot([t, t+dt], [i, i], lw=5, solid_capstyle='butt')
+        yy.append(i)
+
+        label = '{} {}'.format(name, min2str(dt))
+        plt.text(t, i-0.1, label, ha='left', va='bottom', fontsize=9)
+            
+        i += 1
+
+plt.xlim(-1, max(20, int(t+3)))
+plt.xlabel('Time since launch [min]')
+# plt.yticks(yy, names)
+plt.yticks(yy)
+plt.ylim(i-0.5, -0.75)
+if args.title:
+    plt.title(args.title)
+
+plt.tight_layout()
+
+if args.output:
+    plt.savefig(args.output)
+else:
+    plt.show()
+
+
+

@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+## Import some helper functions, you can see their definitions by uncomenting the bash shell command
+from desispec.scripts.processingtable import create_processing_tables
+
+
+def get_parser():
+    """
+    Creates an arguments parser for the create_processing_tables script
+    """
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    parser.add_argument("-n", "--nights", type=str,  default=None, help="nights as comma separated string")
+    parser.add_argument("--night-range", type=str, default=None, help="comma separated pair of nights in form YYYYMMDD,YYYYMMDD"+\
+                                                                      "for first_night,last_night specifying the beginning"+\
+                                                                      "and end of a range of nights to be generated. "+\
+                                                                      "last_night should be inclusive.")
+    parser.add_argument("-i", "--exp-table-path", type=str, default=None, help="data path to exposure tables, without the month subdirectory.")
+    parser.add_argument("-o","--proc-table-path", type=str, default=None,  help="path to save processing tables")
+    parser.add_argument("--obstypes", type=str, default=None, help="comma separated list of exposure types to include in "+\
+                                                           "the processing table, e.g. science,arc,flat,dark,zero, ...")
+    parser.add_argument("--overwrite-files", action="store_true", help="overwrite existing exposure tables")
+    parser.add_argument("--verbose", action="store_true", help="print verbose output")
+    parser.add_argument("--joinsymb", type=str, default='|', help="String that separates entries multivalue column rows when saving to csv")
+    parser.add_argument("--no-specprod-exptab", action="store_true", help="Read exposure table in repository location "+\
+                                                                     "rather than the SPECPROD location.")
+    return parser
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+
+    create_processing_tables(**args.__dict__)

@@ -69,7 +69,7 @@ class TaskSpectra(BaseTask):
             props = self.name_split(name)
             entries = db.select_healpix_frame({"pixel":props["pixel"],"nside":props["nside"]})
             nentry = len(entries)
-            tm = 1.0 + 1.0 * (nentry / 50.0)
+            tm = 10.0 + 1.0 * (nentry / 50.0)
         else:
             tm = 60.0
 

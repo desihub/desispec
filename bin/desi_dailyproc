@@ -1,0 +1,291 @@
+#!/usr/bin/env python
+
+"""
+Work in progress testing by Stephen and AK
+The catchup file should be a single night listed per row
+No delimiters as it is only a single column (loaded as csv internally)
+"""
+
+import sys, os, glob, time, subprocess
+import argparse
+import psutil
+import socket
+import datetime
+import desispec.io
+import fitsio
+from astropy.io import fits
+import numpy as np
+
+########################
+### Helper Functions ###
+########################
+from desispec.desi_proc_dashboard import what_night_is_it, find_newexp, check_running,\
+                                         get_file_list, get_skipped_expids
+
+def get_catchup_nights(catchup_filename, docatchup=True):
+    return get_file_list(filename=catchup_filename, doaction=docatchup)
+
+def get_nights(catchup_filename, args):
+    catchup = get_catchup_nights(catchup_filename,args.catchup)
+
+    if args.skip_today and not args.catchup:
+        print("I have no work to do. I'm skipping today and have no catchup.")
+        sys.exit(1)
+    elif args.skip_today:
+        tonight = []
+    else:
+        tonight = [what_night_is_it(),]
+    return tonight + catchup
+
+
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Perform daily processing of spectral"+
+                                     "data using the pipeline. Can also catchup on"+
+                                     "past nights.")
+    # Runtime params
+    parser.add_argument("-t","--pausetime", type=int, default=5, required=False,
+                        help="Number of minutes to pause after 'nsubmit' "+
+                             "submissions or after completing all known files.")
+    parser.add_argument("-n", "--nsubmits", type=int, required=False, default=10,
+                        help="Number of submissions to make to cori at a time."+
+                             "After 'nsubmits,' the script will wait 'pausetime'"+
+                             "minutes before submitting another 'nsubmits.'")
+
+    parser.add_argument("--cameras", type=str, required=False,
+                        help="Explicitly define the spectrographs for which you want"+
+                             " to reduce the data. Should be a comma separated list."+
+                             " Numbers only assumes you want to reduce R, B, and Z "+
+                             "for that camera. Otherwise specify separately [BRZ|brz][0-9].")
+
+    # File and dir defs
+    parser.add_argument("-c", "--catchup-file", type=str, required=False,
+                        help="Relative path+name for catchup file. Automatically "+
+                             "triggers '--catchup' to be true.")
+    parser.add_argument("-e", "--skip-expid-file", type=str, required=False,
+                        help="Relative pathname for file containing expid's to skip. Automatically "+\
+                             "triggers '--skip--expids' to be true. They are assumed to be in a column"+\
+                             "format, one per row. Stored internally as integers, so zero padding is "+\
+                             "accepted but not required.")
+    parser.add_argument("-s", "--specprod", type=str, required=False,
+                        help="Directory name where the output files should be saved.")
+    parser.add_argument("-r", "--reduxdir", type=str, required=False,
+                        help="Main reduction dir where specprod dir will reside.")
+
+    # Code Flags
+    parser.add_argument("--force-specprod", action="store_true",
+                        help="Force the files to be written to custom SPECPROD "+
+                             "even if user is desi.")
+    parser.add_argument("--ignore-instances", action="store_true",
+                        help="Allow script to run even if another instance is "+
+                             "running. Use with care.")
+    parser.add_argument("--ignore-cori-node", action="store_true",
+                        help="Allow script to run on nodes other than cori21")
+    parser.add_argument("--skip-expids", action="store_true",
+                        help="Load in the skipped exposures id file and skip them instead of running them.")
+    parser.add_argument("--skip-today",action="store_true",
+                        help="If given the code does not search for new files on the current day. "+\
+                             "Used for catchup runs. To not interfere with daily processing, also use --ignore-instances.")
+    parser.add_argument("--do-zeros", action="store_true",
+                        help="Set this flag to process zeros. Otherwise they will be skipped.")
+    parser.add_argument("--do-short-scis", action="store_true",
+                        help="If set, all SCIENCE exposures will be processed. Otherwise those shorter than 60s will"+\
+                             " be skipped and not processed.")
+    parser.add_argument("--catchup", action="store_true",
+                        help="Load in catch up file and rerun the listed nights")
+    parser.add_argument("--scattered-light", action="store_true",
+                        help="Pass scattered light command to desi_proc. Fits and removes scattered light.")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Perform a dry run where no jobs are actually submitted.")
+    parser.add_argument("--most-recent-calib", action="store_true",
+                        help="Look backward in time for the most recent night with good calibration files."+\
+                        " If not set the defaults in DESI_SPECTRO_CALIB are used.")
+    
+    # Read in command line and return
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+
+    if args.catchup_file is not None:
+        args.catchup = True
+    if args.skip_expid_file is not None:
+        args.skip_expids = True
+
+    return args
+
+
+def main(args):
+
+    #- Preflight checks
+    if not args.ignore_cori_node and socket.gethostname() != 'cori21':
+        print('This should only run on cori21')
+        sys.exit(1)
+
+    if not args.ignore_instances:
+        running = check_running(proc_name='desi_dailyproc')
+        if not running:
+            print('OK to run')
+        else:
+            sys.exit(1)
+
+    ########################
+    ### Define io params ###
+    ########################
+    catchup_filename = None
+    if args.catchup:
+        if args.catchup_file is None:
+            catchup_filename = 'catchup_list.csv' # must be relative
+                                                  # path from codedir
+        else:
+            catchup_filename = args.catchup_file
+
+    expid_filename = None
+    if args.skip_expids:
+        if args.skip_expid_file is None:
+            expid_filename = 'skipped_expid_list.csv' # must be relative                                           
+                                                  # path from codedir                                                        
+        else:
+            expid_filename = args.skip_expid_file
+    
+    # Check if we should force the script to use
+    # environment variable (for debugging)
+    # Otherwise if it's the desi user, force to 'daily'
+    # otherwise use whatever is defined with a default
+    # of 'daily'
+    if args.force_specprod:
+        if args.specprod is None:
+            if 'SPECPROD' not in os.environ.keys():
+                os.environ['SPECPROD'] = 'daily'
+            # else specprod already defined as desired
+        else:
+            os.environ['SPECPROD'] = args.specprod
+    else:
+        if str(os.environ['USER']).lower()=='desi':
+            os.environ['SPECPROD'] = 'daily'
+        elif args.specprod is None:
+            if 'SPECPROD' not in os.environ.keys():
+                os.environ['SPECPROD'] = 'daily'
+            # else specprod already define
+        else:
+            os.environ['SPECPROD'] = args.specprod
+
+    if args.reduxdir is None:
+        reduxdir = desispec.io.specprod_root() # directory for reductions                                                     
+    else:
+        reduxdir = args.reduxdir
+            
+    #########################
+    ### Setup for Running ###
+    #########################
+    skipd_expids = get_skipped_expids(expid_filename,args.skip_expids)
+    skipd_expid_set = set(skipd_expids)
+    
+    #- First identify exposures that are already processed
+    known_exposures = set()
+
+    for night in get_nights(catchup_filename,args):
+        fileglob = '{}/preproc/{}/*/preproc-*'.format(reduxdir, night)
+        newexp = find_newexp(night, fileglob, known_exposures)
+        print('{} exposures already processed on {}'.format(len(newexp), night))
+        known_exposures.update(newexp)
+
+    print('redux output to {}'.format(reduxdir))
+    sys.stdout.flush()
+
+
+    ###############################                                                                                                                         
+    ### Define desi_proc params ###                                                                                                                             
+    ############################### 
+    cmd_base = 'desi_proc'
+    cmd_base += ' --batch'
+    cmd_base += ' --traceshift'
+   
+    if args.most_recent_calib:
+        cmd_base += ' --most-recent-calib'
+    if args.scattered_light:
+        cmd_base += ' --scattered-light'
+    if args.cameras is not None:
+        args.cameras = args.cameras.strip(' \t')
+        cmd_base += ' --cameras {}'.format(args.cameras)
+
+                        
+    ##################################
+    ### Run until something breaks ###
+    ##################################
+    # While loop should run while new exposures are being found and processed
+    new_exposures_run = True
+    while new_exposures_run:
+        # if we're skipping today, theres no chance of new data appearing,
+        # set new exposures run to False if skipping today is True
+        new_exposures_run = (not args.skip_today)
+        for night in get_nights(catchup_filename,args):
+            print('{} Checking for new files on {}'.format(time.asctime(), night))
+            fileglob = '{}/{}/*/desi-*.fits.fz'.format(
+                os.getenv('DESI_SPECTRO_DATA'), night)
+
+            newexp = find_newexp(night, fileglob, known_exposures)
+            if len(newexp) > 0:
+                ## If we're still processing new exposures, continue to run while loop
+                new_exposures_run = True
+                print('{}  {} new files found'.format(time.asctime(), len(newexp)))
+                if args.dry_run:
+                    print("\n\n\n\tDry run, nothing submitted.")
+                nsubmit = 0
+                for night, expid in sorted(newexp):
+                    known_exposures.add( (night, expid) )
+
+                    if args.skip_expids and expid in skipd_expid_set:
+                        continue
+
+                    if args.do_zeros and args.do_short_scis:
+                        pass
+                    else:
+                        #- skip ZEROs for now
+                        rawfile = desispec.io.findfile('raw', night, expid)
+                        ### hdr = fitsio.read_header(rawfile, 1)
+                        hdr = fits.getheader(rawfile, 1)
+                        if (not args.do_zeros) and ('OBSTYPE' in hdr) and (hdr['OBSTYPE'].strip().upper() == 'ZERO'):
+                            print('Skipping OBSTYPE=ZERO exposure {}/{}'.format(night, expid))
+                            continue
+                        if (not args.do_short_scis) and ('OBSTYPE' in hdr) and \
+                           (hdr['OBSTYPE'].strip().upper() == 'SCIENCE') and \
+                           ('EXPTIME' in hdr) and (float(hdr['EXPTIME']) < 60.):
+                            print('Skipping OBSTYPE=SCIENCE exposure {}/{} with EXPTIME={}'.format(night,expid,\
+                                                                                                   float(hdr['EXPTIME'])))
+                            continue
+                    #if 'OBSTYPE' in hdr and hdr['OBSTYPE'].strip() == 'ARC':
+                    #    print('Temporarily skipping OBSTYPE=ARC exposure {}/{}'.format(night, expid))
+                    #    continue
+
+                    #- submit batch jobs for others
+                    cmd = '{basecall} -n {night} -e {exp}'.format(basecall=cmd_base,night=night,exp=expid)
+                                         
+                    print(cmd)
+                    if args.dry_run:
+                        print("\tOutput file would have been: {}".format(reduxdir))
+                        print("\tCommand to be run: {}".format(cmd.split()))
+                    else:
+                        subprocess.call(cmd.split())
+                    sys.stdout.flush()
+
+                    #- Don't overwhelm the queue
+                    nsubmit += 1
+                    if nsubmit >= args.nsubmits:
+                        break
+
+                #- if we found any exposures, take a break after submitting
+                #- them without checking prior nights to not overwhelm the queue
+                break
+
+        print('PID '+str(os.getpid())+' {} sleeping...'.format(time.asctime()))
+        sys.stdout.flush()
+        if args.dry_run:
+            print("\n\n\tWould have paused for {} min. here, but this is a dry run. Continuing.\n".format(args.pausetime))
+            time.sleep(4)
+        else:
+            time.sleep(args.pausetime*60)
+
+if __name__=='__main__':
+    args = parse(options=None)
+    main(args)

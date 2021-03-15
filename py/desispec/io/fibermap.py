@@ -5,14 +5,26 @@ desispec.io.fibermap
 IO routines for fibermap.
 """
 import os
+import sys
+import glob
 import warnings
+import time
+
 import numpy as np
-from astropy.table import Table, Column
+from astropy.table import Table, Column, join
+from astropy.io import fits
 
+from desitarget.targetmask import desi_mask
+from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
-from desispec.io.util import fitsheader, write_bintable, makepath
 
-#- Subset of columns that come from original target catalog
+from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
+from desispec.io.meta import rawdata_root, findfile
+from . import iotime
+
+from desispec.maskbits import fibermask
+
+#- Subset of columns that come from original target/MTL catalog
 target_columns = [
     ('TARGETID',    'i8', '', 'Unique target ID'),
     ('DESI_TARGET', 'i8', '', 'Dark survey + calibration targeting bits'),
@@ -29,11 +41,13 @@ target_columns = [
     ('MORPHTYPE', (str, 4), '', 'Imaging Surveys morphological type'),
     ('PRIORITY',    'i4', '', 'Assignment priority; larger=higher priority'),
     ('SUBPRIORITY', 'f8', '', 'Assignment subpriority [0-1)'),
-    ('REF_ID',      'i8', '', 'Astrometric catalog reference ID (SOURCE_ID from Gaia)'),
-    ('PMRA',        'f4', 'marcsec/year', 'Proper motion in +RA direction (already including cos(dec))'),
+    ('REF_ID',      'i8', '', 'Astrometric cat refID (Gaia SOURCE_ID)'),
+    ('PMRA',        'f4', 'marcsec/year', 'PM in +RA dir (already incl cos(dec))'),
     ('PMDEC',       'f4', 'marcsec/year', 'Proper motion in +dec direction'),
+    ('REF_EPOCH',   'f4', '', 'proper motion reference epoch'),
     ('PMRA_IVAR',   'f4', 'year**2/marcsec**2', 'Inverse variance of PMRA'),
     ('PMDEC_IVAR',  'f4', 'year**2/marcsec**2', 'Inverse variance of PMDEC'),
+    ('RELEASE',     'i2', '', 'imaging surveys release ID'),
     ('FLUX_G',      'f4', 'nanomaggies', 'g-band flux'),
     ('FLUX_R',      'f4', 'nanomaggies', 'r-band flux'),
     ('FLUX_Z',      'f4', 'nanomaggies', 'z-band flux'),
@@ -44,22 +58,116 @@ target_columns = [
     ('FLUX_IVAR_Z', 'f4', '1/nanomaggies**2', 'Inverse variance of FLUX_Z'),
     ('FLUX_IVAR_W1','f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W1'),
     ('FLUX_IVAR_W2','f4', '1/nanomaggies**2', 'Inverse variance of FLUX_W2'),
-    ('FIBERFLUX_G', 'f4', 'nanomaggies', 'g-band object model flux for 1" seeing and 1.5" diameter fiber'),
-    ('FIBERFLUX_R', 'f4', 'nanomaggies', 'r-band object model flux for 1" seeing and 1.5" diameter fiber'),
-    ('FIBERFLUX_Z', 'f4', 'nanomaggies', 'z-band object model flux for 1" seeing and 1.5" diameter fiber'),
-    ('FIBERFLUX_W1', 'f4', 'nanomaggies', 'W1-band object model flux for 1" seeing and 1.5" diameter fiber'),
-    ('FIBERFLUX_W2', 'f4', 'nanomaggies', 'W2-band object model flux for 1" seeing and 1.5" diameter fiber'),
-    ('FIBERTOTFLUX_G', 'f4', 'nanomaggies', 'like FIBERFLUX_G but including all objects overlapping this location'),
-    ('FIBERTOTFLUX_R', 'f4', 'nanomaggies', 'like FIBERFLUX_R but including all objects overlapping this location'),
-    ('FIBERTOTFLUX_Z', 'f4', 'nanomaggies', 'like FIBERFLUX_Z but including all objects overlapping this location'),
-    ('FIBERTOTFLUX_W1', 'f4', 'nanomaggies', 'like FIBERFLUX_W1 but including all objects overlapping this location'),
-    ('FIBERTOTFLUX_W2', 'f4', 'nanomaggies', 'like FIBERFLUX_W2 but including all objects overlapping this location'),
+    ('FIBERFLUX_G', 'f4', 'nanomaggies', 'g-band model flux 1" seeing, 1.5" dia fiber'),
+    ('FIBERFLUX_R', 'f4', 'nanomaggies', 'r-band model flux 1" seeing, 1.5" dia fiber'),
+    ('FIBERFLUX_Z', 'f4', 'nanomaggies', 'z-band model flux 1" seeing, 1.5" dia fiber'),
+    ('FIBERFLUX_W1', 'f4', 'nanomaggies', 'W1-band model flux 1" seeing, 1.5" dia fiber'),
+    ('FIBERFLUX_W2', 'f4', 'nanomaggies', 'W2-band model flux 1" seeing, 1.5" dia fiber'),
+    ('FIBERTOTFLUX_G', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    ('FIBERTOTFLUX_R', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    ('FIBERTOTFLUX_Z', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    ('FIBERTOTFLUX_W1', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    ('FIBERTOTFLUX_W2', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    ('GAIA_PHOT_G_MEAN_MAG',      'f4', 'mag', 'Gaia G band mag'),
+    ('GAIA_PHOT_BP_MEAN_MAG',      'f4', 'mag', 'Gaia BP band mag'),
+    ('GAIA_PHOT_RP_MEAN_MAG',      'f4', 'mag', 'Gaia RP band mag'),
     ('MW_TRANSMISSION_G', 'f4', '', 'Milky Way dust transmission in g [0-1]'),
     ('MW_TRANSMISSION_R', 'f4', '', 'Milky Way dust transmission in r [0-1]'),
     ('MW_TRANSMISSION_Z', 'f4', '', 'Milky Way dust transmission in z [0-1]'),
     ('EBV', 'f4', '', 'Galactic extinction E(B-V) reddening from SFD98'),
-    ('PHOTSYS', (str, 1), '', 'N for BASS/MzLS, S for DECam')
+    ('PHOTSYS', (str, 1), '', 'N for BASS/MzLS, S for DECam'),
+    ('OBSCONDITIONS', 'i4', '', 'bitmask of allowable observing conditions'),
+    ('NUMOBS_INIT', 'i8', '', 'initial number of requested observations'),
+    ('PRIORITY_INIT', 'i8', '', 'initial priority'),
+    ('NUMOBS_MORE', 'i4', '', 'current number of additional obs requested'),
+    ('HPXPIXEL', 'i8', '', 'Healpix pixel number (NESTED)')
 ]
+
+### Some additional columns from targeting that I'm not including here yet
+### because we don't use them in the pipeline and they may continue to evolve
+# DCHISQ              f4  array[5]
+# FRACFLUX_G          f4
+# FRACFLUX_R          f4
+# FRACFLUX_Z          f4
+# FRACMASKED_G        f4
+# FRACMASKED_R        f4
+# FRACMASKED_Z        f4
+# FRACIN_G            f4
+# FRACIN_R            f4
+# FRACIN_Z            f4
+# NOBS_G              i2
+# NOBS_R              i2
+# NOBS_Z              i2
+# PSFDEPTH_G          f4
+# PSFDEPTH_R          f4
+# PSFDEPTH_Z          f4
+# GALDEPTH_G          f4
+# GALDEPTH_R          f4
+# GALDEPTH_Z          f4
+# FLUX_W3             f4
+# FLUX_W4             f4
+# FLUX_IVAR_W3        f4
+# FLUX_IVAR_W4        f4
+# MW_TRANSMISSION_W1
+#                     f4
+# MW_TRANSMISSION_W2
+#                     f4
+# MW_TRANSMISSION_W3
+#                     f4
+# MW_TRANSMISSION_W4
+#                     f4
+# ALLMASK_G           i2
+# ALLMASK_R           i2
+# ALLMASK_Z           i2
+# FRACDEV             f4
+# FRACDEV_IVAR        f4
+# SHAPEDEV_R          f4
+# SHAPEDEV_E1         f4
+# SHAPEDEV_E2         f4
+# SHAPEDEV_R_IVAR     f4
+# SHAPEDEV_E1_IVAR
+#                     f4
+# SHAPEDEV_E2_IVAR
+#                     f4
+# SHAPEEXP_R          f4
+# SHAPEEXP_E1         f4
+# SHAPEEXP_E2         f4
+# SHAPEEXP_R_IVAR     f4
+# SHAPEEXP_E1_IVAR
+#                     f4
+# SHAPEEXP_E2_IVAR
+#                     f4
+# WISEMASK_W1         u1
+# WISEMASK_W2         u1
+# MASKBITS            i2
+# REF_ID              i8
+# REF_CAT             S2
+# GAIA_PHOT_G_MEAN_MAG
+#                     f4
+# GAIA_PHOT_G_MEAN_FLUX_OVER_ERROR
+#                     f4
+# GAIA_PHOT_BP_MEAN_MAG
+#                     f4
+# GAIA_PHOT_BP_MEAN_FLUX_OVER_ERROR
+#                     f4
+# GAIA_PHOT_RP_MEAN_MAG
+#                     f4
+# GAIA_PHOT_RP_MEAN_FLUX_OVER_ERROR
+#                     f4
+# GAIA_PHOT_BP_RP_EXCESS_FACTOR
+#                     f4
+# GAIA_ASTROMETRIC_EXCESS_NOISE
+#                     f4
+# GAIA_DUPLICATED_SOURCE
+#                     b1
+# GAIA_ASTROMETRIC_SIGMA5D_MAX
+#                     f4
+# GAIA_ASTROMETRIC_PARAMS_SOLVED
+#                     b1
+# PARALLAX            f4
+# PARALLAX_IVAR       f4
+# BLOBDIST            f4
+
 
 #- Columns added by fiberassign
 fiberassign_columns = target_columns.copy()
@@ -71,10 +179,12 @@ fiberassign_columns.extend([
     ('FIBERSTATUS', 'i4', '', 'Fiber status; 0=good'),
     ('OBJTYPE', (str, 3), '', 'SKY, TGT, NON'),
     ('LAMBDA_REF',  'f4', 'Angstrom', 'Wavelength at which fiber was centered'),
-    ('DESIGN_X',    'f4', 'mm', 'Expected CS5 X on focal plane'),
-    ('DESIGN_Y',    'f4', 'mm', 'Expected CS5 Y on focal plane'),
-    ('DESIGN_Q',    'f4', 'deg', 'Expected CS5 Q azimuthal coordinate'),
-    ('DESIGN_S',    'f4', 'mm', 'Expected CS5 S radial distance along curved focal surface'),
+    ('FIBERASSIGN_X',    'f4', 'mm', 'Expected CS5 X on focal plane'),
+    ('FIBERASSIGN_Y',    'f4', 'mm', 'Expected CS5 Y on focal plane'),
+    ('FA_TARGET',   'i8', '', ''),
+    ('FA_TYPE',     'u1', '', 'Internal fiberassign target type'),
+    # ('DESIGN_Q',    'f4', 'deg', 'Expected CS5 Q azimuthal coordinate'),
+    # ('DESIGN_S',    'f4', 'mm', 'Expected CS5 S radial distance along curved focal surface'),
     ('NUMTARGET',   'i2', '', 'Number of targets covered by positioner'),
 ])
 
@@ -85,12 +195,17 @@ fibermap_columns.extend([
     ('FIBER_DEC',       'f8', 'degree', 'DEC of actual fiber position'),
     ('FIBER_RA_IVAR',   'f4', '1/degree**2', 'Inverse variance of FIBER_RA [not set yet]'),
     ('FIBER_DEC_IVAR',  'f4', '1/degree**2', 'Inverse variance of FIBER_DEC [not set yet]'),
-    ('DELTA_X',         'f4', 'mm', 'CS5 X difference between requested and actual position'),
-    ('DELTA_Y',         'f4', 'mm', 'CS5 Y difference between requested and actual position'),
-    ('DELTA_X_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_X [not set yet]'),
-    ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
+    ('PLATEMAKER_X',    'f4', 'mm', 'CS5 X location requested by PlateMaker'),
+    ('PLATEMAKER_Y',    'f4', 'mm', 'CS5 Y location requested by PlateMaker'),
+    ('PLATEMAKER_RA',   'f4', 'deg', 'ICRS RA requested by PlateMaker'),
+    ('PLATEMAKER_DEC',  'f4', 'deg', 'ICRS dec requested by PlateMaker'),
+    # ('DELTA_X',         'f4', 'mm', 'CS5 X difference between requested and actual position'),
+    # ('DELTA_Y',         'f4', 'mm', 'CS5 Y difference between requested and actual position'),
+    # ('DELTA_X_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_X [not set yet]'),
+    # ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
     ('NUM_ITER',        'i4', '', 'Number of positioner iterations'),
     ('SPECTROID',       'i4', '', 'Hardware ID of spectrograph'),
+    ('EXPTIME','f4','s','Exposure time'),
 ])
 
 #- fibermap_comments[colname] = 'comment to include in FITS header'
@@ -119,10 +234,13 @@ def empty_fibermap(nspec, specmin=0):
     fibers_per_spectrograph = 500
     fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
-    fiberpos = desimodel.io.load_fiberpos()
+    fiberpos = desimodel.io.load_focalplane()[0]
+    fiberpos = fiberpos[fiberpos['DEVICE_TYPE'] == 'POS']
+    fiberpos.sort('FIBER')
+
     ii = slice(specmin, specmin+nspec)
-    fibermap['DESIGN_X'][:]   = fiberpos['X'][ii]
-    fibermap['DESIGN_Y'][:]   = fiberpos['Y'][ii]
+    fibermap['FIBERASSIGN_X'][:]   = fiberpos['OFFSET_X'][ii]
+    fibermap['FIBERASSIGN_Y'][:]   = fiberpos['OFFSET_Y'][ii]
     fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
     fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
     fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
@@ -154,6 +272,7 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
     Returns:
         write_fibermap (str): full path to filename of fibermap file written.
     """
+    log = get_logger()
     outfile = makepath(outfile)
 
     #- astropy.io.fits incorrectly generates warning about 2D arrays of strings
@@ -168,8 +287,12 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERM
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
+        t0 = time.time()
         write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
                        extname=extname, clobber=clobber)
+        duration = time.time() - t0
+
+    log.info(iotime.format('write', outfile, duration))
 
     return outfile
 
@@ -183,7 +306,312 @@ def read_fibermap(filename):
     #- Implementation note: wrapping Table.read() with this function allows us
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
+    log = get_logger()
+    t0 = time.time()
     fibermap = Table.read(filename, 'FIBERMAP')
+    duration = time.time() - t0
+
+    #- support old simulated fiberassign files
+    if 'DESIGN_X' in fibermap.colnames:
+        fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
+    if 'DESIGN_Y' in fibermap.colnames:
+        fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
+
+    log.info(iotime.format('read', filename, duration))
+
+    return fibermap
+
+def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
+    """
+    Walk backwards in exposures to find matching fiberassign file
+
+    Args:
+        night (int): YEARMMDD night of observations
+        expid (int): spectscopic exposure ID
+
+    Options:
+        tileid (int): tileid to look for
+        nightdir (str): base directory for raw data on that night
+
+    Returns first fiberassign file found on or before `expid` on `night`.
+
+    Raises FileNotFoundError if no fibermap is found
+    """
+    log = get_logger()
+    if nightdir is None:
+        nightdir = os.path.join(rawdata_root(), str(night))
+
+    expdir = f'{nightdir}/{expid:08d}'
+
+    if tileid is not None:
+        faglob = nightdir+'/*/fiberassign-{:06d}.fits*'.format(tileid)
+    else:
+        faglob = nightdir+'/*/fiberassign*.fits*'
+
+    fafile = None
+    for filename in sorted(glob.glob(faglob)):
+        if filename.endswith('.fits.gz') or filename.endswith('.fits'):
+            dirname = os.path.dirname(filename)
+            if dirname <= expdir:
+                fafile = filename
+            else:
+                break
+        else:
+            log.debug(f'Ignoring {filename}')
+
+    if fafile is None:
+        raise FileNotFoundError(
+                f'Unable to find fiberassign on {night} prior to {expid}')
+
+    return fafile
+
+def assemble_fibermap(night, expid, badamps=None, force=False):
+    """
+    Create a fibermap for a given night and expid
+
+    Args:
+        night (int): YEARMMDD night of sunset
+        expid (int): exposure ID
+
+    Options:
+        badamps (str): comma separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
+        force (bool): create fibermap even if missing coordinates/guide files
+    """
+
+    log = get_logger()
+
+    #- raw data file for header
+    rawfile = findfile('raw', night, expid)
+    try:
+        rawheader = fits.getheader(rawfile, 'SPEC')
+    except KeyError:
+        rawheader = fits.getheader(rawfile, 'SPS')
+
+    #- Find fiberassign file
+    fafile = find_fiberassign_file(night, expid)
+
+    #- Find coordinates file in same directory
+    dirname, filename = os.path.split(fafile)
+    globfiles = glob.glob(dirname+'/coordinates-*.fits')
+    if len(globfiles) == 1:
+        coordfile = globfiles[0]
+    elif len(globfiles) == 0:
+        message = f'No coordinates*.fits file in fiberassign dir {dirname}'
+        if force:
+            log.error(message + '; continuing anyway')
+            coordfile = None
+        else:
+            raise FileNotFoundError(message)
+
+    elif len(globfiles) > 1:
+        raise RuntimeError(
+            f'Multiple coordinates*.fits files in fiberassign dir {dirname}')
+
+    #- And guide file
+    dirname, filename = os.path.split(fafile)
+    globfiles = glob.glob(dirname+'/guide-????????.fits.fz')
+    if len(globfiles) == 0:
+        #- try falling back to acquisition image
+        globfiles = glob.glob(dirname+'/guide-????????-0000.fits.fz')
+
+    if len(globfiles) == 1:
+        guidefile = globfiles[0]
+    elif len(globfiles) == 0:
+        message = f'No guide-*.fits.fz file in fiberassign dir {dirname}'
+        if force:
+            log.error(message + '; continuing anyway')
+            guidefile = None
+        else:
+            raise FileNotFoundError(message)
+
+    elif len(globfiles) > 1:
+        raise RuntimeError(
+            f'Multiple guide-*.fits.fz files in fiberassign dir {dirname}')
+
+    #- Preflight announcements
+    log.info(f'Night {night} spectro expid {expid}')
+    log.info(f'Raw data file {rawfile}')
+    log.info(f'Fiberassign file {fafile}')
+    log.info(f'Platemaker coordinates file {coordfile}')
+    log.info(f'Guider file {guidefile}')
+
+    #----
+    #- Read and assemble
+
+    fa = Table.read(fafile, 'FIBERASSIGN')
+    fa.sort('LOCATION')
+
+    #- also read extra keywords from HDU 0
+    fa_hdr0 = fits.getheader(fafile, 0)
+    if 'OUTDIR' in fa_hdr0:
+        fa_hdr0.rename_keyword('OUTDIR', 'FAOUTDIR')
+    skipkeys = ['SIMPLE', 'EXTEND', 'COMMENT', 'EXTNAME', 'BITPIX', 'NAXIS']
+    addkeys(fa.meta, fa_hdr0, skipkeys=skipkeys)
+
+    #- Read platemaker (pm) coordinates file and count positioning iterations
+    if coordfile is not None:
+        pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
+        numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
+        if numiter == 0:
+            log.warning('No positioning iters in coordinates file thus no FVC/platemaker info')
+    else:
+        pm = None
+        numiter = 0
+
+    #- If there were positioning iterations, merge that info with fiberassign
+    if (pm is not None) and (numiter > 0):
+        pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
+        pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
+        keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
+        pm = pm[keep]
+        pm.sort('LOCATION')
+        log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
+
+        #- Count offset iterations by counting columns with name OFFSET_{n}
+        numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
+
+        #- Create fibermap table to merge with fiberassign file
+        fibermap = Table()
+        fibermap['LOCATION'] = pm['LOCATION']
+        fibermap['NUM_ITER'] = numiter
+
+        #- Sometimes these columns are missing in the coordinates files, maybe
+        #- only when numiter=1, i.e. only a blind move but not corrections?
+        if f'FPA_X_{numiter-1}' in pm.colnames:
+            fibermap['FIBER_X'] = pm[f'FPA_X_{numiter-1}']
+            fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
+            fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
+            fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
+        else:
+            log.warning('No FIBER_X/Y or DELTA_X/Y information from platemaker')
+            fibermap['FIBER_X'] = np.zeros(len(pm))
+            fibermap['FIBER_Y'] = np.zeros(len(pm))
+            fibermap['DELTA_X'] = np.zeros(len(pm))
+            fibermap['DELTA_Y'] = np.zeros(len(pm))
+
+        #- pre-parse which positioners were good
+        expflag = pm[f'FLAGS_EXP_{numiter-1}']
+        good = ((expflag & 4) != 0) & (expflag < 200)
+
+        flags_cnt_colname = f'FLAGS_CNT_{numiter-1}'
+        if flags_cnt_colname in pm.colnames:
+            cntflag = pm[flags_cnt_colname]
+            good &= ((cntflag & 1) != 0)
+        else:
+            log.warning(f'coordinates file missing column {flags_cnt_colname}')
+
+        bad = ~good
+
+        fibermap['_BADPOS'] = np.zeros(len(fibermap), dtype=bool)
+        fibermap['_BADPOS'][bad] = True
+
+        #- Missing columns from coordinates file...
+        if ('FIBER_RA' in pm.colnames) and ('FIBER_DEC' in pm.colnames):
+            fibermap['FIBER_RA'] = pm['FIBER_RA']
+            fibermap['FIBER_DEC'] = pm['FIBER_DEC']
+        else:
+            log.warning('No FIBER_RA or FIBER_DEC from platemaker yet')
+            fibermap['FIBER_RA'] = np.zeros(len(pm))
+            fibermap['FIBER_DEC'] = np.zeros(len(pm))
+
+        fibermap = join(fa, fibermap, join_type='left')
+
+        #- Set fiber status bits
+        missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
+        fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
+
+        badpos = fibermap['_BADPOS']
+        fibermap['FIBERSTATUS'][badpos] |= fibermask.BADPOSITION
+        fibermap.remove_column('_BADPOS')
+
+    else:
+        #- No coordinates file or no positioning iterations;
+        #- just use fiberassign + dummy columns
+        fibermap = fa
+        fibermap['NUM_ITER'] = 0
+        fibermap['FIBER_X'] = 0.0
+        fibermap['FIBER_Y'] = 0.0
+        fibermap['DELTA_X'] = 0.0
+        fibermap['DELTA_Y'] = 0.0
+        fibermap['FIBER_RA'] = 0.0
+        fibermap['FIBER_DEC'] = 0.0
+        # Update data types to be consistent with updated value if coord file was used.
+        for val in ['FIBER_X','FIBER_Y','DELTA_X','DELTA_Y']:
+            old_col = fibermap[val]
+            fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype='>f8'))
+        for val	in ['LOCATION','NUM_ITER']:
+            old_col = fibermap[val]
+            fibermap.replace_column(val,Table.Column(name=val,data=old_col.data,dtype=np.int64))
+
+    #- Update SKY and STD target bits to be in both CMX_TARGET and DESI_TARGET
+    #- i.e. if they are set in one, also set in the other.  Ditto for SV*
+    for targetcol in ['CMX_TARGET', 'SV0_TARGET', 'SV1_TARGET', 'SV2_TARGET']:
+        if targetcol in fibermap.colnames:
+            for mask in [
+                    desi_mask.SKY, desi_mask.STD_FAINT, desi_mask.STD_BRIGHT]:
+                ii  = (fibermap[targetcol] & mask) != 0
+                iidesi = (fibermap['DESI_TARGET'] & mask) != 0
+                fibermap[targetcol][iidesi] |= mask
+                fibermap['DESI_TARGET'][ii] |= mask
+
+    #- Add header information from rawfile
+    log.debug(f'Adding header keywords from {rawfile}')
+    skipkeys = ['EXPTIME',]
+    addkeys(fibermap.meta, rawheader, skipkeys=skipkeys)
+    fibermap['EXPTIME'] = rawheader['EXPTIME']
+    #- Add header info from guide file
+    #- sometimes full header is in HDU 0, other times HDU 1...
+    if guidefile is not None:
+        log.debug(f'Adding header keywords from {guidefile}')
+        guideheader = fits.getheader(guidefile, 0)
+        if 'TILEID' not in guideheader:
+            guideheader = fits.getheader(guidefile, 1)
+
+        if fibermap.meta['TILEID'] != guideheader['TILEID']:
+            raise RuntimeError('fiberassign tile {} != guider tile {}'.format(
+                fibermap.meta['TILEID'], guideheader['TILEID']))
+
+        addkeys(fibermap.meta, guideheader, skipkeys=skipkeys)
+
+    fibermap.meta['EXTNAME'] = 'FIBERMAP'
+
+    #- Early data raw headers had bad >8 char 'FIBERASSIGN' keyword
+    if 'FIBERASSIGN' in fibermap.meta:
+        log.warning('Renaming header keyword FIBERASSIGN -> FIBASSGN')
+        fibermap.meta['FIBASSGN'] = fibermap.meta['FIBERASSIGN']
+        del fibermap.meta['FIBERASSIGN']
+
+    #- Record input guide and coordinates files
+    if guidefile is not None:
+        fibermap.meta['GUIDEFIL'] = os.path.basename(guidefile)
+    else:
+        fibermap.meta['GUIDEFIL'] = 'MISSING'
+
+    if coordfile is not None:
+        fibermap.meta['COORDFIL'] = os.path.basename(coordfile)
+    else:
+        fibermap.meta['COORDFIL'] = 'MISSING'
+
+    #- Lastly, mask the fibers defined by badamps
+    if badamps is not None:
+        maskbits = {'b':fibermask.BADAMPB, 'r':fibermask.BADAMPR, 'z':fibermask.BADAMPZ}
+        ampoffsets = {'A': 0, 'B':250, 'C':0, 'D':250}
+        for (camera, petal, amplifier) in parse_badamps(badamps):
+            maskbit = maskbits[camera]
+            ampoffset = ampoffsets[amplifier]
+            fibermin = int(petal)*500 + ampoffset
+            fibermax = fibermin + 250
+            ampfibs = np.arange(fibermin,fibermax)
+            truefmax = fibermax - 1
+            log.info(f'Masking fibers from {fibermin} to {truefmax} for camera {camera} because of badamp entry '+\
+                     f'{camera}{petal}{amplifier}')
+            ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
+            fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
+
+    #- Some code incorrectly relies upon the fibermap being sorted by
+    #- fiber number, so accomodate that before returning the table
+    fibermap.sort('FIBER')
+
     return fibermap
 
 def fibermap_new2old(fibermap):
@@ -260,8 +688,15 @@ def fibermap_new2old(fibermap):
     fm.rename_column('FIBER_RA', 'RA_OBS')
     fm.rename_column('FIBER_DEC', 'DEC_OBS')
 
-    fm.rename_column('DESIGN_X', 'X_TARGET')
-    fm.rename_column('DESIGN_Y', 'Y_TARGET')
+    if 'DESIGN_X' in fm.colnames:
+        fm.rename_column('DESIGN_X', 'X_TARGET')
+    if 'DESIGN_Y' in fm.colnames:
+        fm.rename_column('DESIGN_Y', 'Y_TARGET')
+    if 'FIBERASSIGN_X' in fm.colnames:
+        fm.rename_column('FIBERASSIGN_X', 'X_TARGET')
+    if 'FIBERASSIGN_Y' in fm.colnames:
+        fm.rename_column('FIBERASSIGN_Y', 'Y_TARGET')
+
     fm['X_FVCOBS'] = fm['X_TARGET']
     fm['Y_FVCOBS'] = fm['Y_TARGET']
     fm['X_FVCERR'] = np.full(n, 1e-3, dtype='f4')

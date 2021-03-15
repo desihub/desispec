@@ -35,11 +35,13 @@ def main(args) :
     log.info("starting")
     if args.specprod_dir is None:
         specprod_dir = meta.specprod_root()
+        qaprod_dir = None
     else:
         specprod_dir = args.specprod_dir
+        qaprod_dir = meta.qaprod_root(specprod_dir=specprod_dir)
 
     # Generate qaframe (and figures?)
     qaframe = qaframe_from_frame(args.frame_file, specprod_dir=specprod_dir, make_plots=args.make_plots,
-                           output_dir=args.output_dir)
+                                 qaprod_dir=qaprod_dir, output_dir=args.output_dir)
 
 

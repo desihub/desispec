@@ -9,25 +9,33 @@ IO routines for fiberflat.
 from __future__ import absolute_import
 # The line above will help with 2to3 support.
 import os
+import time
 from astropy.io import fits
 
+from desiutil.io import encode_table
 from desiutil.depend import add_dependencies
+from desiutil.log import get_logger
 
 from ..fiberflat import FiberFlat
 from .meta import findfile
 from .util import fitsheader, native_endian, makepath
+from . import iotime
 
-def write_fiberflat(outfile,fiberflat,header=None):
+def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     """Write fiberflat object to outfile
 
     Args:
         outfile: filepath string or (night, expid, camera) tuple
         fiberflat: FiberFlat object
-        header: (optional) dict or fits.Header object to use as HDU 0 header
+
+    Optional:
+        header: dict or fits.Header object to use as HDU 0 header
+        fibermap: table to store as FIBERMAP HDU
 
     Returns:
         filepath of file that was written
     """
+    log = get_logger()
     outfile = makepath(outfile, 'fiberflat')
 
     if header is None:
@@ -48,14 +56,26 @@ def write_fiberflat(outfile,fiberflat,header=None):
     hdus = fits.HDUList()
     hdus.append(fits.PrimaryHDU(ff.fiberflat.astype('f4'), header=hdr))
     hdus.append(fits.ImageHDU(ff.ivar.astype('f4'),     name='IVAR'))
-    # hdus.append(fits.CompImageHDU(ff.mask,              name='MASK'))
     hdus.append(fits.ImageHDU(ff.mask,              name='MASK'))
     hdus.append(fits.ImageHDU(ff.meanspec.astype('f4'), name='MEANSPEC'))
     hdus.append(fits.ImageHDU(ff.wave.astype('f4'),     name='WAVELENGTH'))
-    hdus[-1].header['BUNIT'] = 'Angstrom'
+    if fibermap is None :
+        fibermap=ff.fibermap
+    if fibermap is not None:
+        fibermap = encode_table(fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        hdus.append( fits.convenience.table_to_hdu(fibermap) )
+    hdus[0].header['BUNIT'] = ("","adimensional quantity to divide to flatfield a frame")
+    hdus["IVAR"].header['BUNIT'] = ("","inverse variance, adimensional")
+    hdus["MEANSPEC"].header['BUNIT'] = ("electron/Angstrom")
+    hdus["WAVELENGTH"].header['BUNIT'] = 'Angstrom'
 
+    t0 = time.time()
     hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
+    duration = time.time() - t0
+    log.info(iotime.format('write', outfile, duration))
+
     return outfile
 
 
@@ -78,11 +98,21 @@ def read_fiberflat(filename):
         night, expid, camera = filename
         filename = findfile('fiberflat', night, expid, camera)
 
-    header    = fits.getheader(filename, 0)
-    fiberflat = native_endian(fits.getdata(filename, 0)).astype('f8')
-    ivar      = native_endian(fits.getdata(filename, "IVAR").astype('f8'))
-    mask      = native_endian(fits.getdata(filename, "MASK", uint=True))
-    meanspec  = native_endian(fits.getdata(filename, "MEANSPEC").astype('f8'))
-    wave      = native_endian(fits.getdata(filename, "WAVELENGTH").astype('f8'))
+    log = get_logger()
+    t0 = time.time()
+    with fits.open(filename, uint=True, memmap=False) as fx:
+        header    = fx[0].header
+        fiberflat = native_endian(fx[0].data.astype('f8'))
+        ivar      = native_endian(fx["IVAR"].data.astype('f8'))
+        mask      = native_endian(fx["MASK"].data)
+        meanspec  = native_endian(fx["MEANSPEC"].data.astype('f8'))
+        wave      = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+        if 'FIBERMAP' in fx:
+            fibermap = fx['FIBERMAP'].data
+        else:
+            fibermap = None
 
-    return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header)
+    duration = time.time() - t0
+    log.info(iotime.format('read', filename, duration))
+
+    return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header, fibermap=fibermap)

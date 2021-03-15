@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+
+import argparse
+import numpy as np
+
+import astropy.io.fits as pyfits
+
+from desispec.io import read_xytraceset,write_xytraceset
+from desispec.xytraceset import XYTraceSet
+from desispec.util import parse_fibers
+
+parser = argparse.ArgumentParser(description="Interpolate the trace and PSF parameters from neighboring fibers. This is to get an approximate trace and PSF model for fibers that have 0/low throughput or dark/hot CCD columns along their trace.")
+
+parser.add_argument('-i','--infile', type = str, default = None, required=True,
+                    help = 'input psf fits file')
+parser.add_argument('-o','--outfile', type = str, default = None, required=True,
+                    help = 'output psf fits file')
+parser.add_argument('--fibers', type = str, default = None, required=True,
+                    help = 'fiber indices (i, or i:j or i,j,k) (for i, a fiber will be inserted between index i-1 and i in the file)')
+
+
+args   = parser.parse_args()
+bad_fibers = parse_fibers(args.fibers)
+
+
+neighboring_fiber = None
+
+h = pyfits.open(args.infile)
+for bad_fiber in bad_fibers :
+
+   
+    # find a neigboring fiber
+    nfibers=h["XTRACE"].data.shape[0]
+    neighboring_fiber = None
+
+    x_of_bad=h["XTRACE"].data[bad_fiber,0]
+    
+    
+    if bad_fiber%25 < 12 : # fiber is to the left of the bundle, so choose a neighbor to the right
+        neighboring_fiber = bad_fiber+1
+        while neighboring_fiber in bad_fibers :
+            neighboring_fiber += 1
+    else :
+        neighboring_fiber = bad_fiber-1
+        while neighboring_fiber in bad_fibers :
+            neighboring_fiber -=  1
+    
+    if neighboring_fiber<0 or neighboring_fiber>=h["XTRACE"].data.shape[0] :
+        print("sorry, didn't find a good neighbor for fiber {}".format(bad_fiber))
+        continue
+    
+    print("using fiber {} as reference".format(neighboring_fiber))
+
+    if "PSF" in h :
+        h["PSF"].data["COEFF"][:,bad_fiber,:] =  h["PSF"].data["COEFF"][:,neighboring_fiber,:]
+    h["XTRACE"].data[bad_fiber] = h["XTRACE"].data[neighboring_fiber]
+    h["YTRACE"].data[bad_fiber] = h["YTRACE"].data[neighboring_fiber]
+
+    x = h["XTRACE"].data[:,0]
+    dx=np.median(np.gradient(x))
+    print(dx)
+    x_of_bad=h["XTRACE"].data[neighboring_fiber,0] + dx*(bad_fiber-neighboring_fiber)
+    h["XTRACE"].data[bad_fiber,0] = x_of_bad
+    
+    y = h["YTRACE"].data[:,0]
+    ii=(np.abs(x-x_of_bad)<dx*10)&(x!=x_of_bad)
+    pol = np.poly1d(np.polyfit(x[ii],y[ii],2))
+    y_of_bad = pol(x_of_bad)
+    h["YTRACE"].data[bad_fiber,0] = y_of_bad
+    
+    print("fixed fiber PSF",bad_fiber)
+    
+h.writeto(args.outfile,overwrite=True)
+print("wrote {}".format(args.outfile))
+
+
