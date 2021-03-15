@@ -265,21 +265,20 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
             else:
                 dep_str = ''
 
-    ## True function will actually submit to SLURM
+    # script = f'{jobname}.slurm'
+    # script_path = pathjoin(batchdir, script)
+    batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
+    script_path = pathjoin(batchdir, jobname)
+    batch_params = ['sbatch', '--parsable']
+    if dep_str != '':
+        batch_params.append(f'{dep_str}')
+    if reservation is not None:
+        batch_params.append(f'--reservation={reservation}')
+    batch_params.append(f'{script_path}')
+
     if dry_run:
         current_qid = int(time.time() - 1.6e9)
     else:
-        # script = f'{jobname}.slurm'
-        # script_path = pathjoin(batchdir, script)
-        batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
-        script_path = pathjoin(batchdir, jobname)
-        batch_params = ['sbatch', '--parsable']
-        if dep_str != '':
-            batch_params.append(f'{dep_str}')
-        if reservation is not None:
-            batch_params.append(f'--reservation={reservation}')
-        batch_params.append(f'{script_path}')
-
         current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
 
