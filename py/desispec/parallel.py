@@ -68,7 +68,7 @@ def use_mpi():
 
 # Functions for static distribution
 
-def dist_uniform(nwork, workers, id=None):
+def dist_uniform(nwork, nworkers, id=None):
     """
     Statically distribute some number of items among workers.
 
@@ -82,7 +82,7 @@ def dist_uniform(nwork, workers, id=None):
 
     Args:
         nwork (int): the number of things to distribute.
-        workers (int): the number of workers.
+        nworkers (int): the number of workers.
         id (int): optionally return just the tuple associated with
             this worker
 
@@ -94,10 +94,10 @@ def dist_uniform(nwork, workers, id=None):
     """
     dist = []
 
-    for i in range(workers):
-        ntask = nwork // workers
+    for i in range(nworkers):
+        ntask = nwork // nworkers
         firsttask = 0
-        leftover = nwork % workers
+        leftover = nwork % nworkers
         if i < leftover:
             ntask += 1
             firsttask = i * ntask
@@ -188,7 +188,7 @@ def distribute_partition(A, k):
             low = mid + 1
     return low
 
-def dist_discrete_all(worksizes, workers, power=1.0):
+def dist_discrete_all(worksizes, nworkers, power=1.0):
     """Distribute indivisible blocks of items between groups.
 
     Given some contiguous blocks of items which cannot be
@@ -202,24 +202,22 @@ def dist_discrete_all(worksizes, workers, power=1.0):
 
     Args:
         worksizes (list): The sizes of the indivisible blocks.
-        workers (int): The number of workers.
+        nworkers (int): The number of workers.
         pow (float): The power to use for weighting
 
     Returns:
-        list:  Each element is a tuple.  The first element of the tuple
-            is the first block assigned to the worker, and the second
-            element is the number of blocks assigned to the worker.
-
+        list of length nworkers; each element is a list of indices of
+            worksizes assigned to that worker.
     """
     chunks = np.array(worksizes, dtype=np.int64)
     weights = np.power(chunks.astype(np.float64), power)
-    max_per_proc = float(distribute_partition(weights.astype(np.int64), workers))
+    max_per_proc = float(distribute_partition(weights.astype(np.int64), nworkers))
 
-    if len(worksizes) < workers:
+    if len(worksizes) < nworkers:
         warnings.warn("Too many workers ({}) for {} work items.  Some workers"
-            " idle.".format(workers, len(worksizes)), RuntimeWarning)
+            " idle.".format(nworkers, len(worksizes)), RuntimeWarning)
 
-    target = np.sum(weights) / workers
+    target = np.sum(weights) / nworkers
 
     dist = []
 
@@ -227,41 +225,48 @@ def dist_discrete_all(worksizes, workers, power=1.0):
     curweight = 0.0
     for cur in range(0, weights.shape[0]):
         if curweight + weights[cur] > max_per_proc:
-            dist.append( (off, cur-off) )
+            ## dist.append( (off, cur-off) )
+            dist.append( list(range(off, cur)) )
             over = curweight - target
             curweight = weights[cur] + over
             off = cur
         else:
             curweight += weights[cur]
 
-    if (workers - len(dist) > 0):
+    if (nworkers - len(dist) > 0):
         # There are still workers remaining.
-        if (workers - len(dist) == 1):
+        if (nworkers - len(dist) == 1):
             # There is exactly one worker remaining.  Assign it the rest of
             # the work
             if weights.shape[0] > off:
-                dist.append((off, weights.shape[0] - off))
+                ## dist.append((off, weights.shape[0] - off))
+                dist.append( list(range(off, weights.shape[0])) )
             else:
-                dist.append((off, 0))
+                ## dist.append((off, 0))
+                dist.append( list() )
         else:
             # We have multiple remaining workers.  This can happen in cases
             # of extreme load imbalance.  Distribute the remaining work
             # uniformly.
-            remain = dist_uniform(weights.shape[0]-off, workers-len(dist))
-            for i in range(workers - len(dist)):
-                dist.append( (off + remain[i][0], remain[i][1]) )
+            remain = dist_uniform(weights.shape[0]-off, nworkers-len(dist))
+            for i in range(nworkers - len(dist)):
+                ## dist.append( (off + remain[i][0], remain[i][1]) )
+                ioff = off + remain[i][0]
+                n = remain[i][1]
+                dist.append( list(range(ioff, ioff+n)) )
 
-    if len(dist) < workers:
+    if len(dist) < nworkers:
         # The load imbalance was really bad.  Just warn and assign the
         # remaining workers zero items.
         warnings.warn("Load imbalance.  Some work items are so large that not all workers have items.", RuntimeWarning)
-        for i in range(len(dist), workers):
-            dist.append( (off, 0) )
+        for i in range(len(dist), nworkers):
+            ## dist.append( (off, 0) )
+            dist.append( list() )
 
     return dist
 
 
-def dist_discrete(worksizes, workers, workerid, power=1.0):
+def dist_discrete(worksizes, nworkers, workerid, power=1.0):
     """Distribute indivisible blocks of items between groups.
 
     Given some contiguous blocks of items which cannot be
@@ -275,7 +280,7 @@ def dist_discrete(worksizes, workers, workerid, power=1.0):
 
     Args:
         worksizes (list): The sizes of the indivisible blocks.
-        workers (int): The number of workers.
+        nworkers (int): The number of workers.
         workerid (int): The worker ID whose range should be returned.
         power (float): The power to use for weighting
 
@@ -284,9 +289,65 @@ def dist_discrete(worksizes, workers, workerid, power=1.0):
         block assigned to the worker ID, and the second element
         is the number of blocks assigned to the worker.
     """
-    allworkers = dist_discrete_all(worksizes, workers, power=power)
+    allworkers = dist_discrete_all(worksizes, nworkers, power=power)
     return allworkers[workerid]
 
+def weighted_partition(weights, n, groups_per_node=None):
+    '''
+    Partition `weights` into `n` groups with approximately same sum(weights)
+
+    Args:
+        weights: array-like weights
+        n: number of groups
+
+    Returns list of lists of indices of weights for each group
+
+    Notes:
+        compared to `dist_discrete_all`, this function allows non-contiguous
+        items to be grouped together which allows better balancing.
+    '''
+    #- sumweights will track the sum of the weights that have been assigned
+    #- to each group so far
+    sumweights = np.zeros(n, dtype=float)
+
+    #- Initialize list of lists of indices for each group
+    groups = list()
+    for i in range(n):
+        groups.append(list())
+
+    #- Assign items from highest weight to lowest weight, always assigning
+    #- to whichever group currently has the fewest weights
+    weights = np.asarray(weights)
+    for i in np.argsort(-weights):
+        j = np.argmin(sumweights)
+        groups[j].append(i)
+        sumweights[j] += weights[i]
+
+    assert len(groups) == n
+
+    #- Reorder groups to spread out large items across different nodes
+    #- NOTE: this isn't perfect, e.g. study
+    #-   weighted_partition(np.arange(12), 6, groups_per_node=2)
+    #- even better would be to zigzag back and forth across the nodes instead
+    #- of loop across the nodes.
+    if groups_per_node is None:
+        return groups
+    else:
+        distributed_groups = [None,] * len(groups)
+        num_nodes = (n + groups_per_node - 1) // groups_per_node
+        i = 0
+        for noderank in range(groups_per_node):
+            for inode in range(num_nodes):
+                j = inode*groups_per_node + noderank
+                if i < n and j < n:
+                    distributed_groups[j] = groups[i]
+                    i += 1
+
+        #- do a final check that all groups were assigned
+        for i in range(len(distributed_groups)):
+            assert distributed_groups[i] is not None, 'group {} not set'.format(i)
+
+        return distributed_groups
 
 @contextmanager
 def stdouterr_redirected(to=None, comm=None):

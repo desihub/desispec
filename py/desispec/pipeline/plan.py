@@ -23,7 +23,7 @@ from desiutil.log import get_logger
 from .. import io
 
 from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
-    stdouterr_redirected)
+    weighted_partition, stdouterr_redirected, use_mpi)
 
 from .prod import task_read, task_write
 
@@ -118,23 +118,28 @@ def worker_times(tasktimes, workerdist, startup=0.0):
     """Compute the time needed for each worker.
 
     Args:
-        tasktimes (list):  List of individual task times.
-        workerdist (list):  List of tuples of start task, ntask.
+        tasktimes (array):  array of individual task times.
+        workerdist (list):  List of tuples of indices in taskstimes.
         startup (float):  Startup overhead in minutes for each worker.
 
     Returns:
         (tuple):  The (worker times, min, max).
 
+    Notes / Examples:
+        len(tasktimes) = number of tasks
+        len(workerdist) = number of workers
+        workerdist[i] = tuple of tasktime indices assigned to worker i
+        sum(tasktimes[workerdist[i]]) = expected total time for worker i
     """
-    workertimes = [startup + np.sum(tasktimes[x[0]:x[0]+x[1]])
-                   for x in workerdist]
+    tasktimes = np.asarray(tasktimes)
+    workertimes = np.array([startup + np.sum(tasktimes[ii]) for ii in workerdist])
     workermax = np.max(workertimes)
     workermin = np.min(workertimes)
     return workertimes, workermin, workermax
 
 
 def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
-                         workersize, startup=0.0, db=None):
+                         workersize, startup=0.0, db=None, num_nodes=None):
     """Compute the distribution of tasks for specified workers.
 
     Args:
@@ -143,14 +148,17 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
         tfactor (float):  Additional runtime scaling factor.
         nworker (int):  The number of workers.
         workersize (int):  The number of processes in each worker.
+
+    Options:
         startup (float):  Startup overhead in minutes for each worker.
         db (DataBase): the database to pass to the task runtime
             calculation.
+        num_nodes (int): number of nodes over which the workers are distributed
 
     Returns:
         (tuple):  The (sorted tasks, sorted runtime weights, dist) results
             where dist is the a list of tuples (one per worker) indicating
-            the first task and number of tasks for that worker in the
+            the indices of tasks for that worker in the
             returned sorted list of tasks.
 
     """
@@ -162,10 +170,12 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
                     x, workersize, db=db)) for x in tasklist]
 
     # Sort the tasks by runtime to improve the partitioning
+    # NOTE: sorting is unnecessary when using weighted_partition instead of
+    #       dist_discrete_all, but leaving for now while comparing/debugging
     tasktimes = list(sorted(tasktimes, key=lambda x: x[1]))[::-1]
     mintasktime = tasktimes[-1][1]
     maxtasktime = tasktimes[0][1]
-    log.debug("task runtime range = {} ... {}".format(mintasktime, maxtasktime))
+    log.debug("task runtime range = {:.2f} ... {:.2f}".format(mintasktime, maxtasktime))
 
     # Split the task names and times
     worktasks = [x[0] for x in tasktimes]
@@ -175,29 +185,35 @@ def compute_worker_tasks(tasktype, tasklist, tfactor, nworker,
     workdist = None
     if len(workweights) == nworker:
         # One task per worker
-        workdist = [(x, 1) for x in range(nworker)]
+        workdist = [[i,] for i in range(nworker)]
     else:
-        workdist = dist_discrete_all(workweights, nworker)
+        # workdist = dist_discrete_all(workweights, nworker)
+        if num_nodes is not None:
+            workers_per_node = (nworker + num_nodes - 1 ) // num_nodes
+        else:
+            workers_per_node = None
+
+        workdist = weighted_partition(workweights, nworker,
+            groups_per_node=workers_per_node)
 
     # Find the runtime for each worker
     workertimes, workermin, workermax = worker_times(
         workweights, workdist, startup=startup)
 
     log.debug("worker task assignment:")
-    log.debug("  0: {} minutes".format(workertimes[0]))
+    log.debug("  0: {:.2f} minutes".format(workertimes[0]))
     log.debug("      first task {}".format(worktasks[workdist[0][0]]))
-    log.debug("      last task {}".format(
-        worktasks[workdist[0][0] + workdist[0][1] - 1]))
+    log.debug("      last task {}".format(worktasks[workdist[0][-1]]))
     if nworker > 1:
         log.debug("      ...")
-        log.debug("  {}: {} minutes".format(nworker-1, workertimes[-1]))
+        log.debug("  {}: {:.2f} minutes".format(nworker-1, workertimes[-1]))
         log.debug("      first task {}".format(
             worktasks[workdist[nworker-1][0]]))
         log.debug("      last task {}".format(
-                worktasks[workdist[nworker-1][0] + workdist[nworker-1][1] - 1]
+                worktasks[workdist[nworker-1][-1]]
             )
         )
-    log.debug("range of worker times = {} ... {}".format(workermin, workermax))
+    log.debug("range of worker times = {:.2f} ... {:.2f}".format(workermin, workermax))
 
     return (worktasks, workweights, workdist)
 
