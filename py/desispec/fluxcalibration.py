@@ -913,9 +913,20 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     tframe.R = np.array( [Resolution(r) for r in tframe.resolution_data] )
 
     #- Compute point source flux correction and fiber flux correction
-    log.info("compute point source flux correction")
+    log.info("compute point source flux correction for seeing FWHM = {:4.2f} arcsec".format(exposure_seeing_fwhm))
     point_source_correction = point_source_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
-    log.info("point source correction mean = {} rms = {}".format(np.mean(point_source_correction),np.std(point_source_correction)))
+    good=(point_source_correction!=0)
+    bad=~good
+    #- Set temporary ivar=0 for the targets with bad point source correction
+    tframe.ivar[bad]=0.
+
+    if np.sum(good)>1 :
+        log.info("point source correction mean = {} rms = {}, nbad = {}".format(np.mean(point_source_correction[good]),np.std(point_source_correction[good]),np.sum(bad)))
+    else :
+        log.warning("bad point source correction for most fibers ngood = {} nbad = {}".format(np.sum(good),np.sum(bad)))
+
+    #- Set back to 1 the correction for bad fibers
+    point_source_correction[bad]=1.
 
     #- Apply point source flux correction
     tframe.flux *= point_source_correction[:,None]
