@@ -299,7 +299,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     sys.stdout.flush()
     sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
-    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, 
+    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
                                                                          arcjob, flatjob, lasttype,
                                                                          internal_id, dry_run=dry_run, queue=queue)
 
