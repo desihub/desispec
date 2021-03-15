@@ -829,7 +829,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
             sciences = (np.array(sciences,dtype=object)[tiles == most_common]).tolist()
             log.info("Tiles and exposure id's being submitted for joint fitting:")
             log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
-            log.info("Tileid's: {}".format(tiles))
+            log.info("Tileid's: {}".format([row['TILEID'] for row in sciences]))
         ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
                                                          reservation=reservation, strictly_successful=strictly_successful)
         if tilejob is not None:
