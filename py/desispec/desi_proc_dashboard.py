@@ -388,7 +388,7 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
     file_exptable=get_exposure_table_pathname(night)
     try: # Try reading tables first. Switch to counting files if not failed.
-        #import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
         d_exp =  ascii.read(file_exptable, data_start=2, delimiter=',')
         d_processing = load_table(file_processing) # commented out temporarily, might used later
         #d_unprocessed = load_table(file_unprocessed)
@@ -409,9 +409,9 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
 
     logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
-    if os.path.exists(logpath):
-        cmd="fix_permissions.sh -a {}".format(logpath)
-        os.system(cmd)
+    #if os.path.exists(logpath):
+    #    cmd="fix_permissions.sh -a {}".format(logpath)
+    #    os.system(cmd)
 
     webpage = os.getenv('DESI_DASHBOARD')
     logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}') # search for the log file 
