@@ -492,19 +492,17 @@ def main(args, comm=None) :
     for band in ["G", "BP", "RP"] :
         model_filters["GAIA-" + band] = load_gaia_filter(band=band, dr=2)
 
-    log.info("computing model mags for %s"%sorted(model_filters.keys()))
     # Compute model mags on rank 0 and bcast result to other ranks
     # This sidesteps an OOM event on Cori Haswell with "-c 2"
     model_mags = None
     if rank == 0:
+        log.info("computing model mags for %s"%sorted(model_filters.keys()))
         model_mags = dict()
         for filter_name in model_filters.keys():
             model_mags[filter_name] = get_magnitude(stdwave, stdflux, model_filters, filter_name)
-
+        log.info("done computing model mags")
     if comm is not None:
         model_mags = comm.bcast(model_mags, root=0)
-
-    log.info("done computing model mags")
 
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
@@ -678,13 +676,21 @@ def main(args, comm=None) :
         fitted_model_colors = comm.reduce(fitted_model_colors, op=MPI.SUM, root=0)
         normflux = comm.reduce(normflux, op=MPI.SUM, root=0)
 
-    # Now write the normalized flux for all best models to a file
+    # Check at least one star was fit. The check is peformed on rank 0 and
+    # the result is bcast to other ranks so that all ranks exit together if
+    # the check fails.
+    atleastonestarfit = False
     if rank == 0:
         fitted_stars = np.where(chi2dof != 0)[0]
-        if fitted_stars.size == 0 :
-            log.error("No star has been fit.")
-            sys.exit(12)
+        atleastonestarfit = fitted_stars.size > 0
+    if comm is not None:
+        atleastonestarfit = comm.bcast(atleastonestarfit, root=0)
+    if not atleastonestarfit:
+        log.error("No star has been fit.")
+        sys.exit(12)
 
+    # Now write the normalized flux for all best models to a file
+    if rank == 0:
         data={}
         data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
         data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
