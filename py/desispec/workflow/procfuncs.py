@@ -764,7 +764,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     return joint_prow
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob, \
-                                  lasttype, last_not_dither, internal_id, dry_run=False,
+                                  lasttype, internal_id, dry_run=False,
                                   queue='realtime', reservation=None, strictly_successful=False):
     """
     Takes all the state-ful data from daily processing and determines whether a joint fit needs to be submitted. Places
@@ -783,7 +783,6 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
         flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
-        last_not_dither, bool, True if the last job was a science dither tile. Otherwise False.
         internal_id, int, an internal identifier unique to each job. Increments with each new job. This
                           is the smallest unassigned value.
         dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant

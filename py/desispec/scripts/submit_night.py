@@ -125,7 +125,6 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
             ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
                                                                                            sciences, arcjob,
                                                                                            flatjob, lasttype,
-                                                                                           last_not_dither,
                                                                                            internal_id,
                                                                                            dry_run=dry_run,
                                                                                            queue=queue,
@@ -168,9 +167,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
-        ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
+        ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
                                                                                        arcjob, flatjob, lasttype,
-                                                                                       last_not_dither, \
                                                                                        internal_id, dry_run=dry_run,
                                                                                        queue=queue,
                                                                                        reservation=reservation,
