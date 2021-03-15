@@ -11,12 +11,13 @@ from desispec.io import read_fibermap
 from desispec.io.fluxcalibration import read_flux_calibration
 from desispec.io import shorten_filename
 
-from desispec.fiberflat import apply_fiberflat	
-from desispec.sky import subtract_sky	
-from desispec.fluxcalibration import apply_flux_calibration	
+from desispec.fiberflat import apply_fiberflat
+from desispec.sky import subtract_sky
+from desispec.fluxcalibration import apply_flux_calibration
 from desispec.cosmics import reject_cosmic_rays_1d
 from desispec.specscore import compute_and_append_frame_scores, append_frame_scores
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
+from desispec.fibercrosstalk import correct_fiber_crosstalk
 
 from desispec.tsnr import calc_tsnr2
 from desiutil.log import get_logger
@@ -45,6 +46,8 @@ def parse(options=None):
                         help = 'Do NOT set ivar=0 for masked pixels')
     parser.add_argument('--no-tsnr', action='store_true',
                         help = 'Do not compute template SNR')
+    parser.add_argument('--no-xtalk', action='store_true',
+                        help = 'Do not apply fiber crosstalk correction')
     parser.add_argument('--alpha_only', action='store_true',
                         help = 'Only compute alpha of tsnr calc.')
     
@@ -88,6 +91,13 @@ def main(args):
         # apply fiberflat to all fibers
         apply_fiberflat(frame, fiberflat)
         compute_and_append_frame_scores(frame,suffix="FFLAT")
+    else :
+        fiberflat = None
+
+    if args.no_xtalk :
+        zero_ivar = (not args.no_zero_ivar)
+    else :
+        zero_ivar = False
 
     if args.sky!=None :
 
@@ -100,7 +110,7 @@ def main(args):
             copied_frame = copy.deepcopy(frame)
 
             # first subtract sky without throughput correction
-            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False, zero_ivar = (not args.no_zero_ivar))
+            subtract_sky(copied_frame, skymodel, apply_throughput_correction = False, zero_ivar = zero_ivar)
 
             # then find cosmics
             log.info("cosmics ray 1D rejection after sky subtraction")
@@ -110,13 +120,20 @@ def main(args):
             frame.mask = copied_frame.mask
 
             # and (re-)subtract sky, but just the correction term
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = (not args.no_zero_ivar) )
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
 
         else :
             # subtract sky
-            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = (not args.no_zero_ivar) )
+            subtract_sky(frame, skymodel, apply_throughput_correction = (not args.no_sky_throughput_correction), zero_ivar = zero_ivar )
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
+
+    if not args.no_xtalk :
+        log.info("fiber crosstalk correction")
+        correct_fiber_crosstalk(frame,fiberflat)
+
+        if not args.no_zero_ivar :
+            frame.ivar *= (frame.mask==0)
 
     if args.calib!=None :
         log.info("calibrate")
@@ -127,7 +144,7 @@ def main(args):
 
         # Ensure that ivars are set to 0 for all values if any designated
         # fibermask bit is set. Also flips a bits for each frame.mask value using specmask.BADFIBER
-        frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=True)
+        frame = get_fiberbitmasked_frame(frame,bitmask="flux",ivar_framemask=(not args.no_zero_ivar))
         compute_and_append_frame_scores(frame,suffix="CALIB")
 
     if not args.no_tsnr:
@@ -137,8 +154,8 @@ def main(args):
         frame.meta['TSNRALPH'] = alpha
 
         comments = {k:"from calc_frame_tsnr" for k in results.keys()}
-        append_frame_scores(frame,results,comments,overwrite=True) 
-        
+        append_frame_scores(frame,results,comments,overwrite=True)
+
     # record inputs
     frame.meta['IN_FRAME'] = shorten_filename(args.infile)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)

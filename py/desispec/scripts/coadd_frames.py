@@ -40,6 +40,9 @@ def main(args=None):
 
     frames = []
     for filename in args.infile :
+
+        log.info("adding {}".format(filename))
+
         frame = read_frame(filename)
         if len(frames)==0 :
             frames.append(frame)
@@ -72,8 +75,11 @@ def main(args=None):
         tmp_ivar = frame.ivar * (frame.mask == 0)
         ivar += tmp_ivar
         ivarflux += tmp_ivar * frame.flux
+
         for diag in range(ndiag) :
             ivarres[:,diag,:] += tmp_ivar * frame.resolution_data[:,diag,:]
+
+
         mask &= frame.mask # and mask
 
     coadd = frames[0]
