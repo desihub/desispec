@@ -42,14 +42,11 @@ def point_source_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     #  fiber flat is smaller
     #  fiber flat correction is larger
     #  have to divide by isotropic_platescale^2
-    point_source_correction = 1./fiber_frac/isotropic_platescale**2
+    ok = (fiber_frac>0.01)
+    point_source_correction = np.zeros(x_mm.shape)
+    point_source_correction[ok] = 1./fiber_frac[ok]/isotropic_platescale[ok]**2
 
     # normalize to one because this is a relative correction here
-    point_source_correction /= np.mean(point_source_correction)
-
-    #import matplotlib.pyplot as plt
-    #plt.plot(np.sqrt(x_mm**2+y_mm**2),point_source_correction,".")
-    #plt.show()
-
+    point_source_correction[ok] /= np.mean(point_source_correction[ok])
 
     return point_source_correction
