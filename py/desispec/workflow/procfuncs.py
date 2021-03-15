@@ -807,11 +807,11 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         skysubonly = np.array([sci['LASTSTEP'] == 'skysub' for sci in sciences])
         if np.any(skysubonly):
             log.info("Identified skysub only exposures in joint fitting request")
-            log.info("Expid's: {}".format([row['EXPIDS'] for row in sciences]))
+            log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("LASTSTEP's: {}".format([row['LASTSTEP'] for row in sciences]))
             sciences = (np.array(sciences,dtype=object)[~skysubonly]).tolist()
             log.info("Removed skysub only exposures in joint fitting:")
-            log.info("Expid's: {}".format([row['EXPIDS'] for row in sciences]))
+            log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("LASTSTEP's: {}".format([row['LASTSTEP'] for row in sciences]))
 
         from collections import Counter
@@ -819,7 +819,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         counts = Counter(tiles)
         if len(counts.most_common()) > 1:
             log.info("Identified more than one tile in a joint fitting request")
-            log.info("Expid's: {}".format([row['EXPIDS'] for row in sciences]))
+            log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("Tileid's: {}".format(tiles))
             most_common, nmost_common = counts.most_common()[0]
             if most_common == -99:
@@ -828,7 +828,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
                         f" tile: {most_common} with {nmost_common} exposures")
             sciences = (np.array(sciences,dtype=object)[tiles == most_common]).tolist()
             log.info("Tiles and exposure id's being submitted for joint fitting:")
-            log.info("Expid's: {}".format([row['EXPIDS'] for row in sciences]))
+            log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("Tileid's: {}".format(tiles))
         ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
                                                          reservation=reservation, strictly_successful=strictly_successful)
