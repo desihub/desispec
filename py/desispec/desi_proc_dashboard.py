@@ -175,9 +175,9 @@ def main(args):
     else:
         nights = [nigh.strip(' \t') for nigh in args.nights.split(',')]
 
-    tonight=what_night_is_it()
-    if str(tonight) not in nights:
-        nights.append(str(tonight))
+    #tonight=what_night_is_it()   # Disabled per Anthony's request
+    #if str(tonight) not in nights:
+    #    nights.append(str(tonight))
     nights.sort(reverse=True)
 
     nights = np.array(nights)
@@ -222,6 +222,33 @@ def main(args):
         strTable += "\t<div style='color:{}'>{}</div>".format(background,ctype)
         
     strTable += '\n\n'
+    strTable +="""Filter By Status:
+    <select id="statuslist" onchange="filterByStatus()" class='form-control'>
+    <option>processing</option>
+    <option>unprocessed</option>
+    <option>ALL</option>
+    </select>
+    """
+    # The following codes are for filtering rows by obstype and exptime. Not in use for now, but basically can be enabled anytime. 
+    #strTable +="""Filter By OBSTYPE:
+    #<select id="obstypelist" onchange="filterByObstype()" class='form-control'>
+    #<option>ALL</option>
+    #<option>SCIENCE</option>
+    #<option>FLAT</option>
+    #<option>ARC</option>
+    #<option>DARK</option>
+    #</select>
+    #Exptime Limit:
+    #<select id="exptimelist" onchange="filterByExptime()" class='form-control'>
+    #<option>ALL</option>
+    #<option>5</option>
+    #<option>30</option>
+    #<option>120</option>
+    #<option>900</option>
+    #<option>1200</option>
+    #</select>
+    #"""
+
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month,nights_in_month))
         webpage = os.path.join(os.getenv('DESI_DASHBOARD'), 'links', month)
@@ -242,15 +269,11 @@ def main(args):
     strTable += _closing_str()
     with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name),'w') as hs:
         hs.write(strTable)
-
     ##########################
     #### Fix Permission ######
     ##########################
     cmd="fix_permissions.sh -a {}".format(os.getenv('DESI_DASHBOARD'))
     os.system(cmd)
-
-
-
 
 
 def monthly_table(tables,month):
@@ -322,9 +345,10 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
                                                                                                          nbad=nbad)        
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
-    nightly_table_str += "<table id='c'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
+    # Add table
+    nightly_table_str += "<table id='c' class='nightTable'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
     nightly_table_str += "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>"
-    nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th></tr>"
+    nightly_table_str += "<th>cframe file</th><th>slurm file</th><th>log file</th><th>status</th></tr>"
 
     nightly_table_str += main_body
     nightly_table_str += "</tbody></table></div>\n"
@@ -359,17 +383,22 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     totals_by_type['ZERO'] =   {'psf': 0,               'ff': 0,               'frame': 0,               'sframe': 0}
     totals_by_type['SCIENCE'], totals_by_type['NONE'] = totals_by_type['SKY'], totals_by_type['SKY']
 
-    #table_dir =  os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'),'processing_tables')
-    #file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
+    table_dir =  os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'),'processing_tables')
+    file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
     #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
     file_exptable=get_exposure_table_pathname(night)
     try: # Try reading tables first. Switch to counting files if not failed. 
         d_exp =  ascii.read(file_exptable, data_start=2, delimiter=',')
-        #d_processing = load_table(file_processing) # commented out temporarily, might used later
+        d_processing = load_table(file_processing) # commented out temporarily, might used later
         #d_unprocessed = load_table(file_unprocessed)
     except:
         return calculate_one_night(night, use_short_sci=use_short_sci)
+    expid_processing=[]
+    #import pdb;pdb.set_trace()
 
+    for expid_list in d_processing['EXPID']:
+        expid_processing += expid_list.tolist()
+    expid_processing = set(expid_processing)
     expids = list(d_exp['EXPID'])
     expids.sort(reverse=True)
 
@@ -460,6 +489,10 @@ def calculate_one_night_use_file(night, use_short_sci=False):
 
         hlink1 = '----'
         hlink2 = '----'
+        if expid in expid_processing:
+            status = 'processing'
+        else:
+            status = 'unprocessed'
 
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
             lognames = glob.glob(logfileglob.format(obstype.lower(), night,zfild_expid,'log'))
@@ -505,7 +538,7 @@ def calculate_one_night_use_file(night, use_short_sci=False):
                               _str_frac( nsky,       n_spgrph * n_tots['sframe']), \
                               _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
                               hlink1, \
-                              hlink2         ]
+                              hlink2, status     ]
     return output
 
 
@@ -650,7 +683,7 @@ def calculate_one_night(night, use_short_sci=False):
 
                 hlink1 = _hyperlink(relpath_slurm, 'Slurm')
                 hlink2 = _hyperlink(relpath_log, 'Log')
-
+        status = 'unprocessed'
         output[str(expid)] = [row_color, \
                               expid, \
                               header_info['FLAVOR'],\
@@ -665,7 +698,7 @@ def calculate_one_night(night, use_short_sci=False):
                               _str_frac( len(file_sky),       n_spgrph * n_tots['sframe']), \
                               _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
                               hlink1, \
-                              hlink2         ]
+                              hlink2, status         ]
     return output
 
 
@@ -726,6 +759,28 @@ def _initialize_page(color_profile):
          text-decoration: none;
          cursor: pointer;
      }
+
+#obstypelist {
+
+  background-position: 10px 10px;
+  background-repeat: no-repeat;
+  width: 10%;
+  font-size: 16px;
+  padding: 12px 20px 12px 40px;
+  border: 1px solid #ddd;
+  margin-bottom: 12px;
+}
+#exptimelist {
+
+  background-position: 10px 10px;
+  background-repeat: no-repeat;
+  width: 10%;
+  font-size: 16px;
+  padding: 12px 20px 12px 40px;
+  border: 1px solid #ddd;
+  margin-bottom: 12px;
+}
+
     """
     for ctype,cdict in color_profile.items():
         font = cdict['font']
@@ -733,7 +788,7 @@ def _initialize_page(color_profile):
         html_page += 'table tr#'+str(ctype)+'  {background-color:'+str(background)+'; color:'+str(font)+';}\n'
 
     html_page += '</style>\n'
-    html_page += '</head><body><h1>DESI Daily Processing Status Monitor</h1>\n'
+    html_page += '</head><body><h1>DESI '+os.getenv("SPECPROD").upper()+' Processing Status Monitor</h1>\n'
 
     return html_page
 
@@ -745,10 +800,16 @@ def _closing_str():
 
 def _table_row(elements,idlabel=None):
     color_profile = return_color_profile()
-    if idlabel is None:
-        row_str = '<tr>'
+    if elements[14]=='unprocessed':
+        style_str='display:none;'
     else:
-        row_str = '<tr id="'+str(idlabel)+'">'
+        style_str=''
+
+    if idlabel is None:
+        row_str = '<tr style="{}">'.format(style_str)
+    else:
+        row_str = '<tr style="'+style_str+'" id="'+str(idlabel)+'">'
+
     for elem in elements:
         chars = str(elem).split('/')
         if len(chars)==2: # m/n
@@ -760,7 +821,6 @@ def _table_row(elements,idlabel=None):
                 row_str += _table_element_style(elem,'background-color:'+color_profile['INCOMPLETE']['background'])
             elif chars[0]!='0' and int(chars[0])==int(chars[1]):
                 row_str += _table_element_style(elem,'background-color:'+color_profile['GOOD']['background']) # Medium Aqua Green
-
 
         else:
             row_str += _table_element(elem)
@@ -784,7 +844,7 @@ def _str_frac(numerator,denominator):
 def _js_path(output_dir):
     return os.path.join(output_dir,'js','open_nightly_table.js')
 
-def js_import_str(output_dir):
+def js_import_str(output_dir):  # Not used
     output_path = _js_path(output_dir)
     if not os.path.exists(os.path.join(output_dir,'js')):
         os.makedirs(os.path.join(output_dir,'js'))
@@ -825,7 +885,7 @@ def _write_js_script(output_path):
     with open(output_path,'w') as outjs:
         outjs.write(s)
 
-def js_str():
+def js_str(): # Used
     """                                                                                                                  
         Return the javascript script to be added to the html file                                                                 
         """
@@ -855,6 +915,70 @@ def js_str():
                  for (i = 0; i < coll.length; i++) {
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
+           function filterByStatus() {
+                var input, filter, table, tr, td, i;
+                input = document.getElementById("statuslist");
+                filter = input.value.toUpperCase();
+                tables = document.getElementsByClassName("nightTable")
+                for (j = 0; j < tables.length; j++){
+                 table = tables[j]
+                 tr = table.getElementsByTagName("tr");
+                 for (i = 0; i < tr.length; i++) {
+                   td = tr[i].getElementsByTagName("td")[14];
+                   console.log(td)
+                   if (td) {
+                       if (td.innerHTML.toUpperCase().indexOf(filter) > -1 || filter==='ALL') {
+                           tr[i].style.display = "";
+                       } else {
+                          tr[i].style.display = "none";
+                              }
+                       }       
+                                                                            }
+                             }}
+
+           function filterByObstype() {
+                var input, filter, table, tr, td, i;
+                input = document.getElementById("obstypelist");
+                filter = input.value.toUpperCase();
+                tables = document.getElementsByClassName("nightTable")
+                for (j = 0; j < tables.length; j++){
+                 table = tables[j]
+                 tr = table.getElementsByTagName("tr");
+                 for (i = 0; i < tr.length; i++) {
+                   td = tr[i].getElementsByTagName("td")[2];
+                   if (td) {
+                       if (td.innerHTML.toUpperCase().indexOf(filter) > -1 || filter==='ALL') {
+                           tr[i].style.display = "";
+                       } else {
+                          tr[i].style.display = "none";
+                              }
+                       }       
+                                                                            }
+                             }}
+
+            function filterByExptime() {
+                var input, filter, table, tr, td, i;
+                input = document.getElementById("exptimelist");
+                filter = input.value.toUpperCase();
+                tables = document.getElementsByClassName("nightTable")
+                for (j = 0; j < tables.length; j++){
+                 table = tables[j]
+                 tr = table.getElementsByTagName("tr");
+                 for (i = 0; i < tr.length; i++) {
+                   td = tr[i].getElementsByTagName("td")[3];
+                   if (td) {
+                       if (filter==='ALL') {
+                           tr[i].style.display = "";
+                       } else if (parseInt(td.innerHTML) <= parseInt(filter)){
+                           tr[i].style.display = ""; }
+                       else {
+                          tr[i].style.display = "none";
+                              }
+                       }
+                                                                            }
+                             }}
+
+
        </script>                                                                                                 
         """
     return s

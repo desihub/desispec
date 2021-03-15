@@ -12,6 +12,7 @@ from desispec.util import parse_fibers
 from desispec.qproc.io import read_qframe
 from desispec.io import read_fibermap,read_frame
 from desispec.interpolation import resample_flux
+from desispec.fluxcalibration import isStdStar
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-i','--infile', type = str, default = None, required = True, nargs="*",
@@ -38,6 +39,7 @@ parser.add_argument('--radial', action = 'store_true', help = 'show radial focal
 parser.add_argument('--wmin', type = float, default=None, help = 'min of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
 parser.add_argument('--wmax', type = float, default=None, help = 'max of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
 parser.add_argument('--no-mask', action = 'store_true', help = 'ignore mask')
+parser.add_argument('--std-stars', action = 'store_true', help = 'show only the std stars')
 
 
 args   = parser.parse_args()
@@ -69,6 +71,12 @@ for filename in args.infile :
         frame = read_qframe(filename)
     else :
         frame = read_frame(filename)
+
+    if args.std_stars :
+        selection = isStdStar(frame.fibermap)
+        fibers = frame.fibermap["FIBER"][selection]
+        print("showing std stars fibers: {}".format(fibers))
+
 
     if args.focal_plane and frame.fibermap is not None :
         x.append(frame.fibermap["FIBERASSIGN_X"])

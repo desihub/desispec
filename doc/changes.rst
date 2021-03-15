@@ -2,17 +2,62 @@
 desispec Change Log
 ===================
 
-0.39.1 (2021-02-16)
+0.39.4 (unreleased)
 -------------------
 
 * Add fiber crosstalk correction (PR `#1138`_).
 
 .. _`#1138`: https://github.com/desihub/desispec/issues/1138
 
+0.39.3 (2020-03-04)
+-------------------
+
+Cascades update tag for final catalog creation.
+
+Note: datamodel changes to coadd SCORES and FIBERMAP
+
+* Propagate TSNR2 into coadd SCORES; update coadd FIBERMAP columns (PR `#1166`_)
+* ``bin/desi_tsnr_afterburner`` use pre-calculated TSNR2 from frame files
+  unless requested to recalculate (PR `#1167`_).
+
+.. _`#1166`: https://github.com/desihub/desispec/issues/1166
+.. _`#1167`: https://github.com/desihub/desispec/issues/1167
+
+0.39.2 (2021-03-02)
+-------------------
+
+Cascades update tag to fix coadd and tSNR crashes, and postfacto tag
+``desi_spectro_calib`` version in desispec module file.
+
+* Processing dashboard useability updates (PR `#1152`_).
+* Undo heliocentric correction in throughput analysis not used for
+  production processing (PR `#1154`_).
+* Fix coadd crash (PR `#1163`_).
+* Fix tSNR alpha<0.8 crash (PR `#1164`_).
+* Updated desi_spectro_calib version to 0.2.4.
+
+.. _`#1152`: https://github.com/desihub/desispec/issues/1152
+.. _`#1154`: https://github.com/desihub/desispec/issues/1154
+.. _`#1163`: https://github.com/desihub/desispec/issues/1163
+.. _`#1164`: https://github.com/desihub/desispec/issues/1164
+
+0.39.1 (2021-02-23)
+-------------------
+
+Cascades update tag to add functionality for using a queue reservation and for
+debugging, without algorithmically impacting what has already been run
+with the 0.39.0 tag.
+
+* Add ``desi_run_night --reservation`` option (PR `#1145`_).
+* Fix ``desi_process_exposure --no-zero-ivar`` option (PR `#1146`_).
+
+.. _`#1145`: https://github.com/desihub/desispec/issues/1145
+.. _`#1146`: https://github.com/desihub/desispec/issues/1146
+
 0.39.0 (2021-02-16)
 -------------------
 
-Tag for software release 21.2 and Cascades run.
+Initial tag for Cascades run.
 
 Major updates:
 

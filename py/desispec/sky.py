@@ -234,11 +234,11 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         # B = sum_fiber sum_wave_w sqrt(ivar)[fiber,w]*flux[fiber,w] sqrtwR[fiber,wave]
 
         #A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
-        A=np.zeros((nwave,nwave))
+        A=scipy.sparse.csr_matrix((nwave,nwave))
         B=np.zeros((nwave))
 
         # diagonal sparse matrix with content = sqrt(ivar)*flat of a given fiber
-        SD=scipy.sparse.lil_matrix((nwave,nwave))
+        SD=scipy.sparse.dia_matrix((nwave,nwave))
 
         # loop on fiber to handle resolution
         for fiber in range(nfibers) :
@@ -250,8 +250,9 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             SD.setdiag(sqrtw[fiber])
 
             sqrtwR = SD*R # each row r of R is multiplied by sqrtw[r]
-            A += (sqrtwR.T*sqrtwR).todense()
+            A += sqrtwR.T*sqrtwR
             B += sqrtwR.T*sqrtwflux[fiber]
+        A = A.toarray()
 
         log.info("iter %d solving"%iteration)
         w = A.diagonal()>0
