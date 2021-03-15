@@ -806,12 +806,12 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         log = get_logger()
         skysubonly = np.array([sci['LASTSTEP'] == 'skysub' for sci in sciences])
         if np.all(skysubonly):
-            log.info("Identified all exposures in joint fitting request as skysub only. Not submitting")
+            log.info("Identified all exposures in joint fitting request as skysub-only. Not submitting")
             sciences = []
             return ptable, arcjob, flatjob, sciences, internal_id
 
         if np.any(skysubonly):
-            log.info("Identified skysub only exposures in joint fitting request")
+            log.info("Identified skysub-only exposures in joint fitting request")
             log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("LASTSTEP's: {}".format([row['LASTSTEP'] for row in sciences]))
             sciences = (np.array(sciences,dtype=object)[~skysubonly]).tolist()
@@ -844,7 +844,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         ## Note here we have an assumption about the number of expected flats being greater than 11
         ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
                                                       reservation=reservation, strictly_successful=strictly_successful)
-        
+
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
         ## Note here we have an assumption about the number of expected arcs being greater than 4
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
