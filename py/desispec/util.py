@@ -96,7 +96,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
 
     log.info(time.asctime())
     if err > 0:
-        log.critical("FAILED {}".format(cmd))
+        log.critical("FAILED err={} {}".format(err, cmd))
         return err
 
     #- Check for outputs
@@ -106,6 +106,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             log.error("missing output "+x)
             err = 2
     if err > 0:
+        log.critical("FAILED outputs {}".format(cmd))
         return err
 
     log.info("SUCCESS: {}".format(cmd))

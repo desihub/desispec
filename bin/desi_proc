@@ -934,8 +934,8 @@ if args.obstype in ['SCIENCE',] and (not args.noskysub ) and (not args.nofluxcal
         cmd += " --calib {}".format(calibfile)
         cmd += " --outfile {}".format(cframefile)
         cmd += " --cosmics-nsig 6"
-        if not args.no_xtalk :
-            cmd += " --xtalk"
+        if args.no_xtalk :
+            cmd += " --no-xtalk"
 
         inputs = [framefile, fiberflatfile, skyfile, calibfile]
         runcmd(cmd, inputs=inputs, outputs=[cframefile,])

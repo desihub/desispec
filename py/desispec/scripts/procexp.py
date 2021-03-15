@@ -46,8 +46,8 @@ def parse(options=None):
                         help = 'Do NOT set ivar=0 for masked pixels')
     parser.add_argument('--no-tsnr', action='store_true',
                         help = 'Do not compute template SNR')
-    parser.add_argument('--xtalk', action='store_true',
-                        help = 'Apply fiber crosstalk correction')
+    parser.add_argument('--no-xtalk', action='store_true',
+                        help = 'Do not apply fiber crosstalk correction')
 
     args = None
     if options is None:
@@ -92,10 +92,10 @@ def main(args):
     else :
         fiberflat = None
 
-    if args.xtalk :
-        zero_ivar = False
-    else :
+    if args.no_xtalk :
         zero_ivar = (not args.no_zero_ivar)
+    else :
+        zero_ivar = False
 
     if args.sky!=None :
 
@@ -126,7 +126,7 @@ def main(args):
 
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
 
-    if args.xtalk :
+    if not args.no_xtalk :
         log.info("fiber crosstalk correction")
         correct_fiber_crosstalk(frame,fiberflat)
 
