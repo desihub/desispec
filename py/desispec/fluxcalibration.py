@@ -1253,6 +1253,20 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     mccalibration = R.dot(calibration)
 
+    log.info("interpolate calibration over Ca and Na ISM lines")
+    # do this after convolution with resolution
+    ismlines=np.array([3934.77,3969.59,5891.58,5897.56]) # in vacuum
+
+    hw=6. # A
+    good=np.ones(tframe.nwave,dtype=bool)
+    for line in ismlines :
+        good &= (np.abs(tframe.wave-line)>hw)
+    bad = ~good
+    if np.sum(bad)>0 :
+        mccalibration[bad] = np.interp(tframe.wave[bad],tframe.wave[good],mccalibration[good])
+        for spec in range(tframe.nspec) :
+            ccalibration[spec,bad] = np.interp(tframe.wave[bad],tframe.wave[good],ccalibration[spec,good])
+
     # trim back
     ccalibration=ccalibration[:,margin:-margin]
     ccalibivar=ccalibivar[:,margin:-margin]
