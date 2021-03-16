@@ -110,7 +110,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
     write_table(unproc_table, tablename=unproc_table_pathname)
     ## Get relevant data from the tables
     arcs, flats, sciences, arcjob, flatjob, \
-    curtype, lasttype, curtile, lasttile, internal_id, last_not_dither = parse_previous_tables(etable, ptable, night)
+    curtype, lasttype, curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
 
     ## Loop over new exposures and process them as relevant to that type
     for ii, erow in enumerate(etable):
@@ -149,7 +149,6 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
         lasttile = curtile
         lasttype = curtype
-        last_not_dither = (prow['OBSDESC'] != 'dither')
 
         if not dry_run:
             time.sleep(1)

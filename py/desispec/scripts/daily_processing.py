@@ -172,7 +172,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ## Get relevant data from the tables
     all_exps = set(etable['EXPID'])
     arcs,flats,sciences, arcjob,flatjob, \
-    curtype,lasttype, curtile,lasttile, internal_id, last_not_dither = parse_previous_tables(etable, ptable, night)
+    curtype,lasttype, curtile,lasttile, internal_id = parse_previous_tables(etable, ptable, night)
 
     ## While running on the proper night and during night hours,
     ## or doing a dry_run or override_night, keep looping
@@ -272,7 +272,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
                 lasttile = curtile
                 lasttype = curtype
-                last_not_dither = (prow['OBSDESC'] != 'dither')
 
                 ## Flush the outputs
                 sys.stdout.flush()

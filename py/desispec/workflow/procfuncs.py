@@ -419,7 +419,6 @@ def parse_previous_tables(etable, ptable, night):
         lasttile, str or None, the tileid of the last job (if science). Otherwise None.
         internal_id, int, an internal identifier unique to each job. Increments with each new job. This
                           is the latest unassigned value.
-        last_not_dither, bool, True if the last job was a science dither tile. Otherwise False.
     """
     log = get_logger()
     arcs, flats, sciences = [], [], []
@@ -431,7 +430,6 @@ def parse_previous_tables(etable, ptable, night):
         prow = ptable[-1]
         internal_id = int(prow['INTID'])+1
         lasttype,lasttile = get_type_and_tile(ptable[-1])
-        last_not_dither = (prow['OBSDESC'] != 'dither')
         jobtypes = ptable['JOBDESC']
 
         if 'psfnight' in jobtypes:
@@ -471,13 +469,12 @@ def parse_previous_tables(etable, ptable, night):
             sciences = sciences[::-1]
     else:
         internal_id = night_to_starting_iid(night)
-        last_not_dither = True
 
     return arcs,flats,sciences, \
            arcjob, flatjob, \
            curtype, lasttype, \
            curtile, lasttile,\
-           internal_id, last_not_dither
+           internal_id
 
 
 def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None, start_time=None, end_time=None,
