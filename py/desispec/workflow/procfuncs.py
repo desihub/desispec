@@ -808,7 +808,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
             return ptable, arcjob, flatjob, sciences, internal_id
 
         if np.any(skysubonly):
-            log.info("Identified skysub-only exposures in joint fitting request")
+            log.error("Identified skysub-only exposures in joint fitting request")
             log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("LASTSTEP's: {}".format([row['LASTSTEP'] for row in sciences]))
             sciences = (np.array(sciences,dtype=object)[~skysubonly]).tolist()
@@ -820,7 +820,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         tiles = np.array([sci['TILEID'] for sci in sciences])
         counts = Counter(tiles)
         if len(counts.most_common()) > 1:
-            log.warning("Identified more than one tile in a joint fitting request")
+            log.error("Identified more than one tile in a joint fitting request")
             log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("Tileid's: {}".format(tiles))
             log.info("Returning without joint fitting any of these exposures.")
@@ -830,10 +830,10 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
             # log.warning(f"Given multiple tiles to jointly fit: {counts}. "+
             #             "Only processing the most common non-default " +
             #             f"tile: {most_common} with {nmost_common} exposures")
-            #sciences = (np.array(sciences,dtype=object)[tiles == most_common]).tolist()
-            #log.info("Tiles and exposure id's being submitted for joint fitting:")
-            #log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
-            #log.info("Tileid's: {}".format([row['TILEID'] for row in sciences]))
+            # sciences = (np.array(sciences,dtype=object)[tiles == most_common]).tolist()
+            # log.info("Tiles and exposure id's being submitted for joint fitting:")
+            # log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
+            # log.info("Tileid's: {}".format([row['TILEID'] for row in sciences]))
             sciences = []
             return ptable, arcjob, flatjob, sciences, internal_id
 
