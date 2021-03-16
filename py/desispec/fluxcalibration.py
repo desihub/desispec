@@ -16,7 +16,7 @@ from desispec.frame import Frame
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
-from desispec.fiberfluxcorr import point_source_fiber_flux_correction
+from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
@@ -914,7 +914,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     #- Compute point source flux correction and fiber flux correction
     log.info("compute point source flux correction for seeing FWHM = {:4.2f} arcsec".format(exposure_seeing_fwhm))
-    point_source_correction = point_source_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
+    point_source_correction = flat_to_psf_flux_correction(frame.fibermap,exposure_seeing_fwhm)
     good=(point_source_correction!=0)
     bad=~good
     #- Set temporary ivar=0 for the targets with bad point source correction
@@ -1287,8 +1287,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     fibercorr = dict()
     fibercorr_comments = dict()
-    fibercorr["POINT_SOURCE"]=point_source_correction
-    fibercorr_comments["POINT_SOURCE"]="point source correction already applied to flux vector"
+    fibercorr["FLAT_TO_PSF_FLUX"]=point_source_correction
+    fibercorr_comments["FLAT_TO_PSF_FLUX"]="correction for point sources already applied to the flux vector"
+
+    fibercorr["PSF_TO_FIBER_FLUX"]=psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
+    fibercorr_comments["PSF_TO_FIBER_FLUX"]="multiplication correction to apply to get the fiber flux spectrum"
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
     return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration, fibercorr=fibercorr)
@@ -1382,6 +1385,11 @@ def apply_flux_calibration(frame, fluxcalib):
         ok=np.where(frame.ivar[i]>0)[0]
         if ok.size>0 :
             frame.ivar[i,ok] = 1./( 1./(frame.ivar[i,ok]*C[i,ok]**2)+frame.flux[i,ok]**2/(fluxcalib.ivar[i,ok]*C[i,ok]**4)  )
+
+    if fluxcalib.fibercorr is not None and frame.fibermap is not None :
+        if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
+            log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
+            frame.fibermap["PSF_TO_FIBER_SPECFLUX"]=fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
 
 
 def ZP_from_calib(exptime, wave, calib):
