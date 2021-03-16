@@ -26,6 +26,7 @@ from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2
 from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
+from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
@@ -52,12 +53,16 @@ def parse(options=None):
                         help = 'Multiprocessing.')
     parser.add_argument('--efftime-config', type = str, default = None, required=False,
                         help = 'Use this config file instead of default data/tsnr/tsnr-efftime.yaml')
+    parser.add_argument('--tile-completeness', type = str, default = None, required=False,
+                        help = 'Ouput tile completeness table')
     args = None
     if options is None:
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
     return args
+
+
 
 
 
@@ -169,9 +174,6 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         ii |= (cam_summary['CAMERA'] == 'r'+str(petal))
         ii |= (cam_summary['CAMERA'] == 'z'+str(petal))
         ispetal[petal] = ii
-
-    log.info("ispetal=",ispetal)
-
 
     #- Distill into exposure summary per-petal
     rows = list()
@@ -458,7 +460,15 @@ def main():
         log.error("no valid exposures added")
 
 
-
+    if args.tile_completeness is not None :
+        # reread the exposure table
+        exposure_table = Table.read(args.outfile)
+        new_tile_table = compute_tile_completeness_table(exposure_table,args.prod)
+        if os.path.isfile(args.tile_completeness) :
+            previous_table = Table.read(args.tile_completeness)
+            new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
+        new_tile_table.write(args.tile_completeness,overwrite=True)
+        log.info("wrote {}".format(args.tile_completeness))
 
 
 if __name__ == '__main__':
