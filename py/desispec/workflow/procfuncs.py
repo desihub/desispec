@@ -826,6 +826,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
             log.warning("Identified more than one tile in a joint fitting request")
             log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             log.info("Tileid's: {}".format(tiles))
+            log.info("Returning without joint fitting any of these exposures.")
             # most_common, nmost_common = counts.most_common()[0]
             # if most_common == -99:
             #     most_common, nmost_common = counts.most_common()[1]
