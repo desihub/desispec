@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Calculate stand alone tsnr tables for a given desispec prod.
+Computes a tile summary table
 '''
 
 import os,sys
