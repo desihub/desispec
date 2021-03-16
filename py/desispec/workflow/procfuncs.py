@@ -802,7 +802,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
                           from the input such that it represents the smallest unused ID.
     """
-    if lasttype == 'science':
+    if lasttype == 'science' and len(sciences) > 0:
         log = get_logger()
         skysubonly = np.array([sci['LASTSTEP'] == 'skysub' for sci in sciences])
         if np.all(skysubonly):
