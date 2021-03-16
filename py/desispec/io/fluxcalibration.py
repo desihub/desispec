@@ -151,10 +151,25 @@ def read_flux_calibration(filename):
         wave = native_endian(fx["WAVELENGTH"].data.astype('f8'))
         header = fx[0].header
 
+        if 'FIBERCORR' in fx:
+            fibercorr = fx['FIBERCORR'].data
+            # I need to open the header to read the comments
+            fibercorr_comments = dict()
+            head   = fx['FIBERCORR'].header
+            for i in range(1,len(fibercorr.columns)+1) :
+                k='TTYPE'+str(i)
+                fibercorr_comments[head[k]]=head.comments[k]
+        else:
+            fibercorr = None
+            fibercorr_comments = None
+
+
+
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
 
-    fluxcalib = FluxCalib(wave, calib, ivar, mask)
+    fluxcalib = FluxCalib(wave, calib, ivar, mask,
+                          fibercorr=fibercorr, fibercorr_comments=fibercorr_comments)
     fluxcalib.header = header
 
     return fluxcalib
