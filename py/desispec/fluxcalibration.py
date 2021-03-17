@@ -838,7 +838,7 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1,reference_seeing_fwhm=1.1) :
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
@@ -851,7 +851,6 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
       exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
-      reference_seeing_fwhm : (optional) reference seeing FWHM in arcsec considered for the fiber flux computation
 
     Returns:
          desispec.FluxCalib object
