@@ -45,19 +45,6 @@ def compute_broadband_flux(spectrum_wave,spectrum_flux,transmission_wave,transmi
     trapeze_area = (val[1:]+val[:-1])*(wave[1:]-wave[:-1])/2.
     return np.sum(trapeze_area)
 
-def compute_broadband_flux_of_frame(frame,transmission_wave,transmission_value) :
-
-    bbflux=np.zeros(frame.nspec)
-    for i in range(frame.nspec) :
-        good=(frame.ivar[i]>0)&(frame.mask[i]==0)
-        if len(good)<1 : continue
-        medivar = np.median(frame.ivar[i][good])
-        good=(frame.ivar[i]>medivar*0.05)&(frame.mask[i]==0)
-        tmpflux=np.interp(frame.wave,frame.wave[good],frame.flux[i][good])
-        bbflux[i] = compute_broadband_flux(frame.wave,tmpflux,transmission_wave,transmission_value)
-    return bbflux
-
-
 def ab_flux_in_ergs_s_cm2_A(wave) :
     """
     Args:
