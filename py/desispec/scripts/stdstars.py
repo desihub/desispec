@@ -43,6 +43,7 @@ def parse(options=None):
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
     parser.add_argument('--maxstdstars', type=int, default=30, \
             help='Maximum number of stdstars to include')
+    parser.add_argument('--mpi', action='store_true', help='Use MPI')
 
     log = get_logger()
     args = None
@@ -140,7 +141,7 @@ def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
                  )*gaia_a0
             unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
 
-def main(args) :
+def main(args, comm=None) :
     """ finds the best models of all standard stars in the frame
     and normlize the model flux. Output is written to a file and will be called for calibration.
     """
@@ -148,7 +149,31 @@ def main(args) :
     log = get_logger()
 
     log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
-    log.info('multiprocess parallelizing with {} processes'.format(args.ncpu))
+
+    if args.mpi or comm is not None:
+        from mpi4py import MPI
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        size = comm.Get_size()
+        rank = comm.Get_rank()
+        if rank == 0:
+            log.info('mpi parallelizing with {} ranks'.format(size))
+    else:
+        comm = None
+        rank = 0
+        size = 1
+    
+    # disable multiprocess by forcing ncpu = 1 when using MPI
+    if comm is not None:
+        ncpu = 1
+        if rank == 0:
+            log.info('disabling multiprocess (forcing ncpu = 1)')
+    else:
+        ncpu = args.ncpu
+
+    if ncpu > 1:
+        if rank == 0:
+            log.info('multiprocess parallelizing with {} processes'.format(ncpu))
 
     # READ DATA
     ############################################
@@ -467,20 +492,20 @@ def main(args) :
     for band in ["G", "BP", "RP"] :
         model_filters["GAIA-" + band] = load_gaia_filter(band=band, dr=2)
 
-    log.info("computing model mags for %s"%sorted(model_filters.keys()))
-    model_mags = dict()
-    for filter_name in model_filters.keys():
-        model_mags[filter_name] = get_magnitude(stdwave, stdflux, model_filters, filter_name)
-     
-    log.info("done computing model mags")
+    # Compute model mags on rank 0 and bcast result to other ranks
+    # This sidesteps an OOM event on Cori Haswell with "-c 2"
+    model_mags = None
+    if rank == 0:
+        log.info("computing model mags for %s"%sorted(model_filters.keys()))
+        model_mags = dict()
+        for filter_name in model_filters.keys():
+            model_mags[filter_name] = get_magnitude(stdwave, stdflux, model_filters, filter_name)
+        log.info("done computing model mags")
+    if comm is not None:
+        model_mags = comm.bcast(model_mags, root=0)
 
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
-    linear_coefficients=np.zeros((nstars,stdflux.shape[0]))
-    chi2dof=np.zeros((nstars))
-    redshift=np.zeros((nstars))
-    normflux=[]
-
     star_mags = dict()
     star_unextincted_mags = dict()
 
@@ -531,11 +556,16 @@ def main(args) :
         star_unextincted_colors['GAIA-' + c1 + '-' + c2] = (
             star_unextincted_mags['GAIA-' + c1] -
             star_unextincted_mags['GAIA-' + c2])
+
+    linear_coefficients=np.zeros((nstars,stdflux.shape[0]))
+    chi2dof=np.zeros((nstars))
+    redshift=np.zeros((nstars))
+    normflux=np.zeros((nstars, stdwave.size))
     fitted_model_colors = np.zeros(nstars)
 
-    for star in range(nstars) :
+    for star in range(rank, nstars, size):
 
-        log.info("finding best model for observed star #%d"%star)
+        log.info("rank %d: finding best model for observed star #%d"%(rank, star))
 
         # np.array of wave,flux,ivar,resol
         wave = {}
@@ -580,7 +610,7 @@ def main(args) :
             wave, flux, ivar, resolution_data,
             stdwave, stdflux[selection],
             teff[selection], logg[selection], feh[selection],
-            ncpu=args.ncpu, z_max=args.z_max, z_res=args.z_res,
+            ncpu=ncpu, z_max=args.z_max, z_res=args.z_res,
             template_error=args.template_error
             )
 
@@ -637,26 +667,40 @@ def main(args) :
         scalefac=10**((model_magr - cur_refmag)/2.5)
 
         log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
-        normflux.append(model*scalefac)
+        normflux[star] = model*scalefac
 
-    # Now write the normalized flux for all best models to a file
-    normflux=np.array(normflux)
+    if comm is not None:
+        linear_coefficients = comm.reduce(linear_coefficients, op=MPI.SUM, root=0)
+        redshift = comm.reduce(redshift, op=MPI.SUM, root=0)
+        chi2dof = comm.reduce(chi2dof, op=MPI.SUM, root=0)
+        fitted_model_colors = comm.reduce(fitted_model_colors, op=MPI.SUM, root=0)
+        normflux = comm.reduce(normflux, op=MPI.SUM, root=0)
 
-    fitted_stars = np.where(chi2dof != 0)[0]
-    if fitted_stars.size == 0 :
+    # Check at least one star was fit. The check is peformed on rank 0 and
+    # the result is bcast to other ranks so that all ranks exit together if
+    # the check fails.
+    atleastonestarfit = False
+    if rank == 0:
+        fitted_stars = np.where(chi2dof != 0)[0]
+        atleastonestarfit = fitted_stars.size > 0
+    if comm is not None:
+        atleastonestarfit = comm.bcast(atleastonestarfit, root=0)
+    if not atleastonestarfit:
         log.error("No star has been fit.")
         sys.exit(12)
 
-    data={}
-    data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
-    data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
-    data['FEH']= linear_coefficients[fitted_stars,:].dot(feh)
-    data['CHI2DOF']=chi2dof[fitted_stars]
-    data['REDSHIFT']=redshift[fitted_stars]
-    data['COEFF']=linear_coefficients[fitted_stars,:]
-    data['DATA_%s'%color]=star_colors[color][fitted_stars]
-    data['MODEL_%s'%color]=fitted_model_colors[fitted_stars]
-    data['BLUE_SNR'] = snr['b'][fitted_stars]
-    data['RED_SNR']  = snr['r'][fitted_stars]
-    data['NIR_SNR']  = snr['z'][fitted_stars]
-    io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers[fitted_stars],data)
+    # Now write the normalized flux for all best models to a file
+    if rank == 0:
+        data={}
+        data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
+        data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
+        data['FEH']= linear_coefficients[fitted_stars,:].dot(feh)
+        data['CHI2DOF']=chi2dof[fitted_stars]
+        data['REDSHIFT']=redshift[fitted_stars]
+        data['COEFF']=linear_coefficients[fitted_stars,:]
+        data['DATA_%s'%color]=star_colors[color][fitted_stars]
+        data['MODEL_%s'%color]=fitted_model_colors[fitted_stars]
+        data['BLUE_SNR'] = snr['b'][fitted_stars]
+        data['RED_SNR']  = snr['r'][fitted_stars]
+        data['NIR_SNR']  = snr['z'][fitted_stars]
+        io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers[fitted_stars],data)

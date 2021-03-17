@@ -170,7 +170,7 @@ def run_dist(tasktype, tasklist, db, nproc, procs_per_node, force=False):
             tuples (one per process) giving the group number and rank within
             the group.  The tasks are a sorted list of tasks containing the
             subset of the inputs that needs to be run.  The dist is a list of
-            tuples (one per group) containing the first task and number of tasks
+            tuples (one per group) containing the indices of tasks
             assigned to each group.
     """
     from .tasks.base import task_classes, task_type
@@ -304,7 +304,7 @@ def run_dist(tasktype, tasklist, db, nproc, procs_per_node, force=False):
         else:
             # This process group is idle (not acting as a worker) or contains
             # the leftover processes to make a whole number of nodes.
-            dist.append((-1, 0))
+            dist.append([])
 
     return worker_size, groups, worktasks, dist
 
@@ -403,8 +403,9 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     group = groups[rank][0]
     group_rank = groups[rank][1]
-    group_firsttask = dist[group][0]
-    group_ntask = dist[group][1]
+    ## group_firsttask = dist[group][0]
+    ## group_ntask = dist[group][1]
+    group_ntask = len(dist[group])
 
     failcount = 0
     group_failcount = 0
@@ -412,14 +413,10 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     if group_ntask > 0:
         if group_rank == 0:
             log.debug(
-                "Group {}, running tasks {} to {}".format(
-                    group,
-                    group_firsttask,
-                    (group_firsttask + group_ntask - 1)
-                )
+                "Group {}, running {} tasks".format(group, len(dist[group]))
             )
 
-        for t in range(group_firsttask, group_firsttask + group_ntask):
+        for t in dist[group]:
             # For this task, determine the output log file.  If the task has
             # the "night" key in its name, then use that subdirectory.
             # Otherwise, if it has the "pixel" key, use the appropriate
@@ -575,12 +572,13 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
     for group, group_rank in groups:
-        group_firsttask = dist[group][0]
-        group_ntask = dist[group][1]
+        ## group_firsttask = dist[group][0]
+        ## group_ntask = dist[group][1]
+        group_ntask = len(dist[group])
         if group_ntask == 0:
             continue
 
-        for t in range(group_firsttask, group_firsttask + group_ntask):
+        for t in dist[group]:
             # For this task, determine the output log file.  If the task has
             # the "night" key in its name, then use that subdirectory.
             # Otherwise, if it has the "pixel" key, use the appropriate
