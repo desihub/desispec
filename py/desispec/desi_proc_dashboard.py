@@ -248,14 +248,11 @@ def main(args):
     #<option>1200</option>
     #</select>
     #"""
-
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month,nights_in_month))
-        webpage = os.path.join(os.getenv('DESI_DASHBOARD'), 'links', month)
-        if not os.path.exists(webpage):
-            os.makedirs(webpage)
-        cmd = "fix_permissions.sh -a {}".format(webpage)
-        os.system(cmd)
+        #webpage = os.path.join(os.getenv('DESI_DASHBOARD'), 'links', month)
+        #if not os.path.exists(webpage):
+        #    os.makedirs(webpage)
         nightly_tables = []
         for night in nights_in_month:
             ####################################
@@ -269,12 +266,6 @@ def main(args):
     strTable += _closing_str()
     with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name),'w') as hs:
         hs.write(strTable)
-    ##########################
-    #### Fix Permission ######
-    ##########################
-    cmd="fix_permissions.sh -a {}".format(os.getenv('DESI_DASHBOARD'))
-    os.system(cmd)
-
 
 def monthly_table(tables,month):
     """
@@ -387,20 +378,28 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
     #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
     file_exptable=get_exposure_table_pathname(night)
-    try: # Try reading tables first. Switch to counting files if not failed.
-        d_exp =  ascii.read(file_exptable, data_start=2, delimiter=',')
-        d_processing = load_table(file_processing) # commented out temporarily, might used later
-        #d_unprocessed = load_table(file_unprocessed)
+    try: # Try reading tables first. Switch to counting files if failed.
+        d_exp = load_table(file_exptable, tabletype='exptable')
     except:
         print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Warning ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-        print('Error reading exptable or processing table, using brutal force method of scaning files.')
+        print('Error reading exptable using brute force method of scanning files.')
         print('All exposures will be marked as unprocessed.')
         print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         return calculate_one_night(night, use_short_sci=use_short_sci)
-    expid_processing=[]
 
-    for expid_list in d_processing['EXPID']:
-        expid_processing += expid_list.tolist()
+    try:
+        d_processing = load_table(file_processing, tabletype='proctable')
+    except:
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Warning ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        print('Error reading proctable. Assuming one does not exist.')
+        print('All exposures will be marked as unprocessed.')
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        d_processing = None
+    
+    expid_processing=[]
+    if d_processing is not None:
+        for expid_list in d_processing['EXPID']:
+            expid_processing += expid_list.tolist()
     expid_processing = set(expid_processing)
     expids = list(d_exp['EXPID'])
     expids.sort(reverse=True)
@@ -408,9 +407,6 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
 
     logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
-    #if os.path.exists(logpath):
-    #    cmd="fix_permissions.sh -a {}".format(logpath)
-    #    os.system(cmd)
 
     webpage = os.getenv('DESI_DASHBOARD')
     logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}') # search for the log file 
@@ -524,19 +520,21 @@ def calculate_one_night_use_file(night, use_short_sci=False):
                     spectrographs = log.split('-')[-2]
             if newest_jobid != '00000000' and len(spectrographs)!=0:
                 logname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
-                logname_only = logname.split('/')[-1]
+                #logname_only = logname.split('/')[-1]
 
                 slurmname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'','slurm')
-                slurmname_only = slurmname.split('/')[-1]
-                relpath_log = os.path.join('links',night[:-2],logname_only)
-                relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
+                #slurmname_only = slurmname.split('/')[-1]
 
-                if not os.path.exists(os.path.join(webpage,relpath_log)):
-                    cmd = "ln -s {} {}".format(logname,os.path.join(webpage,relpath_log))
-                    os.system(cmd)
-                if not os.path.exists(os.path.join(webpage, relpath_slurm)):
-                    cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, relpath_slurm))
-                    os.system(cmd)
+                ## Use relative paths to files on disk rather than using sym links
+                relpath_log = os.path.relpath(logname, webpage)
+                relpath_slurm = os.path.relpath(slurmname, webpage)
+
+                #relpath_log = os.path.join('links',night[:-2],logname_only)
+                #relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
+                #if not os.path.exists(os.path.join(webpage,relpath_log)):
+                #    os.symlink(logname,os.path.join(webpage,relpath_log))
+                #if not os.path.exists(os.path.join(webpage, relpath_slurm)):
+                #    os.symlink(slurmname, os.path.join(webpage, relpath_slurm))
 
                 hlink1 = _hyperlink(relpath_slurm, 'Slurm')
                 hlink2 = _hyperlink(relpath_log, 'Log')
@@ -596,9 +594,6 @@ def calculate_one_night(night, use_short_sci=False):
     fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
 
     logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
-    if os.path.exists(logpath):
-        cmd="fix_permissions.sh -a {}".format(logpath)
-        os.system(cmd)
 
     webpage = os.getenv('DESI_DASHBOARD')
     logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}')
@@ -701,19 +696,22 @@ def calculate_one_night(night, use_short_sci=False):
                     spectrographs = log.split('-')[-2]
             if newest_jobid != '00000000' and len(spectrographs)!=0:
                 logname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
-                logname_only = logname.split('/')[-1]
+                #logname_only = logname.split('/')[-1]
 
                 slurmname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'','slurm')
-                slurmname_only = slurmname.split('/')[-1]
-                relpath_log = os.path.join('links',night[:-2],logname_only)
-                relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
+                #slurmname_only = slurmname.split('/')[-1]
+
+                ## Use relative paths to files on disk rather than using sym links 
+                relpath_log = os.path.relpath(logname, webpage)
+                relpath_slurm = os.path.relpath(slurmname, webpage)
+
+                #relpath_log = os.path.join('links',night[:-2],logname_only)
+                #relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
                 
-                if not os.path.exists(os.path.join(webpage,relpath_log)):
-                    cmd = "ln -s {} {}".format(logname,os.path.join(webpage,relpath_log))
-                    os.system(cmd)
-                if not os.path.exists(os.path.join(webpage, relpath_slurm)):
-                    cmd = "ln -s {} {}".format(slurmname, os.path.join(webpage, relpath_slurm))
-                    os.system(cmd)
+                #if not os.path.exists(os.path.join(webpage,relpath_log)):
+                #    os.symlink(logname,os.path.join(webpage,relpath_log))
+                #if not os.path.exists(os.path.join(webpage, relpath_slurm)):
+                #    os.symlink(slurmname, os.path.join(webpage, relpath_slurm))
 
                 hlink1 = _hyperlink(relpath_slurm, 'Slurm')
                 hlink2 = _hyperlink(relpath_log, 'Log')
