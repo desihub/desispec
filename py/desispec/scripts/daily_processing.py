@@ -172,7 +172,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ## Get relevant data from the tables
     all_exps = set(etable['EXPID'])
     arcs,flats,sciences, arcjob,flatjob, \
-    curtype,lasttype, curtile,lasttile, internal_id, last_not_dither = parse_previous_tables(etable, ptable, night)
+    curtype,lasttype, curtile,lasttile, internal_id = parse_previous_tables(etable, ptable, night)
 
     ## While running on the proper night and during night hours,
     ## or doing a dry_run or override_night, keep looping
@@ -246,11 +246,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
                 curtype,curtile = get_type_and_tile(erow)
 
-                if (curtype != lasttype) or (curtile != lasttile):
+                if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
                     ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
                                                                                                    sciences, arcjob,
                                                                                                    flatjob, lasttype,
-                                                                                                   last_not_dither,
                                                                                                    internal_id,
                                                                                                    dry_run=dry_run,
                                                                                                    queue=queue)
@@ -273,7 +272,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
                 lasttile = curtile
                 lasttype = curtype
-                last_not_dither = (prow['OBSDESC'] != 'dither')
 
                 ## Flush the outputs
                 sys.stdout.flush()
@@ -300,8 +298,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     sys.stdout.flush()
     sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
-    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
-                                                                         arcjob, flatjob, lasttype, last_not_dither,\
+    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
+                                                                         arcjob, flatjob, lasttype,
                                                                          internal_id, dry_run=dry_run, queue=queue)
 
     ## All jobs now submitted, update information from job queue and save

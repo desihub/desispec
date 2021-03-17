@@ -110,7 +110,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
     write_table(unproc_table, tablename=unproc_table_pathname)
     ## Get relevant data from the tables
     arcs, flats, sciences, arcjob, flatjob, \
-    curtype, lasttype, curtile, lasttile, internal_id, last_not_dither = parse_previous_tables(etable, ptable, night)
+    curtype, lasttype, curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
 
     ## Loop over new exposures and process them as relevant to that type
     for ii, erow in enumerate(etable):
@@ -121,11 +121,10 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
         curtype, curtile = get_type_and_tile(erow)
 
-        if (curtype != lasttype) or (curtile != lasttile) and lasttype is not None:
+        if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
             ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
                                                                                            sciences, arcjob,
                                                                                            flatjob, lasttype,
-                                                                                           last_not_dither,
                                                                                            internal_id,
                                                                                            dry_run=dry_run,
                                                                                            queue=queue,
@@ -150,7 +149,6 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
         lasttile = curtile
         lasttype = curtype
-        last_not_dither = (prow['OBSDESC'] != 'dither')
 
         if not dry_run:
             time.sleep(1)
@@ -168,9 +166,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
-        ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, \
+        ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
                                                                                        arcjob, flatjob, lasttype,
-                                                                                       last_not_dither, \
                                                                                        internal_id, dry_run=dry_run,
                                                                                        queue=queue,
                                                                                        reservation=reservation,
