@@ -803,7 +803,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         log = get_logger()
         skysubonly = np.array([sci['LASTSTEP'] == 'skysub' for sci in sciences])
         if np.all(skysubonly):
-            log.info("Identified all exposures in joint fitting request as skysub-only. Not submitting")
+            log.error("Identified all exposures in joint fitting request as skysub-only. Not submitting")
             sciences = []
             return ptable, arcjob, flatjob, sciences, internal_id
 
