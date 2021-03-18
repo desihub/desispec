@@ -523,6 +523,28 @@ def difference_camwords(fullcamword,badcamword):
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
 
+def camword_to_spectros(camword, full_spectros_only=False):
+    """
+    Takes a camword as input and returns any spectrograph represented within that camword. By default this includes partial
+    spectrographs (with one or two cameras represented). But if full_spectros_only is set to True, only spectrographs
+    with all cameras represented are given.
+
+    Args:
+        camword, str. The camword of all cameras.
+        full_spectros_only, bool. Default is False. Flag to specify if you want all spectrographs with any cameras existing
+                                  in the camword (the default) or if you only want fully populated spectrographs.
+
+    Returns:
+        spectros, list. A list of integer spectrograph numbers represented in the camword input.
+    """
+    spectros = set()
+    for char in camword:
+        if char.isnumeric():
+            spectros.add(int(char))
+        elif full_spectros_only and char in ['b','r','z']:
+            break
+    return list(spectros)
+
 def parse_badamps(badamps,joinsymb=','):
     """
     Parses badamps string from an exposure or processing table into the (camera,petal,amplifier) sets,

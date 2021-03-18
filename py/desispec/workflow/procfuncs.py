@@ -69,7 +69,71 @@ def batch_script_name(prow):
     scriptfile =  pathname + '.slurm'
     return scriptfile
 
-def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False, strictly_successful=False):
+def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
+    """
+    Args:
+        prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
+                                 desispect.workflow.proctable.get_processing_table_column_defs()
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
+
+    Returns:
+        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
+                                 the change in job status after creating and submitting the job for processing.
+    """
+    from desispec.io import findfile#,get_files
+    from desispec.io.util import decode_camword, create_camword, difference_camwords, camword_to_spectros
+    # findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname=None,
+    #     nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
+    #     download=False, outdir=None, qaprod_dir=None)
+    #
+    # coadd = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',
+    # spectra = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/spectra-{nside:d}-{groupname}.fits',
+    # zbest = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/zbest-{nside:d}-{groupname}.fits',
+    # expid = prow['EXPID'][0]
+    # filedict = get_files(filetype, night, expid)
+    # existing_cameras = list(filedict.keys())
+    # existing_camword = create_camword(existing_cameras)
+    # completed = (existing_camword == prow['PROCCAMWORD'])
+    # if not completed and resubmit_partial_complete and existing_camword != '':
+    #     prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'], existing_camword)
+
+    job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstar', 'poststdstar': 'cframe',
+                       'arc': 'psf', 'flat': 'fiberflat', 'psfnight': 'psfnight', 'nightlyflat': 'fiberflatnight',
+                       'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'zbest_tile'}
+    night = prow['NIGHT']
+    filetype = job_to_file_map[prow['JOBDESC']]
+    if prow['JOBDESC'] in ['stdstarfit','spectra','coadds','redshift']:
+        ## Spectrograph based
+        tileid = prow['TILEID']
+        spectros = camword_to_spectros(prow['PROCCAMWORD'])
+        existing_spectros = []
+        for spectro in spectros:
+            expid = prow['EXPID'][0]
+            if os.path.exists(findfile(filetype=filetype, night=night, expid=expid, spectrograph=spectro, tile=tileid)):
+                existing_spectros.append(spectro)
+        completed = (len(existing_spectros)==len(spectros))
+        if not completed and resubmit_partial_complete and len(existing_spectros) > 0:
+            existing_camword = 'a' + ''.join([str(spec) for spec in sorted(existing_spectros)])
+            prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],existing_camword)
+    else:
+        ## Otheriwse camera based
+        cameras = decode_camword(prow['PROCCAMWORD'])
+        missing_cameras = []
+        for cam in cameras:
+            expid = prow['EXPID'][0]
+            if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid,camera=cam)):
+                missing_cameras.append(cameras)
+        completed = (len(missing_cameras) == 0)
+        if not completed and resubmit_partial_complete and len(missing_cameras) < len(cameras):
+            prow['PROCCAMWORD'] = create_camword(missing_cameras)
+
+    return completed, prow
+
+
+def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False,
+                      strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
@@ -86,6 +150,13 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
+        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is True,
+                                 then the script will not be submitted. If some files exist and this is True, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
@@ -96,6 +167,10 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    if check_for_outputs:
+        already_complete, prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
+        if already_complete:
+            return prow
     prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
     return prow
@@ -208,7 +283,7 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
     return prow
 
 
-def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successful=False):
+def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successful=False, check_for_outputs=False):
     """
     Wrapper script that takes a processing table row and three modifier keywords and submits the scripts to the Slurm
     scheduler.
@@ -222,6 +297,10 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
+        check_for_outputs, bool. Default is False, as this is done in an earlier step in the normal pipeline processing.
+                                 If True, the code checks for the existence of the expected final data products for the
+                                 script being submitted. If all files exist and this is True, then the script will not
+                                 be submitted.
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
@@ -237,7 +316,7 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
     dependencies = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
-    if dependencies is not None:
+    if dependencies is not None and dependencies.lower() != 'none':
         jobtype = prow['JOBDESC']
         if strictly_successful:
             depcond = 'afterok'
