@@ -59,6 +59,11 @@ def get_frame_data(nspec=10, wavemin=4000, wavemax=4100, nwave=100, meta={}):
     fibermap['OBJTYPE'] = 'TGT'
     fibermap['DESI_TARGET'] = desi_mask.QSO
     fibermap['DESI_TARGET'][0:3] = desi_mask.STD_FAINT  # For flux tests
+    fibermap['FIBER_X'] = np.arange(nspec)*400./nspec  #mm
+    fibermap['FIBER_Y'] = np.arange(nspec)*400./nspec  #mm
+    fibermap['DELTA_X'] = 0.005*np.ones(nspec)  #mm
+    fibermap['DELTA_Y'] = 0.003*np.ones(nspec)  #mm
+
 
     if "EXPTIME" not in meta.keys():
         meta['EXPTIME'] = 1.0
