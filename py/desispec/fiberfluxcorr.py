@@ -9,6 +9,7 @@ and the target morphology.
 
 import numpy as np
 
+from desiutil.log import get_logger
 from desimodel.fastfiberacceptance import FastFiberAcceptance
 from desimodel.io import load_platescale
 
@@ -23,6 +24,15 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     Returns: 1D numpy array with correction factor to apply to fiber fielded fluxes, valid for point sources.
     """
+
+    log = get_logger()
+
+    for k in ["FIBER_X","FIBER_Y"] :
+        if k not in fibermap.dtype.names :
+            log.warning("no column '{}' in fibermap, cannot do the flat_to_psf correction, returning 1")
+            return np.ones(len(fibermap))
+
+
     #- Compute point source flux correction and fiber flux correction
     fa = FastFiberAcceptance()
     x_mm = fibermap["FIBER_X"]
@@ -30,8 +40,19 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     bad = np.isnan(x_mm)|np.isnan(y_mm)
     x_mm[bad]=0.
     y_mm[bad]=0.
-    dx_mm = fibermap["DELTA_X"] # mm
-    dy_mm = fibermap["DELTA_Y"] # mm
+
+    if "DELTA_X" in fibermap.dtype.names :
+        dx_mm = fibermap["DELTA_X"] # mm
+    else :
+        log.warning("no column 'DELTA_X' in fibermap, assume DELTA_X=0")
+        dx_mm = np.zeros(len(fibermap))
+
+    if "DELTA_Y" in fibermap.dtype.names :
+        dy_mm = fibermap["DELTA_Y"] # mm
+    else :
+        log.warning("no column 'DELTA_Y' in fibermap, assume DELTA_Y=0")
+        dy_mm = np.zeros(len(fibermap))
+
     bad = np.isnan(dx_mm)|np.isnan(dy_mm)
     dx_mm[bad]=0.
     dy_mm[bad]=0.
@@ -71,6 +92,13 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     Returns: 1D numpy array with correction factor to apply to fiber fielded fluxes, valid for any sources.
     """
 
+    log = get_logger()
+
+    for k in ["FIBER_X","FIBER_Y"] :
+        if k not in fibermap.dtype.names :
+            log.warning("no column '{}' in fibermap, cannot do the flat_to_psf correction, returning 1".format(k))
+            return np.ones(len(fibermap))
+
     # compute the seeing and plate scale correction
 
     fa = FastFiberAcceptance()
@@ -79,8 +107,19 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     bad = np.isnan(x_mm)|np.isnan(y_mm)
     x_mm[bad]=0.
     y_mm[bad]=0.
-    dx_mm = fibermap["DELTA_X"] # mm
-    dy_mm = fibermap["DELTA_Y"] # mm
+
+    if "DELTA_X" in fibermap.dtype.names :
+        dx_mm = fibermap["DELTA_X"] # mm
+    else :
+        log.warning("no column 'DELTA_X' in fibermap, assume = zero")
+        dx_mm = np.zeros(len(fibermap))
+
+    if "DELTA_Y" in fibermap.dtype.names :
+        dy_mm = fibermap["DELTA_Y"] # mm
+    else :
+        log.warning("no column 'DELTA_Y' in fibermap, assume = zero")
+        dy_mm = np.zeros(len(fibermap))
+
     bad = np.isnan(dx_mm)|np.isnan(dy_mm)
     dx_mm[bad]=0.
     dy_mm[bad]=0.
@@ -91,9 +130,20 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     sigmas_um  = exposure_seeing_fwhm/2.35 * isotropic_platescale # um
     offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um
     nfibers = len(fibermap)
-    point_sources    = (fibermap["MORPHTYPE"]=="PSF")
+
+    if "MORPHTYPE" in fibermap.dtype.names :
+        point_sources    = (fibermap["MORPHTYPE"]=="PSF")
+    else :
+        log.warning("no column 'MORPHTYPE' in fibermap, assume all point sources.")
+        point_sources    = np.repeat(True,len(fibermap))
+
     extended_sources = ~point_sources
-    half_light_radius_arcsec = fibermap["SHAPE_R"]
+
+    if "SHAPE_R" in fibermap.dtype.names :
+        half_light_radius_arcsec = fibermap["SHAPE_R"]
+    else :
+        log.warning("no column 'SHAPE_R' in fibermap, assume = zero")
+        half_light_radius_arcsec = np.zeros(len(fibermap))
 
     # saturate half_light_radius_arcsec at 2 arcsec
     # larger values would have extrapolated fiberfrac
@@ -118,14 +168,14 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     nominal_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],half_light_radius_arcsec[extended_sources])
 
     # legacy survey fiber frac
-    selection = (fibermap["MORPHTYPE"]=="PSF")&(fibermap["FLUX_R"]>0)
-    imaging_fiber_frac_for_point_source = np.sum(fibermap["FIBERFLUX_R"][selection]*fibermap["FLUX_R"][selection])/np.sum(fibermap["FLUX_R"][selection]**2)
-    imaging_fiber_frac = imaging_fiber_frac_for_point_source*np.ones(nfibers) # default is value for point sources
-    selection = (fibermap["FLUX_R"]>1)
-    imaging_fiber_frac[selection] = fibermap["FIBERFLUX_R"][selection]/fibermap["FLUX_R"][selection]
-    to_saturate = (imaging_fiber_frac[selection]>imaging_fiber_frac_for_point_source)
-    if np.sum(to_saturate)>0 :
-        imaging_fiber_frac[selection][to_saturate] = imaging_fiber_frac_for_point_source # max is point source value
+    #selection = (fibermap["MORPHTYPE"]=="PSF")&(fibermap["FLUX_R"]>0)
+    #imaging_fiber_frac_for_point_source = np.sum(fibermap["FIBERFLUX_R"][selection]*fibermap["FLUX_R"][selection])/np.sum(fibermap["FLUX_R"][selection]**2)
+    #imaging_fiber_frac = imaging_fiber_frac_for_point_source*np.ones(nfibers) # default is value for point sources
+    #selection = (fibermap["FLUX_R"]>1)
+    #imaging_fiber_frac[selection] = fibermap["FIBERFLUX_R"][selection]/fibermap["FLUX_R"][selection]
+    #to_saturate = (imaging_fiber_frac[selection]>imaging_fiber_frac_for_point_source)
+    #if np.sum(to_saturate)>0 :
+    #    imaging_fiber_frac[selection][to_saturate] = imaging_fiber_frac_for_point_source # max is point source value
 
     """
     uncalibrated flux     ~= current_fiber_frac * total_flux
