@@ -1,0 +1,262 @@
+#!/usr/bin/env python
+
+"""
+Another version of running redshifts per tile
+
+Examples:
+
+All exposures of tile 80605 on night 20201215:
+
+    desi_tile_redshifts --tile 80605 --night 20201215
+
+Exposures E1 E2 E3 on night 20201215 (auto splitting by TILEID if needed):
+
+    desi_tile_redshifts --night 20201215 --expid 67972 67973 67968 67969
+
+Tile 80605 combined across multiple nights:
+
+    desi_tile_redshifts --tile 80605 --night 20201214 20201215 --group blat
+
+Tile 80605 combined across all nights:
+
+    desi_tile_redshifts --tile 80605 --group all
+
+Generate scripts but don't submit batch jobs:
+
+    desi_tile_redshifts --night 20201215 --nosubmit
+
+Not supported yet: multiple tiles on a single night in a single call:
+
+    desi_tile_redshifts --night 20201215 --tileid 80605 80606 80607
+
+"""
+
+#- Parse command line quickly for --help before slower imports
+import argparse
+p = argparse.ArgumentParser()
+p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
+p.add_argument("-t", "--tileid", type=int, help="Tile ID")
+p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
+p.add_argument("-g", "--group", type=str, help="night group name")
+p.add_argument("--nosubmit", action="store_true", help="generate scripts but don't submit batch jobs")
+p.add_argument("--batch-queue", type=str, default='realtime', help="batch queue name")
+p.add_argument("--batch-reservation", type=str, default=None, help="batch reservation name")
+
+args = p.parse_args()
+
+import sys, os, glob
+import subprocess
+import numpy as np
+from astropy.table import Table, vstack
+
+from desiutil.log import get_logger
+
+import desispec.io
+from desispec.workflow.tableio import load_table
+from desispec.workflow.exptable import get_exposure_table_pathname
+
+def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
+    submit=False, queue='realtime', reservation=None):
+    """
+    Generate batch script for spectra+coadd+redshifts for a tile
+
+    Args:
+        tileid (int): Tile ID
+        exptable (Table): has columns NIGHT EXPID to include
+        group (str): group name, e.g. YEARMMDD or "all" or "good"
+
+    Options:
+        spectrographs (list of int): spectrographs to include
+        submit (bool): also submit batch script to queue
+        queue (str): batch queue name
+        reservation (str): batch reservation name
+
+    Returns tuple (scriptpath, error):
+        scriptpath (str): full path to generated script
+        err (int): return code from submitting job (0 if submit=False)
+
+    By default generate the script but don't submit it
+    """
+    log = get_logger()
+    if spectrographs is None:
+        spectrographs = (0,1,2,3,4,5,6,7,8,9)
+
+    spectro_string = ' '.join([str(sp) for sp in spectrographs])
+    num_nodes = len(spectrographs)
+
+    frame_glob = list()
+    for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
+        frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits')
+
+    frame_glob = ' '.join(frame_glob)
+
+    reduxdir = desispec.io.specprod_root()
+    scriptdir = f'{reduxdir}/run/scripts/tiles/{tileid}/{group}'
+    os.makedirs(scriptdir, exist_ok=True)
+    batchscript = f'{scriptdir}/coadd-redshifts-{tileid}-{group}.slurm'
+    batchlog = batchscript.replace('.slurm', r'-%j.log')
+
+    #- TODO: generalize beyond Cori haswell realtime
+    with open(batchscript, 'w') as fx:
+         fx.write(f"""#!/bin/bash
+
+#SBATCH -C haswell
+#SBATCH -N {num_nodes}
+#SBATCH --account desi
+#SBATCH --qos {queue}
+#SBATCH --job-name redrock-{tileid}-{group}
+#SBATCH --output {batchlog}
+#SBATCH --time=00:15:00
+#SBATCH --exclusive
+
+echo Starting at $(date)
+    
+cd $DESI_SPECTRO_REDUX/$SPECPROD
+for SPECTRO in {spectro_string}; do
+    spectra=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.fits
+    splog=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.log
+
+    # Check if input frames exist, then group spectra
+    ls {frame_glob} &> /dev/null
+    if [ $? -eq 0 ]; then
+        srun -N 1 -n 1 -c 64 desi_group_spectra --inframes {frame_glob} --outfile $spectra &> $splog &
+        sleep 1
+    else
+        echo ERROR: no input cframes for spectrograph $SPECTRO; skipping
+    fi
+done
+echo Waiting for desi_group_spectra to finish at $(date)
+wait
+
+for SPECTRO in {spectro_string}; do
+    spectra=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.fits
+    coadd=tiles/{tileid}/{group}/coadd-$SPECTRO-{tileid}-{group}.fits
+    colog=tiles/{tileid}/{group}/coadd-$SPECTRO-{tileid}-{group}.log
+
+    if [ -f $spectra ]; then
+        srun -N 1 -n 1 -c 64 desi_coadd_spectra --nproc 16 -i $spectra -o $coadd &> $colog &
+        sleep 1
+    else
+        echo ERROR: missing $(basename $spectra); skipping coadd
+    fi
+done
+echo Waiting for desi_coadd_spectra to finish at $(date)
+wait
+
+for SPECTRO in {spectro_string}; do
+    spectra=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.fits
+    zbest=tiles/{tileid}/{group}/zbest-$SPECTRO-{tileid}-{group}.fits
+    redrock=tiles/{tileid}/{group}/redrock-$SPECTRO-{tileid}-{group}.h5
+    rrlog=tiles/{tileid}/{group}/redrock-$SPECTRO-{tileid}-{group}.log
+
+    if [ -f $spectra ]; then
+        srun -N 1 -n 32 -c 2 rrdesi_mpi $spectra -o $redrock -z $zbest &> $rrlog &
+        sleep 1
+    else
+        echo ERROR: missing $(basename $spectra); skipping redshifts
+    fi
+done
+echo Waiting for redrock to finish at $(date)
+wait
+echo Done at $(date)
+""")
+
+    log.info(f'Wrote {batchscript}')
+
+    err = 0
+    if submit:
+        cmd = ['sbatch', batchscript]
+        if reservation:
+            cmd.extend(['--reservation', reservation])
+        err = subprocess.call(cmd)
+        basename = os.path.basename(batchscript)
+        if err == 0:
+            log.info('submitted {basename}')
+        else:
+            log.error('Error {err} submitting {basename}')        
+
+    return batchscript, err
+
+
+def _read_minimal_exptables(nights=None):
+    """
+    Read exposure tables while handling evolving formats
+
+    Args:
+        nights (list of int): nights to include (default all nights found)
+
+    Returns exptable with columns TILEID, NIGHT, EXPID filtered by science
+        exposures with LASTSTEP='all' and TILEID>=0
+    """
+    if nights is None:
+        nights = list()
+        reduxdir = desispec.io.specprod_root()
+        for nightdir in sorted(glob.glob(f'{reduxdir}/exposures/20??????')):
+            try:
+                n = int(os.path.basename(nightdir))
+                nights.append(n)
+            except ValueError:
+                pass
+
+    exptables = list()
+    for night in nights:
+        t = Table.read(get_exposure_table_pathname(night))
+        keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
+        if 'LASTSTEP' in t.colnames:        
+            keep &= (t['LASTSTEP'] == 'all')
+
+        t = t[keep]
+        exptables.append(t['TILEID', 'NIGHT', 'EXPID'])
+
+    return vstack(exptables)
+
+#-------------------------------------------------------------------------
+log = get_logger()
+
+#- Load exposure tables for those nights
+exptable = _read_minimal_exptables(args.night)
+
+#- Filter exposure tables by exposure IDs or by tileid
+if args.expid is not None:
+    keep = np.in1d(exptable['EXPID'], args.expid)
+    exptable = exptable[keep]
+    expids = np.array(exptable['EXPID'])
+    tileids = np.unique(np.array(exptable['TILEID']))
+
+    #- if provided, tileid should be redundant with the tiles in those exps
+    if args.tileid is not None:
+        if not np.all(exptable['TILEID'] == args.tileid):
+            log.critical(f'Exposure TILEIDs={tileids} != --tileid={args.tileid}')
+            sys.exit(1)
+ 
+elif args.tileid is not None:
+    keep = (exptable['TILEID'] == args.tileid)
+    exptable = exptable[keep]
+    expids = np.array(exptable['EXPID'])
+    tileids = np.array([args.tileid,])
+
+else:
+    tileids = np.unique(np.array(exptable['TILEID']))
+
+#- default group is the YEARMMDD night, but must be given if combining nights
+if args.group is None:
+    if len(np.unique(exptable['NIGHT'])) == 1:
+        args.group = str(exptable['NIGHT'][0])
+    else:
+        log.critical('If using more than one night, must specify --group')
+        sys.exit(1)
+
+#- Generate the scripts and optionally submit them
+error = 0
+for tileid in tileids:
+    ii = exptable['TILEID'] == tileid
+    nights = np.unique(np.array(exptable['NIGHT'][ii]))
+    expids = np.unique(np.array(exptable['EXPID'][ii]))
+    log.info(f'Tile {tileid} nights={nights} expids={expids}')
+    submit = (not args.nosubmit)
+    batchscript, batcherr = batch_tile_redshifts(tileid, exptable[ii], args.group,
+        submit=submit, queue=args.batch_queue, reservation=args.batch_reservation)
+
+    error |= batcherr
+
+sys.exit(error)
