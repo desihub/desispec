@@ -41,9 +41,10 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["NEXP"]=np.zeros(ntiles,dtype=int)
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
-    res["COMPLETENESS"]=np.repeat("UNKNOWN",ntiles)
+    res["OBSSTATUS"]=np.repeat("UNKNOWN",ntiles)
+    res["ZSTATUS"]=np.repeat("NONE",ntiles)
     res["SURVEY"]=np.repeat("UNKNOWN",ntiles)
-    res["PROGRAM"]=np.repeat("UNKNOWN",ntiles)
+    res["GOALTYP"]=np.repeat("UNKNOWN",ntiles)
     res["TARGETS"]=np.repeat("UNKNOWN",ntiles)
     res["GOALTIME"]=np.zeros(ntiles)
 
@@ -70,14 +71,14 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
             is_bright = [(targets.find("BGS")>=0)|(targets.find("MWS")>=0) for targets in res["TARGETS"]]
             is_backup = [(targets.find("BACKUP")>=0) for targets in res["TARGETS"]]
 
-            res["PROGRAM"][is_dark]   = "DARK"
-            res["PROGRAM"][is_bright] = "BRIGHT"
-            res["PROGRAM"][is_backup] = "BACKUP"
+            res["GOALTYP"][is_dark]   = "DARK"
+            res["GOALTYP"][is_bright] = "BRIGHT"
+            res["GOALTYP"][is_backup] = "BACKUP"
 
             # 4 times nominal exposure time for DARK and BRIGHT
-            res["GOALTIME"][res["PROGRAM"]=="DARK"]   = 4*1000.
-            res["GOALTIME"][res["PROGRAM"]=="BRIGHT"] = 4*150.
-            res["GOALTIME"][res["PROGRAM"]=="BACKUP"] = 30.
+            res["GOALTIME"][res["GOALTYP"]=="DARK"]   = 4*1000.
+            res["GOALTIME"][res["GOALTYP"]=="BRIGHT"] = 4*150.
+            res["GOALTIME"][res["GOALTYP"]=="BACKUP"] = 30.
 
         else :
             log.warning("Sorry I don't know what to do with {}".format(filename))
@@ -98,35 +99,35 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
             res[k] = np.around(res[k],1)
 
     # trivial completeness for now (all of this work for this?)
-    efftime_keyword_per_program = {}
-    efftime_keyword_per_program["DARK"]="ELG_EFFTIME_DARK"
-    efftime_keyword_per_program["BRIGHT"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_program["BACKUP"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_program["UNKNOWN"]="ELG_EFFTIME_DARK"
+    efftime_keyword_per_goaltyp = {}
+    efftime_keyword_per_goaltyp["DARK"]="ELG_EFFTIME_DARK"
+    efftime_keyword_per_goaltyp["BRIGHT"]="BGS_EFFTIME_BRIGHT"
+    efftime_keyword_per_goaltyp["BACKUP"]="BGS_EFFTIME_BRIGHT"
+    efftime_keyword_per_goaltyp["UNKNOWN"]="ELG_EFFTIME_DARK"
 
-    for program in efftime_keyword_per_program :
-        selection=(res["PROGRAM"]==program)
+    for program in efftime_keyword_per_goaltyp :
+        selection=(res["GOALTYP"]==program)
         if np.sum(selection)==0 : continue
-        efftime_keyword=efftime_keyword_per_program[program]
+        efftime_keyword=efftime_keyword_per_goaltyp[program]
         efftime=res[efftime_keyword]
         done=selection&(efftime>res["GOALTIME"])
-        res["COMPLETENESS"][done]="DONE"
+        res["OBSSTATUS"][done]="OBSDONE"
         partial=selection&(efftime<res["GOALTIME"])
-        res["COMPLETENESS"][partial]="PARTIAL"
+        res["OBSSTATUS"][partial]="OBSTART"
 
     return res
 
 def merge_tile_completeness_table(previous_table,new_table) :
-    """ Merges tile summary tables. Entries with tiles previously marked as DONE are not modified.
+    """ Merges tile summary tables. Entries with tiles previously marked as ZDONE are not modified.
 
     Args:
       previous_table: astropy.table.Table
       new_table: astropy.table.Table
     Returns: astropy.table.Table with merged entries.
     """
-    # do not change the status of a DONE tile ; it's too late
+    # do not change the status of a ZDONE tile ; it's too late
 
-    keep_from_previous = (previous_table["COMPLETENESS"]=="DONE") | (~np.in1d(previous_table["TILEID"],new_table["TILEID"]))
+    keep_from_previous = (previous_table["ZSTATUS"]=="ZDONE") | (~np.in1d(previous_table["TILEID"],new_table["TILEID"]))
     exclude_from_new   = np.in1d(new_table["TILEID"],previous_table["TILEID"][keep_from_previous])
     add_from_new = ~exclude_from_new
     log = get_logger()
