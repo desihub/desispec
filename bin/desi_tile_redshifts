@@ -43,7 +43,7 @@ p.add_argument("-t", "--tileid", type=int, help="Tile ID")
 p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
 p.add_argument("-g", "--group", type=str, help="night group name")
 p.add_argument("--explist", type=str,
-        help="read TILE NIGHT EXPID list from this file")
+        help="file with columns TILE NIGHT EXPID to use")
 p.add_argument("--nosubmit", action="store_true",
         help="generate scripts but don't submit batch jobs")
 p.add_argument("--batch-queue", type=str, default='realtime',
@@ -73,7 +73,8 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
     Args:
         tileid (int): Tile ID
-        exptable (Table): has columns NIGHT EXPID to include
+        exptable (Table): has columns NIGHT EXPID to use; ignores other columns.
+            Doesn't need to be full pipeline exposures table (but could be)
         group (str): group name, e.g. YEARMMDD or "all" or "good"
 
     Options:
@@ -87,7 +88,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         scriptpath (str): full path to generated script
         err (int): return code from submitting job (0 if submit=False)
 
-    By default generate the script but don't submit it
+    By default this generates the script but don't submit it
     """
     log = get_logger()
     if spectrographs is None:
@@ -213,8 +214,13 @@ def _read_minimal_exptables(nights=None):
     Args:
         nights (list of int): nights to include (default all nights found)
 
-    Returns exptable with columns TILEID, NIGHT, EXPID filtered by science
+    Returns exptable with just columns TILEID, NIGHT, EXPID filtered by science
         exposures with LASTSTEP='all' and TILEID>=0
+
+    Note: the returned table is *not* the full pipeline exposures table because
+        the format of that changed during SV1 and thus can't be stacked without
+        trimming down the columns.  This trims to just the minimal columns
+        needed by desi_tile_redshifts.
     """
     if nights is None:
         nights = list()
@@ -318,13 +324,13 @@ if args.group is None:
 #- Generate the scripts and optionally submit them
 failed_jobs = list()
 for tileid in tileids:
-    ii = exptable['TILEID'] == tileid
-    nights = np.unique(np.array(exptable['NIGHT'][ii]))
-    expids = np.unique(np.array(exptable['EXPID'][ii]))
+    tilerows = exptable['TILEID'] == tileid
+    nights = np.unique(np.array(exptable['NIGHT'][tilerows]))
+    expids = np.unique(np.array(exptable['EXPID'][tilerows]))
     log.info(f'Tile {tileid} nights={nights} expids={expids}')
     submit = (not args.nosubmit)
     batchscript, batcherr = batch_tile_redshifts(
-            tileid, exptable[ii], args.group, submit=submit,
+            tileid, exptable[tilerows], args.group, submit=submit,
             queue=args.batch_queue, reservation=args.batch_reservation,
             dependency=args.batch_dependency
             )
