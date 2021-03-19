@@ -113,7 +113,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         done=selection&(efftime>res["GOALTIME"])
         res["OBSSTATUS"][done]="OBSDONE"
         partial=selection&(efftime<res["GOALTIME"])
-        res["OBSSTATUS"][partial]="OBSTART"
+        res["OBSSTATUS"][partial]="OBSSTART"
 
     return res
 
