@@ -23,7 +23,7 @@ from   desispec.io import read_frame
 from   desispec.io import read_fibermap
 from   desispec.io.fluxcalibration import read_flux_calibration
 from   desiutil.log import get_logger
-from   desispec.tsnr import calc_tsnr2
+from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
 from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
@@ -212,11 +212,10 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
 
     log.info("Add effective times from TSNR2 values")
-    exp_summary['ELG_EFFTIME_DARK']   = efftime_config["TSNR2_ELG_TO_EFFTIME_DARK"]   * exp_summary['TSNR2_ELG']
-    exp_summary['BGS_EFFTIME_BRIGHT'] = efftime_config["TSNR2_BGS_TO_EFFTIME_BRIGHT"] * exp_summary['TSNR2_BGS']
-
-
-
+    exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG","DARK")
+    exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS","BRIGHT")
+    if 'TSNR2_LYA' in exp_summary.colnames :
+        exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA","DARK")
 
     hdus = fits.HDUList()
     hdus.append(fits.convenience.table_to_hdu(exp_summary))
