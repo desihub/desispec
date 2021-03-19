@@ -42,10 +42,14 @@ p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
 p.add_argument("-t", "--tileid", type=int, help="Tile ID")
 p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
 p.add_argument("-g", "--group", type=str, help="night group name")
-p.add_argument("--explist", type=str, help="read TILE NIGHT EXPID list from this file")
-p.add_argument("--nosubmit", action="store_true", help="generate scripts but don't submit batch jobs")
-p.add_argument("--batch-queue", type=str, default='realtime', help="batch queue name")
-p.add_argument("--batch-reservation", type=str, default=None, help="batch reservation name")
+p.add_argument("--explist", type=str,
+        help="read TILE NIGHT EXPID list from this file")
+p.add_argument("--nosubmit", action="store_true",
+        help="generate scripts but don't submit batch jobs")
+p.add_argument("--batch-queue", type=str, default='realtime',
+        help="batch queue name")
+p.add_argument("--batch-reservation", type=str,
+        help="batch reservation name")
 
 args = p.parse_args()
 
@@ -231,10 +235,30 @@ def _read_minimal_exptables(nights=None):
 #-------------------------------------------------------------------------
 log = get_logger()
 
-#- Load exposure tables for those nights
-if args.explist is None:
+#- If --tileid, --night, and --expid are all given, create exptable
+if ((args.tileid is not None) and
+    (args.night is not None) and (len(args.night) == 1) and
+    (args.expid is not None)):
+    log.info('Creating exposure table from --tileid --night --expid options')
+    exptable = Table()
+    exptable['EXPID'] = args.expid
+    exptable['NIGHT'] = args.night[0]
+    exptable['TILEID'] = args.tileid
+
+    if args.explist is not None:
+        log.warning('Ignoring --explist, using --tileid --night --expid')
+
+#- otherwise load exposure tables for those nights
+elif args.explist is None:
+    if args.night is not None:
+        log.info(f'Loading production exposure tables for nights {args.night}')
+    else:
+        log.info(f'Loading production exposure tables for all nights')
+
     exptable = _read_minimal_exptables(args.night)
+
 else:
+    log.info(f'Loading exposure list from {args.explist}')
     if args.explist.endswith('.fits'):
         exptable = Table.read(args.explist, format='fits')
     elif args.explist.endswith('.csv'):
@@ -249,6 +273,8 @@ else:
         exptable = exptable[keep]
 
 #- Filter exposure tables by exposure IDs or by tileid
+#- Note: If exptable was created from --expid --night --tileid these should
+#- have no effect, but are left in for code flow simplicity
 if args.expid is not None:
     keep = np.in1d(exptable['EXPID'], args.expid)
     exptable = exptable[keep]
@@ -279,16 +305,27 @@ if args.group is None:
         sys.exit(1)
 
 #- Generate the scripts and optionally submit them
-error = 0
+failed_jobs = list()
 for tileid in tileids:
     ii = exptable['TILEID'] == tileid
     nights = np.unique(np.array(exptable['NIGHT'][ii]))
     expids = np.unique(np.array(exptable['EXPID'][ii]))
     log.info(f'Tile {tileid} nights={nights} expids={expids}')
     submit = (not args.nosubmit)
-    batchscript, batcherr = batch_tile_redshifts(tileid, exptable[ii], args.group,
-        submit=submit, queue=args.batch_queue, reservation=args.batch_reservation)
+    batchscript, batcherr = batch_tile_redshifts(
+            tileid, exptable[ii], args.group, submit=submit,
+            queue=args.batch_queue, reservation=args.batch_reservation
+            )
 
-    error |= batcherr
+    if batcherr != 0:
+        failed_jobs.append(batchscript)
 
-sys.exit(error)
+num_error = len(failed_jobs)
+if num_error > 0:
+    tmp = [os.path.basename(filename) for filename in failed_jobs]
+    log.error(f'problem submitting {num_error} scripts: {tmp}')
+
+sys.exit(num_error)
+
+
+
