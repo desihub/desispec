@@ -51,7 +51,7 @@ p.add_argument("--batch-queue", type=str, default='realtime',
 p.add_argument("--batch-reservation", type=str,
         help="batch reservation name")
 p.add_argument("--batch-dependency", type=str,
-        help="job dependencies passed to sbatch --dependency ...")
+        help="job dependencies passed to sbatch --dependency")
 
 args = p.parse_args()
 
