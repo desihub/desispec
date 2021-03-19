@@ -21,9 +21,13 @@ Tile 80605 combined across all nights:
 
     desi_tile_redshifts --tile 80605 --group all
 
-Generate scripts but don't submit batch jobs:
+Generate scripts for every tile on 20201215 but don't submit batch jobs:
 
     desi_tile_redshifts --night 20201215 --nosubmit
+
+Use exposures from a separately curated input list:
+
+    desi_tile_redshifts --explist explist-deep.txt --group deep
 
 Not supported yet: multiple tiles on a single night in a single call:
 
