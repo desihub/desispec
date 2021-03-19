@@ -41,14 +41,12 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["NEXP"]=np.zeros(ntiles,dtype=int)
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
-    res["OBSSTATUS"]=np.repeat("UNKNOWN",ntiles)
-    res["ZSTATUS"]=np.repeat("NONE",ntiles)
-    res["SURVEY"]=np.repeat("UNKNOWN",ntiles)
-    res["GOALTYP"]=np.repeat("UNKNOWN",ntiles)
-    res["TARGETS"]=np.repeat("UNKNOWN",ntiles)
-    res["GOALTIME"]=np.zeros(ntiles)
-
-
+    res["OBSSTATUS"] = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
+    res["ZSTATUS"]   = np.array(np.repeat("NONE",ntiles),dtype='<U16')
+    res["SURVEY"]    = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
+    res["GOALTYP"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
+    res["TARGETS"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
+    res["GOALTIME"]  = np.zeros(ntiles)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     for filename in auxiliary_table_filenames :
