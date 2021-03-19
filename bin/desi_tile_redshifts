@@ -53,6 +53,12 @@ p.add_argument("--batch-reservation", type=str,
 p.add_argument("--batch-dependency", type=str,
         help="job dependencies passed to sbatch --dependency")
 
+# TODO
+# p.add_argument("--outdir", type=str, help="output directory")
+# p.add_argument("--scriptdir", type=str, help="script directory")
+# p.add_argument("--per-exposure", action="store_true",
+#         help="fit redshifts per exposure instead of grouping")
+
 args = p.parse_args()
 
 import sys, os, glob
@@ -314,9 +320,11 @@ if len(exptable) == 0:
     sys.exit(1)
 
 #- default group is the YEARMMDD night, but must be given if combining nights
-if args.group is None:
+if args.group is not None:
+    group = args.group
+else:
     if len(np.unique(exptable['NIGHT'])) == 1:
-        args.group = str(exptable['NIGHT'][0])
+        group = str(exptable['NIGHT'][0])
     else:
         log.critical('If using more than one night, must specify --group')
         sys.exit(1)
@@ -330,7 +338,7 @@ for tileid in tileids:
     log.info(f'Tile {tileid} nights={nights} expids={expids}')
     submit = (not args.nosubmit)
     batchscript, batcherr = batch_tile_redshifts(
-            tileid, exptable[tilerows], args.group, submit=submit,
+            tileid, exptable[tilerows], group, submit=submit,
             queue=args.batch_queue, reservation=args.batch_reservation,
             dependency=args.batch_dependency
             )
