@@ -15,7 +15,7 @@ from astropy.table import Table,vstack
 from desiutil.log import get_logger
 
 
-def compute_tile_completeness_table(exposure_table,specprod_dir) :
+def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_filenames) :
     """ Computes a summary table of the observed tiles
 
     Args:
@@ -26,56 +26,11 @@ def compute_tile_completeness_table(exposure_table,specprod_dir) :
 
     log = get_logger()
 
-    if not "DESI_SURVEYOPS" in os.environ :
-        message="need DESI_SURVEYOPS env. variable set"
-        log.error(message)
-        raise RuntimeError(message)
-
-    survey_ops_dir=os.environ["DESI_SURVEYOPS"]
+    default_goaltime = 1000. # objective effective time in seconds
 
 
 
-    default_objective_effective_exptime = 1000.
 
-    search_path="{}/ops/tiles-*.ecsv".format(survey_ops_dir)
-    log.info("Searching tiles in {}".format(search_path))
-    tiles_filenames = sorted(glob.glob(search_path))
-    if len(tiles_filenames)==0 :
-        log.warning("No survey config found??")
-
-    input_tiles_tables = []
-
-    for tiles_filename in tiles_filenames :
-        log.info("Collecting infos from {}".format(tiles_filename))
-        survey=os.path.basename(tiles_filename).split(".")[0].split("-")[-1].lower()
-        config_filename="{}/ops/config-{}.yaml".format(survey_ops_dir,survey)
-        log.info("Will use config. file {}".format(config_filename))
-        input_tiles_table=Table.read(tiles_filename)
-        selection=(input_tiles_table["TILEID"]>=0)
-        input_tiles_table=input_tiles_table[selection]
-        ntiles=len(input_tiles_table)
-
-        if ntiles==0 : continue
-
-        with open(config_filename) as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-
-        input_tiles_table["EFFTIME_GOAL"]=np.repeat(default_objective_effective_exptime,ntiles)
-
-        for program in np.unique(input_tiles_table["PROGRAM"]) :
-            selection=(input_tiles_table["PROGRAM"]==program)
-            print("do something for program",program)
-
-        input_tiles_table["SURVEY"]=np.repeat(survey,ntiles)
-
-        input_tiles_tables.append(input_tiles_table)
-
-    if len(input_tiles_tables)==1 :
-        input_tiles_table=input_tiles_tables[0]
-    elif len(input_tiles_tables)>1 :
-        input_tiles_table=vstack(input_tiles_tables)
-    else :
-        input_tiles_table=None
 
     tiles=np.unique(exposure_table["TILEID"])
     ntiles=tiles.size
@@ -89,18 +44,46 @@ def compute_tile_completeness_table(exposure_table,specprod_dir) :
     res["COMPLETENESS"]=np.repeat("UNKNOWN",ntiles)
     res["SURVEY"]=np.repeat("UNKNOWN",ntiles)
     res["PROGRAM"]=np.repeat("UNKNOWN",ntiles)
-    res["OBJECTIVE_EFFTIME"]=np.repeat(default_objective_effective_exptime,ntiles)
+    res["TARGETS"]=np.repeat("UNKNOWN",ntiles)
+    res["GOALTIME"]=np.zeros(ntiles)
 
-    if input_tiles_table is not None :
-        ii=[]
-        jj=[]
-        tid2i={tid:i for i,tid in enumerate(input_tiles_table["TILEID"])}
-        for j,tid in enumerate(res["TILEID"]) :
-            if tid in tid2i :
-                ii.append(tid2i[tid])
-                jj.append(j)
-        for k in ["SURVEY","PROGRAM","OBJECTIVE_EFFTIME"] :
-            res[k][jj] = input_tiles_table[k][ii]
+
+
+    # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
+    for filename in auxiliary_table_filenames :
+
+        if filename.find("sv1-tiles")>=0 :
+            log.info("Use SV1 tiles information from {}".format(filename))
+            table=Table.read(filename)
+            ii=[]
+            jj=[]
+            tid2i={tid:i for i,tid in enumerate(table["TILEID"])}
+            for j,tid in enumerate(res["TILEID"]) :
+                if tid in tid2i :
+                    ii.append(tid2i[tid])
+                    jj.append(j)
+
+            res["SURVEY"][jj]="SV1"
+            res["TARGETS"][jj]=table["TARGETS"][ii]
+
+            is_dark   = [(targets.find("ELG")>=0)|(targets.find("LRG")>=0)|(targets.find("QSO")>=0) for targets in res["TARGETS"]]
+            is_bright = [(targets.find("BGS")>=0)|(targets.find("MWS")>=0) for targets in res["TARGETS"]]
+            is_backup = [(targets.find("BACKUP")>=0) for targets in res["TARGETS"]]
+
+            res["PROGRAM"][is_dark]   = "DARK"
+            res["PROGRAM"][is_bright] = "BRIGHT"
+            res["PROGRAM"][is_backup] = "BACKUP"
+
+            # 4 times nominal exposure time for DARK and BRIGHT
+            res["GOALTIME"][res["PROGRAM"]=="DARK"]   = 4*1000.
+            res["GOALTIME"][res["PROGRAM"]=="BRIGHT"] = 4*150.
+            res["GOALTIME"][res["PROGRAM"]=="BACKUP"] = 30.
+
+        else :
+            log.warning("Sorry I don't know what to do with {}".format(filename))
+
+    # test default
+    res["GOALTIME"][res["GOALTIME"]==0] = default_goaltime
 
     for i,tile in enumerate(tiles) :
         jj=(exposure_table["TILEID"]==tile)
@@ -109,12 +92,16 @@ def compute_tile_completeness_table(exposure_table,specprod_dir) :
             res[k][i] = np.sum(exposure_table[k][jj])
 
 
-    # trivial completeness for now (all of the work for this?)
+    # truncate number of digits for exposure times to 0.1 sec
+    for k in res.dtype.names :
+        if k.find("EXPTIME")>=0 or k.find("EFFTIME")>=0 :
+            res[k] = np.around(res[k],1)
 
+    # trivial completeness for now (all of this work for this?)
     efftime_keyword_per_program = {}
     efftime_keyword_per_program["DARK"]="ELG_EFFTIME_DARK"
     efftime_keyword_per_program["BRIGHT"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_program["BACKUP"]="BGS_EFFTIME_BACKUP"
+    efftime_keyword_per_program["BACKUP"]="BGS_EFFTIME_BRIGHT"
     efftime_keyword_per_program["UNKNOWN"]="ELG_EFFTIME_DARK"
 
     for program in efftime_keyword_per_program :
@@ -122,9 +109,9 @@ def compute_tile_completeness_table(exposure_table,specprod_dir) :
         if np.sum(selection)==0 : continue
         efftime_keyword=efftime_keyword_per_program[program]
         efftime=res[efftime_keyword]
-        done=selection&(efftime>res["OBJECTIVE_EFFTIME"])
+        done=selection&(efftime>res["GOALTIME"])
         res["COMPLETENESS"][done]="DONE"
-        partial=selection&(efftime<res["OBJECTIVE_EFFTIME"])
+        partial=selection&(efftime<res["GOALTIME"])
         res["COMPLETENESS"][partial]="PARTIAL"
 
     return res

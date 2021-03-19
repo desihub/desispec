@@ -24,6 +24,8 @@ parser.add_argument('-o','--outfile', type=str, default=None, required=True,
                     help = 'Output tiles completeness file')
 parser.add_argument('--prod', type = str, default = None, required=False,
                     help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
+                    help = 'Path to auxiliary tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
 
 args = parser.parse_args()
 
@@ -47,7 +49,7 @@ print("input file: {}".format(args.infile))
 
 exposure_table = Table.read(args.infile)
 
-tile_table = compute_tile_completeness_table(exposure_table,args.prod)
+tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
 print(tile_table)
 
 if os.path.isfile(args.outfile) :

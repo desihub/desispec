@@ -55,6 +55,9 @@ def parse(options=None):
                         help = 'Use this config file instead of default data/tsnr/tsnr-efftime.yaml')
     parser.add_argument('--tile-completeness', type = str, default = None, required=False,
                         help = 'Ouput tile completeness table')
+    parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
+                    help = 'Path to auxiliary ttiles ables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -462,7 +465,7 @@ def main():
     if args.tile_completeness is not None :
         # reread the exposure table
         exposure_table = Table.read(args.outfile)
-        new_tile_table = compute_tile_completeness_table(exposure_table,args.prod)
+        new_tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
         if os.path.isfile(args.tile_completeness) :
             previous_table = Table.read(args.tile_completeness)
             new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
