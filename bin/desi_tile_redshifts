@@ -50,6 +50,8 @@ p.add_argument("--batch-queue", type=str, default='realtime',
         help="batch queue name")
 p.add_argument("--batch-reservation", type=str,
         help="batch reservation name")
+p.add_argument("--batch-dependency", type=str,
+        help="job dependencies passed to sbatch --dependency ...")
 
 args = p.parse_args()
 
@@ -65,7 +67,7 @@ from desispec.workflow.tableio import load_table
 from desispec.workflow.exptable import get_exposure_table_pathname
 
 def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
-    submit=False, queue='realtime', reservation=None):
+    submit=False, queue='realtime', reservation=None, dependency=None):
     """
     Generate batch script for spectra+coadd+redshifts for a tile
 
@@ -79,6 +81,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         submit (bool): also submit batch script to queue
         queue (str): batch queue name
         reservation (str): batch reservation name
+        dependency (str): passed to sbatch --dependency upon submit
 
     Returns tuple (scriptpath, error):
         scriptpath (str): full path to generated script
@@ -190,12 +193,15 @@ echo Done at $(date)
         cmd = ['sbatch', batchscript]
         if reservation:
             cmd.extend(['--reservation', reservation])
+        if dependency:
+            cmd.extend(['--dependency', dependency])
+
         err = subprocess.call(cmd)
         basename = os.path.basename(batchscript)
         if err == 0:
-            log.info('submitted {basename}')
+            log.info(f'submitted {basename}')
         else:
-            log.error('Error {err} submitting {basename}')        
+            log.error(f'Error {err} submitting {basename}')
 
     return batchscript, err
 
@@ -296,6 +302,11 @@ elif args.tileid is not None:
 else:
     tileids = np.unique(np.array(exptable['TILEID']))
 
+#- anything left?
+if len(exptable) == 0:
+    log.critical(f'No exposures left after filtering by tileid/night/expid')
+    sys.exit(1)
+
 #- default group is the YEARMMDD night, but must be given if combining nights
 if args.group is None:
     if len(np.unique(exptable['NIGHT'])) == 1:
@@ -314,7 +325,8 @@ for tileid in tileids:
     submit = (not args.nosubmit)
     batchscript, batcherr = batch_tile_redshifts(
             tileid, exptable[ii], args.group, submit=submit,
-            queue=args.batch_queue, reservation=args.batch_reservation
+            queue=args.batch_queue, reservation=args.batch_reservation,
+            dependency=args.batch_dependency
             )
 
     if batcherr != 0:
