@@ -16,6 +16,7 @@ from desispec.frame import Frame
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 from desitarget.targets import main_cmx_or_sv
+from desispec.fiberfluxcorr import flat_to_psf_flux_correction,psf_to_fiber_flux_correction
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
@@ -837,7 +838,7 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0) :
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
@@ -849,6 +850,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       input_model_flux : 2D[nstd, nwave] array of model fluxes
       input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
+      exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
 
     Returns:
          desispec.FluxCalib object
@@ -908,6 +910,25 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     tframe.mask = add_margin_2d_dim1(frame.mask,margin)
     tframe.resolution_data = add_margin_3d_dim2(frame.resolution_data,margin)
     tframe.R = np.array( [Resolution(r) for r in tframe.resolution_data] )
+
+    #- Compute point source flux correction and fiber flux correction
+    log.info("compute point source flux correction for seeing FWHM = {:4.2f} arcsec".format(exposure_seeing_fwhm))
+    point_source_correction = flat_to_psf_flux_correction(frame.fibermap,exposure_seeing_fwhm)
+    good=(point_source_correction!=0)
+    bad=~good
+    #- Set temporary ivar=0 for the targets with bad point source correction
+    tframe.ivar[bad]=0.
+
+    if np.sum(good)>1 :
+        log.info("point source correction mean = {} rms = {}, nbad = {}".format(np.mean(point_source_correction[good]),np.std(point_source_correction[good]),np.sum(bad)))
+    else :
+        log.warning("bad point source correction for most fibers ngood = {} nbad = {}".format(np.sum(good),np.sum(bad)))
+
+    #- Set back to 1 the correction for bad fibers
+    point_source_correction[bad]=1.
+
+    #- Apply point source flux correction
+    tframe.flux *= point_source_correction[:,None]
 
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
@@ -1253,6 +1274,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     mccalibration = R.dot(calibration)
 
+
+    #- Apply point source flux correction
+    ccalibration /= point_source_correction[:,None]
+
     log.info("interpolate calibration over Ca and Na ISM lines")
     # do this after convolution with resolution
     ismlines=np.array([3934.77,3969.59,5891.58,5897.56]) # in vacuum
@@ -1274,13 +1299,22 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     mccalibration=mccalibration[margin:-margin]
     stdstars.wave=stdstars.wave[margin:-margin]
 
+    fibercorr = dict()
+    fibercorr_comments = dict()
+    fibercorr["FLAT_TO_PSF_FLUX"]=point_source_correction
+    fibercorr_comments["FLAT_TO_PSF_FLUX"]="correction for point sources already applied to the flux vector"
+
+    fibercorr["PSF_TO_FIBER_FLUX"]=psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
+    fibercorr_comments["PSF_TO_FIBER_FLUX"]="multiplication correction to apply to get the fiber flux spectrum"
+
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration)
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration, fibercorr=fibercorr)
 
 
 
 class FluxCalib(object):
-    def __init__(self, wave, calib, ivar, mask, meancalib=None):
+    def __init__(self, wave, calib, ivar, mask, meancalib=None,
+                 fibercorr=None, fibercorr_comments=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -1289,7 +1323,8 @@ class FluxCalib(object):
             ivar : 2D[nspec, nwave] inverse variance of calib
             mask : 2D[nspec, nwave] mask of calib (0=good)
             meancalib : 1D[nwave] mean convolved calibration (optional)
-
+            fibercorr : dictionary of 1D arrays of size nspec (optional)
+            fibercorr_comments : dictionnary of string (explaining the fibercorr)
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
@@ -1308,6 +1343,8 @@ class FluxCalib(object):
         self.ivar = ivar
         self.mask = util.mask32(mask)
         self.meancalib = meancalib
+        self.fibercorr = fibercorr
+        self.fibercorr_comments= fibercorr_comments
 
         self.meta = dict(units='photons/(erg/s/cm^2)')
 
@@ -1362,6 +1399,11 @@ def apply_flux_calibration(frame, fluxcalib):
         ok=np.where(frame.ivar[i]>0)[0]
         if ok.size>0 :
             frame.ivar[i,ok] = 1./( 1./(frame.ivar[i,ok]*C[i,ok]**2)+frame.flux[i,ok]**2/(fluxcalib.ivar[i,ok]*C[i,ok]**4)  )
+
+    if fluxcalib.fibercorr is not None and frame.fibermap is not None :
+        if "PSF_TO_FIBER_FLUX" in fluxcalib.fibercorr.dtype.names :
+            log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
+            frame.fibermap["PSF_TO_FIBER_SPECFLUX"]=fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
 
 
 def ZP_from_calib(exptime, wave, calib):
