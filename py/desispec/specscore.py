@@ -77,18 +77,17 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
             if colname.startswith('TSNR2_'):
                 parts = colname.split('_')
 
-                # Ignore coadded values as handled independently from b,r,z.
+                # Ignore brz coadded values as handled independently by adding b,r,z.
                 if parts[-1] in ['b', 'r', 'z', 'B', 'R', 'Z']:                
                     _, targtype, band = parts
 
                     scores[colname] = np.zeros(num_targets)
-                    comments[colname] = f'{targtype} {band} template (S/N)^2'
+                    comments[colname] = '{} {} template (S/N)^2'.format(targtype, band)
                     tsnrkeys.append(colname)
 
                     if targtype not in tsnrtypes:
                         tsnrtypes.append(targtype)
                     
-                        
         if len(tsnrkeys) == 0:
             log.warning('No TSNR2_* scores found to coadd')
         else:
