@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+'''
+Computes a tile summary table
+'''
+
+import os,sys
+import argparse
+import numpy as np
+import yaml
+from astropy.table import Table
+
+from desiutil.log import get_logger
+
+from desispec.io.meta import findfile, specprod_root
+from desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
+
+
+
+parser = argparse.ArgumentParser(
+            description="Tile completeness")
+parser.add_argument('-i','--infile', type=str, default=None, required=False,
+                    help = 'Input exposure summary file')
+parser.add_argument('-o','--outfile', type=str, default=None, required=True,
+                    help = 'Output tiles completeness file')
+parser.add_argument('--prod', type = str, default = None, required=False,
+                    help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
+                    help = 'Path to auxiliary tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
+
+args = parser.parse_args()
+
+if args.prod is None and args.infile is None :
+    print("Please specify at least the production version or directory, or an input exposures file.")
+    parser.print_help()
+    sys.exit(12)
+
+
+if args.prod is None:
+    args.prod = specprod_root()
+elif args.prod.find("/")<0 :
+    args.prod = specprod_root(args.prod)
+
+if args.infile is None :
+    args.infile = os.path.join(args.prod,"tsnr-exposures.fits")
+
+log = get_logger()
+
+print("input file: {}".format(args.infile))
+
+exposure_table = Table.read(args.infile)
+
+tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
+print(tile_table)
+
+if os.path.isfile(args.outfile) :
+    previous_table = Table.read(args.outfile)
+    tile_table = merge_tile_completeness_table(previous_table,tile_table)
+
+tile_table.write(args.outfile,overwrite=True)
+
+print("wrote {}".format(args.outfile))

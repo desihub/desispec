@@ -3,6 +3,8 @@ import numpy as np
 import astropy.io.fits as fits
 import glob
 import numpy as np
+import yaml
+from pkg_resources import resource_filename
 
 from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
@@ -12,7 +14,6 @@ from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 from scipy.optimize import minimize
 from desiutil.dust import ext_odonnell
-
 
 def dust_transmission(wave,ebv):
     Rv = 3.1
@@ -412,3 +413,24 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
         log.info('{} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
 
     return results, alpha
+
+def tsnr2_to_efftime(tsnr2,target_type,program="DARK",efftime_config=None) :
+    """ Converts TSNR2 values to effective exposure time.
+    Args:
+      tsnr2: TSNR**2 values, float or numpy array
+      target_type: str, "ELG","BGS","LYA", or other depending on content of  data/tsnr/tsnr-efftime.yaml
+      program: str, "DARK", "BRIGHT", or other depending on content of data/tsnr/tsnr-efftime.yaml
+      efftime_config: (optional) dictionary with calibration parameters of the form "TSNR2_{target_type}_TO_EFFTIME_{program}"
+
+    Returns: exptime in seconds, same type and shape if applicable as input tsnr2
+    """
+    if efftime_config is None :
+        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
+        with open(efftime_config_filename) as f:
+            efftime_config = yaml.load(f, Loader=yaml.FullLoader)
+
+    keyword="TSNR2_{}_TO_EFFTIME_{}".format(target_type,program)
+    if not keyword in efftime_config :
+        message="no calibration for TSNR2_{} to EFFTIME_{}".format(target_type,program)
+        raise KeyError(message)
+    return efftime_config[keyword]*tsnr2
