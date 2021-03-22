@@ -46,40 +46,42 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["SURVEY"]    = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["GOALTYP"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["TARGETS"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
+    res["FAFLAVOR"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["GOALTIME"]  = np.zeros(ntiles)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
-    for filename in auxiliary_table_filenames :
+    if auxiliary_table_filenames is not None :
+        for filename in auxiliary_table_filenames :
 
-        if filename.find("sv1-tiles")>=0 :
-            log.info("Use SV1 tiles information from {}".format(filename))
-            table=Table.read(filename)
-            ii=[]
-            jj=[]
-            tid2i={tid:i for i,tid in enumerate(table["TILEID"])}
-            for j,tid in enumerate(res["TILEID"]) :
-                if tid in tid2i :
-                    ii.append(tid2i[tid])
-                    jj.append(j)
+            if filename.find("sv1-tiles")>=0 :
+                log.info("Use SV1 tiles information from {}".format(filename))
+                table=Table.read(filename)
+                ii=[]
+                jj=[]
+                tid2i={tid:i for i,tid in enumerate(table["TILEID"])}
+                for j,tid in enumerate(res["TILEID"]) :
+                    if tid in tid2i :
+                        ii.append(tid2i[tid])
+                        jj.append(j)
 
-            res["SURVEY"][jj]="SV1"
-            res["TARGETS"][jj]=table["TARGETS"][ii]
+                res["SURVEY"][jj]="SV1"
+                res["TARGETS"][jj]=table["TARGETS"][ii]
 
-            is_dark   = [(targets.find("ELG")>=0)|(targets.find("LRG")>=0)|(targets.find("QSO")>=0) for targets in res["TARGETS"]]
-            is_bright = [(targets.find("BGS")>=0)|(targets.find("MWS")>=0) for targets in res["TARGETS"]]
-            is_backup = [(targets.find("BACKUP")>=0) for targets in res["TARGETS"]]
+                is_dark   = [(targets.find("ELG")>=0)|(targets.find("LRG")>=0)|(targets.find("QSO")>=0) for targets in res["TARGETS"]]
+                is_bright = [(targets.find("BGS")>=0)|(targets.find("MWS")>=0) for targets in res["TARGETS"]]
+                is_backup = [(targets.find("BACKUP")>=0) for targets in res["TARGETS"]]
 
-            res["GOALTYP"][is_dark]   = "DARK"
-            res["GOALTYP"][is_bright] = "BRIGHT"
-            res["GOALTYP"][is_backup] = "BACKUP"
+                res["GOALTYP"][is_dark]   = "DARK"
+                res["GOALTYP"][is_bright] = "BRIGHT"
+                res["GOALTYP"][is_backup] = "BACKUP"
 
-            # 4 times nominal exposure time for DARK and BRIGHT
-            res["GOALTIME"][res["GOALTYP"]=="DARK"]   = 4*1000.
-            res["GOALTIME"][res["GOALTYP"]=="BRIGHT"] = 4*150.
-            res["GOALTIME"][res["GOALTYP"]=="BACKUP"] = 30.
+                # 4 times nominal exposure time for DARK and BRIGHT
+                res["GOALTIME"][res["GOALTYP"]=="DARK"]   = 4*1000.
+                res["GOALTIME"][res["GOALTYP"]=="BRIGHT"] = 4*150.
+                res["GOALTIME"][res["GOALTYP"]=="BACKUP"] = 30.
 
-        else :
-            log.warning("Sorry I don't know what to do with {}".format(filename))
+            else :
+                log.warning("Sorry I don't know what to do with {}".format(filename))
 
     # test default
     res["GOALTIME"][res["GOALTIME"]==0] = default_goaltime
@@ -90,6 +92,17 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT"] :
             res[k][i] = np.sum(exposure_table[k][jj])
 
+        # copy the following from the exposure table if it exists
+        for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
+            if k in exposure_table.dtype.names :
+                val = exposure_table[k][jj][0]
+                if val != "UNKNOWN" :
+                    res[k][i] = val # force consistency
+        k = "GOALTIME"
+        if k in exposure_table.dtype.names :
+            val = exposure_table[k][jj][0]
+            if val > 0. :
+                res[k][i] = val # force consistency
 
     # truncate number of digits for exposure times to 0.1 sec
     for k in res.dtype.names :

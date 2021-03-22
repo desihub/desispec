@@ -186,12 +186,11 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     for expid in np.unique(cam_summary['EXPID'] ) :
         ii = (cam_summary['EXPID'] == expid)
 
-        night=int(cam_summary['NIGHT'][ii][0])
-        tileid=int(cam_summary['TILEID'][ii][0])
-        # subtle differences between spectrographs
-        exptime=float(np.mean(cam_summary['EXPTIME'][ii]))
-
-        row = dict(NIGHT=night, EXPID=expid, TILEID=tileid, EXPTIME=exptime)
+        row = dict()
+        for k in ["NIGHT","EXPID","TILEID","SURVEY","GOALTYP","FAFLAVOR","GOALTIME"] :
+            row[k]=cam_summary[k][ii][0]
+        # mean
+        row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
 
         #- Per EXPID TSNR2 is summed over cameras, averaged over petals
         for colname in tsnr2_colnames:
@@ -225,6 +224,11 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
                 entry["NIGHT"]=night
                 entry["TILEID"]=prod_table["TILEID"][i]
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
+                entry["SURVEY"]="UNKOWN"
+                entry["GOALTYP"]="UNKOWN"
+                entry["FAFLAVOR"]="UNKOWN"
+                entry["GOALTIME"]=0.
+
                 vals=[]
                 for j,k in enumerate(exp_summary.dtype.names) :
                     if k in entry :
@@ -249,6 +253,18 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
 
     if preexisting_tsnr2_expid_table is not None :
         log.debug("Update to preexisting")
+
+        # backward compatibility issue
+        for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
+            nentries=len(preexisting_tsnr2_expid_table)
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("UNKNOWN",nentries),dtype='<U16')
+            k = "GOALTIME"
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
+
         exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
     if preexisting_tsnr2_frame_table is not None :
         log.debug("Update to preexisting")
@@ -369,6 +385,21 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
                 entry[short_key]=np.float32(0.)
         if key.startswith('TSNR2_ALPHA'):
             entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
+
+    #- Add information from targeting
+    fibermap_header = cframe_hdulist["FIBERMAP"].header
+    for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
+        if k in fibermap_header :
+            entry[k] = fibermap_header[k].strip().upper()
+        else :
+            entry[k] = "UNKNOWN"
+
+
+    k="GOALTIME"
+    if k in fibermap_header :
+        entry[k] = fibermap_header[k]
+    else :
+        entry[k] = 0.
 
     cframe_hdulist.close()
     return entry
