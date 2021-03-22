@@ -9,7 +9,7 @@ desispec Change Log
 * Handle missing NIGHT in coadded fibermap (PR `#1195`_).
 
 .. _`#1138`: https://github.com/desihub/desispec/issues/1138
-.. _`#1138`: https://github.com/desihub/desispec/issues/1195
+.. _`#1195`: https://github.com/desihub/desispec/issues/1195
 
 0.39.3 (2020-03-04)
 -------------------
