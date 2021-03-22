@@ -272,13 +272,16 @@ class Spectra(object):
         if len(keep_bands) == 0:
             raise RuntimeError("no valid bands were selected!")
 
-        keep_nights = None
-        if nights is None:
-            keep_nights = [ True for x in self.fibermap["NIGHT"] ]
+        if 'NIGHT' in self.fibermap.colnames: # not present in data model of coadds
+            keep_nights = None
+            if nights is None:
+                keep_nights = [ True for x in self.fibermap["NIGHT"] ]
+            else:
+                keep_nights = [ (x in nights) for x in self.fibermap["NIGHT"] ]
+            if sum(keep_nights) == 0:
+                raise RuntimeError("no valid nights were selected!")
         else:
-            keep_nights = [ (x in nights) for x in self.fibermap["NIGHT"] ]
-        if sum(keep_nights) == 0:
-            raise RuntimeError("no valid nights were selected!")
+            keep_nights = np.ones(len(self.fibermap), bool)
 
         keep_targets = None
         if targets is None:
