@@ -149,7 +149,7 @@ def update_table(table1,table2,keys) :
         return table2
 
 
-def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table) :
+def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir) :
     """ Writes summar file.
 
     Args:
@@ -158,6 +158,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
       efftime_config: dictionnary with scaling factors from TSNR2 to effective exp. time
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
+      specprod_dir: str, production directory
 
     Returns nothing
     """
@@ -206,6 +207,45 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     colnames = list(rows[0].keys())
     exp_summary = Table(rows=rows, names=colnames)
     exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
+
+
+    # check the production exposure table
+    for night in np.unique(exp_summary["NIGHT"]) :
+        prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
+        prod_table = Table.read(prod_table_filename)
+        missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
+        nmissing=np.sum(missing)
+        if nmissing>0 :
+
+            ucam=np.unique(cam_summary["CAMERA"])
+
+            for i in np.where(missing)[0] :
+                entry={}
+                entry["EXPID"]=prod_table["EXPID"][i]
+                entry["NIGHT"]=night
+                entry["TILEID"]=prod_table["TILEID"][i]
+                entry["EXPTIME"]=prod_table["EXPTIME"][i]
+                vals=[]
+                for j,k in enumerate(exp_summary.dtype.names) :
+                    if k in entry :
+                        vals.append(entry[k])
+                    else :
+                        vals.append(0.)
+                log.warning("Adding missing exposure {}".format(vals))
+                exp_summary.add_row(vals)
+
+                # same for other table
+                for cam in ucam :
+                    entry["CAMERA"]=cam
+                    vals=[]
+                    for j,k in enumerate(cam_summary.dtype.names) :
+                        if k in entry :
+                            vals.append(entry[k])
+                        else :
+                            vals.append(0.)
+                    log.debug("Adding missing exposure.cam {}".format(vals))
+                    cam_summary.add_row(vals)
+
 
     if preexisting_tsnr2_expid_table is not None :
         log.debug("Update to preexisting")
@@ -444,13 +484,13 @@ def main():
         # write result after every other night
         if len(summary_rows)>0 :
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-            write_summary(summary_rows,tmpfilename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table)
+            write_summary(summary_rows,tmpfilename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
             log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
 
 
     # end of loop on nights
     if len(summary_rows)>0 :
-        write_summary(summary_rows,args.outfile,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table)
+        write_summary(summary_rows,args.outfile,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
 
         # remove temporary file if successful
         if os.path.isfile(args.outfile) :
