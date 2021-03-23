@@ -125,7 +125,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 #SBATCH --qos {queue}
 #SBATCH --job-name redrock-{tileid}-{group}
 #SBATCH --output {batchlog}
-#SBATCH --time=00:15:00
+#SBATCH --time=00:20:00
 #SBATCH --exclusive
 
 echo Starting at $(date)
