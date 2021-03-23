@@ -187,7 +187,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","SURVEY","GOALTYP","FAFLAVOR","GOALTIME"] :
+        for k in ["NIGHT","EXPID","TILEID","SURVEY","GOALTYPE","FAFLAVOR","GOALTIME"] :
             row[k]=cam_summary[k][ii][0]
         # mean
         row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
@@ -225,7 +225,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
                 entry["TILEID"]=prod_table["TILEID"][i]
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
                 entry["SURVEY"]="UNKOWN"
-                entry["GOALTYP"]="UNKOWN"
+                entry["GOALTYPE"]="UNKOWN"
                 entry["FAFLAVOR"]="UNKOWN"
                 entry["GOALTIME"]=0.
 
@@ -255,7 +255,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         log.debug("Update to preexisting")
 
         # backward compatibility issue
-        for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
+        for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
             nentries=len(preexisting_tsnr2_expid_table)
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
@@ -388,7 +388,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
 
     #- Add information from targeting
     fibermap_header = cframe_hdulist["FIBERMAP"].header
-    for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
+    for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
         if k in fibermap_header :
             entry[k] = fibermap_header[k].strip().upper()
         else :

@@ -45,7 +45,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["OBSSTATUS"] = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["ZSTATUS"]   = np.array(np.repeat("NONE",ntiles),dtype='<U16')
     res["SURVEY"]    = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
-    res["GOALTYP"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
+    res["GOALTYPE"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["TARGETS"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["FAFLAVOR"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["GOALTIME"]  = np.zeros(ntiles)
@@ -72,14 +72,14 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                 is_bright = [(targets.find("BGS")>=0)|(targets.find("MWS")>=0) for targets in res["TARGETS"]]
                 is_backup = [(targets.find("BACKUP")>=0) for targets in res["TARGETS"]]
 
-                res["GOALTYP"][is_dark]   = "DARK"
-                res["GOALTYP"][is_bright] = "BRIGHT"
-                res["GOALTYP"][is_backup] = "BACKUP"
+                res["GOALTYPE"][is_dark]   = "DARK"
+                res["GOALTYPE"][is_bright] = "BRIGHT"
+                res["GOALTYPE"][is_backup] = "BACKUP"
 
                 # 4 times nominal exposure time for DARK and BRIGHT
-                res["GOALTIME"][res["GOALTYP"]=="DARK"]   = 4*1000.
-                res["GOALTIME"][res["GOALTYP"]=="BRIGHT"] = 4*150.
-                res["GOALTIME"][res["GOALTYP"]=="BACKUP"] = 30.
+                res["GOALTIME"][res["GOALTYPE"]=="DARK"]   = 4*1000.
+                res["GOALTIME"][res["GOALTYPE"]=="BRIGHT"] = 4*150.
+                res["GOALTIME"][res["GOALTYPE"]=="BACKUP"] = 30.
 
             else :
                 log.warning("Sorry I don't know what to do with {}".format(filename))
@@ -94,7 +94,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
             res[k][i] = np.sum(exposure_table[k][jj])
 
         # copy the following from the exposure table if it exists
-        for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
+        for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
             if k in exposure_table.dtype.names :
                 val = exposure_table[k][jj][0]
                 if val != "UNKNOWN" :
@@ -111,16 +111,16 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
             res[k] = np.around(res[k],1)
 
     # trivial completeness for now (all of this work for this?)
-    efftime_keyword_per_goaltyp = {}
-    efftime_keyword_per_goaltyp["DARK"]="ELG_EFFTIME_DARK"
-    efftime_keyword_per_goaltyp["BRIGHT"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_goaltyp["BACKUP"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_goaltyp["UNKNOWN"]="ELG_EFFTIME_DARK"
+    efftime_keyword_per_goaltype = {}
+    efftime_keyword_per_goaltype["DARK"]="ELG_EFFTIME_DARK"
+    efftime_keyword_per_goaltype["BRIGHT"]="BGS_EFFTIME_BRIGHT"
+    efftime_keyword_per_goaltype["BACKUP"]="BGS_EFFTIME_BRIGHT"
+    efftime_keyword_per_goaltype["UNKNOWN"]="ELG_EFFTIME_DARK"
 
-    for program in efftime_keyword_per_goaltyp :
-        selection=(res["GOALTYP"]==program)
+    for program in efftime_keyword_per_goaltype :
+        selection=(res["GOALTYPE"]==program)
         if np.sum(selection)==0 : continue
-        efftime_keyword=efftime_keyword_per_goaltyp[program]
+        efftime_keyword=efftime_keyword_per_goaltype[program]
         efftime=res[efftime_keyword]
         done=selection&(efftime>res["GOALTIME"])
         res["OBSSTATUS"][done]="OBSDONE"
