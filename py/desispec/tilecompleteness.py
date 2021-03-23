@@ -41,6 +41,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["NEXP"]=np.zeros(ntiles,dtype=int)
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
+    res["LYA_EFFTIME_DARK"]=np.zeros(ntiles)
     res["OBSSTATUS"] = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
     res["ZSTATUS"]   = np.array(np.repeat("NONE",ntiles),dtype='<U16')
     res["SURVEY"]    = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
@@ -89,7 +90,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     for i,tile in enumerate(tiles) :
         jj=(exposure_table["TILEID"]==tile)
         res["NEXP"][i]=np.sum(jj)
-        for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT"] :
+        for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK"] :
             res[k][i] = np.sum(exposure_table[k][jj])
 
         # copy the following from the exposure table if it exists
