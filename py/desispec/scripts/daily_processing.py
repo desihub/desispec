@@ -257,6 +257,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 prow = erow_to_prow(erow)
                 prow['INTID'] = internal_id
                 internal_id += 1
+                prow['JOBDESC'] = prow['OBSTYPE']
                 prow = define_and_assign_dependency(prow, arcjob, flatjob)
                 print(f"\nProcessing: {prow}\n")
                 prow = create_and_submit(prow, dry_run=dry_run, queue=queue)

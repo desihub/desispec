@@ -11,7 +11,7 @@ from desispec.workflow.utils import pathjoin
 from desispec.workflow.timing import what_night_is_it, nersc_start_time, nersc_end_time
 from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, \
-                                        get_processing_table_name, erow_to_prow
+                                        get_processing_table_name, erow_to_prow, table_row_to_dict
 from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile, \
                                         define_and_assign_dependency, create_and_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue
@@ -134,6 +134,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
         internal_id += 1
+        prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, arcjob, flatjob)
         print(f"\nProcessing: {prow}\n")
         prow = create_and_submit(prow, dry_run=dry_run, queue=queue, reservation=reservation, strictly_successful=True)
