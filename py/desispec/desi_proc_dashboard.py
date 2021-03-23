@@ -10,7 +10,7 @@ from collections import OrderedDict
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.proctable import get_processing_table_pathname, get_processing_table_name
 from desispec.workflow.tableio import load_table
-
+import json
 ########################
 ### Helper Functions ###
 ########################
@@ -258,7 +258,7 @@ def main(args):
             ####################################
             ### Table for individual night ####
             ####################################
-            nightly_tables.append(nightly_table(night,skipd_expids,show_null=args.show_null,use_short_sci=args.include_short_scis))
+            nightly_tables.append(nightly_table(night,skipd_expids,show_null=args.show_null,use_short_sci=args.include_short_scis,args=args))
         strTable += monthly_table(nightly_tables,month)
 
     #strTable += js_import_str(os.getenv('DESI_DASHBOARD'))
@@ -291,14 +291,26 @@ def monthly_table(tables,month):
 
     return month_table_str
 
-def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
+def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False,args=None):
     """
     Add a collapsible and extendable table to the html file for one specific night
     Input
     night: like 20200131
     output: The string to be added to the html file
     """
-    night_info = calculate_one_night_use_file(night,use_short_sci)
+    try:
+        os.system('mkdir '+args.output_dir+'/files/')
+    except:
+        pass
+    filename_json = args.output_dir+'/files/night_info_'+os.getenv('SPECPROD')+'_'+night+'.json'
+    if os.path.exists(filename_json):
+        with open(filename_json) as json_file:
+            night_info_pre=json.load(json_file)
+        night_info = calculate_one_night_use_file(night,use_short_sci,night_info_pre=night_info_pre)
+    else:
+        night_info = calculate_one_night_use_file(night,use_short_sci)
+    with open(filename_json,'w') as json_file:
+        json.dump(night_info,json_file)
 
     ngood,ninter,nbad,nnull,nover,n_notnull = 0,0,0,0,0,0
     main_body = ""
@@ -347,7 +359,7 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False):
     return nightly_table_str
 
 
-def calculate_one_night_use_file(night, use_short_sci=False):
+def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None):
     """
     For a given night, return the file counts and other other information for each exposure taken on that night
     input: night
@@ -385,7 +397,7 @@ def calculate_one_night_use_file(night, use_short_sci=False):
         print('Error reading exptable using brute force method of scanning files.')
         print('All exposures will be marked as unprocessed.')
         print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-        return calculate_one_night(night, use_short_sci=use_short_sci)
+        return calculate_one_night(night, use_short_sci=use_short_sci,night_info_pre = night_info_pre)
 
     try:
         d_processing = load_table(file_processing, tabletype='proctable')
@@ -558,7 +570,7 @@ def calculate_one_night_use_file(night, use_short_sci=False):
     return output
 
 
-def calculate_one_night(night, use_short_sci=False):
+def calculate_one_night(night, use_short_sci=False, night_info_pre = None):
     """
     For a given night, return the file counts and other other information for each exposure taken on that night
     input: night
@@ -601,6 +613,11 @@ def calculate_one_night(night, use_short_sci=False):
 
     output = OrderedDict()
     for expid in expids:
+        if night_info_pre:
+            if str(expid) in night_info_pre:
+                if night_info_pre[str(expid)][0] =='GOOD':
+                    output[str(expid)]=night_info_pre[str(expid)]
+                    continue
         zfild_expid = str(expid).zfill(8)
         # Check the redux folder for reduced files
         filename = os.path.join(os.getenv('DESI_SPECTRO_DATA'), str(night), zfild_expid,
