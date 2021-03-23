@@ -140,13 +140,18 @@ for SPECTRO in {spectro_string}; do
     if [ -f $spectra ]; then
         echo $(basename $spectra) already exists, skipping grouping
     else
-        # Check if any input frames exist, while silencing stderr if some
-        # of the glob doesn't match (the "2> /dev/null" part)
-        CFRAMES=$(ls {frame_glob} 2> /dev/null)
+        # Check if any input frames exist
+        CFRAMES=$(ls {frame_glob})
+        MISSING_CFRAMES=$?
         NUM_CFRAMES=$(echo $CFRAMES | wc -w)
+        if [ $MISSING_CFRAMES -ne 0 ] && [ $NUM_CFRAMES -gt 0 ]; then
+            echo ERROR: some expected cframes missing for spectrograph $SPECTRO but proceeding anyway
+        fi
         if [ $NUM_CFRAMES -gt 0 ]; then
-            echo Grouping $NUM_CFRAMES cframes into $(basename $spectra)
-            srun -N 1 -n 1 -c 64 desi_group_spectra --inframes $CFRAMES --outfile $spectra &> $splog &
+            echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
+            cmd="srun -N 1 -n 1 -c 64 desi_group_spectra --inframes $CFRAMES --outfile $spectra"
+            echo RUNNING $cmd &> $splog
+            $cmd &>> $splog &
             sleep 1
         else
             echo ERROR: no input cframes for spectrograph $SPECTRO, skipping
@@ -164,8 +169,10 @@ for SPECTRO in {spectro_string}; do
     if [ -f $coadd ]; then
         echo $(basename $coadd) already exists, skipping coadd
     elif [ -f $spectra ]; then
-        echo Coadding $(basename $spectra) into $(basename $coadd)
-        srun -N 1 -n 1 -c 64 desi_coadd_spectra --nproc 16 -i $spectra -o $coadd &> $colog &
+        echo Coadding $(basename $spectra) into $(basename $coadd), see $colog
+        cmd="srun -N 1 -n 1 -c 64 desi_coadd_spectra --nproc 16 -i $spectra -o $coadd"
+        echo RUNNING $cmd &> $colog
+        $cmd &>> $colog &
         sleep 1
     else
         echo ERROR: missing $(basename $spectra), skipping coadd
@@ -183,8 +190,10 @@ for SPECTRO in {spectro_string}; do
     if [ -f $zbest ]; then
         echo $(basename $zbest) already exists, skipping redshifts
     elif [ -f $spectra ]; then
-        echo Running redrock on $(basename $spectra)
-        srun -N 1 -n 32 -c 2 rrdesi_mpi $spectra -o $redrock -z $zbest &> $rrlog &
+        echo Running redrock on $(basename $spectra), see $rrlog
+        cmd="srun -N 1 -n 32 -c 2 rrdesi_mpi $spectra -o $redrock -z $zbest"
+        echo RUNNING $cmd &> $rrlog
+        $cmd &>> $rrlog &
         sleep 1
     else
         echo ERROR: missing $(basename $spectra), skipping redshifts
