@@ -458,7 +458,7 @@ def still_a_dependency(dependency):
     Defines the criteria for which a dependency is deemed complete (and therefore no longer a dependency).
 
      Args:
-        dependency, Table.Row, dict. Processing row corresponding to the required input for the job in prow.
+        dependency, Table.Row or dict. Processing row corresponding to the required input for the job in prow.
                                      This must contain keyword accessible values for 'STATUS', and 'LATEST_QID'.
 
     Returns:
@@ -501,14 +501,14 @@ def parse_previous_tables(etable, ptable, night):
         night, str or int, the night the data was taken.
 
     Returns:
-        arcs, list of Table.Row's, list of the individual arc jobs used for the psfnight (NOT all
+        arcs, list of dicts, list of the individual arc jobs used for the psfnight (NOT all
                                    the arcs, if multiple sets existed)
-        flats, list of Table.Row's, list of the individual flat jobs used for the nightlyflat (NOT
+        flats, list of dicts, list of the individual flat jobs used for the nightlyflat (NOT
                                     all the flats, if multiple sets existed)
-        sciences, list of Table.Row's, list of the most recent individual prestdstar science exposures
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile)
-        arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
+        arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
+        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
         curtype, None, the obstype of the current job being run. Always None as first new job will define this.
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         curtile, None, the tileid of the current job (if science). Otherwise None. Always None as first
@@ -702,7 +702,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
 
     Args:
         ptable, Table. The processing table where each row is a processed job.
-        prows, list or array of Table.Rows or dicts. The rows corresponding to the individual exposure jobs that are
+        prows, list or array of dicts. The rows corresponding to the individual exposure jobs that are
                                                      inputs to the joint fit.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
         queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
@@ -725,7 +725,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
     Returns:
         ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
                        of a stdstarfit, the poststdstar science exposure jobs.
-        joint_prow, Table.Row or dict. Row of a processing table corresponding to the joint fit job.
+        joint_prow, dict. Row of a processing table corresponding to the joint fit job.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
     log = get_logger()
@@ -840,7 +840,7 @@ def make_joint_prow(prows, descriptor, internal_id):
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
 
     Returns:
-        joint_prow, Table.Row or dict. Row of a processing table corresponding to the joint fit job.
+        joint_prow, dict. Row of a processing table corresponding to the joint fit job.
     """
     first_row = prows[0]
     joint_prow = first_row.copy()
@@ -864,14 +864,14 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
 
     Args:
         ptable, Table, Processing table of all exposures that have been processed.
-        arcs, list of Table.Row's, list of the individual arc jobs to be used for the psfnight (NOT all
+        arcs, list of dicts, list of the individual arc jobs to be used for the psfnight (NOT all
                                    the arcs, if multiple sets existed). May be empty if none identified yet.
-        flats, list of Table.Row's, list of the individual flat jobs to be used for the nightlyflat (NOT
+        flats, list of dicts, list of the individual flat jobs to be used for the nightlyflat (NOT
                                     all the flats, if multiple sets existed). May be empty if none identified yet.
-        sciences, list of Table.Row's, list of the most recent individual prestdstar science exposures
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile). May be empty if none identified yet.
-        arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
+        arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
+        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         internal_id, int, an internal identifier unique to each job. Increments with each new job. This
                           is the smallest unassigned value.
@@ -891,9 +891,9 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
                                          remaining cameras not found to exist.
     Returns:
         ptable, Table, Processing table of all exposures that have been processed.
-        arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
-        sciences, list of Table.Row's, list of the most recent individual prestdstar science exposures
+        arcjob, dictor None, the psfnight job row if it exists. Otherwise None.
+        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile). May be empty if none identified yet or
                                        we just submitted them for processing.
         internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
