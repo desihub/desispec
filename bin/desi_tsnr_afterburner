@@ -187,7 +187,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","SURVEY","GOALTYPE","FAFLAVOR","GOALTIME"] :
+        for k in ["NIGHT","EXPID","TILEID","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE","MINTFRAC","FAFLAVOR","GOALTIME"] :
             row[k]=cam_summary[k][ii][0]
         # mean
         row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
@@ -224,9 +224,12 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
                 entry["NIGHT"]=night
                 entry["TILEID"]=prod_table["TILEID"][i]
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
-                entry["SURVEY"]="UNKOWN"
-                entry["GOALTYPE"]="UNKOWN"
-                entry["FAFLAVOR"]="UNKOWN"
+                entry['SEEING_ETC']=0.
+                entry['EFFTIME_ETC']=0.
+                entry["SURVEY"]="unknown"
+                entry["GOALTYPE"]="unknown"
+                entry["MINTFRAC"]=0.9
+                entry["FAFLAVOR"]="unknown"
                 entry["GOALTIME"]=0.
 
                 vals=[]
@@ -259,8 +262,8 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
             nentries=len(preexisting_tsnr2_expid_table)
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
-                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("UNKNOWN",nentries),dtype='<U16')
-            k = "GOALTIME"
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
+        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC"] :
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
                 preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
@@ -276,6 +279,10 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     if 'TSNR2_LYA' in exp_summary.colnames :
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA","DARK")
 
+    exp_summary['EFFTIME_SPEC'] = exp_summary['ELG_EFFTIME_DARK']
+    ii = (exp_summary['GOALTYPE']=='BRIGHT')|(exp_summary['GOALTYPE']=='BACKUP')
+    exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
+
     hdus = fits.HDUList()
     hdus.append(fits.convenience.table_to_hdu(exp_summary))
     hdus.append(fits.convenience.table_to_hdu(cam_summary))
@@ -285,6 +292,16 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     os.rename(tmpfile,  output_filename)
 
     log.info('Successfully wrote {}'.format(output_filename))
+
+    # also write first table as csv
+    csv_filename = output_filename.replace(".fits",".csv")
+    if True :
+        for k in exp_summary.keys() :
+            if k.find("TIME")>=0 or k.find("SEEING")>=0 or k.find("SNR2")>=0 :
+                exp_summary[k]=np.around(exp_summary[k].astype(float),1)
+    exp_summary.write(csv_filename,overwrite=True)
+    log.info('Successfully wrote {}'.format(csv_filename))
+
 
 
 def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
@@ -373,6 +390,15 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(tileid)
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
+    if "SEEING" in hdr :
+        entry['SEEING_ETC'] = np.float32(hdr['SEEING'])
+    else :
+        entry['SEEING_ETC'] = 0.
+    if "ACTTEFF" in hdr :
+        entry['EFFTIME_ETC'] = np.float32(hdr['ACTTEFF'])
+    else :
+        entry['EFFTIME_ETC'] = 0.
+
     entry['CAMERA'] = camera
     for key in table.colnames:
         if key.startswith('TSNR2_'):
@@ -382,7 +408,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
             if np.sum(ok)>0 :
                 entry[short_key]=np.median(table[key][ok]).astype(np.float32)
             else :
-                entry[short_key]=np.float32(0.)
+                entry[short_key]=0.
         if key.startswith('TSNR2_ALPHA'):
             entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
 
@@ -390,9 +416,24 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     fibermap_header = cframe_hdulist["FIBERMAP"].header
     for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
         if k in fibermap_header :
-            entry[k] = fibermap_header[k].strip().upper()
+            entry[k] = fibermap_header[k].strip()
         else :
-            entry[k] = "UNKNOWN"
+            entry[k] = "unknown"
+
+    if entry["SURVEY"]=="unknown" and entry["FAFLAVOR"].find("sv1")>=0. : entry["SURVEY"]="sv1"
+    if entry["GOALTYPE"]=="unknown" :
+        if entry["FAFLAVOR"].find("qso")>=0. or entry["FAFLAVOR"].find("lrg")>=0.  or entry["FAFLAVOR"].find("elg")>=0. :
+            entry["GOALTYPE"]="dark"
+        elif entry["FAFLAVOR"].find("mws")>=0. or entry["FAFLAVOR"].find("bgs")>=0. :
+            entry["GOALTYPE"]="bright"
+
+
+
+    k="MINTFRAC"
+    if k in fibermap_header :
+        entry[k] = fibermap_header[k]
+    else :
+        entry[k] = 0.9
 
 
     k="GOALTIME"
