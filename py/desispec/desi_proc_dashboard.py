@@ -298,15 +298,15 @@ def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False,ar
     night: like 20200131
     output: The string to be added to the html file
     """
-    try:
-        os.system('mkdir '+args.output_dir+'/files/')
-    except:
-        pass
+    os.makedirs(os.path.join(args.output_dir,'files'), exist_ok=True)
     filename_json = args.output_dir+'/files/night_info_'+os.getenv('SPECPROD')+'_'+night+'.json'
     if os.path.exists(filename_json):
         with open(filename_json) as json_file:
-            night_info_pre=json.load(json_file)
-        night_info = calculate_one_night_use_file(night,use_short_sci,night_info_pre=night_info_pre)
+            try:
+                night_info_pre=json.load(json_file)
+                night_info = calculate_one_night_use_file(night,use_short_sci,night_info_pre=night_info_pre)
+            except:
+                night_info = calculate_one_night_use_file(night,use_short_sci)
     else:
         night_info = calculate_one_night_use_file(night,use_short_sci)
     with open(filename_json,'w') as json_file:
@@ -552,10 +552,10 @@ def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None
                 hlink2 = _hyperlink(relpath_log, 'Log')
 
         output[str(expid)] = [row_color, \
-                              expid, \
+                              str(expid), \
                               flavor,\
                               obstype,\
-                              exptime, \
+                              str(exptime), \
                               'SP: '+spcgrphs.replace('SP',''), \
                               tileid_str, \
                               _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
@@ -734,7 +734,7 @@ def calculate_one_night(night, use_short_sci=False, night_info_pre = None):
                 hlink2 = _hyperlink(relpath_log, 'Log')
         status = 'unprocessed'
         output[str(expid)] = [row_color, \
-                              expid, \
+                              str(expid), \
                               header_info['FLAVOR'],\
                               obstype,\
                               header_info['EXPTIME'], \
