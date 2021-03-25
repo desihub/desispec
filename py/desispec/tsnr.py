@@ -361,7 +361,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     elif 'PMSEEING' in frame.meta:
         seeing_fwhm = frame.meta['PMSEEING']
 
-        log.info('Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(seeing_fhwm))
+        log.info('Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(seeing_fwhm))
 
     else:
         seeing_fwhm = 1.1  ## arcsecond
@@ -421,7 +421,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
         # Apply dust transmission.
         result *= dust_transmission(frame.wave, ebv)
 
-        result *= psf2fiber[:,None]
+        # result *= psf2fiber[:,None]
         
         result = result**2.
 

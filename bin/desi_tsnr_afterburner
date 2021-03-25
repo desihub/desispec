@@ -487,7 +487,7 @@ def main():
     log.info('Rank {:d} processes nights {}'.format(rank, ranknights))
     
     comm.barrier()
-
+    
     logfile = os.path.dirname(args.outfile) + '/desi_tsnr_afterburner_{:d}_{:d}_{:d}.log'.format(ranknights[0], ranknights[-1], rank)
 
     with stdouterr_redirected(to=logfile):
@@ -538,8 +538,10 @@ def main():
             log.info("wrote {} entries in tmp file {}".format(len(rank_summary_rows),tmpfilename))
 
     comm.barrier()
-            
+    
     if rank == 0:
+        log.info('Gathering TSNR tmp tables over ranks ({})'.format(size))
+        
         tmpfilenames=glob.glob(os.path.dirname(args.outfile) + '/tsnr-exposures_tmp_*.fits')
         ranks=np.sort([x.split('_')[-1].replace('.fits','') for x in tmpfilenames])
 
@@ -552,31 +554,34 @@ def main():
             try:
                 tmp = fits.open(tmpfilename)
 
-                hdr = tmp[0].header
-                
-                if tsnr2_expid is None:
-                    tsnr2_expid = tmp['TSNR2_EXPID'].data
-                else:
-                    tsnr2_expid = np.c_[tsnr2_expid, tmp['TSNR2_EXPID'].data]
-
-                if tsnr2_frame is None:
-                    tsnr2_frame = tmp['TSNR2_FRAME'].data
-                else:
-                    tsnr2_frame = np.c_[tsnr2_frame, tmp['TSNR2_FRAME'].data]
-
             except:
                 log.warning('{} not found.'.format(tmpfilename))
                 continue
-                
+
+            hdr = tmp[0].header
+            
+            if tsnr2_expid is None:
+                tsnr2_expid = Table(tmp['TSNR2_EXPID'].data)
+            else:
+                tsnr2_expid = vstack((tsnr2_expid, Table(tmp['TSNR2_EXPID'].data)))
+
+            if tsnr2_frame is None:
+                tsnr2_frame = Table(tmp['TSNR2_FRAME'].data)
+            else:
+                tsnr2_frame = vstack((tsnr2_frame, Table(tmp['TSNR2_FRAME'].data)))
+
             # remove temporary file if successful
             if os.path.isfile(tmpfilename) :
                 log.info("rm temporary file {}".format(tmpfilename))
-                # os.unlink(tmpfilename)
+                os.unlink(tmpfilename)
 
+        tsnr2_expid.meta['EXTNAME'] = 'TSNR2_EXPID'
+        tsnr2_frame.meta['EXTNAME'] = 'TSNR2_FRAME'
+                
         hdus = fits.HDUList()
         hdus.append(fits.PrimaryHDU(header=hdr))
-        hdus.append(tmp['TSNR2_EXPID'])
-        hdus.append(tmp['TSNR2_FRAME'])
+        hdus.append(fits.convenience.table_to_hdu(tsnr2_expid))
+        hdus.append(fits.convenience.table_to_hdu(tsnr2_frame))
         hdus.writeto(args.outfile, overwrite=True)
 
         log.info('Finished gather of tsnr over ranks to {}.'.format(args.outfile))
