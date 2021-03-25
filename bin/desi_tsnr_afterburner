@@ -421,6 +421,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
             entry[k] = "unknown"
 
     if entry["SURVEY"]=="unknown" and entry["FAFLAVOR"].find("sv1")>=0. : entry["SURVEY"]="sv1"
+    if entry["SURVEY"]=="unknown" and entry["FAFLAVOR"].find("cmx")>=0. : entry["SURVEY"]="cmx"
     if entry["GOALTYPE"]=="unknown" :
         if entry["FAFLAVOR"].find("qso")>=0. or entry["FAFLAVOR"].find("lrg")>=0.  or entry["FAFLAVOR"].find("elg")>=0. :
             entry["GOALTYPE"]="dark"
@@ -567,6 +568,10 @@ def main():
         # remove temporary file if successful
         if os.path.isfile(args.outfile) :
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+            if os.path.isfile(tmpfilename) :
+                log.info("rm temporary file {}".format(tmpfilename))
+                os.unlink(tmpfilename)
+            tmpfilename=args.outfile.replace(".fits","_tmp.csv")
             if os.path.isfile(tmpfilename) :
                 log.info("rm temporary file {}".format(tmpfilename))
                 os.unlink(tmpfilename)
