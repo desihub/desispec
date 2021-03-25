@@ -39,15 +39,17 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["TILEID"]=tiles
     res["EXPTIME"]=np.zeros(ntiles)
     res["NEXP"]=np.zeros(ntiles,dtype=int)
+    res["EFFTIME_ETC"]=np.zeros(ntiles)
+    res["EFFTIME_SPEC"]=np.zeros(ntiles)
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
     res["LYA_EFFTIME_DARK"]=np.zeros(ntiles)
-    res["OBSSTATUS"] = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
-    res["ZSTATUS"]   = np.array(np.repeat("NONE",ntiles),dtype='<U16')
-    res["SURVEY"]    = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
-    res["GOALTYP"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
-    res["TARGETS"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
-    res["FAFLAVOR"]   = np.array(np.repeat("UNKNOWN",ntiles),dtype='<U16')
+    res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["ZSTATUS"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
+    res["SURVEY"]    = np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
+    res["FAFLAVOR"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["GOALTIME"]  = np.zeros(ntiles)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
@@ -55,6 +57,9 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         for filename in auxiliary_table_filenames :
 
             if filename.find("sv1-tiles")>=0 :
+
+                targets = np.array(np.repeat("unknown",ntiles))
+
                 log.info("Use SV1 tiles information from {}".format(filename))
                 table=Table.read(filename)
                 ii=[]
@@ -65,21 +70,21 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                         ii.append(tid2i[tid])
                         jj.append(j)
 
-                res["SURVEY"][jj]="SV1"
-                res["TARGETS"][jj]=table["TARGETS"][ii]
+                res["SURVEY"][jj]="sv1"
+                targets[jj]=table["TARGETS"][ii]
 
-                is_dark   = [(targets.find("ELG")>=0)|(targets.find("LRG")>=0)|(targets.find("QSO")>=0) for targets in res["TARGETS"]]
-                is_bright = [(targets.find("BGS")>=0)|(targets.find("MWS")>=0) for targets in res["TARGETS"]]
-                is_backup = [(targets.find("BACKUP")>=0) for targets in res["TARGETS"]]
+                is_dark   = [(t.lower().find("elg")>=0)|(t.lower().find("lrg")>=0)|(t.lower().find("qso")>=0) for t in targets]
+                is_bright = [(t.lower().find("bgs")>=0)|(t.lower().find("mws")>=0) for t in targets]
+                is_backup = [(t.lower().find("backup")>=0) for t in targets]
 
-                res["GOALTYP"][is_dark]   = "DARK"
-                res["GOALTYP"][is_bright] = "BRIGHT"
-                res["GOALTYP"][is_backup] = "BACKUP"
+                res["GOALTYPE"][is_dark]   = "dark"
+                res["GOALTYPE"][is_bright] = "bright"
+                res["GOALTYPE"][is_backup] = "backup"
 
                 # 4 times nominal exposure time for DARK and BRIGHT
-                res["GOALTIME"][res["GOALTYP"]=="DARK"]   = 4*1000.
-                res["GOALTIME"][res["GOALTYP"]=="BRIGHT"] = 4*150.
-                res["GOALTIME"][res["GOALTYP"]=="BACKUP"] = 30.
+                res["GOALTIME"][res["GOALTYPE"]=="dark"]   = 4*1000.
+                res["GOALTIME"][res["GOALTYPE"]=="bright"] = 4*150.
+                res["GOALTIME"][res["GOALTYPE"]=="backup"] = 30.
 
             else :
                 log.warning("Sorry I don't know what to do with {}".format(filename))
@@ -90,42 +95,44 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     for i,tile in enumerate(tiles) :
         jj=(exposure_table["TILEID"]==tile)
         res["NEXP"][i]=np.sum(jj)
-        for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK"] :
-            res[k][i] = np.sum(exposure_table[k][jj])
+        for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK","EFFTIME_ETC"] :
+            if k in exposure_table.dtype.names :
+                res[k][i] = np.sum(exposure_table[k][jj])
+                if k == "EFFTIME_ETC" :
+                    if np.any(exposure_table[k][jj]==0) : res[k][i]=0 # because we are missing data
 
         # copy the following from the exposure table if it exists
-        for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
+        for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
             if k in exposure_table.dtype.names :
                 val = exposure_table[k][jj][0]
-                if val != "UNKNOWN" :
+                if val != "unknown" :
                     res[k][i] = val # force consistency
-        k = "GOALTIME"
-        if k in exposure_table.dtype.names :
-            val = exposure_table[k][jj][0]
-            if val > 0. :
-                res[k][i] = val # force consistency
+        for k in ["GOALTIME","MINTFRAC"] :
+            if k in exposure_table.dtype.names :
+                val = exposure_table[k][jj][0]
+                if val > 0. :
+                    res[k][i] = val # force consistency
 
     # truncate number of digits for exposure times to 0.1 sec
     for k in res.dtype.names :
         if k.find("EXPTIME")>=0 or k.find("EFFTIME")>=0 :
             res[k] = np.around(res[k],1)
 
-    # trivial completeness for now (all of this work for this?)
-    efftime_keyword_per_goaltyp = {}
-    efftime_keyword_per_goaltyp["DARK"]="ELG_EFFTIME_DARK"
-    efftime_keyword_per_goaltyp["BRIGHT"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_goaltyp["BACKUP"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_goaltyp["UNKNOWN"]="ELG_EFFTIME_DARK"
+    # default efftime is ELG_EFFTIME_DARK
+    res["EFFTIME_SPEC"]=res["ELG_EFFTIME_DARK"]
 
-    for program in efftime_keyword_per_goaltyp :
-        selection=(res["GOALTYP"]==program)
-        if np.sum(selection)==0 : continue
-        efftime_keyword=efftime_keyword_per_goaltyp[program]
-        efftime=res[efftime_keyword]
-        done=selection&(efftime>res["GOALTIME"])
-        res["OBSSTATUS"][done]="OBSDONE"
-        partial=selection&(efftime<res["GOALTIME"])
-        res["OBSSTATUS"][partial]="OBSSTART"
+    # trivial completeness for now (all of this work for this?)
+    efftime_keyword_per_goaltype = {}
+    efftime_keyword_per_goaltype["bright"]="BGS_EFFTIME_BRIGHT"
+    efftime_keyword_per_goaltype["backup"]="BGS_EFFTIME_BRIGHT"
+
+    ii=((res["GOALTYPE"]=="bright")|(res["GOALTYPE"]=="backup"))
+    res["EFFTIME_SPEC"][ii]=res["BGS_EFFTIME_BRIGHT"][ii]
+
+    done=(res["EFFTIME_SPEC"]>res["MINTFRAC"]*res["GOALTIME"])
+    res["OBSSTATUS"][done]="obsend"
+    partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
+    res["OBSSTATUS"][partial]="obsstart"
 
     return res
 
