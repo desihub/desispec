@@ -73,9 +73,9 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                 res["SURVEY"][jj]="sv1"
                 targets[jj]=table["TARGETS"][ii]
 
-                is_dark   = [(t.find("ELG")>=0)|(t.find("LRG")>=0)|(t.find("QSO")>=0) for t in targets]
-                is_bright = [(t.find("BGS")>=0)|(t.find("MWS")>=0) for t in targets]
-                is_backup = [(t.find("BACKUP")>=0) for t in targets]
+                is_dark   = [(t.lower().find("elg")>=0)|(t.lower().find("lrg")>=0)|(t.lower().find("qso")>=0) for t in targets]
+                is_bright = [(t.lower().find("bgs")>=0)|(t.lower().find("mws")>=0) for t in targets]
+                is_backup = [(t.lower().find("backup")>=0) for t in targets]
 
                 res["GOALTYPE"][is_dark]   = "dark"
                 res["GOALTYPE"][is_bright] = "bright"
@@ -98,6 +98,8 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK","EFFTIME_ETC"] :
             if k in exposure_table.dtype.names :
                 res[k][i] = np.sum(exposure_table[k][jj])
+                if k == "EFFTIME_ETC" :
+                    if np.any(exposure_table[k][jj]==0) : res[k][i]=0 # because we are missing data
 
         # copy the following from the exposure table if it exists
         for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
@@ -121,10 +123,10 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
     # trivial completeness for now (all of this work for this?)
     efftime_keyword_per_goaltype = {}
-    efftime_keyword_per_goaltype["BRIGHT"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_goaltype["BACKUP"]="BGS_EFFTIME_BRIGHT"
+    efftime_keyword_per_goaltype["bright"]="BGS_EFFTIME_BRIGHT"
+    efftime_keyword_per_goaltype["backup"]="BGS_EFFTIME_BRIGHT"
 
-    ii=((res["GOALTYPE"]=="BRIGHT")|(res["GOALTYPE"]=="BACKUP"))
+    ii=((res["GOALTYPE"]=="bright")|(res["GOALTYPE"]=="backup"))
     res["EFFTIME_SPEC"][ii]=res["BGS_EFFTIME_BRIGHT"][ii]
 
     done=(res["EFFTIME_SPEC"]>res["MINTFRAC"]*res["GOALTIME"])
