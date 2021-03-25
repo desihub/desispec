@@ -47,7 +47,7 @@ log = get_logger()
 
 print("input file: {}".format(args.infile))
 
-exposure_table = Table.read(args.infile)
+exposure_table = Table.read(args.infile,"TSNR2_EXPID")
 
 tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
 print(tile_table)
