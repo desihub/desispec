@@ -166,6 +166,11 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
 
     #- Create camera summary table; specify names to preserve column order
     colnames = list(summary_rows[0].keys())
+    for row in summary_rows :
+        if len(row.keys()) != len(colnames) :
+            log.error("colnames={} but row={}".format(colnames,row))
+            sys.exit(12)
+
     cam_summary = Table(rows=summary_rows, names=colnames)
     cam_summary.meta['EXTNAME'] = 'TSNR2_FRAME'
 
@@ -282,6 +287,13 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     exp_summary['EFFTIME_SPEC'] = exp_summary['ELG_EFFTIME_DARK']
     ii = (exp_summary['GOALTYPE']=='BRIGHT')|(exp_summary['GOALTYPE']=='BACKUP')
     exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
+
+    # sort table
+    ii = np.argsort(exp_summary['EXPID'])
+    exp_summary = exp_summary[ii]
+    vals=["{}-{}".format(e,c) for e,c in zip(cam_summary['EXPID'],cam_summary['CAMERA'])]
+    ii = np.argsort(vals)
+    cam_summary = cam_summary[ii]
 
     hdus = fits.HDUList()
     hdus.append(fits.convenience.table_to_hdu(exp_summary))
