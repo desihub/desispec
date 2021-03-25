@@ -428,7 +428,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     fibermap_header = cframe_hdulist["FIBERMAP"].header
     for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
         if k in fibermap_header :
-            entry[k] = fibermap_header[k].strip()
+            entry[k] = fibermap_header[k].strip().lower()
         else :
             entry[k] = "unknown"
 
