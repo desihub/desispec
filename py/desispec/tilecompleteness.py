@@ -44,12 +44,12 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
     res["LYA_EFFTIME_DARK"]=np.zeros(ntiles)
-    res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U16')
-    res["ZSTATUS"]   = np.array(np.repeat("none",ntiles),dtype='<U16')
-    res["SURVEY"]    = np.array(np.repeat("unknown",ntiles),dtype='<U16')
-    res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U16')
+    res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["ZSTATUS"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
+    res["SURVEY"]    = np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
-    res["FAFLAVOR"]   = np.array(np.repeat("unknown",ntiles),dtype='<U16')
+    res["FAFLAVOR"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["GOALTIME"]  = np.zeros(ntiles)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
@@ -58,7 +58,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
             if filename.find("sv1-tiles")>=0 :
 
-                targets = np.array(np.repeat("unknown",ntiles),dtype='<U16')
+                targets = np.array(np.repeat("unknown",ntiles))
 
                 log.info("Use SV1 tiles information from {}".format(filename))
                 table=Table.read(filename)
