@@ -155,9 +155,16 @@ def main(args):
         args.output_dir = os.getenv("DESI_DASHBOARD")
     else:
         os.environ['DESI_DASHBOARD'] = args.output_dir
-        
+
+    ## Ensure we have directories to output to
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir,'files'), exist_ok=True)
+
+    ## Verify the production directory exists
     args.prod_dir = os.path.join(args.redux_dir,args.specprod)
-    
+    if not os.path.exists(args.prod_dir):
+        raise ValueError(f"Path {args.prod_dir} doesn't exist for production directory.")
+
     ############
     ## Input ###
     ############
@@ -258,7 +265,8 @@ def main(args):
             ####################################
             ### Table for individual night ####
             ####################################
-            nightly_tables.append(nightly_table(night,skipd_expids,show_null=args.show_null,use_short_sci=args.include_short_scis,args=args))
+            nightly_tables.append(nightly_table(night, args.output_dir, skipd_expids, show_null=args.show_null,
+                                                use_short_sci=args.include_short_scis))
         strTable += monthly_table(nightly_tables,month)
 
     #strTable += js_import_str(os.getenv('DESI_DASHBOARD'))
@@ -291,15 +299,14 @@ def monthly_table(tables,month):
 
     return month_table_str
 
-def nightly_table(night,skipd_expids=set(),show_null=True,use_short_sci=False,args=None):
+def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,use_short_sci=False):
     """
     Add a collapsible and extendable table to the html file for one specific night
     Input
     night: like 20200131
     output: The string to be added to the html file
     """
-    os.makedirs(os.path.join(args.output_dir,'files'), exist_ok=True)
-    filename_json = args.output_dir+'/files/night_info_'+os.getenv('SPECPROD')+'_'+night+'.json'
+    filename_json = os.path.join(output_dir,'files','night_info_'+os.getenv('SPECPROD')+'_'+night+'.json')
     if os.path.exists(filename_json):
         with open(filename_json) as json_file:
             try:
