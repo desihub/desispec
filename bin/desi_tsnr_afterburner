@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 '''
 Calculate stand alone tsnr tables for a given desispec prod.
+#  ----  Calling  ----                                                                                                                                                                                                                        
+salloc -N 2 -C haswell -q interactive -t 02:00:00                                                                                                                                                                                          
+srun -N 2 -n 18 -c 2 python desi_tsnr_afterburner
 '''
 
 import os,sys
@@ -14,6 +17,7 @@ import multiprocessing
 import yaml
 from   pkg_resources import resource_filename
 
+from   desispec.parallel import  stdouterr_redirected
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat
 from   pathlib import Path
@@ -27,6 +31,7 @@ from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
 from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
+from   mpi4py import  MPI
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
@@ -52,11 +57,11 @@ def parse(options=None):
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
     parser.add_argument('--efftime-config', type = str, default = None, required=False,
-                        help = 'Use this config file instead of default data/tsnr/tsnr-efftime.yaml')
+                        help = 'Use this config file instead of default desispec/data/tsnr/tsnr-efftime.yaml')
     parser.add_argument('--tile-completeness', type = str, default = None, required=False,
-                        help = 'Ouput tile completeness table')
+                        help = 'Output tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
-                    help = 'Path to auxiliary ttiles ables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
+                    help = 'Path to auxiliary ttiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
 
     args = None
     if options is None:
@@ -64,10 +69,6 @@ def parse(options=None):
     else:
         args = parser.parse_args(options)
     return args
-
-
-
-
 
 def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir, alpha_only=False) :
     """
@@ -150,7 +151,7 @@ def update_table(table1,table2,keys) :
 
 
 def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir) :
-    """ Writes summar file.
+    """ Writes summary file.
 
     Args:
       summary_rows: list of dictionnaries
@@ -207,7 +208,6 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     exp_summary = Table(rows=rows, names=colnames)
     exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
 
-
     # check the production exposure table
     for night in np.unique(exp_summary["NIGHT"]) :
         prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
@@ -215,7 +215,6 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
         nmissing=np.sum(missing)
         if nmissing>0 :
-
             ucam=np.unique(cam_summary["CAMERA"])
 
             for i in np.where(missing)[0] :
@@ -287,7 +286,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     log.info('Successfully wrote {}'.format(output_filename))
 
 
-def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
+def compute_camnight(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     """
     Compute TSNR for this night exposure camera (code in separate function for multiprocessing)
 
@@ -404,8 +403,8 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     cframe_hdulist.close()
     return entry
 
-def _func(arg) :
-    return func(**arg)
+def _compute_camnight(arg) :
+    return compute_camnight(**arg)
 
 def main():
     log = get_logger()
@@ -425,7 +424,10 @@ def main():
 
     log.info('prod = {}'.format(args.prod))
 
-
+    comm  = MPI.COMM_WORLD
+    rank  = comm.Get_rank()
+    size  = comm.Get_size()
+    
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
         cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
@@ -467,73 +469,119 @@ def main():
         preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
         preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
 
-
+    nights = np.sort(nights)
+        
     # starting computing
     # one night at a time
+    summary_rows = list()
 
-    summary_rows  = list()
+    comm.barrier()
 
-    for count,night in enumerate(nights) :
+    nights     = comm.bcast(nights, root=0)
 
-        dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
-        night_expids=[]
-        for dirname in dirnames :
-            try :
-                expid=int(os.path.basename(dirname))
-                night_expids.append(expid)
-            except ValueError as e :
-                log.warning("ignore {}".format(dirname))
-        if expids is not None :
-            night_expids = np.intersect1d(expids,night_expids)
-            if night_expids.size == 0 :
+    inight     = np.linspace(0, len(nights), size+1, dtype=int)
+    ranknights = nights[inight[rank]:inight[rank+1]]
+
+    rank_summary_rows = list()
+
+    log.info('Rank {:d} processes nights {}'.format(rank, ranknights))
+    
+    comm.barrier()
+
+    logfile = os.path.dirname(args.outfile) + '/desi_tsnr_afterburner_{:d}_{:d}_{:d}.log'.format(ranknights[0], ranknights[-1], rank)
+
+    with stdouterr_redirected(to=logfile):
+        for count,night in enumerate(ranknights) :
+            dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
+        
+            night_expids=[]
+            for dirname in dirnames :
+                try :
+                    expid=int(os.path.basename(dirname))
+                    night_expids.append(expid)
+                except ValueError as e :
+                    log.warning("ignore {}".format(dirname))
+
+            night_expids = np.sort(night_expids)
+                
+            if expids is not None :
+                night_expids = np.intersect1d(expids,night_expids)
+                if night_expids.size == 0 :
+                    continue
+
+            log.info("{} {}".format(night,night_expids))
+
+            func_args = []
+            for expid in night_expids :
+                for camera in cameras:
+                    func_args.append({'prod':args.prod,'night':night,'expid':expid,'camera':camera,
+                                      'recompute':args.recompute,'alpha_only':args.alpha_only,'details_dir':args.details_dir})
+
+            if args.nproc == 1 :
+                for func_arg in func_args :
+                    entry = compute_camnight(**func_arg)
+                    if entry is not None :
+                        rank_summary_rows.append(entry)
+            else :
+                log.info("Multiprocessing with {} procs".format(args.nproc))
+                pool = multiprocessing.Pool(args.nproc)
+                results  =  pool.map(_compute_camnight, func_args)
+                for entry in results :
+                    if entry is not None :
+                        rank_summary_rows.append(entry)
+                pool.close()
+                pool.join()
+
+        if len(rank_summary_rows)>0 :
+            tmpfilename=args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
+            write_summary(rank_summary_rows,tmpfilename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+            log.info("wrote {} entries in tmp file {}".format(len(rank_summary_rows),tmpfilename))
+
+    comm.barrier()
+            
+    if rank == 0:
+        tmpfilenames=glob.glob(os.path.dirname(args.outfile) + '/tsnr-exposures_tmp_*.fits')
+        ranks=np.sort([x.split('_')[-1].replace('.fits','') for x in tmpfilenames])
+
+        tsnr2_expid = None
+        tsnr2_frame = None
+        
+        for rank in ranks:
+            tmpfilename=os.path.dirname(args.outfile) + '/tsnr-exposures_tmp_{}.fits'.format(rank)
+
+            try:
+                tmp = fits.open(tmpfilename)
+
+                hdr = tmp[0].header
+                
+                if tsnr2_expid is None:
+                    tsnr2_expid = tmp['TSNR2_EXPID'].data
+                else:
+                    tsnr2_expid = np.c_[tsnr2_expid, tmp['TSNR2_EXPID'].data]
+
+                if tsnr2_frame is None:
+                    tsnr2_frame = tmp['TSNR2_FRAME'].data
+                else:
+                    tsnr2_frame = np.c_[tsnr2_frame, tmp['TSNR2_FRAME'].data]
+
+            except:
+                log.warning('{} not found.'.format(tmpfilename))
                 continue
-        log.info("{} {}".format(night,night_expids))
-
-        #pool = multiprocessing.Pool(ncpu)
-        func_args = []
-        for expid in night_expids :
-            for camera in cameras:
-                func_args.append({'prod':args.prod,'night':night,'expid':expid,'camera':camera,
-                                  'recompute':args.recompute,'alpha_only':args.alpha_only,'details_dir':args.details_dir})
-
-        if args.nproc == 1 :
-            for func_arg in func_args :
-                entry = func(**func_arg)
-                if entry is not None :
-                    summary_rows.append(entry)
-        else :
-            log.info("Multiprocessing with {} procs".format(args.nproc))
-            pool = multiprocessing.Pool(args.nproc)
-            results  =  pool.map(_func, func_args)
-            for entry in results :
-                if entry is not None :
-                    summary_rows.append(entry)
-            pool.close()
-            pool.join()
-
-
-        # write result after every other night
-        if len(summary_rows)>0 :
-            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-            write_summary(summary_rows,tmpfilename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
-            log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
-
-
-    # end of loop on nights
-    if len(summary_rows)>0 :
-        write_summary(summary_rows,args.outfile,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
-
-        # remove temporary file if successful
-        if os.path.isfile(args.outfile) :
-            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+                
+            # remove temporary file if successful
             if os.path.isfile(tmpfilename) :
                 log.info("rm temporary file {}".format(tmpfilename))
-                os.unlink(tmpfilename)
-    else :
-        log.error("no valid exposures added")
+                # os.unlink(tmpfilename)
 
+        hdus = fits.HDUList()
+        hdus.append(fits.PrimaryHDU(header=hdr))
+        hdus.append(tmp['TSNR2_EXPID'])
+        hdus.append(tmp['TSNR2_FRAME'])
+        hdus.writeto(args.outfile, overwrite=True)
 
-    if args.tile_completeness is not None :
+        log.info('Finished gather of tsnr over ranks to {}.'.format(args.outfile))
+        
+    if (rank == 0) & (args.tile_completeness is not None):
         # reread the exposure table
         exposure_table = Table.read(args.outfile)
         new_tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
@@ -542,7 +590,7 @@ def main():
             new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
         new_tile_table.write(args.tile_completeness,overwrite=True)
         log.info("wrote {}".format(args.tile_completeness))
-
-
+    
+    
 if __name__ == '__main__':
     main()

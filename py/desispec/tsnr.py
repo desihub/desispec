@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import astropy.io.fits as fits
+import copy
 import glob
 import numpy as np
 import yaml
@@ -14,6 +15,7 @@ from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 from scipy.optimize import minimize
 from desiutil.dust import ext_odonnell
+from desispec.fiberfluxcorr import psf_to_fiber_flux_correction
 
 def dust_transmission(wave,ebv):
     Rv = 3.1
@@ -341,7 +343,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     fibers = np.arange(nspec)
     rdnoise = fb_rdnoise(fibers, frame, psf)
 
-    #
+    # Extinction. 
     ebv = frame.fibermap['EBV']
 
     if np.sum(ebv!=0)>0 :
@@ -349,6 +351,29 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     else :
         log.info("TSNR MEDIAN EBV = 0")
 
+    # Fiberloss for given seeing.
+    if 'SEEING' in frame.meta: 
+        seeing = frame.meta['SEEING']
+
+        log.info('Retrieved ETC SEEING of {:.6f} arcsecond for frame.'.format(seeing))
+        
+    # Fall back to platemaker seeing.  
+    elif 'PMSEEING' in frame.meta:
+        seeing = frame.meta['PMSEEING']
+
+        log.info('Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(seeing))
+
+    else:
+        seeing = 1.1  ## arcsecond
+        
+        log.info('No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(seeing))
+
+    # Assume Gaussian.
+    seeing_fwhm = 2.35 * seeing
+        
+    # Calculate fiber loss (accounts for seeing and offset); shuffled amongst extended sources if statistical.
+    extended_sources, psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,statistical=True)
+        
     # Evaluate.
     npix = nea(fibers, frame.wave)
     angperpix = angperpix(fibers, frame.wave)
@@ -399,6 +424,8 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
         # Apply dust transmission.
         result *= dust_transmission(frame.wave, ebv)
 
+        result *= psf2fiber[:,None]
+        
         result = result**2.
 
         result /= denom

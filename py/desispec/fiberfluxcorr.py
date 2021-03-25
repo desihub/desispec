@@ -78,7 +78,7 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     return point_source_correction
 
-def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
+def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1,statistical=False):
     """
     Multiplicative factor to apply to the psf flux of a fiber
     to obtain the fiber flux, given the current exposure seeing.
@@ -126,16 +126,17 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     ps = load_platescale()
     isotropic_platescale = np.interp(x_mm**2+y_mm**2,ps['radius']**2,np.sqrt(ps['radial_platescale']*ps['az_platescale'])) # um/arcsec
+
     # we could include here a wavelength dependence on seeing
     sigmas_um  = exposure_seeing_fwhm/2.35 * isotropic_platescale # um
     offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um
     nfibers = len(fibermap)
 
     if "MORPHTYPE" in fibermap.dtype.names :
-        point_sources    = (fibermap["MORPHTYPE"]=="PSF")
+        point_sources = (fibermap["MORPHTYPE"]=="PSF")
     else :
         log.warning("no column 'MORPHTYPE' in fibermap, assume all point sources.")
-        point_sources    = np.repeat(True,len(fibermap))
+        point_sources = np.repeat(True,len(fibermap))
 
     extended_sources = ~point_sources
 
@@ -152,12 +153,23 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     max_radius=2.0
     half_light_radius_arcsec[half_light_radius_arcsec>max_radius]=max_radius
 
+    if statistical:
+        # Shuffle sizes amongst extended; preserves fiber offset.
+        ext_half_light_radius_arcsec = np.array(half_light_radius_arcsec[extended_sources], copy=True)
+
+        np.random.shuffle(ext_half_light_radius_arcsec)
+        
     # for current seeing, fiber plate scale , fiber size ...
     current_fiber_frac_point_source  = fa.value("POINT",sigmas_um,offsets_um)
     current_fiber_frac = current_fiber_frac_point_source.copy()
     # for the moment use result for an exponential disk profile
-    current_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],half_light_radius_arcsec[extended_sources])
+    current_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],ext_half_light_radius_arcsec)
 
+    if statistical:
+        log.info("Computed median statistical absolute fiber frac of {:.6f} for a seeing fwhm of: {:.6f} arcseconds.".format(np.median(current_fiber_frac), exposure_seeing_fwhm))
+        
+        return extended_sources, current_fiber_frac
+    
     # for "nominal" fiber size of 1.5 arcsec, and seeing of 1.
     nominal_isotropic_platescale = 107/1.5 # um/arcsec
     sigmas_um   = 1.0/2.35 * nominal_isotropic_platescale*np.ones(nfibers) # um
@@ -165,7 +177,7 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     nominal_fiber_frac_point_source = fa.value("POINT",sigmas_um,offsets_um)
     nominal_fiber_frac = nominal_fiber_frac_point_source.copy()
-    nominal_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],half_light_radius_arcsec[extended_sources])
+    nominal_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],ext_half_light_radius_arcsec)
 
     # legacy survey fiber frac
     #selection = (fibermap["MORPHTYPE"]=="PSF")&(fibermap["FLUX_R"]>0)
@@ -190,7 +202,6 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     """
 
-
     # compute normalization between the fast fiber acceptance computation and the one
     # done the imaging surveys assuming a Gaussian seeing of sigma=1/2.35 arcsec and a fiber of 1.5 arcsec diameter
     scale = 0.789 / np.mean(nominal_fiber_frac_point_source)
@@ -201,4 +212,6 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     corr[ok]  *= (nominal_fiber_frac[ok] / current_fiber_frac[ok])
     corr[~ok] *= 0.
 
+    log.info("Computed fiber frac relative to legacy for a nominal seeing fwhm of: {:.6f} arcseconds.".format(exposure_seeing_fwhm))
+    
     return corr
