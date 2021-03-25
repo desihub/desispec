@@ -353,23 +353,20 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
 
     # Fiberloss for given seeing.
     if 'SEEING' in frame.meta: 
-        seeing = frame.meta['SEEING']
+        seeing_fwhm = frame.meta['SEEING']
 
-        log.info('Retrieved ETC SEEING of {:.6f} arcsecond for frame.'.format(seeing))
+        log.info('Retrieved ETC SEEING of {:.6f} arcsecond for frame.'.format(seeing_fwhm))
         
     # Fall back to platemaker seeing.  
     elif 'PMSEEING' in frame.meta:
-        seeing = frame.meta['PMSEEING']
+        seeing_fwhm = frame.meta['PMSEEING']
 
-        log.info('Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(seeing))
+        log.info('Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(seeing_fhwm))
 
     else:
-        seeing = 1.1  ## arcsecond
+        seeing_fwhm = 1.1  ## arcsecond
         
-        log.info('No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(seeing))
-
-    # Assume Gaussian.
-    seeing_fwhm = 2.35 * seeing
+        log.info('No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(seeing_fwhm))
         
     # Calculate fiber loss (accounts for seeing and offset); shuffled amongst extended sources if statistical.
     extended_sources, psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,statistical=True)
