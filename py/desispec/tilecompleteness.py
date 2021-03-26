@@ -54,6 +54,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["LYA_EFFTIME_DARK"]=np.zeros(ntiles)
     res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
+    res["LASTNIGHT"] = np.zeros(ntiles, dtype=np.int32)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     if auxiliary_table_filenames is not None :
@@ -149,6 +150,14 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][partial]="obsstart"
 
+    # what was the last night on which each tile was observed,
+    # for looking up the cumulative redshift file
+    for i, tileid in enumerate(res['TILEID']):
+        thistile = (exposure_table['TILEID'] == tileid)
+        res['LASTNIGHT'][i] = np.max(exposure_table['NIGHT'][thistile])
+
+    assert np.all(res['LASTNIGHT'] > 0)
+
     res = reorder_columns(res)
 
     # reorder rows
@@ -158,7 +167,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','EFFTIME_ETC','EFFTIME_SPEC','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC']
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','EFFTIME_ETC','EFFTIME_SPEC','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
         print("error, mismatch of some keys")
