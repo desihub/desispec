@@ -153,7 +153,7 @@ def main(args):
 
         frame.meta['TSNRALPH'] = alpha
 
-        comments = {k:"from calc_frame_tsnr" for k in results.keys()}
+        comments = {k:"from calc_frame_tsnr" for k in results.keys() if 'TSNR2' in k}
         append_frame_scores(frame,results,comments,overwrite=True)
 
     # record inputs

@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 '''
 Calculate stand alone tsnr tables for a given desispec prod.
-#  ----  Calling  ----                                                                                                                                                                                                                        
-salloc -N 2 -C haswell -q interactive -t 02:00:00                                                                                                                                                                                          
+
+salloc -N 2 -C haswell -q interactive -t 00:30:00                                                                                                                                                                                          
+
 srun -N 2 -n 18 -c 2 python desi_tsnr_afterburner
 '''
 
@@ -32,6 +33,7 @@ from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
 from   mpi4py import  MPI
+from   desitarget.targets import main_cmx_or_sv
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
@@ -87,6 +89,7 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
 
     calib  = findfile('fluxcalib', night=night, expid=expid,
                       camera=camera, specprod_dir=specprod_dir)
+    
     flat = cframe_hdulist[0].header['FIBERFLT']
 
     if 'SPECPROD' in flat:
@@ -110,10 +113,15 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
                                 skymodel=skymodel, fluxcalib=fluxcalib, alpha_only=alpha_only)
 
     table=Table()
-    for k in results:
-        table[k] = results[k].astype(np.float32)
+    for k in results.keys():
+        if 'TSNR2' in k:
+            table[k] = results[k].astype(np.float32)
+        
     table["TSNR2_ALPHA_"+camera[0].upper()] = np.repeat(alpha,len(frame.flux))
 
+    table.meta['EBV'] =	results['ebv']
+    table.meta['SEEING_FWHM'] = results['seeing_fwhm']
+    
     return table
 
 
@@ -188,7 +196,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","SURVEY","GOALTYP","FAFLAVOR","GOALTIME"] :
+        for k in ["NIGHT","EXPID","TILEID","SURVEY","GOALTYP","FAFLAVOR","GOALTIME","SEEING_FWHM","EBV"] :
             row[k]=cam_summary[k][ii][0]
         # mean
         row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
@@ -196,6 +204,11 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         #- Per EXPID TSNR2 is summed over cameras, averaged over petals
         for colname in tsnr2_colnames:
             tsnr2_petal = list()  #- TSNR^2 summed over cameras, per petal
+
+            if 'TSNR2_ALPHA' in colname:
+                row['TSNR2_MAXALPHA'] = cam_summary[colname][ii].max()
+                continue
+                
             for petal in range(10):
                 jj = ii & ispetal[petal]
                 if np.any(jj):
@@ -223,9 +236,9 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
                 entry["NIGHT"]=night
                 entry["TILEID"]=prod_table["TILEID"][i]
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
-                entry["SURVEY"]="UNKOWN"
-                entry["GOALTYP"]="UNKOWN"
-                entry["FAFLAVOR"]="UNKOWN"
+                entry["SURVEY"]=prod_table["OBSTYPE"][i].upper()
+                entry["GOALTYP"]="UNKNOWN"
+                entry["FAFLAVOR"]="UNKNOWN"
                 entry["GOALTIME"]=0.
 
                 vals=[]
@@ -313,6 +326,11 @@ def compute_camnight(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     if flavor != 'science':
         return None
 
+    if 'FIBERFLT' not in hdr:
+        log.warning("Missing FIBERFLT in {}".format(cframe_filename))
+        
+        return None
+        
     log.info("Processing {}".format(cframe_filename))
 
     prog   = hdr['PROGRAM']
@@ -348,6 +366,8 @@ def compute_camnight(prod,night,expid,camera,recompute,alpha_only,details_dir) :
             for k in tsnr_table.columns :
                 table[k] = tsnr_table[k]
 
+        table.meta = tsnr_table.meta
+
     fibermap = cframe_hdulist["FIBERMAP"].data
 
     table['FIBER']       = fibermap['FIBER']
@@ -373,6 +393,9 @@ def compute_camnight(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['TILEID'] = np.int32(tileid)
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
     entry['CAMERA'] = camera
+    entry['EBV'] = table.meta['EBV']
+    entry['SEEING_FWHM'] = table.meta['SEEING_FWHM']
+    
     for key in table.colnames:
         if key.startswith('TSNR2_'):
             #- TSNR2_{TRACER}_{BAND} -> TSNR2_{TRACER}
@@ -390,7 +413,13 @@ def compute_camnight(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     for k in ["SURVEY","GOALTYP","FAFLAVOR"] :
         if k in fibermap_header :
             entry[k] = fibermap_header[k].strip().upper()
-        else :
+
+        elif k == 'SURVEY':
+            _, _, surv = main_cmx_or_sv(fibermap, rename=False, scnd=False)
+
+            entry[k] = surv.upper()
+            
+        else:
             entry[k] = "UNKNOWN"
 
 
@@ -490,6 +519,10 @@ def main():
     
     logfile = os.path.dirname(args.outfile) + '/desi_tsnr_afterburner_{:d}_{:d}_{:d}.log'.format(ranknights[0], ranknights[-1], rank)
 
+    # Remove existing log.
+    if os.path.isfile(logfile):
+        os.unlink(logfile)    
+    
     with stdouterr_redirected(to=logfile):
         for count,night in enumerate(ranknights) :
             dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
@@ -542,14 +575,11 @@ def main():
     if rank == 0:
         log.info('Gathering TSNR tmp tables over ranks ({})'.format(size))
         
-        tmpfilenames=glob.glob(os.path.dirname(args.outfile) + '/tsnr-exposures_tmp_*.fits')
-        ranks=np.sort([x.split('_')[-1].replace('.fits','') for x in tmpfilenames])
-
         tsnr2_expid = None
         tsnr2_frame = None
         
-        for rank in ranks:
-            tmpfilename=os.path.dirname(args.outfile) + '/tsnr-exposures_tmp_{}.fits'.format(rank)
+        for rank in range(size):
+            tmpfilename=args.outfile.replace('.fits', '_tmp_{:d}.fits'.format(rank))
 
             try:
                 tmp = fits.open(tmpfilename)
@@ -575,17 +605,23 @@ def main():
                 log.info("rm temporary file {}".format(tmpfilename))
                 os.unlink(tmpfilename)
 
-        tsnr2_expid.meta['EXTNAME'] = 'TSNR2_EXPID'
-        tsnr2_frame.meta['EXTNAME'] = 'TSNR2_FRAME'
-                
-        hdus = fits.HDUList()
-        hdus.append(fits.PrimaryHDU(header=hdr))
-        hdus.append(fits.convenience.table_to_hdu(tsnr2_expid))
-        hdus.append(fits.convenience.table_to_hdu(tsnr2_frame))
-        hdus.writeto(args.outfile, overwrite=True)
+        if tsnr2_expid is not None:
+            tsnr2_expid.meta['EXTNAME'] = 'TSNR2_EXPID'
+            tsnr2_frame.meta['EXTNAME'] = 'TSNR2_FRAME'
 
-        log.info('Finished gather of tsnr over ranks to {}.'.format(args.outfile))
-        
+            tsnr2_expid.pprint(max_width=-1, max_lines=-1)
+            
+            hdus = fits.HDUList()
+            hdus.append(fits.PrimaryHDU(header=hdr))
+            hdus.append(fits.convenience.table_to_hdu(tsnr2_expid))
+            hdus.append(fits.convenience.table_to_hdu(tsnr2_frame))
+            hdus.writeto(args.outfile, overwrite=True)
+
+            log.info('Finished gather of tsnr over ranks to {}.'.format(args.outfile))
+
+        else:
+            log.warning('Rank 0 gather of tsnr tmp files failed.')
+            
     if (rank == 0) & (args.tile_completeness is not None):
         # reread the exposure table
         exposure_table = Table.read(args.outfile)

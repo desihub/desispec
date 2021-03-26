@@ -277,7 +277,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=False):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -347,26 +347,26 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     ebv = frame.fibermap['EBV']
 
     if np.sum(ebv!=0)>0 :
-        log.info("TSNR MEDIAN EBV = {:.3f}".format(np.median(ebv[ebv!=0])))
+        log.info("{} {} TSNR MEDIAN EBV = {:.3f}".format(frame.meta["EXPID"], camera, np.median(ebv[ebv!=0])))
     else :
-        log.info("TSNR MEDIAN EBV = 0")
+        log.info("{} {} TSNR MEDIAN EBV = 0.0".format(frame.meta["EXPID"], camera))
 
     # Fiberloss for given seeing.
     if 'SEEING' in frame.meta: 
         seeing_fwhm = frame.meta['SEEING']
 
-        log.info('Retrieved ETC SEEING of {:.6f} arcsecond for frame.'.format(seeing_fwhm))
+        log.info('{} {} Retrieved ETC SEEING of {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
         
     # Fall back to platemaker seeing.  
     elif 'PMSEEING' in frame.meta:
         seeing_fwhm = frame.meta['PMSEEING']
 
-        log.info('Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(seeing_fwhm))
+        log.info('{} {} Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
 
     else:
-        seeing_fwhm = 1.1  ## arcsecond
+        seeing_fwhm = 1.1 ## arcsecond
         
-        log.info('No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(seeing_fwhm))
+        log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
         
     # Calculate fiber loss (accounts for seeing and offset); shuffled amongst extended sources if statistical.
     extended_sources, psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,statistical=True)
@@ -377,7 +377,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     angperspecbin = np.mean(np.gradient(frame.wave))
 
     for label, x in zip(['RDNOISE', 'NEA', 'ANGPERPIX', 'ANGPERSPECBIN'], [rdnoise, npix, angperpix, angperspecbin]):
-        log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
+        log.info('{} {} {} \t {:.3f} +- {:.3f}'.format(frame.meta["EXPID"], camera, label.ljust(10), np.median(x), np.std(x)))
 
     # Relative weighting between rdnoise & sky terms to model var.
     alpha = calc_alpha(frame, fibermap=frame.fibermap,
@@ -385,7 +385,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
                 angperpix=angperpix, angperspecbin=angperspecbin,
                 fiberflat=fiberflat, skymodel=skymodel)
 
-    log.info(f"TSNR ALPHA = {alpha:.6f}")
+    log.info("{} {} TSNR ALPHA = {:.6f}".format(frame.meta["EXPID"], camera, alpha))
 
     if alpha_only:
         return {}, alpha
@@ -421,20 +421,28 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
         # Apply dust transmission.
         result *= dust_transmission(frame.wave, ebv)
 
-        # result *= psf2fiber[:,None]
+        result *= psf2fiber[:,None]
         
         result = result**2.
 
-        result /= denom
+        if model_ivar:
+            result /= denom
 
+        else:
+            result *= frame.ivar
+            
         # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
         tsnrs[tracer] = np.sum(result * maskfactor, axis=1)
 
     results=dict()
+
+    results['ebv'] = np.median(ebv)
+    results['seeing_fwhm'] = seeing_fwhm
+    
     for tracer in tsnrs.keys():
         key = 'TSNR2_{}_{}'.format(tracer.upper(), band.upper())
         results[key]=tsnrs[tracer]
-        log.info('{} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
+        log.info('{} {} {} = {:.6f}'.format(frame.meta["EXPID"], camera, key, np.median(tsnrs[tracer])))
 
     return results, alpha
 
