@@ -216,8 +216,8 @@ wait
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
     zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
-    redrock={outdir}/zbest-$SPECTRO-{suffix}.h5
-    rrlog={outdir}/zbest-$SPECTRO-{suffix}.log
+    redrock={outdir}/redrock-$SPECTRO-{suffix}.h5
+    rrlog={outdir}/redrock-$SPECTRO-{suffix}.log
 
     if [ -f $zbest ]; then
         echo $(basename $zbest) already exists, skipping redshifts
