@@ -7,23 +7,27 @@ Examples:
 
 All exposures of tile 80605 on night 20201215:
 
-    desi_tile_redshifts --tile 80605 --night 20201215
+    desi_tile_redshifts --tile 80605 --night 20201215 --group pernight
 
-Exposures E1 E2 E3 on night 20201215 (auto splitting by TILEID if needed):
+All exposures of tile 80605 on night 20201215 and prior:
 
-    desi_tile_redshifts --night 20201215 --expid 67972 67973 67968 67969
-
-Tile 80605 combined across multiple nights:
-
-    desi_tile_redshifts --tile 80605 --night 20201214 20201215 --group blat
+    desi_tile_redshifts --tile 80605 --night 20201215 --group cumulative
 
 Tile 80605 combined across all nights:
 
-    desi_tile_redshifts --tile 80605 --group all
+    desi_tile_redshifts --tile 80605 --group cumulative
+
+Tile 80605 on nights 20201214 20201215:
+
+    desi_tile_redshifts --tile 80605 --night 20201214 20201215 --group blat
+
+Exposures E1 E2 E3 on night 20201215 (auto splitting by TILEID if needed):
+
+    desi_tile_redshifts --night 20201215 --expid 67972 67973 67968 67969 --group foo
 
 Generate scripts for every tile on 20201215 but don't submit batch jobs:
 
-    desi_tile_redshifts --night 20201215 --nosubmit
+    desi_tile_redshifts --night 20201215 --group pernight --nosubmit
 
 Use exposures from a separately curated input list:
 
@@ -31,7 +35,7 @@ Use exposures from a separately curated input list:
 
 Not supported yet: multiple tiles on a single night in a single call:
 
-    desi_tile_redshifts --night 20201215 --tileid 80605 80606 80607
+    desi_tile_redshifts --night 20201215 --tileid 80605 80606 80607 --group cumulative
 
 """
 
@@ -41,7 +45,8 @@ p = argparse.ArgumentParser()
 p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
 p.add_argument("-t", "--tileid", type=int, help="Tile ID")
 p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
-p.add_argument("-g", "--group", type=str, help="night group name")
+p.add_argument("-g", "--group", type=str, required=True,
+        help="cumulative, pernight, perexp, or a custom name")
 p.add_argument("--explist", type=str,
         help="file with columns TILE NIGHT EXPID to use")
 p.add_argument("--nosubmit", action="store_true",
@@ -81,7 +86,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         tileid (int): Tile ID
         exptable (Table): has columns NIGHT EXPID to use; ignores other columns.
             Doesn't need to be full pipeline exposures table (but could be)
-        group (str): group name, e.g. YEARMMDD or "all" or "good"
+        group (str): cumulative, pernight, perexp, or a custom name
 
     Options:
         spectrographs (list of int): spectrographs to include
@@ -100,6 +105,11 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     if spectrographs is None:
         spectrographs = (0,1,2,3,4,5,6,7,8,9)
 
+    if (group == 'perexp') and len(exptable)>1:
+        msg = f'group=perexp requires 1 exptable row, not {len(exptable)}'
+        log.error(msg)
+        raise ValueError(msg)
+
     spectro_string = ' '.join([str(sp) for sp in spectrographs])
     num_nodes = len(spectrographs)
 
@@ -107,12 +117,34 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     for night, expid in zip(exptable['NIGHT'], exptable['EXPID']):
         frame_glob.append(f'exposures/{night}/{expid:08d}/cframe-[brz]$SPECTRO-{expid:08d}.fits')
 
+    night = np.max(exptable['NIGHT'])
+
     frame_glob = ' '.join(frame_glob)
 
+    #- output directory relative to reduxdir
+    if group == 'cumulative':
+        outdir = f'tiles/{group}/{tileid}/{night}'
+        suffix = f'{tileid}-thru{night}'
+    elif group == 'pernight':
+        outdir = f'tiles/{group}/{tileid}/{night}'
+        suffix = f'{tileid}-{night}'
+    elif group == 'perexp':
+        outdir = f'tiles/{group}/{tileid}/{expid:08d}'
+        suffix = f'{tileid}-exp{expid:08d}'
+    elif group == 'pernight-v0':
+        outdir = f'tiles/{tileid}/{night}'
+        suffix = f'{tileid}-{night}'
+    else:
+        outdir = f'tiles/{group}/{tileid}'
+        suffix = f'{tileid}-{group}'
+        log.warning(f'Non-standard tile group={group}; writing outputs to {outdir}/PREFIX-{suffix}.*')
+
     reduxdir = desispec.io.specprod_root()
-    scriptdir = f'{reduxdir}/run/scripts/tiles/{tileid}/{group}'
+    scriptdir = f'{reduxdir}/run/scripts/{outdir}'
     os.makedirs(scriptdir, exist_ok=True)
-    batchscript = f'{scriptdir}/coadd-redshifts-{tileid}-{group}.slurm'
+
+    jobname = f'{scriptdir}/redrock-{suffix}.slurm'
+    batchscript = f'{scriptdir}/coadd-redshifts-{suffix}.slurm'
     batchlog = batchscript.replace('.slurm', r'-%j.log')
 
     #- TODO: generalize beyond Cori haswell realtime
@@ -123,7 +155,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 #SBATCH -N {num_nodes}
 #SBATCH --account desi
 #SBATCH --qos {queue}
-#SBATCH --job-name redrock-{tileid}-{group}
+#SBATCH --job-name {jobname}
 #SBATCH --output {batchlog}
 #SBATCH --time=00:20:00
 #SBATCH --exclusive
@@ -131,11 +163,11 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 echo Starting at $(date)
     
 cd $DESI_SPECTRO_REDUX/$SPECPROD
-mkdir -p tiles/{tileid}/{group}
+mkdir -p {outdir}
 echo Generating files in $(pwd)/tiles/{tileid}/{group}
 for SPECTRO in {spectro_string}; do
-    spectra=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.fits
-    splog=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.log
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    splog={outdir}/spectra-$SPECTRO-{suffix}.log
 
     if [ -f $spectra ]; then
         echo $(basename $spectra) already exists, skipping grouping
@@ -162,9 +194,9 @@ echo Waiting for desi_group_spectra to finish at $(date)
 wait
 
 for SPECTRO in {spectro_string}; do
-    spectra=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.fits
-    coadd=tiles/{tileid}/{group}/coadd-$SPECTRO-{tileid}-{group}.fits
-    colog=tiles/{tileid}/{group}/coadd-$SPECTRO-{tileid}-{group}.log
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
+    colog={outdir}/coadd-$SPECTRO-{suffix}.log
 
     if [ -f $coadd ]; then
         echo $(basename $coadd) already exists, skipping coadd
@@ -182,10 +214,10 @@ echo Waiting for desi_coadd_spectra to finish at $(date)
 wait
 
 for SPECTRO in {spectro_string}; do
-    spectra=tiles/{tileid}/{group}/spectra-$SPECTRO-{tileid}-{group}.fits
-    zbest=tiles/{tileid}/{group}/zbest-$SPECTRO-{tileid}-{group}.fits
-    redrock=tiles/{tileid}/{group}/redrock-$SPECTRO-{tileid}-{group}.h5
-    rrlog=tiles/{tileid}/{group}/redrock-$SPECTRO-{tileid}-{group}.log
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
+    redrock={outdir}/zbest-$SPECTRO-{suffix}.h5
+    rrlog={outdir}/zbest-$SPECTRO-{suffix}.log
 
     if [ -f $zbest ]; then
         echo $(basename $zbest) already exists, skipping redshifts
@@ -330,15 +362,16 @@ if len(exptable) == 0:
     log.critical(f'No exposures left after filtering by tileid/night/expid')
     sys.exit(1)
 
-#- default group is the YEARMMDD night, but must be given if combining nights
-if args.group is not None:
-    group = args.group
-else:
-    if len(np.unique(exptable['NIGHT'])) == 1:
-        group = str(exptable['NIGHT'][0])
-    else:
-        log.critical('If using more than one night, must specify --group')
-        sys.exit(1)
+#- If cumulative, find all prior exposures that also observed these tiles
+#- NOTE: depending upon options, this might re-read all the exptables again
+#- NOTE: this may not scale well several years into the survey
+if args.group == 'cumulative':
+    log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
+    allexp = _read_minimal_exptables()
+    keep = np.in1d(allexp['TILEID'], tileids)
+    exptable = allexp[keep]
+    expids = np.array(exptable['EXPID'])
+    tileids = np.unique(np.array(exptable['TILEID']))
 
 #- Generate the scripts and optionally submit them
 failed_jobs = list()
@@ -348,11 +381,20 @@ for tileid in tileids:
     expids = np.unique(np.array(exptable['EXPID'][tilerows]))
     log.info(f'Tile {tileid} nights={nights} expids={expids}')
     submit = (not args.nosubmit)
-    batchscript, batcherr = batch_tile_redshifts(
-            tileid, exptable[tilerows], group, submit=submit,
+    if args.group != 'perexp':
+        batchscript, batcherr = batch_tile_redshifts(
+            tileid, exptable[tilerows], args.group, submit=submit,
             queue=args.batch_queue, reservation=args.batch_reservation,
             dependency=args.batch_dependency
             )
+    else:
+        for i in range(len(exptable[tilerows])):
+            batchscript, batcherr = batch_tile_redshifts(
+                tileid, exptable[tilerows][i:i+1], args.group, submit=submit,
+                queue=args.batch_queue, reservation=args.batch_reservation,
+                dependency=args.batch_dependency
+                )
+
 
     if batcherr != 0:
         failed_jobs.append(batchscript)
