@@ -40,7 +40,8 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
     res["TILEID"]=tiles
     res["SURVEY"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
-    res["FAPRGM"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["FAPRGRM"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["FAFLAVOR"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["NEXP"]=np.zeros(ntiles,dtype=int)
     res["EXPTIME"]=np.zeros(ntiles)
     res["EFFTIME_ETC"]=np.zeros(ntiles)
@@ -104,7 +105,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                     if np.any(exposure_table[k][jj]==0) : res[k][i]=0 # because we are missing data
 
         # copy the following from the exposure table if it exists
-        for k in ["SURVEY","GOALTYPE","FAPRGM"] :
+        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
             if k in exposure_table.dtype.names :
                 val = exposure_table[k][jj][0]
                 if val != "unknown" :
@@ -157,7 +158,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGM','NEXP','EXPTIME','EFFTIME_ETC','EFFTIME_SPEC','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC']
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','EFFTIME_ETC','EFFTIME_SPEC','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
         print("error, mismatch of some keys")
