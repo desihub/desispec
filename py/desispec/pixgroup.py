@@ -19,6 +19,7 @@ import desiutil.depend
 
 from . import io
 from .maskbits import specmask
+from .tsnr import calc_tsnr2_cframe
 
 def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
     '''
@@ -195,7 +196,9 @@ class FrameLite(object):
             [night, expid, mjd, tileid],
             usemask=False)
 
-        return FrameLite(wave, flux, ivar, mask, resolution_data, fibermap, header, scores)
+        fr = FrameLite(wave, flux, ivar, mask, resolution_data, fibermap, header, scores)
+        fr.filename = filename
+        return fr
 
 #-----
 class SpectraLite(object):
@@ -493,7 +496,32 @@ def frames2spectra(frames, pix=None, nside=64):
     '''
     log = get_logger()
 
-    #- First make sure that the given set of frames is complete
+    #- To support combining old+new data, recalculate TSNR2 if any
+    #- frames are missing TSNR2* scores present in other frames of same bad.
+    #- Assume longest list per camera is the one we want, because we also
+    #- need to preserve order.  Ugh.
+    frame_scores_columns = dict()
+    scores_columns = dict(b=[], r=[], z=[])
+    for (night,expid,cam), frame in frames.items():
+        brz = cam.lower()[0]
+        cols = frame.scores.dtype.names
+        frame_scores_columns[(night,expid,cam)] = cols
+        if len(cols) > len(scores_columns[brz]):
+            scores_columns[brz] = cols
+
+    for (night,expid,cam), frame in frames.items():
+        brz = cam.lower()[0]
+        if frame_scores_columns[(night,expid,cam)] != scores_columns[brz]:
+            log.warning(f'Recalculating TSNR2 for ({night},{expid},{cam})')
+            s = Table(frame.scores)
+            tsnr2, alpha = calc_tsnr2_cframe(frame)
+            for key in tsnr2:
+                s[key] = tsnr2[key]
+
+            #- standardize order
+            frame.scores = np.array(s[scores_columns[brz]])
+
+    #- Make sure that the given set of frames is complete
     #- If not, fill in missing cameras so that the stack works properly
     add_missing_frames(frames)
 
