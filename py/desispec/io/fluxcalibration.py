@@ -18,7 +18,8 @@ from desiutil.io import encode_table
 from .util import fitsheader, native_endian, makepath
 from . import iotime
 
-def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
+def write_stdstar_models(norm_modelfile, normalizedFlux, wave, fibers, data,
+        fibermap, input_exposures, header=None):
     """Writes the normalized flux for the best models.
 
     Args:
@@ -27,6 +28,8 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
         wave : 1D array of wavelengths[nwave] in Angstroms
         fibers : 1D array of fiberids for these spectra
         data : meta data table about which templates best fit
+        fibermap : fibermaps rows for the input standard stars
+        input_exposures : Table with NIGHT, EXPID, CAMERA of input frames used
     """
     log = get_logger()
     hdr = fitsheader(header)

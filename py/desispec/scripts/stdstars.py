@@ -689,6 +689,8 @@ def main(args, comm=None) :
         log.error("No star has been fit.")
         sys.exit(12)
 
+    # 
+
     # Now write the normalized flux for all best models to a file
     if rank == 0:
         data={}
