@@ -271,6 +271,7 @@ def _read_minimal_exptables(nights=None):
         trimming down the columns.  This trims to just the minimal columns
         needed by desi_tile_redshifts.
     """
+    log = get_logger()
     if nights is None:
         nights = list()
         reduxdir = desispec.io.specprod_root()
@@ -283,13 +284,20 @@ def _read_minimal_exptables(nights=None):
 
     exptables = list()
     for night in nights:
-        t = Table.read(get_exposure_table_pathname(night))
-        keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
-        if 'LASTSTEP' in t.colnames:        
-            keep &= (t['LASTSTEP'] == 'all')
+        expfile = get_exposure_table_pathname(night)
+        if os.path.exists(expfile):
+            t = Table.read(expfile)
+            keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
+            if 'LASTSTEP' in t.colnames:
+                keep &= (t['LASTSTEP'] == 'all')
 
-        t = t[keep]
-        exptables.append(t['TILEID', 'NIGHT', 'EXPID'])
+            t = t[keep]
+            exptables.append(t['TILEID', 'NIGHT', 'EXPID'])
+        elif night >= 20201201:
+            log.error(f"Exposure table missing for night {night}")
+        else:
+            #- these are expected for the daily run, ok
+            log.debug(f"Exposure table missing for night {night}")
 
     return vstack(exptables)
 
