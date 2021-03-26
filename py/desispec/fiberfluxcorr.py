@@ -197,8 +197,11 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1,statistical=F
     if statistical:
         log.info("Computed median statistical absolute fiber frac of {:.6f} ({:.6f} for PSF) for a seeing fwhm of: {:.6f} arcseconds.".format(np.median(current_fiber_frac), np.median(current_fiber_frac_point_source), exposure_seeing_fwhm))
         log.info("Fraction of current fiber_frac_point_source targets with zero fiber throughput: {:.6f}".format(np.mean(current_fiber_frac_point_source == 0.0)))
+
+        ratio = (current_fiber_frac / current_fiber_frac_point_source)
+        ratio[current_fiber_frac_point_source == 0.0] = 0.0
         
-        return extended_sources, (current_fiber_frac / current_fiber_frac_point_source)
+        return extended_sources, ratio
     
     # for "nominal" fiber size of 1.5 arcsec, and seeing of 1.
     nominal_isotropic_platescale = 107/1.5 # um/arcsec

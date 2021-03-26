@@ -277,7 +277,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=False):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True):
     '''
     Compute template SNR^2 values for a given frame
 
