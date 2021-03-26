@@ -661,10 +661,10 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
         # the parameters are the unconvolved sky flux at the wavelength i
         # and the polynomial coefficients
 
-        A=scipy.sparse.csr_matrix((nwave,nwave),dtype=float)
+        A=np.zeros((nwave,nwave),dtype=float)
         B=np.zeros((nwave),dtype=float)
-        D=scipy.sparse.dia_matrix((nwave,nwave))
-        D2=scipy.sparse.dia_matrix((nwave,nwave))
+        D=scipy.sparse.lil_matrix((nwave,nwave))
+        D2=scipy.sparse.lil_matrix((nwave,nwave))
 
         Pol /= coef[0] # force constant term to 1.
 
@@ -676,9 +676,8 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
             D.setdiag(sqrtw[fiber])
             D2.setdiag(Pol[fiber])
             sqrtwRP = D.dot(Rsky[fiber]).dot(D2) # each row r of R is multiplied by sqrtw[r]
-            A += sqrtwRP.T*sqrtwRP
+            A += (sqrtwRP.T*sqrtwRP).todense()
             B += sqrtwRP.T*sqrtwflux[fiber]
-        A = A.toarray()
 
         log.info("iter %d solving"%iteration)
         w = A.diagonal()>0
