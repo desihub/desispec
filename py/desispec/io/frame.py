@@ -236,6 +236,9 @@ def read_frame(filename, nspec=None, skip_resolution=False):
                   scores=scores,scores_comments=scores_comments,
                   wsigma=qwsigma,ndiag=qndiag, suppress_res_warning=skip_resolution)
 
+    # This Frame came from a file, so set that
+    frame.filename = os.path.abspath(filename)
+
     # Vette
     diagnosis = frame.vet()
     if diagnosis != 0:

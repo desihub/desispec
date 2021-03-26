@@ -6,6 +6,7 @@ import numpy as np
 import yaml
 from pkg_resources import resource_filename
 
+import desispec.io
 from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
 from scipy.interpolate import RectBivariateSpline
@@ -274,6 +275,43 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 #- Cache files from desimodel to avoid reading them N>>1 times
 _camera_nea_angperpix = None
 _band_ensemble = None
+
+def calc_tsnr2_cframe(cframe):
+    """
+    Given cframe, calc_tsnr2 guessing frame,fiberflat,skymodel,fluxcalib to use
+
+    Args:
+        cframe: input cframe Frame object
+
+    Returns (results, alpha) from calc_tsnr2
+    """
+    log = get_logger()
+    dirname, filename = os.path.split(cframe.filename)
+    framefile = os.path.join(dirname, filename.replace('cframe', 'frame'))
+    skyfile = os.path.join(dirname, filename.replace('cframe', 'sky'))
+    fluxcalibfile = os.path.join(dirname, filename.replace('cframe', 'fluxcalib'))
+
+    for testfile in (framefile, skyfile, fluxcalibfile):
+        if not os.path.exists(testfile):
+            msg = 'missing {testfile}; unable to calculate TSNR2'
+            log.error(msg)
+            raise ValueError(msg)
+
+    night = cframe.meta['NIGHT']
+    expid = cframe.meta['EXPID']
+    camera = cframe.meta['CAMERA']
+    fiberflatfile = desispec.io.findfile('fiberflatnight', night, camera=camera)
+    if not os.path.exists(fiberflatfile):
+        ffname = os.path.basename(fiberflatfile)
+        log.warning(f'{ffname} not found; using default calibs')
+        fiberflatfile = findcalibfile([cframe.meta,], 'FIBERFLAT')
+
+    frame = desispec.io.read_frame(framefile)
+    fiberflat = desispec.io.read_fiberflat(fiberflatfile)
+    skymodel = desispec.io.read_sky(skyfile)
+    fluxcalib = desispec.io.read_flux_calibration(fluxcalibfile)
+
+    return calc_tsnr2(frame, fiberflat, skymodel, fluxcalib)
 
 def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     '''
