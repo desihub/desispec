@@ -15,12 +15,14 @@ from astropy.table import Table,vstack
 from desiutil.log import get_logger
 
 
-def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_filenames) :
+def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_filenames,min_number_of_petals=8) :
     """ Computes a summary table of the observed tiles
 
     Args:
       exposure_table: astropy.table.Table with exposure summary table from a prod (output of desi_tsnr_afterburner)
       specprod_dir: str, production directory name
+      auxiliary_table_filenames: list(str), list of auxiliary table names, optional
+      min_number_of_petals: int, minimum number of petals to declare a tile done
     Returns: astropy.table.Table with one row per TILEID, with completeness and exposure time.
     """
 
@@ -37,20 +39,21 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res=Table()
 
     res["TILEID"]=tiles
-    res["EXPTIME"]=np.zeros(ntiles)
+    res["SURVEY"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["FAPRGRM"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["FAFLAVOR"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["NEXP"]=np.zeros(ntiles,dtype=int)
+    res["EXPTIME"]=np.zeros(ntiles)
     res["EFFTIME_ETC"]=np.zeros(ntiles)
     res["EFFTIME_SPEC"]=np.zeros(ntiles)
+    res["GOALTIME"]  = np.zeros(ntiles)
+    res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["ZDONE"]   = np.array(np.repeat("false",ntiles),dtype='<U20')
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
     res["LYA_EFFTIME_DARK"]=np.zeros(ntiles)
-    res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U20')
-    res["ZSTATUS"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
-    res["SURVEY"]    = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
-    res["FAFLAVOR"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
-    res["GOALTIME"]  = np.zeros(ntiles)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     if auxiliary_table_filenames is not None :
@@ -102,11 +105,12 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                     if np.any(exposure_table[k][jj]==0) : res[k][i]=0 # because we are missing data
 
         # copy the following from the exposure table if it exists
-        for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
+        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
             if k in exposure_table.dtype.names :
                 val = exposure_table[k][jj][0]
                 if val != "unknown" :
                     res[k][i] = val # force consistency
+
         for k in ["GOALTIME","MINTFRAC"] :
             if k in exposure_table.dtype.names :
                 val = exposure_table[k][jj][0]
@@ -131,10 +135,46 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
     done=(res["EFFTIME_SPEC"]>res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][done]="obsend"
+
+    for i in np.where((res["OBSSTATUS"]=="obsend")&(res["ZDONE"]=="false"))[0] :
+        tileid=res["TILEID"][i]
+        log.info("checking redshifts for tile {}".format(tileid))
+        exposure_indices=np.where(exposure_table["TILEID"]==tileid)[0]
+        night = np.max(exposure_table["NIGHT"][exposure_indices])
+        nok   = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir)
+        if nok >= min_number_of_petals :
+            res["ZDONE"][i]="true"
+        elif nok > 0 :
+            log.warning("keep ZDONE=false for tile {} because only {} good petals (requirement is >={})".format(tileid,nok,min_number_of_petals))
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][partial]="obsstart"
 
+    res = reorder_columns(res)
+
+    # reorder rows
+    ii  = np.argsort(res["TILEID"])
+    res = res[ii]
+
     return res
+
+def reorder_columns(table) :
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','EFFTIME_ETC','EFFTIME_SPEC','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC']
+
+    if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
+        print("error, mismatch of some keys")
+        print(sorted(neworder))
+        print(sorted(table.dtype.names))
+        sys.exit(12)
+
+    if np.all(np.array(neworder)==np.array(table.dtype.names)) : # same
+        return table
+
+    newtable=Table()
+    newtable.meta=table.meta
+    for k in neworder :
+       newtable[k]=table[k]
+
+    return newtable
 
 def merge_tile_completeness_table(previous_table,new_table) :
     """ Merges tile summary tables. Entries with tiles previously marked as ZDONE are not modified.
@@ -144,9 +184,8 @@ def merge_tile_completeness_table(previous_table,new_table) :
       new_table: astropy.table.Table
     Returns: astropy.table.Table with merged entries.
     """
-    # do not change the status of a ZDONE tile ; it's too late
 
-    keep_from_previous = (previous_table["ZSTATUS"]=="ZDONE") | (~np.in1d(previous_table["TILEID"],new_table["TILEID"]))
+    keep_from_previous = (previous_table["ZDONE"]=="true") | (~np.in1d(previous_table["TILEID"],new_table["TILEID"]))
     exclude_from_new   = np.in1d(new_table["TILEID"],previous_table["TILEID"][keep_from_previous])
     add_from_new = ~exclude_from_new
     log = get_logger()
@@ -154,6 +193,35 @@ def merge_tile_completeness_table(previous_table,new_table) :
         log.info("do not change the status of {} completed tiles".format(np.sum(exclude_from_new)))
     if np.sum(add_from_new)>0 :
         log.info("add or change the status of {} tiles".format(np.sum(add_from_new)))
-        return vstack( [ previous_table[keep_from_previous] , new_table[add_from_new] ] )
+        res = vstack( [ previous_table[keep_from_previous] , new_table[add_from_new] ] )
     else :
-        return previous_table
+        res = previous_table
+
+
+    res = reorder_columns(res)
+    # reorder rows
+    ii  = np.argsort(res["TILEID"])
+    res = res[ii]
+
+    return res
+
+def number_of_good_zbest(tileid,night,specprod_dir) :
+
+    log=get_logger()
+    nok=0
+    for spectro in range(10) :
+
+        coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
+        if not os.path.isfile(coadd_filename) :
+            log.warning("missing {}".format(coadd_filename))
+            continue
+        zbest_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/zbest-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
+        if not os.path.isfile(zbest_filename) :
+            log.warning("missing {}".format(zbest_filename))
+            continue
+
+        # do more tests
+
+        nok+=1
+
+    return nok

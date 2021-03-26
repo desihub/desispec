@@ -192,7 +192,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE","MINTFRAC","FAFLAVOR","GOALTIME"] :
+        for k in ["NIGHT","EXPID","TILEID","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE","MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
             row[k]=cam_summary[k][ii][0]
         # mean
         row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
@@ -234,6 +234,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
                 entry["SURVEY"]="unknown"
                 entry["GOALTYPE"]="unknown"
                 entry["MINTFRAC"]=0.9
+                entry["FAPRGRM"]="unknown"
                 entry["FAFLAVOR"]="unknown"
                 entry["GOALTIME"]=0.
 
@@ -263,7 +264,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         log.debug("Update to preexisting")
 
         # backward compatibility issue
-        for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
+        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
             nentries=len(preexisting_tsnr2_expid_table)
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
@@ -288,12 +289,27 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     ii = (exp_summary['GOALTYPE']=='BRIGHT')|(exp_summary['GOALTYPE']=='BACKUP')
     exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
-    # sort table
+    # sort table rows
     ii = np.argsort(exp_summary['EXPID'])
     exp_summary = exp_summary[ii]
     vals=["{}-{}".format(e,c) for e,c in zip(cam_summary['EXPID'],cam_summary['CAMERA'])]
     ii = np.argsort(vals)
     cam_summary = cam_summary[ii]
+
+    if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
+
+    # sort table columns
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK']
+    if not np.all(np.in1d(neworder,exp_summary.dtype.names)) or not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
+        print("error, mismatch of some keys")
+        print(sorted(neworder))
+        print(sorted(exp_summary.dtype.names))
+        sys.exit(12)
+    newtable=Table()
+    newtable.meta=exp_summary.meta
+    for k in neworder :
+       newtable[k]=exp_summary[k]
+    exp_summary=newtable
 
     hdus = fits.HDUList()
     hdus.append(fits.convenience.table_to_hdu(exp_summary))
@@ -426,21 +442,28 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
 
     #- Add information from targeting
     fibermap_header = cframe_hdulist["FIBERMAP"].header
-    for k in ["SURVEY","GOALTYPE","FAFLAVOR"] :
+    for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
         if k in fibermap_header :
             entry[k] = fibermap_header[k].strip().lower()
         else :
             entry[k] = "unknown"
 
-    if entry["SURVEY"]=="unknown" and entry["FAFLAVOR"].find("sv1")>=0. : entry["SURVEY"]="sv1"
-    if entry["SURVEY"]=="unknown" and entry["FAFLAVOR"].find("cmx")>=0. : entry["SURVEY"]="cmx"
+    if "FAFLAVOR" in fibermap_header :
+        faflavor=fibermap_header["FAFLAVOR"].strip().lower()
+
+        if entry["FAPRGRM"] == "unknown"  :
+            entry["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
+
+        if entry["SURVEY"]=="unknown" :
+            if faflavor.find("sv1")>=0. : entry["SURVEY"]="sv1"
+            elif faflavor.find("sv2")>=0. : entry["SURVEY"]="sv2"
+            elif faflavor.find("cmx")>=0. : entry["SURVEY"]="cmx"
+
     if entry["GOALTYPE"]=="unknown" :
-        if entry["FAFLAVOR"].find("qso")>=0. or entry["FAFLAVOR"].find("lrg")>=0.  or entry["FAFLAVOR"].find("elg")>=0. :
+        if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0.  or entry["FAPRGRM"].find("elg")>=0. or entry["FAPRGRM"].find("dark")>=0. :
             entry["GOALTYPE"]="dark"
-        elif entry["FAFLAVOR"].find("mws")>=0. or entry["FAFLAVOR"].find("bgs")>=0. :
+        elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
             entry["GOALTYPE"]="bright"
-
-
 
     k="MINTFRAC"
     if k in fibermap_header :
