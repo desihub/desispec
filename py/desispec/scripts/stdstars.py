@@ -179,17 +179,22 @@ def main(args, comm=None) :
     ############################################
     # First loop through and group by exposure and spectrograph
     frames_by_expid = {}
+    rows = list()
     for filename in args.frames :
         log.info("reading %s"%filename)
         frame=io.read_frame(filename)
+        night = safe_read_key(frame.meta,"NIGHT")
         expid = safe_read_key(frame.meta,"EXPID")
         camera = safe_read_key(frame.meta,"CAMERA").strip().lower()
+        rows.append( (night, expid, camera) )
         spec = camera[1]
         uniq_key = (expid,spec)
         if uniq_key in frames_by_expid.keys():
             frames_by_expid[uniq_key][camera] = frame
         else:
             frames_by_expid[uniq_key] = {camera: frame}
+
+    input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID'))
 
     frames={}
     flats={}
@@ -689,7 +694,16 @@ def main(args, comm=None) :
         log.error("No star has been fit.")
         sys.exit(12)
 
-    # 
+    # get the fibermap from any input frame for the standard stars
+    fibermap = Table(frame.fibermap)
+    keep = np.in1d(fibermap['FIBER'], starfibers[fitted_stars])
+    fibermap = fibermap[keep]
+
+    # drop fibermap columns specific to exposures instead of targets
+    for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
+            'FIBER_RA', 'FIBER_DEC', 'FIBER_X', 'FIBER_Y']:
+        if col in fibermap.colnames:
+            fibermap.remove_column(col)
 
     # Now write the normalized flux for all best models to a file
     if rank == 0:
@@ -705,4 +719,6 @@ def main(args, comm=None) :
         data['BLUE_SNR'] = snr['b'][fitted_stars]
         data['RED_SNR']  = snr['r'][fitted_stars]
         data['NIR_SNR']  = snr['z'][fitted_stars]
-        io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers[fitted_stars],data)
+        io.write_stdstar_models(args.outfile,normflux,stdwave,
+                starfibers[fitted_stars],data,
+                fibermap, input_frames_table)
