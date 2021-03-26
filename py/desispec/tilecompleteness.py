@@ -15,12 +15,14 @@ from astropy.table import Table,vstack
 from desiutil.log import get_logger
 
 
-def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_filenames) :
+def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_filenames,min_number_of_petals=8) :
     """ Computes a summary table of the observed tiles
 
     Args:
       exposure_table: astropy.table.Table with exposure summary table from a prod (output of desi_tsnr_afterburner)
       specprod_dir: str, production directory name
+      auxiliary_table_filenames: list(str), list of auxiliary table names, optional
+      min_number_of_petals: int, minimum number of petals to declare a tile done
     Returns: astropy.table.Table with one row per TILEID, with completeness and exposure time.
     """
 
@@ -132,10 +134,25 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
     done=(res["EFFTIME_SPEC"]>res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][done]="obsend"
+
+    for i in np.where((res["OBSSTATUS"]=="obsend")&(res["ZDONE"]=="false"))[0] :
+        tileid=res["TILEID"][i]
+        log.info("checking redshifts for tile {}".format(tileid))
+        exposure_indices=np.where(exposure_table["TILEID"]==tileid)[0]
+        night = np.max(exposure_table["NIGHT"][exposure_indices])
+        nok   = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir)
+        if nok >= min_number_of_petals :
+            res["ZDONE"][i]="true"
+        elif nok > 0 :
+            log.warning("keep ZDONE=false for tile {} because only {} good petals (requirement is >={})".format(tileid,nok,min_number_of_petals))
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][partial]="obsstart"
 
     res = reorder_columns(res)
+
+    # reorder rows
+    ii  = np.argsort(res["TILEID"])
+    res = res[ii]
 
     return res
 
@@ -152,6 +169,7 @@ def reorder_columns(table) :
         return table
 
     newtable=Table()
+    newtable.meta=table.meta
     for k in neworder :
        newtable[k]=table[k]
 
@@ -165,7 +183,6 @@ def merge_tile_completeness_table(previous_table,new_table) :
       new_table: astropy.table.Table
     Returns: astropy.table.Table with merged entries.
     """
-    # do not change the status of a ZDONE tile ; it's too late
 
     keep_from_previous = (previous_table["ZDONE"]=="true") | (~np.in1d(previous_table["TILEID"],new_table["TILEID"]))
     exclude_from_new   = np.in1d(new_table["TILEID"],previous_table["TILEID"][keep_from_previous])
@@ -178,25 +195,32 @@ def merge_tile_completeness_table(previous_table,new_table) :
         res = vstack( [ previous_table[keep_from_previous] , new_table[add_from_new] ] )
     else :
         res = previous_table
+
+
     res = reorder_columns(res)
+    # reorder rows
+    ii  = np.argsort(res["TILEID"])
+    res = res[ii]
+
     return res
 
-def number_of_completed_petal_redshifts(tileid,night,specprod_dir) :
+def number_of_good_zbest(tileid,night,specprod_dir) :
 
     log=get_logger()
     nok=0
     for spectro in range(10) :
 
-        coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/coadd-{}-{}-thru{}.fits".format(spectro,tileid,night))
+        coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
         if not os.path.isfile(coadd_filename) :
             log.warning("missing {}".format(coadd_filename))
             continue
-        zbest_filename = os.path.join(specprod_dir,"tiles/cumulative/zbest-{}-{}-thru{}.fits".format(spectro,tileid,night))
+        zbest_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/zbest-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
         if not os.path.isfile(zbest_filename) :
             log.warning("missing {}".format(zbest_filename))
             continue
 
         # do more tests
+
         nok+=1
 
     return nok
