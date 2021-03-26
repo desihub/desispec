@@ -143,7 +143,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
     os.makedirs(scriptdir, exist_ok=True)
 
-    jobname = f'{scriptdir}/redrock-{suffix}.slurm'
+    jobname = f'redrock-{suffix}'
     batchscript = f'{scriptdir}/coadd-redshifts-{suffix}.slurm'
     batchlog = batchscript.replace('.slurm', r'-%j.log')
 
