@@ -73,7 +73,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
                   "overwrite_existing. Exiting this night.")
             return
         elif os.path.exists(proc_table_pathname):
-            print(f"ERROR: Processing table: {proc_table_pathname} already exists and and not "+
+            print(f"ERROR: Processing table: {proc_table_pathname} already exists and not "+
                   "given flag overwrite_existing. Exiting this night.")
             return
 
@@ -114,6 +114,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
     ## Loop over new exposures and process them as relevant to that type
     for ii, erow in enumerate(etable):
+        erow = table_row_to_dict(erow)
         exp = int(erow['EXPID'])
         print(f'\n\n##################### {exp} #########################')
 

@@ -16,8 +16,6 @@ import subprocess
 import sys
 from copy import deepcopy
 
-
-
 from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
@@ -26,6 +24,9 @@ from desispec.workflow.utils import pathjoin
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
+
+from desispec.io import findfile
+from desispec.io.util import decode_camword, create_camword, difference_camwords, camword_to_spectros
 
 #################################################
 ############## Misc Functions ###################
@@ -84,19 +85,6 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
                                  the change in job status after creating and submitting the job for processing.
     """
     log = get_logger()
-    from desispec.io import findfile#,get_files
-    from desispec.io.util import decode_camword, create_camword, difference_camwords, camword_to_spectros
-    # findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname=None,
-    #     nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
-    #     download=False, outdir=None, qaprod_dir=None)
-    #
-    # expid = prow['EXPID'][0]
-    # filedict = get_files(filetype, night, expid)
-    # existing_cameras = list(filedict.keys())
-    # existing_camword = create_camword(existing_cameras)
-    # completed = (existing_camword == prow['PROCCAMWORD'])
-    # if not completed and resubmit_partial_complete and existing_camword != '':
-    #     prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'], existing_camword)
 
     job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstars', 'poststdstar': 'cframe',
                        'arc': 'psf', 'flat': 'fiberflat', 'psfnight': 'psfnight', 'nightlyflat': 'fiberflatnight',
@@ -105,11 +93,17 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     night = prow['NIGHT']
     filetype = job_to_file_map[prow['JOBDESC']]
     orig_camword = prow['PROCCAMWORD']
+
+    ## if spectro based, look for spectros, else look for cameras
     if prow['JOBDESC'] in ['stdstarfit','spectra','coadds','redshift']:
         ## Spectrograph based
-        tileid = prow['TILEID']
         spectros = camword_to_spectros(prow['PROCCAMWORD'])
         n_desired = len(spectros)
+        ## Suppress outputs about using tile based files in findfile if only looking for stdstarfits
+        if prow['JOBDESC'] == 'stdstarfit':
+            tileid = None
+        else:
+            tileid = prow['TILEID']
         existing_spectros = []
         for spectro in spectros:
             expid = prow['EXPID'][0]
