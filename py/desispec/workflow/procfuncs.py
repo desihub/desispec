@@ -121,7 +121,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         for cam in cameras:
             expid = prow['EXPID'][0]
             if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid,camera=cam)):
-                missing_cameras.append(cameras)
+                missing_cameras.append(cam)
         completed = (len(missing_cameras) == 0)
         if not completed and resubmit_partial_complete and len(missing_cameras) < n_desired:
             prow['PROCCAMWORD'] = create_camword(missing_cameras)
