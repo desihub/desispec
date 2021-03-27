@@ -83,6 +83,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
                                  the change in job status after creating and submitting the job for processing.
     """
+    log = get_logger()
     from desispec.io import findfile#,get_files
     from desispec.io.util import decode_camword, create_camword, difference_camwords, camword_to_spectros
     # findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname=None,
@@ -103,6 +104,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
 
     night = prow['NIGHT']
     filetype = job_to_file_map[prow['JOBDESC']]
+    orig_camword = prow['PROCCAMWORD']
     if prow['JOBDESC'] in ['stdstarfit','spectra','coadds','redshift']:
         ## Spectrograph based
         tileid = prow['TILEID']
@@ -128,6 +130,13 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         if not completed and resubmit_partial_complete and len(missing_cameras) < len(cameras):
             prow['PROCCAMWORD'] = create_camword(missing_cameras)
 
+    if completed:
+        prow['STATUS'] = 'COMPLETED'
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has" +
+                 f"the desired {len(cameras)} {filetype}'s")
+    elif resubmit_partial_complete and orig_camword != prow['PROCCAMWORD']:
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has" +
+                 f"some {filetype}'s. Submitting smaller camword={prow['PROCCAMWORD']}.")
     return completed, prow
 
 
@@ -170,7 +179,6 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
     if check_for_outputs:
         already_complete, prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
         if already_complete:
-            prow['STATUS'] = 'COMPLETED'
             return prow
     prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
