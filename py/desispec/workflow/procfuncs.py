@@ -84,6 +84,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
                                  the change in job status after creating and submitting the job for processing.
     """
+    prow['STATUS'] = 'UNKNOWN'
     log = get_logger()
 
     job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstars', 'poststdstar': 'cframe',
@@ -133,7 +134,10 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     elif resubmit_partial_complete and orig_camword != prow['PROCCAMWORD']:
         log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has " +
                  f"some {filetype}'s. Submitting smaller camword={prow['PROCCAMWORD']}.")
-    return completed, prow
+    else:
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} has no " +
+                 f"existing {filetype}'s. Submitting full camword={prow['PROCCAMWORD']}.")
+    return prow
 
 
 def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False,
@@ -173,8 +177,8 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
     """
     orig_prow = prow.copy()
     if check_for_outputs:
-        already_complete, prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
-        if already_complete:
+        prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
+        if prow['STATUS'].upper() == 'COMPLETED':
             return prow
     prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
