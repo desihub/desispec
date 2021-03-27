@@ -488,19 +488,31 @@ class TestIO(unittest.TestCase):
         data['CHI2DOF'] = np.ones(nstd)
         data['REDSHIFT'] = np.zeros(nstd)
 
+        fibermap = Table()
+        fibermap['TARGETID'] = np.arange(nstd)
+
+        input_frames = Table()
+        input_frames['NIGHT'] = np.ones(nstd)*20201220
+        input_frames['EXPID'] = np.arange(nstd)
+        input_frames['CAMERA'] = 'b0'
+
         #- Write with data as Table, array, and dict
-        write_stdstar_models(self.testfile, flux, wave, fibers, data)
-        write_stdstar_models(self.testfile, flux, wave, fibers, np.asarray(data))
+        write_stdstar_models(self.testfile, flux, wave, fibers,
+                data, fibermap, input_frames)
+        write_stdstar_models(self.testfile, flux, wave, fibers,
+                np.asarray(data), fibermap, input_frames)
 
         datadict = dict()
         for colname in data.colnames:
             datadict[colname] = data[colname]
 
-        write_stdstar_models(self.testfile, flux, wave, fibers, datadict)
+        write_stdstar_models(self.testfile, flux, wave, fibers, datadict,
+                fibermap, input_frames)
 
         #- Now write with coefficients too
         datadict['COEFF'] = np.zeros((nstd, 3))
-        write_stdstar_models(self.testfile, flux, wave, fibers, datadict)
+        write_stdstar_models(self.testfile, flux, wave, fibers, datadict,
+                fibermap, input_frames)
 
         fx, wx, fibx, metadata = read_stdstar_models(self.testfile)
         self.assertTrue(np.all(fx == flux.astype('f4').astype('f8')))
