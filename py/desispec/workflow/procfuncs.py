@@ -109,6 +109,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         ## Spectrograph based
         tileid = prow['TILEID']
         spectros = camword_to_spectros(prow['PROCCAMWORD'])
+        n_desired = len(spectros)
         existing_spectros = []
         for spectro in spectros:
             expid = prow['EXPID'][0]
@@ -121,21 +122,22 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     else:
         ## Otheriwse camera based
         cameras = decode_camword(prow['PROCCAMWORD'])
+        n_desired = len(cameras)
         missing_cameras = []
         for cam in cameras:
             expid = prow['EXPID'][0]
             if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid,camera=cam)):
                 missing_cameras.append(cameras)
         completed = (len(missing_cameras) == 0)
-        if not completed and resubmit_partial_complete and len(missing_cameras) < len(cameras):
+        if not completed and resubmit_partial_complete and len(missing_cameras) < n_desired:
             prow['PROCCAMWORD'] = create_camword(missing_cameras)
 
     if completed:
         prow['STATUS'] = 'COMPLETED'
-        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has" +
-                 f"the desired {len(cameras)} {filetype}'s")
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has " +
+                 f"the desired {n_desired} {filetype}'s. Not submitting this job.")
     elif resubmit_partial_complete and orig_camword != prow['PROCCAMWORD']:
-        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has" +
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has " +
                  f"some {filetype}'s. Submitting smaller camword={prow['PROCCAMWORD']}.")
     return completed, prow
 
