@@ -97,7 +97,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     # if not completed and resubmit_partial_complete and existing_camword != '':
     #     prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'], existing_camword)
 
-    job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstar', 'poststdstar': 'cframe',
+    job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstars', 'poststdstar': 'cframe',
                        'arc': 'psf', 'flat': 'fiberflat', 'psfnight': 'psfnight', 'nightlyflat': 'fiberflatnight',
                        'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'zbest_tile'}
 
