@@ -69,7 +69,8 @@ def batch_script_name(prow):
     scriptfile =  pathname + '.slurm'
     return scriptfile
 
-def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False, strictly_successful=False):
+def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False, strictly_successful=False,
+        system_name=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
@@ -86,6 +87,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
+        system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
@@ -96,7 +98,7 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
-    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint)
+    prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint, system_name=system_name)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
     return prow
 
@@ -162,7 +164,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
     cmd += ' --cameras={} -n {} -e {}'.format(specs, night, expid_str)
     return cmd
 
-def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
+def create_batch_script(prow, queue='realtime', dry_run=False, joint=False, system_name=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords and creates a submission script for the
     compute nodes.
@@ -175,6 +177,7 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
                        relevant for testing will be printed as though scripts are being submitted. Default is False.
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
                      run with desi_proc_joint_fit. Default is False.
+        system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
@@ -201,7 +204,7 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False):
         log.info("Running: {}".format(cmd.split()))
         scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
                                                        cameras=prow['PROCCAMWORD'], jobdesc=prow['JOBDESC'], \
-                                                       queue=queue, cmdline=cmd)
+                                                       queue=queue, cmdline=cmd, system_name=system_name)
         log.info("Outfile is: {}".format(scriptpathname))
 
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
@@ -599,7 +602,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
 #########################################
 ########     Joint fit     ##############
 #########################################
-def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_run=False, strictly_successful=False):
+def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_run=False, strictly_successful=False,
+        system_name=None):
     """
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
     joint fitting job given by descriptor. If the joint fitting job is standard star fitting, the post standard star fits
@@ -620,6 +624,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
+        system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
 
     Returns:
         ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
@@ -649,7 +654,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
     joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
     internal_id += 1
     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
-                                   strictly_successful=strictly_successful)
+                                   strictly_successful=strictly_successful, system_name=system_name)
     ptable.add_row(joint_prow)
 
     if descriptor == 'stdstarfit':
@@ -667,7 +672,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
             internal_id += 1
             row = assign_dependency(row, joint_prow)
             row = create_and_submit(row, queue=queue, reservation=reservation, dry_run=dry_run,
-                                    strictly_successful=strictly_successful)
+                                    strictly_successful=strictly_successful, system_name=system_name)
             ptable.add_row(row)
     else:
         ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
