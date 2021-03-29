@@ -1,0 +1,47 @@
+# Slurm batch configuration parameters for various systems
+
+cori-haswell:
+    site: NERSC
+    cores_per_node: 32
+    threads_per_core: 2
+    memory: 128
+    timefactor: 1.0
+    gpus_per_node: 0
+    batch_opts: ['--constraint=haswell', ]
+
+cori-knl:
+    site: NERSC
+    cores_per_node: 68
+    threads_per_core: 4
+    memory: 96
+    timefactor: 3.0
+    gpus_per_node: 0
+    batch_opts: ['--constraint=knl', ]
+
+perlmutter-cpu:
+    site: NERSC
+    cores_per_node: 128
+    threads_per_core: 2
+    memory: 512
+    timefactor: 1.0
+    gpus_per_node: 0
+    batch_opts: []      # TBD
+
+perlmutter-gpu:
+    site: NERSC
+    cores_per_node: 128
+    threads_per_core: 2
+    memory: 256
+    timefactor: 1.0
+    gpus_per_node: 4
+    batch_opts: []      # TBD
+
+dirac:
+    site: LBNL-HPCS
+    cores_per_node: 24
+    threads_per_core: 2 # TBC
+    memory: 64          # TBC
+    timefactor: 1.0
+    gpus_per_node: 0
+    batch_opts: []      # TBD
+
