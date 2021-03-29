@@ -363,7 +363,9 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
     batch_params.append(f'{script_path}')
 
     if dry_run:
+        ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
         current_qid = int(time.time() - 1.6e9)
+        time.sleep(1)
     else:
         current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
@@ -768,9 +770,6 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
         for row in prows:
             if row['LASTSTEP'] == 'stdstarfit':
                 continue
-            ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
-            if dry_run:
-                time.sleep(1)
             row['JOBDESC'] = 'poststdstar'
             row['INTID'] = internal_id
             internal_id += 1
@@ -780,9 +779,6 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
                                     strictly_successful=strictly_successful)
             ptable.add_row(row)
     else:
-        ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
-        if dry_run:
-            time.sleep(1)
         log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
         ptable = set_calibrator_flag(prows, ptable)
 
