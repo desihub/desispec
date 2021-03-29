@@ -38,7 +38,7 @@ def get_nightly_end_time():
     """
     month = time.localtime().tm_mon
     if np.abs(month - 6) > 2:
-        end_night = 9
+        end_night = 8
     else:
         end_night = 7
     return end_night  # local Tucson time the following morning
