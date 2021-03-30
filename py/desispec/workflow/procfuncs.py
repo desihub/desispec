@@ -110,7 +110,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
             expid = prow['EXPID'][0]
             if os.path.exists(findfile(filetype=filetype, night=night, expid=expid, spectrograph=spectro, tile=tileid)):
                 existing_spectros.append(spectro)
-        completed = (len(existing_spectros)==len(spectros))
+        completed = (len(existing_spectros) == n_desired)
         if not completed and resubmit_partial_complete and len(existing_spectros) > 0:
             existing_camword = 'a' + ''.join([str(spec) for spec in sorted(existing_spectros)])
             prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],existing_camword)
@@ -118,10 +118,13 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         ## Otheriwse camera based
         cameras = decode_camword(prow['PROCCAMWORD'])
         n_desired = len(cameras)
+        expid = prow['EXPID'][0]
+        if len(prow['EXPID']) > 1:
+            log.warning(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']}. This job type only makes " +
+                     f"sense with a single exposure. Proceeding with {expid}.")
         missing_cameras = []
         for cam in cameras:
-            expid = prow['EXPID'][0]
-            if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid,camera=cam)):
+            if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid, camera=cam)):
                 missing_cameras.append(cam)
         completed = (len(missing_cameras) == 0)
         if not completed and resubmit_partial_complete and len(missing_cameras) < n_desired:
