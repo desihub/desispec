@@ -23,7 +23,6 @@ from desispec.sky import subtract_sky
 from desispec.util import runcmd, mpi_count_failures
 import desispec.scripts.extract
 import desispec.scripts.specex
-import desispec.scripts.stdstars
 
 from desitarget.targetmask import desi_mask
 
@@ -401,23 +400,10 @@ if args.obstype in ['SCIENCE']:
     starmodels = os.path.join(
         os.getenv('DESI_BASIS_TEMPLATES'), 'stdstar_templates_v2.2.fits')
 
-    # - Spread ranks across 10 spectrographs
-    mpi_stdstarfit = True
-    if comm is not None and mpi_stdstarfit:
-        group_size = max(1, size // 10)
-        group = rank // group_size
-        num_groups = (size + group_size - 1) // group_size
-        if rank == 0:
-            log.info(f'Splitting {size} ranks into {num_groups} groups of {group_size}')
-        comm_group = comm.Split(color=group)
-    else:
-        comm_group = None
-        group = rank
-        num_groups = size
-
     # - Fit stdstars per spectrograph (not per-camera)
     spectro_nums = sorted(framefiles.keys())
-    for i in range(group, len(spectro_nums), num_groups):
+    ## for sp in spectro_nums[rank::size]:
+    for i in range(rank, len(spectro_nums), size):
         sp = spectro_nums[i]
         # - NOTE: Saving the joint fit file with only the name of the first exposure
         stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
@@ -434,22 +420,11 @@ if args.obstype in ['SCIENCE']:
 
         inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
         num_cmd += 1
-        if comm_group is not None:
-            cmdargs = cmd.split()[1:]
-            cmdargs = desispec.scripts.stdstars.parse(cmdargs)
-            try:
-                desispec.scripts.stdstars.main(cmdargs, comm=comm_group)
-            except:
-                log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
-                num_err += 1
-        else:
-            err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
-            if err:
-                num_err += 1
+        err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+        if err:
+            num_err += 1
 
     timer.stop('stdstarfit')
-    if comm_group is not None:
-        num_cmd, num_err = mpi_count_failures(num_cmd, num_err, comm=comm_group)
     num_cmd, num_err = mpi_count_failures(num_cmd, num_err, comm=comm)
     if comm is not None:
         comm.barrier()
