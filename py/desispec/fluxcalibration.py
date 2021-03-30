@@ -28,12 +28,12 @@ import copy
 try:
     import cupy
     import cupyx.scipy.ndimage
+    # true if cupy is able to detect a GPU device
     _cupy_available = cupy.is_available()
 except ImportError:
     _cupy_available = False
-is_gpu_available = _cupy_available
-# GPU is ignored by default
-use_gpu = False
+use_gpu = _cupy_available
+
 
 try:
     from scipy import constants

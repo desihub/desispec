@@ -44,7 +44,7 @@ def parse(options=None):
     parser.add_argument('--maxstdstars', type=int, default=30, \
             help='Maximum number of stdstars to include')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
-    parser.add_argument('--ignoregpu', action='store_true', help='Ignore GPU, if available')
+    parser.add_argument('--ignore-gpu', action='store_true', help='Ignore GPU, if available')
 
     log = get_logger()
     args = None
@@ -176,13 +176,13 @@ def main(args, comm=None) :
         if rank == 0:
             log.info('multiprocess parallelizing with {} processes'.format(ncpu))
 
-    if args.ignoregpu and desispec.fluxcalibration.is_gpu_available:
-        # Nothing to do here, GPU is ignored by default
+    if args.ignore_gpu and desispec.fluxcalibration.use_gpu:
+        # Opt-out of GPU usage
+        desispec.fluxcalibration.use_gpu = False
         if rank == 0:
             log.info('ignoring GPU')
-    elif desispec.fluxcalibration.is_gpu_available:
-        # Opt-in to GPU usage
-        desispec.fluxcalibration.use_gpu = True
+    elif desispec.fluxcalibration.use_gpu:
+        # Nothing to do here, GPU is used by default if available
         if rank == 0:
             log.info('using GPU')
     else:
