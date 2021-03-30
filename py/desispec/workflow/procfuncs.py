@@ -851,7 +851,11 @@ def make_joint_prow(prows, descriptor, internal_id):
 
     joint_prow['INTID'] = internal_id
     joint_prow['JOBDESC'] = descriptor
+    joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
+    joint_prow['SUBMIT_DATE'] = -99
+    joint_prow['STATUS'] =  'U'
+    joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.array([ currow['EXPID'][0] for currow in prows ], dtype=int)
     joint_prow = assign_dependency(joint_prow,dependency=prows)
     return joint_prow
