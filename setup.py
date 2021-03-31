@@ -69,6 +69,8 @@ setup_keywords['package_data'] = {'desispec': ['data/arc_lines/*',
                                                'data/db/*',
                                                'data/params/*',
                                                'data/quicklook/*',
+                                               'data/tsnr/*',
+                                               'data/*.yaml',
                                                'data/*.dat',],
                                   'desispec.test': ['data/ql/*',]}
 #

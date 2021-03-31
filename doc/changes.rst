@@ -24,7 +24,7 @@ First tag for 21.3/Denali run
 * speed up sky calculation with different sparse matrices (PR `#1209`_).
 * Check file outputs before submitting jobs (PR `#1217`_).
 * improve noise of master dark model fit (PR `#1219`_).
-* Add workflow hooks for KNL (PR `#2020`_).
+* Add workflow hooks for KNL (PR `#1220`_).
 
 .. _`#1138`: https://github.com/desihub/desispec/issues/1138
 .. _`#1195`: https://github.com/desihub/desispec/issues/1195
