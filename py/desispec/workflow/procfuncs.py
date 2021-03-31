@@ -137,6 +137,10 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     elif resubmit_partial_complete and orig_camword != prow['PROCCAMWORD']:
         log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has " +
                  f"some {filetype}'s. Submitting smaller camword={prow['PROCCAMWORD']}.")
+    elif not resubmit_partial_complete:
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} doesn't have all " +
+                 f"{filetype}'s and resubmit_partial_complete=False. "+
+                 f"Submitting full camword={prow['PROCCAMWORD']}.")
     else:
         log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} has no " +
                  f"existing {filetype}'s. Submitting full camword={prow['PROCCAMWORD']}.")
