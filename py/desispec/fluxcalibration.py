@@ -27,6 +27,16 @@ import numpy.linalg
 import copy
 
 try:
+    import cupy
+    import cupyx.scipy.ndimage
+    # true if cupy is able to detect a GPU device
+    _cupy_available = cupy.is_available()
+except ImportError:
+    _cupy_available = False
+use_gpu = _cupy_available
+
+
+try:
     from scipy import constants
     C_LIGHT = constants.c/1000.0
 except TypeError: # This can happen during documentation builds.
@@ -103,7 +113,15 @@ def applySmoothingFilter(flux,width=200) :
 
     # it was checked that the width of the median_filter has little impact on best fit stars
     # smoothing the ouput (with a spline for instance) does not improve the fit
-    return scipy.ndimage.filters.median_filter(flux,width,mode='constant')
+    if use_gpu:
+        # move flux array to device
+        device_flux = cupy.array(flux)
+        # smooth flux array using median filter
+        device_smoothed = cupyx.scipy.ndimage.median_filter(device_flux, width, mode='constant')
+        # move smoothed flux array by to host and return
+        return cupy.asnumpy(device_smoothed)
+    else:
+        return scipy.ndimage.filters.median_filter(flux, width, mode='constant')
 #
 # Import some global constants.
 #

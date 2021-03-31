@@ -15,7 +15,7 @@ from astropy import units
 from astropy.table import Table
 import astropy.coordinates as acoo
 
-
+import desispec.fluxcalibration
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates,isStdStar
 from desispec.interpolation import resample_flux
@@ -44,6 +44,7 @@ def parse(options=None):
     parser.add_argument('--maxstdstars', type=int, default=30, \
             help='Maximum number of stdstars to include')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
+    parser.add_argument('--ignore-gpu', action='store_true', help='Ignore GPU, if available')
 
     log = get_logger()
     args = None
@@ -162,7 +163,7 @@ def main(args, comm=None) :
         comm = None
         rank = 0
         size = 1
-    
+
     # disable multiprocess by forcing ncpu = 1 when using MPI
     if comm is not None:
         ncpu = 1
@@ -174,6 +175,19 @@ def main(args, comm=None) :
     if ncpu > 1:
         if rank == 0:
             log.info('multiprocess parallelizing with {} processes'.format(ncpu))
+
+    if args.ignore_gpu and desispec.fluxcalibration.use_gpu:
+        # Opt-out of GPU usage
+        desispec.fluxcalibration.use_gpu = False
+        if rank == 0:
+            log.info('ignoring GPU')
+    elif desispec.fluxcalibration.use_gpu:
+        # Nothing to do here, GPU is used by default if available
+        if rank == 0:
+            log.info('using GPU')
+    else:
+        if rank == 0:
+            log.info('GPU not available')
 
     # READ DATA
     ############################################
