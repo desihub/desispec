@@ -365,6 +365,32 @@ def fit_const_plus_dark(exp_arr,image_arr):
 
     return const, dark
 
+def fit_dark(exp_arr,image_arr):
+    """
+    fit dark*t model given images and exptimes
+
+    Args:
+        exp_arr: list of exposure times
+        image_arr: list of average dark images
+
+    returns: dark, image
+
+    NOTE: the image_arr should *not* be divided by the exposure time
+    """
+    n_images=len(image_arr)
+    n0=image_arr[0].shape[0]
+    n1=image_arr[0].shape[1]
+
+    # fit dark
+    a = 0
+    b  = np.zeros((n0,n1))
+    for image,exptime in zip(image_arr,exp_arr) :
+        res = image
+        a  += exptime**2
+        b += res*exptime
+
+    return b/a
+
 def model_y1d(image, smooth=0):
     """
     Model image as a sigma-clipped mean 1D function of row
@@ -489,4 +515,3 @@ time {cmd}
                 log.error(f'Error {err} submitting {batchfile}')
         else:
             log.info(f"Generated but didn't submit {batchfile}")
-
