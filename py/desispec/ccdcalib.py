@@ -417,8 +417,8 @@ def model_y1d(image, smooth=0):
     return model1d
 
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
-        linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-        first_expid=None):
+                      linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
+                      first_expid=None,night_for_name=None):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -474,8 +474,10 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         sp = 'sp' + camera[1]
         sm = sp2sm(sp)
         #key = f'{sm}-{camera}-{today}'
-        key = f'{sm}-{camera}-{lastdayornight}'
-
+        if night_for_name is not None :
+            key = f'{sm}-{camera}-{night_for_name}'
+        else :
+            key = f'{sm}-{camera}-{lastdayornight}'
         batchfile = os.path.join(tempdir, f'dark-{key}.slurm')
         logfile = os.path.join(tempdir, f'dark-{key}-%j.log')
         darkfile = f'dark-{key}.fits.gz'
