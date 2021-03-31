@@ -416,14 +416,14 @@ for tileid in tileids:
         batchscript, batcherr = batch_tile_redshifts(
             tileid, exptable[tilerows], args.group, submit=submit,
             queue=args.batch_queue, reservation=args.batch_reservation,
-            dependency=args.batch_dependency, system_name=args.system_name,
+            dependency=args.batch_dependency, system_name=args.system_name
             )
     else:
         for i in range(len(exptable[tilerows])):
             batchscript, batcherr = batch_tile_redshifts(
                 tileid, exptable[tilerows][i:i+1], args.group, submit=submit,
                 queue=args.batch_queue, reservation=args.batch_reservation,
-                dependency=args.batch_dependency, system_name=args.system_name,
+                dependency=args.batch_dependency, system_name=args.system_name
                 )
 
 
