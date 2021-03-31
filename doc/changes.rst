@@ -2,14 +2,35 @@
 desispec Change Log
 ===================
 
-0.39.4 (unreleased)
+0.40.0 (unreleased)
 -------------------
 
 * Add fiber crosstalk correction (PR `#1138`_).
 * Handle missing NIGHT in coadded fibermap (PR `#1195`_).
+* Add ``desi_tiles_completeness`` script with TSNR2-based tile
+  completeness calculations for survey ops (PR `#1196`_, `#1200`_, `#1204`_,
+  `#1206`_, `#1212`_).
+* TSNR2 camera coadd fix (PR `#1197`_).
+* refactor `desi_tile_redshifts` for more flexibility (PR `#1198`_, `#1208`_,
+  `#1211`_).
+* processing dashboard: cache night info (PR `#1199`_).
+* speed up sky calculation with different sparse matrices (PR `#1209`_).
+* improve noise of master dark model fit (PR `#1219`_).
 
 .. _`#1138`: https://github.com/desihub/desispec/issues/1138
 .. _`#1195`: https://github.com/desihub/desispec/issues/1195
+.. _`#1196`: https://github.com/desihub/desispec/issues/1196
+.. _`#1197`: https://github.com/desihub/desispec/issues/1197
+.. _`#1198`: https://github.com/desihub/desispec/issues/1198
+.. _`#1199`: https://github.com/desihub/desispec/issues/1199
+.. _`#1200`: https://github.com/desihub/desispec/issues/1200
+.. _`#1204`: https://github.com/desihub/desispec/issues/1204
+.. _`#1206`: https://github.com/desihub/desispec/issues/1206
+.. _`#1208`: https://github.com/desihub/desispec/issues/1208
+.. _`#1209`: https://github.com/desihub/desispec/issues/1209
+.. _`#1211`: https://github.com/desihub/desispec/issues/1211
+.. _`#1212`: https://github.com/desihub/desispec/issues/1212
+.. _`#1219`: https://github.com/desihub/desispec/issues/1219
 
 0.39.3 (2020-03-04)
 -------------------
