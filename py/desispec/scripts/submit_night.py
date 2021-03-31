@@ -118,12 +118,15 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
     ## Get relevant data from the tables
     arcs, flats, sciences, arcjob, flatjob, \
     curtype, lasttype, curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
-    ptable_expids = np.unique(np.concatenate(ptable['EXPID']))
-    
+    # if len(ptable) > 0:
+    #     ptable_expids = np.unique(np.concatenate(ptable['EXPID']))
+    # else:
+    #     ptable_expids = np.array([], dtype=int)
+
     ## Loop over new exposures and process them as relevant to that type
     for ii, erow in enumerate(etable):
-        if erow['EXPID'] in ptable_expids:
-            continue
+        # if erow['EXPID'] in ptable_expids:
+        #     continue
         erow = table_row_to_dict(erow)
         exp = int(erow['EXPID'])
         print(f'\n\n##################### {exp} #########################')
@@ -150,7 +153,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         prow = create_and_submit(prow, dry_run=dry_run, queue=queue, reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
         ptable.add_row(prow)
-        ptable_expids = np.append(ptable_expids, erow['EXPID'])
+        # ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
