@@ -365,6 +365,32 @@ def fit_const_plus_dark(exp_arr,image_arr):
 
     return const, dark
 
+def fit_dark(exp_arr,image_arr):
+    """
+    fit dark*t model given images and exptimes
+
+    Args:
+        exp_arr: list of exposure times
+        image_arr: list of average dark images
+
+    returns: dark_image
+
+    NOTE: the image_arr should *not* be divided by the exposure time
+    """
+    n_images=len(image_arr)
+    n0=image_arr[0].shape[0]
+    n1=image_arr[0].shape[1]
+
+    # fit dark
+    a = 0
+    b  = np.zeros((n0,n1))
+    for image,exptime in zip(image_arr,exp_arr) :
+        res = image
+        a  += exptime**2
+        b += res*exptime
+
+    return b/a
+
 def model_y1d(image, smooth=0):
     """
     Model image as a sigma-clipped mean 1D function of row
@@ -431,10 +457,14 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     today = datetime.datetime.now().strftime('%Y%m%d')
 
     #- Convert list of days to single string to use in command
+
+    lastdayornight=0
     if days is not None:
         days = ' '.join([str(tmp) for tmp in days])
+        lastdayornight=sorted(days.split())[-1]
     elif nights is not None:
         nights = ' '.join([str(tmp) for tmp in nights])
+        lastdayornight=sorted(nights.split())[-1]
     else:
         msg = 'Must specify days or nights'
         log.critical(msg)
@@ -443,7 +473,9 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     for camera in cameras:
         sp = 'sp' + camera[1]
         sm = sp2sm(sp)
-        key = f'{sm}-{camera}-{today}'
+        #key = f'{sm}-{camera}-{today}'
+        key = f'{sm}-{camera}-{lastdayornight}'
+
         batchfile = os.path.join(tempdir, f'dark-{key}.slurm')
         logfile = os.path.join(tempdir, f'dark-{key}-%j.log')
         darkfile = f'dark-{key}.fits.gz'
@@ -489,4 +521,3 @@ time {cmd}
                 log.error(f'Error {err} submitting {batchfile}')
         else:
             log.info(f"Generated but didn't submit {batchfile}")
-
