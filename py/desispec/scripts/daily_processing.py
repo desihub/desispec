@@ -26,7 +26,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                              expobstypes=None, procobstypes=None, camword=None, badcamword=None, badamps=None,
                              override_night=None, tab_filetype='csv', queue='realtime', exps_to_ignore=None,
                              data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False,
-                             verbose=False):
+                             dont_check_job_outputs=False, dont_resubmit_partial_jobs=False, verbose=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -53,6 +53,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                  and written, however. The timing is accelerated. This option is most useful for testing and simulating a run.
         continue_looping_debug: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
                                  is terminated. Default is False.
+        dont_check_job_outputs, bool. Default is False. If False, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is False,
+                                 then the script will not be submitted. If some files exist and this is False, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        dont_resubmit_partial_jobs, bool. Default is False. Must be used with dont_check_job_outputs=False. If this flag is
+                                          False, jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                          remaining cameras not found to exist.
         verbose: bool. True if you want more verbose output, false otherwise. Current not propagated to lower code,
                        so it is only used in the main daily_processing script itself.
 
@@ -77,6 +84,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     if continue_looping_debug:
         print("continue_looping_debug is set. Will continue looking for new data and needs to be terminated by the user.")
+
+    ## Recast booleans from double negative
+    check_for_outputs = (not dont_check_job_outputs)
+    resubmit_partial_complete = (not dont_resubmit_partial_jobs)
 
     ## Define the obstypes to process
     if procobstypes is None:
@@ -247,12 +258,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 curtype,curtile = get_type_and_tile(erow)
 
                 if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
-                    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
-                                                                                                   sciences, arcjob,
-                                                                                                   flatjob, lasttype,
-                                                                                                   internal_id,
-                                                                                                   dry_run=dry_run,
-                                                                                                   queue=queue)
+                    ptable, arcjob, flatjob, \
+                    sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob,
+                                                                          flatjob,
+                                                                          lasttype, internal_id, dry_run=dry_run,
+                                                                          queue=queue, strictly_successful=False,
+                                                                          check_for_outputs=check_for_outputs,
+                                                                          resubmit_partial_complete=resubmit_partial_complete)
 
                 prow = erow_to_prow(erow)
                 prow['INTID'] = internal_id
@@ -260,7 +272,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 prow['JOBDESC'] = prow['OBSTYPE']
                 prow = define_and_assign_dependency(prow, arcjob, flatjob)
                 print(f"\nProcessing: {prow}\n")
-                prow = create_and_submit(prow, dry_run=dry_run, queue=queue)
+                prow = create_and_submit(prow, dry_run=dry_run, queue=queue,
+                                         strictly_successful=False, check_for_outputs=check_for_outputs,
+                                         resubmit_partial_complete=resubmit_partial_complete)
                 ptable.add_row(prow)
 
                 ## Note: Assumption here on number of flats
@@ -299,9 +313,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     sys.stdout.flush()
     sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
-    ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
-                                                                         arcjob, flatjob, lasttype,
-                                                                         internal_id, dry_run=dry_run, queue=queue)
+    ptable, arcjob, flatjob, \
+    sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob,
+                                                          flatjob,
+                                                          lasttype, internal_id, dry_run=dry_run,
+                                                          queue=queue, strictly_successful=False,
+                                                          check_for_outputs=check_for_outputs,
+                                                          resubmit_partial_complete=resubmit_partial_complete)
 
     ## All jobs now submitted, update information from job queue and save
     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run)

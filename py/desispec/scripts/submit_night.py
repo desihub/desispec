@@ -19,7 +19,8 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 
 def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', reservation=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
-                 error_if_not_available=True, overwrite_existing=False):
+                 error_if_not_available=True, overwrite_existing_tables=False,
+                 dont_check_job_outputs=False, dont_resubmit_partial_jobs=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -37,11 +38,23 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         error_if_not_available: bool. Default is True. Raise as error if the required exposure table doesn't exist,
                                       otherwise prints an error and returns.
-        overwrite_existing: bool. True if you want to submit jobs even if scripts already exist.
+        overwrite_existing_tables: bool. True if you want to submit jobs even if a processing table already exists.
+                                         Otherwise jobs will be appended to it. Default is False
+        dont_check_job_outputs, bool. Default is False. If False, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is False,
+                                 then the script will not be submitted. If some files exist and this is False, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        dont_resubmit_partial_jobs, bool. Default is False. Must be used with dont_check_job_outputs=False. If this flag is
+                                          False, jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                          remaining cameras not found to exist.
     Returns:
         None.
     """
     log = get_logger()
+
+    ## Recast booleans from double negative
+    check_for_outputs = (not dont_check_job_outputs)
+    resubmit_partial_complete = (not dont_resubmit_partial_jobs)
 
     if proc_obstypes is None:
         proc_obstypes = default_exptypes_for_proctable()
@@ -66,16 +79,10 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
     proc_table_pathname = pathjoin(proc_table_path, name)
 
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
-    batchdir = get_desi_proc_batch_file_path(night=night)
-    if not overwrite_existing:
-        if os.path.exists(batchdir) and len(os.listdir(batchdir)) > 0:
-            print(f"ERROR: Batch jobs already exist for night {night} and not given flag "+
-                  "overwrite_existing. Exiting this night.")
-            return
-        elif os.path.exists(proc_table_pathname):
-            print(f"ERROR: Processing table: {proc_table_pathname} already exists and not "+
-                  "given flag overwrite_existing. Exiting this night.")
-            return
+    if not overwrite_existing_tables and os.path.exists(proc_table_pathname):
+        print(f"ERROR: Processing table: {proc_table_pathname} already exists and not "+
+              "given flag overwrite_existing. Exiting this night.")
+        return
 
     ## Determine where the unprocessed data table will be written
     unproc_table_pathname = pathjoin(proc_table_path, name.replace('processing', 'unprocessed'))
@@ -114,6 +121,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
     ## Loop over new exposures and process them as relevant to that type
     for ii, erow in enumerate(etable):
+        if erow['internal_id'] < internal_id:
+            continue
         erow = table_row_to_dict(erow)
         exp = int(erow['EXPID'])
         print(f'\n\n##################### {exp} #########################')
@@ -123,14 +132,13 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         curtype, curtile = get_type_and_tile(erow)
 
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
-            ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats,
-                                                                                           sciences, arcjob,
-                                                                                           flatjob, lasttype,
-                                                                                           internal_id,
-                                                                                           dry_run=dry_run,
-                                                                                           queue=queue,
-                                                                                           reservation=reservation,
-                                                                                           strictly_successful=True)
+            ptable, arcjob, flatjob, \
+            sciences, internal_id    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
+                                                                     lasttype, internal_id, dry_run=dry_run,
+                                                                     queue=queue, reservation=reservation,
+                                                                     strictly_successful=True,
+                                                                     check_for_outputs=check_for_outputs,
+                                                                     resubmit_partial_complete=resubmit_partial_complete)
 
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
@@ -138,7 +146,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, arcjob, flatjob)
         print(f"\nProcessing: {prow}\n")
-        prow = create_and_submit(prow, dry_run=dry_run, queue=queue, reservation=reservation, strictly_successful=True)
+        prow = create_and_submit(prow, dry_run=dry_run, queue=queue, reservation=reservation, strictly_successful=True,
+                                 check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
         ptable.add_row(prow)
 
         ## Note: Assumption here on number of flats
@@ -168,12 +177,13 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
-        ptable, arcjob, flatjob, sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
-                                                                                       arcjob, flatjob, lasttype,
-                                                                                       internal_id, dry_run=dry_run,
-                                                                                       queue=queue,
-                                                                                       reservation=reservation,
-                                                                                       strictly_successful=True)
+        ptable, arcjob, flatjob, \
+        sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
+                                                              lasttype, internal_id, dry_run=dry_run,
+                                                              queue=queue, reservation=reservation,
+                                                              strictly_successful=True,
+                                                              check_for_outputs=check_for_outputs,
+                                                              resubmit_partial_complete=resubmit_partial_complete)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run)
         write_table(ptable, tablename=proc_table_pathname)

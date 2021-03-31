@@ -79,6 +79,13 @@ def parse_args():#options=None):
                         help="Perform a dry run where no jobs are actually created or submitted.")
     parser.add_argument("--continue-looping-debug",action="store_true",help= "FOR DEBUG purposes only."+
                          "Will continue looping in search of new data until the process is terminated externally.")
+    parser.add_argument("--dont-check-job-outputs", action="store_true",
+                        help="If all files for a pending job exist and this is False, then the script will not be "+
+                             "submitted. If some files exist and this is True, only the"+
+                             "subset of the cameras without the final data products will be generated and submitted.")
+    parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
+                        help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
+                             "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     # parser.add_argument("--force-specprod", action="store_true",
     #                     help="Force the files to be written to custom SPECPROD " +
     #                          "even if user is desi.")
@@ -136,5 +143,7 @@ if __name__ == '__main__':
                              dry_run=args.dry_run, tab_filetype=args.table_file_type, camword=camword,
                              badcamword=badcamword, badamps=args.badamps, queue=args.queue,
                              override_night=args.override_night, exps_to_ignore=exps_to_ignore,
-                             continue_looping_debug=args.continue_looping_debug, data_cadence_time=args.data_cadence_time,
-                             queue_cadence_time=args.queue_cadence_time)
+                             continue_looping_debug=args.continue_looping_debug,
+                             data_cadence_time=args.data_cadence_time, queue_cadence_time=args.queue_cadence_time,
+                             dont_check_job_outputs=args.dont_check_job_outputs,
+                             dont_resubmit_partial_jobs=args.dont_resubmit_partial_jobs)

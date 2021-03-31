@@ -35,13 +35,18 @@ def parse_args():  # options=None):
     parser.add_argument("--error-if-not-available", action="store_true",
                         help="Raise an error instead of reporting and moving on if an exposure "+\
                              "table doesn't exist.")
-    parser.add_argument("--overwrite-existing", action="store_true",
+    parser.add_argument("--overwrite-existing-tables", action="store_true",
                         help="Give this flag if you want to submit jobs even if scripts already exist.")
-
+    parser.add_argument("--dont-check-job-outputs", action="store_true",
+                        help="If all files for a pending job exist and this is False, then the script will not be "+
+                             "submitted. If some files exist and this is True, only the "+
+                             "subset of the cameras without the final data products will be generated and submitted.")
+    parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
+                        help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
+                             "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     args = parser.parse_args()
 
     return args
-
 
 if __name__ == '__main__':
     args = parse_args()
