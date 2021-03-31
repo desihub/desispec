@@ -615,7 +615,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  _overscan(raw_overscan_col)
             overscan_col += o
             rdnoise  += r
-
+            if bias is not False :
+                jj = parse_sec_keyword(header['DATASEC'+amp])
+                o,biasnoise = _overscan(bias[jj])
+                new_rdnoise = np.sqrt(rdnoise**2+biasnoise**2)
+                log.info("Master bias noise for AMP %s = %4.3f ADU, rdnoise %4.3f -> %4.3f ADU"%(amp,biasnoise,np.mean(rdnoise),np.mean(new_rdnoise)))
+                rdnoise = new_rdnoise
         rdnoise *= gain
         median_rdnoise  = np.median(rdnoise)
         median_overscan = np.median(overscan_col)
@@ -754,6 +759,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     if dark is not False  :
         log.info("subtracting dark")
         image -= trimmed_dark_in_electrons
+        # measure its noise
+        new_readnoise = np.zeros(readnoise.shape)
+        for amp in amp_ids:
+            kk = parse_sec_keyword(header['CCDSEC'+amp])
+            o,darknoise = _overscan(trimmed_dark_in_electrons[kk])
+            new_readnoise[kk] = np.sqrt(readnoise[kk]**2+darknoise**2)
+            log.info("Master dark noise for AMP %s = %4.3f elec, rdnoise %4.3f -> %4.3f elec"%(amp,darknoise,np.mean(readnoise[kk]),np.mean(new_readnoise[kk])))
+        readnoise = new_readnoise
 
     #- Correct for dark trails if any
     if not nodarktrail and cfinder is not None :
