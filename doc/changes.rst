@@ -2,8 +2,15 @@
 desispec Change Log
 ===================
 
-0.40.0 (unreleased)
+0.40.1 (unreleased)
 -------------------
+
+No changes yet.
+
+0.40.0 (2021-03-31)
+-------------------
+
+First tag for 21.3/Denali run
 
 * Add fiber crosstalk correction (PR `#1138`_).
 * Handle missing NIGHT in coadded fibermap (PR `#1195`_).
@@ -15,7 +22,9 @@ desispec Change Log
   `#1211`_).
 * processing dashboard: cache night info (PR `#1199`_).
 * speed up sky calculation with different sparse matrices (PR `#1209`_).
+* Check file outputs before submitting jobs (PR `#1217`_).
 * improve noise of master dark model fit (PR `#1219`_).
+* Add workflow hooks for KNL (PR `#2020`_).
 
 .. _`#1138`: https://github.com/desihub/desispec/issues/1138
 .. _`#1195`: https://github.com/desihub/desispec/issues/1195
@@ -31,6 +40,8 @@ desispec Change Log
 .. _`#1211`: https://github.com/desihub/desispec/issues/1211
 .. _`#1212`: https://github.com/desihub/desispec/issues/1212
 .. _`#1219`: https://github.com/desihub/desispec/issues/1219
+.. _`#1217`: https://github.com/desihub/desispec/issues/1217
+.. _`#1220`: https://github.com/desihub/desispec/issues/1220
 
 0.39.3 (2020-03-04)
 -------------------
