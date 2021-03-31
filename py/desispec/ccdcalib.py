@@ -373,7 +373,7 @@ def fit_dark(exp_arr,image_arr):
         exp_arr: list of exposure times
         image_arr: list of average dark images
 
-    returns: dark, image
+    returns: dark_image
 
     NOTE: the image_arr should *not* be divided by the exposure time
     """
