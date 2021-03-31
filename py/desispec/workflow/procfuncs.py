@@ -801,7 +801,8 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
 ## wrapper functions for joint fitting
 def science_joint_fit(ptable, sciences, internal_id, queue='realtime',
                       reservation=None, dry_run=False, strictly_successful=False,
-                      check_for_outputs=True, resubmit_partial_complete=True):
+                      check_for_outputs=True, resubmit_partial_complete=True,
+                      system_name=None):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the stdstarfit joint fit.
 
@@ -811,12 +812,14 @@ def science_joint_fit(ptable, sciences, internal_id, queue='realtime',
     """
     return joint_fit(ptable=ptable, prows=sciences, internal_id=internal_id, queue=queue, reservation=reservation,
                      descriptor='stdstarfit', dry_run=dry_run, strictly_successful=strictly_successful,
-                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
+                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
+                     system_name=system_name)
 
 
 def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
                    reservation=None, dry_run=False, strictly_successful=False,
-                   check_for_outputs=True, resubmit_partial_complete=True):
+                   check_for_outputs=True, resubmit_partial_complete=True,
+                   system_name=None):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the nightlyflat joint fit.
 
@@ -826,12 +829,14 @@ def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
     """
     return joint_fit(ptable=ptable, prows=flats, internal_id=internal_id, queue=queue, reservation=reservation,
                      descriptor='nightlyflat', dry_run=dry_run, strictly_successful=strictly_successful,
-                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
+                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
+                     system_name=system_name)
 
 
 def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
                   reservation=None, dry_run=False, strictly_successful=False,
-                  check_for_outputs=True, resubmit_partial_complete=True):
+                  check_for_outputs=True, resubmit_partial_complete=True,
+                  system_name=None):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the psfnight joint fit.
 
@@ -841,7 +846,8 @@ def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
     """
     return joint_fit(ptable=ptable, prows=arcs, internal_id=internal_id, queue=queue, reservation=reservation,
                      descriptor='psfnight', dry_run=dry_run, strictly_successful=strictly_successful,
-                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
+                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
+                     system_name=system_name)
 
 
 def make_joint_prow(prows, descriptor, internal_id):
@@ -876,7 +882,8 @@ def make_joint_prow(prows, descriptor, internal_id):
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                   lasttype, internal_id, dry_run=False,
                                   queue='realtime', reservation=None, strictly_successful=False,
-                                  check_for_outputs=True, resubmit_partial_complete=True):
+                                  check_for_outputs=True, resubmit_partial_complete=True,
+                                  system_name=None):
     """
     Takes all the state-ful data from daily processing and determines whether a joint fit needs to be submitted. Places
     the decision criteria into a single function for easier maintainability over time. These are separate from the
@@ -910,6 +917,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
                                          jobs with some prior data are pruned using PROCCAMWORD to only process the
                                          remaining cameras not found to exist.
+        system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
     Returns:
         ptable, Table, Processing table of all exposures that have been processed.
         arcjob, dictor None, the psfnight job row if it exists. Otherwise None.
@@ -961,7 +969,8 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
                                                          reservation=reservation, strictly_successful=strictly_successful,
                                                          check_for_outputs=check_for_outputs,
-                                                         resubmit_partial_complete=resubmit_partial_complete)
+                                                         resubmit_partial_complete=resubmit_partial_complete,
+                                                         system_name=system_name)
         if tilejob is not None:
             sciences = []
 
@@ -970,7 +979,8 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
                                                       reservation=reservation, strictly_successful=strictly_successful,
                                                       check_for_outputs=check_for_outputs,
-                                                      resubmit_partial_complete=resubmit_partial_complete
+                                                      resubmit_partial_complete=resubmit_partial_complete,
+                                                      system_name=system_name
                                                       )
 
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
@@ -978,7 +988,8 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
                                                     reservation=reservation, strictly_successful=strictly_successful,
                                                     check_for_outputs=check_for_outputs,
-                                                    resubmit_partial_complete=resubmit_partial_complete
+                                                    resubmit_partial_complete=resubmit_partial_complete,
+                                                    system_name=system_name
                                                     )
     return ptable, arcjob, flatjob, sciences, internal_id
 

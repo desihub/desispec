@@ -23,6 +23,8 @@ def parse_args():  # options=None):
                         help="The queue to submit jobs to. Default is realtime.")
     parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
                         help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
+    parser.add_argument("--system-name", type=str, required=False, default=None,
+                        help="Batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu, ...")
     parser.add_argument("--exp-table-path", type=str, required=False, default=None,
                         help="Directory name where the output exposure table should be saved.")
     parser.add_argument("--proc-table-path", type=str, required=False, default=None,

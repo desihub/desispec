@@ -451,6 +451,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
     batch_config = batch.get_config(system_name)
+    threads_per_core = batch_config['threads_per_core']
 
     ncameras = len(cameras)
     nexps = 1
@@ -459,7 +460,12 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
-    assert runtime <= 60 * batch_config['timefactor']
+    #- arc fits require more memory per core than Cori KNL has, so increase nodes as needed
+    if jobdesc.lower() == 'arc':
+        while (batch_config['memory'] / (ncores/nodes)) < 2.0:
+            nodes *= 2
+            threads_per_core *= 2
+
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
 
@@ -521,21 +527,14 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         fx.write('echo Starting at $(date)\n')
 
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
-            ################################## Note ############################
-            ## Needs to be refactored to write the correct thing given flags ###
-            ####################################################################
             fx.write('\n# Do steps at full MPI parallelism\n')
-            srun = 'srun -N {} -n {} -c 2 {}'.format(nodes, ncores, cmd)
+            srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
             fx.write('echo Running {}\n'.format(srun))
             fx.write('{}\n'.format(srun))
         else:
             if jobdesc.lower() in ['science','prestdstar']:
-                ################################## Note ############################
-                ## Needs to be refactored to write the correct thing given flags ###
-                ####################################################################
                 fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-                srun = 'srun -N {} -n {} -c {} {} --nofluxcalib'.format(
-                        nodes, ncores, batch_config['threads_per_core'], cmd)
+                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd} --nofluxcalib'
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
             if jobdesc.lower() in ['science', 'stdstarfit', 'poststdstar']:
@@ -544,13 +543,13 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                     ntasks = ncameras
                 else:
                     #- but don't run more than 4 per node (to be tuned)
-                    tasks = nodes*4
+                    ntasks = nodes*4
 
-                totcores = nodes * batch_config['cores_per_node'] * batch_config['threads_per_core']
-                cpus_per_task = max(int(totcores / ntasks), 1)
+                tot_threads = nodes * batch_config['cores_per_node'] * batch_config['threads_per_core']
+                threads_per_task = max(int(tot_threads / ntasks), 1)
                 fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
                 fx.write('# This should quickly skip over the steps already done\n')
-                srun = 'srun -N {} -n {} -c {} {} '.format(nodes, ntasks, cpus_per_task, cmd)
+                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} {cmd} '
                 fx.write('if [ $? -eq 0 ]; then\n')
                 fx.write('  echo Running {}\n'.format(srun))
                 fx.write('  {}\n'.format(srun))
