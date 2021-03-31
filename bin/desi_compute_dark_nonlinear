@@ -5,7 +5,7 @@ Compute "nonlinear dark" model, e.g.
 
 desi_compute_dark_nonlinear --days 20200729 20200730 --camera b0 \
         --darkfile dark-20200729-b0.fits.gz \
-        --biasfile bias-20200729-b0.fits.gz 
+        --biasfile bias-20200729-b0.fits.gz
 """
 
 import argparse
@@ -60,7 +60,7 @@ import fitsio
 from desiutil.log import get_logger
 import desispec.io.util
 from desispec.ccdcalib import compute_dark_file, compute_bias_file
-from desispec.ccdcalib import fit_const_plus_dark
+from desispec.ccdcalib import fit_const_plus_dark,fit_dark
 from desispec.ccdcalib import model_y1d
 from desispec.io import findfile
 
@@ -168,7 +168,7 @@ for night in nights:
     nzeros_good = nzeros - args.nskip_zeros
     if nzeros_good < 5:
         log.critical(f'{nzeros} ZEROS on {night} is insufficient when skipping {args.nskip_zeros}')
-        sys.exit(1)
+        continue
 
     elif nzeros_good < 20:
         log.warning(f'Only {nzeros_good} good ZEROs on {night}')
@@ -179,7 +179,7 @@ for night in nights:
         rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
         zerofiles.append(rawfile)
         all_zerofiles.append(rawfile)
-    
+
     biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
         log.info(f'{biasfile} already exists')
@@ -234,16 +234,30 @@ if np.max(darktimes) < args.linexptime:
 ii = darktimes >= args.linexptime
 log.info('Calculating const+dark using exptimes {}'.format(darktimes[ii]))
 const, dark = fit_const_plus_dark(darktimes[ii], darkimages[ii])
+ny, nx = dark.shape
 
-#- Assemble final 1D models for left & right amps vs. exposure time
-ny, nx = const.shape
-nonlinear1d = list()
-for exptime, image in zip(darktimes, darkimages):
-    assert image.shape == (ny,nx)
-    tmp = image - dark*exptime  #- 1D images model dark-subtracted residuals
-    left = model_y1d(tmp[:, 0:nx//2], smooth=0)
-    right = model_y1d(tmp[:, nx//2:], smooth=0)
-    nonlinear1d.append( np.array([left, right]) )
+for iteration in range(3) :
+    log.info("iter={} Assemble 1D models for left & right amps vs. exposure time".format(iteration))
+    nonlinear1d = list()
+    darkimages_bis = list()
+    for exptime, image in zip(darktimes, darkimages):
+        assert image.shape == (ny,nx)
+        tmp = image - dark*exptime  #- 1D images model dark-subtracted residuals
+        left = model_y1d(tmp[:, 0:nx//2], smooth=0)
+        right = model_y1d(tmp[:, nx//2:], smooth=0)
+        nonlinear1d.append( np.array([left, right]) )
+        twod=np.zeros((ny,nx))
+        twod[:,0:nx//2] = left[:,None]
+        twod[:,nx//2:]  = right[:,None]
+        darkimages_bis.append(image-twod)
+        log.debug("iter={} exptime={} <left>={} <right>={}".format(iteration,exptime,np.mean(left),np.mean(right)))
+    log.info('iter={} Calculating dark using exptimes {}'.format(iteration,darktimes[ii]))
+    darkimages_bis=np.array(darkimages_bis)
+    previous_dark = dark
+    dark = fit_dark(darktimes[ii], darkimages_bis[ii])
+    maxdiff=np.max(np.abs(dark-previous_dark))*1000
+    log.info('iter={} max(|delta dark|)*(1000 sec)={:4.3f} elec'.format(iteration,maxdiff))
+    if maxdiff<0.01 : break # typically ok after 1 iteration
 
 #- Write final output
 log.info(f'Writing {args.darkfile}')
@@ -262,7 +276,7 @@ with fitsio.FITS(args.darkfile, 'rw', clobber=True) as fx:
                 header.add_record(
                     dict(name=key, value=hdr[key], comment=hdr.get_comment(key))
                     )
-    
+
     #- Add record of all input files used
     i = 0
     for hdr in darkheaders:
@@ -285,5 +299,3 @@ with fitsio.FITS(args.darkfile, 'rw', clobber=True) as fx:
         hdr.delete('EXTNAME')
         extname = 'T{}'.format(int(exptime))
         fx.write(model1d.astype(np.float32), extname=extname, header=hdr)
-
-
