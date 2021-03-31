@@ -149,7 +149,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
 
 def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False,
                       strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
-                      system_name=system_name):
+                      system_name=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
