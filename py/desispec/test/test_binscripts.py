@@ -185,7 +185,15 @@ class TestBinScripts(unittest.TestCase):
         data['REDSHIFT']=np.zeros(fibers.size)
         data['DATA_G-R']=0.3*np.ones(fibers.size)
         data['MODEL_G-R']=0.3*np.ones(fibers.size)
-        io.write_stdstar_models(self.stdfile,stdflux,self.wave,fibers,data)
+        # dummy placeholders, not used downstream
+        tmp = np.arange(fibers.size)
+        fibermap = Table()
+        fibermap['TARGETID'] = tmp
+        inframes = Table()
+        inframes['NIGHT'] = tmp
+        inframes['EXPID'] = tmp
+        inframes['CAMERA'] = 'b0'
+        io.write_stdstar_models(self.stdfile,stdflux,self.wave,fibers,data,fibermap,inframes)
 
     def _remove_files(self, filenames):
         '''Utility to cleanup output files if they exist'''
