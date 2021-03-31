@@ -298,10 +298,8 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
         prow, dict. The output processing table row.
     """
     log = get_logger()
-    if type(erow) is dict:
-        row_names = list(erow.keys())
-    else:
-        row_names = erow.colnames
+    erow = table_row_to_dict(erow)
+    row_names = list(erow.keys())
 
     ## Define the column names for the exposure table and their respective datatypes
     #if colnames is None:
@@ -348,3 +346,25 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
         prow['BADAMPS'] = ''
 
     return prow
+
+def table_row_to_dict(table_row):
+    """
+    Helper function to convert a table row to a dictionary, which is much easier to work with for some applications
+
+    Args:
+        table_row, Table.Row or dict. The row of an astropy table that you want to convert into a dictionary where
+                                      each key is a column name and the values are the column entry.
+
+    Returns:
+        out, dict. Dictionary where each key is a column name and the values are the column entry.
+    """
+    if type(table_row) is Table.Row:
+        out = {coln: table_row[coln] for coln in table_row.colnames}
+        return out
+    elif type(table_row) in [dict, OrderedDict]:
+        return table_row
+    else:
+        log = get_logger()
+        typ = type(table_row)
+        log.error(f"Received table_row of type {typ}, can't convert to a dictionary. Exiting.")
+        raise TypeError(f"Received table_row of type {typ}, can't convert to a dictionary. Exiting.")

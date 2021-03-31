@@ -16,15 +16,17 @@ import subprocess
 import sys
 from copy import deepcopy
 
-
-
 from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
                                               get_desi_proc_batch_file_path
 from desispec.workflow.utils import pathjoin
 from desispec.workflow.tableio import write_table
+from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
+
+from desispec.io import findfile
+from desispec.io.util import decode_camword, create_camword, difference_camwords, camword_to_spectros
 
 #################################################
 ############## Misc Functions ###################
@@ -69,7 +71,84 @@ def batch_script_name(prow):
     scriptfile =  pathname + '.slurm'
     return scriptfile
 
-def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False, strictly_successful=False):
+def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
+    """
+    Args:
+        prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
+                                 desispect.workflow.proctable.get_processing_table_column_defs()
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
+
+    Returns:
+        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
+                                 the change in job status after creating and submitting the job for processing.
+    """
+    prow['STATUS'] = 'UNKNOWN'
+    log = get_logger()
+
+    job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstars', 'poststdstar': 'cframe',
+                       'arc': 'psf', 'flat': 'fiberflat', 'psfnight': 'psfnight', 'nightlyflat': 'fiberflatnight',
+                       'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'zbest_tile'}
+
+    night = prow['NIGHT']
+    filetype = job_to_file_map[prow['JOBDESC']]
+    orig_camword = prow['PROCCAMWORD']
+
+    ## if spectro based, look for spectros, else look for cameras
+    if prow['JOBDESC'] in ['stdstarfit','spectra','coadds','redshift']:
+        ## Spectrograph based
+        spectros = camword_to_spectros(prow['PROCCAMWORD'])
+        n_desired = len(spectros)
+        ## Suppress outputs about using tile based files in findfile if only looking for stdstarfits
+        if prow['JOBDESC'] == 'stdstarfit':
+            tileid = None
+        else:
+            tileid = prow['TILEID']
+        existing_spectros = []
+        for spectro in spectros:
+            expid = prow['EXPID'][0]
+            if os.path.exists(findfile(filetype=filetype, night=night, expid=expid, spectrograph=spectro, tile=tileid)):
+                existing_spectros.append(spectro)
+        completed = (len(existing_spectros) == n_desired)
+        if not completed and resubmit_partial_complete and len(existing_spectros) > 0:
+            existing_camword = 'a' + ''.join([str(spec) for spec in sorted(existing_spectros)])
+            prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],existing_camword)
+    else:
+        ## Otheriwse camera based
+        cameras = decode_camword(prow['PROCCAMWORD'])
+        n_desired = len(cameras)
+        expid = prow['EXPID'][0]
+        if len(prow['EXPID']) > 1 and prow['JOBDESC'] not in ['psfnight','nightlyflat']:
+            log.warning(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']}. This job type only makes " +
+                     f"sense with a single exposure. Proceeding with {expid}.")
+        missing_cameras = []
+        for cam in cameras:
+            if not os.path.exists(findfile(filetype=filetype, night=night, expid=expid, camera=cam)):
+                missing_cameras.append(cam)
+        completed = (len(missing_cameras) == 0)
+        if not completed and resubmit_partial_complete and len(missing_cameras) < n_desired:
+            prow['PROCCAMWORD'] = create_camword(missing_cameras)
+
+    if completed:
+        prow['STATUS'] = 'COMPLETED'
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has " +
+                 f"the desired {n_desired} {filetype}'s. Not submitting this job.")
+    elif resubmit_partial_complete and orig_camword != prow['PROCCAMWORD']:
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} already has " +
+                 f"some {filetype}'s. Submitting smaller camword={prow['PROCCAMWORD']}.")
+    elif not resubmit_partial_complete:
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} doesn't have all " +
+                 f"{filetype}'s and resubmit_partial_complete=False. "+
+                 f"Submitting full camword={prow['PROCCAMWORD']}.")
+    else:
+        log.info(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']} has no " +
+                 f"existing {filetype}'s. Submitting full camword={prow['PROCCAMWORD']}.")
+    return prow
+
+
+def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False,
+                      strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True):
     """
     Wrapper script that takes a processing table row and three modifier keywords, creates a submission script for the
     compute nodes, and then submits that script to the Slurm scheduler with appropriate dependencies.
@@ -86,6 +165,13 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
+        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is True,
+                                 then the script will not be submitted. If some files exist and this is True, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated to reflect
@@ -96,8 +182,18 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    orig_prow = prow.copy()
+    if check_for_outputs:
+        prow = check_for_outputs_on_disk(prow, resubmit_partial_complete)
+        if prow['STATUS'].upper() == 'COMPLETED':
+            return prow
     prow = create_batch_script(prow, queue=queue, dry_run=dry_run, joint=joint)
     prow = submit_batch_script(prow, reservation=reservation, dry_run=dry_run, strictly_successful=strictly_successful)
+    ## If resubmitted partial, the PROCCAMWORD and SCRIPTNAME will correspond to the pruned values. But we want to
+    ## retain the full job's value, so get those from the old job.
+    if resubmit_partial_complete:
+        prow['PROCCAMWORD'] = orig_prow['PROCCAMWORD']
+        prow['SCRIPTNAME'] = orig_prow['SCRIPTNAME']
     return prow
 
 def desi_proc_command(prow, queue=None):
@@ -112,9 +208,6 @@ def desi_proc_command(prow, queue=None):
     Returns:
         cmd, str. The proper command to be submitted to desi_proc to process the job defined by the prow values.
     """
-    if prow is None:
-        import pdb
-        pdb.set_trace()
     cmd = 'desi_proc'
     cmd += ' --batch'
     cmd += ' --nosubmit'
@@ -234,10 +327,10 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
     """
     log = get_logger()
     jobname = batch_script_name(prow)
-    dependencies = prow['LATEST_DEP_QID']
+    dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
-    if dependencies is not None:
+    if len(dep_qids) > 0:
         jobtype = prow['JOBDESC']
         if strictly_successful:
             depcond = 'afterok'
@@ -250,18 +343,18 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
 
         dep_str = f'--dependency={depcond}:'
 
-        if np.isscalar(dependencies):
-            dep_list = str(dependencies).strip(' \t')
+        if np.isscalar(dep_qids):
+            dep_list = str(dep_qids).strip(' \t')
             if dep_list == '':
                 dep_str = ''
             else:
                 dep_str += dep_list
         else:
-            if len(dependencies)>1:
-                dep_list = ':'.join(np.array(dependencies).astype(str))
+            if len(dep_qids)>1:
+                dep_list = ':'.join(np.array(dep_qids).astype(str))
                 dep_str += dep_list
-            elif len(dependencies) == 1 and dependencies[0] not in [None, 0]:
-                dep_str += str(dependencies[0])
+            elif len(dep_qids) == 1 and dep_qids[0] not in [None, 0]:
+                dep_str += str(dep_qids[0])
             else:
                 dep_str = ''
 
@@ -277,7 +370,9 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
     batch_params.append(f'{script_path}')
 
     if dry_run:
+        ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
         current_qid = int(time.time() - 1.6e9)
+        time.sleep(1)
     else:
         current_qid = subprocess.check_output(batch_params, stderr=subprocess.STDOUT, text=True)
         current_qid = int(current_qid.strip(' \t\n'))
@@ -287,7 +382,7 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
 
     prow['LATEST_QID'] = current_qid
     prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
-    prow['STATUS'] = 'SU'
+    prow['STATUS'] = 'SUBMITTED'
     prow['SUBMIT_DATE'] = int(time.time())
     
     return prow
@@ -320,7 +415,6 @@ def define_and_assign_dependency(prow, arcjob, flatjob):
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
-    prow['JOBDESC'] = prow['OBSTYPE']
     if prow['OBSTYPE'] in ['science', 'twiflat']:
         if flatjob is None:
             dependency = arcjob
@@ -345,9 +439,11 @@ def assign_dependency(prow, dependency):
     Args:
         prow, Table.Row or dict. Must include keyword accessible definitions for 'OBSTYPE'. A row must have column names for
                                  'JOBDESC', 'INT_DEP_IDS', and 'LATEST_DEP_ID'.
-        dependency, Table.Row, dict, or NoneType. Processing row corresponding to the required input for the job in prow.
-                                              This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
-                                              If None, it assumes the dependency doesn't exist and no dependency is assigned.
+        dependency, NoneType or scalar/list/array of Table.Row, dict. Processing row corresponding to the required input
+                                                                      for the job in prow. This must contain keyword
+                                                                      accessible values for 'INTID', and 'LATEST_QID'.
+                                                                      If None, it assumes the dependency doesn't exist
+                                                                      and no dependency is assigned.
 
     Returns:
         prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
@@ -358,19 +454,37 @@ def assign_dependency(prow, dependency):
         input object in memory may or may not be changed. As of writing, a row from a table given to this function will
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
+    prow['INT_DEP_IDS'] = np.ndarray(shape=0).astype(int)
+    prow['LATEST_DEP_QID'] = np.ndarray(shape=0).astype(int)
     if dependency is not None:
         if type(dependency) in [list, np.array]:
             ids, qids = [], []
             for curdep in dependency:
-                ids.append(curdep['INTID'])
-                qids.append(curdep['LATEST_QID'])
-            prow['INT_DEP_IDS'] = np.array(ids)
-            prow['LATEST_DEP_QID'] = np.array(qids)
-        else:
-            prow['INT_DEP_IDS'] = np.array([dependency['INTID']])
-            prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']])
+                if still_a_dependency(curdep):
+                    ids.append(curdep['INTID'])
+                    qids.append(curdep['LATEST_QID'])
+            prow['INT_DEP_IDS'] = np.array(ids, dtype=int)
+            prow['LATEST_DEP_QID'] = np.array(qids, dtype=int)
+        elif type(dependency) in [dict, OrderedDict, Table.Row] and still_a_dependency(dependency):
+            prow['INT_DEP_IDS'] = np.array([dependency['INTID']], dtype=int)
+            prow['LATEST_DEP_QID'] = np.array([dependency['LATEST_QID']], dtype=int)
     return prow
 
+def still_a_dependency(dependency):
+    """
+    Defines the criteria for which a dependency is deemed complete (and therefore no longer a dependency).
+
+     Args:
+        dependency, Table.Row or dict. Processing row corresponding to the required input for the job in prow.
+                                     This must contain keyword accessible values for 'STATUS', and 'LATEST_QID'.
+
+    Returns:
+        bool. False if the criteria indicate that the dependency is completed and no longer a blocking factor (ie no longer
+              a genuine dependency). Returns True if the dependency is still a blocking factor such that the slurm
+              scheduler needs to be aware of the pending job.
+
+    """
+    return dependency['LATEST_QID'] > 0 and dependency['STATUS'] != 'COMPLETED'
 
 def get_type_and_tile(erow):
     """
@@ -404,14 +518,14 @@ def parse_previous_tables(etable, ptable, night):
         night, str or int, the night the data was taken.
 
     Returns:
-        arcs, list of Table.Row's, list of the individual arc jobs used for the psfnight (NOT all
+        arcs, list of dicts, list of the individual arc jobs used for the psfnight (NOT all
                                    the arcs, if multiple sets existed)
-        flats, list of Table.Row's, list of the individual flat jobs used for the nightlyflat (NOT
+        flats, list of dicts, list of the individual flat jobs used for the nightlyflat (NOT
                                     all the flats, if multiple sets existed)
-        sciences, list of Table.Row's, list of the most recent individual prestdstar science exposures
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile)
-        arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
+        arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
+        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
         curtype, None, the obstype of the current job being run. Always None as first new job will define this.
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         curtile, None, the tileid of the current job (if science). Otherwise None. Always None as first
@@ -433,14 +547,14 @@ def parse_previous_tables(etable, ptable, night):
         jobtypes = ptable['JOBDESC']
 
         if 'psfnight' in jobtypes:
-            arcjob = ptable[jobtypes=='psfnight'][0]
+            arcjob = table_row_to_dict(ptable[jobtypes=='psfnight'][0])
             log.info("Located joint fit arc job in exposure table: {}".format(arcjob))
         elif lasttype == 'arc':
             seqnum = 10
             for row in ptable[::-1]:
                 erow = etable[etable['EXPID']==row['EXPID'][0]]
                 if row['OBSTYPE'].lower() == 'arc' and int(erow['SEQNUM'])<seqnum:
-                    arcs.append(row)
+                    arcs.append(table_row_to_dict(row))
                     seqnum = int(erow['SEQNUM'])
                 else:
                     break
@@ -448,13 +562,13 @@ def parse_previous_tables(etable, ptable, night):
             arcs = arcs[::-1]
 
         if 'nightlyflat' in jobtypes:
-            flatjob = ptable[jobtypes=='nightlyflat'][0]
+            flatjob = table_row_to_dict(ptable[jobtypes=='nightlyflat'][0])
             log.info("Located joint fit flat job in exposure table: {}".format(flatjob))
         elif lasttype == 'flat':
             for row in ptable[::-1]:
                 erow = etable[etable['EXPID']==row['EXPID'][0]]
                 if row['OBSTYPE'].lower() == 'flat' and int(erow['SEQTOT'])<5:
-                    flats.append(row)
+                    flats.append(table_row_to_dict(row))
                 else:
                     break
             flats = flats[::-1]
@@ -463,7 +577,7 @@ def parse_previous_tables(etable, ptable, night):
             for row in ptable[::-1]:
                 if row['OBSTYPE'].lower() == 'science' and row['TILEID'] == lasttile and \
                    row['JOBDESC'] == 'prestdstar' and row['LASTSTEP'] != 'skysub':
-                    sciences.append(row)
+                    sciences.append(table_row_to_dict(row))
                 else:
                     break
             sciences = sciences[::-1]
@@ -516,9 +630,8 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
-            proc_table, submits = recursive_submit_failed(rown, proc_table, \
-                                                                   submits, id_to_row_map, ptab_name,
-                                                                   resubmission_states, reservation, dry_run)
+            proc_table, submits = recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name,
+                                                          resubmission_states, reservation, dry_run)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -556,7 +669,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
     if ideps is None:
-        proc_table['LATEST_DEP_QID'][rown] = None
+        proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
     else:
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
@@ -569,15 +682,12 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         if len(qdeps) > 0:
             proc_table['LATEST_DEP_QID'][rown] = qdeps
         else:
-            log.info("Error: number of qdeps should be 1 or more")
-            log.info(f'Rown {rown}, ideps {ideps}')
+            log.error(f"number of qdeps should be 1 or more: Rown {rown}, ideps {ideps}")
 
     proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation, dry_run=dry_run)
     submits += 1
 
-    if dry_run:
-        pass
-    else:
+    if not dry_run:
         time.sleep(2)
         if submits % 10 == 0:
             if ptab_name is None:
@@ -599,7 +709,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
 #########################################
 ########     Joint fit     ##############
 #########################################
-def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_run=False, strictly_successful=False):
+def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
+              dry_run=False, strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True):
     """
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
     joint fitting job given by descriptor. If the joint fitting job is standard star fitting, the post standard star fits
@@ -608,7 +719,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
 
     Args:
         ptable, Table. The processing table where each row is a processed job.
-        prows, list or array of Table.Rows or dicts. The rows corresponding to the individual exposure jobs that are
+        prows, list or array of dicts. The rows corresponding to the individual exposure jobs that are
                                                      inputs to the joint fit.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
         queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
@@ -620,11 +731,18 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
+        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is True,
+                                 then the script will not be submitted. If some files exist and this is True, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
 
     Returns:
         ptable, Table. The same processing table as input except with added rows for the joint fit job and, in the case
                        of a stdstarfit, the poststdstar science exposure jobs.
-        joint_prow, Table.Row or dict. Row of a processing table corresponding to the joint fit job.
+        joint_prow, dict. Row of a processing table corresponding to the joint fit job.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
     """
     log = get_logger()
@@ -649,7 +767,8 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
     joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
     internal_id += 1
     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
-                                   strictly_successful=strictly_successful)
+                                   strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                   resubmit_partial_complete=resubmit_partial_complete)
     ptable.add_row(joint_prow)
 
     if descriptor == 'stdstarfit':
@@ -658,21 +777,16 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
         for row in prows:
             if row['LASTSTEP'] == 'stdstarfit':
                 continue
-            ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
-            if dry_run:
-                time.sleep(1)
             row['JOBDESC'] = 'poststdstar'
             row['INTID'] = internal_id
-            row['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
             internal_id += 1
+            row['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
             row = assign_dependency(row, joint_prow)
             row = create_and_submit(row, queue=queue, reservation=reservation, dry_run=dry_run,
-                                    strictly_successful=strictly_successful)
+                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                    resubmit_partial_complete=resubmit_partial_complete)
             ptable.add_row(row)
     else:
-        ## in dry_run, mock Slurm ID's are generated using CPU seconds. Wait one second so we have unique ID's
-        if dry_run:
-            time.sleep(1)
         log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
         ptable = set_calibrator_flag(prows, ptable)
 
@@ -681,7 +795,8 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, dry_ru
 
 ## wrapper functions for joint fitting
 def science_joint_fit(ptable, sciences, internal_id, queue='realtime',
-                      reservation=None, dry_run=False, strictly_successful=False):
+                      reservation=None, dry_run=False, strictly_successful=False,
+                      check_for_outputs=True, resubmit_partial_complete=True):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the stdstarfit joint fit.
 
@@ -690,11 +805,13 @@ def science_joint_fit(ptable, sciences, internal_id, queue='realtime',
         The joint_fit argument descriptor is pre-defined as 'stdstarfit'.
     """
     return joint_fit(ptable=ptable, prows=sciences, internal_id=internal_id, queue=queue, reservation=reservation,
-                     descriptor='stdstarfit', dry_run=dry_run, strictly_successful=strictly_successful)
+                     descriptor='stdstarfit', dry_run=dry_run, strictly_successful=strictly_successful,
+                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
 
 
 def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
-                   reservation=None, dry_run=False, strictly_successful=False):
+                   reservation=None, dry_run=False, strictly_successful=False,
+                   check_for_outputs=True, resubmit_partial_complete=True):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the nightlyflat joint fit.
 
@@ -703,11 +820,13 @@ def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
         The joint_fit argument descriptor is pre-defined as 'nightlyflat'.
     """
     return joint_fit(ptable=ptable, prows=flats, internal_id=internal_id, queue=queue, reservation=reservation,
-                     descriptor='nightlyflat', dry_run=dry_run, strictly_successful=strictly_successful)
+                     descriptor='nightlyflat', dry_run=dry_run, strictly_successful=strictly_successful,
+                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
 
 
 def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
-                  reservation=None, dry_run=False, strictly_successful=False):
+                  reservation=None, dry_run=False, strictly_successful=False,
+                  check_for_outputs=True, resubmit_partial_complete=True):
     """
     Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the psfnight joint fit.
 
@@ -716,7 +835,8 @@ def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
         The joint_fit argument descriptor is pre-defined as 'psfnight'.
     """
     return joint_fit(ptable=ptable, prows=arcs, internal_id=internal_id, queue=queue, reservation=reservation,
-                     descriptor='psfnight', dry_run=dry_run, strictly_successful=strictly_successful)
+                     descriptor='psfnight', dry_run=dry_run, strictly_successful=strictly_successful,
+                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
 
 
 def make_joint_prow(prows, descriptor, internal_id):
@@ -726,43 +846,32 @@ def make_joint_prow(prows, descriptor, internal_id):
     input prows).
 
     Args:
-        prows, list or array of Table.Rows or dicts. The rows corresponding to the individual exposure jobs that are
+        prows, list or array of dicts. The rows corresponding to the individual exposure jobs that are
                                                      inputs to the joint fit.
         descriptor, str. Description of the joint fitting job. Can either be 'stdstarfit', 'psfnight', or 'nightlyflat'.
         internal_id, int, the next internal id to be used for assignment (already incremented up from the last used id number used).
 
     Returns:
-        joint_prow, Table.Row or dict. Row of a processing table corresponding to the joint fit job.
+        joint_prow, dict. Row of a processing table corresponding to the joint fit job.
     """
-    if type(prows[0]) in [dict, OrderedDict]:
-        joint_prow = prows[0].copy()
-    else:
-        joint_prow = OrderedDict()
-        for nam in prows[0].colnames:
-            joint_prow[nam] = prows[0][nam]
+    first_row = prows[0]
+    joint_prow = first_row.copy()
 
     joint_prow['INTID'] = internal_id
     joint_prow['JOBDESC'] = descriptor
+    joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
-    if type(prows) in [list, np.array]:
-        ids, qids, expids = [], [], []
-        for currow in prows:
-            ids.append(currow['INTID'])
-            qids.append(currow['LATEST_QID'])
-            expids.append(currow['EXPID'][0])
-        joint_prow['INT_DEP_IDS'] = np.array(ids)
-        joint_prow['LATEST_DEP_QID'] = np.array(qids)
-        joint_prow['EXPID'] = np.array(expids)
-    else:
-        joint_prow['INT_DEP_IDS'] = np.array([prows['INTID']])
-        joint_prow['LATEST_DEP_QID'] = np.array([prows['LATEST_QID']])
-        joint_prow['EXPID'] = prows['EXPID']
-
+    joint_prow['SUBMIT_DATE'] = -99
+    joint_prow['STATUS'] =  'U'
+    joint_prow['SCRIPTNAME'] = ''
+    joint_prow['EXPID'] = np.array([ currow['EXPID'][0] for currow in prows ], dtype=int)
+    joint_prow = assign_dependency(joint_prow,dependency=prows)
     return joint_prow
 
-def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob, \
+def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                   lasttype, internal_id, dry_run=False,
-                                  queue='realtime', reservation=None, strictly_successful=False):
+                                  queue='realtime', reservation=None, strictly_successful=False,
+                                  check_for_outputs=True, resubmit_partial_complete=True):
     """
     Takes all the state-ful data from daily processing and determines whether a joint fit needs to be submitted. Places
     the decision criteria into a single function for easier maintainability over time. These are separate from the
@@ -771,14 +880,14 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
 
     Args:
         ptable, Table, Processing table of all exposures that have been processed.
-        arcs, list of Table.Row's, list of the individual arc jobs to be used for the psfnight (NOT all
+        arcs, list of dicts, list of the individual arc jobs to be used for the psfnight (NOT all
                                    the arcs, if multiple sets existed). May be empty if none identified yet.
-        flats, list of Table.Row's, list of the individual flat jobs to be used for the nightlyflat (NOT
+        flats, list of dicts, list of the individual flat jobs to be used for the nightlyflat (NOT
                                     all the flats, if multiple sets existed). May be empty if none identified yet.
-        sciences, list of Table.Row's, list of the most recent individual prestdstar science exposures
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile). May be empty if none identified yet.
-        arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
+        arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
+        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         internal_id, int, an internal identifier unique to each job. Increments with each new job. This
                           is the smallest unassigned value.
@@ -789,11 +898,18 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
+        check_for_outputs, bool. Default is True. If True, the code checks for the existence of the expected final
+                                 data products for the script being submitted. If all files exist and this is True,
+                                 then the script will not be submitted. If some files exist and this is True, only the
+                                 subset of the cameras without the final data products will be generated and submitted.
+        resubmit_partial_complete, bool. Default is True. Must be used with check_for_outputs=True. If this flag is True,
+                                         jobs with some prior data are pruned using PROCCAMWORD to only process the
+                                         remaining cameras not found to exist.
     Returns:
         ptable, Table, Processing table of all exposures that have been processed.
-        arcjob, Table.Row or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, Table.Row or None, the nightlyflat job row if it exists. Otherwise None.
-        sciences, list of Table.Row's, list of the most recent individual prestdstar science exposures
+        arcjob, dictor None, the psfnight job row if it exists. Otherwise None.
+        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
+        sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile). May be empty if none identified yet or
                                        we just submitted them for processing.
         internal_id, int, if no job is submitted, this is the same as the input, otherwise it is incremented upward from
@@ -838,19 +954,27 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
             return ptable, arcjob, flatjob, sciences, internal_id
 
         ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
-                                                         reservation=reservation, strictly_successful=strictly_successful)
+                                                         reservation=reservation, strictly_successful=strictly_successful,
+                                                         check_for_outputs=check_for_outputs,
+                                                         resubmit_partial_complete=resubmit_partial_complete)
         if tilejob is not None:
             sciences = []
 
     elif lasttype == 'flat' and flatjob is None and len(flats)>11:
         ## Note here we have an assumption about the number of expected flats being greater than 11
         ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
-                                                      reservation=reservation, strictly_successful=strictly_successful)
+                                                      reservation=reservation, strictly_successful=strictly_successful,
+                                                      check_for_outputs=check_for_outputs,
+                                                      resubmit_partial_complete=resubmit_partial_complete
+                                                      )
 
     elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
         ## Note here we have an assumption about the number of expected arcs being greater than 4
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
-                                                    reservation=reservation, strictly_successful=strictly_successful)
+                                                    reservation=reservation, strictly_successful=strictly_successful,
+                                                    check_for_outputs=check_for_outputs,
+                                                    resubmit_partial_complete=resubmit_partial_complete
+                                                    )
     return ptable, arcjob, flatjob, sciences, internal_id
 
 

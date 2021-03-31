@@ -85,14 +85,27 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
         #
-        # spectra-{nside}/
-        # Note: coadd naming convention and location needs to be resolved, path may change.
+        # spectra- hp based
         #
-        zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
-        coadd = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',
-        redrock = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/redrock-{nside:d}-{groupname}.h5',
-        spectra = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/spectra-{nside:d}-{groupname}.fits',
-        zbest = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/zbest-{nside:d}-{groupname}.fits',
+        zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',
+        coadd_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',
+        redrock_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/redrock-{nside:d}-{groupname}.h5',
+        spectra_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/spectra-{nside:d}-{groupname}.fits',
+        zbest_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/zbest-{nside:d}-{groupname}.fits',
+        #
+        # spectra- tile based
+        #
+        coadd_tile='{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits',
+        redrock_tile='{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5',
+        spectra_tile='{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits',
+        zbest_tile='{specprod_dir}/tiles/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-{night}.fits',
+        #
+        # spectra- single exp tile based
+        #
+        coadd_single='{specprod_dir}/tiles/{tile:d}/exposures/coadd-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
+        redrock_single='{specprod_dir}/tiles/{tile:d}/exposures/redrock-{spectrograph:d}-{tile:d}-{expid:08d}.h5',
+        spectra_single='{specprod_dir}/tiles/{tile:d}/exposures/spectra-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
+        zbest_single='{specprod_dir}/tiles/{tile:d}/exposures/zbest-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
         #
         # Deprecated QA files below this point.
         #
@@ -121,10 +134,15 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
 
     if tile is not None:
         log.info("Tile-based files selected; healpix-based files and input will be ignored.")
-        location['coadd'] = '{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits'
-        location['redrock'] = '{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5'
-        location['spectra'] = '{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits'
-        location['zbest'] = '{specprod_dir}/tiles/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-{night}.fits'
+        location['coadd'] = location['coadd_tile']
+        location['redrock'] = location['redrock_tile']
+        location['spectra'] = location['spectra_tile']
+        location['zbest'] = location['zbest_tile']
+    else:
+        location['coadd'] = location['coadd_hp']
+        location['redrock'] = location['redrock_hp']
+        location['spectra'] = location['spectra_hp']
+        location['zbest'] = location['zbest_hp']
 
     if groupname is not None:
         hpix = int(groupname)
@@ -178,8 +196,7 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band,
-        'spectrograph':spectrograph,
-        'hpixdir':hpixdir,
+        'spectrograph':spectrograph
         }
 
     if 'rawdata_dir' in required_inputs:
