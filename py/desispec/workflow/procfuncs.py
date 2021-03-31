@@ -779,7 +779,8 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
             row['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
             row = assign_dependency(row, joint_prow)
             row = create_and_submit(row, queue=queue, reservation=reservation, dry_run=dry_run,
-                                    strictly_successful=strictly_successful)
+                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                    resubmit_partial_complete=resubmit_partial_complete)
             ptable.add_row(row)
     else:
         log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
