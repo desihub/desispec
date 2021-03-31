@@ -457,10 +457,14 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     today = datetime.datetime.now().strftime('%Y%m%d')
 
     #- Convert list of days to single string to use in command
+
+    lastdayornight=0
     if days is not None:
         days = ' '.join([str(tmp) for tmp in days])
+        lastdayornight=sorted(days.split())[-1]
     elif nights is not None:
         nights = ' '.join([str(tmp) for tmp in nights])
+        lastdayornight=sorted(nights.split())[-1]
     else:
         msg = 'Must specify days or nights'
         log.critical(msg)
@@ -469,7 +473,9 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
     for camera in cameras:
         sp = 'sp' + camera[1]
         sm = sp2sm(sp)
-        key = f'{sm}-{camera}-{today}'
+        #key = f'{sm}-{camera}-{today}'
+        key = f'{sm}-{camera}-{lastdayornight}'
+
         batchfile = os.path.join(tempdir, f'dark-{key}.slurm')
         logfile = os.path.join(tempdir, f'dark-{key}-%j.log')
         darkfile = f'dark-{key}.fits.gz'
