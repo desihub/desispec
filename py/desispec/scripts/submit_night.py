@@ -20,7 +20,8 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', reservation=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
                  error_if_not_available=True, overwrite_existing_tables=False,
-                 dont_check_job_outputs=False, dont_resubmit_partial_jobs=False):
+                 dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
+                 system_name=None):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -47,6 +48,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         dont_resubmit_partial_jobs, bool. Default is False. Must be used with dont_check_job_outputs=False. If this flag is
                                           False, jobs with some prior data are pruned using PROCCAMWORD to only process the
                                           remaining cameras not found to exist.
+        system_name: batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
     Returns:
         None.
     """
@@ -142,7 +144,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
                                                                      queue=queue, reservation=reservation,
                                                                      strictly_successful=True,
                                                                      check_for_outputs=check_for_outputs,
-                                                                     resubmit_partial_complete=resubmit_partial_complete)
+                                                                     resubmit_partial_complete=resubmit_partial_complete,
+                                                                     system_name=system_name)
 
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
@@ -151,7 +154,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         prow = define_and_assign_dependency(prow, arcjob, flatjob)
         print(f"\nProcessing: {prow}\n")
         prow = create_and_submit(prow, dry_run=dry_run, queue=queue, reservation=reservation, strictly_successful=True,
-                                 check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete)
+                                 check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
+                                 system_name=system_name)
         ptable.add_row(prow)
         # ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
@@ -173,8 +177,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         if tableng > 0 and ii % 10 == 0:
             write_table(ptable, tablename=proc_table_pathname)
             if not dry_run:
-                print("\n", "Sleeping 10s to slow down the queue submission rate")
-                time.sleep(10)
+                print("\n", "Sleeping 2s to slow down the queue submission rate")
+                time.sleep(2)
 
         ## Flush the outputs
         sys.stdout.flush()
@@ -188,7 +192,8 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
                                                               queue=queue, reservation=reservation,
                                                               strictly_successful=True,
                                                               check_for_outputs=check_for_outputs,
-                                                              resubmit_partial_complete=resubmit_partial_complete)
+                                                              resubmit_partial_complete=resubmit_partial_complete,
+                                                              system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run)
         write_table(ptable, tablename=proc_table_pathname)

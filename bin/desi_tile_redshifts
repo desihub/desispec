@@ -57,6 +57,8 @@ p.add_argument("--batch-reservation", type=str,
         help="batch reservation name")
 p.add_argument("--batch-dependency", type=str,
         help="job dependencies passed to sbatch --dependency")
+p.add_argument("--system-name", type=str,
+        help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
 
 # TODO
 # p.add_argument("--outdir", type=str, help="output directory")
@@ -76,9 +78,11 @@ from desiutil.log import get_logger
 import desispec.io
 from desispec.workflow.tableio import load_table
 from desispec.workflow.exptable import get_exposure_table_pathname
+from desispec.workflow import batch
 
 def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
-    submit=False, queue='realtime', reservation=None, dependency=None):
+    submit=False, queue='realtime', reservation=None, dependency=None,
+    system_name=None):
     """
     Generate batch script for spectra+coadd+redshifts for a tile
 
@@ -94,6 +98,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         queue (str): batch queue name
         reservation (str): batch reservation name
         dependency (str): passed to sbatch --dependency upon submit
+        system_name (str): batch system name, e.g. cori-haswell, perlmutter-gpu
 
     Returns tuple (scriptpath, error):
         scriptpath (str): full path to generated script
@@ -143,22 +148,38 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
     os.makedirs(scriptdir, exist_ok=True)
 
+    batch_config = batch.get_config(system_name)
+
     jobname = f'redrock-{suffix}'
     batchscript = f'{scriptdir}/coadd-redshifts-{suffix}.slurm'
     batchlog = batchscript.replace('.slurm', r'-%j.log')
 
-    #- TODO: generalize beyond Cori haswell realtime
+    #- system specific options, e.g. "--constraint=haswell"
+    batch_opts = list()
+    if 'batch_opts' in batch_config:
+        for opt in batch_config['batch_opts']:
+            batch_opts.append(f'#SBATCH {opt}')
+    batch_opts = '\n'.join(batch_opts)
+
+    runtime = 10 + int(10 * batch_config['timefactor'])
+    runtime_hh = runtime // 60
+    runtime_mm = runtime % 60
+
+    cores_per_node = batch_config['cores_per_node']
+    threads_per_core = batch_config['threads_per_core']
+    threads_per_node = cores_per_node * threads_per_core
+
     with open(batchscript, 'w') as fx:
          fx.write(f"""#!/bin/bash
 
-#SBATCH -C haswell
 #SBATCH -N {num_nodes}
 #SBATCH --account desi
 #SBATCH --qos {queue}
 #SBATCH --job-name {jobname}
 #SBATCH --output {batchlog}
-#SBATCH --time=00:20:00
+#SBATCH --time={runtime_hh:02d}:{runtime_mm:02d}:00
 #SBATCH --exclusive
+{batch_opts}
 
 echo Starting at $(date)
     
@@ -181,7 +202,7 @@ for SPECTRO in {spectro_string}; do
         fi
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
-            cmd="srun -N 1 -n 1 -c 64 desi_group_spectra --inframes $CFRAMES --outfile $spectra"
+            cmd="srun -N 1 -n 1 -c {threads_per_node} desi_group_spectra --inframes $CFRAMES --outfile $spectra"
             echo RUNNING $cmd &> $splog
             $cmd &>> $splog &
             sleep 1
@@ -193,6 +214,7 @@ done
 echo Waiting for desi_group_spectra to finish at $(date)
 wait
 
+echo Coadding spectra at $(date)
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
@@ -202,7 +224,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $coadd) already exists, skipping coadd
     elif [ -f $spectra ]; then
         echo Coadding $(basename $spectra) into $(basename $coadd), see $colog
-        cmd="srun -N 1 -n 1 -c 64 desi_coadd_spectra --nproc 16 -i $spectra -o $coadd"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra --nproc 16 -i $spectra -o $coadd"
         echo RUNNING $cmd &> $colog
         $cmd &>> $colog &
         sleep 1
@@ -213,6 +235,7 @@ done
 echo Waiting for desi_coadd_spectra to finish at $(date)
 wait
 
+echo Running redrock at $(date)
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
     zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
@@ -223,7 +246,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $zbest) already exists, skipping redshifts
     elif [ -f $spectra ]; then
         echo Running redrock on $(basename $spectra), see $rrlog
-        cmd="srun -N 1 -n 32 -c 2 rrdesi_mpi $spectra -o $redrock -z $zbest"
+        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi $spectra -o $redrock -z $zbest"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 1
@@ -393,14 +416,14 @@ for tileid in tileids:
         batchscript, batcherr = batch_tile_redshifts(
             tileid, exptable[tilerows], args.group, submit=submit,
             queue=args.batch_queue, reservation=args.batch_reservation,
-            dependency=args.batch_dependency
+            dependency=args.batch_dependency, system_name=args.system_name
             )
     else:
         for i in range(len(exptable[tilerows])):
             batchscript, batcherr = batch_tile_redshifts(
                 tileid, exptable[tilerows][i:i+1], args.group, submit=submit,
                 queue=args.batch_queue, reservation=args.batch_reservation,
-                dependency=args.batch_dependency
+                dependency=args.batch_dependency, system_name=args.system_name
                 )
 
 

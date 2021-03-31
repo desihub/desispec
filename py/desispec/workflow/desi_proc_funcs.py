@@ -13,6 +13,8 @@ from desispec.io.util import create_camword, decode_camword, parse_cameras
 # from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 
+from . import batch
+
 def get_desi_proc_parser():
     """
     Create an argparser object for use with desi_proc based on arguments from sys.argv
@@ -67,6 +69,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
+    parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
 
     return parser
 
@@ -271,7 +274,7 @@ def update_args_with_headers(args):
     fx.close()
     return args, hdr, camhdr
 
-def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
+def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, system_name=None):
     """
     Determine the resources that should be assigned to the batch script given what
     desi_proc needs for the given input information.
@@ -286,9 +289,11 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
 
     Returns:
         ncores: int, number of cores (actually 2xphysical cores) that should be submitted via "-n {ncores}"
-        nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // 32 + 1
+        nodes:  int, number of nodes to be requested in the script. Typically  (ncores-1) // cores_per_node + 1
         runtime: int, the max time requested for the script in minutes for the processing.
     """
+    config = batch.get_config(system_name)
+
     nspectro = (ncameras - 1) // 3 + 1
     if jobdesc in ('ARC', 'TESTARC'):
         ncores, runtime = 20 * ncameras, 45
@@ -311,7 +316,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     if forced_runtime is not None:
         runtime = forced_runtime
 
-    nodes = (ncores - 1) // 32 + 1
+    nodes = (ncores - 1) // config['cores_per_node'] + 1
 
     # - Arcs and flats make good use of full nodes, but throttle science
     # - exposures to 5 nodes to enable two to run together in the 10-node
@@ -326,7 +331,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None):
     ### if (queue == 'realtime') and (nodes > max_realtime_nodes):
     if (nodes > max_realtime_nodes):
         nodes = max_realtime_nodes
-        ncores = 32 * nodes
+        ncores = config['cores_per_node'] * nodes
+
+    runtime *= config['timefactor']
 
     return ncores, nodes, runtime
 
@@ -391,7 +398,7 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
 
 
 def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
-                                  timingfile=None, batchdir=None, jobname=None, cmdline=None):
+                                  timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
 
@@ -416,6 +423,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         batchdir: can define an alternative location to write the file. The default is to SPECPROD under run/scripts/night/NIGHT
         jobname: name to save this batch script file as and the name of the eventual log file. Script is save  within
                  the batchdir directory.
+        system_name: name of batch system, e.g. cori-haswell, cori-knl
 
     Returns:
         scriptfile: the full path name for the script written.
@@ -442,26 +450,37 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     scriptfile = os.path.join(batchdir, jobname + '.slurm')
 
+    batch_config = batch.get_config(system_name)
+    threads_per_core = batch_config['threads_per_core']
+
     ncameras = len(cameras)
     nexps = 1
     if not np.isscalar(exp) and type(exp) is not str:
         nexps = len(exp)
-    ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps, forced_runtime=runtime)
+    ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
+            forced_runtime=runtime, system_name=system_name)
 
-    assert runtime <= 60
+    #- arc fits require more memory per core than Cori KNL has, so increase nodes as needed
+    if jobdesc.lower() == 'arc':
+        while (batch_config['memory'] / (ncores/nodes)) < 2.0:
+            nodes *= 2
+            threads_per_core *= 2
+
+    runtime_hh = int(runtime // 60)
+    runtime_mm = int(runtime % 60)
 
     with open(scriptfile, 'w') as fx:
         fx.write('#!/bin/bash -l\n\n')
-        fx.write('#SBATCH -C haswell\n')
         fx.write('#SBATCH -N {}\n'.format(nodes))
-        fx.write('#SBATCH -n {}\n'.format(ncores))
         fx.write('#SBATCH --qos {}\n'.format(queue))
+        for opts in batch_config['batch_opts']:
+            fx.write('#SBATCH {}\n'.format(opts))
         if batch_opts is not None:
             fx.write('#SBATCH {}\n'.format(batch_opts))
         fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
-        fx.write('#SBATCH --time=00:{:02d}:00\n'.format(runtime))
+        fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
 
         # - If we are asking for more than half the node, ask for all of it
         # - to avoid memory problems with other people's jobs
@@ -508,26 +527,29 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         fx.write('echo Starting at $(date)\n')
 
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
-            ################################## Note ############################
-            ## Needs to be refactored to write the correct thing given flags ###
-            ####################################################################
             fx.write('\n# Do steps at full MPI parallelism\n')
-            srun = 'srun -N {} -n {} -c 2 {}'.format(nodes, ncores, cmd)
+            srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
             fx.write('echo Running {}\n'.format(srun))
             fx.write('{}\n'.format(srun))
         else:
             if jobdesc.lower() in ['science','prestdstar']:
-                ################################## Note ############################
-                ## Needs to be refactored to write the correct thing given flags ###
-                ####################################################################
                 fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-                srun = 'srun -N {} -n {} -c 2 {} --nofluxcalib'.format(nodes, ncores, cmd)
+                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd} --nofluxcalib'
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
             if jobdesc.lower() in ['science', 'stdstarfit', 'poststdstar']:
+                if nodes*4 > ncameras:
+                    #- only one rank per camera; multiprocessing fans out the rest
+                    ntasks = ncameras
+                else:
+                    #- but don't run more than 4 per node (to be tuned)
+                    ntasks = nodes*4
+
+                tot_threads = nodes * batch_config['cores_per_node'] * batch_config['threads_per_core']
+                threads_per_task = max(int(tot_threads / ntasks), 1)
                 fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
                 fx.write('# This should quickly skip over the steps already done\n')
-                srun = 'srun -N {} -n {} -c 32 {} '.format(nodes, nodes * 2, cmd)
+                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} {cmd} '
                 fx.write('if [ $? -eq 0 ]; then\n')
                 fx.write('  echo Running {}\n'.format(srun))
                 fx.write('  {}\n'.format(srun))
