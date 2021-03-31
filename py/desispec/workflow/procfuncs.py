@@ -119,7 +119,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         cameras = decode_camword(prow['PROCCAMWORD'])
         n_desired = len(cameras)
         expid = prow['EXPID'][0]
-        if len(prow['EXPID']) > 1:
+        if len(prow['EXPID']) > 1 and prow['JOBDESC'] not in ['psfnight','psfnight']:
             log.warning(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']}. This job type only makes " +
                      f"sense with a single exposure. Proceeding with {expid}.")
         missing_cameras = []
