@@ -263,11 +263,14 @@ echo Done at $(date)
 
     err = 0
     if submit:
-        cmd = ['sbatch', batchscript]
+        cmd = ['sbatch',]
         if reservation:
             cmd.extend(['--reservation', reservation])
         if dependency:
             cmd.extend(['--dependency', dependency])
+
+        #- sbatch requires the script to be last, after all options
+        cmd.append(batchscript)
 
         err = subprocess.call(cmd)
         basename = os.path.basename(batchscript)
