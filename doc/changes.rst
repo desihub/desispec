@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.40.1 (unreleased)
+0.40.2 (unreleased)
 -------------------
 
 No changes yet.
+
+0.40.1 (2020-04-01)
+-------------------
+
+Installation and job submission fixes for Denali; no algorithmic changes.
+
+* fix data installation (PR `#1221`_).
+* ``desi_tile_redshifts --batch-reservation`` fix for Denali run (PR `#1222`_).
+
+.. _`#1221: https://github.com/desihub/desispec/issues/1221
+.. _`#1222: https://github.com/desihub/desispec/issues/1222
 
 0.40.0 (2021-03-31)
 -------------------
