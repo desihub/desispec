@@ -19,7 +19,7 @@ from desispec.calibfinder import findcalibfile
 # AR grz-band sky mag / arcsec2 from sky-....fits files
 # AR now using work-in-progress throughput
 # AR still provides a better agreement with GFAs than previous method
-def compute_skymag(night, expid, specprod=None, fiber=0):
+def compute_skymag(night, expid, specprod_dir=None, acals=None):
 
     log=get_logger()
 
@@ -30,9 +30,11 @@ def compute_skymag(night, expid, specprod=None, fiber=0):
     # AR (wmin,wmax) to "stich" all three cameras
     wstich = {"b": (wmin, 5780), "r": (5780, 7570), "z": (7570, 9824)}
 
-    specprod_dir = specprod_root(specprod)
+    if specprod_dir is None :
+        specprod_dir = specprod_root()
 
-    acals={}
+    if acals is None :
+        acals={}
 
     # AR looking for a petal with brz sky and ivar>0
     sky_spectra = []
@@ -43,13 +45,13 @@ def compute_skymag(night, expid, specprod=None, fiber=0):
             camspec="{}{}".format(camera,spec)
             filename = findfile("sky",night=night,expid=expid,camera=camspec,specprod_dir=specprod_dir)
             if not os.path.isfile(filename) :
-                log.warning("skipping {}-{:08d}-{} : not 3 cameras".format(night,expid,spec))
-                continue # to next spectrograph
-
+                log.warning("skipping {}-{:08d}-{} : missing {}".format(night,expid,spec,filename))
+                ok = False
+                break
             fiber=0
             skyivar=fitsio.read(filename,"IVAR")[fiber]
             if np.all(skyivar==0) :
-                log.warning("skipping {}-{:08d} : ivar=0 for {}".format(night,expid,filename))
+                log.warning("skipping {}-{:08d}-{} : ivar=0 for {}".format(night,expid,spec,filename))
                 ok=False
                 break
             skyflux=fitsio.read(filename,0)[fiber]
@@ -72,7 +74,7 @@ def compute_skymag(night, expid, specprod=None, fiber=0):
             else :
                 acal=acals[cal_filename] # read it only once (because by default same for all spectro)
             flux = np.interp(fullwave[cslice[camera]], skywave, skyflux)
-            sky[cslice[camera]] = flux / exptime / acal.value() / fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
+            sky[cslice[camera]] = flux / exptime / acal.value() * fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
 
         if not ok : continue # to next spectrograph
         sky_spectra.append(sky)
@@ -95,6 +97,9 @@ def compute_skymag(night, expid, specprod=None, fiber=0):
         sky_pad, fullwave_pad = filts[i].pad_spectrum(sky_pad, fullwave_pad, method="zero")
     mags = filts.get_ab_magnitudes(sky_pad * units.erg / (units.cm ** 2 * units.s * units.angstrom),fullwave_pad * units.angstrom).as_array()[0]
 
+    #import matplotlib.pyplot as plt
+    #plt.plot(fullwave_pad,sky_pad)
+    #plt.grid()
+    #plt.show()
 
-
-    return mags
+    return mags # AB mags for flux per arcsec2
