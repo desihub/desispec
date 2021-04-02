@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script computes the fiber flat field correction from a DESI continuum lamp frame.
+"""
+
+from desispec.skymag import compute_skymag
+
+mags=compute_skymag(night=20210401,expid=83006,specprod="daily")
+print(mags[0])
+print(mags[1])
+print(mags[2])
