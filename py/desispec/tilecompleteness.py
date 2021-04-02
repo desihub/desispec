@@ -142,7 +142,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         log.info("checking redshifts for tile {}".format(tileid))
         exposure_indices=np.where(exposure_table["TILEID"]==tileid)[0]
         night = np.max(exposure_table["NIGHT"][exposure_indices])
-        nok   = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir)
+        nok   = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir,warn=(night==res["LASTNIGHT"][i]))
         if nok >= min_number_of_petals :
             res["ZDONE"][i]="true"
         elif nok > 0 :
@@ -185,6 +185,19 @@ def reorder_columns(table) :
 
     return newtable
 
+def is_same_table_rows(table1,index1,table2,index2) :
+
+    #if table1[index1] == table2[index2] : return True
+
+    if sorted(table1.dtype.names) != sorted(table2.dtype.names) :
+        print("not same keys??")
+        return False
+    for k in table1.dtype.names :
+        if table1[k][index1] != table2[k][index2] :
+            return False
+    return True
+
+
 def merge_tile_completeness_table(previous_table,new_table) :
     """ Merges tile summary tables. Entries with tiles previously marked as ZDONE are not modified.
 
@@ -194,18 +207,53 @@ def merge_tile_completeness_table(previous_table,new_table) :
     Returns: astropy.table.Table with merged entries.
     """
 
-    keep_from_previous = (previous_table["ZDONE"]=="true") | (~np.in1d(previous_table["TILEID"],new_table["TILEID"]))
-    exclude_from_new   = np.in1d(new_table["TILEID"],previous_table["TILEID"][keep_from_previous])
-    add_from_new = ~exclude_from_new
     log = get_logger()
-    if np.sum(exclude_from_new)>0 :
-        log.info("do not change the status of {} completed tiles".format(np.sum(exclude_from_new)))
-    if np.sum(add_from_new)>0 :
-        log.info("add or change the status of {} tiles".format(np.sum(add_from_new)))
+
+    # check whether there is any difference for the new ones
+    t2i={t:i for i,t in enumerate(previous_table["TILEID"])}
+
+    nadd=0
+    nmod=0
+    nsame=0
+    nforcekeep=0
+    keep_from_previous = []
+    add_from_new = []
+    for j,t in enumerate(new_table["TILEID"]) :
+        if t not in t2i :
+            nadd += 1
+            add_from_new.append(j)
+            continue
+        i=t2i[t]
+        if is_same_table_rows(previous_table,i,new_table,j) :
+            nsame += 1
+            keep_from_previous.append(i)
+            continue
+        if previous_table["ZDONE"][i]=="true" and new_table["ZDONE"][j]!="true" :
+            if previous_table["OBSSTATUS"][i]==new_table["OBSSTATUS"][j] :
+                nforcekeep += 1
+                nsame += 1
+                keep_from_previous.append(i)
+                log.warning("For tile {} zdone=true for lastnight={} but zdone={} for lastnight={}".format(t,previous_table["LASTNIGHT"][i],new_table["ZDONE"][j],new_table["LASTNIGHT"][j]))
+                log.warning("previously: {}".format(previous_table[i]))
+                log.warning("newly: {}".format(new_table[j]))
+                continue
+            elif previous_table["GOALTIME"][i] != new_table["GOALTIME"][j] :
+                log.warning("For tile {} GOALTIME changed from {} to {} ???".format(t,previous_table["GOALTIME"][i],new_table["GOALTIME"][j]))
+            else :
+                log.warning("For tile {} OBSTATUS changed from {} to {} ???".format(t,previous_table["OBSSTATUS"][i],new_table["OBSSTATUS"][j]))
+
+        nmod += 1
+        add_from_new.append(j)
+
+
+    log.info("{} tiles unchanged".format(nsame))
+    log.info("{} tiles modified".format(nmod))
+    log.info("{} tiles added".format(nadd))
+
+    if len(add_from_new)>0 :
         res = vstack( [ previous_table[keep_from_previous] , new_table[add_from_new] ] )
     else :
         res = previous_table
-
 
     res = reorder_columns(res)
     # reorder rows
@@ -214,7 +262,7 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
     return res
 
-def number_of_good_zbest(tileid,night,specprod_dir) :
+def number_of_good_zbest(tileid,night,specprod_dir,warn=True) :
 
     log=get_logger()
     nok=0
@@ -222,11 +270,11 @@ def number_of_good_zbest(tileid,night,specprod_dir) :
 
         coadd_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/coadd-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
         if not os.path.isfile(coadd_filename) :
-            log.warning("missing {}".format(coadd_filename))
+            if warn : log.warning("missing {}".format(coadd_filename))
             continue
         zbest_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/zbest-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
         if not os.path.isfile(zbest_filename) :
-            log.warning("missing {}".format(zbest_filename))
+            if warn : log.warning("missing {}".format(zbest_filename))
             continue
 
         # do more tests
