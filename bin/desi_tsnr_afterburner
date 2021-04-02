@@ -286,7 +286,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA","DARK")
 
     exp_summary['EFFTIME_SPEC'] = exp_summary['ELG_EFFTIME_DARK']
-    ii = (exp_summary['GOALTYPE']=='BRIGHT')|(exp_summary['GOALTYPE']=='BACKUP')
+    ii = (exp_summary['GOALTYPE']=='bright')|(exp_summary['GOALTYPE']=='backup')
     exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
     # sort table rows
