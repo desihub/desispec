@@ -312,7 +312,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GFA_TRANSPARENCY','GFA_FWHM_ASEC','GFA_FIBERFAC','GFA_FIBERFAC_ELG','GFA_FIBERFAC_BGS','GFA_SKY_MAG_AB']
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS','SKY_MAG_AB_GFA']
     #neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
@@ -652,8 +652,8 @@ def main():
         cols=["TRANSPARENCY","FWHM_ASEC","FIBERFAC","FIBERFAC_ELG","FIBERFAC_BGS","SKY_MAG_AB"]
         for col in cols :
             if col in gfa_table.dtype.names :
-                tsnr2_expid_table["GFA_"+col]=np.zeros(len(tsnr2_expid_table),dtype=float)
-                tsnr2_expid_table["GFA_"+col][jj] = gfa_table[col][ii]
+                tsnr2_expid_table[col+"_GFA"]=np.zeros(len(tsnr2_expid_table),dtype=float)
+                tsnr2_expid_table[col+"_GFA"][jj] = gfa_table[col][ii]
 
 
     # end of loop on nights
