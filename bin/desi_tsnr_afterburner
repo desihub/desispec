@@ -11,6 +11,8 @@ import astropy.io.fits as fits
 import fitsio
 import numpy as np
 import multiprocessing
+from astropy.table import Table,vstack
+
 import yaml
 from   pkg_resources import resource_filename
 
@@ -57,6 +59,8 @@ def parse(options=None):
                         help = 'Ouput tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
                     help = 'Path to auxiliary ttiles ables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
+    parser.add_argument('--gfa-proc-dir', type = str, default = None, required=False,
+                        help = 'Directory where the GFA processing from Aaron can be found, like /global/cfs/cdirs/desi/GFA/offline_matched_coadd_ccds_SV')
 
     args = None
     if options is None:
@@ -67,6 +71,16 @@ def parse(options=None):
 
 
 
+def read_gfa_data(gfa_proc_dir) :
+    tables=[]
+    for survey in ["SV1","SV2"] :
+        filename=sorted(glob.glob("{}/offline_matched_coadd_ccds_{}-thru_????????.fits".format(gfa_proc_dir,survey)))[-1]
+        print(filename)
+        table=Table.read(filename)
+        tables.append(table)
+    table=vstack(tables)
+    print(table)
+    return table
 
 
 def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir, alpha_only=False) :
@@ -148,9 +162,8 @@ def update_table(table1,table2,keys) :
     else :
         return table2
 
-
-def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir) :
-    """ Writes summar file.
+def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir) :
+    """ Compute summary tables.
 
     Args:
       summary_rows: list of dictionnaries
@@ -160,7 +173,7 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
 
-    Returns nothing
+    Returns tsnr2_expid_table , tsnr2_frame_table
     """
     log = get_logger()
 
@@ -299,38 +312,63 @@ def write_summary(summary_rows,output_filename,efftime_config,preexisting_tsnr2_
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK']
-    if not np.all(np.in1d(neworder,exp_summary.dtype.names)) or not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
-        print("error, mismatch of some keys")
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GFA_TRANSPARENCY','GFA_FWHM_ASEC','GFA_FIBERFAC','GFA_FIBERFAC_ELG','GFA_FIBERFAC_BGS','GFA_SKY_MAG_AB']
+    #neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK']
+
+    if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
+        print("error, missing of some keys in new order")
         print(sorted(neworder))
         print(sorted(exp_summary.dtype.names))
         sys.exit(12)
     newtable=Table()
     newtable.meta=exp_summary.meta
     for k in neworder :
-       newtable[k]=exp_summary[k]
+        if k in exp_summary.dtype.names :
+            newtable[k]=exp_summary[k]
+        else :
+            newtable[k]=np.zeros(len(exp_summary))
     exp_summary=newtable
 
+    return exp_summary, cam_summary
+
+def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename,output_csv_filename=None) :
+    """ Writes a summary fits file.
+
+    Args:
+     tsnr2_expid_table: astropy.table.Table
+     tsnr2_frame_table: astropy.table.Table
+     output_fits_filename: str, output fits filename
+     output_csv_filename: str, output csv filename
+
+    Returns nothing
+    """
+    log = get_logger()
+
     hdus = fits.HDUList()
-    hdus.append(fits.convenience.table_to_hdu(exp_summary))
-    hdus.append(fits.convenience.table_to_hdu(cam_summary))
+    hdus.append(fits.convenience.table_to_hdu(tsnr2_expid_table))
+    hdus.append(fits.convenience.table_to_hdu(tsnr2_frame_table))
 
-    tmpfile = output_filename+'.tmp'
+    tmpfile = output_fits_filename+'.tmp'
     hdus.writeto(tmpfile, overwrite=True)
-    os.rename(tmpfile,  output_filename)
+    os.rename(tmpfile,  output_fits_filename)
 
-    log.info('Successfully wrote {}'.format(output_filename))
+    log.info('Successfully wrote {}'.format(output_fits_filename))
 
     # also write first table as csv
-    csv_filename = output_filename.replace(".fits",".csv")
-    if True :
-        for k in exp_summary.keys() :
-            if k.find("TIME")>=0 or k.find("SEEING")>=0 or k.find("SNR2")>=0 :
-                exp_summary[k]=np.around(exp_summary[k].astype(float),1)
-    exp_summary.write(csv_filename,overwrite=True)
-    log.info('Successfully wrote {}'.format(csv_filename))
-
-
+    if output_csv_filename is not None :
+        for k in tsnr2_expid_table.keys() :
+            if k.find("TIME")>=0 or k.find("SNR2")>=0 :
+                try :
+                    tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),1)
+                except ValueError as e :
+                    log.warning("cannot change number of digits for col {}: {}".format(k,e))
+            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBERFAC")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 :
+                try :
+                    tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),3)
+                except ValueError as e :
+                    log.warning("cannot change number of digits for col {}: {}".format(k,e))
+        tsnr2_expid_table.write(output_csv_filename,overwrite=True)
+        log.info('Successfully wrote {}'.format(output_csv_filename))
 
 def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     """
@@ -592,13 +630,36 @@ def main():
         # write result after every other night
         if len(summary_rows)>0 :
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-            write_summary(summary_rows,tmpfilename,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
+
+
+    tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+
+
+    if args.gfa_proc_dir is not None :
+        gfa_table = read_gfa_data(args.gfa_proc_dir)
+
+        e2i = {e:i for i,e in enumerate(gfa_table["SPECTRO_EXPID"])}
+        jj=[]
+        ii=[]
+        for j,e in enumerate(tsnr2_expid_table["EXPID"]) :
+            if e in e2i :
+                jj.append(j)
+                ii.append(e2i[e])
+
+        cols=["TRANSPARENCY","FWHM_ASEC","FIBERFAC","FIBERFAC_ELG","FIBERFAC_BGS","SKY_MAG_AB"]
+        for col in cols :
+            if col in gfa_table.dtype.names :
+                tsnr2_expid_table["GFA_"+col]=np.zeros(len(tsnr2_expid_table),dtype=float)
+                tsnr2_expid_table["GFA_"+col][jj] = gfa_table[col][ii]
 
 
     # end of loop on nights
     if len(summary_rows)>0 :
-        write_summary(summary_rows,args.outfile,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+
+        write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,output_csv_filename=args.outfile.replace(".fits",".csv"))
 
         # remove temporary file if successful
         if os.path.isfile(args.outfile) :
