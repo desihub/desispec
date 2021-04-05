@@ -29,6 +29,7 @@ from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
 from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
+from   desispec.skymag import compute_skymag
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
@@ -61,6 +62,10 @@ def parse(options=None):
                     help = 'Path to auxiliary ttiles ables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
     parser.add_argument('--gfa-proc-dir', type = str, default = None, required=False,
                         help = 'Directory where the GFA processing from Aaron can be found, like /global/cfs/cdirs/desi/GFA/offline_matched_coadd_ccds_SV')
+    parser.add_argument('--skymags', type = str, default = None, required=False,
+                        help = 'path to table with sky magnitudes. Expected keys=NIGHT,EXPID,SKY_MAG_G,SKY_MAG_R,SKY_MAG_Z')
+    parser.add_argument('--compute-skymags', action='store_true',
+                        help = 'recompute sky mags')
 
     args = None
     if options is None:
@@ -82,6 +87,99 @@ def read_gfa_data(gfa_proc_dir) :
     print(table)
     return table
 
+
+
+# AR https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+# AR 2021-03-05: GFA values are now computed for a fiber diameter of 1.52"
+def compute_efftime(table,
+                    ffrac_psf_nom=0.58176816, # FRACFLUX_NOMINAL_POINTSOURCE in Aaron's table
+                    ffrac_elg_nom=0.42423388, # FRACFLUX_NOMINAL_ELG
+                    ffrac_bgs_nom=0.19544029, # FRACFLUX_NOMINAL_BGS
+                    kterm=0.114, # KERM
+                    ebv_r_coeff=2.165,
+                    fiber_diameter_arcsec=1.52):
+
+    # AR : sky <- spectro. sky in nMgy / arcsec**2 (corrected by throughput)
+    # AR : transparency, airmass <- GFA
+    # AR : ffrac_psf <- GFA fiber_fracflux
+    # AR : ffrac_elg <- GFA fiber_fracflux_elg
+    # AR : ffrac_bgs <- GFA fiber_fracflux_bgs
+    # AR : ffrac_*_nom and kterm <- from GFA [ffrac_psf_nom~0.582, ffrac_elg_nom~0.424, ffrac_bgs_nom~0.195]
+    #
+    # AR nominal values
+
+    exptime  = table["EXPTIME"]
+    skymag   = table["SKY_MAG_R_SPEC"]
+    sky      = 10**(-0.4*(skymag-22.5)) # nMgy/arcsec**2
+    ebv      = table["EBV"]
+    transparency = table["TRANSPARENCY_GFA"]
+    airmass      = table["AIRMASS"]
+    ffrac_psf    = table["FIBER_FRACFLUX_GFA"] #
+    ffrac_elg    = table["FIBER_FRACFLUX_ELG_GFA"] #
+    ffrac_bgs    = table["FIBER_FRACFLUX_BGS_GFA"] #
+
+
+
+    exptime_nom = 1000.0  # AR seconds
+    sky_nom = 3.73  # AR nMgy/arcsec**2
+    fflux_bright_nom = (
+        15.8  # AR nMgy/arcsec**2 (r=19.5 mag for de Vaucouleurs rhalf=1.5" BGS)
+    )
+    fflux_backup_nom = 27.5  # AR nMgy/arcsec**2 (r=18.9 mag star)
+    # AR airmass term
+    airfac = 10.0 ** (kterm * (airmass - 1.0) / 2.5)
+    # AR ebv term
+    ebvfac = 10.0 ** (ebv_r_coeff * ebv / 2.5)
+    # AR sky readnoise
+    sky_rdn = 0.932  # AR nMgy/arcsec**2
+
+    fiber_area_arcsec2 = np.pi*(fiber_diameter_arcsec/2.)**2
+
+    # AR "limit" fiber flux
+    fflux_bright = (
+        ffrac_bgs * transparency / airfac * fflux_bright_nom / fiber_area_arcsec2
+    )
+    fflux_backup = (
+        ffrac_psf * transparency / airfac * fflux_backup_nom / fiber_area_arcsec2
+    )
+    # AR effective sky
+    effsky_dark = (sky + sky_rdn * exptime_nom / exptime) / (1.0 + sky_rdn / sky_nom)
+    effsky_bright = (sky + sky_rdn * exptime_nom / exptime + fflux_bright) / (
+        1.0 + sky_rdn / sky_nom + fflux_bright / sky_nom
+    )
+    effsky_backup = (sky + sky_rdn * exptime_nom / exptime + fflux_backup) / (
+        1.0 + sky_rdn / sky_nom + fflux_backup / sky_nom
+    )
+    # AR effective exposure time
+    efftime_dark = (
+        exptime
+        * (ffrac_elg / ffrac_elg_nom * transparency / airfac) ** 2
+        * (sky_nom / effsky_dark)
+        / ebvfac ** 2
+    )
+    efftime_bright = (
+        exptime
+        * (ffrac_bgs / ffrac_bgs_nom * transparency / airfac) ** 2
+        * (sky_nom / effsky_bright)
+        / ebvfac ** 2
+    )
+    efftime_backup = (
+        exptime
+        * (ffrac_psf / ffrac_psf_nom * transparency / airfac) ** 2
+        * (sky_nom / effsky_backup)
+        / ebvfac ** 2
+    )
+
+    # set to -1 values with incorrect inputs
+    bad=table["AIRMASS"]<0.99
+    bad |=(table["FIBER_FRACFLUX_GFA"]==0)
+    bad |=(table["TRANSPARENCY_GFA"]>2)
+    efftime_dark[bad]=0.
+    efftime_bright[bad]=0.
+    efftime_backup[bad]=0.
+
+
+    return efftime_dark , efftime_bright , efftime_backup
 
 def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir, alpha_only=False) :
     """
@@ -205,7 +303,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE","MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
+        for k in ["NIGHT","EXPID","TILEID","AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE","MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
             row[k]=cam_summary[k][ii][0]
         # mean
         row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
@@ -241,6 +339,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 entry["EXPID"]=prod_table["EXPID"][i]
                 entry["NIGHT"]=night
                 entry["TILEID"]=prod_table["TILEID"][i]
+                entry["AIRMASS"]=0.
+                entry["EBV"]=0.
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
                 entry['SEEING_ETC']=0.
                 entry['EFFTIME_ETC']=0.
@@ -282,7 +382,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
                 preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
-        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC"] :
+        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV"]:
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
                 preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
@@ -312,13 +412,13 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS','SKY_MAG_AB_GFA']
-    #neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK']
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
-        print("error, missing of some keys in new order")
-        print(sorted(neworder))
-        print(sorted(exp_summary.dtype.names))
+        missing=~np.in1d(exp_summary.dtype.names,neworder)
+        print("error, missing keys {} in new order list".format(np.array(exp_summary.dtype.names)[missing]))
+        print("new order list:",sorted(neworder))
+        print("current table:",sorted(exp_summary.dtype.names))
         sys.exit(12)
     newtable=Table()
     newtable.meta=exp_summary.meta
@@ -456,6 +556,11 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(tileid)
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
+    entry['AIRMASS'] = np.float32(hdr['AIRMASS'])
+    if 'EBV' in fibermap.dtype.names :
+        entry['EBV'] = np.median(fibermap["EBV"])
+    else :
+        entry['EBV'] = 0.
     if "SEEING" in hdr :
         entry['SEEING_ETC'] = np.float32(hdr['SEEING'])
     else :
@@ -521,6 +626,32 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
 
 def _func(arg) :
     return func(**arg)
+
+def func2(night,expid,specprod_dir) :
+    mags = compute_skymag(night,expid,specprod_dir)
+    entry = {'NIGHT':night,'EXPID':expid,'SKY_MAG_G':mags[0],'SKY_MAG_R':mags[1],'SKY_MAG_Z':mags[2]}
+    print(entry)
+    return(entry)
+
+def _func2(arg) :
+    return func2(**arg)
+
+def add_skymags_columns(exposure_table,skymags_table) :
+    e2i = {e:i for i,e in enumerate(skymags_table["EXPID"])}
+    jj=[]
+    ii=[]
+    for j,e in enumerate(exposure_table["EXPID"]) :
+        if e in e2i :
+            jj.append(j)
+            ii.append(e2i[e])
+        cols=["SKY_MAG_G","SKY_MAG_R","SKY_MAG_Z"]
+        for col in cols :
+            if col in skymags_table.dtype.names :
+                col2=col+"_SPEC"
+                if col2 not in exposure_table.dtype.names :
+                    exposure_table[col2] = np.zeros(len(exposure_table),dtype=float)
+                exposure_table[col2][jj] = skymags_table[col][ii]
+
 
 def main():
     log = get_logger()
@@ -638,6 +769,51 @@ def main():
     tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
 
 
+    if args.skymags is not None :
+        skymags_table = Table.read(args.skymags)
+        add_skymags_columns(tsnr2_expid_table,skymags_table)
+
+    if args.compute_skymags is not None :
+        skymag_rows=[]
+        for count,night in enumerate(nights) :
+
+            dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
+            night_expids=[]
+            for dirname in dirnames :
+                try :
+                    expid=int(os.path.basename(dirname))
+                    night_expids.append(expid)
+                except ValueError as e :
+                    log.warning("ignore {}".format(dirname))
+            if expids is not None :
+                night_expids = np.intersect1d(expids,night_expids)
+                if night_expids.size == 0 :
+                    continue
+            log.info("{} {}".format(night,night_expids))
+
+            func_args = []
+            for expid in night_expids :
+                func_args.append({'night':night,'expid':expid,'specprod_dir':args.prod})
+
+            if args.nproc == 1 :
+                for func_arg in func_args :
+                    entry = func(**func_arg)
+                    if entry is not None :
+                        skymag_rows.append(entry)
+            else :
+                log.info("Multiprocessing with {} procs".format(args.nproc))
+                pool = multiprocessing.Pool(args.nproc)
+                results  =  pool.map(_func2, func_args)
+                for entry in results :
+                    if entry is not None :
+                        skymag_rows.append(entry)
+                pool.close()
+                pool.join()
+
+        colnames = list(skymag_rows[0].keys())
+        skymags_table = Table(rows=skymag_rows, names=colnames)
+        add_skymags_columns(tsnr2_expid_table,skymags_table)
+
     if args.gfa_proc_dir is not None :
         gfa_table = read_gfa_data(args.gfa_proc_dir)
 
@@ -649,12 +825,25 @@ def main():
                 jj.append(j)
                 ii.append(e2i[e])
 
-        cols=["TRANSPARENCY","FWHM_ASEC","FIBERFAC","FIBERFAC_ELG","FIBERFAC_BGS","SKY_MAG_AB"]
+        cols=["TRANSPARENCY","FWHM_ASEC","FIBER_FRACFLUX","FIBER_FRACFLUX_ELG","FIBER_FRACFLUX_BGS","SKY_MAG_AB","AIRMASS",]
         for col in cols :
             if col in gfa_table.dtype.names :
                 tsnr2_expid_table[col+"_GFA"]=np.zeros(len(tsnr2_expid_table),dtype=float)
                 tsnr2_expid_table[col+"_GFA"][jj] = gfa_table[col][ii]
 
+
+    if args.gfa_proc_dir is not None  and args.skymags is not None :
+
+        efftime_dark, efftime_bright, efftime_backup = compute_efftime(tsnr2_expid_table[jj])
+        for col in ["EFFTIME_DARK_GFA","EFFTIME_BRIGHT_GFA","EFFTIME_BACKUP_GFA"] :
+            tsnr2_expid_table[col]=np.zeros(len(tsnr2_expid_table),dtype=float)
+        tsnr2_expid_table["EFFTIME_DARK_GFA"][jj]=efftime_dark
+        tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][jj]=efftime_bright
+        tsnr2_expid_table["EFFTIME_BACKUP_GFA"][jj]=efftime_backup
+        goaltype=tsnr2_expid_table["GOALTYPE"]
+        tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"] # default
+        tsnr2_expid_table["EFFTIME_GFA"][goaltype=="bright"]=tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype=="bright"]
+        tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
 
     # end of loop on nights
     if len(summary_rows)>0 :

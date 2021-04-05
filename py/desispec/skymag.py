@@ -16,12 +16,27 @@ from speclite import filters
 from desispec.io import read_sky,findfile,specprod_root,read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
 
+
+average_calibrations = dict()
+
+# only read once
+def get_average_calibration(filename) :
+    global average_calibrations
+    if not filename in average_calibrations :
+        average_calibrations[filename] = read_average_flux_calibration(filename)
+    return average_calibrations[filename]
+
 # AR grz-band sky mag / arcsec2 from sky-....fits files
 # AR now using work-in-progress throughput
 # AR still provides a better agreement with GFAs than previous method
-def compute_skymag(night, expid, specprod_dir=None, acals=None):
+def compute_skymag(night, expid, specprod_dir=None):
+
+
 
     log=get_logger()
+
+
+
 
     # AR/DK DESI spectra wavelengths
     wmin, wmax, wdelta = 3600, 9824, 0.8
@@ -32,9 +47,6 @@ def compute_skymag(night, expid, specprod_dir=None, acals=None):
 
     if specprod_dir is None :
         specprod_dir = specprod_root()
-
-    if acals is None :
-        acals={}
 
     # AR looking for a petal with brz sky and ivar>0
     sky_spectra = []
@@ -68,11 +80,7 @@ def compute_skymag(night, expid, specprod_dir=None, acals=None):
             mean_fiber_diameter_arcsec = 1.52 # see DESI-6043
             fiber_area_arcsec = np.pi*(mean_fiber_diameter_arcsec/2)**2
 
-            if not cal_filename in acals :
-                acal = read_average_flux_calibration(cal_filename)
-                acals[cal_filename]=acal
-            else :
-                acal=acals[cal_filename] # read it only once (because by default same for all spectro)
+            acal = get_average_calibration(cal_filename)
             flux = np.interp(fullwave[cslice[camera]], skywave, skyflux)
             sky[cslice[camera]] = flux / exptime / acal.value() * fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
 

@@ -54,8 +54,8 @@ def compute_skymag_table(summary_rows) :
 def write_skymag_table(table,outfilename) :
     table.write(outfilename,overwrite=True)
 
-def func(night,expid,specprod_dir,acals) :
-    mags = compute_skymag(night,expid,specprod_dir,acals)
+def func(night,expid,specprod_dir) :
+    mags = compute_skymag(night,expid,specprod_dir)
     entry = {'NIGHT':night,'EXPID':expid,'SKY_MAG_G':mags[0],'SKY_MAG_R':mags[1],'SKY_MAG_Z':mags[2]}
     print(entry)
     return(entry)
@@ -100,7 +100,6 @@ def main():
 
     summary_rows  = list()
 
-    acals={} # dictionnary containing the calibration data so we don't reread them each time
     for count,night in enumerate(nights) :
 
         dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
@@ -119,7 +118,7 @@ def main():
 
         func_args = []
         for expid in night_expids :
-            func_args.append({'night':night,'expid':expid,'specprod_dir':args.prod,'acals':acals})
+            func_args.append({'night':night,'expid':expid,'specprod_dir':args.prod})
 
         if args.nproc == 1 :
             for func_arg in func_args :
