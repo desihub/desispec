@@ -40,7 +40,7 @@ def parse(options=None):
                         help = 'Update pre-existing output summary file (replace or append)')
     parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
-    parser.add_argument('--prod', type = str, default = None, required=False,
+    parser.add_argument('--prod', type = str, default = "daily", required=False,
                         help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
