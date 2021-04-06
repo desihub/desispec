@@ -329,7 +329,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
@@ -379,7 +379,7 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),1)
                 except ValueError as e :
                     log.warning("cannot change number of digits for col {}: {}".format(k,e))
-            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 :
+            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 or k.find("AIRMASS")>=0 or k.find("EBV")>=0 :
                 try :
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),3)
                 except ValueError as e :
@@ -747,8 +747,17 @@ def main():
         skymags_table = Table(rows=skymag_rows, names=colnames)
         add_skymags_columns(tsnr2_expid_table,skymags_table)
 
+    gfa_table = None
     if args.gfa_proc_dir is not None :
-        gfa_table = read_gfa_data(args.gfa_proc_dir)
+        try :
+            gfa_table = read_gfa_data(args.gfa_proc_dir)
+        except PermissionError as e :
+            log.error(e)
+            log.error("could not read some files in {}".format(args.gfa_proc_dir))
+            args.gfa_proc_dir = None
+
+
+    if args.gfa_proc_dir is not None and gfa_table is not None :
 
         e2i = {e:i for i,e in enumerate(gfa_table["SPECTRO_EXPID"])}
         jj=[]
