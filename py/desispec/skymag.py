@@ -18,25 +18,46 @@ from desispec.calibfinder import findcalibfile
 
 
 average_calibrations = dict()
+decam_filters = None
 
-# only read once
-def get_average_calibration(filename) :
+# only read once per process
+def _get_average_calibration(filename) :
+    """
+    Use a dictionnary referenced by a global variable
+    to keep a copy of the calibration
+    instead of reading it at each function call.
+    """
     global average_calibrations
     if not filename in average_calibrations :
         average_calibrations[filename] = read_average_flux_calibration(filename)
     return average_calibrations[filename]
 
+# only read once per process
+def _get_decam_filters() :
+    global decam_filters
+    if decam_filters is None :
+        log = get_logger()
+        log.info("read decam filters")
+        decam_filters = filters.load_filters("decam2014-g", "decam2014-r", "decam2014-z")
+    return decam_filters
+
 # AR grz-band sky mag / arcsec2 from sky-....fits files
 # AR now using work-in-progress throughput
 # AR still provides a better agreement with GFAs than previous method
 def compute_skymag(night, expid, specprod_dir=None):
-
-
+    """
+    Computes the sky magnitude for a given exposure. Uses the sky model
+    and apply a fixed calibration for which the fiber aperture loss
+    is well understood.
+    Args:
+       night: int, YYYYMMDD
+       expid: int, exposure id
+       specprod_dir: str, optional, specify the production directory.
+                     default is $DESI_SPECTRO_REDUX/$SPECPROD
+    returns (gmag,rmag,zmag) AB magnitudes per arcsec2, tuple with 3 float values
+    """
 
     log=get_logger()
-
-
-
 
     # AR/DK DESI spectra wavelengths
     wmin, wmax, wdelta = 3600, 9824, 0.8
@@ -71,8 +92,6 @@ def compute_skymag(night, expid, specprod_dir=None):
             header=fitsio.read_header(filename)
             exptime=header["EXPTIME"]
 
-            #cal_filename=findcalibfile([header],"FLUXCALIB")
-
             # for now we use a fixed calibration as used in DESI-6043 for which we know what was the fiber aperture loss
             cal_filename="{}/spec/fluxcalib/fluxcalibnight-{}-20201216.fits".format(os.environ["DESI_SPECTRO_CALIB"],camera)
             # apply the correction from
@@ -80,7 +99,7 @@ def compute_skymag(night, expid, specprod_dir=None):
             mean_fiber_diameter_arcsec = 1.52 # see DESI-6043
             fiber_area_arcsec = np.pi*(mean_fiber_diameter_arcsec/2)**2
 
-            acal = get_average_calibration(cal_filename)
+            acal = _get_average_calibration(cal_filename)
             flux = np.interp(fullwave[cslice[camera]], skywave, skyflux)
             sky[cslice[camera]] = flux / exptime / acal.value() * fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
 
@@ -93,10 +112,8 @@ def compute_skymag(night, expid, specprod_dir=None):
     else :
         sky = np.mean(np.array(sky_spectra),axis=0) # mean over petals/spectrographs
 
-
     # AR integrate over the DECam grz-bands
-    # AR using the curves with no atmospheric extinction
-    filts = filters.load_filters("decam2014-g", "decam2014-r", "decam2014-z")
+    filts = _get_decam_filters()
 
     # AR zero-padding spectrum so that it covers the DECam grz passbands
     # AR looping through filters while waiting issue to be solved (https://github.com/desihub/speclite/issues/64)
@@ -104,10 +121,5 @@ def compute_skymag(night, expid, specprod_dir=None):
     for i in range(len(filts)):
         sky_pad, fullwave_pad = filts[i].pad_spectrum(sky_pad, fullwave_pad, method="zero")
     mags = filts.get_ab_magnitudes(sky_pad * units.erg / (units.cm ** 2 * units.s * units.angstrom),fullwave_pad * units.angstrom).as_array()[0]
-
-    #import matplotlib.pyplot as plt
-    #plt.plot(fullwave_pad,sky_pad)
-    #plt.grid()
-    #plt.show()
 
     return mags # AB mags for flux per arcsec2
