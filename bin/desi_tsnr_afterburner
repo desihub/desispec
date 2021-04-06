@@ -199,7 +199,6 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
     calib  = findfile('fluxcalib', night=night, expid=expid,
                       camera=camera, specprod_dir=specprod_dir)
     flat = cframe_hdulist[0].header['FIBERFLT']
-
     if 'SPECPROD' in flat:
         flat = flat.replace('SPECPROD', specprod_dir)
     elif 'SPCALIB' in flat:
@@ -412,7 +411,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
@@ -462,7 +461,7 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),1)
                 except ValueError as e :
                     log.warning("cannot change number of digits for col {}: {}".format(k,e))
-            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBERFAC")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 :
+            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 :
                 try :
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),3)
                 except ValueError as e :
