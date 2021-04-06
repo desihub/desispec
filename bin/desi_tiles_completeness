@@ -22,7 +22,7 @@ parser.add_argument('-i','--infile', type=str, default=None, required=False,
                     help = 'Input exposure summary file')
 parser.add_argument('-o','--outfile', type=str, default=None, required=True,
                     help = 'Output tiles completeness file')
-parser.add_argument('--prod', type = str, default = None, required=False,
+parser.add_argument('--prod', type = str, default = "daily", required=False,
                     help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
 parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
                     help = 'Path to auxiliary tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
