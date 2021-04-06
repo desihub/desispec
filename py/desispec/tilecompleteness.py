@@ -162,7 +162,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res = reorder_columns(res)
 
     # reorder rows
-    ii  = np.argsort(res["TILEID"])
+    ii  = np.argsort(res["LASTNIGHT"])
     res = res[ii]
 
     return res
@@ -258,7 +258,7 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
     res = reorder_columns(res)
     # reorder rows
-    ii  = np.argsort(res["TILEID"])
+    ii  = np.argsort(res["LASTNIGHT"])
     res = res[ii]
 
     return res
