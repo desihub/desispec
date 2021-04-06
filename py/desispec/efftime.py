@@ -6,6 +6,9 @@ Effective exposure time formulae
 
 """
 
+import numpy as np
+
+
 # AR https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
 # AR 2021-03-05: GFA values are now computed for a fiber diameter of 1.52"
 def compute_efftime(table,
