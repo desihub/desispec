@@ -41,7 +41,7 @@ def parse(options=None):
                         help = 'Update pre-existing output summary file (replace or append)')
     parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
-    parser.add_argument('--prod', type = str, default = "daily", required=False,
+    parser.add_argument('--prod', type = str, default = None, required=False,
                         help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
@@ -60,7 +60,7 @@ def parse(options=None):
     parser.add_argument('--tile-completeness', type = str, default = None, required=False,
                         help = 'Ouput tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
-                    help = 'Path to auxiliary ttiles ables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
+                        help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits (optional, will not affect exposures after SV1)')
     parser.add_argument('--gfa-proc-dir', type = str, default = None, required=False,
                         help = 'Directory where the GFA processing from Aaron can be found, like /global/cfs/cdirs/desi/survey/GFA/')
     parser.add_argument('--skymags', type = str, default = None, required=False,
