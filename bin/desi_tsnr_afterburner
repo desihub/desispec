@@ -30,6 +30,7 @@ from   astropy.table import Table, vstack
 from   desiutil.depend import getdep
 from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
 from   desispec.skymag import compute_skymag
+from   desispec.efftime import compute_efftime
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
@@ -77,9 +78,18 @@ def parse(options=None):
 
 
 def read_gfa_data(gfa_proc_dir) :
+    """
+    Read the directory with the offline GFA data reduction (like /global/cfs/cdirs/desi/GFA/offline_matched_coadd_ccds_SV),
+    find the latest version of the table files for the various surveys, return the merged table.
+    Args:
+      gfa_proc_dir: str, directory path
+    returns astropy.table.Table
+    """
     tables=[]
-    for survey in ["SV1","SV2"] :
-        filename=sorted(glob.glob("{}/offline_matched_coadd_ccds_{}-thru_????????.fits".format(gfa_proc_dir,survey)))[-1]
+    for survey in ["SV1","SV2","SV3"] :
+        filenames=sorted(glob.glob("{}/offline_matched_coadd_ccds_{}-thru_????????.fits".format(gfa_proc_dir,survey)))
+        if len(filenames)==0 : continue
+        filename=filenames[-1]
         print(filename)
         table=Table.read(filename)
         tables.append(table)
@@ -88,98 +98,6 @@ def read_gfa_data(gfa_proc_dir) :
     return table
 
 
-
-# AR https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
-# AR 2021-03-05: GFA values are now computed for a fiber diameter of 1.52"
-def compute_efftime(table,
-                    ffrac_psf_nom=0.58176816, # FRACFLUX_NOMINAL_POINTSOURCE in Aaron's table
-                    ffrac_elg_nom=0.42423388, # FRACFLUX_NOMINAL_ELG
-                    ffrac_bgs_nom=0.19544029, # FRACFLUX_NOMINAL_BGS
-                    kterm=0.114, # KERM
-                    ebv_r_coeff=2.165,
-                    fiber_diameter_arcsec=1.52):
-
-    # AR : sky <- spectro. sky in nMgy / arcsec**2 (corrected by throughput)
-    # AR : transparency, airmass <- GFA
-    # AR : ffrac_psf <- GFA fiber_fracflux
-    # AR : ffrac_elg <- GFA fiber_fracflux_elg
-    # AR : ffrac_bgs <- GFA fiber_fracflux_bgs
-    # AR : ffrac_*_nom and kterm <- from GFA [ffrac_psf_nom~0.582, ffrac_elg_nom~0.424, ffrac_bgs_nom~0.195]
-    #
-    # AR nominal values
-
-    exptime  = table["EXPTIME"]
-    skymag   = table["SKY_MAG_R_SPEC"]
-    sky      = 10**(-0.4*(skymag-22.5)) # nMgy/arcsec**2
-    ebv      = table["EBV"]
-    transparency = table["TRANSPARENCY_GFA"]
-    airmass      = table["AIRMASS"]
-    ffrac_psf    = table["FIBER_FRACFLUX_GFA"] #
-    ffrac_elg    = table["FIBER_FRACFLUX_ELG_GFA"] #
-    ffrac_bgs    = table["FIBER_FRACFLUX_BGS_GFA"] #
-
-
-
-    exptime_nom = 1000.0  # AR seconds
-    sky_nom = 3.73  # AR nMgy/arcsec**2
-    fflux_bright_nom = (
-        15.8  # AR nMgy/arcsec**2 (r=19.5 mag for de Vaucouleurs rhalf=1.5" BGS)
-    )
-    fflux_backup_nom = 27.5  # AR nMgy/arcsec**2 (r=18.9 mag star)
-    # AR airmass term
-    airfac = 10.0 ** (kterm * (airmass - 1.0) / 2.5)
-    # AR ebv term
-    ebvfac = 10.0 ** (ebv_r_coeff * ebv / 2.5)
-    # AR sky readnoise
-    sky_rdn = 0.932  # AR nMgy/arcsec**2
-
-    fiber_area_arcsec2 = np.pi*(fiber_diameter_arcsec/2.)**2
-
-    # AR "limit" fiber flux
-    fflux_bright = (
-        ffrac_bgs * transparency / airfac * fflux_bright_nom / fiber_area_arcsec2
-    )
-    fflux_backup = (
-        ffrac_psf * transparency / airfac * fflux_backup_nom / fiber_area_arcsec2
-    )
-    # AR effective sky
-    effsky_dark = (sky + sky_rdn * exptime_nom / exptime) / (1.0 + sky_rdn / sky_nom)
-    effsky_bright = (sky + sky_rdn * exptime_nom / exptime + fflux_bright) / (
-        1.0 + sky_rdn / sky_nom + fflux_bright / sky_nom
-    )
-    effsky_backup = (sky + sky_rdn * exptime_nom / exptime + fflux_backup) / (
-        1.0 + sky_rdn / sky_nom + fflux_backup / sky_nom
-    )
-    # AR effective exposure time
-    efftime_dark = (
-        exptime
-        * (ffrac_elg / ffrac_elg_nom * transparency / airfac) ** 2
-        * (sky_nom / effsky_dark)
-        / ebvfac ** 2
-    )
-    efftime_bright = (
-        exptime
-        * (ffrac_bgs / ffrac_bgs_nom * transparency / airfac) ** 2
-        * (sky_nom / effsky_bright)
-        / ebvfac ** 2
-    )
-    efftime_backup = (
-        exptime
-        * (ffrac_psf / ffrac_psf_nom * transparency / airfac) ** 2
-        * (sky_nom / effsky_backup)
-        / ebvfac ** 2
-    )
-
-    # set to -1 values with incorrect inputs
-    bad=table["AIRMASS"]<0.99
-    bad |=(table["FIBER_FRACFLUX_GFA"]==0)
-    bad |=(table["TRANSPARENCY_GFA"]>2)
-    efftime_dark[bad]=0.
-    efftime_bright[bad]=0.
-    efftime_backup[bad]=0.
-
-
-    return efftime_dark , efftime_bright , efftime_backup
 
 def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specprod_dir, alpha_only=False) :
     """
@@ -624,18 +542,34 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     return entry
 
 def _func(arg) :
+    """
+    Wrapper function to TSNR values for multiprocessing
+    """
     return func(**arg)
 
 def func2(night,expid,specprod_dir) :
+    """
+    Wrapper function to compute_skymag for multiprocessing
+    """
     mags = compute_skymag(night,expid,specprod_dir)
     entry = {'NIGHT':night,'EXPID':expid,'SKY_MAG_G':mags[0],'SKY_MAG_R':mags[1],'SKY_MAG_Z':mags[2]}
     print(entry)
     return(entry)
 
 def _func2(arg) :
+    """
+    Wrapper function to compute_skymag for multiprocessing
+    """
     return func2(**arg)
 
 def add_skymags_columns(exposure_table,skymags_table) :
+    """
+    Add sky magnitudes to exposure table
+    Args :
+       exposure_table, astropy.table.Table with column EXPID
+       skymags_table astropy.table.Table with columns EXPID,SKY_MAG_G,SKY_MAG_R,SKY_MAG_Z, AB mags/arcsec2 in decam bands
+    returns nothing (updates input exposure table)
+    """
     e2i = {e:i for i,e in enumerate(skymags_table["EXPID"])}
     jj=[]
     ii=[]
