@@ -334,7 +334,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','FWHM_ASEC_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
@@ -775,8 +775,12 @@ def main():
         cols=["TRANSPARENCY","FWHM_ASEC","FIBER_FRACFLUX","FIBER_FRACFLUX_ELG","FIBER_FRACFLUX_BGS","SKY_MAG_AB","AIRMASS",]
         for col in cols :
             if col in gfa_table.dtype.names :
-                tsnr2_expid_table[col+"_GFA"]=np.zeros(len(tsnr2_expid_table),dtype=float)
-                tsnr2_expid_table[col+"_GFA"][jj] = gfa_table[col][ii]
+                if col == "FWHM_ASEC" :
+                    col2 = "SEEING_GFA"
+                else :
+                    col2 = col+"_GFA"
+                tsnr2_expid_table[col2]=np.zeros(len(tsnr2_expid_table),dtype=float)
+                tsnr2_expid_table[col2][jj] = gfa_table[col][ii]
 
 
     if args.gfa_proc_dir is not None  and args.skymags is not None :
