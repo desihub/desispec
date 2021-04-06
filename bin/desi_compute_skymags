@@ -134,11 +134,12 @@ def main():
                     summary_rows.append(entry)
             pool.close()
             pool.join()
-
-    colnames = list(summary_rows[0].keys())
-    table = Table(rows=summary_rows, names=colnames)
-    table.write(args.outfile,overwrite=True)
-    log.info("wrote {}".format(args.outfile))
-
+    if len(summary_rows)>0 :
+        colnames = list(summary_rows[0].keys())
+        table = Table(rows=summary_rows, names=colnames)
+        table.write(args.outfile,overwrite=True)
+        log.info("wrote {}".format(args.outfile))
+    else :
+        log.error("no data")
 if __name__ == '__main__':
     main()
