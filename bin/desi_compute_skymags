@@ -51,9 +51,10 @@ def func(night,expid,specprod_dir) :
     """
     Wrapper function to compute_skymag for multiprocessing
     """
+    log = get_logger()
     mags = compute_skymag(night,expid,specprod_dir)
     entry = {'NIGHT':night,'EXPID':expid,'SKY_MAG_G':mags[0],'SKY_MAG_R':mags[1],'SKY_MAG_Z':mags[2]}
-    print(entry)
+    log.info(str(entry))
     return(entry)
 
 def _func(arg) :
