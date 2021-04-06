@@ -62,7 +62,7 @@ def parse(options=None):
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
                     help = 'Path to auxiliary ttiles ables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits')
     parser.add_argument('--gfa-proc-dir', type = str, default = None, required=False,
-                        help = 'Directory where the GFA processing from Aaron can be found, like /global/cfs/cdirs/desi/GFA/offline_matched_coadd_ccds_SV')
+                        help = 'Directory where the GFA processing from Aaron can be found, like /global/cfs/cdirs/desi/survey/GFA/')
     parser.add_argument('--skymags', type = str, default = None, required=False,
                         help = 'path to table with sky magnitudes. Expected keys=NIGHT,EXPID,SKY_MAG_G,SKY_MAG_R,SKY_MAG_Z')
     parser.add_argument('--compute-skymags', action='store_true',
@@ -79,7 +79,7 @@ def parse(options=None):
 
 def read_gfa_data(gfa_proc_dir) :
     """
-    Read the directory with the offline GFA data reduction (like /global/cfs/cdirs/desi/GFA/offline_matched_coadd_ccds_SV),
+    Read the directory with the offline GFA data reduction (like /global/cfs/cdirs/desi/survey/GFA/),
     find the latest version of the table files for the various surveys, return the merged table.
     Args:
       gfa_proc_dir: str, directory path
@@ -93,6 +93,11 @@ def read_gfa_data(gfa_proc_dir) :
         print(filename)
         table=Table.read(filename)
         tables.append(table)
+    if len(tables)==0 :
+        log=get_logger()
+        mess="did not find any file offline_matched_coadd_ccds_*-thru_????????.fits in {}".format(gfa_proc_dir)
+        log.critical(mess)
+        raise RuntimeError(mess)
     table=vstack(tables)
     print(table)
     return table
@@ -706,7 +711,7 @@ def main():
         skymags_table = Table.read(args.skymags)
         add_skymags_columns(tsnr2_expid_table,skymags_table)
 
-    if args.compute_skymags is not None :
+    if args.compute_skymags :
         skymag_rows=[]
         for count,night in enumerate(nights) :
 
@@ -724,19 +729,19 @@ def main():
                     continue
             log.info("{} {}".format(night,night_expids))
 
-            func_args = []
+            func2_args = []
             for expid in night_expids :
-                func_args.append({'night':night,'expid':expid,'specprod_dir':args.prod})
+                func2_args.append({'night':night,'expid':expid,'specprod_dir':args.prod})
 
             if args.nproc == 1 :
-                for func_arg in func_args :
-                    entry = func(**func_arg)
+                for func2_arg in func2_args :
+                    entry = func2(**func2_arg)
                     if entry is not None :
                         skymag_rows.append(entry)
             else :
                 log.info("Multiprocessing with {} procs".format(args.nproc))
                 pool = multiprocessing.Pool(args.nproc)
-                results  =  pool.map(_func2, func_args)
+                results  =  pool.map(_func2, func2_args)
                 for entry in results :
                     if entry is not None :
                         skymag_rows.append(entry)
