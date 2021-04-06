@@ -500,6 +500,12 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
         else:
             log.warning(f'coordinates file missing column {flags_cnt_colname}')
 
+        #- Add our own requirement on good positioning
+        if ('FIBER_DX' in pm.colnames) and ('FIBER_DY' in pm.colnames):
+            #- offset in cm -> um
+            dr = np.sqrt(pm['FIBER_DX']**2 + pm['FIBER_DY']**2) * 1000
+            good &= (dr < 100)  #- HARDCODE
+
         bad = ~good
 
         fibermap['_BADPOS'] = np.zeros(len(fibermap), dtype=bool)
