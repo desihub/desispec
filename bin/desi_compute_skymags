@@ -45,22 +45,21 @@ def parse(options=None):
     return args
 
 
-def compute_skymag_table(summary_rows) :
 
-    colnames = list(summary_rows[0].keys())
-    table = Table(rows=summary_rows, names=colnames)
-    return table
-
-def write_skymag_table(table,outfilename) :
-    table.write(outfilename,overwrite=True)
 
 def func(night,expid,specprod_dir) :
+    """
+    Wrapper function to compute_skymag for multiprocessing
+    """
     mags = compute_skymag(night,expid,specprod_dir)
     entry = {'NIGHT':night,'EXPID':expid,'SKY_MAG_G':mags[0],'SKY_MAG_R':mags[1],'SKY_MAG_Z':mags[2]}
     print(entry)
     return(entry)
 
 def _func(arg) :
+    """
+    Wrapper function to compute_skymag for multiprocessing
+    """
     return func(**arg)
 
 def main():
@@ -134,8 +133,10 @@ def main():
                     summary_rows.append(entry)
             pool.close()
             pool.join()
-    table = compute_skymag_table(summary_rows)
-    write_skymag_table(table,args.outfile)
+
+    colnames = list(summary_rows[0].keys())
+    table = Table(rows=summary_rows, names=colnames)
+    table.write(args.outfile,overwrite=True)
     log.info("wrote {}".format(args.outfile))
 
 if __name__ == '__main__':
