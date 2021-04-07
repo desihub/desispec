@@ -101,7 +101,7 @@ def read_gfa_data(gfa_proc_dir) :
         log.critical(mess)
         raise RuntimeError(mess)
     table=vstack(tables)
-    print(table)
+    log.info(f'{len(table)} GFA table entries')
     return table
 
 
