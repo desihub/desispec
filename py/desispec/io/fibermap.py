@@ -327,7 +327,7 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     Args:
         night (int): YEARMMDD night of observations
-        expid (int): spectscopic exposure ID
+        expid (int): spectroscopic exposure ID
 
     Options:
         tileid (int): tileid to look for
@@ -452,15 +452,31 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
     if coordfile is not None:
         pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
         numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
-        if numiter == 0:
+        if numiter <= 1:
             log.warning('No positioning iters in coordinates file thus no FVC/platemaker info')
     else:
         pm = None
         numiter = 0
 
+    #- If the coordinates file doesn't have full platemaker position info
+    #- fall back to first exposure in the sequence
+    if (pm is None) or ('FIBER_DX' not in pm.colnames):
+        if 'VISITIDS' in rawheader:
+            firstexp = int(rawheader['VISITIDS'].split(',')[0])
+            if firstexp != rawheader['EXPID']:
+                firstcoordfile = findfile('coordinates', night, firstexp)
+                log.warning('No DX/DY info in {}; trying {} instead'.format(
+                    os.path.basename(coordfile),
+                    os.path.basename(firstcoordfile)
+                    ))
+                if os.path.exists(firstcoordfile):
+                    pm = Table.read(firstcoordfile)
+                    numiter = len([col for col in pm.colnames if col.startswith('EXP_X_')])
+                else:
+                    log.warning(f'Missing first coordinates file in exposure sequence: {coordfile}')
+
     #- If there were positioning iterations, merge that info with fiberassign
     if (pm is not None) and (numiter > 0):
-        pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
         pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
         keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
         pm = pm[keep]
@@ -586,6 +602,12 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
         log.warning('Renaming header keyword FIBERASSIGN -> FIBASSGN')
         fibermap.meta['FIBASSGN'] = fibermap.meta['FIBERASSIGN']
         del fibermap.meta['FIBERASSIGN']
+
+    #- similarly for early splits in raw data file
+    if 'USESPLITS' in fibermap.meta:
+        log.warning('Renaming header keyword USESPLITS -> USESPLIT')
+        fibermap.meta['USESPLIT'] = fibermap.meta['USESPLITS']
+        del fibermap.meta['USESPLITS']
 
     #- Record input guide and coordinates files
     if guidefile is not None:

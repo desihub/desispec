@@ -5,7 +5,7 @@ Assemble fibermap from input exposures
 """
 
 import argparse
-from desispec.io.fibermap import find_fiberassign_file, assemble_fibermap
+from desispec.io.fibermap import assemble_fibermap
 
 #----
 
