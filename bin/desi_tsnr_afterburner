@@ -81,6 +81,7 @@ def read_gfa_data(gfa_proc_dir) :
     """
     Read the directory with the offline GFA data reduction (like /global/cfs/cdirs/desi/survey/GFA/),
     find the latest version of the table files for the various surveys, return the merged table.
+    See documentation here https://desi.lbl.gov/trac/wiki/SurveyValidation/SV1/conditions/summary_files
     Args:
       gfa_proc_dir: str, directory path
     returns astropy.table.Table
@@ -92,7 +93,7 @@ def read_gfa_data(gfa_proc_dir) :
         if len(filenames)==0 : continue
         filename=filenames[-1]
         log.info(f"Reading {filename}")
-        table=Table.read(filename)
+        table=Table.read(filename,3)# HDU3 is average over frames during spectro exposure and median across CCDs
         tables.append(table)
     if len(tables)==0 :
         log=get_logger()
@@ -766,7 +767,7 @@ def main():
 
     if args.gfa_proc_dir is not None and gfa_table is not None :
 
-        e2i = {e:i for i,e in enumerate(gfa_table["SPECTRO_EXPID"])}
+        e2i = {e:i for i,e in enumerate(gfa_table["EXPID"])}
         jj=[]
         ii=[]
         for j,e in enumerate(tsnr2_expid_table["EXPID"]) :
