@@ -85,12 +85,13 @@ def read_gfa_data(gfa_proc_dir) :
       gfa_proc_dir: str, directory path
     returns astropy.table.Table
     """
+    log = get_logger()
     tables=[]
     for survey in ["SV1","SV2","SV3"] :
         filenames=sorted(glob.glob("{}/offline_matched_coadd_ccds_{}-thru_????????.fits".format(gfa_proc_dir,survey)))
         if len(filenames)==0 : continue
         filename=filenames[-1]
-        print(filename)
+        log.info(f"Reading {filename}")
         table=Table.read(filename)
         tables.append(table)
     if len(tables)==0 :
@@ -338,9 +339,9 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
-        print("error, missing keys {} in new order list".format(np.array(exp_summary.dtype.names)[missing]))
-        print("new order list:",sorted(neworder))
-        print("current table:",sorted(exp_summary.dtype.names))
+        log.critical("missing keys {} in new order list".format(np.array(exp_summary.dtype.names)[missing]))
+        log.error("new order list:",sorted(neworder))
+        log.error("current table:",sorted(exp_summary.dtype.names))
         sys.exit(12)
     newtable=Table()
     newtable.meta=exp_summary.meta
@@ -556,9 +557,10 @@ def func2(night,expid,specprod_dir) :
     """
     Wrapper function to compute_skymag for multiprocessing
     """
+    log = get_logger()
     mags = compute_skymag(night,expid,specprod_dir)
     entry = {'NIGHT':night,'EXPID':expid,'SKY_MAG_G':mags[0],'SKY_MAG_R':mags[1],'SKY_MAG_Z':mags[2]}
-    print(entry)
+    log.info(entry)
     return(entry)
 
 def _func2(arg) :
@@ -601,7 +603,7 @@ def main():
         args.prod = specprod_root(args.prod)
 
     if not args.outfile.endswith(".fits") :
-        print("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
+        log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
         sys.exit(1)
 
     log.info('outfile = {}'.format(args.outfile))
