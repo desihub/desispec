@@ -783,7 +783,7 @@ def main():
                 tsnr2_expid_table[col2][jj] = gfa_table[col][ii]
 
 
-    if args.gfa_proc_dir is not None  and args.skymags is not None :
+    if args.gfa_proc_dir is not None  and (args.skymags is not None or args.compute_skymags) :
 
         efftime_dark, efftime_bright, efftime_backup = compute_efftime(tsnr2_expid_table[jj])
         for col in ["EFFTIME_DARK_GFA","EFFTIME_BRIGHT_GFA","EFFTIME_BACKUP_GFA"] :
