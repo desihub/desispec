@@ -336,7 +336,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
@@ -386,7 +386,7 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),1)
                 except ValueError as e :
                     log.warning("cannot change number of digits for col {}: {}".format(k,e))
-            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 or k.find("AIRMASS")>=0 or k.find("EBV")>=0 :
+            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("FIBERFAC")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 or k.find("AIRMASS")>=0 or k.find("EBV")>=0 :
                 try :
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),3)
                 except ValueError as e :
@@ -775,7 +775,7 @@ def main():
                 jj.append(j)
                 ii.append(e2i[e])
 
-        cols=["TRANSPARENCY","FWHM_ASEC","FIBER_FRACFLUX","FIBER_FRACFLUX_ELG","FIBER_FRACFLUX_BGS","SKY_MAG_AB","AIRMASS",]
+        cols=["TRANSPARENCY","FWHM_ASEC","FIBER_FRACFLUX","FIBER_FRACFLUX_ELG","FIBER_FRACFLUX_BGS","FIBERFAC","FIBERFAC_ELG","FIBERFAC_BGS","SKY_MAG_AB","AIRMASS",]
         for col in cols :
             if col in gfa_table.dtype.names :
                 if col == "FWHM_ASEC" :
