@@ -8,10 +8,13 @@ desispec Change Log
 * Exposure and tiles files updates, including merging GFA data.
   (PR `#1226`_, `#1232`_).
 * Flag fibers that are mis-positioned by >100 um as bad. (PR `#1233`_).
+* Correct bit flagging and support split exposures with
+  ``bin/assemble_fibermap`` (PR `#1235`_).
 
 .. _`#1226`: https://github.com/desihub/desispec/issues/1226
 .. _`#1232`: https://github.com/desihub/desispec/issues/1232
 .. _`#1233`: https://github.com/desihub/desispec/issues/1233
+.. _`#1235`: https://github.com/desihub/desispec/issues/1235
 
 0.40.1 (2020-04-01)
 -------------------
