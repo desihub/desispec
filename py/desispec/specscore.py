@@ -104,7 +104,11 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
                 comments[col] = f'{targtype} template (S/N)^2 summed over B,R,Z'
                 for band in ['B', 'R', 'Z']:
                     colbrz = f'TSNR2_{targtype}_{band}'
-                    scores[col] += scores[colbrz]
+
+                    #- Missing cameras can result in missing columns, which
+                    #- should be treated as SNR=0 but not crash
+                    if colbrz in scores.keys():
+                        scores[col] += scores[colbrz]
 
     #- convert to float32
     for col in scores.keys():
