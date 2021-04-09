@@ -56,6 +56,9 @@ if os.path.isfile(args.outfile) :
     previous_table = Table.read(args.outfile)
     tile_table = merge_tile_completeness_table(previous_table,tile_table)
 
+if args.outfile.endswith('.fits'):
+    tile_table.meta['EXTNAME'] = 'TILES'
+
 tile_table.write(args.outfile,overwrite=True)
 
 print("wrote {}".format(args.outfile))
