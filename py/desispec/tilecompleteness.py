@@ -104,7 +104,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
             if k in exposure_table.dtype.names :
                 res[k][i] = np.sum(exposure_table[k][jj])
                 if k == "EFFTIME_ETC" or k == "EFFTIME_GFA" :
-                    if np.any(exposure_table[k][jj]==0) : res[k][i]=0 # because we are missing data
+                    if np.any((exposure_table[k][jj]==0)&(exposure_table["EFFTIME_SPEC"][jj]>0)) : res[k][i]=0 # because we are missing data
 
         # copy the following from the exposure table if it exists
         for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
