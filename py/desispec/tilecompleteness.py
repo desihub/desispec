@@ -66,7 +66,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                 targets = np.array(np.repeat("unknown",ntiles))
 
                 log.info("Use SV1 tiles information from {}".format(filename))
-                table=Table.read(filename)
+                table=Table.read(filename, 1)
                 ii=[]
                 jj=[]
                 tid2i={tid:i for i,tid in enumerate(table["TILEID"])}
@@ -138,26 +138,33 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     done=(res["EFFTIME_SPEC"]>res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][done]="obsend"
 
+    # what was the last night on which each tile was observed,
+    # for looking up the cumulative redshift file
+    goodexp = (exposure_table['EFFTIME_SPEC'] > 0)
+    for i, tileid in enumerate(res['TILEID']):
+        thistile = (exposure_table['TILEID'] == tileid)
+        if np.any(thistile & goodexp):
+            lastnight = np.max(exposure_table['NIGHT'][thistile & goodexp])
+        else:
+            #- no exposures for this tile with EFFTIME_SPEC>0,
+            #- so just use last one that appears at all
+            lastnight = np.max(exposure_table['NIGHT'][thistile])
+
+        res['LASTNIGHT'][i] = lastnight
+
+    assert np.all(res['LASTNIGHT'] > 0)
+
     for i in np.where((res["OBSSTATUS"]=="obsend")&(res["ZDONE"]=="false"))[0] :
         tileid=res["TILEID"][i]
-        log.info("checking redshifts for tile {}".format(tileid))
-        exposure_indices=np.where(exposure_table["TILEID"]==tileid)[0]
-        night = np.max(exposure_table["NIGHT"][exposure_indices])
-        nok   = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir,warn=(night==res["LASTNIGHT"][i]))
+        night=res["LASTNIGHT"][i]
+        log.info(f"checking redshifts for tile {tileid} on night {night}")
+        nok = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir)
         if nok >= min_number_of_petals :
             res["ZDONE"][i]="true"
         elif nok > 0 :
             log.warning("keep ZDONE=false for tile {} because only {} good petals (requirement is >={})".format(tileid,nok,min_number_of_petals))
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][partial]="obsstart"
-
-    # what was the last night on which each tile was observed,
-    # for looking up the cumulative redshift file
-    for i, tileid in enumerate(res['TILEID']):
-        thistile = (exposure_table['TILEID'] == tileid)
-        res['LASTNIGHT'][i] = np.max(exposure_table['NIGHT'][thistile])
-
-    assert np.all(res['LASTNIGHT'] > 0)
 
     res = reorder_columns(res)
 
