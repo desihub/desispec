@@ -30,6 +30,9 @@ def compute_efftime(table,
          - FIBERFAC_GFA PMGSTARS forced photometry amount of light in 1.52 asec diameter aperture normalized to nominal, assuming a point source profile
          - FIBERFAC_ELG_GFA PMGSTARS forced photometry amount of light in 1.52 asec diameter aperture normalized to nominal, assuming an ELG-like profile (r_half = 0.45 asec exponential)
          - FIBERFAC_BGS_GFA PMGSTARS forced photometry amount of light in 1.52 asec diameter aperture normalized to nominal, assuming a BGS-like profile (r_half = 1.5 asec de Vaucouleurs)
+         - FIBER_FRACFLUX_GFA fraction of light in fiber for point source
+         - FIBER_FRACFLUX_ELG_GFA fraction of light in fiber for typical ELG source
+         - FIBER_FRACFLUX_BGS_GFA fraction of light in fiber for typical BGS source
     """
 
     exptime  = table["EXPTIME"]
@@ -38,14 +41,18 @@ def compute_efftime(table,
     ebv      = table["EBV"]
     transparency = table["TRANSPARENCY_GFA"]
     airmass      = table["AIRMASS"]
-    fiberfac_psf = table["FIBERFAC_GFA"]
-    fiberfac_elg = table["FIBERFAC_ELG_GFA"]
-    fiberfac_bgs = table["FIBERFAC_BGS_GFA"]
+    fiberfac_psf = table["FIBERFAC_GFA"] # fiber_frac * transparency normalized to 1 for nominal conditions
+    fiberfac_elg = table["FIBERFAC_ELG_GFA"] # fiber_frac * transparency normalized to 1 for nominal conditions
+    fiberfac_bgs = table["FIBERFAC_BGS_GFA"] # fiber_frac * transparency normalized to 1 for nominal conditions
+
+    fiber_fracflux_bgs = table["FIBER_FRACFLUX_BGS_GFA"] # fraction of light down fiber
+    fiber_fracflux_psf = table["FIBER_FRACFLUX_GFA"]
 
     exptime_nom = 1000.0  # AR seconds
     sky_nom = 3.73  # AR nMgy/arcsec**2
-    fflux_bright_nom = 15.8  # AR nMgy/arcsec**2 (r=19.5 mag for de Vaucouleurs rhalf=1.5" BGS)
-    fflux_backup_nom = 27.5  # AR nMgy/arcsec**2 (r=18.9 mag star)
+    flux_bright_nom = 15.8  # nMgy (r=19.5 mag for de Vaucouleurs rhalf=1.5" BGS)
+    flux_backup_nom = 27.5  # nMgy (r=18.9 mag star)
+
     # AR airmass term
     airfac = 10.0 ** (kterm * (airmass - 1.0) / 2.5)
     # AR ebv term
@@ -56,9 +63,9 @@ def compute_efftime(table,
     # AR "limit" fiber flux
     fiber_area_arcsec2 = np.pi*(fiber_diameter_arcsec/2)**2
 
-    # we divide by fiber_area_arcsec2  because the sky flux has been divided by the fiber_area_arcsec2
-    fflux_bright = fflux_bright_nom * fiberfac_bgs / airfac / ebvfac / fiber_area_arcsec2
-    fflux_backup = fflux_backup_nom * fiberfac_psf / airfac / ebvfac / fiber_area_arcsec2
+    # flux in fiber artificially divided by fiber_area_arcsec2  because the sky flux is per arcsec2
+    fflux_bright = flux_bright_nom * fiber_fracflux_bgs / airfac / ebvfac / fiber_area_arcsec2
+    fflux_backup = flux_backup_nom * fiber_fracflux_psf / airfac / ebvfac / fiber_area_arcsec2
 
     # AR effective sky
     effsky_dark = (sky + sky_rdn * exptime_nom / exptime) / (1.0 + sky_rdn / sky_nom)
