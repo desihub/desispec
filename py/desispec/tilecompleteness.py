@@ -110,10 +110,10 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         # copy the following from the exposure table if it exists and not already set as sv1
         for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
             if k in exposure_table.dtype.names :
-                val = exposure_table[k][jj][0]
-                if val != "unknown" :
-                    if k != "SURVEY" or res[k][i]!= "sv1" :
-                        res[k][i] = val # force consistency
+                for val in  exposure_table[k][jj] : # loop in case one of them is not unknown
+                    if val != "unknown" :
+                        if k != "SURVEY" or res[k][i]!= "sv1" :
+                            res[k][i] = val # force consistency
 
         for k in ["GOALTIME","MINTFRAC"] :
             if k in exposure_table.dtype.names :
