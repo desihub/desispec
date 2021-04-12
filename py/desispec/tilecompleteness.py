@@ -108,16 +108,24 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                     if np.any((exposure_table[k][jj]==0)&(exposure_table["EFFTIME_SPEC"][jj]>0)) : res[k][i]=0 # because we are missing data
 
         # copy the following from the exposure table if it exists and not already set as sv1
+
+        # look for first exposure with SURVEY set (the others are exposures that were not processed)
+        jj2=(exposure_table["TILEID"]==tile)&(exposure_table["SURVEY"]!="unknown")
+        if np.sum(jj2)>0 :
+            j=np.where(jj2)[0][0]
+        else :
+            j=np.where(jj)[0][0]
+
         for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
             if k in exposure_table.dtype.names :
-                for val in  exposure_table[k][jj] : # loop in case one of them is not unknown
-                    if val != "unknown" :
-                        if k != "SURVEY" or res[k][i]!= "sv1" :
-                            res[k][i] = val # force consistency
+                val = exposure_table[k][j]
+                if val != "unknown" :
+                    if k != "SURVEY" or res[k][i]!= "sv1" :
+                        res[k][i] = val # force consistency
 
         for k in ["GOALTIME","MINTFRAC"] :
             if k in exposure_table.dtype.names :
-                val = exposure_table[k][jj][0]
+                val = exposure_table[k][j]
                 if val > 0. :
                     res[k][i] = val # force consistency
 
