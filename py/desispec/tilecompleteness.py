@@ -75,7 +75,8 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
                         ii.append(tid2i[tid])
                         jj.append(j)
 
-                res["SURVEY"][jj]="sv1"
+                for i,j in zip(ii,jj) :
+                    res["SURVEY"][j]=str(table["PROGRAM"][i]).lower()
                 targets[jj]=table["TARGETS"][ii]
 
                 is_dark   = [(t.lower().find("elg")>=0)|(t.lower().find("lrg")>=0)|(t.lower().find("qso")>=0) for t in targets]
