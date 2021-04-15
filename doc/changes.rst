@@ -10,6 +10,7 @@ desispec Change Log
 * Flag fibers that are mis-positioned by >100 um as bad. (PR `#1233`_).
 * Correct bit flagging and support split exposures with
   ``bin/assemble_fibermap`` (PR `#1235`_).
+* Also write fibercorr to the fluxcalibration when using low S/N simplified calibration.
 
 .. _`#1226`: https://github.com/desihub/desispec/issues/1226
 .. _`#1232`: https://github.com/desihub/desispec/issues/1232
