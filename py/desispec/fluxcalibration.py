@@ -1026,7 +1026,17 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         ccalibivar = 1/(ccalibration**2+(ccalibration==0)) # 100% uncertainty!
         mask = np.ones(ccalibration.shape,dtype=int)
         mccalibration = fluxcal
-        return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, fluxcal)
+
+
+        fibercorr = dict()
+        fibercorr_comments = dict()
+        fibercorr["FLAT_TO_PSF_FLUX"]=point_source_correction
+        fibercorr_comments["FLAT_TO_PSF_FLUX"]="correction for point sources already applied to the flux vector"
+
+        fibercorr["PSF_TO_FIBER_FLUX"]=psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
+        fibercorr_comments["PSF_TO_FIBER_FLUX"]="multiplication correction to apply to get the fiber flux spectrum"
+
+        return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, fluxcal, fibercorr=fibercorr)
 
     input_model_flux = None # I shall not use any more the input_model_flux here
 
