@@ -23,10 +23,11 @@ from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.io.util import difference_camwords, parse_badamps
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
-                             expobstypes=None, procobstypes=None, camword=None, badcamword=None, badamps=None,
-                             override_night=None, tab_filetype='csv', queue='realtime', exps_to_ignore=None,
-                             data_cadence_time=30, queue_cadence_time=1800, dry_run=False,continue_looping_debug=False,
-                             dont_check_job_outputs=False, dont_resubmit_partial_jobs=False, verbose=False):
+                             expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
+                             badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
+                             exps_to_ignore=None, data_cadence_time=30, queue_cadence_time=1800,
+                             dry_run=False,continue_looping_debug=False, dont_check_job_outputs=False,
+                             dont_resubmit_partial_jobs=False, verbose=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
 
@@ -37,6 +38,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         path_to_data: str. Path to the raw data.
         expobstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the exposure table.
         procobstypes: str or comma separated list of strings. The exposure OBSTYPE's that you want to include in the processing table.
+        z_submit_types: list of str's or comma separated list of string. The "group" types of redshifts that should be
+                                       submitted with each exposure. If not specified, default for daily processing is
+                                       ['cumulative', 'pernight-v0']. If false, 'false', or [], then no redshifts are submitted.
         camword: str. Camword that, if set, alters the set of cameras that will be set for processing.
                       Examples: a0123456789, a1, a2b3r3, a2b3r4z3.
         badcamword: str. Camword that, if set, will be removed from the camword defined in camword if given, or the camword
@@ -100,6 +104,21 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         expobstypes = default_exptypes_for_exptable()
     elif isinstance(expobstypes, str):
         expobstypes = expobstypes.split(',')
+
+    ## Define the group types of redshifts you want to generate for each tile
+    zdefaults = ['cumulative', 'pernight-v0']
+    if z_submit_types is None:
+        z_submit_types = zdefaults
+    if isinstance(z_submit_types, bool):
+        if z_submit_types:
+            z_submit_types = zdefaults
+        else:
+            z_submit_types = False
+    elif isinstance(z_submit_types, str):
+        if z_submit_types.lower() == 'false':
+            z_submit_types = False
+        else:
+            z_submit_types = zdefaults
 
     ## expobstypes must contain all the types used in processing
     for typ in procobstypes:
@@ -218,7 +237,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             elif type(erow) is str:
                 if exp in exps_to_ignore:
                     print(f"Located {erow} in exposure {exp}, but the exposure was listed in the expids to ignore. Ignoring this.")
-                    continue
                 elif erow == 'endofarcs' and arcjob is None and 'arc' in procobstypes:
                     print("\nLocated end of arc calibration sequence flag. Processing psfnight.\n")
                     ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
@@ -228,69 +246,71 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 elif 'short' in erow and flatjob is None:
                     print("\nLocated end of short flat calibration flag. Removing flats from list for nightlyflat processing.\n")
                     flats = []
-                else:
-                    continue
+                continue
             else:
-                erow['BADCAMWORD'] = badcamword
-                erow['BADAMPS'] = badamps
-                unproc = False
-                if exp in exps_to_ignore:
-                    print("\n{} given as exposure id to ignore. Not processing.".format(exp))
-                    erow['LASTSTEP'] = 'ignore'
-                    # erow['EXPFLAG'] = np.append(erow['EXPFLAG'], )
-                    unproc = True
-                elif erow['LASTSTEP'] == 'ignore':
-                    print("\n{} identified by the pipeline as something to ignore. Not processing.".format(exp))
-                    unproc = True
-                elif erow['OBSTYPE'] not in procobstypes:
-                    print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
-                    unproc = True
-                elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
-                    print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
-                    unproc = True
+                ## Else it's a real row so start processing it
+                pass
 
-                print(f"\nFound: {erow}")
-                etable.add_row(erow)
-                if unproc:
-                    unproc_table.add_row(erow)
-                    continue
+            erow['BADCAMWORD'] = badcamword
+            erow['BADAMPS'] = badamps
+            unproc = False
+            if exp in exps_to_ignore:
+                print("\n{} given as exposure id to ignore. Not processing.".format(exp))
+                erow['LASTSTEP'] = 'ignore'
+                # erow['EXPFLAG'] = np.append(erow['EXPFLAG'], )
+                unproc = True
+            elif erow['LASTSTEP'] == 'ignore':
+                print("\n{} identified by the pipeline as something to ignore. Not processing.".format(exp))
+                unproc = True
+            elif erow['OBSTYPE'] not in procobstypes:
+                print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
+                unproc = True
+            elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
+                print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
+                unproc = True
 
-                curtype,curtile = get_type_and_tile(erow)
+            print(f"\nFound: {erow}")
+            etable.add_row(erow)
+            if unproc:
+                unproc_table.add_row(erow)
+                continue
 
-                if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
-                    ptable, arcjob, flatjob, \
-                    sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob,
-                                                                          flatjob,
-                                                                          lasttype, internal_id, dry_run=dry_run,
-                                                                          queue=queue, strictly_successful=False,
-                                                                          check_for_outputs=check_for_outputs,
-                                                                          resubmit_partial_complete=resubmit_partial_complete)
+            curtype,curtile = get_type_and_tile(erow)
 
-                prow = erow_to_prow(erow)
-                prow['INTID'] = internal_id
-                internal_id += 1
-                prow['JOBDESC'] = prow['OBSTYPE']
-                prow = define_and_assign_dependency(prow, arcjob, flatjob)
-                print(f"\nProcessing: {prow}\n")
-                prow = create_and_submit(prow, dry_run=dry_run, queue=queue,
-                                         strictly_successful=False, check_for_outputs=check_for_outputs,
-                                         resubmit_partial_complete=resubmit_partial_complete)
-                ptable.add_row(prow)
+            if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
+                ptable, arcjob, flatjob, \
+                sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
+                                                                      lasttype, internal_id, dry_run=dry_run,
+                                                                      queue=queue, strictly_successful=False,
+                                                                      check_for_outputs=check_for_outputs,
+                                                                      resubmit_partial_complete=resubmit_partial_complete,
+                                                                      z_submit_types=z_submit_types)
 
-                ## Note: Assumption here on number of flats
-                if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
-                    flats.append(prow)
-                elif curtype == 'arc' and arcjob is None:
-                    arcs.append(prow)
-                elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
-                    sciences.append(prow)
+            prow = erow_to_prow(erow)
+            prow['INTID'] = internal_id
+            internal_id += 1
+            prow['JOBDESC'] = prow['OBSTYPE']
+            prow = define_and_assign_dependency(prow, arcjob, flatjob)
+            print(f"\nProcessing: {prow}\n")
+            prow = create_and_submit(prow, dry_run=dry_run, queue=queue,
+                                     strictly_successful=False, check_for_outputs=check_for_outputs,
+                                     resubmit_partial_complete=resubmit_partial_complete)
+            ptable.add_row(prow)
 
-                lasttile = curtile
-                lasttype = curtype
+            ## Note: Assumption here on number of flats
+            if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
+                flats.append(prow)
+            elif curtype == 'arc' and arcjob is None:
+                arcs.append(prow)
+            elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
+                sciences.append(prow)
 
-                ## Flush the outputs
-                sys.stdout.flush()
-                sys.stderr.flush()
+            lasttile = curtile
+            lasttype = curtype
+
+            ## Flush the outputs
+            sys.stdout.flush()
+            sys.stderr.flush()
 
             time.sleep(10*speed_modifier)
             write_tables([etable, ptable, unproc_table],
@@ -314,12 +334,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
     ptable, arcjob, flatjob, \
-    sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob,
-                                                          flatjob,
+    sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                           lasttype, internal_id, dry_run=dry_run,
                                                           queue=queue, strictly_successful=False,
                                                           check_for_outputs=check_for_outputs,
-                                                          resubmit_partial_complete=resubmit_partial_complete)
+                                                          resubmit_partial_complete=resubmit_partial_complete,
+                                                          z_submit_types=z_submit_types)
 
     ## All jobs now submitted, update information from job queue and save
     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run)

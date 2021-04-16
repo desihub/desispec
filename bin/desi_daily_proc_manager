@@ -42,6 +42,10 @@ def parse_args():#options=None):
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
+    parser.add_argument("--z-submit-types", type=str, default=None, required=False,
+                        help="The group types of redshifts that should be submitted with each exposure. If not "+
+                             "specified, default for daily processing is ['cumulative', 'pernight-v0']. If "+
+                             "'false' then no redshifts are submitted")
     # File and dir defs
     parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
                         help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
@@ -140,6 +144,7 @@ if __name__ == '__main__':
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
                              expobstypes=args.exp_obstypes, procobstypes=args.proc_obstypes,
+                             z_submit_types=args.z_submit_types,
                              dry_run=args.dry_run, tab_filetype=args.table_file_type, camword=camword,
                              badcamword=badcamword, badamps=args.badamps, queue=args.queue,
                              override_night=args.override_night, exps_to_ignore=exps_to_ignore,

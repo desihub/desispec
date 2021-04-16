@@ -1,21 +1,16 @@
-import os
-import glob
+
+import sys, os, glob
 import json
 from astropy.io import fits
 from astropy.table import Table, join
 import numpy as np
-# import numpy as np
 
-import argparse
-import re
 import time, datetime
-import psutil
-from os import listdir
 from collections import OrderedDict
 import subprocess
-import sys
 from copy import deepcopy
 
+from desispec.scripts.tile_redshifts import create_and_submit_tile_redshifts, get_tile_redshift_script_pathname
 from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
@@ -282,24 +277,37 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False, syst
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
     log = get_logger()
-    if joint:
-        cmd = desi_proc_joint_fit_command(prow, queue=queue)
+    if prow['JOBDESC'] in ['perexp','pernight','pernight-v0','cumulative']:
+        scripts, failed_scripts = create_and_submit_tile_redshifts(group=prow['JOBDESC'], night=prow['NIGHT'],
+                                                                   tileid=prow['TILEID'], expid=prow['EXPID'],
+                                                                   batch_queue=queue, system_name=system_name,
+                                                                   nosubmit=True)
+        if len(failed_scripts) > 0:
+            log.error(f"Redshifts failed for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
+                      f"tileid={prow['TILEID']}, expid={prow['EXPID']}.")
+            log.info(f"Returned failed scriptname is {failed_scripts}")
+        elif len(scripts) > 1:
+            log.error(f"More than one redshifts returned for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
+                      f"tileid={prow['TILEID']}, expid={prow['EXPID']}.")
+            log.info(f"Returned scriptnames were {scripts}")
+        else:
+            scriptpathname = scripts[0]
     else:
-        cmd = desi_proc_command(prow, queue=queue)
+        if joint:
+            cmd = desi_proc_joint_fit_command(prow, queue=queue)
+        else:
+            cmd = desi_proc_command(prow, queue=queue)
+        scriptpathname = batch_script_name(prow)
+        if dry_run:
+            log.info("Output file would have been: {}".format(scriptpathname))
+            log.info("Command to be run: {}".format(cmd.split()))
+        else:
+            log.info("Running: {}".format(cmd.split()))
+            scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
+                                                           cameras=prow['PROCCAMWORD'], jobdesc=prow['JOBDESC'], \
+                                                           queue=queue, cmdline=cmd, system_name=system_name)
 
-    #log.debug(cmd)
-
-    scriptpathname = batch_script_name(prow)
-    if dry_run:
-        log.info("Output file would have been: {}".format(scriptpathname))
-        log.info("Command to be run: {}".format(cmd.split()))
-    else:
-        log.info("Running: {}".format(cmd.split()))
-        scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
-                                                       cameras=prow['PROCCAMWORD'], jobdesc=prow['JOBDESC'], \
-                                                       queue=queue, cmdline=cmd, system_name=system_name)
-        log.info("Outfile is: {}".format(scriptpathname))
-
+    log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
     return prow
 
@@ -329,7 +337,6 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
     log = get_logger()
-    jobname = batch_script_name(prow)
     dep_qids = prow['LATEST_DEP_QID']
     dep_list, dep_str = '', ''
 
@@ -337,12 +344,12 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
         jobtype = prow['JOBDESC']
         if strictly_successful:
             depcond = 'afterok'
-        elif jobtype in ['flat','nightlyflat','poststdstar']:
-            depcond = 'afterok'
-        else:
-            ## if arc, psfnight, prestdstar, or stdstarfit, any inputs is fine
+        elif jobtype in ['arc', 'psfnight', 'prestdstar', 'stdstarfit']:
             ## (though psfnight and stdstarfit will require some inputs otherwise they'll go up in flames)
             depcond = 'afterany'
+        else:
+            ## if 'flat','nightlyflat','poststdstar', or any type of redshift, require strict success of inputs
+            depcond = 'afterok'
 
         dep_str = f'--dependency={depcond}:'
 
@@ -363,8 +370,14 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
 
     # script = f'{jobname}.slurm'
     # script_path = pathjoin(batchdir, script)
-    batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
-    script_path = pathjoin(batchdir, jobname)
+    if prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
+        script_path = get_tile_redshift_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
+                                                        night=prow['NIGHT'], expid=np.min(prow['EXPID']))
+    else:
+        batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
+        jobname = batch_script_name(prow)
+        script_path = pathjoin(batchdir, jobname)
+
     batch_params = ['sbatch', '--parsable']
     if dep_str != '':
         batch_params.append(f'{dep_str}')
@@ -712,7 +725,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
 #########################################
 ########     Joint fit     ##############
 #########################################
-def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
+def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_submit_types=False,
               dry_run=False, strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
               system_name=None):
     """
@@ -730,6 +743,9 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         descriptor, str. Description of the joint fitting job. Can either be 'science' or 'stdstarfit', 'arc' or 'psfnight',
                          or 'flat' or 'nightlyflat'.
+        z_submit_types: bool, or list of str's. The "group" types of redshifts that should be submitted with each
+                                                exposure. If not specified, default for daily processing is
+                                                ['cumulative', 'pernight-v0']. If false or [], then no redshifts are submitted.
         dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
                        information is printed to help with testing.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
@@ -756,14 +772,18 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
 
     if descriptor is None:
         return ptable, None
-    elif descriptor == 'science':
-        descriptor = 'stdstarfit'
     elif descriptor == 'arc':
         descriptor = 'psfnight'
     elif descriptor == 'flat':
         descriptor = 'nightlyflat'
+    elif descriptor == 'science':
+        if isinstance(z_submit_types,bool) and not z_submit_types:
+            descriptor = 'stdstarfit'
+        elif len(z_submit_types) == 0:
+            descriptor = 'stdstarfit'
 
-    if descriptor not in ['stdstarfit', 'psfnight', 'nightlyflat']:
+
+    if descriptor not in ['psfnight', 'nightlyflat', 'science','stdstarfit']:
         return ptable, None, internal_id
 
     log.info(" ")
@@ -776,7 +796,9 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
     ptable.add_row(joint_prow)
 
-    if descriptor == 'stdstarfit':
+    if descriptor in ['science','stdstarfit']:
+        if descriptor == 'science':
+            zprows = []
         log.info(" ")
         log.info(f"Submitting individual science exposures now that joint fitting of standard stars is submitted.\n")
         for row in prows:
@@ -791,16 +813,31 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor,
                                     strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
                                     resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
             ptable.add_row(row)
-    else:
+            if descriptor == 'science' and row['LASTSTEP'] == 'all':
+                zprows.append(row)
+
+    if descriptor in ['psfnight', 'nightlyflat']:
         log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
         ptable = set_calibrator_flag(prows, ptable)
+
+    ## Now run redshifts
+    if descriptor == 'science' and len(zprows) > 0:
+        log.info(" ")
+        for zsubtype in z_submit_types:
+            log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.\n")
+            joint_prow = make_joint_prow(zprows, descriptor=zsubtype, internal_id=internal_id)
+            internal_id += 1
+            joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
+                                           strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                                           resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
+            ptable.add_row(joint_prow)
 
     return ptable, joint_prow, internal_id
 
 
 ## wrapper functions for joint fitting
-def science_joint_fit(ptable, sciences, internal_id, queue='realtime',
-                      reservation=None, dry_run=False, strictly_successful=False,
+def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservation=None,
+                      z_submit_types=False, dry_run=False, strictly_successful=False,
                       check_for_outputs=True, resubmit_partial_complete=True,
                       system_name=None):
     """
@@ -811,7 +848,7 @@ def science_joint_fit(ptable, sciences, internal_id, queue='realtime',
         The joint_fit argument descriptor is pre-defined as 'stdstarfit'.
     """
     return joint_fit(ptable=ptable, prows=sciences, internal_id=internal_id, queue=queue, reservation=reservation,
-                     descriptor='stdstarfit', dry_run=dry_run, strictly_successful=strictly_successful,
+                     descriptor='science', dry_run=dry_run, strictly_successful=strictly_successful,
                      check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
                      system_name=system_name)
 

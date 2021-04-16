@@ -39,26 +39,27 @@ Not supported yet: multiple tiles on a single night in a single call:
 
 """
 
-#- Parse command line quickly for --help before slower imports
+# - Parse command line quickly for --help before slower imports
 import argparse
+
 p = argparse.ArgumentParser()
 p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
 p.add_argument("-t", "--tileid", type=int, help="Tile ID")
 p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
 p.add_argument("-g", "--group", type=str, required=True,
-        help="cumulative, pernight, perexp, or a custom name")
+               help="cumulative, pernight, perexp, or a custom name")
 p.add_argument("--explist", type=str,
-        help="file with columns TILE NIGHT EXPID to use")
+               help="file with columns TILE NIGHT EXPID to use")
 p.add_argument("--nosubmit", action="store_true",
-        help="generate scripts but don't submit batch jobs")
+               help="generate scripts but don't submit batch jobs")
 p.add_argument("--batch-queue", type=str, default='realtime',
-        help="batch queue name")
+               help="batch queue name")
 p.add_argument("--batch-reservation", type=str,
-        help="batch reservation name")
+               help="batch reservation name")
 p.add_argument("--batch-dependency", type=str,
-        help="job dependencies passed to sbatch --dependency")
+               help="job dependencies passed to sbatch --dependency")
 p.add_argument("--system-name", type=str,
-        help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
+               help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
 
 # TODO
 # p.add_argument("--outdir", type=str, help="output directory")
@@ -68,176 +69,10 @@ p.add_argument("--system-name", type=str,
 
 args = p.parse_args()
 
-import sys, os, glob
-import subprocess
-import numpy as np
-from astropy.table import Table, vstack
+import sys
+from desispec.scripts.tile_redshifts import create_and_submit_tile_redshifts
 
-from desiutil.log import get_logger
-
-import desispec.io
-from desispec.workflow.tableio import load_table
-from desispec.scripts.tile_redshifts import batch_tile_redshifts
-from desispec.workflow.exptable import get_exposure_table_pathname
-
-
-def _read_minimal_exptables(nights=None):
-    """
-    Read exposure tables while handling evolving formats
-
-    Args:
-        nights (list of int): nights to include (default all nights found)
-
-    Returns exptable with just columns TILEID, NIGHT, EXPID filtered by science
-        exposures with LASTSTEP='all' and TILEID>=0
-
-    Note: the returned table is *not* the full pipeline exposures table because
-        the format of that changed during SV1 and thus can't be stacked without
-        trimming down the columns.  This trims to just the minimal columns
-        needed by desi_tile_redshifts.
-    """
-    log = get_logger()
-    if nights is None:
-        nights = list()
-        reduxdir = desispec.io.specprod_root()
-        for nightdir in sorted(glob.glob(f'{reduxdir}/exposures/20??????')):
-            try:
-                n = int(os.path.basename(nightdir))
-                nights.append(n)
-            except ValueError:
-                pass
-
-    exptables = list()
-    for night in nights:
-        expfile = get_exposure_table_pathname(night)
-        if os.path.exists(expfile):
-            t = Table.read(expfile)
-            keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
-            if 'LASTSTEP' in t.colnames:
-                keep &= (t['LASTSTEP'] == 'all')
-
-            t = t[keep]
-            exptables.append(t['TILEID', 'NIGHT', 'EXPID'])
-        elif night >= 20201201:
-            log.error(f"Exposure table missing for night {night}")
-        else:
-            #- these are expected for the daily run, ok
-            log.debug(f"Exposure table missing for night {night}")
-
-    return vstack(exptables)
-
-#-------------------------------------------------------------------------
-log = get_logger()
-
-#- If --tileid, --night, and --expid are all given, create exptable
-if ((args.tileid is not None) and
-    (args.night is not None) and (len(args.night) == 1) and
-    (args.expid is not None)):
-    log.info('Creating exposure table from --tileid --night --expid options')
-    exptable = Table()
-    exptable['EXPID'] = args.expid
-    exptable['NIGHT'] = args.night[0]
-    exptable['TILEID'] = args.tileid
-
-    if args.explist is not None:
-        log.warning('Ignoring --explist, using --tileid --night --expid')
-
-#- otherwise load exposure tables for those nights
-elif args.explist is None:
-    if args.night is not None:
-        log.info(f'Loading production exposure tables for nights {args.night}')
-    else:
-        log.info(f'Loading production exposure tables for all nights')
-
-    exptable = _read_minimal_exptables(args.night)
-
-else:
-    log.info(f'Loading exposure list from {args.explist}')
-    if args.explist.endswith('.fits'):
-        exptable = Table.read(args.explist, format='fits')
-    elif args.explist.endswith('.csv'):
-        exptable = Table.read(args.explist, format='ascii.csv')
-    elif args.explist.endswith('.ecsv'):
-        exptable = Table.read(args.explist, format='ascii.ecsv')
-    else:
-        exptable = Table.read(args.explist, format='ascii')
-
-    if args.night is not None:
-        keep = np.in1d(exptable['NIGHT'], args.night)
-        exptable = exptable[keep]
-
-#- Filter exposure tables by exposure IDs or by tileid
-#- Note: If exptable was created from --expid --night --tileid these should
-#- have no effect, but are left in for code flow simplicity
-if args.expid is not None:
-    keep = np.in1d(exptable['EXPID'], args.expid)
-    exptable = exptable[keep]
-    expids = np.array(exptable['EXPID'])
-    tileids = np.unique(np.array(exptable['TILEID']))
-
-    #- if provided, tileid should be redundant with the tiles in those exps
-    if args.tileid is not None:
-        if not np.all(exptable['TILEID'] == args.tileid):
-            log.critical(f'Exposure TILEIDs={tileids} != --tileid={args.tileid}')
-            sys.exit(1)
- 
-elif args.tileid is not None:
-    keep = (exptable['TILEID'] == args.tileid)
-    exptable = exptable[keep]
-    expids = np.array(exptable['EXPID'])
-    tileids = np.array([args.tileid,])
-
-else:
-    tileids = np.unique(np.array(exptable['TILEID']))
-
-#- anything left?
-if len(exptable) == 0:
-    log.critical(f'No exposures left after filtering by tileid/night/expid')
-    sys.exit(1)
-
-#- If cumulative, find all prior exposures that also observed these tiles
-#- NOTE: depending upon options, this might re-read all the exptables again
-#- NOTE: this may not scale well several years into the survey
-if args.group == 'cumulative':
-    log.info(f'{len(tileids)} tiles; searching for exposures on prior nights')
-    allexp = _read_minimal_exptables()
-    keep = np.in1d(allexp['TILEID'], tileids)
-    exptable = allexp[keep]
-    expids = np.array(exptable['EXPID'])
-    tileids = np.unique(np.array(exptable['TILEID']))
-
-#- Generate the scripts and optionally submit them
-failed_jobs = list()
-for tileid in tileids:
-    tilerows = exptable['TILEID'] == tileid
-    nights = np.unique(np.array(exptable['NIGHT'][tilerows]))
-    expids = np.unique(np.array(exptable['EXPID'][tilerows]))
-    log.info(f'Tile {tileid} nights={nights} expids={expids}')
-    submit = (not args.nosubmit)
-    if args.group != 'perexp':
-        batchscript, batcherr = batch_tile_redshifts(
-            tileid, exptable[tilerows], args.group, submit=submit,
-            queue=args.batch_queue, reservation=args.batch_reservation,
-            dependency=args.batch_dependency, system_name=args.system_name
-            )
-    else:
-        for i in range(len(exptable[tilerows])):
-            batchscript, batcherr = batch_tile_redshifts(
-                tileid, exptable[tilerows][i:i+1], args.group, submit=submit,
-                queue=args.batch_queue, reservation=args.batch_reservation,
-                dependency=args.batch_dependency, system_name=args.system_name
-                )
-
-
-    if batcherr != 0:
-        failed_jobs.append(batchscript)
+batch_scripts, failed_jobs = create_and_submit_tile_redshifts(**args.__dict__)
 
 num_error = len(failed_jobs)
-if num_error > 0:
-    tmp = [os.path.basename(filename) for filename in failed_jobs]
-    log.error(f'problem submitting {num_error} scripts: {tmp}')
-
 sys.exit(num_error)
-
-
-
