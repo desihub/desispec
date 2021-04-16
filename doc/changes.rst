@@ -2,21 +2,37 @@
 desispec Change Log
 ===================
 
-0.41.0 (unreleased)
+0.41.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.41.0 (2021-04-16)
+-------------------
+
+Although most of the Denali production was run with tag 0.40.1, the following
+updates where made for final steps to recover some missing coadds and make
+the final tsnr and tiles files:
 
 * Exposure and tiles files updates, including merging GFA data.
   (PR `#1226`_, `#1232`_, `#1236`_, plus commits directly to master on Apr 12).
+* Fix coadds with missing TSNR columns due to missing cameras (PR `#1239`_).
+
+Changes that also occured in the meantime but were not used for Denali
+processing (they impact earlier steps):
+
 * Flag fibers that are mis-positioned by >100 um as bad. (PR `#1233`_).
 * Correct bit flagging and support split exposures with
   ``bin/assemble_fibermap`` (PR `#1235`_).
-* Also write fibercorr to the fluxcalibration when using low S/N simplified calibration.
+* Also write fibercorr to the fluxcalibration when using low S/N simplified
+  calibration (direct fix to master).
 
 .. _`#1226`: https://github.com/desihub/desispec/issues/1226
 .. _`#1232`: https://github.com/desihub/desispec/issues/1232
 .. _`#1233`: https://github.com/desihub/desispec/issues/1233
 .. _`#1235`: https://github.com/desihub/desispec/issues/1235
 .. _`#1236`: https://github.com/desihub/desispec/issues/1236
+.. _`#1239`: https://github.com/desihub/desispec/issues/1239
 
 0.40.1 (2020-04-01)
 -------------------
