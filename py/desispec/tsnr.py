@@ -14,12 +14,7 @@ from specter.psf.gausshermite  import  GaussHermitePSF
 from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 from scipy.optimize import minimize
-from desiutil.dust import ext_odonnell
-
-def dust_transmission(wave,ebv):
-    Rv = 3.1
-    extinction = ext_odonnell(wave,Rv=Rv)
-    return 10**(-Rv*ebv[:,None]*extinction[None,:]/2.5)
+from desiutil.dust import dust_transmission
 
 def get_ensemble(dirpath, bands, smooth=125):
     '''

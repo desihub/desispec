@@ -22,7 +22,7 @@ from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 from desispec.parallel import default_nproc
 from desispec.io.filters import load_legacy_survey_filter, load_gaia_filter
-from desiutil.dust import ext_odonnell,extinction_total_to_selective_ratio, SFDMap
+from desiutil.dust import dust_transmission,extinction_total_to_selective_ratio, SFDMap
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 def parse(options=None):
@@ -70,14 +70,9 @@ def safe_read_key(header,key) :
         value=header[key.ljust(8).upper()]
     return value
 
-def dust_transmission(wave,ebv) :
-    Rv = 3.1
-    extinction = ext_odonnell(wave,Rv=Rv)
-    return 10**(-Rv*extinction*ebv/2.5)
-
 def get_gaia_ab_correction():
     """
-Get the dictionary with corrections from AB magnitudes to 
+Get the dictionary with corrections from AB magnitudes to
 Vega magnitudes (as the official gaia catalog is in vega)
 """
     vega_zpt = dict(G=25.6914396869,
@@ -98,7 +93,7 @@ def get_magnitude(stdwave, model, model_filters, cur_filt):
     """ Obtain magnitude for a filter taking into
 account the ab/vega correction if needed.
 Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
-    """ 
+    """
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
 
     # AB/Vega correction
@@ -108,7 +103,7 @@ Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
         corr = 0
     if not(cur_filt in model_filters):
         raise Exception(('Filter {} is not present in models').format(cur_filt))
-    # see https://github.com/desihub/speclite/issues/34 
+    # see https://github.com/desihub/speclite/issues/34
     # to explain copy()
     retmag = model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
     return retmag
@@ -134,7 +129,7 @@ def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
         else:
             bprp = (unextincted_mags['GAIA-BP'] -
                     unextincted_mags['GAIA-RP'])
-            
+
         for band in ['G','BP','RP']:
             curp = gaia_poly_coeff[band]
             dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
@@ -249,7 +244,7 @@ def main(args, comm=None) :
             for colname in ['G', 'BP', 'RP']:  #- and W1 and W2?
                 keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] > 10
                 keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] < 20
-            n_legacy_std = keep_legacy.sum() 
+            n_legacy_std = keep_legacy.sum()
             n_gaia_std = keep_gaia.sum()
             keep = keep_legacy | keep_gaia
             # accept both types of standards for the time being
@@ -257,7 +252,7 @@ def main(args, comm=None) :
             # keep the indices for gaia/legacy subsets
             gaia_indices = keep_gaia[keep]
             legacy_indices = keep_legacy[keep]
-            
+
             frame_starindices = frame_starindices[keep]
 
             if spectrograph is None :
@@ -301,7 +296,7 @@ def main(args, comm=None) :
         else :
             flats[camera]=flat
 
-    # if color is not specified we decide on the fly 
+    # if color is not specified we decide on the fly
     color = args.color
     if color is not None:
         if color[:4] == 'GAIA':
@@ -346,8 +341,8 @@ def main(args, comm=None) :
         # select appropriate subset of standards
         starindices = starindices[legacy_indices]
         starfibers = starfibers[legacy_indices]
-    
-        
+
+
     # excessive check but just in case
     if not color in ['G-R', 'R-Z', 'GAIA-BP-RP', 'GAIA-G-RP']:
         raise ValueError('Unknown color {}'.format(color))
@@ -495,7 +490,7 @@ def main(args, comm=None) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
-    if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all(): 
+    if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
         log.error('Unknown PHOTSYS found')
         raise Exception('Unknown PHOTSYS found')
     # Fetching Filter curves
@@ -537,7 +532,7 @@ def main(args, comm=None) :
             dec = fibermap['TARGET_DEC'] * units.deg))
     else:
         ebv = fibermap['EBV']
-    
+
     photometric_systems = np.unique(fibermap['PHOTSYS'])
     if not gaia_std:
         for band in ['G', 'R', 'Z']:
@@ -549,7 +544,7 @@ def main(args, comm=None) :
                 # E(B-V) is a difference of magnitudes (dimensionless)
                 # a_band = -2.5*log10(effective dust transmission) , dimensionless
                 # effective dust transmission =
-                #                  integral( SED(lambda) * filter_transmission(lambda,band) * milkyway_dust_transmission(lambda,E(B-V)) dlamdba)
+                #                  integral( SED(lambda) * filter_transmission(lambda,band) * dust_transmission(lambda,E(B-V)) dlamdba)
                 #                / integral( SED(lambda) * filter_transmission(lambda,band) dlamdba)
                 selection = (fibermap['PHOTSYS'] == photsys)
                 a_band = r_band * ebv[selection]  # dimensionless
@@ -558,7 +553,7 @@ def main(args, comm=None) :
     for band in ['G','BP','RP']:
         star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
     unextinct_gaia_mags(star_mags, star_unextincted_mags, ebv)
-    
+
     star_colors = dict()
     star_unextincted_colors = dict()
 
@@ -601,7 +596,7 @@ def main(args, comm=None) :
 
         # preselect models based on magnitudes
         photsys=fibermap['PHOTSYS'][star]
-        
+
         if gaia_std:
             model_colors = model_mags[color_band1] - model_mags[color_band2]
         else:
@@ -676,7 +671,7 @@ def main(args, comm=None) :
             else:
                 model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name + photsys)
         fitted_model_colors[star] = model_mag1 - model_mag2
-            
+
         #- TODO: move this back into normalize_templates, at the cost of
         #- recalculating a model magnitude?
 
