@@ -388,8 +388,10 @@ def create_and_submit_tile_redshifts(group, night=None, tileid=None, expid=None,
     
     # - Generate the scripts and optionally submit them
     failed_jobs, batch_scripts = list(), list()
+    if (night is not None):
+        lastnight = np.max(night)
     for tileid in tileids:
-        tilerows = exptable['TILEID'] == tileid
+        tilerows = ((exptable['TILEID'] == tileid) & (exptable['NIGHT'] <= lastnight))
         nights = np.unique(np.array(exptable['NIGHT'][tilerows]))
         expids = np.unique(np.array(exptable['EXPID'][tilerows]))
         log.info(f'Tile {tileid} nights={nights} expids={expids}')
