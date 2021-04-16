@@ -31,7 +31,7 @@ import numpy as np
 import fitsio
 from astropy.io import fits
 import glob
-from desiutil.timer import Timer, compute_stats
+import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
 from desispec.io.util import create_camword
@@ -45,6 +45,7 @@ import desispec.scripts.specex
 from desitarget.targetmask import desi_mask
 
 from desiutil.log import get_logger, DEBUG, INFO
+import desiutil.iers
 
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
@@ -80,7 +81,7 @@ def main(args=None, comm=None):
     stop_mpi_connect = time.time()
 
     #- Start timer; only print log messages from rank 0 (others are silent)
-    timer = Timer(silent=(rank>0))
+    timer = desiutil.timer.Timer(silent=(rank>0))
 
     #- Fill in timing information for steps before we had the timer created
     if args.starttime is not None:
@@ -95,7 +96,6 @@ def main(args=None, comm=None):
 
     #- Freeze IERS after parsing args so that it doesn't bother if only --help
     timer.start('freeze_iers')
-    import desiutil.iers
     desiutil.iers.freeze_iers()
     timer.stop('freeze_iers')
 
@@ -972,7 +972,7 @@ def main(args=None, comm=None):
         timers = [timer,]
 
     if rank == 0:
-        stats = compute_stats(timers)
+        stats = desiutil.timer.compute_stats(timers)
         log.info('Timing summary statistics:\n' + json.dumps(stats, indent=2))
 
         if args.timingfile:
