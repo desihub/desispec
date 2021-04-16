@@ -93,7 +93,7 @@ def read_gfa_data(gfa_proc_dir) :
         if len(filenames)==0 : continue
         filename=filenames[-1]
         log.info(f"Reading {filename}")
-        table=Table.read(filename,3)# HDU3 is average over frames during spectro exposure and median across CCDs
+        table=Table.read(filename,2)# HDU2 is average over frames during spectro exposure and median across CCDs
         tables.append(table)
     if len(tables)==0 :
         log=get_logger()
