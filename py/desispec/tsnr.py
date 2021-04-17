@@ -430,7 +430,8 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
         result = dflux * fiberflat.fiberflat
 
         # Apply dust transmission.
-        result *= dust_transmission(frame.wave, ebv)
+        for i in range(len(ebv)) :
+            result[i] *= dust_transmission(frame.wave, ebv[i])
 
         result = result**2.
 
