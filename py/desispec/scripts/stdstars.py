@@ -582,10 +582,13 @@ def main(args, comm=None) :
     normflux=np.zeros((nstars, stdwave.size))
     fitted_model_colors = np.zeros(nstars)
 
-    # All ranks in local_comm work on the same stars
-    local_comm = comm.Split(rank % nstars, rank)
-    # The color 1 in head_comm contains all ranks that are have rank 0 in local_comm
-    head_comm = comm.Split(rank < nstars, rank)
+    local_comm, head_comm = None, None
+    if comm is not None:
+        # All ranks in local_comm work on the same stars
+        local_comm = comm.Split(rank % nstars, rank)
+        # The color 1 in head_comm contains all ranks that are have rank 0 in local_comm
+        head_comm = comm.Split(rank < nstars, rank)
+
     for star in range(rank % nstars, nstars, size):
 
         log.info("rank %d: finding best model for observed star #%d"%(rank, star))
