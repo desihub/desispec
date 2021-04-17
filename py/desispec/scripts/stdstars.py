@@ -708,19 +708,19 @@ def main(args, comm=None) :
         log.error("No star has been fit.")
         sys.exit(12)
 
-    # get the fibermap from any input frame for the standard stars
-    fibermap = Table(frame.fibermap)
-    keep = np.in1d(fibermap['FIBER'], starfibers[fitted_stars])
-    fibermap = fibermap[keep]
-
-    # drop fibermap columns specific to exposures instead of targets
-    for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
-            'FIBER_RA', 'FIBER_DEC', 'FIBER_X', 'FIBER_Y']:
-        if col in fibermap.colnames:
-            fibermap.remove_column(col)
-
-    # Now write the normalized flux for all best models to a file
     if rank == 0:
+        # get the fibermap from any input frame for the standard stars
+        fibermap = Table(frame.fibermap)
+        keep = np.in1d(fibermap['FIBER'], starfibers[fitted_stars])
+        fibermap = fibermap[keep]
+
+        # drop fibermap columns specific to exposures instead of targets
+        for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
+                'FIBER_RA', 'FIBER_DEC', 'FIBER_X', 'FIBER_Y']:
+            if col in fibermap.colnames:
+                fibermap.remove_column(col)
+
+        # Now write the normalized flux for all best models to a file
         data={}
         data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
         data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
