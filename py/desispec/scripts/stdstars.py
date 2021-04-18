@@ -705,44 +705,39 @@ def main(args, comm=None) :
         fitted_model_colors = head_comm.reduce(fitted_model_colors, op=MPI.SUM, root=0)
         normflux = head_comm.reduce(normflux, op=MPI.SUM, root=0)
 
-    # Check at least one star was fit. The check is peformed on rank 0 and
-    # the result is bcast to other ranks so that all ranks exit together if
-    # the check fails.
-    atleastonestarfit = False
-    if rank == 0:
-        fitted_stars = np.where(chi2dof != 0)[0]
-        atleastonestarfit = fitted_stars.size > 0
-    if comm is not None:
-        atleastonestarfit = comm.bcast(atleastonestarfit, root=0)
-    if not atleastonestarfit:
+    if rank != 0: # All the work left belongs to rank 0
+        return
+
+    # Check at least one star was fit.
+    fitted_stars = np.where(chi2dof != 0)[0]
+    if fitted_stars.size == 0:
         log.error("No star has been fit.")
         sys.exit(12)
 
-    if rank == 0:
-        # get the fibermap from any input frame for the standard stars
-        fibermap = Table(frame.fibermap)
-        keep = np.in1d(fibermap['FIBER'], starfibers[fitted_stars])
-        fibermap = fibermap[keep]
+    # get the fibermap from any input frame for the standard stars
+    fibermap = Table(frame.fibermap)
+    keep = np.in1d(fibermap['FIBER'], starfibers[fitted_stars])
+    fibermap = fibermap[keep]
 
-        # drop fibermap columns specific to exposures instead of targets
-        for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
-                'FIBER_RA', 'FIBER_DEC', 'FIBER_X', 'FIBER_Y']:
-            if col in fibermap.colnames:
-                fibermap.remove_column(col)
+    # drop fibermap columns specific to exposures instead of targets
+    for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
+            'FIBER_RA', 'FIBER_DEC', 'FIBER_X', 'FIBER_Y']:
+        if col in fibermap.colnames:
+            fibermap.remove_column(col)
 
-        # Now write the normalized flux for all best models to a file
-        data={}
-        data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
-        data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
-        data['FEH']= linear_coefficients[fitted_stars,:].dot(feh)
-        data['CHI2DOF']=chi2dof[fitted_stars]
-        data['REDSHIFT']=redshift[fitted_stars]
-        data['COEFF']=linear_coefficients[fitted_stars,:]
-        data['DATA_%s'%color]=star_colors[color][fitted_stars]
-        data['MODEL_%s'%color]=fitted_model_colors[fitted_stars]
-        data['BLUE_SNR'] = snr['b'][fitted_stars]
-        data['RED_SNR']  = snr['r'][fitted_stars]
-        data['NIR_SNR']  = snr['z'][fitted_stars]
-        io.write_stdstar_models(args.outfile,normflux,stdwave,
-                starfibers[fitted_stars],data,
-                fibermap, input_frames_table)
+    # Now write the normalized flux for all best models to a file
+    data={}
+    data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
+    data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)
+    data['FEH']= linear_coefficients[fitted_stars,:].dot(feh)
+    data['CHI2DOF']=chi2dof[fitted_stars]
+    data['REDSHIFT']=redshift[fitted_stars]
+    data['COEFF']=linear_coefficients[fitted_stars,:]
+    data['DATA_%s'%color]=star_colors[color][fitted_stars]
+    data['MODEL_%s'%color]=fitted_model_colors[fitted_stars]
+    data['BLUE_SNR'] = snr['b'][fitted_stars]
+    data['RED_SNR']  = snr['r'][fitted_stars]
+    data['NIR_SNR']  = snr['z'][fitted_stars]
+    io.write_stdstar_models(args.outfile,normflux,stdwave,
+            starfibers[fitted_stars],data,
+            fibermap, input_frames_table)

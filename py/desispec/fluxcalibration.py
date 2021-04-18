@@ -823,28 +823,29 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         results = [_func2(x) for x in func_args]
         log.debug("Finished serial loop")
 
-    if comm is None or comm.rank == 0:
-        # collect results
-        for result in results :
-            template_id = result[0]
-            index  = result[1]
-            template_flux[template_id][data_index==index] /= (result[2] + (result[2]==0))
+    if comm is not None and rank != 0: # All the work left belongs to rank 0
+        return None
 
-        log.debug("refit the model ...")
-        template_chi2=np.zeros(ntemplates)
-        for template_id in range(ntemplates) :
-            template_chi2[template_id] = np.sum(data_ivar*(data_flux-template_flux[template_id])**2)
+    # collect results
+    for result in results :
+        template_id = result[0]
+        index  = result[1]
+        template_flux[template_id][data_index==index] /= (result[2] + (result[2]==0))
 
-        best_model_id=np.argmin(template_chi2)
-        best_chi2=template_chi2[best_model_id]
+    log.debug("refit the model ...")
+    template_chi2=np.zeros(ntemplates)
+    for template_id in range(ntemplates) :
+        template_chi2[template_id] = np.sum(data_ivar*(data_flux-template_flux[template_id])**2)
 
-        log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
+    best_model_id=np.argmin(template_chi2)
+    best_chi2=template_chi2[best_model_id]
 
-        # interpolate around best model using parameter grid
-        coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
-        log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
-        return coef,z,chi2/ndata
-    return None # Only return something when MPI is not used or is rank 0
+    log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
+
+    # interpolate around best model using parameter grid
+    coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
+    log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
+    return coef,z,chi2/ndata
 
 
 def normalize_templates(stdwave, stdflux, mag, band, photsys):
