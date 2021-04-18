@@ -639,64 +639,65 @@ def main(args, comm=None) :
             ncpu=ncpu, z_max=args.z_max, z_res=args.z_res,
             template_error=args.template_error, comm=local_comm
             )
-        if match_templates_result:
-            coefficients, redshift[star], chi2dof[star] = match_templates_result
 
-        if local_comm is None or local_comm.Get_rank() == 0:
-            linear_coefficients[star,selection] = coefficients
+        # Only local rank 0 can perform the remaining work
+        if local_comm is not None and local_comm.Get_rank() != 0:
+            continue
 
-            log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
-                starfibers[star],
-                np.inner(teff,linear_coefficients[star]),
-                np.inner(logg,linear_coefficients[star]),
-                np.inner(feh,linear_coefficients[star]),
-                redshift[star],
-                chi2dof[star])
-                )
+        coefficients, redshift[star], chi2dof[star] = match_templates_result
+        linear_coefficients[star,selection] = coefficients
+        log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
+            starfibers[star],
+            np.inner(teff,linear_coefficients[star]),
+            np.inner(logg,linear_coefficients[star]),
+            np.inner(feh,linear_coefficients[star]),
+            redshift[star],
+            chi2dof[star])
+            )
 
-            # Apply redshift to original spectrum at full resolution
-            model=np.zeros(stdwave.size)
-            redshifted_stdwave = stdwave*(1+redshift[star])
-            for i,c in enumerate(linear_coefficients[star]) :
-                if c != 0 :
-                    model += c*np.interp(stdwave,redshifted_stdwave,stdflux[i])
+        # Apply redshift to original spectrum at full resolution
+        model=np.zeros(stdwave.size)
+        redshifted_stdwave = stdwave*(1+redshift[star])
+        for i,c in enumerate(linear_coefficients[star]) :
+            if c != 0 :
+                model += c*np.interp(stdwave,redshifted_stdwave,stdflux[i])
 
-            # Apply dust extinction to the model
-            log.info("Applying MW dust extinction to star {} with EBV = {}".format(star,ebv[star]))
-            model *= dust_transmission(stdwave, ebv[star])
+        # Apply dust extinction to the model
+        log.info("Applying MW dust extinction to star {} with EBV = {}".format(star,ebv[star]))
+        model *= dust_transmission(stdwave, ebv[star])
 
-            # Compute final color of dust-extincted model
-            photsys=fibermap['PHOTSYS'][star]
+        # Compute final color of dust-extincted model
+        photsys=fibermap['PHOTSYS'][star]
 
-            if not gaia_std:
-                model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ + photsys) for _ in [color_band1, color_band2]]
+        if not gaia_std:
+            model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ + photsys) for _ in [color_band1, color_band2]]
+        else:
+            model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ ) for _ in [color_band1, color_band2]]
+
+        if color_band1 == ref_mag_name:
+            model_magr = model_mag1
+        elif color_band2 == ref_mag_name:
+            model_magr = model_mag2
+        else:
+            # if the reference magnitude is not among colours
+            # I'm fetching it separately. This will happen when
+            # colour is BP-RP and ref magnitude is G
+            if gaia_std:
+                model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name)
             else:
-                model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ ) for _ in [color_band1, color_band2]]
+                model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name + photsys)
+        fitted_model_colors[star] = model_mag1 - model_mag2
 
-            if color_band1 == ref_mag_name:
-                model_magr = model_mag1
-            elif color_band2 == ref_mag_name:
-                model_magr = model_mag2
-            else:
-                # if the reference magnitude is not among colours
-                # I'm fetching it separately. This will happen when
-                # colour is BP-RP and ref magnitude is G
-                if gaia_std:
-                    model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name)
-                else:
-                    model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name + photsys)
-            fitted_model_colors[star] = model_mag1 - model_mag2
+        #- TODO: move this back into normalize_templates, at the cost of
+        #- recalculating a model magnitude?
 
-            #- TODO: move this back into normalize_templates, at the cost of
-            #- recalculating a model magnitude?
+        cur_refmag = star_mags[ref_mag_name][star]
 
-            cur_refmag = star_mags[ref_mag_name][star]
+        # Normalize the best model using reported magnitude
+        scalefac=10**((model_magr - cur_refmag)/2.5)
 
-            # Normalize the best model using reported magnitude
-            scalefac=10**((model_magr - cur_refmag)/2.5)
-
-            log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
-            normflux[star] = model*scalefac
+        log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
+        normflux[star] = model*scalefac
 
     if head_comm is not None and rank < nstars: # head_comm color is 1
         linear_coefficients = head_comm.reduce(linear_coefficients, op=MPI.SUM, root=0)
