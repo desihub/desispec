@@ -5,7 +5,14 @@ desispec Change Log
 0.41.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Wrap ``bin/desi_proc`` and ``bin/desi_proc_joint_fit`` in functions to
+  facilitate pipeline wrappers (PRs `#1242`_ and `#1244`_).
+* Use less restrictive gfaproc extension 2 instead of 3 for EFFTIME_GFA
+  (PR `#1245`_).
+
+.. _`#1242`: https://github.com/desihub/desispec/issues/1242
+.. _`#1244`: https://github.com/desihub/desispec/issues/1244
+.. _`#1245`: https://github.com/desihub/desispec/issues/1245
 
 0.41.0 (2021-04-16)
 -------------------
