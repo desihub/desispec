@@ -100,9 +100,9 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
             tileid = None
         else:
             tileid = prow['TILEID']
+        expid = prow['EXPID'][0]
         existing_spectros = []
         for spectro in spectros:
-            expid = prow['EXPID'][0]
             if os.path.exists(findfile(filetype=filetype, night=night, expid=expid, spectrograph=spectro, tile=tileid)):
                 existing_spectros.append(spectro)
         completed = (len(existing_spectros) == n_desired)
@@ -142,7 +142,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     return prow
 
 
-def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, joint=False,
+def create_and_submit(prow, queue='realtime', reservation=None, dry_run=0, joint=False,
                       strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
                       system_name=None):
     """
@@ -154,8 +154,9 @@ def create_and_submit(prow, queue='realtime', reservation=None, dry_run=False, j
                                  desispect.workflow.proctable.get_processing_table_column_defs()
         queue, str. The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run, bool. If true, this is a simulated run and the scripts will not be written or submitted. Output will
-                       relevant for testing will be printed as though scripts are being submitted. Default is False.
+        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
                      run with desi_proc_joint_fit. Default is False.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
@@ -242,7 +243,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
         cmd += f' -q {queue}'
 
     descriptor = prow['OBSTYPE'].lower()
-        
+
     night = prow['NIGHT']
     specs = str(prow['PROCCAMWORD'])
     expids = prow['EXPID']
@@ -252,7 +253,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
     cmd += ' --cameras={} -n {} -e {}'.format(specs, night, expid_str)
     return cmd
 
-def create_batch_script(prow, queue='realtime', dry_run=False, joint=False, system_name=None):
+def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None):
     """
     Wrapper script that takes a processing table row and three modifier keywords and creates a submission script for the
     compute nodes.
@@ -261,8 +262,9 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False, syst
         prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
                                  desispect.workflow.proctable.get_processing_table_column_defs()
         queue, str. The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
-        dry_run, bool. If true, this is a simulated run and the scripts will not be written or submitted. Output will
-                       relevant for testing will be printed as though scripts are being submitted. Default is False.
+        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
                      run with desi_proc_joint_fit. Default is False.
         system_name (str): batch system name, e.g. cori-haswell or perlmutter-gpu
@@ -278,27 +280,32 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False, syst
     """
     log = get_logger()
     if prow['JOBDESC'] in ['perexp','pernight','pernight-v0','cumulative']:
-        scripts, failed_scripts = create_and_submit_tile_redshifts(group=prow['JOBDESC'], night=prow['NIGHT'],
-                                                                   tileid=prow['TILEID'], expid=prow['EXPID'],
-                                                                   batch_queue=queue, system_name=system_name,
-                                                                   nosubmit=True)
-        if len(failed_scripts) > 0:
-            log.error(f"Redshifts failed for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
-                      f"tileid={prow['TILEID']}, expid={prow['EXPID']}.")
-            log.info(f"Returned failed scriptname is {failed_scripts}")
-        elif len(scripts) > 1:
-            log.error(f"More than one redshifts returned for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
-                      f"tileid={prow['TILEID']}, expid={prow['EXPID']}.")
-            log.info(f"Returned scriptnames were {scripts}")
+        if dry_run > 1:
+            scriptpathname = get_tile_redshift_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
+                                                               night=prow['NIGHT'], expid=prow['EXPID'])
+            log.info("Output file would have been: {}".format(scriptpathname))
         else:
-            scriptpathname = scripts[0]
+            scripts, failed_scripts = create_and_submit_tile_redshifts(tileid=prow['TILEID'],group=prow['JOBDESC'],
+                                                                       night=prow['NIGHT'], expid=prow['EXPID'],
+                                                                       batch_queue=queue, system_name=system_name,
+                                                                       nosubmit=True)
+            if len(failed_scripts) > 0:
+                log.error(f"Redshifts failed for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
+                          f"tileid={prow['TILEID']}, expid={prow['EXPID']}.")
+                log.info(f"Returned failed scriptname is {failed_scripts}")
+            elif len(scripts) > 1:
+                log.error(f"More than one redshifts returned for group={prow['JOBDESC']}, night={prow['NIGHT']}, "+
+                          f"tileid={prow['TILEID']}, expid={prow['EXPID']}.")
+                log.info(f"Returned scriptnames were {scripts}")
+            else:
+                scriptpathname = scripts[0]
     else:
         if joint:
             cmd = desi_proc_joint_fit_command(prow, queue=queue)
         else:
             cmd = desi_proc_command(prow, queue=queue)
         scriptpathname = batch_script_name(prow)
-        if dry_run:
+        if dry_run > 1:
             log.info("Output file would have been: {}".format(scriptpathname))
             log.info("Command to be run: {}".format(cmd.split()))
         else:
@@ -312,7 +319,7 @@ def create_batch_script(prow, queue='realtime', dry_run=False, joint=False, syst
     return prow
 
 
-def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successful=False):
+def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=False):
     """
     Wrapper script that takes a processing table row and three modifier keywords and submits the scripts to the Slurm
     scheduler.
@@ -320,8 +327,9 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
     Args:
         prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
                                  desispect.workflow.proctable.get_processing_table_column_defs()
-        dry_run, bool. If true, this is a simulated run and the scripts will not be written or submitted. Output will
-                       relevant for testing will be printed as though scripts are being submitted. Default is False.
+        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
@@ -400,7 +408,7 @@ def submit_batch_script(prow, dry_run=False, reservation=None, strictly_successf
     prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)
     prow['STATUS'] = 'SUBMITTED'
     prow['SUBMIT_DATE'] = int(time.time())
-    
+
     return prow
 
 
@@ -608,7 +616,7 @@ def parse_previous_tables(etable, ptable, night):
 
 
 def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None, start_time=None, end_time=None,
-                                   ptab_name=None, dry_run=False,reservation=None):
+                                   ptab_name=None, dry_run=0,reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
     Before submitting a job, it checks the dependencies for failures. If a dependency needs to be resubmitted, it recursively
@@ -628,8 +636,9 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
                        date and time that you expected to have a job run in the queue. Used to narrow the window of jobs
                        to request information on.
         ptab_name, str, the full pathname where the processing table should be saved.
-        dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
-                       information is printed to help with testing.
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
     Returns:
         proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
@@ -651,7 +660,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
-                            resubmission_states=None, reservation=None, dry_run=False):
+                            resubmission_states=None, reservation=None, dry_run=0):
     """
     Given a row of a processing table and the full processing table, this resubmits the given job.
     Before submitting a job, it checks the dependencies for failures in the processing table. If a dependency needs to
@@ -669,8 +678,9 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                                                        possible Slurm scheduler state, where you wish for jobs with that
                                                        outcome to be resubmitted
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
-        dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
-                       information is printed to help with testing.
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
     Returns:
         proc_table: Table, a table with the same rows as the input except that Slurm and jobid relevant columns have
                            been updated for those jobs that needed to be resubmitted.
@@ -726,7 +736,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
 ########     Joint fit     ##############
 #########################################
 def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_submit_types=False,
-              dry_run=False, strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
+              dry_run=0, strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
               system_name=None):
     """
     Given a set of prows, this generates a processing table row, creates a batch script, and submits the appropriate
@@ -746,8 +756,9 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
         z_submit_types: bool, or list of str's. The "group" types of redshifts that should be submitted with each
                                                 exposure. If not specified, default for daily processing is
                                                 ['cumulative', 'pernight-v0']. If false or [], then no redshifts are submitted.
-        dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
-                       information is printed to help with testing.
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
                                    less desirable because e.g. the sciences can run with SVN default calibrations rather
                                    than failing completely from failed calibrations. Default is False.
@@ -837,7 +848,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
 
 ## wrapper functions for joint fitting
 def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservation=None,
-                      z_submit_types=False, dry_run=False, strictly_successful=False,
+                      z_submit_types=False, dry_run=0, strictly_successful=False,
                       check_for_outputs=True, resubmit_partial_complete=True,
                       system_name=None):
     """
@@ -848,13 +859,13 @@ def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservati
         The joint_fit argument descriptor is pre-defined as 'stdstarfit'.
     """
     return joint_fit(ptable=ptable, prows=sciences, internal_id=internal_id, queue=queue, reservation=reservation,
-                     descriptor='science', dry_run=dry_run, strictly_successful=strictly_successful,
-                     check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
-                     system_name=system_name)
+                     descriptor='science', z_submit_types=z_submit_types, dry_run=dry_run,
+                     strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
+                     resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
 
 
 def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
-                   reservation=None, dry_run=False, strictly_successful=False,
+                   reservation=None, dry_run=0, strictly_successful=False,
                    check_for_outputs=True, resubmit_partial_complete=True,
                    system_name=None):
     """
@@ -871,7 +882,7 @@ def flat_joint_fit(ptable, flats, internal_id, queue='realtime',
 
 
 def arc_joint_fit(ptable, arcs, internal_id, queue='realtime',
-                  reservation=None, dry_run=False, strictly_successful=False,
+                  reservation=None, dry_run=0, strictly_successful=False,
                   check_for_outputs=True, resubmit_partial_complete=True,
                   system_name=None):
     """
@@ -917,7 +928,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     return joint_prow
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                  lasttype, internal_id, dry_run=False,
+                                  lasttype, internal_id, z_submit_types=False, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
                                   system_name=None):
@@ -940,8 +951,12 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         internal_id, int, an internal identifier unique to each job. Increments with each new job. This
                           is the smallest unassigned value.
-        dry_run, bool, whether this is a simulated run or not. If True, jobs are not actually submitted but relevant
-                       information is printed to help with testing.
+        z_submit_types: bool or list of str's. The "group" types of redshifts that should be submitted with each
+                                                exposure. If not specified, default for daily processing is
+                                                ['cumulative', 'pernight-v0']. If false or [], then no redshifts are submitted.
+        dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If 
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
         queue, str. The name of the queue to submit the jobs to. If None is given the current desi_proc default is used.
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         strictly_successful, bool. Whether all jobs require all inputs to have succeeded. For daily processing, this is
@@ -1003,11 +1018,13 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
             sciences = []
             return ptable, arcjob, flatjob, sciences, internal_id
 
-        ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, dry_run=dry_run, queue=queue,
-                                                         reservation=reservation, strictly_successful=strictly_successful,
+        ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, z_submit_types=z_submit_types,
+                                                         dry_run=dry_run, queue=queue, reservation=reservation,
+                                                         strictly_successful=strictly_successful,
                                                          check_for_outputs=check_for_outputs,
                                                          resubmit_partial_complete=resubmit_partial_complete,
-                                                         system_name=system_name)
+                                                         system_name=system_name
+                                                         )
         if tilejob is not None:
             sciences = []
 

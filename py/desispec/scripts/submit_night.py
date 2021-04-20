@@ -17,11 +17,10 @@ from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile
 from desispec.workflow.queue import update_from_queue
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 
-def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', reservation=None,
+def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime', reservation=None, system_name=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
-                 error_if_not_available=True, overwrite_existing_tables=False,
-                 dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
-                 system_name=None):
+                 dry_run_level=0, dry_run=False, error_if_not_available=True, overwrite_existing_tables=False,
+                 dont_check_job_outputs=False, dont_resubmit_partial_jobs=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -30,12 +29,20 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         night, int. The night of data to be processed. Exposure table must exist.
         proc_obstypes, list or np.array. Optional. A list of exposure OBSTYPE's that should be processed (and therefore
                                               added to the processing table).
-        dry_run, bool. Default is False. Should the jobs written to the processing table actually be submitted
-                                             for processing.
+        z_submit_types: list of str's or comma separated list of string. The "group" types of redshifts that should be
+                                       submitted with each exposure. If not specified, default for daily processing is
+                                       ['cumulative', 'pernight-v0']. If false, 'false', or [], then no redshifts are submitted.
         exp_table_path: str. Full path to where to exposure tables are stored, WITHOUT the monthly directory included.
         proc_table_path: str. Full path to where to processing tables to be written.
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
+        system_name: batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
+        dry_run_level, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run, bool. When to run without submitting scripts or not. If dry_run_level is defined, then it over-rides
+                       this flag. dry_run_level not set and dry_run=True, dry_run_level is set to 2 (no scripts
+                       generated or run). Default for dry_run is False.
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         error_if_not_available: bool. Default is True. Raise as error if the required exposure table doesn't exist,
                                       otherwise prints an error and returns.
@@ -48,7 +55,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         dont_resubmit_partial_jobs, bool. Default is False. Must be used with dont_check_job_outputs=False. If this flag is
                                           False, jobs with some prior data are pruned using PROCCAMWORD to only process the
                                           remaining cameras not found to exist.
-        system_name: batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
+
     Returns:
         None.
     """
@@ -79,6 +86,29 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
     os.makedirs(proc_table_path, exist_ok=True)
     name = get_processing_table_name(prodmod=night, extension=tab_filetype)
     proc_table_pathname = pathjoin(proc_table_path, name)
+
+    ## Define the group types of redshifts you want to generate for each tile
+    zdefaults = ['cumulative', 'pernight-v0']
+    if z_submit_types is None:
+        z_submit_types = zdefaults
+    elif isinstance(z_submit_types, bool):
+        if z_submit_types:
+            z_submit_types = zdefaults
+        else:
+            z_submit_types = False
+    elif isinstance(z_submit_types, str):
+        if z_submit_types.lower() == 'false':
+            z_submit_types = False
+        else:
+            z_submit_types = zdefaults
+    else:
+        raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
+
+    ## Reconcile the dry_run and dry_run_level
+    if dry_run and dry_run_level == 0:
+        dry_run_level = 2
+    elif dry_run_level > 0:
+        dry_run = True
 
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
     if not overwrite_existing_tables and os.path.exists(proc_table_pathname):
@@ -140,12 +170,11 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
             ptable, arcjob, flatjob, \
             sciences, internal_id    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                                     lasttype, internal_id, dry_run=dry_run,
-                                                                     queue=queue, reservation=reservation,
-                                                                     strictly_successful=True,
+                                                                     lasttype, internal_id, dry_run=dry_run_level,
+                                                                     queue=queue, strictly_successful=False,
                                                                      check_for_outputs=check_for_outputs,
                                                                      resubmit_partial_complete=resubmit_partial_complete,
-                                                                     system_name=system_name)
+                                                                     z_submit_types=z_submit_types)
 
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
@@ -153,7 +182,7 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, arcjob, flatjob)
         print(f"\nProcessing: {prow}\n")
-        prow = create_and_submit(prow, dry_run=dry_run, queue=queue, reservation=reservation, strictly_successful=True,
+        prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue, reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
                                  system_name=system_name)
         ptable.add_row(prow)
@@ -188,14 +217,13 @@ def submit_night(night, proc_obstypes=None, dry_run=False, queue='realtime', res
         ## No more data coming in, so do bottleneck steps if any apply
         ptable, arcjob, flatjob, \
         sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                              lasttype, internal_id, dry_run=dry_run,
-                                                              queue=queue, reservation=reservation,
-                                                              strictly_successful=True,
+                                                              lasttype, internal_id, dry_run=dry_run_level,
+                                                              queue=queue, strictly_successful=False,
                                                               check_for_outputs=check_for_outputs,
                                                               resubmit_partial_complete=resubmit_partial_complete,
-                                                              system_name=system_name)
+                                                              z_submit_types=z_submit_types)
         ## All jobs now submitted, update information from job queue and save
-        ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run)
+        ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
         write_table(ptable, tablename=proc_table_pathname)
 
     print(f"Completed submission of exposures for night {night}.", '\n\n\n')

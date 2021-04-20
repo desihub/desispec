@@ -26,7 +26,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                              expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
                              badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
                              exps_to_ignore=None, data_cadence_time=30, queue_cadence_time=1800,
-                             dry_run=False,continue_looping_debug=False, dont_check_job_outputs=False,
+                             dry_run_level=0, dry_run=False, continue_looping_debug=False, dont_check_job_outputs=False,
                              dont_resubmit_partial_jobs=False, verbose=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
@@ -53,8 +53,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         exps_to_ignore: list. A list of exposure id's that should not be processed. Each should be an integer.
         data_cadence_time: int. Wait time in seconds between loops in looking for new data. Default is 30 seconds.
         queue_cadence_time: int. Wait time in seconds between loops in checking queue statuses and resubmitting failures. Default is 1800s.
-        dry_run: boolean. If true, no scripts are written and no scripts are submitted. The tables are still generated
-                 and written, however. The timing is accelerated. This option is most useful for testing and simulating a run.
+        dry_run_level, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
+                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+                      for testing as though scripts are being submitted. Default is 0 (false).
+        dry_run, bool. When to run without submitting scripts or not. If dry_run_level is defined, then it over-rides
+                       this flag. dry_run_level not set and dry_run=True, dry_run_level is set to 2 (no scripts
+                       generated or run). Default for dry_run is False.
         continue_looping_debug: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
                                  is terminated. Default is False.
         dont_check_job_outputs, bool. Default is False. If False, the code checks for the existence of the expected final
@@ -109,7 +113,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     zdefaults = ['cumulative', 'pernight-v0']
     if z_submit_types is None:
         z_submit_types = zdefaults
-    if isinstance(z_submit_types, bool):
+    elif isinstance(z_submit_types, bool):
         if z_submit_types:
             z_submit_types = zdefaults
         else:
@@ -119,6 +123,14 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             z_submit_types = False
         else:
             z_submit_types = zdefaults
+    else:
+        raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
+
+    ## Reconcile the dry_run and dry_run_level
+    if dry_run and dry_run_level == 0:
+        dry_run_level = 2
+    elif dry_run_level > 0:
+        dry_run = True
 
     ## expobstypes must contain all the types used in processing
     for typ in procobstypes:
@@ -239,10 +251,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                     print(f"Located {erow} in exposure {exp}, but the exposure was listed in the expids to ignore. Ignoring this.")
                 elif erow == 'endofarcs' and arcjob is None and 'arc' in procobstypes:
                     print("\nLocated end of arc calibration sequence flag. Processing psfnight.\n")
-                    ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue)
+                    ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run_level, queue=queue)
                 elif erow == 'endofflats' and flatjob is None and 'flat' in procobstypes:
                     print("\nLocated end of long flat calibration sequence flag. Processing nightlyflat.\n")
-                    ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue)
+                    ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run_level, queue=queue)
                 elif 'short' in erow and flatjob is None:
                     print("\nLocated end of short flat calibration flag. Removing flats from list for nightlyflat processing.\n")
                     flats = []
@@ -280,7 +292,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
                 ptable, arcjob, flatjob, \
                 sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                                      lasttype, internal_id, dry_run=dry_run,
+                                                                      lasttype, internal_id, dry_run=dry_run_level,
                                                                       queue=queue, strictly_successful=False,
                                                                       check_for_outputs=check_for_outputs,
                                                                       resubmit_partial_complete=resubmit_partial_complete,
@@ -292,7 +304,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             prow['JOBDESC'] = prow['OBSTYPE']
             prow = define_and_assign_dependency(prow, arcjob, flatjob)
             print(f"\nProcessing: {prow}\n")
-            prow = create_and_submit(prow, dry_run=dry_run, queue=queue,
+            prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                      strictly_successful=False, check_for_outputs=check_for_outputs,
                                      resubmit_partial_complete=resubmit_partial_complete)
             ptable.add_row(prow)
@@ -321,9 +333,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         time.sleep(data_cadence_time*speed_modifier)
 
         if len(ptable) > 0:
-            ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run)
+            ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
             # ptable, nsubmits = update_and_recurvsively_submit(ptable,start_time=nersc_start,end_time=nersc_end,
-            #                                                   ptab_name=proc_table_pathname, dry_run=dry_run)
+            #                                                   ptab_name=proc_table_pathname, dry_run=dry_run_level)
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
             write_table(ptable, tablename=proc_table_pathname)
@@ -335,14 +347,14 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     ## No more data coming in, so do bottleneck steps if any apply
     ptable, arcjob, flatjob, \
     sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                          lasttype, internal_id, dry_run=dry_run,
+                                                          lasttype, internal_id, dry_run=dry_run_level,
                                                           queue=queue, strictly_successful=False,
                                                           check_for_outputs=check_for_outputs,
                                                           resubmit_partial_complete=resubmit_partial_complete,
                                                           z_submit_types=z_submit_types)
 
     ## All jobs now submitted, update information from job queue and save
-    ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run)
+    ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run_level)
     write_table(ptable, tablename=proc_table_pathname)
 
     print(f"Completed submission of exposures for night {night}.")
@@ -361,7 +373,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     # while ii < 4 and any_jobs_not_complete(ptable['STATUS']):
     #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
     #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
-    #                                                       ptab_name=proc_table_pathname, dry_run=dry_run)
+    #                                                       ptab_name=proc_table_pathname, dry_run=dry_run_level)
     #     write_table(ptable, tablename=proc_table_pathname)
     #     if any_jobs_not_complete(ptable['STATUS']):
     #         time.sleep(queue_cadence_time*speed_modifier)

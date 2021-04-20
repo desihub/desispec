@@ -65,7 +65,7 @@ def get_termination_states():
 
 
 def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
-                             columns='jobid,state,submit,eligible,start,end,jobname', dry_run=False):
+                             columns='jobid,state,submit,eligible,start,end,jobname', dry_run=0):
     """
     Queries the NERSC Slurm database using sacct with appropriate flags to get information within a specified time
     window of all jobs submitted or executed during that time.
@@ -81,7 +81,7 @@ def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
                       it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
                       in the default list are: ther format columns: jobid,state,submit,eligible,start,end,elapsed,
                       suspended,exitcode,derivedexitcode,reason,priority,jobname.
-        dry_run, bool. Whether this is a simulated run or real run. If True, it is a simulation and it returns a default
+        dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
                        table that doesn't query the Slurm scheduler.
 
     Returns:
@@ -127,7 +127,7 @@ def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
 
 
 
-def update_from_queue(ptable, qtable=None, start_time=None, end_time=None, user=None, dry_run=False,):
+def update_from_queue(ptable, qtable=None, start_time=None, end_time=None, user=None, dry_run=0):
     """
     Given an input prcessing table (ptable) and query table from the Slurm queue (qtable) it cross matches the
     Slurm job ID's and updates the 'state' in the table using the current state in the Slurm scheduler system.
@@ -145,7 +145,7 @@ def update_from_queue(ptable, qtable=None, start_time=None, end_time=None, user=
                              want to see queue information about.
             user, str. The username at NERSC that you want job information about. The default is an the environment name if
                        if exists, otherwise 'desi'.
-            dry_run, bool. Whether this is a simulated run or real run. If True, it is a simulation and it returns a default
+            dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
                            table that doesn't query the Slurm scheduler.
 
     Returns:
