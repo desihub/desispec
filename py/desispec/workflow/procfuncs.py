@@ -10,7 +10,8 @@ from collections import OrderedDict
 import subprocess
 from copy import deepcopy
 
-from desispec.scripts.tile_redshifts import create_and_submit_tile_redshifts, get_tile_redshift_script_pathname
+from desispec.scripts.tile_redshifts import create_and_submit_tile_redshifts, get_tile_redshift_script_pathname, \
+                                            get_tile_redshift_relpath, get_tile_redshift_script_suffix
 from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
@@ -20,7 +21,7 @@ from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
 
-from desispec.io import findfile
+from desispec.io import findfile, specprod_root
 from desispec.io.util import decode_camword, create_camword, difference_camwords, camword_to_spectros
 
 #################################################
@@ -104,6 +105,24 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         existing_spectros = []
         for spectro in spectros:
             if os.path.exists(findfile(filetype=filetype, night=night, expid=expid, spectrograph=spectro, tile=tileid)):
+                existing_spectros.append(spectro)
+        completed = (len(existing_spectros) == n_desired)
+        if not completed and resubmit_partial_complete and len(existing_spectros) > 0:
+            existing_camword = 'a' + ''.join([str(spec) for spec in sorted(existing_spectros)])
+            prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],existing_camword)
+    elif prow['JOBDESC'] in ['cumulative','pernight-v0','pernight','perexp']:
+        ## Spectrograph based
+        spectros = camword_to_spectros(prow['PROCCAMWORD'])
+        n_desired = len(spectros)
+        ## Suppress outputs about using tile based files in findfile if only looking for stdstarfits
+        tileid = prow['TILEID']
+        expid = prow['EXPID'][0]
+        redux_dir = specprod_root()
+        outdir = os.path.join(redux_dir,get_tile_redshift_relpath(tileid,group=prow['JOBDESC'],night=night,expid=expid))
+        suffix = get_tile_redshift_script_suffix(tileid, group=prow['JOBDESC'], night=night, expid=expid)
+        existing_spectros = []
+        for spectro in spectros:
+            if os.path.exists(os.path.join(outdir, f"zbest-{spectro}-{suffix}.fits")):
                 existing_spectros.append(spectro)
         completed = (len(existing_spectros) == n_desired)
         if not completed and resubmit_partial_complete and len(existing_spectros) > 0:
