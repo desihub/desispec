@@ -582,7 +582,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         logg : 1D[nstd] model surface gravity
         feh : 1D[nstd] model metallicity
         ncpu : number of cpu for multiprocessing
-        comm : MPI communicator; if given, ncpu will be ignored
+        comm : MPI communicator; if given, ncpu will be ignored and only rank 0 will return results that are not None
 
     Returns:
         coef : numpy.array of linear coefficient of standard stars
