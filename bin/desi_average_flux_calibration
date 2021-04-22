@@ -20,6 +20,9 @@ import sys
 import fitsio
 import scipy.interpolate
 from pkg_resources import resource_exists, resource_filename
+from desimodel.fastfiberacceptance import FastFiberAcceptance
+from glob import glob
+import yaml
 import matplotlib.pyplot as plt
 
 
@@ -27,14 +30,19 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Compute the average calibration for a DESI spectrograph camera using precomputed flux calibration vectors.")
 
-    parser.add_argument('-i','--infile', type = str, default = None, required=True, nargs='*', help = 'path to DESI frame calib fits files')
+    parser.add_argument('-i','--infiles', type = str, default = None, required=True, help = 'path to ASCII file with full path to DESI frame calib fits files (1 per line)')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True, help = 'output calibration file')
     parser.add_argument('--plot', action = 'store_true', help = 'plot the result')
     parser.add_argument('--no-airmass-term', action = 'store_true', help = 'do not try to estimate an airmass term')
     parser.add_argument('--no-seeing-term', action = 'store_true', help = 'do not try to estimate a seeing term')
+    parser.add_argument('--corr_transp', action = 'store_true', help = 'correct for transparency')
+    parser.add_argument('--seeing_key', type = str, default = 'RADPROF_FWHM_ASEC', choices = ['FWHM_ASEC', 'RADPROF_FWHM_ASEC'], help = 'key in GFA catalog for seeing (default=RADPROF_FWHM_ASEC)')
+    parser.add_argument('--fac_wave_power', type = float, default = -0.25, help = 'wavelength dependence of fiber acceptance (default=-0.25)')
 
     args = parser.parse_args()
     log=get_logger()
+    for kwargs in args._get_kwargs():
+        log.info(kwargs)
 
     # read the data
     ###########################################################
@@ -50,7 +58,55 @@ if __name__ == '__main__':
     with_airmass = not args.no_airmass_term
     with_seeing  = not args.no_seeing_term
 
-    for filename in args.infile :
+    # AR GFA information: airmass, seeing, transparency, fiber_fracflux
+    # AR working only with airmass and fiber_fracflux
+    # AR using the latest GFA file (daily updated)
+    # AR as of early Mar. 2021: GFA now reports fiber_fracflux for a 1.52" diameter fiber
+    filenames = np.loadtxt(args.infiles, dtype=np.str)
+    log.info("{} files in {}".format(len(filenames), args.infiles))
+    expids = np.array([fitsio.read_header(fn)["EXPID"] for fn in filenames])
+    airmass = np.nan + np.zeros(len(filenames))
+    seeing = np.nan + np.zeros(len(filenames))
+    transparency = np.nan + np.zeros(len(filenames))
+    ffracflux = np.nan + np.zeros(len(filenames))
+    # AR first checking GFA acq, then matched_coadd
+    # AR hence, retained values are matched_coadd if present, then acq if no matched_coadd
+    # AR if neither present in matched_coadd nor in acq, we discard the exposure
+    acq_fn = np.sort(glob("{}/survey/GFA/offline_acq_ccds_SV1-thru_20??????.fits".format(os.getenv("DESI_ROOT"))))[-1]
+    matched_coadd_fn = np.sort(glob("{}/survey/GFA/offline_matched_coadd_ccds_SV1-thru_20??????.fits".format(os.getenv("DESI_ROOT"))))[-1]
+    unq_expids = np.unique(expids)
+    for fn in [acq_fn, matched_coadd_fn]:
+        gfa = fitsio.read(fn, ext=3)
+        _, ii, gfa_ii = np.intersect1d(unq_expids, gfa["EXPID"], return_indices=True)
+        for i, gfa_i in zip(ii, gfa_ii):
+            jj = np.where(expids == unq_expids[i])[0]
+            airmass[jj] = gfa["AIRMASS"][gfa_i]
+            seeing[jj] = gfa[args.seeing_key][gfa_i]
+            transparency[jj] = gfa["TRANSPARENCY"][gfa_i]
+            ffracflux[jj] = gfa["FIBER_FRACFLUX"][gfa_i]
+    # AR cutting the input file list on exposures having - meaningful - GFA measurements
+    keep = (airmass >= 1.0) & (seeing >= 0) & (ffracflux >= 0)
+    if args.corr_transp:
+        keep &= transparency >= 0
+    airmass, seeing, transparency, ffracflux = airmass[keep], seeing[keep], transparency[keep], ffracflux[keep]
+    log.info("discarding the {} following exposures (no GFA): {}".format((~keep).sum(), ",".join(filenames[~keep])))
+    filenames = filenames[keep]
+
+    # AR fiber acceptance, fiber diameters
+    fac = FastFiberAcceptance("{}/data/throughput/galsim-fiber-acceptance.fits".format(os.getenv("DESIMODEL")))
+    fac_wave = np.arange(3500, 10000) # AR to do the fac calculation, and then to be interpolated to wave
+    fn = os.path.join(os.getenv("DESIMODEL"), "data", "desi.yaml")
+    f = open(fn, "r")
+    desi = yaml.safe_load(f)
+    f.close()
+    fdiam_um = desi['fibers']['diameter_um'] # AR 107 um: physical fiber diameter
+    fdiam_avg_asec = desi['fibers']['diameter_arcsec'] # AR 1.52 arcsec ; average fiber diameter
+
+    # AR storing indexes kept in the loop
+    ii = []
+    # AR looping on filenames
+    for i in range(len(filenames)):
+        filename = filenames[i]
         log.info("reading {}".format(filename))
         header=fitsio.read_header(filename)
 
@@ -62,10 +118,6 @@ if __name__ == '__main__':
             assert(arm==header["camera"].strip().lower()[0])
 
         exptime = float(header["exptime"])
-        if with_airmass :
-            airmass.append(float(header["airmass"]))
-        if with_seeing :
-            seeing.append(float(header["seeing"]))
 
         cal=read_flux_calibration(filename)
         if np.any(np.isnan(cal.calib)) :
@@ -96,10 +148,31 @@ if __name__ == '__main__':
             print("skip exptime=",exptime)
             continue
 
-        calibs.append(mcalib/exptime)
+        # AR GFA now provide ffrac for fiber_diameter=1.52", so no need to correct for different diameters
+        # AR we do the normalization using fac_wave
+        seeing_wave = seeing[i] * (fac_wave / 6500) ** args.fac_wave_power
+        sigma = seeing_wave / 2.35  * (fdiam_um / fdiam_avg_asec)
+        offset = np.zeros(sigma.shape)
+        ffracflux_wave = fac.value("POINT", sigma, offset) # AR fac for seeing[i] and fdiam_avg_asec
+        ffracflux_wave /= ffracflux_wave[np.abs(fac_wave-6500).argmin()] # AR normalizing to 1 at 6500A
+        ffracflux_wave *= ffracflux[i] # AR normalising to ffracflux[i] at 6500A
+        ffracflux_wave_interp = np.interp(wave, fac_wave, ffracflux_wave) # AR interpolating on wave
+        # AR normalizing
+        norm = exptime * ffracflux_wave_interp
+        text = "applying calibs.append(mcalib / exptime / ffracflux_wave_interp"
+        if args.corr_transp:
+            norm *= transparency[i]
+            text += " / transparency"
+        text += ")"
+        log.info(text)
+        calibs.append(mcalib / norm)
+        #
+        ii += [i]
 
     calibs=np.array(calibs)
     nexp=calibs.shape[0]
+    # AR cutting airmass, seeing on kept exposures
+    airmass, seeing = airmass[ii], seeing[ii]
 
     # compute an average calibration vector
     ###########################################################
