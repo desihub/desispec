@@ -718,10 +718,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         func_args.append( arguments )
 
     if comm is not None and comm.Get_size() > 1: # MPI mode & more than one rank per star
-        delta, remainder = len(func_args) // size, len(func_args) % size
-        start = rank * delta + min(rank, remainder) # Start of the args to process
-        end = (rank + 1) * delta + min(rank + 1, remainder) # End of the args to process
-        results = list(map(_func, func_args[start:end]))
+        results = list(map(_func, func_args[rank::size]))
         # All reduce here because we'll need to divide the work out again
         results = comm.allreduce(results, op=MPI.SUM)
     elif ncpu > 1:
@@ -805,10 +802,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
             func_args.append(arguments)
 
     if comm is not None and comm.Get_size() > 1: # MPI mode & more than one rank per star
-        delta, remainder = len(func_args) // size, len(func_args) % size
-        start = rank * delta + min(rank, remainder) # Start of the args to process
-        end = (rank + 1) * delta + min(rank + 1, remainder) # End of the args to process
-        results = list(map(_func2, func_args[start:end]))
+        results = list(map(_func2, func_args[rank::size]))
         results = comm.reduce(results, op=MPI.SUM, root=0)
     elif ncpu > 1:
         log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d"%ncpu)
