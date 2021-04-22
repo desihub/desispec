@@ -706,14 +706,21 @@ def main(args, comm=None) :
         fitted_model_colors = head_comm.reduce(fitted_model_colors, op=MPI.SUM, root=0)
         normflux = head_comm.reduce(normflux, op=MPI.SUM, root=0)
 
-    if rank != 0: # All the work left belongs to rank 0
-        return
-
-    # Check at least one star was fit.
-    fitted_stars = np.where(chi2dof != 0)[0]
-    if fitted_stars.size == 0:
+    # Check at least one star was fit. The check is peformed on rank 0 and
+    # the result is bcast to other ranks so that all ranks exit together if
+    # the check fails.
+    atleastonestarfit = False
+    if rank == 0:
+        fitted_stars = np.where(chi2dof != 0)[0]
+        atleastonestarfit = fitted_stars.size > 0
+    if comm is not None:
+        atleastonestarfit = comm.bcast(atleastonestarfit, root=0)
+    if not atleastonestarfit:
         log.error("No star has been fit.")
         sys.exit(12)
+
+    if rank != 0: # All the work left belongs to rank 0
+        return
 
     # get the fibermap from any input frame for the standard stars
     fibermap = Table(frame.fibermap)
