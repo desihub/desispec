@@ -21,6 +21,7 @@ import fitsio
 import scipy.interpolate
 from pkg_resources import resource_exists, resource_filename
 from desimodel.fastfiberacceptance import FastFiberAcceptance
+import desimodel.io
 from glob import glob
 import yaml
 import matplotlib.pyplot as plt
@@ -95,10 +96,7 @@ if __name__ == '__main__':
     # AR fiber acceptance, fiber diameters
     fac = FastFiberAcceptance("{}/data/throughput/galsim-fiber-acceptance.fits".format(os.getenv("DESIMODEL")))
     fac_wave = np.arange(3500, 10000) # AR to do the fac calculation, and then to be interpolated to wave
-    fn = os.path.join(os.getenv("DESIMODEL"), "data", "desi.yaml")
-    f = open(fn, "r")
-    desi = yaml.safe_load(f)
-    f.close()
+    desi = desimodel.io.load_desiparams()
     fdiam_um = desi['fibers']['diameter_um'] # AR 107 um: physical fiber diameter
     fdiam_avg_asec = desi['fibers']['diameter_arcsec'] # AR 1.52 arcsec ; average fiber diameter
 
