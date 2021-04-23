@@ -21,6 +21,7 @@ from desispec.sky import subtract_sky
 from desispec.util import runcmd, mpi_count_failures
 import desispec.scripts.extract
 import desispec.scripts.specex
+import desispec.scripts.stdstars
 
 from desitarget.targetmask import desi_mask
 
@@ -412,8 +413,23 @@ def main(args=None, comm=None):
 
         # - Fit stdstars per spectrograph (not per-camera)
         spectro_nums = sorted(framefiles.keys())
-        ## for sp in spectro_nums[rank::size]:
-        for i in range(rank, len(spectro_nums), size):
+
+        if args.mpistdstars and comm is not None:
+            #- If using MPI parallelism in stdstar fit, divide comm into subcommunicators.
+            #- (spectro_start, spectro_step) determine stride pattern over spectro_nums.
+            #- Split comm by at most len(spectro_nums)
+            num_subcomms = min(size, len(spectro_nums))
+            subcomm_index = rank % num_subcomms
+            if rank == 0:
+                log.info(f"Splitting comm of {size=} into {num_subcomms=} for stdstar fitting")
+            subcomm = comm.Split(color=subcomm_index)
+            spectro_start, spectro_step = subcomm_index, num_subcomms
+        else:
+            #- Otherwise, use multiprocessing assuming 1 MPI rank per spectrograph
+            spectro_start, spectro_step = rank, size
+            subcomm = None
+
+        for i in range(spectro_start, len(spectro_nums), spectro_step):
             sp = spectro_nums[i]
             # - NOTE: Saving the joint fit file with only the name of the first exposure
             stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
@@ -430,7 +446,21 @@ def main(args=None, comm=None):
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
             num_cmd += 1
-            err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+            if subcomm is None:
+                #- Using multiprocessing
+                err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+            else:
+                #- Using MPI
+                try:
+                    cmdargs = cmd.split()[1:]
+                    cmdargs = desispec.scripts.stdstars.parse(cmdargs)
+                    err = runcmd(desispec.scripts.stdstars.main, 
+                        args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile]
+                    )
+                except:
+                    #- Catches sys.exit from stdstars.main
+                    log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
+                    err = True
             if err:
                 num_err += 1
 
