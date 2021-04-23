@@ -88,7 +88,10 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
                        'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'zbest_tile'}
 
     night = prow['NIGHT']
-    filetype = job_to_file_map[prow['JOBDESC']]
+    if prow['JOBDESC'] in ['cumulative','pernight-v0','pernight','perexp']:
+        filetype = 'zbest_tile'
+    else:
+        filetype = job_to_file_map[prow['JOBDESC']]
     orig_camword = prow['PROCCAMWORD']
 
     ## if spectro based, look for spectros, else look for cameras
