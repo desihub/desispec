@@ -70,9 +70,9 @@ p.add_argument("--system-name", type=str,
 args = p.parse_args()
 
 import sys
-from desispec.scripts.tile_redshifts import create_and_submit_tile_redshifts
+from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 
-batch_scripts, failed_jobs = create_and_submit_tile_redshifts(**args.__dict__)
+batch_scripts, failed_jobs = generate_tile_redshift_scripts(**args.__dict__)
 
 num_error = len(failed_jobs)
 sys.exit(num_error)

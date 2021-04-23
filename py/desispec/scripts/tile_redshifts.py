@@ -285,9 +285,9 @@ def _read_minimal_exptables(nights=None):
     return vstack(exptables)
 
 
-def create_and_submit_tile_redshifts(group, night=None, tileid=None, expid=None, explist=None,
-                        batch_queue='realtime', batch_reservation=None,
-                        batch_dependency=None, system_name=None, nosubmit=False):
+def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, explist=None,
+                                   batch_queue='realtime', batch_reservation=None,
+                                   batch_dependency=None, system_name=None, nosubmit=False):
     """
     Creates a slurm script to run redshifts per tile. By default it also submits the job to Slurm. If nosubmit
     is True, the script is created but not submitted to Slurm.
