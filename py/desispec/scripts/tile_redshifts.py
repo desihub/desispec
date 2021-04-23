@@ -29,11 +29,8 @@ def get_tile_redshift_relpath(tileid,group,night=None,expid=None):
 
 def get_tile_redshift_script_pathname(tileid,group,night=None,expid=None):
     reduxdir = desispec.io.specprod_root()
-    # - output directory relative to reduxdir
     outdir = get_tile_redshift_relpath(tileid,group,night=night,expid=expid)
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
-    os.makedirs(scriptdir, exist_ok=True)
-
     suffix = get_tile_redshift_script_suffix(tileid,group,night=night,expid=expid)
     batchscript = f'coadd-redshifts-{suffix}.slurm'
     return os.path.join(scriptdir, batchscript)
@@ -104,11 +101,15 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
     batch_config = batch.get_config(system_name)
 
-    outdir = get_tile_redshift_relpath(tileid, group, night=night, expid=expid)
     batchscript = get_tile_redshift_script_pathname(tileid, group, night=night, expid=expid)
+    batchlog = batchscript.replace('.slurm', r'-%j.log')
+
+    scriptdir = os.path.split(batchscript)[0]
+    os.makedirs(scriptdir, exist_ok=True)
+
+    outdir = get_tile_redshift_relpath(tileid, group, night=night, expid=expid)
     suffix = get_tile_redshift_script_suffix(tileid,group,night=night,expid=expid)
     jobname = f'redrock-{suffix}'
-    batchlog = batchscript.replace('.slurm', r'-%j.log')
 
     # - system specific options, e.g. "--constraint=haswell"
     batch_opts = list()
@@ -124,6 +125,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     cores_per_node = batch_config['cores_per_node']
     threads_per_core = batch_config['threads_per_core']
     threads_per_node = cores_per_node * threads_per_core
+
 
     with open(batchscript, 'w') as fx:
         fx.write(f"""#!/bin/bash
