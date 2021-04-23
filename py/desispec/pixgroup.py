@@ -21,17 +21,20 @@ from . import io
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
-def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
+def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
+        nside=64, comm=None):
     '''
     Returns table with columns NIGHT EXPID SPECTRO HEALPIX NTARGETS
 
     Options:
-        nights: list of YEARMMDD to scan for exposures
+        nights: list of YEARMMDD to scan for exposures (default all)
+        expids: list of exposure IDs to keep (default all)
         specprod_dir: override $DESI_SPECTRO_REDUX/$SPECPROD
         nside: healpix nside, must be power of 2
         comm: MPI communicator
 
-    Note: This could be replaced by a DB query when the production DB exists.
+    Note: This could be replaced by a DB query when the production DB exista,
+    or by parsing the exposure tables.
     '''
     log = get_logger()
     if comm is None:
@@ -47,6 +50,7 @@ def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
 
     if comm:
         nights = comm.bcast(nights, root=0)
+        expids = comm.bcast(expids, root=0)
 
     #-----
     #- Distribute nights over ranks, scanning their exposures to build
@@ -63,6 +67,9 @@ def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
         nightdir = os.path.join(specprod_dir, 'exposures', night)
         for expid in io.get_exposures(night, specprod_dir=specprod_dir,
                                       raw=False):
+            if (expids is None) or (expid not in expids):
+                continue
+
             tmpframe = io.findfile('cframe', night, expid, 'r0',
                                    specprod_dir=specprod_dir)
             expdir = os.path.split(tmpframe)[0]
@@ -364,6 +371,7 @@ class SpectraLite(object):
         #- these are written one-by-one
         if self.scores is not None:
             fitsio.write(tmpout, self.scores, extname='SCORES')
+
         for band in sorted(self.bands):
             upperband = band.upper()
             fitsio.write(tmpout, self.wave[band], extname=upperband+'_WAVELENGTH',
