@@ -308,7 +308,7 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             log.info("Output file would have been: {}".format(scriptpathname))
         else:
             scripts, failed_scripts = generate_tile_redshift_scripts(tileid=prow['TILEID'], group=prow['JOBDESC'],
-                                                                     night=prow['NIGHT'], expid=prow['EXPID'],
+                                                                     night=[prow['NIGHT']], expid=prow['EXPID'],
                                                                      batch_queue=queue, system_name=system_name,
                                                                      nosubmit=True)
             if len(failed_scripts) > 0:
