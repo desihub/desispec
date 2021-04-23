@@ -392,6 +392,8 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
     failed_jobs, batch_scripts = list(), list()
     if (night is not None):
         lastnight = int(np.max(night))
+    else:
+        lastnight = int(np.max(exptable['NIGHT']))
     for tileid in tileids:
         tilerows = ((exptable['TILEID'] == tileid) & (exptable['NIGHT'] <= lastnight))
         nights = np.unique(np.array(exptable['NIGHT'][tilerows]))

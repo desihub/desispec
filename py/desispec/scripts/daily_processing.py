@@ -25,7 +25,7 @@ from desispec.io.util import difference_camwords, parse_badamps
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
                              badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
-                             exps_to_ignore=None, data_cadence_time=30, queue_cadence_time=1800,
+                             exps_to_ignore=None, data_cadence_time=300, queue_cadence_time=1800,
                              dry_run_level=0, dry_run=False, continue_looping_debug=False, dont_check_job_outputs=False,
                              dont_resubmit_partial_jobs=False, verbose=False):
     """
