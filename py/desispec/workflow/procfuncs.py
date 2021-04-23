@@ -822,7 +822,10 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
     log.info(" ")
     log.info(f"Joint fit criteria found. Running {descriptor}.\n")
 
-    joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
+    if descriptor == 'science':
+        joint_prow = make_joint_prow(prows, descriptor='stdstarfit', internal_id=internal_id)
+    else:
+        joint_prow = make_joint_prow(prows, descriptor=descriptor, internal_id=internal_id)
     internal_id += 1
     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
