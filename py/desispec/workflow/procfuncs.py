@@ -758,7 +758,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
 #########################################
 ########     Joint fit     ##############
 #########################################
-def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_submit_types=False,
+def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_submit_types=None,
               dry_run=0, strictly_successful=False, check_for_outputs=True, resubmit_partial_complete=True,
               system_name=None):
     """
@@ -776,9 +776,8 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         descriptor, str. Description of the joint fitting job. Can either be 'science' or 'stdstarfit', 'arc' or 'psfnight',
                          or 'flat' or 'nightlyflat'.
-        z_submit_types: bool, or list of str's. The "group" types of redshifts that should be submitted with each
-                                                exposure. If not specified, default for daily processing is
-                                                ['cumulative', 'pernight-v0']. If false or [], then no redshifts are submitted.
+        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+                                        exposure. If not specified or None, then no redshifts are submitted.
         dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
                       dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
                       for testing as though scripts are being submitted. Default is 0 (false).
@@ -811,7 +810,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
     elif descriptor == 'flat':
         descriptor = 'nightlyflat'
     elif descriptor == 'science':
-        if isinstance(z_submit_types,bool) and not z_submit_types:
+        if z_submit_types is None:
             descriptor = 'stdstarfit'
         elif len(z_submit_types) == 0:
             descriptor = 'stdstarfit'
@@ -853,10 +852,6 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
             if descriptor == 'science' and row['LASTSTEP'] == 'all':
                 zprows.append(row)
 
-    if descriptor in ['psfnight', 'nightlyflat']:
-        log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
-        ptable = set_calibrator_flag(prows, ptable)
-
     ## Now run redshifts
     if descriptor == 'science' and len(zprows) > 0:
         log.info(" ")
@@ -869,20 +864,24 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                                            resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
             ptable.add_row(joint_prow)
 
+    if descriptor in ['psfnight', 'nightlyflat']:
+        log.info(f"Setting the calibration exposures as calibrators in the processing table.\n")
+        ptable = set_calibrator_flag(prows, ptable)
+
     return ptable, joint_prow, internal_id
 
 
 ## wrapper functions for joint fitting
 def science_joint_fit(ptable, sciences, internal_id, queue='realtime', reservation=None,
-                      z_submit_types=False, dry_run=0, strictly_successful=False,
+                      z_submit_types=None, dry_run=0, strictly_successful=False,
                       check_for_outputs=True, resubmit_partial_complete=True,
                       system_name=None):
     """
-    Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the stdstarfit joint fit.
+    Wrapper function for desiproc.workflow.procfuns.joint_fit specific to the stdstarfit joint fit and redshift fitting.
 
     All variables are the same except:
         Arg 'sciences' is mapped to the prows argument of joint_fit.
-        The joint_fit argument descriptor is pre-defined as 'stdstarfit'.
+        The joint_fit argument descriptor is pre-defined as 'science'.
     """
     return joint_fit(ptable=ptable, prows=sciences, internal_id=internal_id, queue=queue, reservation=reservation,
                      descriptor='science', z_submit_types=z_submit_types, dry_run=dry_run,
@@ -954,7 +953,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     return joint_prow
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                  lasttype, internal_id, z_submit_types=False, dry_run=0,
+                                  lasttype, internal_id, z_submit_types=None, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
                                   system_name=None):
@@ -977,9 +976,8 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         internal_id, int, an internal identifier unique to each job. Increments with each new job. This
                           is the smallest unassigned value.
-        z_submit_types: bool or list of str's. The "group" types of redshifts that should be submitted with each
-                                                exposure. If not specified, default for daily processing is
-                                                ['cumulative', 'pernight-v0']. If false or [], then no redshifts are submitted.
+        z_submit_types: list of str's. The "group" types of redshifts that should be submitted with each
+                                        exposure. If not specified or None, then no redshifts are submitted.
         dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If 
                       dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
                       for testing as though scripts are being submitted. Default is 0 (false).

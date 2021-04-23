@@ -90,17 +90,22 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     ## Define the group types of redshifts you want to generate for each tile
     zdefaults = ['cumulative', 'pernight-v0']
     if z_submit_types is None:
-        z_submit_types = zdefaults
+        pass
     elif isinstance(z_submit_types, bool):
         if z_submit_types:
             z_submit_types = zdefaults
         else:
-            z_submit_types = False
+            z_submit_types = None
     elif isinstance(z_submit_types, str):
         if z_submit_types.lower() == 'false':
-            z_submit_types = False
+            z_submit_types = None
+        elif z_submit_types.lower() == 'none':
+            z_submit_types = None
         else:
-            z_submit_types = zdefaults
+            z_submit_types = [ztype.strip().lower() for ztype in z_submit_types.split(',')]
+            for ztype in z_submit_types:
+                if ztype not in ['cumulative', 'pernight-v0', 'pernight', 'perexp']:
+                    raise ValueError(f"Couldn't understand ztype={ztype} in z_submit_types={z_submit_types}.")
     else:
         raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
 
