@@ -403,6 +403,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
     if prow['JOBDESC'] in ['pernight-v0','pernight','perexp','cumulative']:
         script_path = get_tile_redshift_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
                                                         night=prow['NIGHT'], expid=np.min(prow['EXPID']))
+        jobname = os.path.split(script_path)[-1]
     else:
         batchdir = get_desi_proc_batch_file_path(night=prow['NIGHT'])
         jobname = batch_script_name(prow)
