@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function
 import os, sys, time
 
 import numpy as np
+from astropy.table import Table
 
 from desiutil.log import get_logger
 
@@ -20,6 +21,8 @@ def parse(options=None):
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("--reduxdir", type=str,  help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
     parser.add_argument("--nights", type=str,  help="YEARMMDD to add")
+    parser.add_argument("--expfile", type=str,
+        help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
     parser.add_argument("--nside", type=int,default=64,help="input spectra healpix nside")
     parser.add_argument("-o", "--outdir", type=str,  help="output directory")
     parser.add_argument("--mpi", action="store_true",
@@ -85,15 +88,36 @@ def main(args=None, comm=None):
             log.error('Only use --outfile with --inframes options')
         return 1
 
-    if args.nights:
+    if args.expfile:
+        if rank == 0:
+            nightexp = Table.read(args.expfile)
+        else:
+            nightexp = None
+
+        if comm is not None:
+            nightexp = comm.bcast(nightexp, root=0)
+
+        #- all ranks parse table so that all will fail if there is a problem
+        if (('NIGHT' not in nightexp.colnames) or
+                ('EXPID' not in nightexp.colnames)):
+            msg = f'{args.explist} missing NIGHT and/or EXPID columns'
+            log.critical(msg)
+            raise ValueError(msg)
+
+        nights = np.unique(nightexp['NIGHT'])
+        expids = np.asarray(nightexp['EXPID'])
+
+    elif args.nights:
         nights = [int(night) for night in args.nights.split(',')]
+        expids = None
     else:
         nights = None
+        expids = None
 
     #- Get table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
     t0 = time.time()
-    exp2pix = get_exp2healpix_map(nights=nights, comm=comm,
-                                  specprod_dir=args.reduxdir)
+    exp2pix = get_exp2healpix_map(nights=nights, expids=expids, comm=comm,
+                                  nside=args.nside, specprod_dir=args.reduxdir)
     assert len(exp2pix) > 0
     if rank == 0:
         dt = time.time() - t0
@@ -153,7 +177,7 @@ def main(args=None, comm=None):
         update_frame_cache(frames, framekeys, specprod_dir=args.reduxdir)
 
         #- convert individual FrameLite objects into SpectraLite
-        newspectra = frames2spectra(frames, pix)
+        newspectra = frames2spectra(frames, pix, nside=args.nside)
 
         #- Combine with any previous spectra if needed
         if oldspectra:
@@ -165,7 +189,6 @@ def main(args=None, comm=None):
         header = dict(HPXNSIDE=args.nside, HPXPIXEL=pix, HPXNEST=True)
         spectra.write(specfile, header=header)
     
-    if rank == 0:
-        dt = time.time() - t0
-        log.info('Done in {:.1f} minutes'.format(dt/60))
+    dt = time.time() - t0
+    log.info('Rank {} done in {:.1f} minutes'.format(rank, dt/60))
 
