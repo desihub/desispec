@@ -1,5 +1,6 @@
 
 import sys, os, glob
+import re
 import subprocess
 import numpy as np
 from astropy.table import Table, vstack
@@ -256,31 +257,29 @@ def _read_minimal_exptables(nights=None):
     """
     log = get_logger()
     if nights is None:
-        nights = list()
         reduxdir = desispec.io.specprod_root()
-        for nightdir in sorted(glob.glob(f'{reduxdir}/exposures/20??????')):
-            try:
-                n = int(os.path.basename(nightdir))
-                nights.append(n)
-            except ValueError:
-                pass
+        etab_files = glob.glob(f'{reduxdir}/exposure_tables/*/exposure_table_202?????.csv')
+    else:
+        etab_files = list()
+        for night in nights:
+            etab_file = get_exposure_table_pathname(night)
+            if os.path.exists(etab_file):
+                etab_files.append(etab_file)
+            elif night >= 20201201:
+                log.error(f"Exposure table missing for night {night}")
+            else:
+                # - these are expected for the daily run, ok
+                log.debug(f"Exposure table missing for night {night}")
 
+    etab_files = sorted(etab_files)
     exptables = list()
-    for night in nights:
-        expfile = get_exposure_table_pathname(night)
-        if os.path.exists(expfile):
-            t = Table.read(expfile)
-            keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
-            if 'LASTSTEP' in t.colnames:
-                keep &= (t['LASTSTEP'] == 'all')
-
-            t = t[keep]
-            exptables.append(t['TILEID', 'NIGHT', 'EXPID'])
-        elif night >= 20201201:
-            log.error(f"Exposure table missing for night {night}")
-        else:
-            # - these are expected for the daily run, ok
-            log.debug(f"Exposure table missing for night {night}")
+    for etab_file in etab_files:
+        t = Table.read(etab_file)
+        keep = (t['OBSTYPE'] == 'science') & (t['TILEID'] >= 0)
+        if 'LASTSTEP' in t.colnames:
+            keep &= (t['LASTSTEP'] == 'all')
+        t = t[keep]
+        exptables.append(t['TILEID', 'NIGHT', 'EXPID'])
 
     return vstack(exptables)
 
