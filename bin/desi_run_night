@@ -15,9 +15,9 @@ def parse_args():  # options=None):
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
-    parser.add_argument("--z-submit-types", type=str, default='cumulative,pernight-v0', required=False,
+    parser.add_argument("--z-submit-types", type=str, default='perexp,pernight', required=False,
                         help="The group types of redshifts that should be submitted with each exposure. If not "+
-                             "specified, default  is 'cumulative,pernight-v0'. If "+
+                             "specified, default  is 'perexp,pernight'. If "+
                              "'false' or 'None' then no redshifts are submitted")
     parser.add_argument("--dry-run-level", type=int, default=0, required=False,
                         help="If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. "+

@@ -88,7 +88,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     proc_table_pathname = pathjoin(proc_table_path, name)
 
     ## Define the group types of redshifts you want to generate for each tile
-    zdefaults = ['cumulative', 'pernight-v0']
+    zdefaults = ['perexp', 'pernight']
     if z_submit_types is None:
         pass
     elif isinstance(z_submit_types, bool):
