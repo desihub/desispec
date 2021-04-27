@@ -92,9 +92,13 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         log.error(msg)
         raise ValueError(msg)
 
-    tileid = np.unique(np.asarray(exptable['TILEID']))
-    if len(tileid)>1:
-        msg = f'batch_tile_redshifts requires all exptable rows to be same tileid, not {tileid}'
+    tileids = np.unique(np.asarray(exptable['TILEID']))
+    if len(tileids)>1:
+        msg = f'batch_tile_redshifts requires all exptable rows to be same tileid, not {tileids}'
+        log.error(msg)
+        raise ValueError(msg)
+    elif len(tileids) == 1 and tileids[0] != tileid:
+        msg = f'Specified tileid={tileid} didnt match tileid given in exptable, {tileids}'
         log.error(msg)
         raise ValueError(msg)
 
