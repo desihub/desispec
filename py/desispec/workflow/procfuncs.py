@@ -858,7 +858,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
             if zsubtype == 'perexp':
                 for zprow in zprows:
                     log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
-                    joint_prow = make_joint_prow(zprow, descriptor=zsubtype, internal_id=internal_id)
+                    joint_prow = make_joint_prow([zprow], descriptor=zsubtype, internal_id=internal_id)
                     internal_id += 1
                     joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                    strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
