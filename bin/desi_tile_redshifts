@@ -115,6 +115,12 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         log.error(msg)
         raise ValueError(msg)
 
+    nights = np.unique(np.asarray(exptable['NIGHT']))
+    if (group in ['pernight', 'pernight-v0']) and len(nights)>1:
+        msg = f'group=pernight requires all exptable rows to be same night, not {nights}'
+        log.error(msg)
+        raise ValueError(msg)
+
     spectro_string = ' '.join([str(sp) for sp in spectrographs])
     num_nodes = len(spectrographs)
 
@@ -415,20 +421,28 @@ for tileid in tileids:
     expids = np.unique(np.array(exptable['EXPID'][tilerows]))
     log.info(f'Tile {tileid} nights={nights} expids={expids}')
     submit = (not args.nosubmit)
-    if args.group != 'perexp':
-        batchscript, batcherr = batch_tile_redshifts(
-            tileid, exptable[tilerows], args.group, submit=submit,
-            queue=args.batch_queue, reservation=args.batch_reservation,
-            dependency=args.batch_dependency, system_name=args.system_name
-            )
-    else:
+    if args.group == 'perexp':
         for i in range(len(exptable[tilerows])):
             batchscript, batcherr = batch_tile_redshifts(
                 tileid, exptable[tilerows][i:i+1], args.group, submit=submit,
                 queue=args.batch_queue, reservation=args.batch_reservation,
                 dependency=args.batch_dependency, system_name=args.system_name
                 )
-
+    elif args.group in ['pernight', 'pernight-v0']:
+        for night in nights:
+            thisnight = exptable['NIGHT'] == night
+            batchscript, batcherr = batch_tile_redshifts(
+                tileid, exptable[tilerows & thisnight], args.group,
+                submit=submit,
+                queue=args.batch_queue, reservation=args.batch_reservation,
+                dependency=args.batch_dependency, system_name=args.system_name
+                )
+    else:
+        batchscript, batcherr = batch_tile_redshifts(
+            tileid, exptable[tilerows], args.group, submit=submit,
+            queue=args.batch_queue, reservation=args.batch_reservation,
+            dependency=args.batch_dependency, system_name=args.system_name
+            )
 
     if batcherr != 0:
         failed_jobs.append(batchscript)
