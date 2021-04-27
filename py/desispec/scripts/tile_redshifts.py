@@ -79,10 +79,22 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     """
     log = get_logger()
     if spectrographs is None:
-        spectrographs = (0 ,1 ,2 ,3 ,4 ,5 ,6 ,7 ,8 ,9)
+        spectrographs = (0,1,2,3,4,5,6,7,8,9)
 
-    if (group == 'perexp') and len(exptable ) >1:
+    if (group == 'perexp') and len(exptable)>1:
         msg = f'group=perexp requires 1 exptable row, not {len(exptable)}'
+        log.error(msg)
+        raise ValueError(msg)
+
+    nights = np.unique(np.asarray(exptable['NIGHT']))
+    if (group in ['pernight', 'pernight-v0']) and len(nights)>1:
+        msg = f'group=pernight requires all exptable rows to be same night, not {nights}'
+        log.error(msg)
+        raise ValueError(msg)
+
+    tileid = np.unique(np.asarray(exptable['TILEID']))
+    if len(tileid)>1:
+        msg = f'batch_tile_redshifts requires all exptable rows to be same tileid, not {tileid}'
         log.error(msg)
         raise ValueError(msg)
 
@@ -384,35 +396,43 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         allexp = _read_minimal_exptables()
         keep = np.in1d(allexp['TILEID'], tileids)
         exptable = allexp[keep]
+        ## Ensure we only include data for nights up to and including specified nights
+        if (night is not None):
+            lastnight = int(np.max(night))
+            exptable = exptable[exptable['NIGHT'] <= lastnight]
         #expids = np.array(exptable['EXPID'])
         tileids = np.unique(np.array(exptable['TILEID']))
-    
+
     # - Generate the scripts and optionally submit them
     failed_jobs, batch_scripts = list(), list()
-    if (night is not None):
-        lastnight = int(np.max(night))
-    else:
-        lastnight = int(np.max(exptable['NIGHT']))
+
     for tileid in tileids:
-        tilerows = ((exptable['TILEID'] == tileid) & (exptable['NIGHT'] <= lastnight))
+        tilerows = (exptable['TILEID'] == tileid)
         nights = np.unique(np.array(exptable['NIGHT'][tilerows]))
         expids = np.unique(np.array(exptable['EXPID'][tilerows]))
         log.info(f'Tile {tileid} nights={nights} expids={expids}')
         submit = (not nosubmit)
-        if group != 'perexp':
-            batchscript, batcherr = batch_tile_redshifts(
-                tileid, exptable[tilerows], group, submit=submit,
-                queue=batch_queue, reservation=batch_reservation,
-                dependency=batch_dependency, system_name=system_name
-            )
-        else:
+        if group == 'perexp':
             for i in range(len(exptable[tilerows])):
                 batchscript, batcherr = batch_tile_redshifts(
                     tileid, exptable[tilerows][i:i + 1], group, submit=submit,
                     queue=batch_queue, reservation=batch_reservation,
                     dependency=batch_dependency, system_name=system_name
                 )
-    
+        elif group in ['pernight', 'pernight-v0']:
+            for night in nights:
+                thisnight = exptable['NIGHT'] == night
+                batchscript, batcherr = batch_tile_redshifts(
+                    tileid, exptable[tilerows & thisnight], group, submit=submit,
+                    queue=batch_queue, reservation=batch_reservation,
+                    dependency=batch_dependency, system_name=system_name
+                )
+        else:
+            batchscript, batcherr = batch_tile_redshifts(
+                tileid, exptable[tilerows], group, submit=submit,
+                queue=batch_queue, reservation=batch_reservation,
+                dependency=batch_dependency, system_name=system_name
+            )
         if batcherr != 0:
             failed_jobs.append(batchscript)
         else:
