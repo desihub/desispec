@@ -567,7 +567,7 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     return final_coefficients,chi2
 
 
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00002, template_error=0):
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00002, template_error=0, comm=None):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -582,6 +582,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         logg : 1D[nstd] model surface gravity
         feh : 1D[nstd] model metallicity
         ncpu : number of cpu for multiprocessing
+        comm : MPI communicator; if given, ncpu will be ignored and only rank 0 will return results that are not None
 
     Returns:
         coef : numpy.array of linear coefficient of standard stars
@@ -599,11 +600,15 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # Each data(3 channels) is compared to every model.
     # flux should be already flat fielded and sky subtracted.
 
-
-
     cameras = list(flux.keys())
     log = get_logger()
     log.debug(time.asctime())
+
+    # Initialize MPI
+    if comm is not None:
+        from mpi4py import MPI
+        size, rank = comm.Get_size(), comm.Get_rank()
+        log.debug("Using MPI. rank: {}, size: {}".format(rank, size))
 
     # fit continuum and save it
     continuum={}
@@ -712,8 +717,11 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                    "template_id":template_id}
         func_args.append( arguments )
 
-
-    if ncpu > 1:
+    if comm is not None and comm.Get_size() > 1: # MPI mode & more than one rank per star
+        results = list(map(_func, func_args[rank::size]))
+        # All reduce here because we'll need to divide the work out again
+        results = comm.allreduce(results, op=MPI.SUM)
+    elif ncpu > 1:
         log.debug("creating multiprocessing pool with %d cpus"%ncpu); sys.stdout.flush()
         pool = multiprocessing.Pool(ncpu)
         log.debug("Running pool.map() for {} items".format(len(func_args))); sys.stdout.flush()
@@ -793,7 +801,10 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
             arguments={"template_id":t,"camera_index":index,"template_flux":template_flux[t][ii]}
             func_args.append(arguments)
 
-    if ncpu > 1:
+    if comm is not None and comm.Get_size() > 1: # MPI mode & more than one rank per star
+        results = list(map(_func2, func_args[rank::size]))
+        results = comm.reduce(results, op=MPI.SUM, root=0)
+    elif ncpu > 1:
         log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d"%ncpu)
         pool = multiprocessing.Pool(ncpu)
         results  =  pool.map(_func2, func_args)
@@ -805,6 +816,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("divide templates serially")
         results = [_func2(x) for x in func_args]
         log.debug("Finished serial loop")
+
+    if comm is not None and rank != 0: # All the work left belongs to rank 0
+        return None
 
     # collect results
     for result in results :
@@ -825,8 +839,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # interpolate around best model using parameter grid
     coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
     log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
-
-
     return coef,z,chi2/ndata
 
 
