@@ -13,6 +13,18 @@ from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow import batch
 
 def get_tile_redshift_relpath(tileid,group,night=None,expid=None):
+    """
+    Determine the relative output directory of the tile redshift batch script for spectra+coadd+redshifts for a tile
+
+    Args:
+        tileid (int): Tile ID
+        group (str): cumulative, pernight, perexp, or a custom name
+        night (int): Night
+        expid (int): Exposure ID
+
+    Returns:
+        outdir (str): the relative path of output directory of the batch script from the specprod/run/scripts
+    """
     log = get_logger()
     # - output directory relative to reduxdir
     if group == 'cumulative':
@@ -29,6 +41,18 @@ def get_tile_redshift_relpath(tileid,group,night=None,expid=None):
     return outdir
 
 def get_tile_redshift_script_pathname(tileid,group,night=None,expid=None):
+    """
+    Generate the pathname of the tile redshift batch script for spectra+coadd+redshifts for a tile
+
+    Args:
+        tileid (int): Tile ID
+        group (str): cumulative, pernight, perexp, or a custom name
+        night (int): Night
+        expid (int): Exposure ID
+
+    Returns:
+        (str): the pathname of the tile redshift batch script
+    """
     reduxdir = desispec.io.specprod_root()
     outdir = get_tile_redshift_relpath(tileid,group,night=night,expid=expid)
     scriptdir = f'{reduxdir}/run/scripts/{outdir}'
@@ -37,6 +61,18 @@ def get_tile_redshift_script_pathname(tileid,group,night=None,expid=None):
     return os.path.join(scriptdir, batchscript)
 
 def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
+    """
+    Generate the suffix of the tile redshift batch script for spectra+coadd+redshifts for a tile
+
+    Args:
+        tileid (int): Tile ID
+        group (str): cumulative, pernight, perexp, or a custom name
+        night (int): Night
+        expid (int): Exposure ID
+
+    Returns:
+        suffix (str): the suffix of the batch script
+    """
     log = get_logger()
     if group == 'cumulative':
         suffix = f'{tileid}-thru{night}'
@@ -160,7 +196,7 @@ echo Starting at $(date)
 
 cd $DESI_SPECTRO_REDUX/$SPECPROD
 mkdir -p {outdir}
-echo Generating files in $(pwd)/tiles/{tileid}/{group}
+echo Generating files in $(pwd)/{outdir}
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
     splog={outdir}/spectra-$SPECTRO-{suffix}.log
@@ -274,7 +310,7 @@ def _read_minimal_exptables(nights=None):
     log = get_logger()
     if nights is None:
         reduxdir = desispec.io.specprod_root()
-        etab_files = glob.glob(f'{reduxdir}/exposure_tables/*/exposure_table_202?????.csv')
+        etab_files = glob.glob(f'{reduxdir}/exposure_tables/202???/exposure_table_202?????.csv')
     else:
         etab_files = list()
         for night in nights:
