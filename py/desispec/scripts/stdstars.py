@@ -43,6 +43,9 @@ def parse(options=None):
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
     parser.add_argument('--maxstdstars', type=int, default=30, \
             help='Maximum number of stdstars to include')
+    parser.add_argument('--std-targetids', type=int, default=None,
+                         nargs='*',
+                         help='List of TARGETIDs of standards overriding the targeting info')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
     parser.add_argument('--ignore-gpu', action='store_true', help='Ignore GPU, if available')
 
@@ -189,6 +192,10 @@ def main(args, comm=None) :
         if rank == 0:
             log.info('GPU not available')
 
+    std_targetids = None
+    if args.std_targetids is not None:
+        std_targetids = args.std_targetids
+            
     # READ DATA
     ############################################
     # First loop through and group by exposure and spectrograph
@@ -235,7 +242,10 @@ def main(args, comm=None) :
             # Set fibermask flagged spectra to have 0 flux and variance
             frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
             frame_fibermap = frame.fibermap
-            frame_starindices = np.where(isStdStar(frame_fibermap))[0]
+            if std_targetids is None:
+                frame_starindices = np.where(isStdStar(frame_fibermap))[0]
+            else:
+                frame_starindices = np.nonzero(np.isin(frame_fibermap['TARGETID'], std_targetids))[0]
 
             #- Confirm that all fluxes have entries but trust targeting bits
             #- to get basic magnitude range correct
@@ -495,7 +505,7 @@ def main(args, comm=None) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
-    if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all(): 
+    if not np.isin(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
         log.error('Unknown PHOTSYS found')
         raise Exception('Unknown PHOTSYS found')
     # Fetching Filter curves
@@ -724,7 +734,7 @@ def main(args, comm=None) :
 
         # get the fibermap from any input frame for the standard stars
         fibermap = Table(frame.fibermap)
-        keep = np.in1d(fibermap['FIBER'], starfibers[fitted_stars])
+        keep = np.isin(fibermap['FIBER'], starfibers[fitted_stars])
         fibermap = fibermap[keep]
 
         # drop fibermap columns specific to exposures instead of targets
