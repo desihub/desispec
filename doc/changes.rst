@@ -9,10 +9,17 @@ desispec Change Log
   facilitate pipeline wrappers (PRs `#1242`_ and `#1244`_).
 * Use less restrictive gfaproc extension 2 instead of 3 for EFFTIME_GFA
   (PR `#1245`_).
+* Add MPI to stdstar ``match_templates`` (PR `#1248`_).
+* Updates to ``desi_average_flux_calibration`` (PR `#1252`_).
+* ``desi_fit_stdstars --std-targetids`` option to override stdstars for testing
+  and custom fields (PR `#1257`_).
 
 .. _`#1242`: https://github.com/desihub/desispec/issues/1242
 .. _`#1244`: https://github.com/desihub/desispec/issues/1244
 .. _`#1245`: https://github.com/desihub/desispec/issues/1245
+.. _`#1248`: https://github.com/desihub/desispec/issues/1248
+.. _`#1252`: https://github.com/desihub/desispec/issues/1252
+.. _`#1257`: https://github.com/desihub/desispec/issues/1257
 
 0.41.0 (2021-04-16)
 -------------------
