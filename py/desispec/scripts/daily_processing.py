@@ -110,7 +110,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         expobstypes = expobstypes.split(',')
 
     ## Define the group types of redshifts you want to generate for each tile
-    zdefaults = ['cumulative', 'pernight-v0']
+    zdefaults = ['cumulative']
     if z_submit_types is None:
         pass
     elif isinstance(z_submit_types, bool):
