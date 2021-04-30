@@ -19,7 +19,7 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime', reservation=None, system_name=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
-                 dry_run_level=0, dry_run=False, error_if_not_available=True, overwrite_existing_tables=False,
+                 dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True, overwrite_existing_tables=False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
@@ -43,6 +43,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         dry_run, bool. When to run without submitting scripts or not. If dry_run_level is defined, then it over-rides
                        this flag. dry_run_level not set and dry_run=True, dry_run_level is set to 2 (no scripts
                        generated or run). Default for dry_run is False.
+        no_redshifts, bool. Whether to submit redshifts or not. If True, redshifts are not submitted.
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         error_if_not_available: bool. Default is True. Raise as error if the required exposure table doesn't exist,
                                       otherwise prints an error and returns.
@@ -88,26 +89,24 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     proc_table_pathname = pathjoin(proc_table_path, name)
 
     ## Define the group types of redshifts you want to generate for each tile
-    zdefaults = ['perexp', 'pernight']
-    if z_submit_types is None:
-        pass
-    elif isinstance(z_submit_types, bool):
-        if z_submit_types:
-            z_submit_types = zdefaults
-        else:
-            z_submit_types = None
-    elif isinstance(z_submit_types, str):
-        if z_submit_types.lower() == 'false':
-            z_submit_types = None
-        elif z_submit_types.lower() == 'none':
-            z_submit_types = None
-        else:
-            z_submit_types = [ztype.strip().lower() for ztype in z_submit_types.split(',')]
-            for ztype in z_submit_types:
-                if ztype not in ['cumulative', 'pernight-v0', 'pernight', 'perexp']:
-                    raise ValueError(f"Couldn't understand ztype={ztype} in z_submit_types={z_submit_types}.")
+    ## Define the group types of redshifts you want to generate for each tile
+    if no_redshifts:
+        z_submit_types = None
     else:
-        raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
+        if z_submit_types is None:
+            pass
+        elif isinstance(z_submit_types, str):
+            if z_submit_types.lower() == 'false':
+                z_submit_types = None
+            elif z_submit_types.lower() == 'none':
+                z_submit_types = None
+            else:
+                z_submit_types = [ztype.strip().lower() for ztype in z_submit_types.split(',')]
+                for ztype in z_submit_types:
+                    if ztype not in ['cumulative', 'pernight-v0', 'pernight', 'perexp']:
+                        raise ValueError(f"Couldn't understand ztype={ztype} in z_submit_types={z_submit_types}.")
+        else:
+            raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
 
     ## Reconcile the dry_run and dry_run_level
     if dry_run and dry_run_level == 0:

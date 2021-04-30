@@ -43,6 +43,8 @@ def parse_args():  # options=None):
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
                         "dry-run-level is defined as nonzero.")
+    parser.add_argument("--no-redshifts", action="store_true",
+                        help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
     parser.add_argument("--error-if-not-available", action="store_true",
                         help="Raise an error instead of reporting and moving on if an exposure "+\
                              "table doesn't exist.")

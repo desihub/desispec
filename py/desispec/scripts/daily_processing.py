@@ -26,7 +26,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                              expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
                              badamps=None, override_night=None, tab_filetype='csv', queue='realtime',
                              exps_to_ignore=None, data_cadence_time=300, queue_cadence_time=1800,
-                             dry_run_level=0, dry_run=False, continue_looping_debug=False, dont_check_job_outputs=False,
+                             dry_run_level=0, dry_run=False, no_redshifts=False, continue_looping_debug=False, dont_check_job_outputs=False,
                              dont_resubmit_partial_jobs=False, verbose=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
@@ -59,6 +59,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         dry_run, bool. When to run without submitting scripts or not. If dry_run_level is defined, then it over-rides
                        this flag. dry_run_level not set and dry_run=True, dry_run_level is set to 2 (no scripts
                        generated or run). Default for dry_run is False.
+        no_redshifts, bool. Whether to submit redshifts or not. If True, redshifts are not submitted.
         continue_looping_debug: bool. FOR DEBUG purposes only. Will continue looping in search of new data until the process
                                  is terminated. Default is False.
         dont_check_job_outputs, bool. Default is False. If False, the code checks for the existence of the expected final
@@ -110,26 +111,23 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         expobstypes = expobstypes.split(',')
 
     ## Define the group types of redshifts you want to generate for each tile
-    zdefaults = ['cumulative']
-    if z_submit_types is None:
-        pass
-    elif isinstance(z_submit_types, bool):
-        if z_submit_types:
-            z_submit_types = zdefaults
-        else:
-            z_submit_types = None
-    elif isinstance(z_submit_types, str):
-        if z_submit_types.lower() == 'false':
-            z_submit_types = None
-        elif z_submit_types.lower() == 'none':
-            z_submit_types = None
-        else:
-            z_submit_types = [ztype.strip().lower() for ztype in z_submit_types.split(',')]
-            for ztype in z_submit_types:
-                if ztype not in ['cumulative', 'pernight-v0', 'pernight', 'perexp']:
-                    raise ValueError(f"Couldn't understand ztype={ztype} in z_submit_types={z_submit_types}.")
+    if no_redshifts:
+        z_submit_types = None
     else:
-        raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
+        if z_submit_types is None:
+            pass
+        elif isinstance(z_submit_types, str):
+            if z_submit_types.lower() == 'false':
+                z_submit_types = None
+            elif z_submit_types.lower() == 'none':
+                z_submit_types = None
+            else:
+                z_submit_types = [ztype.strip().lower() for ztype in z_submit_types.split(',')]
+                for ztype in z_submit_types:
+                    if ztype not in ['cumulative', 'pernight-v0', 'pernight', 'perexp']:
+                        raise ValueError(f"Couldn't understand ztype={ztype} in z_submit_types={z_submit_types}.")
+        else:
+            raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
 
     ## Reconcile the dry_run and dry_run_level
     if dry_run and dry_run_level == 0:
