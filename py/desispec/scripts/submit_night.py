@@ -108,6 +108,11 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         else:
             raise ValueError(f"Couldn't understand z_submit_types={z_submit_types}, type={type(z_submit_types)}.")
 
+    if z_submit_types is None:
+        print("Not submitting scripts for redshift fitting")
+    else:
+        print(f"Redshift fitting with redshift group types: {z_submit_types}")
+
     ## Reconcile the dry_run and dry_run_level
     if dry_run and dry_run_level == 0:
         dry_run_level = 2
