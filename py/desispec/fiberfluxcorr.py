@@ -78,7 +78,7 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     return point_source_correction
 
-def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
+def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1,statistical=False):
     """
     Multiplicative factor to apply to the psf flux of a fiber
     to obtain the fiber flux, given the current exposure seeing.
@@ -126,38 +126,83 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     ps = load_platescale()
     isotropic_platescale = np.interp(x_mm**2+y_mm**2,ps['radius']**2,np.sqrt(ps['radial_platescale']*ps['az_platescale'])) # um/arcsec
+
     # we could include here a wavelength dependence on seeing
-    sigmas_um  = exposure_seeing_fwhm/2.35 * isotropic_platescale # um
+    sigmas_um  = (exposure_seeing_fwhm/2.35) * isotropic_platescale # um
     offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um
     nfibers = len(fibermap)
 
+    log.info('Median psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(sigmas_um), sigmas_um.min(), sigmas_um.max()))
+    log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
+    
     if "MORPHTYPE" in fibermap.dtype.names :
-        point_sources    = (fibermap["MORPHTYPE"]=="PSF")
+        point_sources = (fibermap["MORPHTYPE"]=="PSF")
     else :
         log.warning("no column 'MORPHTYPE' in fibermap, assume all point sources.")
-        point_sources    = np.repeat(True,len(fibermap))
+        point_sources = np.repeat(True,len(fibermap))
 
     extended_sources = ~point_sources
 
+    log.info('Calculating relative fiberloss for {} PSF and {} non-PSF targets.'.format(np.count_nonzero(point_sources), np.count_nonzero(extended_sources)))
+    
     if "SHAPE_R" in fibermap.dtype.names :
         half_light_radius_arcsec = fibermap["SHAPE_R"]
     else :
-        log.warning("no column 'SHAPE_R' in fibermap, assume = zero")
-        half_light_radius_arcsec = np.zeros(len(fibermap))
+        log.warning("no column 'SHAPE_R' in fibermap, assume = 0.45 arcseconds.")
+        half_light_radius_arcsec = 0.45 * np.ones(len(fibermap))
 
     # saturate half_light_radius_arcsec at 2 arcsec
     # larger values would have extrapolated fiberfrac
-    # when in fact the ratio of fiberfrac for difference seeing
-    # or fiebr angular size are similar
+    # when in fact the ratio of fiberfrac for different seeing
+    # or fiber angular size are similar.
     max_radius=2.0
     half_light_radius_arcsec[half_light_radius_arcsec>max_radius]=max_radius
 
+    # Limits to DR9, prior to which SHAPE_EXPR etc.
+    if ("SHAPE_R" in fibermap.dtype.names) & statistical:
+        from desitarget.targets import main_cmx_or_sv
+        
+        ext_half_light_radius_arcsec = np.array(half_light_radius_arcsec[extended_sources], copy=True)
+
+        # survey_targetnames: e.g. ["DESI_TARGET", "BGS_TARGET", "MWS_TARGET", "SCND_TARGET"].
+        # survey_targetmasks: e.g. targmask.desi_mask, targmask.bgs_mask, targmask.mws_mask, targmask.scnd_mask].
+        survey_targetnames, survey_targetmasks, survey_target = main_cmx_or_sv(fibermap, rename=False, scnd=False)
+
+        if survey_target == 'sv1':
+            # https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+            for tracer, rexp in zip(['ELG', 'LRG', 'BGS_ANY'], [0.45, 1.5, 1.5]):
+                try:
+                    istracer = (fibermap[survey_targetnames[0]][extended_sources] & survey_targetmasks[0][tracer]) != 0
+            
+                    # Note:  later tracer will overwrite assigned rexp for overlap objects. 
+                    ext_half_light_radius_arcsec[istracer] = rexp
+                    
+                except:
+                    log.warning('failed to reassign statistical fiberlosss for {} in {} of {}'.format(tracer, survey_targetmasks[0].names(), survey_target))
+
+        else:
+            log.warning("Ignoring survey {} for statistical fiberloss.".format(survey_target))
+        
+    else:
+        log.warning("no column 'SHAPE_R' (DR9) in fibermap, assume = zero for statistical fiberloss.")
+        
+        ext_half_light_radius_arcsec = 0.45 * np.ones(np.count_nonzero(extended_sources))
+            
     # for current seeing, fiber plate scale , fiber size ...
     current_fiber_frac_point_source  = fa.value("POINT",sigmas_um,offsets_um)
     current_fiber_frac = current_fiber_frac_point_source.copy()
     # for the moment use result for an exponential disk profile
-    current_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],half_light_radius_arcsec[extended_sources])
+    current_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],ext_half_light_radius_arcsec)
 
+    if statistical:
+        log.info("Computed median statistical absolute fiber frac of {:.6f} ({:.6f} for PSF) for a seeing fwhm of: {:.6f} arcseconds.".format(np.median(current_fiber_frac), np.median(current_fiber_frac_point_source), exposure_seeing_fwhm))
+        log.info("Fraction of current fiber_frac_point_source targets with zero fiber throughput: {:.6f}".format(np.mean(current_fiber_frac_point_source == 0.0)))
+
+        ratio = (current_fiber_frac / current_fiber_frac_point_source)
+        ratio[current_fiber_frac_point_source == 0.0] = 0.0
+        
+        return extended_sources, ratio
+    
     # for "nominal" fiber size of 1.5 arcsec, and seeing of 1.
     nominal_isotropic_platescale = 107/1.5 # um/arcsec
     sigmas_um   = 1.0/2.35 * nominal_isotropic_platescale*np.ones(nfibers) # um
@@ -165,7 +210,7 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     nominal_fiber_frac_point_source = fa.value("POINT",sigmas_um,offsets_um)
     nominal_fiber_frac = nominal_fiber_frac_point_source.copy()
-    nominal_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],half_light_radius_arcsec[extended_sources])
+    nominal_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],ext_half_light_radius_arcsec)
 
     # legacy survey fiber frac
     #selection = (fibermap["MORPHTYPE"]=="PSF")&(fibermap["FLUX_R"]>0)
@@ -190,7 +235,6 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     """
 
-
     # compute normalization between the fast fiber acceptance computation and the one
     # done the imaging surveys assuming a Gaussian seeing of sigma=1/2.35 arcsec and a fiber of 1.5 arcsec diameter
     scale = 0.789 / np.mean(nominal_fiber_frac_point_source)
@@ -201,4 +245,6 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
     corr[ok]  *= (nominal_fiber_frac[ok] / current_fiber_frac[ok])
     corr[~ok] *= 0.
 
+    log.info("Computed fiber frac relative to legacy for a nominal seeing fwhm of: {:.6f} arcseconds.".format(exposure_seeing_fwhm))
+    
     return corr

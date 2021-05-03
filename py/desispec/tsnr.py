@@ -1,12 +1,12 @@
 import os
 import numpy as np
 import astropy.io.fits as fits
+import copy
 import glob
 import numpy as np
 import yaml
 from pkg_resources import resource_filename
 
-import desispec.io
 from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
 from scipy.interpolate import RectBivariateSpline
@@ -15,6 +15,7 @@ from desispec.calibfinder import findcalibfile
 from desiutil.log import get_logger
 from scipy.optimize import minimize
 from desiutil.dust import ext_odonnell
+from desispec.fiberfluxcorr import psf_to_fiber_flux_correction
 
 def dust_transmission(wave,ebv):
     Rv = 3.1
@@ -276,44 +277,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2_cframe(cframe):
-    """
-    Given cframe, calc_tsnr2 guessing frame,fiberflat,skymodel,fluxcalib to use
-
-    Args:
-        cframe: input cframe Frame object
-
-    Returns (results, alpha) from calc_tsnr2
-    """
-    log = get_logger()
-    dirname, filename = os.path.split(cframe.filename)
-    framefile = os.path.join(dirname, filename.replace('cframe', 'frame'))
-    skyfile = os.path.join(dirname, filename.replace('cframe', 'sky'))
-    fluxcalibfile = os.path.join(dirname, filename.replace('cframe', 'fluxcalib'))
-
-    for testfile in (framefile, skyfile, fluxcalibfile):
-        if not os.path.exists(testfile):
-            msg = 'missing {testfile}; unable to calculate TSNR2'
-            log.error(msg)
-            raise ValueError(msg)
-
-    night = cframe.meta['NIGHT']
-    expid = cframe.meta['EXPID']
-    camera = cframe.meta['CAMERA']
-    fiberflatfile = desispec.io.findfile('fiberflatnight', night, camera=camera)
-    if not os.path.exists(fiberflatfile):
-        ffname = os.path.basename(fiberflatfile)
-        log.warning(f'{ffname} not found; using default calibs')
-        fiberflatfile = findcalibfile([cframe.meta,], 'FIBERFLAT')
-
-    frame = desispec.io.read_frame(framefile)
-    fiberflat = desispec.io.read_fiberflat(fiberflatfile)
-    skymodel = desispec.io.read_sky(skyfile)
-    fluxcalib = desispec.io.read_flux_calibration(fluxcalibfile)
-
-    return calc_tsnr2(frame, fiberflat, skymodel, fluxcalib)
-
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -379,21 +343,41 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
     fibers = np.arange(nspec)
     rdnoise = fb_rdnoise(fibers, frame, psf)
 
-    #
+    # Extinction. 
     ebv = frame.fibermap['EBV']
 
     if np.sum(ebv!=0)>0 :
-        log.info("TSNR MEDIAN EBV = {:.3f}".format(np.median(ebv[ebv!=0])))
+        log.info("{} {} TSNR MEDIAN EBV = {:.3f}".format(frame.meta["EXPID"], camera, np.median(ebv[ebv!=0])))
     else :
-        log.info("TSNR MEDIAN EBV = 0")
+        log.info("{} {} TSNR MEDIAN EBV = 0.0".format(frame.meta["EXPID"], camera))
 
+    # Fiberloss for given seeing.
+    if 'SEEING' in frame.meta: 
+        seeing_fwhm = frame.meta['SEEING']
+
+        log.info('{} {} Retrieved ETC SEEING of {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
+        
+    # Fall back to platemaker seeing.  
+    elif 'PMSEEING' in frame.meta:
+        seeing_fwhm = frame.meta['PMSEEING']
+
+        log.info('{} {} Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
+
+    else:
+        seeing_fwhm = 1.1 ## arcsecond
+        
+        log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
+        
+    # Calculate fiber loss (accounts for seeing and offset); shuffled amongst extended sources if statistical.
+    extended_sources, psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,statistical=True)
+        
     # Evaluate.
     npix = nea(fibers, frame.wave)
     angperpix = angperpix(fibers, frame.wave)
     angperspecbin = np.mean(np.gradient(frame.wave))
 
     for label, x in zip(['RDNOISE', 'NEA', 'ANGPERPIX', 'ANGPERSPECBIN'], [rdnoise, npix, angperpix, angperspecbin]):
-        log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
+        log.info('{} {} {} \t {:.3f} +- {:.3f}'.format(frame.meta["EXPID"], camera, label.ljust(10), np.median(x), np.std(x)))
 
     # Relative weighting between rdnoise & sky terms to model var.
     alpha = calc_alpha(frame, fibermap=frame.fibermap,
@@ -401,7 +385,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
                 angperpix=angperpix, angperspecbin=angperspecbin,
                 fiberflat=fiberflat, skymodel=skymodel)
 
-    log.info(f"TSNR ALPHA = {alpha:.6f}")
+    log.info("{} {} TSNR ALPHA = {:.6f}".format(frame.meta["EXPID"], camera, alpha))
 
     if alpha_only:
         return {}, alpha
@@ -437,18 +421,28 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
         # Apply dust transmission.
         result *= dust_transmission(frame.wave, ebv)
 
+        result *= psf2fiber[:,None]
+        
         result = result**2.
 
-        result /= denom
+        if model_ivar:
+            result /= denom
 
+        else:
+            result *= frame.ivar
+            
         # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
         tsnrs[tracer] = np.sum(result * maskfactor, axis=1)
 
     results=dict()
+
+    # results['ebv'] = np.median(ebv)
+    # results['seeing_fwhm'] = seeing_fwhm
+    
     for tracer in tsnrs.keys():
         key = 'TSNR2_{}_{}'.format(tracer.upper(), band.upper())
         results[key]=tsnrs[tracer]
-        log.info('{} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
+        log.info('{} {} {} = {:.6f}'.format(frame.meta["EXPID"], camera, key, np.median(tsnrs[tracer])))
 
     return results, alpha
 

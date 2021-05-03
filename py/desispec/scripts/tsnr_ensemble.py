@@ -10,19 +10,24 @@ import sys
 import copy
 import yaml
 import pickle
+import desiutil
+import fitsio
 import desisim
 import argparse
 import os.path                       as     path
 import numpy                         as     np
 import astropy.io.fits               as     fits
+import matplotlib.pyplot             as     plt
 
+from   desiutil                      import depend
+from   scipy                         import stats
 from   astropy.convolution           import convolve, Box1DKernel
 from   pathlib                       import Path
 from   desiutil.dust                 import mwdust_transmission
 from   desiutil.log                  import get_logger
 from   pkg_resources                 import resource_filename
 from   scipy.interpolate             import interp1d
-
+from   astropy.table                 import Table, join
 
 np.random.seed(seed=314)
 
@@ -34,7 +39,7 @@ cslice             = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(49
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate a sim. template ensemble stack of given type and write it to disk at --outdir.")
-    parser.add_argument('--nmodel', type = int, default = 2000, required=True,
+    parser.add_argument('--nmodel', type = int, default = 2000, required=False,
                         help='Number of galaxies in the ensemble.')
     parser.add_argument('--tracer', type = str, default = 'bgs', required=True,
                         help='Tracer to generate of [bgs, lrg, elg, qso].')
@@ -44,6 +49,10 @@ def parse(options=None):
                         help='Smoothing scale [A] for DFLUX calc.')
     parser.add_argument('--Nz', action='store_true',
                         help = 'Apply tracer Nz weighting in stacking of ensemble.')
+    parser.add_argument('--external_calib', type=str, required=False, default=None,
+                        help='Calibration file, e.g. sv1-exposures.fits, with EFFTIME_DARK to normalize against.')
+    parser.add_argument('--tsnr_run', type=str, required=False,
+                        help='TSNR afterburner file, with TSNR2_TRACER.')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
 			help='Directory to write to.')
     args = None
@@ -55,6 +64,66 @@ def parse(options=None):
 
     return args
 
+def tsnr_efftime(external_calib, tsnr_run, tracer):
+    '''
+    Given an external calibration, e.g. 
+    /global/cfs/cdirs/desi/survey/observations/SV1/sv1-exposures.fits
+
+    with e.g. EFFTIME_DARK and
+
+    a tsnr afterburner run, e.g. 
+    /global/cfs/cdirs/desi/spectro/redux/cascades/tsnr-cascades.fits
+
+    Compute linear coefficient to convert TSNR2_TRACER_BRZ to EFFTIME_DARK
+    or EFFTIME_BRIGHT. 
+    '''
+
+    tsnr_col  = 'TSNR2_{}'.format(tracer.upper())
+    
+    ext_calib = Table.read(external_calib)
+
+    # Quality cuts. 
+    ext_calib = ext_calib[(ext_calib['EXPTIME'] > 60.)]
+
+    if tracer in ['bgs', 'mws']:
+        ext_col   = 'EFFTIME_BRIGHT'
+
+        # Expected BGS exposure is 180s nominal. 
+        ext_calib = ext_calib[(ext_calib['EFFTIME_BRIGHT'] > 120.)]
+
+    else:
+        ext_col   = 'EFFTIME_DARK'
+
+        # Expected BGS exposure is 900s nominal.   
+        ext_calib = ext_calib[(ext_calib['EFFTIME_DARK'] > 450.)]
+
+    tsnr_run  = Table.read(tsnr_run)
+
+    # TSNR == 0.0 if exposure was not successfully reduced. 
+    tsnr_run  = tsnr_run[tsnr_run[tsnr_col] > 0.0]
+
+    # Keep common exposures.
+    ext_calib = ext_calib[np.isin(ext_calib['EXPID'], tsnr_run['EXPID'])]
+    tsnr_run  = tsnr_run[np.isin(tsnr_run['EXPID'], ext_calib['EXPID'])] 
+    
+    tsnr_run  = join(tsnr_run, ext_calib['EXPID', ext_col], join_type='left', keys='EXPID')
+    tsnr_run.sort(ext_col)
+    
+    tsnr_run.pprint()
+    
+    res       = stats.linregress(tsnr_run[ext_col], tsnr_run[tsnr_col])
+    slope     = res.slope
+    intercept = res.intercept
+    
+    plt.plot(tsnr_run[ext_col], tsnr_run[tsnr_col], c='k', marker='.', lw=0.0, markersize=1)
+    plt.plot(tsnr_run[ext_col], intercept + slope*tsnr_run[ext_col], c='k', lw=0.5)
+    plt.title('{} = {:.3f} x {} + {:.3f}'.format(tsnr_col, slope, ext_col, intercept))
+    plt.xlabel(ext_col)
+    plt.ylabel(tsnr_col)
+    plt.show()
+
+    return  slope
+    
 class Config(object):
     def __init__(self, cpath):
         with open(cpath) as f:
@@ -73,7 +142,7 @@ class template_ensemble(object):
     '''
     
     def __init__(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None,
-                 Nz=False, smooth=100.):
+                 Nz=False, smooth=100., calibrate=False):
         """
         Generate a template ensemble for template S/N measurements (tSNR)
 
@@ -99,6 +168,15 @@ class template_ensemble(object):
             cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
 
         config = Config(cpath)
+
+        if calibrate:
+            log.info('Reading pre-written {} for normalization.'.format('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer)))
+
+            ensemble = fitsio.read('{}/tsnr-ensemble-{}.fits'.format(outdir, tracer))
+
+            calibrate(ensemble)
+            
+            return 
             
         def tracer_maker(wave, tracer=tracer, nmodel=nmodel, redshifts=None,
                          mags=None, config=None):
@@ -279,8 +357,28 @@ def main():
     log = get_logger()
 
     args = parse()
-    
-    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir, Nz=args.Nz, smooth=args.smooth)
 
+    if args.external_calib is None:
+        rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir, Nz=args.Nz, smooth=args.smooth)
+
+    else:
+        slope = tsnr_efftime(args.external_calib, args.tsnr_run, args.tracer)
+
+        log.info('Appending TSNR2TOEFFTIME coefficient of {:.6f} to {}/tsnr-ensemble-{}.fits.'.format(slope, args.outdir, args.tracer))
+
+        ens = fits.open('{}/tsnr-ensemble-{}.fits'.format(args.outdir, args.tracer))  
+        hdr = ens[0].header
+
+        hdr['TSNR2TOEFFTIME'] = slope
+        hdr['EFFTIMEFILE']  = args.external_calib.replace('/global/cfs/cdirs/desi/survey', '$DESISURVEYOPS')
+        hdr['TSNRRUNFILE']  = args.tsnr_run.replace('/global/cfs/cdirs/desi/spectro/redux', '$REDUX')
+                        
+        depend.setdep(hdr, 'desisim',  desisim.__version__)
+        depend.setdep(hdr, 'desiutil', desiutil.__version__)
+
+        ens.writeto('{}/tsnr-ensemble-{}.fits'.format(args.outdir, args.tracer), overwrite=True)
+
+    log.info('Done.')
+        
 if __name__ == '__main__':
     main()

@@ -661,7 +661,6 @@ def main():
     summary_rows  = list()
 
     for count,night in enumerate(nights) :
-
         dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
         night_expids=[]
         for dirname in dirnames :
@@ -697,15 +696,13 @@ def main():
                     summary_rows.append(entry)
             pool.close()
             pool.join()
-
-
+            
         # write result after every other night
         if len(summary_rows)>0 :
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
             tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
-
 
     tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
 
