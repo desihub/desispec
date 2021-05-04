@@ -5,8 +5,8 @@ import copy
 import glob
 import numpy as np
 import yaml
-from pkg_resources import resource_filename
 
+from pkg_resources import resource_filename
 from desispec.io.spectra import Spectra
 from astropy.convolution import convolve, Box1DKernel
 from scipy.interpolate import RectBivariateSpline
@@ -18,6 +18,8 @@ from desiutil.dust import ext_odonnell
 from desispec.fiberfluxcorr import psf_to_fiber_flux_correction
 from desimodel.fastfiberacceptance import FastFiberAcceptance
 from desimodel.io import load_platescale
+from astropy import units
+from astropy import constants as const
 
 def dust_transmission(wave,ebv):
     Rv = 3.1
@@ -173,17 +175,43 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
     else:
         return alpha * rdnoise_variance + fiberflat.fiberflat * np.abs(skymodel.flux)
 
-def var_tracer(tracer, npix_1d, angperpix, angperspecbin, fiberflat):
-    # https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed.
-    # https://github.com/desihub/desispec/blob/master/py/desispec/efftime.py
+def var_tracer(tracer, angperspecbin, fiberflat, fluxcalib, fiber_diameter_arcsec=1.52, exposure_seeing_fwhm=1.1):
+    '''
+    Source Poisson term to the model ivar, following conventions defined at:
+        https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed.  
+
+    See also:
+        https://github.com/desihub/desispec/blob/master/py/desispec/efftime.py
+
+    '''
+    fiber_area_arcsec2 = np.pi*(fiber_diameter_arcsec/2.)**2
+    
     if tracer == 'bgs':
+        # Nominal fiberloss dependence on seeing.  Assumes zero offset. 
+        fiberfrac = np.exp(0.0341 * np.log(exposure_seeing_fwhm)**3 -0.3611 * np.log(exposure_seeing_fwhm)**2 -0.7175 * np.log(exposure_seeing_fwhm) -1.5643)
+
+        # Note: neglects transparency & EBV corrections. 
+        nominal = 15.8                    # r=19.5 [nanomaggie].    
+
+    elif tracer == 'backup':
+        fiberfrac = np.exp(0.0989 * np.log(exposure_seeing_fwhm)**3 -0.5588 * np.log(exposure_seeing_fwhm)**2 -0.9708 * np.log(exposure_seeing_fwhm) -0.4473)
+        nominal = 27.5                    # r=18.9 [nanomaggie].
         
+    else:
+        # No source poisson term otherwise. 
+        nominal = 0.0                     # [nanomaggie]. 
 
-    
-    return fiberflat.fiberflat *
+    nominal *= fiberfrac
+    nominal /= fiber_area_arcsec2         # [nMg / ''].                                                                                                                                                                                     
+    nominal *= 1.e-9                      # [ Mg / ''].                                                                                                                                                                                     
+    nominal /= (1.e23 / const.c.value / 1.e10 / 3631.)
+    nominal /= (frame.wave)**2.           # [ergs/s/cm2/A].                                                                                                                                                                                 
+    nominal *= fluxcalib.calib            # [e/A]                                                                                                                                                                                            
+    nominal *= angperspecbin  	          # [e/specbin].                                                                                                                                                                                    
+    nominal *= fiberflat.fiberflat
 
-    
-    
+    return  nominal
+
 def gen_mask(frame, skymodel, hw=5.):
     """
     Generate a mask for the alpha computation, masking out bright sky lines.
@@ -376,7 +404,7 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -385,6 +413,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         fiberflat : FiberFlat object
         sky : SkyModel object
         fluxcalib : FluxCalib object
+        model_poisson: if True, add source Poisson term to model ivar (supported for BGS & Backup).
 
     returns (tsnr2, alpha):
         `tsnr2` dictionary, with keys labeling tracer (bgs,elg,etc.), of values
@@ -494,9 +523,13 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
     maskfactor *= (frame.ivar > 0.0)
 
     tsnrs = {}
-    denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
     for tracer in ensemble.keys():
+        denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
+
+        if model_poisson:
+            denom += var_tracer(tracer, angperspecbin, fiberflat, fluxcalib)
+        
         wave = ensemble[tracer].wave[band]
         dflux = ensemble[tracer].flux[band]
 
