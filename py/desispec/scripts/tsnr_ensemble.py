@@ -20,7 +20,6 @@ import astropy.io.fits               as     fits
 import matplotlib.pyplot             as     plt
 
 from   desiutil                      import depend
-from   scipy                         import stats
 from   astropy.convolution           import convolve, Box1DKernel
 from   pathlib                       import Path
 from   desiutil.dust                 import mwdust_transmission
@@ -50,7 +49,7 @@ def parse(options=None):
     parser.add_argument('--Nz', action='store_true',
                         help = 'Apply tracer Nz weighting in stacking of ensemble.')
     parser.add_argument('--external_calib', type=str, required=False, default=None,
-                        help='Calibration file, e.g. sv1-exposures.fits, with EFFTIME_DARK to normalize against.')
+                        help='Calibration file, e.g. sv1-exposures.fits, with e.g. EFFTIME_DARK to normalize against.')
     parser.add_argument('--tsnr_run', type=str, required=False,
                         help='TSNR afterburner file, with TSNR2_TRACER.')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
@@ -64,7 +63,7 @@ def parse(options=None):
 
     return args
 
-def tsnr_efftime(external_calib, tsnr_run, tracer):
+def tsnr_efftime(external_calib, tsnr_run, tracer, plot=True):
     '''
     Given an external calibration, e.g. 
     /global/cfs/cdirs/desi/survey/observations/SV1/sv1-exposures.fits
@@ -110,17 +109,21 @@ def tsnr_efftime(external_calib, tsnr_run, tracer):
     tsnr_run.sort(ext_col)
     
     tsnr_run.pprint()
-    
-    res       = stats.linregress(tsnr_run[ext_col], tsnr_run[tsnr_col])
-    slope     = res.slope
-    intercept = res.intercept
-    
-    plt.plot(tsnr_run[ext_col], tsnr_run[tsnr_col], c='k', marker='.', lw=0.0, markersize=1)
-    plt.plot(tsnr_run[ext_col], intercept + slope*tsnr_run[ext_col], c='k', lw=0.5)
-    plt.title('{} = {:.3f} x {} + {:.3f}'.format(tsnr_col, slope, ext_col, intercept))
-    plt.xlabel(ext_col)
-    plt.ylabel(tsnr_col)
-    plt.show()
+
+    # from   scipy  import stats
+    # res       = stats.linregress(tsnr_run[ext_col], tsnr_run[tsnr_col])
+    # slope     = res.slope
+    # intercept = res.intercept
+
+    slope     = np.sum(tsnr_run[ext_col] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
+
+    if plot:
+        plt.plot(tsnr_run[ext_col], tsnr_run[tsnr_col], c='k', marker='.', lw=0.0, markersize=1)
+        plt.plot(tsnr_run[ext_col], intercept + slope*tsnr_run[ext_col], c='k', lw=0.5)
+        plt.title('{} = {:.3f} x {} + {:.3f}'.format(tsnr_col, slope, ext_col, intercept))
+        plt.xlabel(ext_col)
+        plt.ylabel(tsnr_col)
+        plt.show()
 
     return  slope
     
@@ -358,20 +361,38 @@ def main():
 
     args = parse()
 
+    # TSNR template generation. 
     if args.external_calib is None:
         rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir, Nz=args.Nz, smooth=args.smooth)
 
+    # Calibration of raw TSNR to EFFTIMEs. 
     else:
-        slope = tsnr_efftime(args.external_calib, args.tsnr_run, args.tracer)
+        if len(args.external_calib) == 0:
+            # If empty string, default to immutable sv1-exposures.fits 
+            args.external_calib = resource_filename('desispec', 'data/tsnr/tsnr-efftime-calibration.yaml')
 
+            with open(args.external_calib) as f:
+                calib_yaml = yaml.load(f, Loader=yaml.FullLoader)
+
+        keyword="TSNR_CALIB_PATH"
+
+        if not keyword in calib_yaml:
+            message="Failed to find {} in {}".format(keyword, args.external_calib)
+            raise KeyError(message)
+
+        else:
+            args.external_calib = calib_yaml[keyword]
+        
+        slope = tsnr_efftime(args.external_calib, args.tsnr_run, args.tracer)
+        
         log.info('Appending TSNR2TOEFFTIME coefficient of {:.6f} to {}/tsnr-ensemble-{}.fits.'.format(slope, args.outdir, args.tracer))
 
         ens = fits.open('{}/tsnr-ensemble-{}.fits'.format(args.outdir, args.tracer))  
         hdr = ens[0].header
 
         hdr['TSNR2TOEFFTIME'] = slope
-        hdr['EFFTIMEFILE']  = args.external_calib.replace('/global/cfs/cdirs/desi/survey', '$DESISURVEYOPS')
-        hdr['TSNRRUNFILE']  = args.tsnr_run.replace('/global/cfs/cdirs/desi/spectro/redux', '$REDUX')
+        hdr['EFFTIMEFILE']    = args.external_calib.replace('/global/cfs/cdirs/desi/survey', '$DESISURVEYOPS')
+        hdr['TSNRRUNFILE']    = args.tsnr_run.replace('/global/cfs/cdirs/desi/spectro/redux',        '$REDUX')
                         
         depend.setdep(hdr, 'desisim',  desisim.__version__)
         depend.setdep(hdr, 'desiutil', desiutil.__version__)

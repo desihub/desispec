@@ -368,8 +368,8 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         
         log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
         
-    # Calculate fiber loss (accounts for seeing and offset); shuffled amongst extended sources if statistical.
-    extended_sources, psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,statistical=True)
+    # Calculate fiber loss (accounts for seeing and offset);
+    psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,statistical=True)
         
     # Evaluate.
     npix = nea(fibers, frame.wave)
@@ -436,33 +436,9 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
 
     results=dict()
 
-    # results['ebv'] = np.median(ebv)
-    # results['seeing_fwhm'] = seeing_fwhm
-    
     for tracer in tsnrs.keys():
         key = 'TSNR2_{}_{}'.format(tracer.upper(), band.upper())
         results[key]=tsnrs[tracer]
         log.info('{} {} {} = {:.6f}'.format(frame.meta["EXPID"], camera, key, np.median(tsnrs[tracer])))
 
     return results, alpha
-
-def tsnr2_to_efftime(tsnr2,target_type,program="DARK",efftime_config=None) :
-    """ Converts TSNR2 values to effective exposure time.
-    Args:
-      tsnr2: TSNR**2 values, float or numpy array
-      target_type: str, "ELG","BGS","LYA", or other depending on content of  data/tsnr/tsnr-efftime.yaml
-      program: str, "DARK", "BRIGHT", or other depending on content of data/tsnr/tsnr-efftime.yaml
-      efftime_config: (optional) dictionary with calibration parameters of the form "TSNR2_{target_type}_TO_EFFTIME_{program}"
-
-    Returns: exptime in seconds, same type and shape if applicable as input tsnr2
-    """
-    if efftime_config is None :
-        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
-        with open(efftime_config_filename) as f:
-            efftime_config = yaml.load(f, Loader=yaml.FullLoader)
-
-    keyword="TSNR2_{}_TO_EFFTIME_{}".format(target_type,program)
-    if not keyword in efftime_config :
-        message="no calibration for TSNR2_{} to EFFTIME_{}".format(target_type,program)
-        raise KeyError(message)
-    return efftime_config[keyword]*tsnr2

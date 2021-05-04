@@ -1,0 +1,3 @@
+# Default (nersc) path for calibration of TSNR values to [0., 1000s.] EFFTIME specs.
+# Immutable.  Supported solely for replication away from nersc. 
+TSNR_CALIB_PATH: /global/cfs/cdirs/desi/survey/observations/SV1/sv1-exposures.fits
