@@ -14,7 +14,8 @@ import numpy as np
 def compute_efftime(table,
                     kterm=0.114, # KERM
                     ebv_r_coeff=2.165,
-                    fiber_diameter_arcsec=1.52):
+                    fiber_diameter_arcsec=1.52,
+                    correct=True):
     """Computes the effective exposure times using transparency and fiber acceptance from the GFAs
     offline analysis, and the sky magnitudes from the spectroscopy.
     Uses the formulae described in https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
@@ -67,6 +68,10 @@ def compute_efftime(table,
     fflux_bright = flux_bright_nom * fiber_fracflux_bgs / airfac / ebvfac / fiber_area_arcsec2
     fflux_backup = flux_backup_nom * fiber_fracflux_psf / airfac / ebvfac / fiber_area_arcsec2
 
+    if correct:
+        fflux_bright *= transparency
+        fflux_backup *= transparency
+    
     # AR effective sky
     effsky_dark = (sky + sky_rdn * exptime_nom / exptime) / (1.0 + sky_rdn / sky_nom)
     effsky_bright = (sky + sky_rdn * exptime_nom / exptime + fflux_bright) / (

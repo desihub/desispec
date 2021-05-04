@@ -230,9 +230,10 @@ class template_ensemble(object):
                 maker = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
+                # Deprecated: fiberloss inherited at exposure stage for given seeing. 
                 # Additional factor rel. to psf.; TSNR put onto instrumental
                 # e/A given calibration vector that includes psf-like loss.
-                flux *= rel_loss
+                # flux *= rel_loss
                 
             elif tracer == 'lrg':
                 # Cut on fib. mag. with desisim.templates setting FIBERFLUX to FLUX. 
@@ -242,6 +243,7 @@ class template_ensemble(object):
                 maker = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
+                # TO DO?
                 # Take factor rel. to psf.; TSNR put onto instrumental
                 # e/A given calibration vector that includes psf-like loss.
                 # Note:  Oppostive to other tracers as templates normalized to fibermag.  
@@ -255,9 +257,10 @@ class template_ensemble(object):
                 maker = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
+                # Deprecated: fiberloss inherited at exposure stage for given seeing.
                 # Additional factor rel. to psf.; TSNR put onto instrumental
                 # e/A given calibration vector that includes psf-like loss.
-                flux *=	rel_loss
+                # flux *= rel_loss
                 
             elif tracer == 'qso':
                 # Cut on mag. 
@@ -267,9 +270,10 @@ class template_ensemble(object):
                 maker = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
                 flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
 
+                # Deprecated: fiberloss inherited at exposure stage for given seeing.
                 # Additional factor rel. to psf.; TSNR put onto instrumental
                 # e/A given calibration vector that includes psf-like loss.
-                flux *=	rel_loss
+                # flux *= rel_loss
                 
             else:
                 raise  ValueError('{} is not an available tracer.'.format(tracer))
