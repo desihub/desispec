@@ -673,7 +673,7 @@ def main():
             night_expids = np.intersect1d(expids,night_expids)
             if night_expids.size == 0 :
                 continue
-        log.info("{} {}".format(night,night_expids))
+        log.info("{} {} ({:d} of {:d})".format(night,night_expids,count,len(nights)))
 
         #pool = multiprocessing.Pool(ncpu)
         func_args = []

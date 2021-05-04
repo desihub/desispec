@@ -16,6 +16,8 @@ from desiutil.log import get_logger
 from scipy.optimize import minimize
 from desiutil.dust import ext_odonnell
 from desispec.fiberfluxcorr import psf_to_fiber_flux_correction
+from desimodel.fastfiberacceptance import FastFiberAcceptance
+from desimodel.io import load_platescale
 
 def dust_transmission(wave,ebv):
     Rv = 3.1
@@ -171,6 +173,17 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
     else:
         return alpha * rdnoise_variance + fiberflat.fiberflat * np.abs(skymodel.flux)
 
+def var_tracer(tracer, npix_1d, angperpix, angperspecbin, fiberflat):
+    # https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed.
+    # https://github.com/desihub/desispec/blob/master/py/desispec/efftime.py
+    if tracer == 'bgs':
+        
+
+    
+    return fiberflat.fiberflat *
+
+    
+    
 def gen_mask(frame, skymodel, hw=5.):
     """
     Generate a mask for the alpha computation, masking out bright sky lines.
@@ -273,6 +286,92 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 
     return alpha
 
+def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1):
+    '''
+    Nominal fiberfracs for effective depths. See:
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+
+    Returns:
+       dict of the nominal fiberloss of given type and seeing. 
+    '''
+    
+    log = get_logger()
+
+    for k in ["FIBER_X","FIBER_Y"] :
+        if k not in fibermap.dtype.names :
+            log.warning("no column '{}' in fibermap, cannot do the tsnr fiberfrac correction, returning 1".format(k))
+            return np.ones(len(fibermap))
+
+    # compute the seeing and plate scale correction                                                                                                                                                                                          
+    fa = FastFiberAcceptance()
+    x_mm = fibermap["FIBER_X"]
+    y_mm = fibermap["FIBER_Y"]
+    bad = np.isnan(x_mm)|np.isnan(y_mm)
+    x_mm[bad]=0.
+    y_mm[bad]=0.
+
+    if "DELTA_X" in fibermap.dtype.names :
+        dx_mm = fibermap["DELTA_X"] # mm                                                                                                                                                                                                      
+    else :
+        log.warning("no column 'DELTA_X' in fibermap, assume = zero")
+        dx_mm = np.zeros(len(fibermap))
+
+    if "DELTA_Y" in fibermap.dtype.names :
+        dy_mm = fibermap["DELTA_Y"] # mm                                                                                                                                                                                                      
+    else :
+        log.warning("no column 'DELTA_Y' in fibermap, assume = zero")
+        dy_mm = np.zeros(len(fibermap))
+
+    bad = np.isnan(dx_mm)|np.isnan(dy_mm)
+    dx_mm[bad]=0.
+    dy_mm[bad]=0.
+
+    ps = load_platescale()
+    isotropic_platescale = np.interp(x_mm**2+y_mm**2,ps['radius']**2,np.sqrt(ps['radial_platescale']*ps['az_platescale'])) # um/arcsec                                                                                                        
+    # we could include here a wavelength dependence on seeing                                                                                                                                                                                
+    sigmas_um  = (exposure_seeing_fwhm/2.35) * isotropic_platescale # um                                                                                                                                                                     
+    offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um                                                                                                                                                                                        
+    nfibers = len(fibermap)
+
+    log.info('Median psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(sigmas_um), sigmas_um.min(), sigmas_um.max()))
+    log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
+
+    tsnr_fiberfracs        = {}
+
+    psf_like               = fa.value("POINT",sigmas_um,offsets_um)
+
+    tsnr_fiberfracs['mws'] = psf_like
+    tsnr_fiberfracs['qso'] = psf_like
+    tsnr_fiberfracs['lya'] = psf_like
+
+    # 0.45''
+    tsnr_fiberfracs['elg'] = fa.value("DISK", sigmas_um,offsets_um,0.45 * np.ones_like(sigmas_um))    
+
+    # DEV 1.5''
+    tsnr_fiberfracs['lrg'] = fa.value("BULGE",sigmas_um,offsets_um,1.50 * np.ones_like(sigmas_um))
+    tsnr_fiberfracs['bgs'] = fa.value("BULGE",sigmas_um,offsets_um,1.50 * np.ones_like(sigmas_um))
+
+    for tracer in ['qso', 'elg', 'lrg', 'bgs']:
+        log.info("Computed median nominal {} fiber frac of {:.6f} ([{:.6f},{:.6f}]) for a seeing fwhm of: {:.6f} arcseconds.".format(tracer, np.median(tsnr_fiberfracs[tracer]),\
+                                                                                                                                            tsnr_fiberfracs[tracer].min(),\
+                                                                                                                                            tsnr_fiberfracs[tracer].max(),\
+                                                                                                                                            exposure_seeing_fwhm))
+
+    # Normalize.
+    floor   = 1.e-6
+
+    tracers = list(tsnr_fiberfracs.keys())
+
+    notnull = psf_like > 0.0
+    
+    for tracer in tracers:
+        tsnr_fiberfracs[tracer][ notnull] /= psf_like[notnull]
+        tsnr_fiberfracs[tracer][~notnull]  = floor
+
+        # print(tsnr_fiberfracs[tracer].min(), tsnr_fiberfracs[tracer].max())
+        
+    return  tsnr_fiberfracs
+
 #- Cache files from desimodel to avoid reading them N>>1 times
 _camera_nea_angperpix = None
 _band_ensemble = None
@@ -368,9 +467,9 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         
         log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
         
-    # Calculate fiber loss (accounts for seeing and offset);
-    psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,nominal_profiles=True)
-        
+    # Calculate nominal fiber loss (accounts for seeing and offset);
+    tsnr_fiberfrac_dict = tsnr_fiberfracs(frame.fibermap, exposure_seeing_fwhm=seeing_fwhm)
+            
     # Evaluate.
     npix = nea(fibers, frame.wave)
     angperpix = angperpix(fibers, frame.wave)
@@ -420,9 +519,9 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         # Apply dust transmission.
         result *= dust_transmission(frame.wave, ebv)
 
-        result *= psf2fiber[:,None]
+        result *= tsnr_fiberfrac_dict[tracer][:,None]
         
-        result = result**2.
+        result  = result**2.
 
         if model_ivar:
             result /= denom
@@ -441,3 +540,23 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         log.info('{} {} {} = {:.6f}'.format(frame.meta["EXPID"], camera, key, np.median(tsnrs[tracer])))
 
     return results, alpha
+
+def tsnr2_to_efftime(tsnr2,target_type,program="DARK",efftime_config=None) :
+    """ Converts TSNR2 values to effective exposure time.
+    Args:
+      tsnr2: TSNR**2 values, float or numpy array
+      target_type: str, "ELG","BGS","LYA", or other depending on content of  data/tsnr/tsnr-efftime.yaml
+      program: str, "DARK", "BRIGHT", or other depending on content of data/tsnr/tsnr-efftime.yaml
+      efftime_config: (optional) dictionary with calibration parameters of the form "TSNR2_{target_type}_TO_EFFTIME_{program}"
+    Returns: exptime in seconds, same type and shape if applicable as input tsnr2
+    """
+    if efftime_config is None :
+        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
+        with open(efftime_config_filename) as f:
+            efftime_config = yaml.load(f, Loader=yaml.FullLoader)
+
+    keyword="TSNR2_{}_TO_EFFTIME_{}".format(target_type,program)
+    if not keyword in efftime_config :
+        message="no calibration for TSNR2_{} to EFFTIME_{}".format(target_type,program)
+        raise KeyError(message)
+    return efftime_config[keyword]*tsnr2

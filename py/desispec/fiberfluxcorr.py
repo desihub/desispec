@@ -78,7 +78,7 @@ def flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1) :
 
     return point_source_correction
 
-def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1,nominal_profiles=False):
+def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1):
     """
     Multiplicative factor to apply to the psf flux of a fiber
     to obtain the fiber flux, given the current exposure seeing.
@@ -164,69 +164,6 @@ def psf_to_fiber_flux_correction(fibermap,exposure_seeing_fwhm=1.1,nominal_profi
 
     # for the moment use result for an exponential disk profile.                                                                                                                                                                             
     current_fiber_frac[extended_sources] = fa.value("DISK",sigmas_um[extended_sources],offsets_um[extended_sources],ext_half_light_radius_arcsec[extended_sources])
-        
-    # Limits to DR9, prior to which SHAPE_EXPR etc.
-    if nominal_profiles & ("SHAPE_R" in fibermap.dtype.names):        
-        from desitarget.targets import main_cmx_or_sv
-
-        dev_sources=None
-        
-        tsnr_fiberfracs = {}
-
-        for tracer in ['ELG', 'LRG', 'BGS', 'QSO']:
-            tsnr_fiberfracs[tracer] = current_fiber_frac_point_source
-                                    
-        ext_half_light_radius_arcsec = np.array(half_light_radius_arcsec[extended_sources], copy=True)
-
-        # survey_targetnames: e.g. ["DESI_TARGET", "BGS_TARGET", "MWS_TARGET", "SCND_TARGET"].
-        # survey_targetmasks: e.g. targmask.desi_mask, targmask.bgs_mask, targmask.mws_mask, targmask.scnd_mask].
-        survey_targetnames, survey_targetmasks, survey_target = main_cmx_or_sv(fibermap, rename=False, scnd=False)
-
-        # E.g. https://github.com/desihub/desitarget/blob/master/py/desitarget/sv1/data/sv1_targetmask.yaml.
-        # Supported survey epochs. 
-        tracer_flags = {'sv1':  ['ELG', 'LRG', 'BGS_ANY'],
-                        'sv2':  ['ELG', 'LRG', 'BGS_ANY'],
-                        'sv3':  ['ELG', 'LRG', 'BGS_ANY'],
-                        'main': ['ELG', 'LRG', 'BGS_ANY']}
-        
-        if survey_target in tracer_flags.keys():
-            # https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed/
-            for tracer, rexp in zip(tracer_flags[survey_target], [0.45, 1.5, 1.5]):
-                try:
-                    istracer = (fibermap[survey_targetnames[0]][extended_sources] & survey_targetmasks[0][tracer]) != 0
-            
-                    # Note:  later tracer will overwrite assigned rexp for overlap objects. 
-                    ext_half_light_radius_arcsec[istracer] = rexp
-
-                    # Isolate BGS by identifying last in list. 
-                    if survey_target == tracer_flags[survey_target][-1]:
-                        dev_sources = extended_sources & istracer
-                         
-                except:
-                    log.warning('failed to reassign nominal profile fiberlosss for {} in {} of {}'.format(tracer, survey_targetmasks[0].names(), survey_target))
-
-        else:
-            log.warning("ignoring survey {} for nominal profile fiberloss ([sv1] supported).".format(survey_target))
-        
-    else:
-        log.warning("no column 'SHAPE_R' (DR9) in fibermap, assume = zero for nominal profile fiberloss.")
-        
-        ext_half_light_radius_arcsec = np.zeros(np.count_nonzero(extended_sources))
-            
-    if dev_sources is not None:        
-        # DEV profile for BGS.  Equates to BULGE for galsim based fast_fiber_acceptance.    
-        current_fiber_frac[dev_sources] = fa.value("BULGE",sigmas_um[dev_sources],offsets_um[dev_sources],ext_half_light_radius_arcsec[dev_sources])
-
-        log.info('Identified {:d} DEV targets with median fiberloss of {:.6f}.'.format(np.count_nonzero(dev_sources), np.median(current_fiber_frac[dev_sources])))
-        
-    if nominal_profiles:
-        log.info("Computed median nominal absolute fiber frac of {:.6f} ({:.6f} for PSF) for a seeing fwhm of: {:.6f} arcseconds.".format(np.median(current_fiber_frac), np.median(current_fiber_frac_point_source), exposure_seeing_fwhm))
-        log.info("Fraction of current fiber_frac_point_source targets with zero fiber throughput: {:.6f}".format(np.mean(current_fiber_frac_point_source == 0.0)))
-
-        ratio = (current_fiber_frac / current_fiber_frac_point_source)
-        ratio[current_fiber_frac_point_source == 0.0] = 0.0
-        
-        return  ratio
     
     # for "nominal" fiber size of 1.5 arcsec, and seeing of 1.
     nominal_isotropic_platescale = 107/1.5 # um/arcsec
