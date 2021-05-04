@@ -369,7 +369,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
         
     # Calculate fiber loss (accounts for seeing and offset);
-    psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,statistical=True)
+    psf2fiber = psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm=seeing_fwhm,nominal_profiles=True)
         
     # Evaluate.
     npix = nea(fibers, frame.wave)
@@ -395,7 +395,6 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
     maskfactor *= (frame.ivar > 0.0)
 
     tsnrs = {}
-
     denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
     for tracer in ensemble.keys():
