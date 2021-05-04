@@ -868,7 +868,7 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1) :
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1, stdcheck=True) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
@@ -881,6 +881,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
       exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
+      stdcheck: check if the model stars are actually standards according 
+                to the fibermap and only rely on those
 
     Returns:
          desispec.FluxCalib object
@@ -963,17 +965,21 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
-    stdfibers = np.where(isStdStar(tframe.fibermap))[0]
-    assert len(stdfibers) > 0
+    if stdcheck:
+        stdfibers = np.where(isStdStar(tframe.fibermap))[0]
+        assert len(stdfibers) > 0
 
-    if not np.all(np.in1d(stdfibers, input_model_fibers)):
-        bad = set(input_model_fibers) - set(stdfibers)
-        if len(bad) > 0:
-            log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
-        stdfibers = np.intersect1d(stdfibers, input_model_fibers)
+        if not np.all(np.in1d(stdfibers, input_model_fibers)):
+            bad = set(input_model_fibers) - set(stdfibers)
+            if len(bad) > 0:
+                log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
+            stdfibers = np.intersect1d(stdfibers, input_model_fibers)
 
-    # also other way around
-    stdfibers = np.intersect1d(input_model_fibers, stdfibers)
+        # also other way around
+        stdfibers = np.intersect1d(input_model_fibers, stdfibers)
+    else:
+        stdfibers = input_model_fibers
+    
     log.info("Std stars fibers: {}".format(stdfibers))
 
     stdstars = tframe[stdfibers]
@@ -1484,7 +1490,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
 
     # Unpack model
     exptime = frame.meta['EXPTIME']
-
+    
     # Standard stars
     stdfibers = np.where(isStdStar(frame.fibermap))[0]
     stdstars = frame[stdfibers]
@@ -1521,7 +1527,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # MAX ZP Offset
-    #stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
+
     ZPoffset = ZP_fiducial-qadict['ZP']
     imax = np.argmax(np.abs(ZPoffset))
     qadict['MAX_ZP_OFF'] = [float(ZPoffset[imax]),
