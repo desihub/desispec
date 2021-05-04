@@ -190,7 +190,7 @@ def main(args) :
             for i in model_fibers%500:
                 log.error("inconsistency with spectrum {}, OBJTYPE={}, {}={} in fibermap".format(
                 i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i]))
-        sys.exit(12)
+            sys.exit(12)
     else:
         fibermap_std_indices = model_fibers % 500
     # Make sure the fibers of interest aren't entirely masked.
