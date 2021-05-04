@@ -8,9 +8,48 @@ from astropy.table import Table, vstack
 from desiutil.log import get_logger
 
 import desispec.io
-from desispec.workflow.tableio import load_table
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow import batch
+
+
+def parse(options=None):
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
+    p.add_argument("-t", "--tileid", type=int, help="Tile ID")
+    p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
+    p.add_argument("-g", "--group", type=str, required=True,
+                   help="cumulative, pernight, perexp, or a custom name")
+    p.add_argument("--explist", type=str,
+                   help="file with columns TILE NIGHT EXPID to use")
+    p.add_argument("--nosubmit", action="store_true",
+                   help="generate scripts but don't submit batch jobs")
+    p.add_argument("--batch-queue", type=str, default='realtime',
+                   help="batch queue name")
+    p.add_argument("--batch-reservation", type=str,
+                   help="batch reservation name")
+    p.add_argument("--batch-dependency", type=str,
+                   help="job dependencies passed to sbatch --dependency")
+    p.add_argument("--system-name", type=str,
+                   help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
+
+    # TODO
+    # p.add_argument("--outdir", type=str, help="output directory")
+    # p.add_argument("--scriptdir", type=str, help="script directory")
+    # p.add_argument("--per-exposure", action="store_true",
+    #         help="fit redshifts per exposure instead of grouping")
+    if options is None:
+        args = p.parse_args()
+    else:
+        args = p.parse_args(options)
+
+    return args
+
+def main(args):
+    batch_scripts, failed_jobs = generate_tile_redshift_scripts(**args.__dict__)
+    num_error = len(failed_jobs)
+    sys.exit(num_error)
 
 def get_tile_redshift_relpath(tileid,group,night=None,expid=None):
     """
