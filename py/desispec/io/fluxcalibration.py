@@ -218,6 +218,7 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
         hx[-1].header['MDSEEING'] = averagefluxcalib.median_seeing
         hx[-1].header['MDFFRACF'] = averagefluxcalib.median_ffracflux
         hx[-1].header['FACWPOW'] = averagefluxcalib.fac_wave_power
+        hx[-1].header['FSTNIGHT'] = averagefluxcalib.first_night
     
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
@@ -256,8 +257,10 @@ def read_average_flux_calibration(filename):
             median_ffracflux       = fx["FFRACFLUX_WAVE"].header["MDFFRACF"]
             fac_wave_power         = fx["FFRACFLUX_WAVE"].header["FACWPOW"]
             ffracflux_wave         = native_endian(fx["FFRACFLUX_WAVE"].data.astype('f8'))
+            first_night            = fx["FFRACFLUX_WAVE"].header["FSTNIGHT"]
         else:
             median_seeing, median_ffracflux, fac_wave_power, ffracflux_wave = None, None, None, None
+            first_night = None
 
 
     duration = time.time() - t0
@@ -274,7 +277,8 @@ def read_average_flux_calibration(filename):
                                   median_seeing=median_seeing,
                                   median_ffracflux=median_ffracflux,
                                   fac_wave_power=fac_wave_power,
-                                  ffracflux_wave=ffracflux_wave)
+                                  ffracflux_wave=ffracflux_wave,
+                                  first_night=first_night)
 
     return afluxcalib
 

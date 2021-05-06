@@ -6,7 +6,8 @@ class AverageFluxCalib(object):
     def __init__(self, wave, average_calib, atmospheric_extinction, seeing_term, \
                  pivot_airmass, pivot_seeing,\
                  atmospheric_extinction_uncertainty = None, seeing_term_uncertainty = None,\
-                 median_seeing = None, median_ffracflux = None, fac_wave_power = None, ffracflux_wave = None):
+                 median_seeing = None, median_ffracflux = None, fac_wave_power = None, ffracflux_wave = None,
+                 first_night = None):
         """Lightweight wrapper object for average flux calibration data
 
         Args:
@@ -22,6 +23,7 @@ class AverageFluxCalib(object):
             median_ffracflux : float, median GFA FIBER_FRACFLUX
             fac_wave_power : float, wavelength-dependence of the fiber acceptance (wave ** fac_wave_power)
             ffracflux_wave : 1D[nwave], fiber acceptance for {median_seeing, median_ffrac} at 6500A, following wave ** fac_wave_power
+            first_night : first night for which this calibration is usable
 
         All arguments become attributes,
         the calib vector should be in units of [electrons]/[1e-17 erg/cm^2].
@@ -47,6 +49,7 @@ class AverageFluxCalib(object):
         self.median_ffracflux = median_ffracflux
         self.fac_wave_power = fac_wave_power
         self.ffracflux_wave = ffracflux_wave
+        self.first_night = first_night
         self.meta = dict(units='electrons/(1e-17 erg/cm^2)')
         self.desiparams = load_desiparams()
 

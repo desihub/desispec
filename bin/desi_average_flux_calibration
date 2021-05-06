@@ -77,6 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--corr_transp', action = 'store_true', help = 'correct for transparency')
     parser.add_argument('--seeing_key', type = str, default = 'RADPROF_FWHM_ASEC', choices = ['FWHM_ASEC', 'RADPROF_FWHM_ASEC'], help = 'key in GFA catalog for seeing (default=RADPROF_FWHM_ASEC)')
     parser.add_argument('--fac_wave_power', type = float, default = -0.25, help = 'wavelength dependence of fiber acceptance (default=-0.25)')
+    parser.add_argument('--first_night', type = int, default = None, help = 'first night for which this calibration is usable (default=None)')
 
     args = parser.parse_args()
     log=get_logger()
@@ -381,7 +382,8 @@ if __name__ == '__main__':
                              median_seeing=np.median(seeing),
                              median_ffracflux=np.median(ffracflux),
                              fac_wave_power=args.fac_wave_power,
-                             ffracflux_wave=median_ffracflux_wave)
+                             ffracflux_wave=median_ffracflux_wave,
+                             first_night=args.first_night)
 
     # write the result ...
 
