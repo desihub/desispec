@@ -180,7 +180,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     #- Hack: test tile 81097 (observed 20210430/00086750) had set
     #- FIBERSTATUS bit UNASSIGNED for sky targets on stuck positioners.
     #- Undo that.
-    if ('TILEID' in frame.meta) and (frame.meta['TILEID'] == 81097):
+    if (frame.meta is not None) and ('TILEID' in frame.meta) and (frame.meta['TILEID'] == 81097):
         log.info('Unsetting FIBERSTATUS UNASSIGNED for tileid 81097 sky fibers')
         frame.fibermap['FIBERSTATUS'][skyfibers] &= ~1
 
