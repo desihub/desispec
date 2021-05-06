@@ -50,7 +50,7 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
               a bad FIBERSTATUS
 
     example bitmask list:
-        bitmask = [fmsk.BROKENFIBER,fmsk.BADTARGET,fmsk.BADFIBER,\
+        bitmask = [fmsk.BROKENFIBER,fmsk.UNASSIGNED,fmsk.BADFIBER,\
                     fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
         bitmask = get_fiberbitmask_comparison_value(kind='fluxcalib')
         bitmask = 'fluxcalib'
@@ -129,28 +129,25 @@ def get_fiberbitmask_comparison_value(kind='fluxcalib'):
 
 
 def get_skysub_fiberbitmask_val():
-    #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
-    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED)
     return get_all_fiberbitmask_val()
 
 def get_flat_fiberbitmask_val():
-    #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
-    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC)
     return (fmsk.BROKENFIBER | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
 def get_fluxcalib_fiberbitmask_val():
-    #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
-    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC | fmsk.BADFLAT)
     return get_all_fiberbitmask_val()
 
 def get_stdstars_fiberbitmask_val():
-    #return (fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.BADFIBER | fmsk.BADTRACE | \
-    #        fmsk.MANYBADCOL | fmsk.MANYREJECTED | fmsk.BADARC | fmsk.BADFLAT)
     return get_all_fiberbitmask_val()
 
 def get_all_nonamp_fiberbitmask_val():
-    return (fmsk.STUCKPOSITIONER | fmsk.BROKENFIBER | fmsk.BADTARGET | fmsk.MISSINGPOSITION | fmsk.BADPOSITION | \
+    """Return a mask for all bad FIBERSTATUS bits except BADAMPB/R/Z
+
+    Note: does not include STUCKPOSITIONER or RESTRICTED, which could still
+    be on a valid sky location, or even a target for RESTRICTED.
+    """
+    return (fmsk.UNASSIGNED | fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | fmsk.BADPOSITION | \
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
