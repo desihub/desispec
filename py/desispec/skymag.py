@@ -92,16 +92,19 @@ def compute_skymag(night, expid, specprod_dir=None):
             header=fitsio.read_header(filename)
             exptime=header["EXPTIME"]
 
-            # for now we use a fixed calibration as used in DESI-6043 for which we know what was the fiber aperture loss
-            cal_filename="{}/spec/fluxcalib/fluxcalibnight-{}-20201216.fits".format(os.environ["DESI_SPECTRO_CALIB"],camera)
-            # apply the correction from
-            fiber_acceptance_for_point_sources = 0.60 # see DESI-6043
-            mean_fiber_diameter_arcsec = 1.52 # see DESI-6043
-            fiber_area_arcsec = np.pi*(mean_fiber_diameter_arcsec/2)**2
+            # use fixed calibrations
+            if night < 20210318 : # before mirror cleaning
+                cal_filename="{}/spec/fluxcalib/fluxcalibaverage-{}-20201214.fits".format(os.environ["DESI_SPECTRO_CALIB"],camera)
+            else :
+                cal_filename="{}/spec/fluxcalib/fluxcalibaverage-{}-20210318.fits".format(os.environ["DESI_SPECTRO_CALIB"],camera)
 
             acal = _get_average_calibration(cal_filename)
+            calval = np.interp(fullwave[cslice[camera]],acal.wave,acal.value()/acal.ffracflux_wave,left=0,right=0)
+
+            mean_fiber_diameter_arcsec = 1.52 # see DESI-6043
+            fiber_area_arcsec = np.pi*(mean_fiber_diameter_arcsec/2)**2
             flux = np.interp(fullwave[cslice[camera]], skywave, skyflux)
-            sky[cslice[camera]] = flux / exptime / acal.value() * fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
+            sky[cslice[camera]] = flux / exptime / calval / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
 
         if not ok : continue # to next spectrograph
         sky_spectra.append(sky)
