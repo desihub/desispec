@@ -175,7 +175,7 @@ def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymo
     else:
         return alpha * rdnoise_variance + fiberflat.fiberflat * np.abs(skymodel.flux)
 
-def var_tracer(tracer, angperspecbin, fiberflat, fluxcalib, fiber_diameter_arcsec=1.52, exposure_seeing_fwhm=1.1):
+def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, fiber_diameter_arcsec=1.52, exposure_seeing_fwhm=1.1):
     '''
     Source Poisson term to the model ivar, following conventions defined at:
         https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed.  
@@ -184,6 +184,8 @@ def var_tracer(tracer, angperspecbin, fiberflat, fluxcalib, fiber_diameter_arcse
         https://github.com/desihub/desispec/blob/master/py/desispec/efftime.py
 
     '''
+    log = get_logger()
+
     fiber_area_arcsec2 = np.pi*(fiber_diameter_arcsec/2.)**2
     
     if tracer == 'bgs':
@@ -200,16 +202,26 @@ def var_tracer(tracer, angperspecbin, fiberflat, fluxcalib, fiber_diameter_arcse
     else:
         # No source poisson term otherwise. 
         nominal = 0.0                     # [nanomaggie]. 
+        fiberfrac = 1.0
 
     nominal *= fiberfrac
-    nominal /= fiber_area_arcsec2         # [nMg / ''].                                                                                                                                                                                     
+    nominal /= fiber_area_arcsec2         # [nMg / ''].
+
+    log.info('Including {} poisson source var of {:.6f} [nMg / sq. arcsec.]'.format(tracer, nominal))
+    
     nominal *= 1.e-9                      # [ Mg / ''].                                                                                                                                                                                     
     nominal /= (1.e23 / const.c.value / 1.e10 / 3631.)
-    nominal /= (frame.wave)**2.           # [ergs/s/cm2/A].                                                                                                                                                                                 
-    nominal *= fluxcalib.calib            # [e/A]                                                                                                                                                                                            
+    nominal /= (frame.wave)**2.           # [ergs/s/cm2/A].                                                                                                                                                                            
+
+    nominal *= 1.e17                      # [1.e-17 ergs/s/cm2/A].  
+    
+    nominal  = fluxcalib.calib * nominal  # [e/A]
+    
     nominal *= angperspecbin  	          # [e/specbin].                                                                                                                                                                                    
     nominal *= fiberflat.fiberflat
 
+    log.info('Including {} poisson source var of {:.6e} [e/specbin]'.format(tracer, np.median(nominal)))
+    
     return  nominal
 
 def gen_mask(frame, skymodel, hw=5.):
@@ -314,7 +326,7 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 
     return alpha
 
-def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1):
+def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1, no_offsets=True):
     '''
     Nominal fiberfracs for effective depths. See:
     https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
@@ -356,13 +368,19 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1):
 
     ps = load_platescale()
     isotropic_platescale = np.interp(x_mm**2+y_mm**2,ps['radius']**2,np.sqrt(ps['radial_platescale']*ps['az_platescale'])) # um/arcsec                                                                                                        
-    # we could include here a wavelength dependence on seeing                                                                                                                                                                                
+    # we could include here a wavelength dependence on seeing, or non-Gaussian.
     sigmas_um  = (exposure_seeing_fwhm/2.35) * isotropic_platescale # um                                                                                                                                                                     
     offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um                                                                                                                                                                                        
     nfibers = len(fibermap)
 
-    log.info('Median psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(sigmas_um), sigmas_um.min(), sigmas_um.max()))
-    log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
+    if no_offsets:
+        offsets_um = np.zeros_like(offsets_um)
+
+        log.info('Zeroing fiber offsets.')
+        
+    else:
+        log.info('Median psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(sigmas_um), sigmas_um.min(), sigmas_um.max()))
+        log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
 
     tsnr_fiberfracs        = {}
 
@@ -375,8 +393,8 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1):
     # 0.45''
     tsnr_fiberfracs['elg'] = fa.value("DISK", sigmas_um,offsets_um,0.45 * np.ones_like(sigmas_um))    
 
-    # DEV 1.5''
-    tsnr_fiberfracs['lrg'] = fa.value("BULGE",sigmas_um,offsets_um,1.50 * np.ones_like(sigmas_um))
+    # DEV
+    tsnr_fiberfracs['lrg'] = fa.value("BULGE",sigmas_um,offsets_um,1.00 * np.ones_like(sigmas_um))
     tsnr_fiberfracs['bgs'] = fa.value("BULGE",sigmas_um,offsets_um,1.50 * np.ones_like(sigmas_um))
 
     for tracer in ['qso', 'elg', 'lrg', 'bgs']:
@@ -386,7 +404,7 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1):
                                                                                                                                             exposure_seeing_fwhm))
 
     # Normalize.
-    floor   = 1.e-6
+    floor   = 1.e-16
 
     tracers = list(tsnr_fiberfracs.keys())
 
@@ -404,7 +422,7 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=True, nominal_seeing_fwhm=1.1):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -492,13 +510,17 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         log.info('{} {} Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
 
     else:
-        seeing_fwhm = 1.1 ## arcsecond
+        seeing_fwhm = nominal_seeing_fwhm ## arcsecond
+
+        if seeing_fwhm is not None:
+            log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
+
+    if seeing_fwhm is not None:
+        # Calculate nominal fiber loss (accounts for seeing and offset);
+        tsnr_fiberfrac_dict = tsnr_fiberfracs(frame.fibermap, exposure_seeing_fwhm=seeing_fwhm)
+    else:
+        tsnr_fiberfrac_dict = {}
         
-        log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
-        
-    # Calculate nominal fiber loss (accounts for seeing and offset);
-    tsnr_fiberfrac_dict = tsnr_fiberfracs(frame.fibermap, exposure_seeing_fwhm=seeing_fwhm)
-            
     # Evaluate.
     npix = nea(fibers, frame.wave)
     angperpix = angperpix(fibers, frame.wave)
@@ -528,7 +550,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
         if model_poisson:
-            denom += var_tracer(tracer, angperspecbin, fiberflat, fluxcalib)
+            denom += var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib)
         
         wave = ensemble[tracer].wave[band]
         dflux = ensemble[tracer].flux[band]
@@ -552,9 +574,10 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         # Apply dust transmission.
         result *= dust_transmission(frame.wave, ebv)
 
-        result *= tsnr_fiberfrac_dict[tracer][:,None]
+        if tracer in tsnr_fiberfrac_dict:
+            result *= tsnr_fiberfrac_dict[tracer][:,None]
         
-        result  = result**2.
+        result = result**2.
 
         if model_ivar:
             result /= denom
