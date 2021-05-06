@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.constants
 from desimodel.io import load_desiparams
+from desiutil.log import get_logger
 
 class AverageFluxCalib(object):
     def __init__(self, wave, average_calib, atmospheric_extinction, seeing_term, \
@@ -96,4 +97,10 @@ class AverageFluxCalib(object):
         # AR (if present, it means the average_calib has been multiplied by it)
         if self.ffracflux_wave is not None:
             cal_scale /= self.ffracflux_wave
+        else :
+            default_fiber_fracflux = 0.6
+            log = get_logger()
+            log.warning("Considering a default fiber frac flux of {} to convert calib to throughput".format(default_fiber_fracflux))
+            cal_scale /= default_fiber_fracflux
+
         return cal_scale * self.value(airmass,seeing)
