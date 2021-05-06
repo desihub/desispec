@@ -376,26 +376,28 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1, no_offsets=True):
     if no_offsets:
         offsets_um = np.zeros_like(offsets_um)
 
-        log.info('Zeroing fiber offsets.')
+        log.info('Zeroing fiber offsets for tsnr fiberfracs.')
         
     else:
-        log.info('Median psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(sigmas_um), sigmas_um.min(), sigmas_um.max()))
         log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
 
+    log.info('Median psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(sigmas_um), sigmas_um.min(), sigmas_um.max()))
+
+    
     tsnr_fiberfracs        = {}
 
-    psf_like               = fa.value("POINT",sigmas_um,offsets_um)
+    psf_like               = fa.value("POINT",sigmas_um,offsets=offsets_um)
 
     tsnr_fiberfracs['mws'] = psf_like
     tsnr_fiberfracs['qso'] = psf_like
     tsnr_fiberfracs['lya'] = psf_like
 
     # 0.45''
-    tsnr_fiberfracs['elg'] = fa.value("DISK", sigmas_um,offsets_um,0.45 * np.ones_like(sigmas_um))    
+    tsnr_fiberfracs['elg'] = fa.value("DISK", sigmas_um,offsets=offsets_um,hlradii=0.45 * np.ones_like(sigmas_um))    
 
     # DEV
-    tsnr_fiberfracs['lrg'] = fa.value("BULGE",sigmas_um,offsets_um,1.00 * np.ones_like(sigmas_um))
-    tsnr_fiberfracs['bgs'] = fa.value("BULGE",sigmas_um,offsets_um,1.50 * np.ones_like(sigmas_um))
+    tsnr_fiberfracs['lrg'] = fa.value("BULGE",sigmas_um,offsets=offsets_um,hlradii=1.00 * np.ones_like(sigmas_um))
+    tsnr_fiberfracs['bgs'] = fa.value("BULGE",sigmas_um,offsets=offsets_um,hlradii=1.50 * np.ones_like(sigmas_um))
 
     for tracer in ['qso', 'elg', 'lrg', 'bgs']:
         log.info("Computed median nominal {} fiber frac of {:.6f} ([{:.6f},{:.6f}]) for a seeing fwhm of: {:.6f} arcseconds.".format(tracer, np.median(tsnr_fiberfracs[tracer]),\
@@ -515,7 +517,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         if seeing_fwhm is not None:
             log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
 
-    if seeing_fwhm is not None:
+    if nominal_seeing_fwhm is not None:
         # Calculate nominal fiber loss (accounts for seeing and offset);
         tsnr_fiberfrac_dict = tsnr_fiberfracs(frame.fibermap, exposure_seeing_fwhm=seeing_fwhm)
     else:
@@ -550,7 +552,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
         if model_poisson:
-            denom += var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib)
+            denom += var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seeing_fwhm=seeing_fwhm)
         
         wave = ensemble[tracer].wave[band]
         dflux = ensemble[tracer].flux[band]
