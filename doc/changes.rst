@@ -12,7 +12,9 @@ desispec Change Log
 * Add MPI to stdstar ``match_templates`` (PR `#1248`_).
 * Updates to ``desi_average_flux_calibration`` (PR `#1252`_).
 * ``desi_fit_stdstars --std-targetids`` option to override stdstars for testing
-  and custom fields (PR `#1257`_).
+  and custom fields (PR `#1257`_, `#1259`_).
+* Launch redshifts automatically as part of pipeline (PR `#1260`_).
+* Support stuck positioners assigned to sky locations (PR `#1266`_).
 
 .. _`#1242`: https://github.com/desihub/desispec/issues/1242
 .. _`#1244`: https://github.com/desihub/desispec/issues/1244
@@ -20,6 +22,9 @@ desispec Change Log
 .. _`#1248`: https://github.com/desihub/desispec/issues/1248
 .. _`#1252`: https://github.com/desihub/desispec/issues/1252
 .. _`#1257`: https://github.com/desihub/desispec/issues/1257
+.. _`#1259`: https://github.com/desihub/desispec/issues/1259
+.. _`#1260`: https://github.com/desihub/desispec/issues/1260
+.. _`#1266`: https://github.com/desihub/desispec/issues/1266
 
 0.41.0 (2021-04-16)
 -------------------
