@@ -117,6 +117,12 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
 
     hdr = fitsheader(header)
     add_dependencies(hdr)
+    if fluxcalib.meta is not None :
+        for k in fluxcalib.meta :
+            if k not in hdr :
+                hdr[k]=fluxcalib.meta[k]
+
+
 
     hdr['EXTNAME'] = 'FLUXCALIB'
     hdr['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
@@ -181,9 +187,7 @@ def read_flux_calibration(filename):
     log.info(iotime.format('read', filename, duration))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask,
-                          fibercorr=fibercorr, fibercorr_comments=fibercorr_comments)
-    fluxcalib.header = header
-
+                          fibercorr=fibercorr, fibercorr_comments=fibercorr_comments, meta=header)
     return fluxcalib
 
 
