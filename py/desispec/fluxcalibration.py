@@ -881,7 +881,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
       exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
-      stdcheck: check if the model stars are actually standards according 
+      stdcheck: check if the model stars are actually standards according
                 to the fibermap and only rely on those
 
     Returns:
@@ -979,7 +979,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         stdfibers = np.intersect1d(input_model_fibers, stdfibers)
     else:
         stdfibers = input_model_fibers
-    
+
     log.info("Std stars fibers: {}".format(stdfibers))
 
     stdstars = tframe[stdfibers]
@@ -1360,7 +1360,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
 class FluxCalib(object):
     def __init__(self, wave, calib, ivar, mask, meancalib=None,
-                 fibercorr=None, fibercorr_comments=None):
+                 fibercorr=None, fibercorr_comments=None, meta=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -1371,6 +1371,7 @@ class FluxCalib(object):
             meancalib : 1D[nwave] mean convolved calibration (optional)
             fibercorr : dictionary of 1D arrays of size nspec (optional)
             fibercorr_comments : dictionnary of string (explaining the fibercorr)
+            meta : dictionary
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
@@ -1392,7 +1393,12 @@ class FluxCalib(object):
         self.fibercorr = fibercorr
         self.fibercorr_comments= fibercorr_comments
 
-        self.meta = dict(units='photons/(erg/s/cm^2)')
+        if meta is None :
+            self.meta = dict()
+        else :
+            self.meta = meta
+        self.meta['units']='photons/(erg/s/cm^2)'
+
 
     def __repr__(self):
         txt = '<{:s}: nspec={:d}, nwave={:d}, units={:s}'.format(
@@ -1451,6 +1457,9 @@ def apply_flux_calibration(frame, fluxcalib):
             log.info("add a column PSF_TO_FIBER_SPECFLUX to fibermap")
             frame.fibermap["PSF_TO_FIBER_SPECFLUX"]=fluxcalib.fibercorr["PSF_TO_FIBER_FLUX"]
 
+    if "FCSEEING" in fluxcalib.meta :
+        frame.meta["FCSEEING"] = fluxcalib.meta["FCSEEING"]
+
 
 def ZP_from_calib(exptime, wave, calib):
     """ Calculate the ZP in AB magnitudes given the calibration and the wavelength arrays
@@ -1490,7 +1499,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
 
     # Unpack model
     exptime = frame.meta['EXPTIME']
-    
+
     # Standard stars
     stdfibers = np.where(isStdStar(frame.fibermap))[0]
     stdstars = frame[stdfibers]
