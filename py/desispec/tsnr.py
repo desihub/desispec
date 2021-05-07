@@ -372,30 +372,37 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1, no_offsets=True):
     sigmas_um  = (exposure_seeing_fwhm/2.35) * isotropic_platescale # um                                                                                                                                                                     
     offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um                                                                                                                                                                                        
     nfibers = len(fibermap)
-
-    if no_offsets:
-        offsets_um = np.zeros_like(offsets_um)
-
-        log.info('Zeroing fiber offsets for tsnr fiberfracs.')
         
-    else:
-        log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
-
+    log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
     log.info('Median psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(sigmas_um), sigmas_um.min(), sigmas_um.max()))
 
-    
     tsnr_fiberfracs        = {}
 
-    psf_like               = fa.value("POINT",sigmas_um,offsets=offsets_um)
+    ##
+    ##  FIX ME:  desispec flux calibration, in the absence of seeing values in the header, assumes 1.1'' as a default;
+    ##
+    ##  https://github.com/desihub/desispec/blob/05cd4cdf501b9afb7376bb0ea205517246b58769/py/desispec/scripts/fluxcalibration.py#L56
+    ##
+    ##  We do the same here until that is corrected:  https://github.com/desihub/desispec/issues/1267
+    ##
+    sigmas_um_1p1          = (1.1/2.35) * isotropic_platescale
+    
+    psf_like               = fa.value("POINT",sigmas_um_1p1,offsets=offsets_um)
 
     tsnr_fiberfracs['mws'] = psf_like
     tsnr_fiberfracs['qso'] = psf_like
     tsnr_fiberfracs['lya'] = psf_like
 
+    if no_offsets:
+        offsets_um = np.zeros_like(offsets_um)
+
+        log.info('Zeroing fiber offsets for tsnr fiberfracs.')
+
+    
     # 0.45''
     tsnr_fiberfracs['elg'] = fa.value("DISK", sigmas_um,offsets=offsets_um,hlradii=0.45 * np.ones_like(sigmas_um))    
 
-    # DEV
+    # BULGE == DEV
     tsnr_fiberfracs['lrg'] = fa.value("BULGE",sigmas_um,offsets=offsets_um,hlradii=1.00 * np.ones_like(sigmas_um))
     tsnr_fiberfracs['bgs'] = fa.value("BULGE",sigmas_um,offsets=offsets_um,hlradii=1.50 * np.ones_like(sigmas_um))
 
@@ -404,17 +411,16 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1, no_offsets=True):
                                                                                                                                             tsnr_fiberfracs[tracer].min(),\
                                                                                                                                             tsnr_fiberfracs[tracer].max(),\
                                                                                                                                             exposure_seeing_fwhm))
-
     # Normalize.
-    floor   = 1.e-16
-
     tracers = list(tsnr_fiberfracs.keys())
 
     notnull = psf_like > 0.0
+
+    log.info("Correcting fiberfrac for {:d} of {:d} sources.".format(np.count_nonzero(notnull), len(notnull)))
     
     for tracer in tracers:
         tsnr_fiberfracs[tracer][ notnull] /= psf_like[notnull]
-        tsnr_fiberfracs[tracer][~notnull]  = floor
+        tsnr_fiberfracs[tracer][~notnull]  = 1.0
 
         # print(tsnr_fiberfracs[tracer].min(), tsnr_fiberfracs[tracer].max())
         
@@ -424,7 +430,7 @@ def tsnr_fiberfracs(fibermap, exposure_seeing_fwhm=1.1, no_offsets=True):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=True, nominal_seeing_fwhm=1.1):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False, nominal_seeing_fwhm=1.1):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -512,7 +518,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         log.info('{} {} Fall back to PMSEEING of {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
 
     else:
-        seeing_fwhm = nominal_seeing_fwhm ## arcsecond
+        seeing_fwhm = nominal_seeing_fwhm  ## arcsecond
 
         if seeing_fwhm is not None:
             log.info('{} {} No measured seeing found.  Assumed nominal {:.6f} arcsecond for frame.'.format(frame.meta["EXPID"], camera, seeing_fwhm))
