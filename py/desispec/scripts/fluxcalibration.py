@@ -53,8 +53,8 @@ def parse(options=None):
                         help = 'path of QA figure file')
     parser.add_argument('--highest-throughput', type = int, default = 0, required=False,
                         help = 'use this number of stars ranked by highest throughput to normalize transmission (for DESI commissioning)')
-    parser.add_argument('--seeing-fwhm', type = float, default = 1.1, required=False,
-                        help = 'seeing FWHM in arcsec, used for fiberloss correction')
+    parser.add_argument('--seeing-fwhm', type = float, default = None, required=False,
+                        help = 'seeing FWHM in arcsec, used for fiberloss correction. If not set, read from header, and if not exists, then set to 1.1 arcsec')
     parser.set_defaults(nostdcheck=False)
     args = None
     if options is None:
@@ -176,7 +176,7 @@ def main(args) :
         model_metadata=model_metadata[:][ok]
 
     stdcheck = not args.nostdcheck
-        
+
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
 
@@ -197,6 +197,21 @@ def main(args) :
     if np.sum(np.sum(frame.ivar[model_fibers%500, :] == 0, axis=1) == frame.nwave) == len(model_fibers):
         log.warning('All standard-star spectra are masked!')
         return
+
+    if args.seeing_fwhm is None :
+        if "SEEING" in frame.meta :
+            val = frame.meta["SEEING"]
+            if val >= 0.4 and val <= 5. :
+                log.info("Using SEEING from header = {} arcsec".format(val))
+                args.seeing_fwhm = val
+            else :
+                log.warning("Probably incorrect seeing value of {} in header. Switch to default of 1.1.".format(val))
+                args.seeing_fwhm = 1.1
+        else :
+            args.seeing_fwhm = 1.1
+            log.info("Using default SEEING = {} arcsec".format(args.seeing_fwhm))
+    else :
+        log.info("Using SEEING = {} arcsec from command line argument".format(args.seeing_fwhm))
 
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput, exposure_seeing_fwhm = args.seeing_fwhm, stdcheck=stdcheck)
 
@@ -226,6 +241,8 @@ def main(args) :
     frame.meta['IN_SKY']   = shorten_filename(args.sky)
     frame.meta['FIBERFLT'] = shorten_filename(args.fiberflat)
     frame.meta['STDMODEL'] = shorten_filename(args.models)
+
+    frame.meta['FCSEEING'] = args.seeing_fwhm
 
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)
