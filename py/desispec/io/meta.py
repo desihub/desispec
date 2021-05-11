@@ -57,6 +57,7 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         raw = '{rawdata_dir}/{night}/{expid:08d}/desi-{expid:08d}.fits.fz',
         coordinates = '{rawdata_dir}/{night}/{expid:08d}/coordinates-{expid:08d}.fits',
         fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
         # preproc/
         # Note: fibermap files will eventually move to preproc.
