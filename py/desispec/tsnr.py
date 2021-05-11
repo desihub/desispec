@@ -461,7 +461,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False, model_extfiberloss=True):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False, model_extfiberloss=False, components=False):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -596,7 +596,9 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
     maskfactor *= (frame.ivar > 0.0)
 
     tsnrs = {}
-
+    tsnrs_signal = {}
+    tsnrs_background = {}
+    
     for tracer in ensemble.keys():
         denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
@@ -641,6 +643,15 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         # Eqn. (1) of https://desi.lbl.gov/DocDB/cgi-bin/private/RetrieveFile?docid=4723;filename=sky-monitor-mc-study-v1.pdf;version=2
         tsnrs[tracer] = np.sum(result * maskfactor, axis=1)
 
+        if components:
+            tsnrs_signal[tracer] = (fluxcalib.calib * fiberflat.fiberflat * dust_transmission(frame.wave, ebv))**2.
+
+            if tracer in tsnr_fiberfracs:
+                tsnrs_signal[tracer] *= tsnr_fiberfracs[tracer][:,None]**2.
+
+            # With the Poisson term, the background is tracer dependent. 
+            tsnrs_background[tracer] = denom 
+
     results=dict()
 
     for tracer in tsnrs.keys():
@@ -648,7 +659,18 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         results[key]=tsnrs[tracer]
         log.info('{} {} {} = {:.6f}'.format(frame.meta["EXPID"], camera, key, np.median(tsnrs[tracer])))
 
-    return results, alpha, tsnr_fiberfracs['exposure_seeing_fwhm']
+    if components:
+        components = {}
+
+        for x, d in zip(['SIGNAL', 'BACKGROUND'], [tsnrs_signal, tsnrs_background]):
+            for tracer in d.keys():
+                key = 'TSNR2_{}_{}_{}'.format(tracer.upper(), band.upper(), x)
+                components[key] = d[tracer]
+            
+        return results, alpha, tsnr_fiberfracs['exposure_seeing_fwhm'], components
+        
+    else:
+        return results, alpha, tsnr_fiberfracs['exposure_seeing_fwhm']
 
 def tsnr2_to_efftime(tsnr2,target_type,program="DARK",efftime_config=None) :
     """ Converts TSNR2 values to effective exposure time.
