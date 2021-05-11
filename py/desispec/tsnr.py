@@ -352,7 +352,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     fa = FastFiberAcceptance()
         
     # Compute the effective seeing.
-    exposure_seeing_fwhm = fa.psf_seeing(etc_fiberfracs['psf']) # [microns]
+    exposure_seeing_fwhm = fa.psf_seeing_fwhm(etc_fiberfracs['psf']) # [microns]
 
     fiber_params = load_desiparams()['fibers']
     fiber_dia = fiber_params['diameter_um'] # 107 um.
@@ -497,7 +497,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
     etcpath=findfile('etc', night=night, expid=expid)
 
     if not os.path.exists(etcpath):
-        log.critical('Failed to find etc data at {}.  Assuming nominal.'.format(etcpath))
+        log.critical('Failed to find etc data at {}.  Assuming nominal etc fiberfracs.'.format(etcpath))
 
         etc_fiberfracs={}
         
@@ -518,10 +518,10 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
 
     tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs)
 
-    exposure_seeing_fwhm = tsnr_fiberfracs['exposure_seeing_fwhm']
-
     if not model_extfiberloss:
-        # No extended fiberlosses.
+        # No extended fiberlosses. 
+        exposure_seeing_fwhm = tsnr_fiberfracs['exposure_seeing_fwhm']
+        
         tsnr_fiberfracs = {}
         tsnr_fiberfracs['exposure_seeing_fwhm'] = exposure_seeing_fwhm
                 
