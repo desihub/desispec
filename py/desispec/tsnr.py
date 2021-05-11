@@ -390,7 +390,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     ps = load_platescale()
     isotropic_platescale = np.interp(x_mm**2+y_mm**2,ps['radius']**2,np.sqrt(ps['radial_platescale']*ps['az_platescale'])) # um/arcsec                                                                                                        
     # we could include here a wavelength dependence on seeing, or non-Gaussian.
-    avg_sigmas_um  = (exposure_seeing_fwhm/2.35) * avg_platescale # um
+    avg_sigmas_um  = (exposure_seeing_fwhm/2.35) / avg_platescale # um
     iso_sigmas_um  = (exposure_seeing_fwhm/2.35) * isotropic_platescale # um
     
     offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um                                                                                                                                                                                        
@@ -444,7 +444,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
                                                                                                                                                        tsnr_fiberfracs[tracer].max(),\
                                                                                                                                                        exposure_seeing_fwhm))
     # Normalize.
-    tracers = list(tsnr_fiberfracs.keys())
+    tracers = ['mws', 'qso', 'lya', 'elg', 'lrg', 'bgs']
 
     notnull = psf_like_1p1 > 0.0
 
@@ -581,7 +581,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
 
     tsnrs = {}
 
-    tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs, no_offsets=True)
+    tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs)
     
     for tracer in ensemble.keys():
         denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
