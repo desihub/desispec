@@ -461,7 +461,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False, model_extfiberloss=True):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -497,18 +497,34 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
     etcpath=findfile('etc', night=night, expid=expid)
 
     if not os.path.exists(etcpath):
-        log.critical('Failed to find etc data at {}'.format(etcpath))
+        log.critical('Failed to find etc data at {}.  Assuming nominal.'.format(etcpath))
+
+        etc_fiberfracs={}
+        
+        etc_fiberfracs['psf'] = 0.56198
+        etc_fiberfracs['elg'] = 0.41220
+        etc_fiberfracs['bgs'] = 0.18985
+        
     else:
         log.info('Retrieved etc data from {}'.format(etcpath))
         
-    with open(etcpath) as f: 
-        etcdata = json.load(f)
+        with open(etcpath) as f: 
+            etcdata = json.load(f)
 
-    etc_fiberfracs={}
-    
-    for tracer in ['psf', 'elg', 'bgs']:
-        etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
-        
+        etc_fiberfracs={}
+
+        for tracer in ['psf', 'elg', 'bgs']:
+            etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
+
+    tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs)
+
+    exposure_seeing_fwhm = tsnr_fiberfracs['exposure_seeing_fwhm']
+
+    if not model_extfiberloss:
+        # No extended fiberlosses.
+        tsnr_fiberfracs = {}
+        tsnr_fiberfracs['exposure_seeing_fwhm'] = exposure_seeing_fwhm
+                
     psfpath=findcalibfile([frame.meta],"PSF")
     psf=GaussHermitePSF(psfpath)
 
@@ -581,8 +597,6 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
 
     tsnrs = {}
 
-    tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs)
-    
     for tracer in ensemble.keys():
         denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
@@ -634,7 +648,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         results[key]=tsnrs[tracer]
         log.info('{} {} {} = {:.6f}'.format(frame.meta["EXPID"], camera, key, np.median(tsnrs[tracer])))
 
-    return results, alpha
+    return results, alpha, tsnr_fiberfracs['exposure_seeing_fwhm']
 
 def tsnr2_to_efftime(tsnr2,target_type,program="DARK",efftime_config=None) :
     """ Converts TSNR2 values to effective exposure time.
