@@ -415,6 +415,8 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     ## 
     tsnr_fiberfracs        = {}
 
+    tsnr_fiberfracs['exposure_seeing_fwhm'] = exposure_seeing_fwhm
+    
     if no_offsets:
         offsets_um = np.zeros_like(offsets_um)
 
@@ -585,7 +587,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
         if model_poisson:
-            denom += var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seeing_fwhm=seeing_fwhm)
+            denom += var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seeing_fwhm=tsnr_fiberfracs['exposure_seeing_fwhm'])
         
         wave = ensemble[tracer].wave[band]
         dflux = ensemble[tracer].flux[band]
