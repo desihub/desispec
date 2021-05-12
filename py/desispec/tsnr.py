@@ -4,6 +4,7 @@ import astropy.io.fits as fits
 import copy
 import glob
 import json
+import scipy
 import numpy as np
 import yaml
 
@@ -23,6 +24,8 @@ from desispec.io.meta import findfile
 from astropy import units
 from astropy import constants as const
 from desimodel.io import load_desiparams
+from desispec.fiberfluxcorr import flat_to_psf_flux_correction
+
 
 def dust_transmission(wave,ebv):
     Rv = 3.1
@@ -407,10 +410,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     ##
     ##  We do the same here until that is corrected:  https://github.com/desihub/desispec/issues/1267
     ##
-    iso_sigmas_um_1p1      = (1.1/2.35) * isotropic_platescale
-
-    ##  @Julien: offsets = 0.0?
-    psf_like_1p1           = fa.value("POINT",iso_sigmas_um_1p1,offsets=np.zeros_like(iso_sigmas_um_1p1))
+    psf_like_1p1           = flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1)
 
     ## 
     tsnr_fiberfracs        = {}
@@ -421,7 +421,9 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
         offsets_um = np.zeros_like(offsets_um)
 
         log.info('Zeroing fiber offsets for tsnr fiberfracs.')
-    
+
+    # Note:  https://github.com/desihub/desispec/blob/05cd4cdf501b9afb7376bb0ea205517246b58769/py/desispec/fiberfluxcorr.py#L74
+        
     # 0.45''
     tsnr_fiberfracs['elg']  = fa.value("DISK", iso_sigmas_um,offsets=offsets_um,hlradii=0.45 * np.ones_like(iso_sigmas_um))    
     tsnr_fiberfracs['elg'] *= etc_fiberfracs['elg'] / fa.value("DISK", avg_sigmas_um,offsets=np.zeros_like(avg_sigmas_um),hlradii=0.45 * np.ones_like(avg_sigmas_um))
@@ -452,7 +454,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     
     for tracer in tracers:
         # To the TSNR 'signal' we apply the flux calib (including transparency).  Here, we remove the PSF fiberloss accounted for there. 
-        tsnr_fiberfracs[tracer][ notnull] /= psf_like_1p1[notnull]
+        tsnr_fiberfracs[tracer][ notnull] *= psf_like_1p1[notnull]
         tsnr_fiberfracs[tracer][~notnull]  = 1.0
         
     return  tsnr_fiberfracs
@@ -461,7 +463,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, sky_ivar=False, model_poisson=False, model_extfiberloss=False, components=False, no_offsets=False, unitalpha=False):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, sky_ivar=False, model_poisson=False, model_extfiberloss=False, components=False, no_offsets=False, unit_alpha=False):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -591,7 +593,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
     if alpha_only:
         return {}, alpha
     
-    if unitalpha:
+    if unit_alpha:
         alpha = 1.0
         log.info("FORCING:  {} {} TSNR ALPHA = {:.6f}".format(frame.meta["EXPID"], camera, alpha))
 
@@ -659,11 +661,12 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
             if tracer in tsnr_fiberfracs:
                 tsnrs_signal[tracer] *= tsnr_fiberfracs[tracer][:,None]**2.
                 
-            tsnrs_signal[tracer] = np.sum(maskfactor * tsnrs_signal[tracer], axis=1) 
+            tsnrs_signal[tracer] = np.sqrt( np.sum(maskfactor * tsnrs_signal[tracer], axis=1) )
                 
-            # With the Poisson term, the background is tracer dependent. 
-            tsnrs_background[tracer] = np.sum(maskfactor * denom, axis=1) 
-
+            # With the Poisson term, the background is tracer dependent.
+            # scipy.signal.medfilt
+            tsnrs_background[tracer] = etc_fiberfracs['psf'] * np.sum(wave * denom / fluxcalib.calib, axis=1)
+            
     results=dict()
 
     for tracer in tsnrs.keys():
