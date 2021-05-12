@@ -461,7 +461,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False, model_extfiberloss=False, components=False, no_offsets=False):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, sky_ivar=False, model_poisson=False, model_extfiberloss=False, components=False, no_offsets=False, unitalpha=False):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -590,6 +590,10 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
 
     if alpha_only:
         return {}, alpha
+    
+    if unitalpha:
+        alpha = 1.0
+        log.info("FORCING:  {} {} TSNR ALPHA = {:.6f}".format(frame.meta["EXPID"], camera, alpha))
 
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
@@ -600,7 +604,13 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
     tsnrs_background = {}
     
     for tracer in ensemble.keys():
-        denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
+        if sky_ivar:
+            log.info('Assuming model IVAR derived from sky only.')
+            
+            _, denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha, components=True)
+            
+        else:
+            denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
 
         if model_poisson:
             denom += var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seeing_fwhm=tsnr_fiberfracs['exposure_seeing_fwhm'])
@@ -648,9 +658,11 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
 
             if tracer in tsnr_fiberfracs:
                 tsnrs_signal[tracer] *= tsnr_fiberfracs[tracer][:,None]**2.
-
+                
+            tsnrs_signal[tracer] = np.sum(maskfactor * tsnrs_signal[tracer], axis=1) 
+                
             # With the Poisson term, the background is tracer dependent. 
-            tsnrs_background[tracer] = denom 
+            tsnrs_background[tracer] = np.sum(maskfactor * denom, axis=1) 
 
     results=dict()
 
