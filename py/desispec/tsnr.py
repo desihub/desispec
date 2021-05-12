@@ -461,7 +461,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
 _camera_nea_angperpix = None
 _band_ensemble = None
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False, model_extfiberloss=False, components=False):
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_ivar=True, model_poisson=False, model_extfiberloss=False, components=False, no_offsets=False):
     '''
     Compute template SNR^2 values for a given frame
 
@@ -516,7 +516,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         for tracer in ['psf', 'elg', 'bgs']:
             etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
 
-    tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs)
+    tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs, no_offsets=no_offsets)
 
     if not model_extfiberloss:
         # No extended fiberlosses. 
