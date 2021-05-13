@@ -43,6 +43,9 @@ def parse(options=None):
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
     parser.add_argument('--maxstdstars', type=int, default=30, \
             help='Maximum number of stdstars to include')
+    parser.add_argument('--std-targetids', type=int, default=None,
+                         nargs='*',
+                         help='List of TARGETIDs of standards overriding the targeting info')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
     parser.add_argument('--ignore-gpu', action='store_true', help='Ignore GPU, if available')
 
@@ -155,6 +158,10 @@ def main(args, comm=None) :
         if rank == 0:
             log.info('GPU not available')
 
+    std_targetids = None
+    if args.std_targetids is not None:
+        std_targetids = args.std_targetids
+
     # READ DATA
     ############################################
     # First loop through and group by exposure and spectrograph
@@ -201,7 +208,10 @@ def main(args, comm=None) :
             # Set fibermask flagged spectra to have 0 flux and variance
             frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
             frame_fibermap = frame.fibermap
-            frame_starindices = np.where(isStdStar(frame_fibermap))[0]
+            if std_targetids is None:
+                frame_starindices = np.where(isStdStar(frame_fibermap))[0]
+            else:
+                frame_starindices = np.nonzero(np.isin(frame_fibermap['TARGETID'], std_targetids))[0]
 
             #- Confirm that all fluxes have entries but trust targeting bits
             #- to get basic magnitude range correct
@@ -461,6 +471,7 @@ def main(args, comm=None) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
+
     if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
         log.error('Unknown PHOTSYS found')
         raise Exception('Unknown PHOTSYS found')
@@ -528,7 +539,7 @@ def main(args, comm=None) :
                                         star_mags['GAIA-BP'],
                                         star_mags['GAIA-RP'], ebv).items():
         star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - extval
-        
+
 
     star_colors = dict()
     star_unextincted_colors = dict()
@@ -553,7 +564,14 @@ def main(args, comm=None) :
     normflux=np.zeros((nstars, stdwave.size))
     fitted_model_colors = np.zeros(nstars)
 
-    for star in range(rank, nstars, size):
+    local_comm, head_comm = None, None
+    if comm is not None:
+        # All ranks in local_comm work on the same stars
+        local_comm = comm.Split(rank % nstars, rank)
+        # The color 1 in head_comm contains all ranks that are have rank 0 in local_comm
+        head_comm = comm.Split(rank < nstars, rank)
+
+    for star in range(rank % nstars, nstars, size):
 
         log.info("rank %d: finding best model for observed star #%d"%(rank, star))
 
@@ -596,16 +614,20 @@ def main(args, comm=None) :
             selection.size, stdflux.shape[0]))
 
         # Match unextincted standard stars to data
-        coefficients, redshift[star], chi2dof[star] = match_templates(
+        match_templates_result = match_templates(
             wave, flux, ivar, resolution_data,
             stdwave, stdflux[selection],
             teff[selection], logg[selection], feh[selection],
             ncpu=ncpu, z_max=args.z_max, z_res=args.z_res,
-            template_error=args.template_error
+            template_error=args.template_error, comm=local_comm
             )
 
-        linear_coefficients[star,selection] = coefficients
+        # Only local rank 0 can perform the remaining work
+        if local_comm is not None and local_comm.Get_rank() != 0:
+            continue
 
+        coefficients, redshift[star], chi2dof[star] = match_templates_result
+        linear_coefficients[star,selection] = coefficients
         log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
             starfibers[star],
             np.inner(teff,linear_coefficients[star]),
@@ -659,12 +681,12 @@ def main(args, comm=None) :
         log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
         normflux[star] = model*scalefac
 
-    if comm is not None:
-        linear_coefficients = comm.reduce(linear_coefficients, op=MPI.SUM, root=0)
-        redshift = comm.reduce(redshift, op=MPI.SUM, root=0)
-        chi2dof = comm.reduce(chi2dof, op=MPI.SUM, root=0)
-        fitted_model_colors = comm.reduce(fitted_model_colors, op=MPI.SUM, root=0)
-        normflux = comm.reduce(normflux, op=MPI.SUM, root=0)
+    if head_comm is not None and rank < nstars: # head_comm color is 1
+        linear_coefficients = head_comm.reduce(linear_coefficients, op=MPI.SUM, root=0)
+        redshift = head_comm.reduce(redshift, op=MPI.SUM, root=0)
+        chi2dof = head_comm.reduce(chi2dof, op=MPI.SUM, root=0)
+        fitted_model_colors = head_comm.reduce(fitted_model_colors, op=MPI.SUM, root=0)
+        normflux = head_comm.reduce(normflux, op=MPI.SUM, root=0)
 
     # Check at least one star was fit. The check is peformed on rank 0 and
     # the result is bcast to other ranks so that all ranks exit together if
@@ -679,19 +701,20 @@ def main(args, comm=None) :
         log.error("No star has been fit.")
         sys.exit(12)
 
-    # get the fibermap from any input frame for the standard stars
-    fibermap = Table(frame.fibermap)
-    keep = np.in1d(fibermap['FIBER'], starfibers[fitted_stars])
-    fibermap = fibermap[keep]
-
-    # drop fibermap columns specific to exposures instead of targets
-    for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
-            'FIBER_RA', 'FIBER_DEC', 'FIBER_X', 'FIBER_Y']:
-        if col in fibermap.colnames:
-            fibermap.remove_column(col)
-
     # Now write the normalized flux for all best models to a file
     if rank == 0:
+
+        # get the fibermap from any input frame for the standard stars
+        fibermap = Table(frame.fibermap)
+        keep = np.isin(fibermap['FIBER'], starfibers[fitted_stars])
+        fibermap = fibermap[keep]
+
+        # drop fibermap columns specific to exposures instead of targets
+        for col in ['DELTA_X', 'DELTA_Y', 'EXPTIME', 'NUM_ITER',
+                'FIBER_RA', 'FIBER_DEC', 'FIBER_X', 'FIBER_Y']:
+            if col in fibermap.colnames:
+                fibermap.remove_column(col)
+
         data={}
         data['LOGG']=linear_coefficients[fitted_stars,:].dot(logg)
         data['TEFF']= linear_coefficients[fitted_stars,:].dot(teff)

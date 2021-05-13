@@ -32,6 +32,8 @@ parser.add_argument('--rest-frame', action='store_true',
                     help = 'show rest-frame wavelength')
 parser.add_argument('--errors', action='store_true',
                     help = 'show error bars')
+parser.add_argument('--only-valid', action='store_true',
+                    help = 'show error bars')
 
 
 args        = parser.parse_args()
@@ -49,7 +51,11 @@ if args.zbest is None and args.rest_frame :
 
 spectra = []
 for filename in args.infile :
-    spectra.append(read_spectra(filename))
+    spec=read_spectra(filename)
+    if args.only_valid :
+        good=(spec.fibermap["FIBERSTATUS"]==0)
+        spec=spec[good]
+    spectra.append(spec)
 
 targetids=None
 if ( targetids is None ) and ( args.targetid is not None ) :
@@ -92,7 +98,7 @@ for tid in targetids :
     if zbest is not None :
         j=np.where(zbest["TARGETID"]==tid)[0][0]
         line += " ZBEST={} SPECTYPE={} ZWARN={}".format(zbest["Z"][j],zbest["SPECTYPE"][j],zbest["ZWARN"][j])
-
+        zval=zbest["Z"][j]
         tx = templates[(zbest['SPECTYPE'][j], zbest['SUBTYPE'][j])]
         for band in spectra[0].bands:
             model_flux[band] = np.zeros(spectra[0].wave[band].shape)
@@ -107,10 +113,11 @@ for tid in targetids :
     print(line)
     for spec in spectra :
         jj=np.where(spec.fibermap["TARGETID"]==tid)[0]
+        fiber=spec.fibermap["FIBER"][jj[0]]
 
         wavescale=1.
         if args.rest_frame :
-            wavescale = 1./(1+zbest['Z'][j])
+            wavescale = 1./(1+zval)
 
         for j in jj :
             for b in spec._bands :
@@ -136,7 +143,7 @@ for tid in targetids :
         for band in spectra[0].bands:
             plt.plot(wavescale*spectra[0].wave[band],model_flux[band],"-",alpha=0.6)
             for elem in lines :
-                line=(1+zbest['Z'][j])*lines[elem]
+                line=(1+zval)*lines[elem]
                 if line>spectra[0].wave[band][0] and line<spectra[0].wave[band][-1] :
                     plt.axvline(wavescale*line,color="red",linestyle="--",alpha=0.4)
                     y=np.interp(wavescale*line,wavescale*spectra[0].wave[band],model_flux[band])
@@ -148,8 +155,9 @@ for tid in targetids :
     plt.grid()
     props = dict(boxstyle='round', facecolor='yellow', alpha=0.2)
     bla="TID = {}".format(tid)
+    bla+="\nFIBER = {}".format(fiber)
     if zbest is not None :
-        bla+="\nZ  = {:4.3f}".format(zbest['Z'][j])
+        bla+="\nZ  = {:4.3f}".format(zval)
     plt.text(0.9,0.9,bla,fontsize=12, bbox=props,transform = ax.transAxes,verticalalignment='top', horizontalalignment='right')
     if args.ylim is not None:
         plt.ylim(args.ylim[0], args.ylim[1])

@@ -567,7 +567,7 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     return final_coefficients,chi2
 
 
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00002, template_error=0):
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00002, template_error=0, comm=None):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -582,6 +582,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         logg : 1D[nstd] model surface gravity
         feh : 1D[nstd] model metallicity
         ncpu : number of cpu for multiprocessing
+        comm : MPI communicator; if given, ncpu will be ignored and only rank 0 will return results that are not None
 
     Returns:
         coef : numpy.array of linear coefficient of standard stars
@@ -599,11 +600,15 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # Each data(3 channels) is compared to every model.
     # flux should be already flat fielded and sky subtracted.
 
-
-
     cameras = list(flux.keys())
     log = get_logger()
     log.debug(time.asctime())
+
+    # Initialize MPI
+    if comm is not None:
+        from mpi4py import MPI
+        size, rank = comm.Get_size(), comm.Get_rank()
+        log.debug("Using MPI. rank: {}, size: {}".format(rank, size))
 
     # fit continuum and save it
     continuum={}
@@ -712,8 +717,11 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                    "template_id":template_id}
         func_args.append( arguments )
 
-
-    if ncpu > 1:
+    if comm is not None and comm.Get_size() > 1: # MPI mode & more than one rank per star
+        results = list(map(_func, func_args[rank::size]))
+        # All reduce here because we'll need to divide the work out again
+        results = comm.allreduce(results, op=MPI.SUM)
+    elif ncpu > 1:
         log.debug("creating multiprocessing pool with %d cpus"%ncpu); sys.stdout.flush()
         pool = multiprocessing.Pool(ncpu)
         log.debug("Running pool.map() for {} items".format(len(func_args))); sys.stdout.flush()
@@ -793,7 +801,10 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
             arguments={"template_id":t,"camera_index":index,"template_flux":template_flux[t][ii]}
             func_args.append(arguments)
 
-    if ncpu > 1:
+    if comm is not None and comm.Get_size() > 1: # MPI mode & more than one rank per star
+        results = list(map(_func2, func_args[rank::size]))
+        results = comm.reduce(results, op=MPI.SUM, root=0)
+    elif ncpu > 1:
         log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d"%ncpu)
         pool = multiprocessing.Pool(ncpu)
         results  =  pool.map(_func2, func_args)
@@ -805,6 +816,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("divide templates serially")
         results = [_func2(x) for x in func_args]
         log.debug("Finished serial loop")
+
+    if comm is not None and rank != 0: # All the work left belongs to rank 0
+        return None
 
     # collect results
     for result in results :
@@ -825,8 +839,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # interpolate around best model using parameter grid
     coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
     log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
-
-
     return coef,z,chi2/ndata
 
 
@@ -856,7 +868,7 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1) :
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1, stdcheck=True) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
@@ -869,6 +881,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
       exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
+      stdcheck: check if the model stars are actually standards according 
+                to the fibermap and only rely on those
 
     Returns:
          desispec.FluxCalib object
@@ -951,17 +965,21 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
-    stdfibers = np.where(isStdStar(tframe.fibermap))[0]
-    assert len(stdfibers) > 0
+    if stdcheck:
+        stdfibers = np.where(isStdStar(tframe.fibermap))[0]
+        assert len(stdfibers) > 0
 
-    if not np.all(np.in1d(stdfibers, input_model_fibers)):
-        bad = set(input_model_fibers) - set(stdfibers)
-        if len(bad) > 0:
-            log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
-        stdfibers = np.intersect1d(stdfibers, input_model_fibers)
+        if not np.all(np.in1d(stdfibers, input_model_fibers)):
+            bad = set(input_model_fibers) - set(stdfibers)
+            if len(bad) > 0:
+                log.error('Discarding input_model_fibers that are not standards: {}'.format(bad))
+            stdfibers = np.intersect1d(stdfibers, input_model_fibers)
 
-    # also other way around
-    stdfibers = np.intersect1d(input_model_fibers, stdfibers)
+        # also other way around
+        stdfibers = np.intersect1d(input_model_fibers, stdfibers)
+    else:
+        stdfibers = input_model_fibers
+    
     log.info("Std stars fibers: {}".format(stdfibers))
 
     stdstars = tframe[stdfibers]
@@ -1472,7 +1490,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
 
     # Unpack model
     exptime = frame.meta['EXPTIME']
-
+    
     # Standard stars
     stdfibers = np.where(isStdStar(frame.fibermap))[0]
     stdstars = frame[stdfibers]
@@ -1509,7 +1527,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # MAX ZP Offset
-    #stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
+
     ZPoffset = ZP_fiducial-qadict['ZP']
     imax = np.argmax(np.abs(ZPoffset))
     qadict['MAX_ZP_OFF'] = [float(ZPoffset[imax]),

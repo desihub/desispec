@@ -15,6 +15,14 @@ def parse_args():  # options=None):
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
+    parser.add_argument("--z-submit-types", type=str, default='perexp,pernight', required=False,
+                        help="The group types of redshifts that should be submitted with each exposure. If not "+
+                             "specified, default  is 'perexp,pernight'. If "+
+                             "'false' or 'None' then no redshifts are submitted")
+    parser.add_argument("--dry-run-level", type=int, default=0, required=False,
+                        help="If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. "+
+                             "If dry_run=2, the scripts will not be writter or submitted. Logging will remain the same "+
+                             "for testing as though scripts are being submitted. Default is 0 (false).")
     # File and dir defs
     #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
     #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
@@ -33,7 +41,10 @@ def parse_args():  # options=None):
                         help="File format and extension for the exp and proc tables.")
     # Code Flags
     parser.add_argument("--dry-run", action="store_true",
-                        help="Perform a dry run where no jobs are actually created or submitted.")
+                        help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
+                        "dry-run-level is defined as nonzero.")
+    parser.add_argument("--no-redshifts", action="store_true",
+                        help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
     parser.add_argument("--error-if-not-available", action="store_true",
                         help="Raise an error instead of reporting and moving on if an exposure "+\
                              "table doesn't exist.")

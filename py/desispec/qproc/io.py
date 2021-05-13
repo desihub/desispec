@@ -83,8 +83,9 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
         x.header['FIBERMIN'] = 500*qframe.spectrograph  # Hard-coded (as in desispec.qproc.qframe)
     else:
         log.error("You are likely writing a qframe without sufficient fiber info")
+        raise ValueError('no fibermap')
 
-    hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
     return outfile
