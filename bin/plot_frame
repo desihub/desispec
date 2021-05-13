@@ -40,6 +40,7 @@ parser.add_argument('--wmin', type = float, default=None, help = 'min of wavelen
 parser.add_argument('--wmax', type = float, default=None, help = 'max of wavelength range for mean flux of focal plane view (only valid form Frame, not QFrame)')
 parser.add_argument('--no-mask', action = 'store_true', help = 'ignore mask')
 parser.add_argument('--std-stars', action = 'store_true', help = 'show only the std stars')
+parser.add_argument('--sky-fibers', action = 'store_true', help = 'show only the sky fibers')
 
 
 args   = parser.parse_args()
@@ -74,6 +75,10 @@ for filename in args.infile :
 
     if args.std_stars :
         selection = isStdStar(frame.fibermap)
+        fibers = frame.fibermap["FIBER"][selection]
+        print("showing std stars fibers: {}".format(fibers))
+    if args.sky_fibers :
+        selection = frame.fibermap["OBJTYPE"]=="SKY"
         fibers = frame.fibermap["FIBER"][selection]
         print("showing std stars fibers: {}".format(fibers))
 
