@@ -34,9 +34,6 @@ Full desispec API Reference
 .. automodule:: desispec.database.util
     :members:
 
-.. automodule:: desispec.dustextinction
-    :members:
-
 .. automodule:: desispec.fiberflat
     :members:
 
@@ -399,4 +396,3 @@ Full desispec API Reference
 
 .. automodule:: desispec.xytraceset
     :members:
-
