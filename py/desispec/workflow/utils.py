@@ -155,7 +155,7 @@ def check_running(proc_name='desi_daily_proc_manager', suppress_outputs=False):
     """
     log = get_logger()
     if not suppress_outputs:
-        log.info(f"Looking for other python processes with {proc_name} in command")
+        log.info(f"Looking for other python processes with \'{proc_name}\' in command")
 
     mypid = int(os.getpid())
     ## getlogin() doesn't work with desi account, so try environment variable first
@@ -167,6 +167,7 @@ def check_running(proc_name='desi_daily_proc_manager', suppress_outputs=False):
         log.info(f"pid of this process: {mypid}, under username={user}")
 
     running = False
+    ## Loop through all processes on the machine
     for p in psutil.process_iter():
         ## In testing there was an exception thrown when a process ended during the loop. Protect with try-except
         try:
@@ -179,14 +180,14 @@ def check_running(proc_name='desi_daily_proc_manager', suppress_outputs=False):
             if not suppress_outputs:
                 log.error("Couldn't get process information from process_iter object.")
             continue
-        # ( status == 'running'               ) and \
+        # ( status in ['running','sleeping'] )
+        ## if not this PID, but same user and command, then it the given command is already running
         if (ppid != mypid) and (proc_name in cmdline) and \
            (puser == user) and (pname in ['python', proc_name]):
             if not suppress_outputs:
-                log.error(f"{proc_name} already running as PID {ppid}:")
+                log.warning(f"{proc_name} already running as PID {ppid}:")
                 log.info(f"\t {cmdline}")
                 log.info(f"\t status={status}, user={puser}, name={pname}")
-            # print(p.as_dict())
             running = True
             break
 
