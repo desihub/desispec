@@ -154,15 +154,43 @@ def check_running(proc_name='desi_daily_proc_manager', suppress_outputs=False):
                         the current process (signifying a second instance of that program).
     """
     log = get_logger()
+    if not suppress_outputs:
+        log.info(f"Looking for other python processes with \'{proc_name}\' in command")
+
+    mypid = int(os.getpid())
+    ## getlogin() doesn't work with desi account, so try environment variable first
+    if 'USER' in os.environ:
+        user = os.getenv('USER')
+    else:
+        user = os.getlogin()
+    if not suppress_outputs:
+        log.info(f"pid of this process: {mypid}, under username={user}")
+
     running = False
-    mypid = os.getpid()
+    ## Loop through all processes on the machine
     for p in psutil.process_iter():
-        if p.pid != mypid and proc_name in ' '.join(p.cmdline()):
+        ## In testing there was an exception thrown when a process ended during the loop. Protect with try-except
+        try:
+            cmdline = ' '.join(p.cmdline())
+            status = str(p.status()).lower()
+            ppid = int(p.pid)
+            puser = p.username()
+            pname = p.name()
+        except:
             if not suppress_outputs:
-                log.error('ERROR: {} already running as PID {}:'.format(proc_name, p.pid))
-                log.info('  ' + ' '.join(p.cmdline()))
+                log.error("Couldn't get process information from process_iter object.")
+            continue
+        # ( status in ['running','sleeping'] )
+        ## if not this PID, but same user and command, then it the given command is already running
+        if (ppid != mypid) and (proc_name in cmdline) and \
+           (puser == user) and (pname in ['python', proc_name]):
+            if not suppress_outputs:
+                log.warning(f"{proc_name} already running as PID {ppid}:")
+                log.info(f"\t {cmdline}")
+                log.info(f"\t status={status}, user={puser}, name={pname}")
             running = True
             break
+
     return running
 
 def get_printable_banner(input_str=None):
