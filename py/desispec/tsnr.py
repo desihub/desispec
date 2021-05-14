@@ -656,12 +656,12 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, model_iv
         tsnrs[tracer] = np.sum(result * maskfactor, axis=1)
 
         if components:
-            tsnrs_signal[tracer] = (fluxcalib.calib * fiberflat.fiberflat * dust_transmission(frame.wave, ebv))**2.
+            tsnrs_signal[tracer] = fluxcalib.calib * fiberflat.fiberflat
 
             if tracer in tsnr_fiberfracs:
-                tsnrs_signal[tracer] *= tsnr_fiberfracs[tracer][:,None]**2.
+                tsnrs_signal[tracer] *= tsnr_fiberfracs[tracer][:,None]
                 
-            tsnrs_signal[tracer] = np.sqrt( np.sum(maskfactor * tsnrs_signal[tracer], axis=1) )
+            tsnrs_signal[tracer] = np.sum(maskfactor * tsnrs_signal[tracer], axis=1)
                 
             # With the Poisson term, the background is tracer dependent.
             # scipy.signal.medfilt
