@@ -16,6 +16,227 @@ from desiutil.log import get_logger
 from scipy.optimize import minimize
 from desiutil.dust import dust_transmission
 
+class template_ensemble(object):
+    '''
+    Generate an ensemble of templates to sample tSNR for a range of points in
+    (z, m, OII, etc.) space.
+
+    If conditioned, uses deepfield redshifts and (currently r) magnitudes
+    to condition simulated templates.
+    '''
+
+    def __init__(self) :
+        pass
+
+
+    def generate_templates(wave, tracer, nmodel, redshifts=None,
+                                    mags=None, config=None):
+        '''
+            Dedicated wrapper for desisim.templates.GALAXY.make_templates call,
+            stipulating templates in a redshift range suggested by the FDR.
+            Further, assume fluxes close to the expected (within ~0.5 mags.)
+            in the appropriate band.
+
+            Class init will write ensemble stack to disk at outdir, for a given
+            tracer [bgs, lrg, elg, qso], having generated nmodel templates.
+            Optionally, provide redshifts and mags. to condition appropriately
+            at cost of runtime.
+        '''
+            # Only import desisim if code is run, not at module import
+        # to minimize desispec -> desisim -> desispec dependency loop
+        import desisim.templates
+
+        tracer = tracer.lower()  # support ELG or elg, etc.
+
+        # https://arxiv.org/pdf/1611.00036.pdf
+        #
+        normfilter_south=config.filter
+
+        zrange   = (config.zlo, config.zhi)
+
+        # Variance normalized as for psf, so we need an additional linear
+        # flux loss so account for the relative factors.
+        psf_loss = -config.psf_fiberloss / 2.5
+        psf_loss = 10.**psf_loss
+
+        rel_loss = -(config.wgt_fiberloss - config.psf_fiberloss) / 2.5
+        rel_loss = 10.**rel_loss
+
+        log.info('{} nmodel: {:d}'.format(tracer, nmodel))
+        log.info('{} filter: {}'.format(tracer, config.filter))
+        log.info('{} zrange: {} - {}'.format(tracer, zrange[0], zrange[1]))
+
+        # Calibration vector assumes PSF mtype.
+        log.info('psf fiberloss: {:.3f}'.format(psf_loss))
+        log.info('Relative fiberloss to psf morphtype: {:.3f}'.format(rel_loss))
+
+        if tracer == 'bgs':
+            # Cut on mag.
+            # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1312
+            magrange = (config.med_mag, config.limit_mag)
+
+            maker = desisim.templates.BGS(wave=wave, normfilter_south=normfilter_south)
+            flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+            # Deprecated: fiberloss inherited at exposure stage for given seeing.
+            # Additional factor rel. to psf.; TSNR put onto instrumental
+            # e/A given calibration vector that includes psf-like loss.
+            # flux *= rel_loss
+
+        elif tracer == 'lrg':
+            # Cut on fib. mag. with desisim.templates setting FIBERFLUX to FLUX.
+            # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
+            magrange = (config.med_fibmag, config.limit_fibmag)
+
+            maker = desisim.templates.LRG(wave=wave, normfilter_south=normfilter_south)
+            flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+            # TO DO?
+            # Take factor rel. to psf.; TSNR put onto instrumental
+            # e/A given calibration vector that includes psf-like loss.
+            # Note:  Oppostive to other tracers as templates normalized to fibermag.
+            flux /=	psf_loss
+
+        elif tracer == 'elg':
+            # Cut on mag.
+            # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
+            magrange = (config.med_mag, config.limit_mag)
+
+            maker = desisim.templates.ELG(wave=wave, normfilter_south=normfilter_south)
+            flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+            # Deprecated: fiberloss inherited at exposure stage for given seeing.
+            # Additional factor rel. to psf.; TSNR put onto instrumental
+            # e/A given calibration vector that includes psf-like loss.
+            # flux *= rel_loss
+
+        elif tracer == 'qso':
+            # Cut on mag.
+            # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1422
+            magrange = (config.med_mag, config.limit_mag)
+
+            maker = desisim.templates.QSO(wave=wave, normfilter_south=normfilter_south)
+            flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange)
+
+            # Deprecated: fiberloss inherited at exposure stage for given seeing.
+            # Additional factor rel. to psf.; TSNR put onto instrumental
+            # e/A given calibration vector that includes psf-like loss.
+            # flux *= rel_loss
+
+        else:
+            raise  ValueError('{} is not an available tracer.'.format(tracer))
+
+        log.info('{} magrange: {} - {}'.format(tracer, magrange[0], magrange[1]))
+
+        return  wave, flux, meta, objmeta
+
+    def compute(self, outdir, tracer='elg', nmodel=5, log=None, configdir=None,
+                 Nz=False, smooth=100.):
+        """
+        Generate a template ensemble for template S/N measurements (tSNR)
+
+        Args:
+            outdir: output directory
+
+        Options:
+            tracer: 'bgs', 'lrg', 'elg', or 'qso'
+            nmodel: number of template models to generate
+            log: logger to use
+            configdir: directory to override tsnr-config-{tracer}.yaml files
+            Nz (bool): if True, apply FDR N(z) weights
+            smooth: smoothing scale for <F - smooth(F)>
+
+        Writes {outdir}/tsnr-ensemle-{tracer}.fits files
+        """
+        if log is None:
+            log = get_logger()
+
+        if configdir == None:
+            cpath = resource_filename('desispec', 'data/tsnr/tsnr-config-{}.yaml'.format(tracer))
+        else:
+            cpath = args.configdir + '/tsnr-config-{}.yaml'.format(tracer)
+
+        config = Config(cpath)
+
+        _, flux, meta, objmeta         = generate_templates(wave, tracer=tracer, nmodel=nmodel, config=config)
+
+        self.ensemble_flux             = {}
+        self.ensemble_dflux            = {}
+        self.ensemble_meta             = meta
+        self.ensemble_objmeta          = objmeta
+        self.ensemble_dflux_stack      = {}
+
+        ##
+        smoothing = np.ceil(smooth / wdelta).astype(np.int)
+
+        log.info('Applying {:.3f} AA smoothing ({:d} pixels)'.format(smooth, smoothing))
+
+        # Generate template (d)fluxes for brz bands.
+        for band in ['b', 'r', 'z']:
+            band_wave                 = wave[cslice[band]]
+            in_band                   = np.isin(wave, band_wave)
+            self.ensemble_flux[band]  = flux[:, in_band]
+            dflux                     = np.zeros_like(self.ensemble_flux[band])
+
+            # Retain only spectral features < 100. Angstroms.
+            # dlambda per pixel = 0.8; 100A / dlambda per pixel = 125.
+            for i, ff in enumerate(self.ensemble_flux[band]):
+                sflux                 = convolve(ff, Box1DKernel(smoothing), boundary='extend')
+                dflux[i,:]            = ff - sflux
+
+            self.ensemble_dflux[band] = dflux
+
+        zs = meta['REDSHIFT'].data
+
+        if Nz:
+            log.info('Applying FDR N(Z) weights.')
+
+            # Get tracer N(z) [Total number per sq deg per dz=0.1 redshift bin].
+            zmin, zmax, N = np.loadtxt(os.environ['DESIMODEL'] + '/data/targets/nz_{}.dat'.format(tracer), unpack=True, usecols = (0,1,2))
+            zmid = 0.5 * (zmin + zmax)
+
+            interp  = interp1d(zmid, N, kind='linear', copy=True, bounds_error=True, fill_value=None, assume_sorted=False)
+            weights = interp(zs)
+
+        else:
+            log.info('Assuming uniform in z stack.')
+
+            weights = np.ones_like(zs)
+
+        # Stack ensemble.
+        for band in ['b', 'r', 'z']:
+            self.ensemble_dflux_stack[band] = np.sqrt(np.average(self.ensemble_dflux[band]**2., weights=weights, axis=0).reshape(1, len(self.ensemble_dflux[band].T)))
+
+
+    def write(self,filename) :
+
+        hdr = fits.Header()
+        hdr['NMODEL']   = nmodel
+        hdr['TRACER']   = tracer
+        hdr['FILTER']   = config.filter
+        hdr['ZLO']      = config.zlo
+        hdr['ZHI']      = config.zhi
+        hdr['MEDMAG']   = config.med_mag
+        hdr['LIMMAG']   = config.limit_mag
+        hdr['PSFFLOSS'] = config.psf_fiberloss
+        hdr['WGTFLOSS'] = config.wgt_fiberloss
+        hdr['SMOOTH']   = smooth
+
+        hdu_list = [fits.PrimaryHDU(header=hdr)]
+
+        for band in ['b', 'r', 'z']:
+            hdu_list.append(fits.ImageHDU(wave[cslice[band]], name='WAVE_{}'.format(band.upper())))
+            hdu_list.append(fits.ImageHDU(self.ensemble_dflux_stack[band], name='DFLUX_{}'.format(band.upper())))
+
+        if Nz:
+            hdu_list.append(fits.ImageHDU(np.c_[zs, weights], name='WEIGHTS'))
+
+        hdu_list = fits.HDUList(hdu_list)
+
+        hdu_list.writeto(filename, overwrite=True)
+
+        log.info('Successfully written to '+filename)
+
 def get_ensemble(dirpath, bands, smooth=125):
     '''
     Function that takes a frame object and a bitmask and
