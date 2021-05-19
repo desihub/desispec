@@ -1,0 +1,1 @@
+sv1-exposures.csv is the ASCII version of the file /global/cfs/cdirs/desi/survey/observations/SV1/sv1-exposures.fits (version from Apr 3, 2021, md5sum=  9c2eb0996317744c3f17942a504e23db). This table of exposures defines the normalization of the effective times, EFFTIME_DARK and EFFTIME_BRIGHT.
