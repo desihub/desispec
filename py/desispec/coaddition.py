@@ -23,6 +23,89 @@ from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.specscore import compute_coadd_scores
 
+#- Fibermap columns that come from targeting or MTL files
+fibermap_target_cols = (
+    'TARGETID',
+    'PETAL_LOC',
+    'DEVICE_LOC',
+    'LOCATION',
+    'FIBER',
+    'FIBERSTATUS',
+    'TARGET_RA',
+    'TARGET_DEC',
+    'PMRA',
+    'PMDEC',
+    'REF_EPOCH',
+    'LAMBDA_REF',
+    'FA_TARGET',
+    'FA_TYPE',
+    'OBJTYPE',
+    'FIBERASSIGN_X',
+    'FIBERASSIGN_Y',
+    'NUMTARGET',
+    'PRIORITY',
+    'SUBPRIORITY',
+    'OBSCONDITIONS',
+    'MORPHTYPE',
+    'FLUX_G',
+    'FLUX_R',
+    'FLUX_Z',
+    'FLUX_IVAR_G',
+    'FLUX_IVAR_R',
+    'FLUX_IVAR_Z',
+    'REF_ID',
+    'REF_CAT',
+    'GAIA_PHOT_G_MEAN_MAG',
+    'GAIA_PHOT_BP_MEAN_MAG',
+    'GAIA_PHOT_RP_MEAN_MAG',
+    'PARALLAX',
+    'EBV',
+    'FLUX_W1',
+    'FLUX_W2',
+    'FIBERFLUX_G',
+    'FIBERFLUX_R',
+    'FIBERFLUX_Z',
+    'FIBERTOTFLUX_G',
+    'FIBERTOTFLUX_R',
+    'FIBERTOTFLUX_Z',
+    'MASKBITS',
+    'SERSIC',
+    'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2',
+    'PHOTSYS',
+    'PRIORITY_INIT',
+    'NUMOBS_INIT',
+    'RELEASE',
+    'BRICKID',
+    'BRICKNAME', 'BRICK_OBJID',
+    'BLOBDIST',
+    'FIBERFLUX_IVAR_G', 'FIBERFLUX_IVAR_R', 'FIBERFLUX_IVAR_Z',
+    'CMX_TARGET', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET',
+    'HPXPIXEL',
+)
+
+#- Fibermap columns that were added by fiberassign
+fibermap_fiberassign_cols = (
+    'PETAL_LOC', 'DEVICE_LOC', 'LOCATION', 'FIBER', 'LAMBDA_REF',
+    'FIBERSTATUS', 'FA_TARGET', 'FA_TYPE', 'OBJTYPE',
+    'FIBERASSIGN_X', 'FIBERASSIGN_Y',
+    )
+
+#- Fibermap columns added frome the platemaker coordinates file
+fibermap_coords_cols = (
+    'NUM_ITER', 'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y',
+    'FIBER_RA', 'FIBER_DEC',
+        )
+
+#- Fibermap columns with exposure metadata
+fibermap_exp_cols = (
+    'NIGHT', 'EXPID', 'MJD', 'TILEID', 'EXPTIME'
+    )
+
+#- Fibermap columns added by flux calibration
+fibermap_cframe_cols = (
+    'PSF_TO_FIBER_SPECFLUX',
+    )
+
 def coadd_fibermap(fibermap) :
 
     log = get_logger()
