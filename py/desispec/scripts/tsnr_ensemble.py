@@ -26,6 +26,8 @@ from   pkg_resources                 import resource_filename
 from   scipy.interpolate             import interp1d
 from   astropy.table                 import Table, join
 
+from desispec.tsnr import template_ensemble
+
 np.random.seed(seed=314)
 
 # AR/DK DESI spectra wavelengths
@@ -40,14 +42,18 @@ def parse(options=None):
                         help='Number of galaxies in the ensemble.')
     parser.add_argument('--tracer', type = str, default = 'bgs', required=True,
                         help='Tracer to generate of [bgs, lrg, elg, qso].')
-    parser.add_argument('--configdir', type = str, default = None, required=False,
-                        help='Directory to config files if not desispec repo.')
     parser.add_argument('--smooth', type=float, default=100., required=False,
                         help='Smoothing scale [A] for DFLUX calc.')
-    parser.add_argument('--Nz', action='store_true',
-                        help = 'Apply tracer Nz weighting in stacking of ensemble.')
+    parser.add_argument('--config-filename', type = str, default = None, required=False,
+			help='path to config filename (default is from python package desispec/data/tsnr/tsnr-config-{tracer}.yaml)')
+    parser.add_argument('--nz-filename', type = str, default = None, required=False,
+			help='path to n(z) filename (default is from $DESIMODEL/data/targets/nz_{tracer}.dat)')
     parser.add_argument('--outdir', type = str, default = 'bgs', required=True,
 			help='Directory to write to.')
+    parser.add_argument('--no-nz-convolution', action='store_true',
+			help='Dont convolve each template dF^2 with redshift distribution')
+    parser.add_argument('--mag-range', action='store_true',
+			help='Monte Carlo the full mag range (given in config file) instead of using the same effective mag for all templates')
     args = None
 
     if options is None:
@@ -58,41 +64,20 @@ def parse(options=None):
     return args
 
 
-class Config(object):
-    def __init__(self, cpath):
-        with open(cpath) as f:
-            d = yaml.load(f, Loader=yaml.FullLoader)
-
-        for key in d:
-            setattr(self, key, d[key])
 
 
 def main():
-    log = get_logger()
+    #log = get_logger()
 
     args = parse()
 
-    rads = template_ensemble(args.outdir, tracer=args.tracer, nmodel=args.nmodel, log=log, configdir=args.configdir, Nz=args.Nz, smooth=args.smooth)
+    templates = template_ensemble(tracer=args.tracer,config_filename=args.config_filename)
+    templates.compute(nmodel=args.nmodel, smooth=args.smooth, nz_table_filename=args.nz_filename,
+                      convolve_to_nz=(not args.no_nz_convolution), single_mag=(not args.mag_range))
+    filename = "{}/tsnr-ensemble-{}.fits".format(args.outdir,args.tracer)
+    templates.write(filename)
 
-    effective_time_calibration_table_filename = resource_filename('desispec', 'data/tsnr/sv1-exposures.csv')
-
-    slope = tsnr_efftime(effective_time_calibration_table_filename, args.tsnr_run, args.tracer)
-
-    log.info('Appending TSNR2TOEFFTIME coefficient of {:.6f} to {}/tsnr-ensemble-{}.fits.'.format(slope, args.outdir, args.tracer))
-
-    ens = fits.open('{}/tsnr-ensemble-{}.fits'.format(args.outdir, args.tracer))
-    hdr = ens[0].header
-
-    hdr['TSNR2TOEFFTIME'] = slope
-    hdr['EFFTIMEFILE']    = args.external_calib.replace('/global/cfs/cdirs/desi/survey', '$DESISURVEYOPS')
-    hdr['TSNRRUNFILE']    = args.tsnr_run.replace('/global/cfs/cdirs/desi/spectro/redux',        '$REDUX')
-
-    depend.setdep(hdr, 'desisim',  desisim.__version__)
-    depend.setdep(hdr, 'desiutil', desiutil.__version__)
-
-    ens.writeto('{}/tsnr-ensemble-{}.fits'.format(args.outdir, args.tracer), overwrite=True)
-
-    log.info('Done.')
+    #log.info('Done.')
 
 if __name__ == '__main__':
     main()
