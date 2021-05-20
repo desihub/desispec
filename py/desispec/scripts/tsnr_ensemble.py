@@ -66,10 +66,7 @@ def parse(options=None):
 
 
 
-def main():
-    #log = get_logger()
-
-    args = parse()
+def main(args):
 
     templates = template_ensemble(tracer=args.tracer,config_filename=args.config_filename)
     templates.compute(nmodel=args.nmodel, smooth=args.smooth, nz_table_filename=args.nz_filename,
@@ -80,4 +77,4 @@ def main():
     #log.info('Done.')
 
 if __name__ == '__main__':
-    main()
+    print("please run desi_compute_tsnr_ensemble")
