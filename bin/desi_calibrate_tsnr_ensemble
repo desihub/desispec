@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+import desispec.scripts.calibrate_tsnr_ensemble as calibrate_tsnr_ensemble
+
+if __name__ == '__main__':
+    args = calibrate_tsnr_ensemble.parse()
+    calibrate_tsnr_ensemble.main(args)

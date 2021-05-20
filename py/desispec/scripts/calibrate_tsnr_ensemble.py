@@ -7,35 +7,17 @@ Currently assumes redshift and mag ranges derived from FDR, but uniform in both.
 '''
 import os
 import sys
-import yaml
-import desiutil
-import fitsio
-import desisim
 import argparse
-import os.path                       as     path
-import numpy                         as     np
-import astropy.io.fits               as     fits
-import matplotlib.pyplot             as     plt
+import numpy as np
+from pkg_resources import resource_filename
 
-from   desiutil                      import depend
-from   astropy.convolution           import convolve, Box1DKernel
-from   pathlib                       import Path
-from   desiutil.dust                 import mwdust_transmission
-from   desiutil.log                  import get_logger
-from   pkg_resources                 import resource_filename
-from   scipy.interpolate             import interp1d
-from   astropy.table                 import Table, join
+import astropy.io.fits as fits
+from astropy.table import Table, join
 
+import matplotlib.pyplot as plt
 
-from tsnr import template_ensemble
-
-np.random.seed(seed=314)
-
-# AR/DK DESI spectra wavelengths
-# TODO:  where are brz extraction wavelengths defined?  https://github.com/desihub/desispec/issues/1006.
-wmin, wmax, wdelta = 3600, 9824, 0.8
-wave               = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
-cslice             = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(4900, 7781)}
+from desiutil.log import get_logger
+from desispec.tsnr import template_ensemble
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate a sim. template ensemble stack of given type and write it to disk at --outdir.")
@@ -43,6 +25,10 @@ def parse(options=None):
                         help='tsnr-ensemble fits filename')
     parser.add_argument('--tsnr-table-filename', type=str, required=True,
                         help='TSNR afterburner file, with TSNR2_TRACER.')
+    parser.add_argument('--plot', action='store_true',
+                        help='plot the fit.')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='do not save the result in the file')
 
     args = None
 
@@ -108,41 +94,44 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     slope     = np.sum(tsnr_run[ext_col] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
 
     if plot:
-        plt.plot(tsnr_run[ext_col], tsnr_run[tsnr_col], c='k', marker='.', lw=0.0, markersize=1)
-        plt.plot(tsnr_run[ext_col], intercept + slope*tsnr_run[ext_col], c='k', lw=0.5)
-        plt.title('{} = {:.3f} x {} + {:.3f}'.format(tsnr_col, slope, ext_col, intercept))
-        plt.xlabel(ext_col)
-        plt.ylabel(tsnr_col)
+        plt.figure("efftime-vs-tsnr-{}".format(tracer))
+        plt.plot(tsnr_run[tsnr_col], tsnr_run[ext_col], c='k', marker='.', lw=0.0, markersize=1)
+        plt.plot(tsnr_run[tsnr_col], slope*tsnr_run[tsnr_col], c='k', lw=0.5)
+        plt.title('{} = {:.3f} x {}'.format(ext_col, slope, tsnr_col))
+        plt.xlabel(tsnr_col)
+        plt.ylabel(ext_col)
+        plt.grid()
         plt.show()
 
     return  slope
 
 
 
-def main():
+def main(args):
     log = get_logger()
-
-    args = parse()
 
     effective_time_calibration_table_filename = resource_filename('desispec', 'data/tsnr/sv1-exposures.csv')
 
-    slope = tsnr_efftime(effective_time_calibration_table_filename, args.tsnr_table_filename)
-
-    log.info('Appending TSNR2TOEFFTIME coefficient of {:.6f} to {}'.format(slope, args.infile))
 
     ens = fits.open(args.infile)
     hdr = ens[0].header
 
-    hdr['TSNR2TOEFFTIME'] = slope
-    hdr['EFFTIMEFILE']    = args.external_calib.replace('/global/cfs/cdirs/desi/survey', '$DESISURVEYOPS')
-    hdr['TSNRRUNFILE']    = args.tsnr_run.replace('/global/cfs/cdirs/desi/spectro/redux',        '$REDUX')
+    tracer = hdr["TRACER"].strip().lower()
+    log.info("tracer = {}".format(tracer))
 
-    depend.setdep(hdr, 'desisim',  desisim.__version__)
-    depend.setdep(hdr, 'desiutil', desiutil.__version__)
+    slope = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot)
 
-    ens.writeto(args.infile, overwrite=True)
+    if not args.dry_run :
+        log.info('appending TSNR2TOEFFTIME coefficient of {:.6f} to {}'.format(slope, args.infile))
 
-    log.info('Done.')
+        hdr['TSNR2TOEFFTIME'] = slope
+        hdr['EFFTIMEFILE']    = os.path.basename(effective_time_calibration_table_filename)
+        hdr['TSNRRUNFILE']    = os.path.basename(args.tsnr_table_filename)
+        ens.writeto(args.infile, overwrite=True)
+        log.info("wrote {}".format(args.infile))
+    else :
+        log.info('fitted slope = {:.6f}'.format(slope))
+        log.warning("fid not overwrite the file {} (because of option --dry-run)".format(args.infile))
 
 if __name__ == '__main__':
-    main()
+    print("please run desi_calibrate_tsnr_ensemble")
