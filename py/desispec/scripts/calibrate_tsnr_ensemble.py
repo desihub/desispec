@@ -122,11 +122,11 @@ def main(args):
     slope = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot)
 
     if not args.dry_run :
-        log.info('appending TSNR2TOEFFTIME coefficient of {:.6f} to {}'.format(slope, args.infile))
+        log.info('appending SNR2TIME coefficient of {:.6f} to {}'.format(slope, args.infile))
 
-        hdr['TSNR2TOEFFTIME'] = slope
-        hdr['EFFTIMEFILE']    = os.path.basename(effective_time_calibration_table_filename)
-        hdr['TSNRRUNFILE']    = os.path.basename(args.tsnr_table_filename)
+        hdr['SNR2TIME'] = slope
+        hdr['TIMEFILE']    = os.path.basename(effective_time_calibration_table_filename)
+        hdr['TSNRFILE']    = os.path.basename(args.tsnr_table_filename)
         ens.writeto(args.infile, overwrite=True)
         log.info("wrote {}".format(args.infile))
     else :

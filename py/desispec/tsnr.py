@@ -309,7 +309,7 @@ class template_ensemble(object):
 
         log.info('Successfully written to '+filename)
 
-def get_ensemble(dirpath, bands, smooth=125):
+def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
     '''
     Function that takes a frame object and a bitmask and
     returns ivar (and optionally mask) array(s) that have fibers with
@@ -317,7 +317,7 @@ def get_ensemble(dirpath, bands, smooth=125):
     0 in ivar and optionally flips a bit in mask.
 
     Args:
-        dirpath: path to the dir. with ensemble dflux files.
+        dirpath: path to the dir. with ensemble dflux files. default is $DESIMODEL/data/tsnr
         bands:  bands to expect, typically [BRZ] - case ignored.
 
     Options:
@@ -328,6 +328,9 @@ def get_ensemble(dirpath, bands, smooth=125):
         is a Spectra class instance with wave, flux for BRZ arms.  Note flux is the high
         frequency residual for the ensemble.  See doc. 4723.
     '''
+    if dirpath is None :
+        dirpath = os.path.join(os.environ["DESIMODEL"],"data/tsnr")
+
     paths = glob.glob(dirpath + '/tsnr-ensemble-*.fits')
 
     wave = {}
@@ -353,6 +356,7 @@ def get_ensemble(dirpath, bands, smooth=125):
                 flux[band] = flux[band].reshape(1, len(flux[band]))
 
         ensembles[tracer] = Spectra(bands, wave, flux, ivar)
+        ensembles[tracer].meta = dat[0].header
 
     return  ensembles
 
@@ -741,23 +745,30 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False) :
 
     return results, alpha
 
-def tsnr2_to_efftime(tsnr2,target_type,program="DARK",efftime_config=None) :
+def tsnr2_to_efftime(tsnr2,target_type,program="DARK") :
     """ Converts TSNR2 values to effective exposure time.
     Args:
       tsnr2: TSNR**2 values, float or numpy array
       target_type: str, "ELG","BGS","LYA", or other depending on content of  data/tsnr/tsnr-efftime.yaml
       program: str, "DARK", "BRIGHT", or other depending on content of data/tsnr/tsnr-efftime.yaml
-      efftime_config: (optional) dictionary with calibration parameters of the form "TSNR2_{target_type}_TO_EFFTIME_{program}"
 
     Returns: exptime in seconds, same type and shape if applicable as input tsnr2
     """
-    if efftime_config is None :
-        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
-        with open(efftime_config_filename) as f:
-            efftime_config = yaml.load(f, Loader=yaml.FullLoader)
 
-    keyword="TSNR2_{}_TO_EFFTIME_{}".format(target_type,program)
-    if not keyword in efftime_config :
-        message="no calibration for TSNR2_{} to EFFTIME_{}".format(target_type,program)
+    #keyword="TSNR2_{}_TO_EFFTIME_{}".format(target_type,program)
+    #if not keyword in efftime_config :
+    #    message="no calibration for TSNR2_{} to EFFTIME_{}".format(target_type,program)
+    #    raise KeyError(message)
+
+    tracer=target_type.lower()
+    tsnr_ensembles = get_ensemble()
+    log = get_logger()
+    if not "SNR2TIME" in tsnr_ensembles[tracer].meta.keys() :
+        message = "did not find key SNR2TIME in tsnr_ensemble fits file header, the tsnr files must be deprecated, please update DESIMODEL."
+        log.error(message)
         raise KeyError(message)
-    return efftime_config[keyword]*tsnr2
+
+    slope = tsnr_ensembles[tracer].meta["SNR2TIME"]
+    log.info("for tracer {} SNR2TIME={:f}".format(tracer,slope))
+
+    return slope*tsnr2
