@@ -4,8 +4,8 @@
 #
 # -*- coding: utf-8 -*-
 
-import desispec.scripts.tsnr_ensemble as tsnr_ensemble
+import desispec.scripts.compute_tsnr_ensemble as compute_tsnr_ensemble
 
 if __name__ == '__main__':
-    args = tsnr_ensemble.parse()
-    tsnr_ensemble.main(args)
+    args = compute_tsnr_ensemble.parse()
+    compute_tsnr_ensemble.main(args)
