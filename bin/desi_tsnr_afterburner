@@ -251,6 +251,9 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     # check the production exposure table
     for night in np.unique(exp_summary["NIGHT"]) :
         prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
+        if not os.path.isfile(prod_table_filename) :
+            log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
+            continue
         prod_table = Table.read(prod_table_filename)
         missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
         nmissing=np.sum(missing)
