@@ -27,8 +27,8 @@ def parse(options=None):
                         help='TSNR afterburner file, with TSNR2_TRACER.')
     parser.add_argument('--plot', action='store_true',
                         help='plot the fit.')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='do not save the result in the file')
+    parser.add_argument('--commit', action='store_true',
+                        help='save the result in the input file')
 
     args = None
 
@@ -82,6 +82,9 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     tsnr_run  = tsnr_run[np.isin(tsnr_run['EXPID'], ext_calib['EXPID'])]
 
     tsnr_run  = join(tsnr_run, ext_calib['EXPID', ext_col], join_type='left', keys='EXPID')
+    with_reference_tsnr = (tsnr_col in ext_calib.dtype.names)
+    if with_reference_tsnr :
+        tsnr_run[tsnr_col+"_REF"] = ext_calib[tsnr_col]
     tsnr_run.sort(ext_col)
 
     tsnr_run.pprint()
@@ -91,19 +94,33 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     # slope     = res.slope
     # intercept = res.intercept
 
-    slope     = np.sum(tsnr_run[ext_col] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
+    slope_efftime  = np.sum(tsnr_run[ext_col] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
+
+    if with_reference_tsnr :
+        slope_tsnr2    = np.sum(tsnr_run[tsnr_col+"_REF"] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
+    else :
+        slope_tsnr2    = 1.
 
     if plot:
-        plt.figure("efftime-vs-tsnr-{}".format(tracer))
+        plt.figure("efftime-vs-tsnr2-{}".format(tracer))
         plt.plot(tsnr_run[tsnr_col], tsnr_run[ext_col], c='k', marker='.', lw=0.0, markersize=1)
-        plt.plot(tsnr_run[tsnr_col], slope*tsnr_run[tsnr_col], c='k', lw=0.5)
-        plt.title('{} = {:.3f} x {}'.format(ext_col, slope, tsnr_col))
+        plt.plot(tsnr_run[tsnr_col], slope_efftime*tsnr_run[tsnr_col], c='k', lw=0.5)
+        plt.title('{} = {:.3f} x {}'.format(ext_col, slope_efftime, tsnr_col))
         plt.xlabel(tsnr_col)
         plt.ylabel(ext_col)
         plt.grid()
+
+        if with_reference_tsnr :
+            plt.figure("tsnr2-vs-tsnr2-{}".format(tracer))
+            plt.plot(tsnr_run[tsnr_col], tsnr_run[tsnr_col+"_REF"], c='k', marker='.', lw=0.0, markersize=1)
+            plt.plot(tsnr_run[tsnr_col], slope_tsnr2*tsnr_run[tsnr_col], c='k', lw=0.5)
+            plt.title('{} = {:.3f} x {}'.format(tsnr_col+"_REF", slope_tsnr2, tsnr_col))
+            plt.xlabel(tsnr_col)
+            plt.ylabel(tsnr_col+"_REF")
+            plt.grid()
         plt.show()
 
-    return  slope
+    return  slope_efftime , slope_tsnr2
 
 
 
@@ -119,19 +136,35 @@ def main(args):
     tracer = hdr["TRACER"].strip().lower()
     log.info("tracer = {}".format(tracer))
 
-    slope = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot)
+    slope_efftime,slope_tsnr2 = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot)
 
-    if not args.dry_run :
-        log.info('appending SNR2TIME coefficient of {:.6f} to {}'.format(slope, args.infile))
 
-        hdr['SNR2TIME'] = slope
+    # TSNR2_REF = slope_tsnr2 * TSNR2_CURRENT
+    # so I have to apply to delta_flux a scale:
+    flux_scale = np.sqrt(slope_tsnr2)
+    # EFFTIME_REF = slope_efftime * TSNR2_CURRENT = slope_efftime/slope_tsnr2 * TSNR2_REF
+    slope_efftime_calib = slope_efftime/slope_tsnr2
+
+    if False and 'FLUXSCAL' in hdr :
+        # need to account for previous flux scale if exists because used to compute the TSNR values
+        old_flux_scale = hdr['FLUXSCAL']
+        new_flux_scale = old_flux_scale * flux_scale
+    else :
+        new_flux_scale = flux_scale
+
+    if args.commit :
+        log.info('appending SNR2TIME coefficient of {:.6f} to {}'.format(slope_efftime, args.infile))
+        hdr['FLUXSCAL'] = ( new_flux_scale , "flux scale factor")
+        hdr['SNR2TIME'] = ( slope_efftime_calib , "eff. time factor")
         hdr['TIMEFILE']    = os.path.basename(effective_time_calibration_table_filename)
         hdr['TSNRFILE']    = os.path.basename(args.tsnr_table_filename)
         ens.writeto(args.infile, overwrite=True)
         log.info("wrote {}".format(args.infile))
     else :
-        log.info('fitted slope = {:.6f}'.format(slope))
-        log.warning("fid not overwrite the file {} (because of option --dry-run)".format(args.infile))
+        log.info('fitted slope efftime vs tsnr2 = {:.6f}'.format(slope_efftime))
+        log.info('fitted slope tsnr2(ref) vs tsnr2(current) = {:.6f}'.format(slope_tsnr2))
+
+        log.warning("fid not overwrite the file {} (use option --commit to write the result)".format(args.infile))
 
 if __name__ == '__main__':
     print("please run desi_calibrate_tsnr_ensemble")
