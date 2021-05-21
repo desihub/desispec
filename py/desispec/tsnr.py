@@ -243,6 +243,10 @@ class template_ensemble(object):
 
             loggrid_lz=loggrid_lzmin+loggrid_step*np.arange(number_z_bins)
             loggrid_nz=np.interp(loggrid_lz,np.log(1+zmid),numz)
+
+            # truncate at zrange
+            loggrid_nz[(loggrid_lz<np.log(1+self.config.zlo))|(loggrid_lz>np.log(1+self.config.zhi))] = 0.
+
             loggrid_nz /= np.sum(loggrid_nz)
             central_lz = loggrid_lz[loggrid_lz.size//2]
 
