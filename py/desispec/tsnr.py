@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import time
 
 import astropy.io.fits as fits
 from astropy.table import Table
@@ -15,7 +16,7 @@ from scipy.signal import fftconvolve
 from desiutil.log import get_logger
 from desiutil.dust import dust_transmission
 
-from desispec.io import findfile,read_frame,read_fiberflat,read_sky,read_flux_calibration
+from desispec.io import findfile,read_frame,read_fiberflat,read_sky,read_flux_calibration,iotime
 from desispec.io.spectra import Spectra
 from desispec.calibfinder import findcalibfile
 
@@ -61,6 +62,9 @@ class template_ensemble(object):
         self.seed = 1
 
 
+    def effmag(m1,m2) :
+         return -0.5*2.5*np.log10( (10**(-0.8*m1)-10**(-0.8*m2))/(0.8*np.log(10.))/(m2-m1) )
+
     def generate_templates(self, nmodel, redshifts=None,
                            mags=None,single_mag=True):
         '''
@@ -101,6 +105,16 @@ class template_ensemble(object):
         log.info('{} filter: {}'.format(self.tracer, self.config.filter))
         log.info('{} zrange: {} - {}'.format(self.tracer, zrange[0], zrange[1]))
 
+
+        # NOTE THE NORMALIZATION OF MAGNITUDES DOES NOT HAVE ANY EFFECT
+        # AT THE END OF THE DAY, BECAUSE BOTH TSNR2 VALUES AND EFFTIME
+        # ARE RECALIBRATED TO VALUES OBTAINED EARLY IN THE SURVEY
+        # (using table sv1-exposures.csv in py/desispec/data/tsnr/)
+        # TO AVOID ANY ARTIFICIAL DRIFT IN THE NORMALIZATION OF THOSE
+        # QUANTITIES.
+        # See the scale factor applied to the flux in the routine get_ensemble
+        # and the efftime normalization in the routine tsnr2_to_efftime
+
         if single_mag and mags is None :
 
             # effective mag is the magnitude that gives the same average flux^2
@@ -121,54 +135,66 @@ class template_ensemble(object):
         if self.tracer == 'bgs':
             # Cut on mag.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1312
+            magrange = (self.config.med_mag, self.config.limit_mag)
+            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.BGS(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
 
-            # Deprecated: fiberloss inherited at exposure stage for given seeing.
             # Additional factor rel. to psf.; TSNR put onto instrumental
             # e/A given calibration vector that includes psf-like loss.
-            # flux *= rel_loss
+            flux *= rel_loss
 
         elif self.tracer == 'lrg':
             # Cut on fib. mag. with desisim.templates setting FIBERFLUX to FLUX.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
+            #magrange = (self.config.med_fibmag, self.config.limit_fibmag)
+            # consistent with tsnr on disk
+            magrange = (self.config.med_mag, self.config.limit_mag)
+            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.LRG(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
 
-            # TO DO?
             # Take factor rel. to psf.; TSNR put onto instrumental
             # e/A given calibration vector that includes psf-like loss.
             # Note:  Oppostive to other tracers as templates normalized to fibermag.
-            flux /=	psf_loss
+            #flux /= psf_loss
+            flux *= rel_loss
 
         elif self.tracer == 'elg':
             # Cut on mag.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
+            magrange = (self.config.med_mag, self.config.limit_mag)
+            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.ELG(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
 
-            # Deprecated: fiberloss inherited at exposure stage for given seeing.
             # Additional factor rel. to psf.; TSNR put onto instrumental
             # e/A given calibration vector that includes psf-like loss.
-            # flux *= rel_loss
+            flux *= rel_loss
 
         elif self.tracer == 'qso':
             # Cut on mag.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1422
+            magrange = (self.config.med_mag, self.config.limit_mag)
+            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.QSO(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
 
-            # Deprecated: fiberloss inherited at exposure stage for given seeing.
             # Additional factor rel. to psf.; TSNR put onto instrumental
             # e/A given calibration vector that includes psf-like loss.
-            # flux *= rel_loss
+            flux *= rel_loss
 
         else:
             raise  ValueError('{} is not an available tracer.'.format(self.tracer))
+
+        if single_mag :
+            log.info('{} single effective mag: {}'.format(self.tracer, mags[0]))
+        else :
+            log.info('{} magrange: {} - {}'.format(self.tracer, magrange[0], magrange[1]))
         log.info("  Done generating templates")
 
         return  wave, flux, meta, objmeta
@@ -332,6 +358,10 @@ def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
         is a Spectra class instance with wave, flux for BRZ arms.  Note flux is the high
         frequency residual for the ensemble.  See doc. 4723.
     '''
+
+    t0 = time.time()
+
+    log=get_logger()
     if dirpath is None :
         dirpath = os.path.join(os.environ["DESIMODEL"],"data/tsnr")
 
@@ -349,9 +379,15 @@ def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
         tracer = path.split('/')[-1].split('-')[2].replace('.fits','')
         dat    = fits.open(path)
 
+        if 'FLUXSCAL' in dat[0].header :
+            scale_factor = dat[0].header['FLUXSCAL']
+            log.info("for {} apply scale factor = {:4.3f}".format(path,scale_factor))
+        else :
+            scale_factor = 1.
+
         for band in bands:
             wave[band] = dat['WAVE_{}'.format(band.upper())].data
-            flux[band] = dat['DFLUX_{}'.format(band.upper())].data
+            flux[band] = scale_factor*dat['DFLUX_{}'.format(band.upper())].data
             ivar[band] = 1.e99 * np.ones_like(flux[band])
 
             # 125: 100. A in 0.8 pixel.
@@ -361,6 +397,11 @@ def get_ensemble(dirpath=None, bands=["b","r","z"], smooth=0):
 
         ensembles[tracer] = Spectra(bands, wave, flux, ivar)
         ensembles[tracer].meta = dat[0].header
+
+    duration = time.time() - t0
+
+    log=get_logger()
+    log.info(iotime.format('read',"tsnr ensemble", duration))
 
     return  ensembles
 
@@ -770,7 +811,7 @@ def tsnr2_to_efftime(tsnr2,target_type,program="DARK") :
     if not "SNR2TIME" in tsnr_ensembles[tracer].meta.keys() :
         message = "did not find key SNR2TIME in tsnr_ensemble fits file header, the tsnr files must be deprecated, please update DESIMODEL."
         log.error(message)
-        raise KeyError(message)
+        return np.zeros_like(tsnr2)
 
     slope = tsnr_ensembles[tracer].meta["SNR2TIME"]
     log.info("for tracer {} SNR2TIME={:f}".format(tracer,slope))
