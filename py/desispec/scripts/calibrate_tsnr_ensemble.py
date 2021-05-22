@@ -2,8 +2,6 @@
 Generate Master TSNR ensemble DFLUX files.  See doc. 4723.  Note: in this
 instance, ensemble avg. of flux is written, in order to efficiently generate
 tile depths.
-
-Currently assumes redshift and mag ranges derived from FDR, but uniform in both.
 '''
 import os
 import sys
@@ -27,8 +25,8 @@ def parse(options=None):
                         help='TSNR afterburner file, with TSNR2_TRACER.')
     parser.add_argument('--plot', action='store_true',
                         help='plot the fit.')
-    parser.add_argument('--commit', action='store_true',
-                        help='save the result in the input file')
+    parser.add_argument('-o','--outfile', type = str, required=True,
+                        help='tsnr-ensemble fits output')
 
     args = None
 
@@ -58,19 +56,22 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     ext_calib = Table.read(exposures_table_filename)
 
     # Quality cuts.
-    ext_calib = ext_calib[(ext_calib['EXPTIME'] > 60.)]
+    ext_calib = ext_calib[(ext_calib['EXPTIME'] > 0.)]
 
     if tracer in ['bgs', 'mws']:
         ext_col   = 'EFFTIME_BRIGHT'
 
         # Expected BGS exposure is 180s nominal.
-        ext_calib = ext_calib[(ext_calib['EFFTIME_BRIGHT'] > 120.)]
+        #ext_calib = ext_calib[(ext_calib['EFFTIME_BRIGHT'] > 120.)]
+        ext_calib = ext_calib[(ext_calib['TARGETS']=='BGS+MWS')]
 
     else:
         ext_col   = 'EFFTIME_DARK'
 
         # Expected BGS exposure is 900s nominal.
-        ext_calib = ext_calib[(ext_calib['EFFTIME_DARK'] > 450.)]
+        ext_calib = ext_calib[(ext_calib['TARGETS']=='ELG')
+                              |(ext_calib['TARGETS']=='QSO+ELG')
+                              |(ext_calib['TARGETS']=='QSO+LRG')]
 
     tsnr_run  = Table.read(tsnr_table_filename)
 
@@ -85,14 +86,12 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     with_reference_tsnr = (tsnr_col in ext_calib.dtype.names)
     if with_reference_tsnr :
         tsnr_run[tsnr_col+"_REF"] = ext_calib[tsnr_col]
+    else :
+        log.warning("no {} column in ref, cannot calibrate it".format(tsnr_col))
+
     tsnr_run.sort(ext_col)
 
     tsnr_run.pprint()
-
-    # from   scipy  import stats
-    # res       = stats.linregress(tsnr_run[ext_col], tsnr_run[tsnr_col])
-    # slope     = res.slope
-    # intercept = res.intercept
 
     slope_efftime  = np.sum(tsnr_run[ext_col] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
 
@@ -106,8 +105,8 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
         plt.plot(tsnr_run[tsnr_col], tsnr_run[ext_col], c='k', marker='.', lw=0.0, markersize=1)
         plt.plot(tsnr_run[tsnr_col], slope_efftime*tsnr_run[tsnr_col], c='k', lw=0.5)
         plt.title('{} = {:.3f} x {}'.format(ext_col, slope_efftime, tsnr_col))
-        plt.xlabel(tsnr_col)
-        plt.ylabel(ext_col)
+        plt.xlabel("new "+tsnr_col)
+        plt.ylabel("SV1 reference "+ext_col)
         plt.grid()
 
         if with_reference_tsnr :
@@ -115,8 +114,8 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
             plt.plot(tsnr_run[tsnr_col], tsnr_run[tsnr_col+"_REF"], c='k', marker='.', lw=0.0, markersize=1)
             plt.plot(tsnr_run[tsnr_col], slope_tsnr2*tsnr_run[tsnr_col], c='k', lw=0.5)
             plt.title('{} = {:.3f} x {}'.format(tsnr_col+"_REF", slope_tsnr2, tsnr_col))
-            plt.xlabel(tsnr_col)
-            plt.ylabel(tsnr_col+"_REF")
+            plt.xlabel("new "+tsnr_col)
+            plt.ylabel("SV1 reference "+tsnr_col)
             plt.grid()
         plt.show()
 
@@ -145,26 +144,25 @@ def main(args):
     # EFFTIME_REF = slope_efftime * TSNR2_CURRENT = slope_efftime/slope_tsnr2 * TSNR2_REF
     slope_efftime_calib = slope_efftime/slope_tsnr2
 
-    if False and 'FLUXSCAL' in hdr :
+    if 'FLUXSCAL' in hdr :
         # need to account for previous flux scale if exists because used to compute the TSNR values
         old_flux_scale = hdr['FLUXSCAL']
         new_flux_scale = old_flux_scale * flux_scale
     else :
         new_flux_scale = flux_scale
 
-    if args.commit :
+    if args.outfile :
         log.info('appending SNR2TIME coefficient of {:.6f} to {}'.format(slope_efftime, args.infile))
         hdr['FLUXSCAL'] = ( new_flux_scale , "flux scale factor")
         hdr['SNR2TIME'] = ( slope_efftime_calib , "eff. time factor")
         hdr['TIMEFILE']    = os.path.basename(effective_time_calibration_table_filename)
         hdr['TSNRFILE']    = os.path.basename(args.tsnr_table_filename)
-        ens.writeto(args.infile, overwrite=True)
-        log.info("wrote {}".format(args.infile))
+        ens.writeto(args.outfile, overwrite=True)
+        log.info("wrote {}".format(args.outfile))
     else :
         log.info('fitted slope efftime vs tsnr2 = {:.6f}'.format(slope_efftime))
         log.info('fitted slope tsnr2(ref) vs tsnr2(current) = {:.6f}'.format(slope_tsnr2))
-
-        log.warning("fid not overwrite the file {} (use option --commit to write the result)".format(args.infile))
+        log.warning("the calibration has not been saved (use option -o to write the result)")
 
 if __name__ == '__main__':
     print("please run desi_calibrate_tsnr_ensemble")
