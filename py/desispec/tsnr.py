@@ -25,7 +25,7 @@ from specter.psf.gausshermite  import  GaussHermitePSF
 class Config(object):
     def __init__(self, cpath):
         with open(cpath) as f:
-            d = yaml.load(f, Loader=yaml.FullLoader)
+            d = yaml.safe_load(f)
 
         for key in d:
             setattr(self, key, d[key])
@@ -62,8 +62,12 @@ class template_ensemble(object):
         self.seed = 1
 
 
-    def effmag(m1,m2) :
-         return -0.5*2.5*np.log10( (10**(-0.8*m1)-10**(-0.8*m2))/(0.8*np.log(10.))/(m2-m1) )
+    def effmag(self,m1,m2) :
+        """
+        returns an effective mag which is the magnitude that gives the same average flux^2
+        for the mag range specified [m1,m2] assuming a flat magnitude distribution
+        """
+        return -0.5*2.5*np.log10( (10**(-0.8*m1)-10**(-0.8*m2))/(0.8*np.log(10.))/(m2-m1) )
 
     def generate_templates(self, nmodel, redshifts=None,
                            mags=None,single_mag=True):
@@ -115,19 +119,6 @@ class template_ensemble(object):
         # See the scale factor applied to the flux in the routine get_ensemble
         # and the efftime normalization in the routine tsnr2_to_efftime
 
-        if single_mag and mags is None :
-
-            # effective mag is the magnitude that gives the same average flux^2
-            # for the mag range specified [self.config.med_mag, self.config.limit_mag]
-            # assuming a flat magnitude distribution
-            m1=self.config.med_mag
-            m2=self.config.limit_mag
-            effmag = -0.5*2.5*np.log10( (10**(-0.8*m1)-10**(-0.8*m2))/(0.8*np.log(10.))/(m2-m1) )
-            mags=np.repeat( effmag , nmodel)
-            log.info('{} single effective mag: {}'.format(self.tracer, effmag))
-        else :
-            log.info('{} magrange: {} - {}'.format(self.tracer, magrange[0], magrange[1]))
-
         # Calibration vector assumes PSF mtype.
         log.info('psf fiberloss: {:.3f}'.format(psf_loss))
         log.info('Relative fiberloss to psf morphtype: {:.3f}'.format(rel_loss))
@@ -136,7 +127,7 @@ class template_ensemble(object):
             # Cut on mag.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1312
             magrange = (self.config.med_mag, self.config.limit_mag)
-            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
+            if single_mag and mags is None : mags=np.repeat( self.effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.BGS(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
@@ -148,10 +139,10 @@ class template_ensemble(object):
         elif self.tracer == 'lrg':
             # Cut on fib. mag. with desisim.templates setting FIBERFLUX to FLUX.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L447
-            #magrange = (self.config.med_fibmag, self.config.limit_fibmag)
+            magrange = (self.config.med_fibmag, self.config.limit_fibmag)
             # consistent with tsnr on disk
-            magrange = (self.config.med_mag, self.config.limit_mag)
-            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
+            #magrange = (self.config.med_mag, self.config.limit_mag)
+            if single_mag and mags is None : mags=np.repeat( self.effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.LRG(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
@@ -159,14 +150,14 @@ class template_ensemble(object):
             # Take factor rel. to psf.; TSNR put onto instrumental
             # e/A given calibration vector that includes psf-like loss.
             # Note:  Oppostive to other tracers as templates normalized to fibermag.
-            #flux /= psf_loss
-            flux *= rel_loss
+            flux /= psf_loss
+            #flux *= rel_loss
 
         elif self.tracer == 'elg':
             # Cut on mag.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L517
             magrange = (self.config.med_mag, self.config.limit_mag)
-            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
+            if single_mag and mags is None : mags=np.repeat( self.effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.ELG(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
@@ -179,7 +170,7 @@ class template_ensemble(object):
             # Cut on mag.
             # https://github.com/desihub/desitarget/blob/dd353c6c8dd8b8737e45771ab903ac30584db6db/py/desitarget/cuts.py#L1422
             magrange = (self.config.med_mag, self.config.limit_mag)
-            if single_mag and mags is None : mags=np.repeat( effmag(magrange[0],magrange[1]) , nmodel)
+            if single_mag and mags is None : mags=np.repeat( self.effmag(magrange[0],magrange[1]) , nmodel)
 
             maker = desisim.templates.QSO(wave=self.wave, normfilter_south=normfilter_south)
             flux, wave, meta, objmeta = maker.make_templates(nmodel=nmodel, redshift=redshifts, mag=mags, south=True, zrange=zrange, magrange=magrange, seed=self.seed)
