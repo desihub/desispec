@@ -2,8 +2,6 @@
 Generate Master TSNR ensemble DFLUX files.  See doc. 4723.  Note: in this
 instance, ensemble avg. of flux is written, in order to efficiently generate
 tile depths.
-
-Currently assumes redshift and mag ranges derived from FDR, but uniform in both.
 '''
 import os
 import sys
@@ -38,7 +36,7 @@ cslice             = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(49
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate a sim. template ensemble stack of given type and write it to disk at --outdir.")
-    parser.add_argument('--nmodel', type = int, default = 2000, required=False,
+    parser.add_argument('--nmodel', type = int, default = 1000, required=False,
                         help='Number of galaxies in the ensemble.')
     parser.add_argument('--tracer', type = str, default = 'bgs', required=True,
                         help='Tracer to generate of [bgs, lrg, elg, qso].')
