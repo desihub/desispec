@@ -288,13 +288,9 @@ class template_ensemble(object):
 
         zs = meta['REDSHIFT'].data
 
-        log.info('Applying N(Z) weights.')
-        interp  = interp1d(zmid,self.nz["n"], kind='linear', copy=True, bounds_error=True, fill_value=None, assume_sorted=False)
-        self.meta["WEIGHT"] = interp(zs)
-
         # Stack ensemble.
         for band in ['b', 'r', 'z']:
-            self.ensemble_dflux_stack[band] = np.sqrt(np.average(self.ensemble_dflux[band]**2., weights=self.meta["WEIGHT"], axis=0).reshape(1, len(self.ensemble_dflux[band].T)))
+            self.ensemble_dflux_stack[band] = np.sqrt(np.average(self.ensemble_dflux[band]**2., axis=0).reshape(1, len(self.ensemble_dflux[band].T)))
 
     def write(self,filename) :
 
