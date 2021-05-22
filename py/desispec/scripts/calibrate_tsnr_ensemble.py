@@ -51,6 +51,8 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     or EFFTIME_BRIGHT.
     '''
 
+    log = get_logger()
+
     tsnr_col  = 'TSNR2_{}'.format(tracer.upper())
 
     ext_calib = Table.read(exposures_table_filename)
