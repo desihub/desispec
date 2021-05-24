@@ -16,12 +16,10 @@ from scipy.signal import fftconvolve
 from desiutil.log import get_logger
 from desiutil.dust import dust_transmission
 
-from desispec.io import findfile,read_frame,read_fiberflat,read_sky,read_flux_calibration,iotime
+from desispec.io import findfile,read_frame,read_fiberflat,read_sky,read_flux_calibration,iotime,read_xytraceset
 from desispec.io.spectra import Spectra
 from desispec.calibfinder import findcalibfile
 from astropy import constants as const
-
-from specter.psf.gausshermite  import  GaussHermitePSF
 
 class Config(object):
     def __init__(self, cpath):
@@ -418,7 +416,7 @@ def read_nea(path):
 
     return  nea, angperpix
 
-def fb_rdnoise(fibers, frame, psf):
+def fb_rdnoise(fibers, frame, tset):
     '''
     Approximate the readnoise for a given fiber (on a given camera) for the
     wavelengths present in frame. wave.
@@ -426,7 +424,7 @@ def fb_rdnoise(fibers, frame, psf):
     input:
         fibers: e.g. np.arange(500) to index fiber.
         frame:  frame instance for the given camera.
-        psf:  corresponding psf instance.
+        tset: xytraceset object with fiber traces coordinates.
 
     returns:
         rdnoise: (nfiber x nwave) array with the estimated readnosie.  Same
@@ -440,9 +438,12 @@ def fb_rdnoise(fibers, frame, psf):
 
     rdnoise = np.zeros_like(frame.flux)
 
+    twave=np.linspace(tset.wavemin,tset.wavemax,20) # precision better than 0.3 pixel with 20 nodes
     for ifiber in fibers:
-        wave_lim = psf.wavelength(ispec=ifiber, y=ytrans)
-        x = psf.x(ifiber, wave_lim)
+        #wave_lim = tset.wave_vs_y(fiber=ifiber, y=ytrans) # this is slow because requires inversion
+        ty = tset.y_vs_wave(fiber=ifiber, wavelength=twave)
+        wave_lim = np.interp(ytrans,ty,twave)
+        x = tset.x_vs_wave(fiber=ifiber, wavelength=wave_lim)
 
         # A | C.
         if x < xtrans:
@@ -453,7 +454,6 @@ def fb_rdnoise(fibers, frame, psf):
         else:
             rdnoise[ifiber, frame.wave <  wave_lim] = frame.meta['OBSRDNB']
             rdnoise[ifiber, frame.wave >= wave_lim] = frame.meta['OBSRDND']
-
     return rdnoise
 
 def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seeing_fwhm=1.1):
@@ -716,6 +716,8 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     global _camera_nea_angperpix
     global _band_ensemble
 
+    t0=time.time()
+
     log=get_logger()
 
     if not (frame.meta["BUNIT"]=="count/Angstrom" or frame.meta["BUNIT"]=="electron/Angstrom" ) :
@@ -724,9 +726,8 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
 
     camera=frame.meta["CAMERA"].strip().lower()
     band=camera[0]
-
     psfpath=findcalibfile([frame.meta],"PSF")
-    psf=GaussHermitePSF(psfpath)
+    tset=read_xytraceset(psfpath)
 
     # Returns bivariate spline to be evaluated at (fiber, wave).
     if not "DESIMODEL" in os.environ :
@@ -760,7 +761,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     nspec, nwave = fluxcalib.calib.shape
 
     fibers = np.arange(nspec)
-    rdnoise = fb_rdnoise(fibers, frame, psf)
+    rdnoise = fb_rdnoise(fibers, frame, tset)
 
     #
     ebv = frame.fibermap['EBV']
@@ -779,6 +780,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
         log.info('{} \t {:.3f} +- {:.3f}'.format(label.ljust(10), np.median(x), np.std(x)))
 
     # Relative weighting between rdnoise & sky terms to model var.
+
     alpha = calc_alpha(frame, fibermap=frame.fibermap,
                 rdnoise_sigma=rdnoise, npix_1d=npix,
                 angperpix=angperpix, angperspecbin=angperspecbin,
@@ -792,7 +794,6 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     maskfactor = np.ones_like(frame.mask, dtype=np.float)
     maskfactor[frame.mask > 0] = 0.0
     maskfactor *= (frame.ivar > 0.0)
-
     tsnrs = {}
 
     for tracer in ensemble.keys():
@@ -837,6 +838,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
         results[key]=tsnrs[tracer]
         log.info('{} = {:.6f}'.format(key, np.median(tsnrs[tracer])))
 
+    log.info('computation time = {:4.2f} sec'.format(time.time()-t0))
     return results, alpha
 
 def tsnr2_to_efftime(tsnr2,target_type,program="DARK") :
