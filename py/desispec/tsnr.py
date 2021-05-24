@@ -459,7 +459,7 @@ def fb_rdnoise(fibers, frame, psf):
 def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seeing_fwhm=1.1):
     '''
     Source Poisson term to the model ivar, following conventions defined at:
-        https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed.  
+        https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed.
 
     See also:
         https://github.com/desihub/desispec/blob/master/py/desispec/efftime.py
@@ -471,47 +471,47 @@ def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seei
         fiberflat: desispec instance
         fluxcalib: desispec instance
         fiber_diameter_arcsec:
-        
-    Returns: 
+
+    Returns:
         nominal flux [e/specbin] corresponding to frame.wave
     '''
     log = get_logger()
-    
+
     if tracer == 'bgs':
-        # Nominal fiberloss dependence on seeing.  Assumes zero offset. 
+        # Nominal fiberloss dependence on seeing.  Assumes zero offset.
         fiberfrac = np.exp(0.0341 * np.log(exposure_seeing_fwhm)**3 -0.3611 * np.log(exposure_seeing_fwhm)**2 -0.7175 * np.log(exposure_seeing_fwhm) -1.5643)
 
-        # Note: neglects transparency & EBV corrections. 
-        nominal = 15.8                    # r=19.5 [nanomaggie].    
+        # Note: neglects transparency & EBV corrections.
+        nominal = 15.8                    # r=19.5 [nanomaggie].
 
     elif tracer == 'backup':
         fiberfrac = np.exp(0.0989 * np.log(exposure_seeing_fwhm)**3 -0.5588 * np.log(exposure_seeing_fwhm)**2 -0.9708 * np.log(exposure_seeing_fwhm) -0.4473)
         nominal = 27.5                    # r=18.9 [nanomaggie].
-        
+
     else:
-        # No source poisson term otherwise. 
-        nominal = 0.0                     # [nanomaggie]. 
+        # No source poisson term otherwise.
+        nominal = 0.0                     # [nanomaggie].
         fiberfrac = 1.0
 
         return nominal                    # [e/specbin].
 
-    
+
     nominal *= fiberfrac
 
     log.info('TSNR MODEL VAR: include {} poisson source var of {:.6f} [nMg]'.format(tracer, nominal))
-    
-    nominal *= 1.e-9                      # [Mg].                                                                                                                                                                                     
+
+    nominal *= 1.e-9                      # [Mg].
     nominal /= (1.e23 / const.c.value / 1.e10 / 3631.)
-    nominal /= (frame.wave)**2.           # [ergs/s/cm2/A].                                                                                                                                                                            
-    nominal *= 1.e17                      # [1.e-17 ergs/s/cm2/A].  
-    
+    nominal /= (frame.wave)**2.           # [ergs/s/cm2/A].
+    nominal *= 1.e17                      # [1.e-17 ergs/s/cm2/A].
+
     nominal  = fluxcalib.calib * nominal  # [e/A]
-    
-    nominal *= angperspecbin  	          # [e/specbin].                                                                                                                                                                                    
+
+    nominal *= angperspecbin  	          # [e/specbin].
     nominal *= fiberflat.fiberflat
 
     log.info('TSNR MODEL VAR: include {} poisson source var of {:.6e} [e/specbin]'.format(tracer, np.median(nominal)))
-    
+
     return  nominal
 
 def var_model(rdnoise_sigma, npix_1d, angperpix, angperspecbin, fiberflat, skymodel, alpha=1.0, components=False):
@@ -809,11 +809,11 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
             wave = frame.wave
 
         denom = var_model(rdnoise, npix, angperpix, angperspecbin, fiberflat, skymodel, alpha=alpha)
-            
+
         if include_poisson:
-            # TODO:  Fix default seeing-fiberfrac relation. 
+            # TODO:  Fix default seeing-fiberfrac relation.
             denom += var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib)
-            
+
         # Work in uncalibrated flux units (electrons per angstrom); flux_calib includes exptime. tau.
         # Broadcast.
         dflux = dflux * fluxcalib.calib # [e/A]
@@ -822,8 +822,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
         result = dflux * fiberflat.fiberflat
 
         # Apply dust transmission.
-        for i in range(len(ebv)) :
-            result[i] *= dust_transmission(frame.wave, ebv[i])
+        result *= dust_transmission(frame.wave, ebv[:,None])
 
         result = result**2.
 
