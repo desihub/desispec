@@ -22,7 +22,6 @@ from desispec.calibfinder import findcalibfile
 from astropy import constants as const
 
 from specter.psf.gausshermite  import  GaussHermitePSF
-from desimodel.io import load_desiparams
 
 class Config(object):
     def __init__(self, cpath):
@@ -477,12 +476,6 @@ def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seei
         nominal flux [e/specbin] corresponding to frame.wave
     '''
     log = get_logger()
-
-    fiber_params = load_desiparams()['fibers']
-    fiber_dia = fiber_params['diameter_um'] # 107 um.
-    fiber_dia_asec = fiber_params['diameter_arcsec'] # 1.52 ''
-    
-    fiber_area_arcsec2 = np.pi*(fiber_dia_asec/2.)**2
     
     if tracer == 'bgs':
         # Nominal fiberloss dependence on seeing.  Assumes zero offset. 
@@ -504,11 +497,10 @@ def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seei
 
     
     nominal *= fiberfrac
-    nominal /= fiber_area_arcsec2         # [nMg / ''].
 
-    log.info('TSNR MODEL VAR: include {} poisson source var of {:.6f} [nMg / sq. arcsec.]'.format(tracer, nominal))
+    log.info('TSNR MODEL VAR: include {} poisson source var of {:.6f} [nMg]'.format(tracer, nominal))
     
-    nominal *= 1.e-9                      # [ Mg / ''].                                                                                                                                                                                     
+    nominal *= 1.e-9                      # [Mg].                                                                                                                                                                                     
     nominal /= (1.e23 / const.c.value / 1.e10 / 3631.)
     nominal /= (frame.wave)**2.           # [ergs/s/cm2/A].                                                                                                                                                                            
     nominal *= 1.e17                      # [1.e-17 ergs/s/cm2/A].  
