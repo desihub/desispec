@@ -4,6 +4,7 @@ Calculate stand alone tsnr tables for a given desispec prod.
 '''
 
 import os,sys
+import json
 import glob
 import itertools
 import argparse
@@ -184,7 +185,7 @@ def update_table(table1,table2,keys) :
     else :
         return table2
 
-def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir) :
+def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_missing=True) :
     """ Compute summary tables.
 
     Args:
@@ -247,9 +248,9 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     exp_summary = Table(rows=rows, names=colnames)
     exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
 
-
-    # check the production exposure table
-    for night in np.unique(exp_summary["NIGHT"]) :
+    if add_missing:
+      # check the production exposure table
+      for night in np.unique(exp_summary["NIGHT"]) :
         prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
         if not os.path.isfile(prod_table_filename) :
             log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
@@ -494,8 +495,15 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         entry['SEEING_ETC'] = 0.
     if "ACTTEFF" in hdr :
         entry['EFFTIME_ETC'] = np.float32(hdr['ACTTEFF'])
-    else :
-        entry['EFFTIME_ETC'] = 0.
+    elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):    
+        with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file: 
+            etcdata = json.load(etc_file)
+            entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
+
+        # log.info('READ ETC JSON TO GET EFFTME OF {}'.format(entry['EFFTIME_ETC']))
+    else:
+        # -99?
+        entry['EFFTIME_ETC'] = np.float32(-99.)
 
     entry['CAMERA'] = camera
     for key in table.colnames:
@@ -624,8 +632,10 @@ def main():
 
     if args.expids is not None:
         expids = [np.int(x) for x in args.expids.split(',')]
+        add_missing = False
     else:
         expids = None
+        add_missing = True
 
     if args.nights is None:
         dirnames = sorted(glob.glob('{}/exposures/*'.format(args.prod)))
@@ -705,12 +715,12 @@ def main():
         # write result after every other night
         if len(summary_rows)>0 :
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod,add_missing=add_missing)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
 
 
-    tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+    tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod,add_missing=add_missing)
 
 
     if args.skymags is not None :
