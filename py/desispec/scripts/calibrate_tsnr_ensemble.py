@@ -25,7 +25,7 @@ def parse(options=None):
                         help='TSNR afterburner file, with TSNR2_TRACER.')
     parser.add_argument('--plot', action='store_true',
                         help='plot the fit.')
-    parser.add_argument('-o','--outfile', type = str, required=True,
+    parser.add_argument('-o','--outfile', type = str, required=False,
                         help='tsnr-ensemble fits output')
 
     args = None
