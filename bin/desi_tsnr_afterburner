@@ -129,17 +129,33 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
 
     Returns: astropy.table.Table obkect with TSNR values
     """
+    log = get_logger()
 
     calib  = findfile('fluxcalib', night=night, expid=expid,
                       camera=camera, specprod_dir=specprod_dir)
-    flat = cframe_hdulist[0].header['FIBERFLT']
+
+    hdr0 = cframe_hdulist[0].header
+    hdr1 = cframe_hdulist[1].header
+    
+    if 'FIBERFLT' not in hdr0:
+        log.critical('Failed to find FIBERFLT in cframe hdr of {:08d} on {}'.format(expid, night))
+        log.info('Trying CalibFinder.')
+        
+        flat = CalibFinder([hdr0, hdr1]).findfile('FIBERFLAT')
+        
+    else:
+        flat = cframe_hdulist[0].header['FIBERFLT']
+        
     if 'SPECPROD' in flat:
         flat = flat.replace('SPECPROD', specprod_dir)
-    elif 'SPCALIB' in flat:
+    if 'SPCALIB' in flat:
         hdr  = fitsio.read_header(cframe_filename)
         flat = flat.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
+
+    if os.path.exists(flat):
+        log.info('Retrieved {}'.format(flat))
     else:
-        raise ValueError('Failed on flat retrieval for {}.'.format(hdr))
+        raise ValueError('Failed on flat retrieval for {} on {}.'.format(expid, night))
 
     iin = cframe_filename.replace('cframe', 'frame')
     sky = cframe_filename.replace('cframe', 'sky')
@@ -506,11 +522,16 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):    
         with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file: 
             etcdata = json.load(etc_file)
-            entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
 
-        # log.info('READ ETC JSON TO GET EFFTME OF {}'.format(entry['EFFTIME_ETC']))
+            if 'expinfo' in etcdata.keys():
+                if 'efftime' in etcdata['expinfo']:
+                    entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
+                else:
+                    entry['EFFTIME_ETC'] = np.float32(-99.)
+
+            else:
+                entry['EFFTIME_ETC'] = np.float32(-99.)
     else:
-        # -99?
         entry['EFFTIME_ETC'] = np.float32(-99.)
 
     entry['CAMERA'] = camera
@@ -750,7 +771,7 @@ def main():
         if len(ranknights) > 0:
             rank_summary_rows = list()
 
-            log.info('Rank {:d} processes nights {}'.format(rank, ranknights))
+            log.info('Rank {:d} processes nights {} with nproc={}'.format(rank, ranknights, default_nproc))
     
             comm.barrier()
     
@@ -805,6 +826,9 @@ def main():
         tsnr2_expid_table = vstack(tsnr2_expid)
         tsnr2_frame_table = vstack(tsnr2_frame)
 
+        tsnr2_expid_table.meta['EXTNAME'] = 'TSNR2_EXPID'
+        tsnr2_frame_table.meta['EXTNAME'] = 'TSNR2_FRAME'
+        
         if use_mpi():
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
         
@@ -895,22 +919,22 @@ def main():
             tsnr2_expid_table["EFFTIME_GFA"][goaltype=="bright"]=tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype=="bright"]
             tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
     
-            # end of loop on nights
-            if len(tsnr2_frame_table)>0 :
-                write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,output_csv_filename=args.outfile.replace(".fits",".csv"))
+        # end of loop on nights
+        if len(tsnr2_frame_table)>0 :
+            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,output_csv_filename=args.outfile.replace(".fits",".csv"))
 
-                # remove temporary file if successful
-                if os.path.isfile(args.outfile) :
-                    tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-                    if os.path.isfile(tmpfilename) :
-                        log.info("rm temporary file {}".format(tmpfilename))
-                        os.unlink(tmpfilename)
-                    tmpfilename=args.outfile.replace(".fits","_tmp.csv")
-                    if os.path.isfile(tmpfilename) :
-                        log.info("rm temporary file {}".format(tmpfilename))
-                        os.unlink(tmpfilename)
-        else :
-            log.error("no valid exposures added")
+            # remove temporary file if successful
+            if os.path.isfile(args.outfile) :
+                tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+                if os.path.isfile(tmpfilename) :
+                    log.info("rm temporary file {}".format(tmpfilename))
+                    os.unlink(tmpfilename)
+                tmpfilename=args.outfile.replace(".fits","_tmp.csv")
+                if os.path.isfile(tmpfilename) :
+                    log.info("rm temporary file {}".format(tmpfilename))
+                    os.unlink(tmpfilename)
+            else :
+                log.error("no valid exposures added")
     
         if args.tile_completeness is not None :
             # reread the exposure table
