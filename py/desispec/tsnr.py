@@ -36,7 +36,7 @@ class gfa_template_ensemble(object):
         log = get_logger()
 
         log.info('Computing GFA passband TSNR template.')
-        self.tracer = 'GFADARK'
+        self.tracer = 'GPBDARK'
 
         # https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1297
         self.pb_fname = resource_filename('desispec', 'data/gfa/gfa-mean-desi-1297.csv')
@@ -62,7 +62,7 @@ class gfa_template_ensemble(object):
             band_wave = self.wave[self.cslice[band]]
             self.ensemble_dflux[band] = self.pb_interp(band_wave).reshape(1, len(band_wave))
 
-        log.info('GFA passband TSNR template computation done.')
+        log.info('GPB passband TSNR template computation done.')
 
     def plot(self):
         import pylab as pl
@@ -78,19 +78,22 @@ class gfa_template_ensemble(object):
 
     def write(self,dirname):
         log = get_logger()
-        hdr = fits.Header()
-        hdr['TRACER']   = self.tracer
 
-        hdu_list = [fits.PrimaryHDU(header=hdr)]
+        for tracer in ['gpbdark', 'gpbbright', 'gpbbackup']:
+            hdr = fits.Header()
+            hdr['TRACER'] = tracer
 
-        for band in ['b', 'r', 'z']:
-            hdu_list.append(fits.ImageHDU(self.wave[self.cslice[band]], name='WAVE_{}'.format(band.upper())))
-            hdu_list.append(fits.ImageHDU(self.ensemble_dflux[band], name='DFLUX_{}'.format(band.upper())))
+            hdu_list = [fits.PrimaryHDU(header=hdr)]
 
-        hdu_list = fits.HDUList(hdu_list)
-        hdu_list.writeto(dirname + '/tsnr-ensemble-gfadark.fits', overwrite=True)
+            for band in ['b', 'r', 'z']:
+                hdu_list.append(fits.ImageHDU(self.wave[self.cslice[band]], name='WAVE_{}'.format(band.upper())))
+                hdu_list.append(fits.ImageHDU(self.ensemble_dflux[band], name='DFLUX_{}'.format(band.upper())))
 
-        log.info('Successfully written GFA TSNR template to ' + dirname + '/tsnr-ensemble-gfadark.fits')
+            hdu_list = fits.HDUList(hdu_list)
+            hdu_list.writeto(dirname + '/tsnr-ensemble-{}.fits'.format(tracer), overwrite=True)
+
+            log.info('Successfully written GFA TSNR template to ' + dirname + '/tsnr-ensemble-{}.fits'.format(tracer))
+            
         log.info('Should now be copied to $DESIMODEL/data/tsnr/.')
         
 class template_ensemble(object):
@@ -541,14 +544,14 @@ def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seei
     '''
     log = get_logger()
 
-    if tracer in ['bgs', 'gfabright']:
+    if tracer in ['bgs', 'gpbbright']:
         # Nominal fiberloss dependence on seeing.  Assumes zero offset.
         fiberfrac = np.exp(0.0341 * np.log(exposure_seeing_fwhm)**3 -0.3611 * np.log(exposure_seeing_fwhm)**2 -0.7175 * np.log(exposure_seeing_fwhm) -1.5643)
 
         # Note: neglects transparency & EBV corrections.
         nominal = 15.8                    # r=19.5 [nanomaggie].
 
-    elif tracer in ['backup', 'gfabackup']:
+    elif tracer in ['backup', 'gpbbackup']:
         fiberfrac = np.exp(0.0989 * np.log(exposure_seeing_fwhm)**3 -0.5588 * np.log(exposure_seeing_fwhm)**2 -0.9708 * np.log(exposure_seeing_fwhm) -0.4473)
         nominal = 27.5                    # r=18.9 [nanomaggie].
 

@@ -64,14 +64,14 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
 
     log.info('Calibrating tracer {}'.format(tracer))
     
-    if tracer in ['bgs', 'mws' , 'gfabright']:
+    if tracer in ['bgs', 'mws' , 'gpbbright']:
         ext_col   = 'EFFTIME_BRIGHT'
 
         # Expected BGS exposure is 180s nominal.
         #ext_calib = ext_calib[(ext_calib['EFFTIME_BRIGHT'] > 120.)]
         ext_calib = ext_calib[(ext_calib['TARGETS']=='BGS+MWS')]
 
-    elif tracer in ['elg', 'lrg', 'qso', 'lya', 'gfadark']:
+    elif tracer in ['elg', 'lrg', 'qso', 'lya', 'gpbdark']:
         ext_col   = 'EFFTIME_DARK'
 
         # Expected dark exposure is 900s nominal.
