@@ -25,6 +25,8 @@ def parse(options=None):
                         help='TSNR afterburner file, with TSNR2_TRACER.')
     parser.add_argument('--plot', action='store_true',
                         help='plot the fit.')
+    parser.add_argument('--exclude', type=str, default=None, required=False,
+                        help='comma separated list of expids to ignore.')    
     parser.add_argument('-o','--outfile', type = str, required=False,
                         help='tsnr-ensemble fits output')
 
@@ -37,7 +39,7 @@ def parse(options=None):
 
     return args
 
-def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=True):
+def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=True, exclude=None):
     '''
     Given an external calibration, e.g.
     /global/cfs/cdirs/desi/survey/observations/SV1/sv1-exposures.fits
@@ -60,26 +62,38 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     # Quality cuts.
     ext_calib = ext_calib[(ext_calib['EXPTIME'] > 0.)]
 
-    if tracer in ['bgs', 'mws']:
+    log.info('Calibrating tracer {}'.format(tracer))
+    
+    if tracer in ['bgs', 'mws' , 'gpbbright']:
         ext_col   = 'EFFTIME_BRIGHT'
 
         # Expected BGS exposure is 180s nominal.
         #ext_calib = ext_calib[(ext_calib['EFFTIME_BRIGHT'] > 120.)]
         ext_calib = ext_calib[(ext_calib['TARGETS']=='BGS+MWS')]
 
-    else:
+    elif tracer in ['elg', 'lrg', 'qso', 'lya', 'gpbdark']:
         ext_col   = 'EFFTIME_DARK'
 
-        # Expected BGS exposure is 900s nominal.
+        # Expected dark exposure is 900s nominal.
         ext_calib = ext_calib[(ext_calib['TARGETS']=='ELG')
                               |(ext_calib['TARGETS']=='QSO+ELG')
                               |(ext_calib['TARGETS']=='QSO+LRG')]
-
+    else:
+        log.critical('External calibration for tracer {} is not defined.'.format(tracer))
+        
     tsnr_run  = Table.read(tsnr_table_filename)
 
     # TSNR == 0.0 if exposure was not successfully reduced.
     tsnr_run  = tsnr_run[tsnr_run[tsnr_col] > 0.0]
 
+    # External excluded exposures.
+    exclude   = np.array(exclude)
+
+    if exclude is not None:
+        log.info('Excluding exposure list of: {}'.format(exclude))
+    
+    tsnr_run  = tsnr_run[~np.isin(tsnr_run['EXPID'], exclude)]
+    
     # Keep common exposures.
     ext_calib = ext_calib[np.isin(ext_calib['EXPID'], tsnr_run['EXPID'])]
     tsnr_run  = tsnr_run[np.isin(tsnr_run['EXPID'], ext_calib['EXPID'])]
@@ -95,6 +109,8 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
 
     tsnr_run.pprint()
 
+    log.info('Calibrating {} [{}, {}] against {} [{}, {}].'.format(tsnr_col, tsnr_run[tsnr_col].min(), tsnr_run[tsnr_col].max(), ext_col, tsnr_run[ext_col].min(), tsnr_run[ext_col].max()))
+    
     slope_efftime  = np.sum(tsnr_run[ext_col] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
 
     if with_reference_tsnr :
@@ -137,8 +153,10 @@ def main(args):
     tracer = hdr["TRACER"].strip().lower()
     log.info("tracer = {}".format(tracer))
 
-    slope_efftime,slope_tsnr2 = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot)
-
+    if args.exclude is not None:
+        args.exclude = [np.int(x) for x in args.exclude.split(',')]
+    
+    slope_efftime,slope_tsnr2 = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot, exclude=args.exclude)
 
     # TSNR2_REF = slope_tsnr2 * TSNR2_CURRENT
     # so I have to apply to delta_flux a scale:

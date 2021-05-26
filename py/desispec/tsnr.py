@@ -29,6 +29,74 @@ class Config(object):
         for key in d:
             setattr(self, key, d[key])
 
+class gfa_template_ensemble(object):
+    '''
+    '''
+    def __init__(self):
+        log = get_logger()
+
+        log.info('Computing GFA passband TSNR template.')
+        self.tracer = 'GPBDARK'
+
+        # https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1297
+        self.pb_fname = resource_filename('desispec', 'data/gfa/gfa-mean-desi-1297.csv')
+
+        log.info('Retrieved {}.'.format(self.pb_fname))
+
+        # passband: wave [3000., 11000.]
+        self.pb = Table.read(self.pb_fname, names=['wave', 'trans'])
+        self.pb_interp = interp1d(self.pb['wave'], self.pb['trans'], kind='linear', copy=True, bounds_error=False, fill_value=0.0, assume_sorted=False)
+
+        self.wmin = 3600
+        self.wmax = 9824
+        self.wdelta = 0.8
+        self.wave = np.round(np.arange(self.wmin, self.wmax + self.wdelta, self.wdelta), 1)
+        self.cslice = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(4900, 7781)}
+
+    def compute(self):
+        log = get_logger()
+
+        self.ensemble_dflux = {}
+
+        for band in ['b', 'r', 'z']:
+            band_wave = self.wave[self.cslice[band]]
+            self.ensemble_dflux[band] = self.pb_interp(band_wave).reshape(1, len(band_wave))
+
+        log.info('GFA passband TSNR template computation done.')
+
+    def plot(self):
+        import pylab as pl
+
+        for band in ['b', 'r', 'z']:
+            band_wave = self.wave[self.cslice[band]]
+
+            pl.plot(band_wave, self.ensemble_dflux[band][0], label=band)
+
+        pl.xlabel('Wavelength [Angstroms]')
+        pl.ylabel('GPBDARK TSNR DFLUX TEMPLATE')
+        pl.show()
+
+    def write(self,dirname):
+        log = get_logger()
+
+        for tracer in ['gpbdark', 'gpbbright', 'gpbbackup']:        
+            hdr = fits.Header()
+            
+            hdr['TRACER'] = tracer
+            
+            hdu_list = [fits.PrimaryHDU(header=hdr)]
+
+            for band in ['b', 'r', 'z']:
+                hdu_list.append(fits.ImageHDU(self.wave[self.cslice[band]], name='WAVE_{}'.format(band.upper())))
+                hdu_list.append(fits.ImageHDU(self.ensemble_dflux[band], name='DFLUX_{}'.format(band.upper())))
+
+            hdu_list = fits.HDUList(hdu_list)
+            hdu_list.writeto(dirname + '/tsnr-ensemble-{}.fits'.format(tracer), overwrite=True)
+
+            log.info('Successfully written GFA TSNR template to ' + dirname + '/tsnr-ensemble-{}.fits'.format(tracer))
+            
+        log.info('Should now be copied to $DESIMODEL/data/tsnr/.')
+        
 class template_ensemble(object):
     '''
     Generate an ensemble of templates to sample tSNR for a range of points in
@@ -477,14 +545,14 @@ def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seei
     '''
     log = get_logger()
 
-    if tracer == 'bgs':
+    if tracer in ['bgs', 'gpbbright']:
         # Nominal fiberloss dependence on seeing.  Assumes zero offset.
         fiberfrac = np.exp(0.0341 * np.log(exposure_seeing_fwhm)**3 -0.3611 * np.log(exposure_seeing_fwhm)**2 -0.7175 * np.log(exposure_seeing_fwhm) -1.5643)
 
         # Note: neglects transparency & EBV corrections.
         nominal = 15.8                    # r=19.5 [nanomaggie].
 
-    elif tracer == 'backup':
+    elif tracer in ['backup', 'gpbbackup']:
         fiberfrac = np.exp(0.0989 * np.log(exposure_seeing_fwhm)**3 -0.5588 * np.log(exposure_seeing_fwhm)**2 -0.9708 * np.log(exposure_seeing_fwhm) -0.4473)
         nominal = 27.5                    # r=18.9 [nanomaggie].
 
@@ -494,7 +562,6 @@ def var_tracer(tracer, frame, angperspecbin, fiberflat, fluxcalib, exposure_seei
         fiberfrac = 1.0
 
         return nominal                    # [e/specbin].
-
 
     nominal *= fiberfrac
 
