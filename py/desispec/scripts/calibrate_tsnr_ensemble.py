@@ -58,7 +58,7 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     tsnr_col  = 'TSNR2_{}'.format(tracer.upper())
 
     ext_calib = Table.read(exposures_table_filename)
-
+    
     # Quality cuts.
     ext_calib = ext_calib[(ext_calib['EXPTIME'] > 0.)]
 
@@ -95,9 +95,18 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     tsnr_run  = tsnr_run[~np.isin(tsnr_run['EXPID'], exclude)]
     
     # Keep common exposures.
+    ref_extexpids = ext_calib['EXPID']
+    
     ext_calib = ext_calib[np.isin(ext_calib['EXPID'], tsnr_run['EXPID'])]
     tsnr_run  = tsnr_run[np.isin(tsnr_run['EXPID'], ext_calib['EXPID'])]
 
+    ref_frac  = np.mean(np.isin(ref_extexpids, ext_calib['EXPID']))
+    
+    log.info('Found {:.6f} of ref. exposures in provided tsnr'.format(ref_frac))
+
+    if ref_frac < 0.7:
+        log.critical('Provided TSNR is likely missing exposures required to calibrate (!)')
+    
     tsnr_run  = join(tsnr_run, ext_calib['EXPID', ext_col], join_type='left', keys='EXPID')
     with_reference_tsnr = (tsnr_col in ext_calib.dtype.names)
     if with_reference_tsnr :
@@ -122,7 +131,7 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
         plt.figure("efftime-vs-tsnr2-{}".format(tracer))
         plt.plot(tsnr_run[tsnr_col], tsnr_run[ext_col], c='k', marker='.', lw=0.0, markersize=1)
         plt.plot(tsnr_run[tsnr_col], slope_efftime*tsnr_run[tsnr_col], c='k', lw=0.5)
-        plt.title('{} = {:.3f} x {}'.format(ext_col, slope_efftime, tsnr_col))
+        plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(ext_col, slope_efftime, tsnr_col, ref_frac))
         plt.xlabel("new "+tsnr_col)
         plt.ylabel("SV1 reference "+ext_col)
         plt.grid()
