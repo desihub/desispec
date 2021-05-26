@@ -36,7 +36,7 @@ class gfa_template_ensemble(object):
         log = get_logger()
 
         log.info('Computing GFA passband TSNR template.')
-        self.tracer = 'GFA'
+        self.tracer = 'GFADARK'
 
         # https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1297
         self.pb_fname = resource_filename('desispec', 'data/gfa/gfa-mean-desi-1297.csv')
