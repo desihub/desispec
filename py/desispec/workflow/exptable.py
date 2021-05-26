@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import os
+import glob
 import numpy as np
 from astropy.table import Table
 from astropy.io import fits
@@ -371,23 +372,53 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             coldefaults = cdflts
     colnames,coldefaults = np.asarray(colnames),np.asarray(coldefaults,dtype=object)
 
+    manpath = pathjoin(raw_data_dir, night, exp, f'manifest_{exp}.json')
+    reqpath = pathjoin(raw_data_dir, night, exp, f'request-{exp}.json')
+    datpath = pathjoin(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
+
     ## Give a header for the exposure
     if verbosely:
         log.info(f'\n\n###### Summarizing exposure: {exp} ######\n')
     else:
         log.info(f'Summarizing exposure: {exp}')
-    ## Request json file is first used to quickly identify science exposures
-    ## If a request file doesn't exist for an exposure, it shouldn't be an exposure we care about
-    reqpath = pathjoin(raw_data_dir, night, exp, f'request-{exp}.json')
-    if not os.path.isfile(reqpath):
-        if verbosely:
-            log.info(f'{reqpath} did not exist!')
-        else:
-            log.info(f'{exp}: skipped  -- request not found')
-        return None
 
-    ## Load the json file in as a dictionary
-    req_dict = get_json_dict(reqpath)
+    if os.path.isfile(manpath):
+        log.info(f'Found manifest file: {manpath}')
+        ## Load the json file in as a dictionary
+        manifest_dict = get_json_dict(manpath)
+        if int(night) < 20200309:
+            log.error(f"Manifest found on night {night} prior to invention of manifest. Expid: {exp}.")
+        elif int(night) < 20200801:
+            if 'PROGRAM' in manifest_dict:
+                prog = manifest_dict['PROGRAM'].lower()
+                if 'calib' in prog and 'done' in prog:
+                    if 'short' in prog:
+                        return "endofshortflats"
+                    elif 'long' in prog:
+                        return 'endofflats'
+                    elif 'arc' in prog:
+                        return 'endofarcs'
+                else:
+                    log.warning(f"Couldn't parse program name {prog} in manifest.")
+        else:
+            ## Starting Fall of 2020 the manifest should have standardized language, so no program parsing
+            if 'MANIFEST' in manifest_dict:
+                name = manifest_dict['MANIFEST'].lower()
+                if name in ['endofarcs', 'endofflats', 'endofshortflats']:
+                    return name
+                else:
+                    log.error(f"Couldn't understand manifest name: {name}.")
+            else:
+                log.error(f"Couldn't find MANIFEST in manifest file. Available keys: {manifest_dict.keys()}.")
+
+    ## Request json file can also be used to identify the end of calibrations
+    ## It also has information on what we wanted the exposure to be, which is useful to check against what we got
+    if os.path.isfile(reqpath):
+        ## Load the json file in as a dictionary
+        req_dict = get_json_dict(reqpath)
+    else:
+        log.error(f"Couldn't find request file: {reqpath}.")
+        req_dict = {}
 
     ## Check to see if it is a manifest file for calibrations
     if "SEQUENCE" in req_dict and req_dict["SEQUENCE"].lower() == "manifest":
@@ -412,15 +443,31 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                     if name in ['endofarcs', 'endofflats', 'endofshortflats']:
                         return name
 
+    ## Look for the data. If it's not there, say so then move on
+    if not os.path.exists(datpath):
+        if 'OBSTYPE' in req_dict and req_dict['OBSTYPE'].lower() in ['science','arc','flat']:
+            logtype = log.error
+        else:
+            logtype = log.info
+        if verbosely:
+            logtype(f"Couldn't find {datpath} for exposure {exp}! Skipping")
+        else:
+            logtype(f'{exp}: skipped  -- data not found')
+        return None
+    else:
+        if verbosely:
+            log.info(f'Using: {datpath}')
+        header, fx = load_raw_data_header(pathname=datpath, return_filehandle=True)
+
     ## If FLAVOR is wrong or no obstype is defines, skip it
-    if 'FLAVOR' not in req_dict.keys():
+    if 'FLAVOR' not in header:
         if verbosely:
             log.info(f'WARNING: {reqpath} -- flavor not given!')
         else:
             log.info(f'{exp}: skipped  -- flavor not given!')
         return None
 
-    flavor = req_dict['FLAVOR'].lower()
+    flavor = header['FLAVOR'].lower()
     if flavor != 'science' and 'dark' not in obstypes and 'zero' not in obstypes:
         ## If FLAVOR is wrong
         if verbosely:
@@ -429,7 +476,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.info(f'{exp}: skipped  -- {flavor} not a relevant flavor')
         return None
 
-    if 'OBSTYPE' not in req_dict.keys():
+    if 'OBSTYPE' not in header:
         ## If no obstype is defines, skip it
         if verbosely:
             log.info(f'ignoring: {reqpath} -- {flavor} flavor but obstype not defined')
@@ -441,7 +488,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.info(f'using: {reqpath}')
 
     ## If obstype isn't in our list of ones we care about, skip it
-    obstype = req_dict['OBSTYPE'].lower()
+    obstype = header['OBSTYPE']
     if obstype not in obstypes:
         ## If obstype is wrong
         if verbosely:
@@ -450,27 +497,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.info(f'{exp}: skipped  -- {obstype} not relevant obstype')
         return None
 
-    ## Look for the data. If it's not there, say so then move on
-    datapath = pathjoin(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
-    if not os.path.exists(datapath):
-        if verbosely:
-            log.info(f'could not find {datapath}! It had obstype={obstype}. Skipping')
-        else:
-            log.info(f'{exp}: skipped  -- data not found')
-        return None
-    else:
-        if verbosely:
-            log.info(f'using: {datapath}')
-
-    ## Raw data, so ensure it's read only and close right away just to be safe
-    # log.debug(hdulist.info())
-
-    header,fx = load_raw_data_header(pathname=datapath, return_filehandle=True)
-    # log.debug(header)
-    # log.debug(specs)
+    ## Get the cameras available in the raw data and summarize with camword
+    cams = cameras_from_raw_data(fx)
+    camword = create_camword(cams)
+    fx.close()
 
     ## Define the column values for the current exposure in a dictionary
     outdict = {}
+
     ## Set HEADERERR and EXPFLAG before loop because they may be set if other columns have missing information
     outdict['HEADERERR'] = coldefaults[colnames == 'HEADERERR'][0]
     outdict['EXPFLAG'] = coldefaults[colnames == 'EXPFLAG'][0]
@@ -522,15 +556,44 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         reporting = keyval_change_reporting('NIGHT',orig,outdict['NIGHT'])
         outdict['HEADERERR'] = np.append(outdict['HEADERERR'],reporting)
 
-    ## Get the cameras available in the raw data and summarize with camword
-    cams = cameras_from_raw_data(fx)
-    camword = create_camword(cams)
+    ## Assign camword
     outdict['CAMWORD'] = camword
-    fx.close()
 
     ## Add the fiber assign survey, if it doesn't exist use the pre-defined one
     if "FA_SURV" in req_dict and "FA_SURV" in colnames:
         outdict['FA_SURV'] = req_dict['FA_SURV']
+
+
+    ## For Things defined in both request and data, if they don't match, flag in the
+    ##     output file for followup/clarity
+    for check in ['OBSTYPE']:#, 'FLAVOR']:
+        if check in req_dict and check in header:
+            rval, hval = req_dict[check], header[check]
+            if rval != hval:
+                log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
+                if 'metadata_mismatch' not in outdict['EXPFLAG']:
+                    outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_mismatch')
+                outdict['COMMENTS'] = np.append(outdict['COMMENTS'],f'For {check}: req={rval} but hdu={hval}')
+            else:
+                if verbosely:
+                    log.info(f'{check} checks out')
+        else:
+            if check not in header:
+                log.warning(f'{check} not found in header of exp {exp}')
+            else:
+                log.warning(f'{check} not found in request file of exp {exp}')
+
+    ## Special logic for EXPTIME because of real-world variance on order 10's - 100's of ms
+    # check = 'EXPTIME'
+    # rval, hval = req_dict[check], header[check]
+    # if np.abs(float(rval)-float(hval))>0.5:
+    #     log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
+    #     if 'aborted' not in outdict['EXPFLAG']:
+    #         outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'aborted')
+    #     outdict['COMMENTS'] = np.append(outdict['COMMENTS'],f'For {check}: req={rval} but hdu={hval}')
+    # else:
+    #     if verbosely:
+    #         log.info(f'{check} checks out')
 
     ## Flag the exposure based on PROGRAM information
     if 'system test' in outdict['PROGRAM'].lower():
@@ -544,34 +607,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
         outdict['LASTSTEP'] = 'fluxcal'
         log.info(f"Science exposure {exp} identified as undithered. Processing through flux calibration.")
+        outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'undithered dither')
     elif obstype == 'science' and 'dither' in outdict['PROGRAM']:
         outdict['LASTSTEP'] = 'skysub'
+        outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
         log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
-
-    ## For Things defined in both request and data, if they don't match, flag in the
-    ##     output file for followup/clarity
-    for check in ['OBSTYPE']:#, 'FLAVOR']:
-        rval, hval = req_dict[check], header[check]
-        if rval != hval:
-            log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
-            if 'metadata_mismatch' not in outdict['EXPFLAG']:
-                outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_mismatch')
-            outdict['COMMENTS'] = np.append(outdict['COMMENTS'],f'For {check}: req={rval} but hdu={hval}')
-        else:
-            if verbosely:
-                log.info(f'{check} checks out')
-
-    ## Special logic for EXPTIME because of real-world variance on order 10's - 100's of ms
-    check = 'EXPTIME'
-    rval, hval = req_dict[check], header[check]
-    if np.abs(float(rval)-float(hval))>0.5:
-        log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
-        if 'aborted' not in outdict['EXPFLAG']:
-            outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'aborted')
-        outdict['COMMENTS'] = np.append(outdict['COMMENTS'],f'For {check}: req={rval} but hdu={hval}')
-    else:
-        if verbosely:
-            log.info(f'{check} checks out')
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
