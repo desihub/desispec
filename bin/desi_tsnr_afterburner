@@ -523,15 +523,11 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file: 
             etcdata = json.load(etc_file)
 
-            if 'expinfo' in etcdata.keys():
-                if 'efftime' in etcdata['expinfo']:
-                    entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
-                else:
-                    entry['EFFTIME_ETC'] = np.float32(-99.)
-
-            else:
-                entry['EFFTIME_ETC'] = np.float32(-99.)
-    else:
+        try:
+            entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
+        except:
+            entry['EFFTIME_ETC'] = np.float32(-99.)
+    else:        
         entry['EFFTIME_ETC'] = np.float32(-99.)
 
     entry['CAMERA'] = camera
