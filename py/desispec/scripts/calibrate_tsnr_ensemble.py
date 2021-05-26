@@ -127,7 +127,7 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     else :
         slope_tsnr2    = 1.
 
-    if plot:
+    if plot:       
         plt.figure("efftime-vs-tsnr2-{}".format(tracer))
         plt.plot(tsnr_run[tsnr_col], tsnr_run[ext_col], c='k', marker='.', lw=0.0, markersize=1)
         plt.plot(tsnr_run[tsnr_col], slope_efftime*tsnr_run[tsnr_col], c='k', lw=0.5)
@@ -135,7 +135,19 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
         plt.xlabel("new "+tsnr_col)
         plt.ylabel("SV1 reference "+ext_col)
         plt.grid()
-
+        
+        plt.figure("efftime-vs-tsnr2-{}-ratio".format(tracer))
+        plt.plot(slope_efftime*tsnr_run[tsnr_col], tsnr_run[ext_col] / (slope_efftime*tsnr_run[tsnr_col]), c='k', lw=0.0, marker='.', markersize=2)
+        plt.axhline(1.1, c='c', alpha=0.75, lw=0.5)
+        plt.axhline(0.9, c='c', alpha=0.75, lw=0.5)
+        plt.axhline(1.2, c='b', alpha=0.50, lw=0.5)
+        plt.axhline(0.8, c='b', alpha=0.50, lw=0.5)
+        plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(ext_col, slope_efftime, tsnr_col, ref_frac))
+        plt.xlabel("efftime "+tsnr_col)
+        plt.ylabel("SV1 reference "+ext_col+"/"+"new efftime "+tsnr_col)
+        plt.ylim(0.0, 2.5)
+        plt.grid()
+        
         if with_reference_tsnr :
             plt.figure("tsnr2-vs-tsnr2-{}".format(tracer))
             plt.plot(tsnr_run[tsnr_col], tsnr_run[tsnr_col+"_REF"], c='k', marker='.', lw=0.0, markersize=1)
@@ -144,6 +156,7 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
             plt.xlabel("new "+tsnr_col)
             plt.ylabel("SV1 reference "+tsnr_col)
             plt.grid()
+        
         plt.show()
 
     return  slope_efftime , slope_tsnr2
