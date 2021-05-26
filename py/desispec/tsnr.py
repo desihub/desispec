@@ -6,6 +6,7 @@ import astropy.io.fits as fits
 from astropy.table import Table
 from astropy.convolution import convolve, Box1DKernel
 
+import json
 import glob
 import yaml
 from pkg_resources import resource_filename
@@ -20,6 +21,10 @@ from desispec.io import findfile,read_frame,read_fiberflat,read_sky,read_flux_ca
 from desispec.io.spectra import Spectra
 from desispec.calibfinder import findcalibfile
 from astropy import constants as const
+from desimodel.io import load_desiparams
+from desimodel.io import load_platescale
+from desimodel.fastfiberacceptance import FastFiberAcceptance
+from desispec.fiberfluxcorr import flat_to_psf_flux_correction
 
 class Config(object):
     def __init__(self, cpath):
@@ -726,6 +731,138 @@ def calc_alpha(frame, fibermap, rdnoise_sigma, npix_1d, angperpix, angperspecbin
 _camera_nea_angperpix = None
 _band_ensemble = None
 
+def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
+    '''
+    Nominal fiberfracs for effective depths. See:
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    Args:
+       fibermap: desispec instance. 
+       etc_fiberfracs: propragated etc fiberfracs per tracer, json or fits 
+                       header derived (dictionary).
+       no_offsets: ignore throughput loss due to fiber offsets. 
+    Returns:
+       dict of the nominal fiberloss of given type and seeing. 
+    '''
+
+    log = get_logger()
+
+    for k in ["FIBER_X","FIBER_Y"] :
+        if k not in fibermap.dtype.names :
+            log.warning("no column '{}' in fibermap, cannot do the tsnr fiberfrac correction, returning 1".format(k))
+            return np.ones(len(fibermap))
+
+    fa = FastFiberAcceptance()
+
+    # Compute the effective seeing; requires updated desimodel. 
+    exposure_seeing_fwhm = fa.psf_seeing_fwhm(etc_fiberfracs['psf']) # [microns]
+
+    fiber_params = load_desiparams()['fibers']
+    fiber_dia = fiber_params['diameter_um'] # 107 um.
+    fiber_dia_asec = fiber_params['diameter_arcsec'] # 1.52 ''
+
+    avg_platescale = fiber_dia_asec / fiber_dia # ['' / um]
+
+    exposure_seeing_fwhm *= avg_platescale # [''] 
+
+    log.info('Computed effective seeing of {:.6f} arcseconds (focalplane avg.) for a ETC PSF fiberfrac of {:.6f}'.format(exposure_seeing_fwhm, etc_fiberfracs['psf']))
+
+    # compute the seeing and plate scale correction                                                                                                                                                                                          
+    x_mm = fibermap["FIBER_X"]
+    y_mm = fibermap["FIBER_Y"]
+    bad = np.isnan(x_mm)|np.isnan(y_mm)
+    x_mm[bad]=0.
+    y_mm[bad]=0.
+
+    if "DELTA_X" in fibermap.dtype.names :
+        dx_mm = fibermap["DELTA_X"] # mm                                                                                                                                                                                                      
+    else :
+        log.warning("no column 'DELTA_X' in fibermap, assume = zero")
+        dx_mm = np.zeros(len(fibermap))
+
+    if "DELTA_Y" in fibermap.dtype.names :
+        dy_mm = fibermap["DELTA_Y"] # mm                                                                                                                                                                                                      
+    else :
+        log.warning("no column 'DELTA_Y' in fibermap, assume = zero")
+        dy_mm = np.zeros(len(fibermap))
+
+    bad = np.isnan(dx_mm)|np.isnan(dy_mm)
+    dx_mm[bad]=0.
+    dy_mm[bad]=0.
+
+    ps = load_platescale()
+    isotropic_platescale = np.interp(x_mm**2+y_mm**2,ps['radius']**2,np.sqrt(ps['radial_platescale']*ps['az_platescale'])) # um/arcsec                                                                                                        
+    # we could include here a wavelength dependence on seeing, or non-Gaussian.
+    avg_sigmas_um  = (exposure_seeing_fwhm/2.35) / avg_platescale # um
+    iso_sigmas_um  = (exposure_seeing_fwhm/2.35) * isotropic_platescale # um
+
+    offsets_um = np.sqrt(dx_mm**2+dy_mm**2)*1000. # um                                                                                                                                                                                        
+    nfibers = len(fibermap)
+
+    log.info('Median fiber offset {:.6f} [{:.6f} to {:.6f}]'.format(np.median(offsets_um), offsets_um.min(), offsets_um.max()))
+    log.info('Median avg psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(avg_sigmas_um), avg_sigmas_um.min(), avg_sigmas_um.max()))
+    log.info('Median iso psf microns {:.6f} [{:.6f} to {:.6f}]'.format(np.median(iso_sigmas_um), iso_sigmas_um.min(), iso_sigmas_um.max()))
+
+    ##
+    ##  FIX ME:  desispec flux calibration, in the absence of seeing values in the header, assumes 1.1'' as a default;
+    ##
+    ##  https://github.com/desihub/desispec/blob/05cd4cdf501b9afb7376bb0ea205517246b58769/py/desispec/scripts/fluxcalibration.py#L56
+    ##
+    ##  We do the same here until that is corrected:  https://github.com/desihub/desispec/issues/1267
+    ##
+    psf_like_1p1           = flat_to_psf_flux_correction(fibermap,exposure_seeing_fwhm=1.1)
+
+    ## 
+    tsnr_fiberfracs        = {}
+
+    tsnr_fiberfracs['exposure_seeing_fwhm'] = exposure_seeing_fwhm
+
+    if no_offsets:
+        offsets_um = np.zeros_like(offsets_um)
+
+        log.info('Zeroing fiber offsets for tsnr fiberfracs.')
+
+    # Note:  https://github.com/desihub/desispec/blob/05cd4cdf501b9afb7376bb0ea205517246b58769/py/desispec/fiberfluxcorr.py#L74
+
+    # 0.45''
+    tsnr_fiberfracs['elg']  = fa.value("DISK", iso_sigmas_um,offsets=offsets_um,hlradii=0.45 * np.ones_like(iso_sigmas_um))    
+    tsnr_fiberfracs['elg'] *= etc_fiberfracs['elg'] / fa.value("DISK", avg_sigmas_um,offsets=np.zeros_like(avg_sigmas_um),hlradii=0.45 * np.ones_like(avg_sigmas_um))
+
+    # Assume same as elg. 
+    tsnr_fiberfracs['gpbdark'] = tsnr_fiberfracs['elg'] 
+    
+    # BULGE == DEV.
+    tsnr_fiberfracs['bgs']  = fa.value("BULGE",iso_sigmas_um,offsets=offsets_um,hlradii=1.50 * np.ones_like(iso_sigmas_um))
+    tsnr_fiberfracs['bgs'] *= etc_fiberfracs['bgs'] / fa.value("BULGE", avg_sigmas_um,offsets=np.zeros_like(avg_sigmas_um),hlradii=1.50 * np.ones_like(avg_sigmas_um))
+
+    tsnr_fiberfracs['gpbbright'] = tsnr_fiberfracs['bgs']
+    
+    # FIX ME: ETC derived LRG FFRAC. BGS IN THE MEANTIME (DOES NOT DETERMINE TILE COMPLETION).
+    tsnr_fiberfracs['lrg']  = fa.value("BULGE",iso_sigmas_um,offsets=offsets_um,hlradii=1.00 * np.ones_like(iso_sigmas_um))
+    tsnr_fiberfracs['lrg'] *= etc_fiberfracs['bgs'] / fa.value("BULGE", avg_sigmas_um,offsets=np.zeros_like(avg_sigmas_um),hlradii=1.00 * np.ones_like(avg_sigmas_um))
+    
+    for tracer in ['mws', 'qso', 'lya', 'gpbbackup']:
+        tsnr_fiberfracs[tracer]  = fa.value("POINT",iso_sigmas_um,offsets=offsets_um)
+        tsnr_fiberfracs[tracer] *= etc_fiberfracs['psf'] / fa.value("POINT", avg_sigmas_um,offsets=np.zeros_like(avg_sigmas_um))
+
+    for tracer in ['qso', 'elg', 'lrg', 'bgs', 'gpbdark', 'gpbbright', 'gpbbackup']:
+        log.info("Computed median nominal {} fiber frac of {:.6f} ([{:.6f},{:.6f}]) for a seeing fwhm of: {:.6f} arcseconds.".format(tracer, np.median(tsnr_fiberfracs[tracer]),\
+                                                                                                                                                       tsnr_fiberfracs[tracer].min(),\
+                                                                                                                                                       tsnr_fiberfracs[tracer].max(),\
+                                                                                                                                                       exposure_seeing_fwhm))
+    # Normalize.
+    tracers = ['mws', 'bgs', 'lrg', 'elg', 'lya', 'qso', 'gpbdark', 'gpbbright', 'gpbbackup']
+
+    notnull = psf_like_1p1 > 0.0
+
+    log.info("Correcting fiberfrac for {:d} of {:d} sources.".format(np.count_nonzero(notnull), len(notnull)))
+
+    for tracer in tracers:
+        # To the TSNR 'signal' we apply the flux calib (including transparency).  Here, we remove the PSF fiberloss accounted for there. 
+        tsnr_fiberfracs[tracer][ notnull] *= psf_like_1p1[notnull]
+        tsnr_fiberfracs[tracer][~notnull]  = 1.0
+
+    return  tsnr_fiberfracs
+
 def calc_tsnr2_cframe(cframe):
     """
     Given cframe, calc_tsnr2 guessing frame,fiberflat,skymodel,fluxcalib to use
@@ -763,7 +900,7 @@ def calc_tsnr2_cframe(cframe):
 
     return calc_tsnr2(frame, fiberflat, skymodel, fluxcalib)
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_poisson=True) :
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_poisson=True, include_fiberfracs=True) :
     '''
     Compute template SNR^2 values for a given frame
 
@@ -796,6 +933,48 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     psfpath=findcalibfile([frame.meta],"PSF")
     tset=read_xytraceset(psfpath)
 
+    etc_fiberfracs={}
+    load_etcjson = False
+    
+    for tracer in ['psf', 'elg', 'bgs']:
+        ffrac = 'FFRAC_{}'.format(tracer.upper())
+        
+        if ffrac in frame.meta:
+            etc_fiberfracs[tracer] = frame.meta[ffrac]
+
+        else:
+            log.warning('TSNR failed to find a full set of ETC fiberfracs by tracer in frame.meta; loading etc json.')
+            load_etcjson = True
+            break
+
+    if load_etcjson:
+        expid=frame.meta["EXPID"]
+        night=frame.meta["NIGHT"]
+
+        etcpath=findfile('etc', night=night, expid=expid)
+
+        if not os.path.exists(etcpath):
+            log.warning('Failed to find etc json at {}.  Assuming nominal etc fiberfracs.'.format(etcpath))
+
+            etc_fiberfracs={}
+        
+            etc_fiberfracs['psf'] = 0.56198
+            etc_fiberfracs['elg'] = 0.41220
+            etc_fiberfracs['bgs'] = 0.18985
+        
+        else:
+            log.info('Retrieved etc data from {}'.format(etcpath))
+        
+            with open(etcpath) as f: 
+                etcdata = json.load(f)
+
+            etc_fiberfracs={}
+
+            for tracer in ['psf', 'elg', 'bgs']:
+                etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
+
+    tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs, no_offsets=False)
+    
     # Returns bivariate spline to be evaluated at (fiber, wave).
     if not "DESIMODEL" in os.environ :
         msg = "requires $DESIMODEL to get the NEA and the SNR templates"
@@ -892,6 +1071,12 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
         # Apply dust transmission.
         result *= dust_transmission(frame.wave, ebv[:,None])
 
+        if include_fiberfracs:
+            if (tracer in tsnr_fiberfracs):
+                result *= tsnr_fiberfracs[tracer][:,None]
+            else:
+                log.critical('Missing {} tracer in tsnr fiberfracs.'.format(tracer))
+        
         result = result**2.
 
         result /= denom
