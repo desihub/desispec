@@ -968,6 +968,9 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
             except:
                 log.warning('Failed to find etc expinfo/ffrac for all tracers.')
 
+                # Reset.
+                etc_fiberfracs={}
+
     # Empty dictionaries evaluate to False. 
     if not etc_fiberfracs:
         log.warning('Failed to inherit from etc json at {}.  Assuming nominal etc fiberfracs.'.format(etcpath))
