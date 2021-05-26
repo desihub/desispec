@@ -73,11 +73,12 @@ class gfa_template_ensemble(object):
             pl.plot(band_wave, self.ensemble_dflux[band][0], label=band)
 
         pl.xlabel('Wavelength [Angstroms]')
-        pl.ylabel('GFADARK TSNR DFLUX TEMPLATE')
+        pl.ylabel('GPBDARK TSNR DFLUX TEMPLATE')
         pl.show()
 
     def write(self,dirname):
         log = get_logger()
+
 
         for tracer in ['gpbdark', 'gpbbright', 'gpbbackup']:
             hdr = fits.Header()
@@ -93,9 +94,9 @@ class gfa_template_ensemble(object):
             hdu_list.writeto(dirname + '/tsnr-ensemble-{}.fits'.format(tracer), overwrite=True)
 
             log.info('Successfully written GFA TSNR template to ' + dirname + '/tsnr-ensemble-{}.fits'.format(tracer))
-            
+
         log.info('Should now be copied to $DESIMODEL/data/tsnr/.')
-        
+
 class template_ensemble(object):
     '''
     Generate an ensemble of templates to sample tSNR for a range of points in

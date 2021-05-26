@@ -67,14 +67,13 @@ def main(args):
         templates.compute()
         templates.plot()
         templates.write(dirname=args.outdir)
-        
+
     elif args.tracer in ['bgs', 'lrg', 'elg', 'lya', 'qso']:
         templates = template_ensemble(tracer=args.tracer,config_filename=args.config_filename)
         templates.compute(nmodel=args.nmodel, smooth=args.smooth, nz_table_filename=args.nz_filename,
                       convolve_to_nz=(not args.no_nz_convolution), single_mag=(not args.mag_range))
         filename = "{}/tsnr-ensemble-{}.fits".format(args.outdir,args.tracer)
         templates.write(filename)
-
     else:
         raise ValueError('Unknown tracer {} to compute.'.format(args.tracer))
 
