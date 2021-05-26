@@ -804,7 +804,10 @@ def main():
             
         tsnr2_expid_table = vstack(tsnr2_expid)
         tsnr2_frame_table = vstack(tsnr2_frame)
-            
+
+        if use_mpi():
+            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
+        
         # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod,add_missing=add_missing)
 
         if args.skymags is not None :
@@ -908,7 +911,6 @@ def main():
                         os.unlink(tmpfilename)
         else :
             log.error("no valid exposures added")
-
     
         if args.tile_completeness is not None :
             # reread the exposure table
