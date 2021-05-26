@@ -67,7 +67,7 @@ def main(args):
         templates.compute()
         templates.plot()
         templates.write(dirname=args.outdir)
-        
+
     elif args.tracer in ['bgs', 'lrg', 'elg', 'lya', 'qso']:
         templates = template_ensemble(tracer=args.tracer,config_filename=args.config_filename)
         templates.compute(nmodel=args.nmodel, smooth=args.smooth, nz_table_filename=args.nz_filename,
@@ -76,6 +76,6 @@ def main(args):
         templates.write(filename)
     else:
         raise ValueError('Unknown tracer {} to compute.'.format(args.tracer))
-        
+
 if __name__ == '__main__':
     print("please run desi_compute_tsnr_ensemble")

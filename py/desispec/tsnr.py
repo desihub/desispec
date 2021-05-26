@@ -62,7 +62,7 @@ class gfa_template_ensemble(object):
             band_wave = self.wave[self.cslice[band]]
             self.ensemble_dflux[band] = self.pb_interp(band_wave).reshape(1, len(band_wave))
 
-        log.info('GFA passband TSNR template computation done.')
+        log.info('GPB passband TSNR template computation done.')
 
     def plot(self):
         import pylab as pl
@@ -79,11 +79,11 @@ class gfa_template_ensemble(object):
     def write(self,dirname):
         log = get_logger()
 
-        for tracer in ['gpbdark', 'gpbbright', 'gpbbackup']:        
+
+        for tracer in ['gpbdark', 'gpbbright', 'gpbbackup']:
             hdr = fits.Header()
-            
             hdr['TRACER'] = tracer
-            
+
             hdu_list = [fits.PrimaryHDU(header=hdr)]
 
             for band in ['b', 'r', 'z']:
@@ -94,9 +94,9 @@ class gfa_template_ensemble(object):
             hdu_list.writeto(dirname + '/tsnr-ensemble-{}.fits'.format(tracer), overwrite=True)
 
             log.info('Successfully written GFA TSNR template to ' + dirname + '/tsnr-ensemble-{}.fits'.format(tracer))
-            
+
         log.info('Should now be copied to $DESIMODEL/data/tsnr/.')
-        
+
 class template_ensemble(object):
     '''
     Generate an ensemble of templates to sample tSNR for a range of points in
