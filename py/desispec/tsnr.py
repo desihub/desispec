@@ -953,26 +953,31 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
 
         etcpath=findfile('etc', night=night, expid=expid)
 
-        if not os.path.exists(etcpath):
-            log.warning('Failed to find etc json at {}.  Assuming nominal etc fiberfracs.'.format(etcpath))
-
-            etc_fiberfracs={}
+        etc_fiberfracs={}
         
-            etc_fiberfracs['psf'] = 0.56198
-            etc_fiberfracs['elg'] = 0.41220
-            etc_fiberfracs['bgs'] = 0.18985
-        
-        else:
+        if os.path.exists(etcpath):
             log.info('Retrieved etc data from {}'.format(etcpath))
-        
-            with open(etcpath) as f: 
+
+            with open(etcpath) as f:
                 etcdata = json.load(f)
 
-            etc_fiberfracs={}
+            try:
+                for tracer in ['psf', 'elg', 'bgs']:
+                    etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)] 
 
-            for tracer in ['psf', 'elg', 'bgs']:
-                etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
+            except:
+                log.warning('Failed to find etc expinfo/ffrac for all tracers.')
 
+    # Empty dictionaries evaluate to False. 
+    if not etc_fiberfracs:
+        log.warning('Failed to inherit from etc json at {}.  Assuming nominal etc fiberfracs.'.format(etcpath))
+
+        etc_fiberfracs={}
+        
+        etc_fiberfracs['psf'] = 0.56198
+        etc_fiberfracs['elg'] = 0.41220
+        etc_fiberfracs['bgs'] = 0.18985
+        
     tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs, no_offsets=False)
     
     # Returns bivariate spline to be evaluated at (fiber, wave).
