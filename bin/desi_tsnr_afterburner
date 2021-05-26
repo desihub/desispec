@@ -3,9 +3,9 @@
 Calculate stand alone tsnr tables for a given desispec prod.
 
 Use MPI:
-    salloc -N 2 -C haswell -q interactive -t 00:30:00                                                                                                                                                                                       
+    salloc -N 2 -C haswell -q interactive -t 00:30:00
 
-    # 2 nodes, 2 mpi ranks reducing 2 nights (1 per rank) with 32 processes. 
+    # 2 nodes, 2 mpi ranks reducing 2 nights (1 per rank) with 32 processes.
     srun -N 2 -n 2 -c 32 python desi_tsnr_afterburner
 '''
 
@@ -136,16 +136,16 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
 
     hdr0 = cframe_hdulist[0].header
     hdr1 = cframe_hdulist[1].header
-    
+
     if 'FIBERFLT' not in hdr0:
         log.critical('Failed to find FIBERFLT in cframe hdr of {:08d} on {}'.format(expid, night))
         log.info('Trying CalibFinder.')
-        
+
         flat = CalibFinder([hdr0, hdr1]).findfile('FIBERFLAT')
-        
+
     else:
         flat = cframe_hdulist[0].header['FIBERFLT']
-        
+
     if 'SPECPROD' in flat:
         flat = flat.replace('SPECPROD', specprod_dir)
     if 'SPCALIB' in flat:
@@ -519,15 +519,15 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         entry['SEEING_ETC'] = 0.
     if "ACTTEFF" in hdr :
         entry['EFFTIME_ETC'] = np.float32(hdr['ACTTEFF'])
-    elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):    
-        with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file: 
+    elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):
+        with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file:
             etcdata = json.load(etc_file)
 
         try:
             entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
         except:
             entry['EFFTIME_ETC'] = np.float32(-99.)
-    else:        
+    else:
         entry['EFFTIME_ETC'] = np.float32(-99.)
 
     entry['CAMERA'] = camera
@@ -651,19 +651,19 @@ def main():
     if use_mpi():
         from mpi4py import  MPI
         from desispec.parallel import default_nproc
-        
+
         comm  = MPI.COMM_WORLD
         rank  = comm.Get_rank()
         size  = comm.Get_size()
 
         args.update = False
         args.nproc = default_nproc
-        
+
     else:
         comm  = None
         rank  = 0
         size  = 1
-        
+
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
         cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
@@ -768,22 +768,25 @@ def main():
             rank_summary_rows = list()
 
             log.info('Rank {:d} processes nights {} with nproc={}'.format(rank, ranknights, default_nproc))
-    
+
             comm.barrier()
-    
-            logfile = os.path.dirname(args.outfile) + '/desi_tsnr_afterburner_{:d}_{:d}_{:d}.log'.format(ranknights[0], ranknights[-1], rank)
+
+            outdir = os.path.dirname(args.outfile)
+            if outdir == "" :
+                outdir = "."
+            logfile = outdir+'/desi_tsnr_afterburner_{:d}_{:d}_{:d}.log'.format(ranknights[0], ranknights[-1], rank)
 
             if os.path.isfile(logfile):
-                os.unlink(logfile) 
+                os.unlink(logfile)
 
             with stdouterr_redirected(to=logfile):
                 for count,night in enumerate(ranknights):
                     tmpfilename=args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
-                
+
                     one_night(count, night, rank_summary_rows, tmpfilename)
 
         comm.barrier()
-        
+
     else:
         for count,night in enumerate(nights):
             tmpfilename=args.outfile.replace(".fits","_tmp.fits")
@@ -792,16 +795,16 @@ def main():
 
     if (comm is None) | (rank == 0):
         log.info('Gathering TSNR tmp tables (over ranks: {}, {})'.format(use_mpi(), size))
-        
+
         tsnr2_expid = []
         tsnr2_frame = []
-        
+
         for rank in range(size):
             if use_mpi():
                 tmpfilename=args.outfile.replace('.fits', '_tmp_{:d}.fits'.format(rank))
             else:
                 tmpfilename=args.outfile.replace('.fits', '_tmp.fits')
-                
+
             try:
                 tmp = fits.open(tmpfilename)
 
@@ -810,24 +813,24 @@ def main():
                 continue
 
             hdr = tmp[0].header
-            
+
             tsnr2_expid.append(Table(tmp['TSNR2_EXPID'].data))
             tsnr2_frame.append(Table(tmp['TSNR2_FRAME'].data))
-                            
+
             # remove temporary file if successful
             if os.path.isfile(tmpfilename) :
                 log.info("rm temporary file {}".format(tmpfilename))
                 os.unlink(tmpfilename)
-            
+
         tsnr2_expid_table = vstack(tsnr2_expid)
         tsnr2_frame_table = vstack(tsnr2_frame)
 
         tsnr2_expid_table.meta['EXTNAME'] = 'TSNR2_EXPID'
         tsnr2_frame_table.meta['EXTNAME'] = 'TSNR2_FRAME'
-        
+
         if use_mpi():
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
-        
+
         # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod,add_missing=add_missing)
 
         if args.skymags is not None :
@@ -875,7 +878,7 @@ def main():
             add_skymags_columns(tsnr2_expid_table,skymags_table)
 
         gfa_table = None
-                                   
+
         if args.gfa_proc_dir is not None :
             try :
                 gfa_table = read_gfa_data(args.gfa_proc_dir)
@@ -914,7 +917,7 @@ def main():
             tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"] # default
             tsnr2_expid_table["EFFTIME_GFA"][goaltype=="bright"]=tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype=="bright"]
             tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
-    
+
         # end of loop on nights
         if len(tsnr2_frame_table)>0 :
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,output_csv_filename=args.outfile.replace(".fits",".csv"))
@@ -931,7 +934,7 @@ def main():
                     os.unlink(tmpfilename)
             else :
                 log.error("no valid exposures added")
-    
+
         if args.tile_completeness is not None :
             # reread the exposure table
             exposure_table = Table.read(args.outfile)
