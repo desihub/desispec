@@ -140,7 +140,7 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
             plt.figure("tsnr2-vs-tsnr2-{}".format(tracer))
             plt.plot(tsnr_run[tsnr_col], tsnr_run[tsnr_col+"_REF"], c='k', marker='.', lw=0.0, markersize=1)
             plt.plot(tsnr_run[tsnr_col], slope_tsnr2*tsnr_run[tsnr_col], c='k', lw=0.5)
-            plt.title('{} = {:.3f} x {}'.format(tsnr_col+"_REF", slope_tsnr2, tsnr_col))
+            plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(tsnr_col+"_REF", slope_tsnr2, tsnr_col, ref_frac))
             plt.xlabel("new "+tsnr_col)
             plt.ylabel("SV1 reference "+tsnr_col)
             plt.grid()
