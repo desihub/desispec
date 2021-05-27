@@ -376,6 +376,13 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     reqpath = pathjoin(raw_data_dir, night, exp, f'request-{exp}.json')
     datpath = pathjoin(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
 
+    etcpath = pathjoin(raw_data_dir, night, exp, f'request-{exp}.json')
+    fbapaths = glob.glob(pathjoin(raw_data_dir, night, exp, 'fiberassign-*.fits.?z'))
+    if len(fbapaths) == 1:
+        fbapath = fbapaths[0]
+    else:
+        log.error(f"Found {len(fbapaths)} fiberassing files: {fbapaths}")
+
     ## Give a header for the exposure
     if verbosely:
         log.info(f'\n\n###### Summarizing exposure: {exp} ######\n')
@@ -457,17 +464,17 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     else:
         if verbosely:
             log.info(f'Using: {datpath}')
-        header, fx = load_raw_data_header(pathname=datpath, return_filehandle=True)
+        dat_header, fx = load_raw_data_header(pathname=datpath, return_filehandle=True)
 
     ## If FLAVOR is wrong or no obstype is defines, skip it
-    if 'FLAVOR' not in header:
+    if 'FLAVOR' not in dat_header:
         if verbosely:
             log.info(f'WARNING: {reqpath} -- flavor not given!')
         else:
             log.info(f'{exp}: skipped  -- flavor not given!')
         return None
 
-    flavor = header['FLAVOR'].lower()
+    flavor = dat_header['FLAVOR'].lower()
     if flavor != 'science' and 'dark' not in obstypes and 'zero' not in obstypes:
         ## If FLAVOR is wrong
         if verbosely:
@@ -476,7 +483,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.info(f'{exp}: skipped  -- {flavor} not a relevant flavor')
         return None
 
-    if 'OBSTYPE' not in header:
+    if 'OBSTYPE' not in dat_header:
         ## If no obstype is defines, skip it
         if verbosely:
             log.info(f'ignoring: {reqpath} -- {flavor} flavor but obstype not defined')
@@ -488,7 +495,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.info(f'using: {reqpath}')
 
     ## If obstype isn't in our list of ones we care about, skip it
-    obstype = header['OBSTYPE']
+    obstype = dat_header['OBSTYPE']
     if obstype not in obstypes:
         ## If obstype is wrong
         if verbosely:
@@ -511,19 +518,19 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     ## Loop over columns and fill in the information. If unavailable report/flag if necessary and assign default
     for key,default in zip(colnames,coldefaults):
         ## These are dealt with separately
-        if key in ['NIGHT','HEADERERR','EXPFLAG']:
+        if key in ['NIGHT','HEADERERR','EXPFLAG','GOALTIME','EBVFAC','FA_SURV','FAPRGRM','GOALTYPE']:
             continue
         ## These just need defaults, as they are user defined (except FA_SURV which comes from the request.json file
-        elif key in ['CAMWORD', 'FA_SURV', 'BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'COMMENTS']:
+        elif key in ['CAMWORD', 'BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'COMMENTS']:
             outdict[key] = default
         ## Try to find the key in the raw data header
-        elif key in header.keys():
-            val = header[key]
+        elif key in dat_header.keys():
+            val = dat_header[key]
             if type(val) is str:
                 outdict[key] = val.lower()
             else:
                 outdict[key] = val
-        ## If key not in the header, identify that and place a default value
+        ## If key not in the dat_header, identify that and place a default value
         ## If obstype isn't arc or flat, don't worry about seqnum or seqtot
         elif key in ['SEQNUM','SEQTOT'] and obstype not in ['arc','flat']:
             outdict[key] = default
@@ -544,13 +551,13 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
     ## Make sure that the night is defined:
     try:
-        outdict['NIGHT'] = int(header['NIGHT'])
+        outdict['NIGHT'] = int(dat_header['NIGHT'])
     except (KeyError, ValueError, TypeError):
         if 'metadata_missing' not in outdict['EXPFLAG']:
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_missing')
-        outdict['NIGHT'] = header2night(header)
+        outdict['NIGHT'] = header2night(dat_header)
         try:
-            orig = str(header['NIGHT'])
+            orig = str(dat_header['NIGHT'])
         except (KeyError, ValueError, TypeError):
             orig = ''
         reporting = keyval_change_reporting('NIGHT',orig,outdict['NIGHT'])
@@ -559,16 +566,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     ## Assign camword
     outdict['CAMWORD'] = camword
 
-    ## Add the fiber assign survey, if it doesn't exist use the pre-defined one
-    if "FA_SURV" in req_dict and "FA_SURV" in colnames:
-        outdict['FA_SURV'] = req_dict['FA_SURV']
-
-
     ## For Things defined in both request and data, if they don't match, flag in the
     ##     output file for followup/clarity
     for check in ['OBSTYPE']:#, 'FLAVOR']:
-        if check in req_dict and check in header:
-            rval, hval = req_dict[check], header[check]
+        if check in req_dict and check in dat_header:
+            rval, hval = req_dict[check], dat_header[check]
             if rval != hval:
                 log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
                 if 'metadata_mismatch' not in outdict['EXPFLAG']:
@@ -578,14 +580,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                 if verbosely:
                     log.info(f'{check} checks out')
         else:
-            if check not in header:
+            if check not in dat_header:
                 log.warning(f'{check} not found in header of exp {exp}')
             else:
                 log.warning(f'{check} not found in request file of exp {exp}')
 
     ## Special logic for EXPTIME because of real-world variance on order 10's - 100's of ms
     # check = 'EXPTIME'
-    # rval, hval = req_dict[check], header[check]
+    # rval, hval = req_dict[check], dat_header[check]
     # if np.abs(float(rval)-float(hval))>0.5:
     #     log.warning(f'In keyword {check}, request and data header disagree: req:{rval}\tdata:{hval}')
     #     if 'aborted' not in outdict['EXPFLAG']:
@@ -595,23 +597,140 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     #     if verbosely:
     #         log.info(f'{check} checks out')
 
-    ## Flag the exposure based on PROGRAM information
-    if 'system test' in outdict['PROGRAM'].lower():
-        outdict['LASTSTEP'] = 'ignore'
-        outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
-        log.info(f"Exposure {exp} identified as system test. Not processing.")
-    elif obstype == 'science' and float(outdict['EXPTIME']) < 59.0:
-        outdict['LASTSTEP'] = 'skysub'
-        outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
-        log.info(f"Science exposure {exp} with EXPTIME less than 59s. Processing through sky subtraction.")
-    elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
-        outdict['LASTSTEP'] = 'fluxcal'
-        log.info(f"Science exposure {exp} identified as undithered. Processing through flux calibration.")
-        outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'undithered dither')
-    elif obstype == 'science' and 'dither' in outdict['PROGRAM']:
-        outdict['LASTSTEP'] = 'skysub'
-        outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
-        log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
+    if obstype == 'science':
+        if os.path.isfile(fbapath):
+            log.info(f"Found fiberassign file: {fbapath}.")
+            fba = fits.open(fbapath)
+            extra_in_fba = 'EXTRA' in fba
+            fba_header = fba['PRIMARY'].header
+            fba.close()
+        else:
+            fba_header = {}
+
+        if os.path.isfile(etcpath):
+            log.info(f"Found etc file: {etcpath}.")
+            etc_dict = get_json_dict(etcpath)
+        else:
+            log.info(f"Couldn't find etc file: {etcpath}.")
+            etc_dict = {}
+
+        ## Add the fiber assign survey, if it doesn't exist use the pre-defined one
+        for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE","EBVFAC"]:
+            outdict[name] = None
+            for location in [fba_header,dat_header,req_dict]:
+                if name in location:
+                    val = location[name]
+                    if isinstance(val,str):
+                        val = val.strip()
+                    location[name] = val
+                    break
+
+        if outdict['EBVFAC'] is None and 'fassign' in etc_dict:
+            if 'EBVFAC' in etc_dict['fassign']:
+                outdict['EBVFAC'] = etc_dict['fassign']['EBVFAC']
+            elif 'MW_transp' in etc_dict['fassign']:
+                outdict['EBVFAC'] = 1.0 / etc_dict['fassign']['MW_transp']
+
+        outdict['EFFTIME_ETC'], outdict['AIRFAC'] = None, None
+        if 'expinfo' in etc_dict and 'efftime' in etc_dict['expinfo']:
+            outdict['EFFTIME_ETC'] = etc_dict['expinfo']['efftime']
+        elif 'ACTTEFF' in dat_header:
+            outdict['EFFTIME_ETC'] = dat_header['ACTTEFF']
+
+        if 'expinfo' in etc_dict and 'atm_extinction' in etc_dict['expinfo']:
+            outdict['AIRFAC'] = 1.0 / etc_dict['expinfo']['atm_extinction']
+        elif 'AIRMASS' in dat_header:
+            outdict['AIRFAC'] = np.power(10.0, (0.114 * (dat_header['AIRMASS'] - 1.0) / 2.5))
+
+
+        ## FA
+        # GOALTIME = 1000
+        # GOALTYPE = 'DARK    '
+        # FAPRGRM = 'dark    '
+        # FA_SURV = 'main    '
+        # EBVFAC = 1.0573020682586
+
+        ## Last resort, use the requests:
+        # 'CONDITIONS' #dark, bright, backup
+        # 'PROGRAM': #'DARK'
+        # 'FAFLAVOR': #'maindark'
+        # 'GOALTIME': #1000.0,
+        # 'GOALTYPE': #'DARK',
+        # 'EBVFAC':# 1.0573020682586,
+
+        ## Perform QA Cuts:
+        if outdict['AIRFAC'] is None:
+            outdict['AIRFAC'] = 1
+            log.warning("Couldn't find AIRFAC or derive it, so setting it equal to 1.")
+        if outdict['EBVFAC'] is None:
+            outdict['EBVFAC'] = 1
+            log.warning("Couldn't find EBVFAC or derive it, so setting it equal to 1.")
+        if outdict['GOALTIME'] is None:
+            outdict['GOALTIME'] = 0.
+            log.warning("Couldn't find GOALTIME, so setting it equal to 0.")
+        if outdict['EFFTIME_ETC'] is None:
+            outdict['EFFTIME_ETC'] = -99.0
+            log.warning("Couldn't find EFFTIME or ACTTEFF, so setting EFFTIME_ETC equal to -99.0")
+
+        ## Flag the exposure based on PROGRAM information
+        if 'system test' in outdict['PROGRAM'].lower():
+            outdict['LASTSTEP'] = 'ignore'
+            outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
+            log.info(f"Exposure {exp} identified as system test. Not processing.")
+        elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
+            outdict['LASTSTEP'] = 'fluxcal'
+            log.info(f"Science exposure {exp} identified as undithered. Processing through flux calibration.")
+            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'undithered dither')
+        elif obstype == 'science' and 'dither' in outdict['PROGRAM']:
+            outdict['LASTSTEP'] = 'skysub'
+            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
+            log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
+        elif extra_in_fba:
+            outdict['LASTSTEP'] = 'skysub'
+            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
+            log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
+        else:
+            efftime = outdict['EFFTIME_ETC']
+            speed = (efftime / outdict['EXPTIME']) * (outdict['EBVFAC'] * outdict['AIRFAC']) ** 2
+
+            ## Define thresholds
+            threshold_exptime = 60.
+            threshold_efftime = 0.05 * outdict['GOALTIME']  # 0.0 by default if GOALTIME not defined in headers
+            threshold_speed = 0.
+            if outdict['GOALTYPE'] is not None:
+                goaltype = outdict['GOALTYPE'].lower()
+                if   goaltype == 'dark':
+                    threshold_speed = 1 / 5.   # = 0.5*(1/2.5) = half the survey threshold
+                elif goaltype == 'bright':
+                    threshold_speed = 1 / 12.  # = 0.5*(1/6) = half the survey threshold
+                elif goaltype == 'backup':
+                    pass
+                else:
+                    log.warning(f"Couldn't understand GOALTYPE={outdict['GOALTYPE']}")
+
+            ## Cut on signal:
+            if float(outdict['EXPTIME']) < threshold_exptime:
+                outdict['LASTSTEP'] = 'skysub'
+                outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
+                log.info(f"Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less than 60s. " + \
+                         "Processing through sky subtraction.")
+            elif outdict['EFFTIME_ETC'] > -98.:
+                ## Cut on S/N:
+                if efftime < threshold_efftime:
+                    outdict['LASTSTEP'] = 'skysub'
+                    outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
+                    log.info(f"Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} less than 5% goaltime={threshold_efftime}." + \
+                             "Processing through sky subtraction.")
+                ## Cut on Speed:
+                elif speed < threshold_speed:
+                    outdict['LASTSTEP'] = 'skysub'
+                    outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
+                    log.info(f"Science exposure {exp} with speed={speed} less than threshold speed={threshold_speed}." + \
+                             "Processing through sky subtraction.")
+
+    for name in ["FA_SURV","FAPRGRM","GOALTYPE"]:
+        if outdict[name] is None:
+            outdict[name] = "UNKNWN"
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
