@@ -192,7 +192,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD')
 
     ## Define the files to look for
-    file_glob = os.path.join(path_to_data, str(night), '*', 'checksum-*')
+    file_glob = os.path.join(path_to_data, str(night), '*', 'desi-*.fit*')
 
     ## Determine where the exposure table will be written
     if exp_table_path is None:
