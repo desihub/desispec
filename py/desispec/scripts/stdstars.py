@@ -80,9 +80,9 @@ def dust_transmission(wave,ebv) :
 
 def get_gaia_ab_correction():
     """
-Get the dictionary with corrections from AB magnitudes to 
-Vega magnitudes (as the official gaia catalog is in vega)
-"""
+    Get the dictionary with corrections from AB magnitudes to
+    Vega magnitudes (as the official gaia catalog is in vega)
+    """
     vega_zpt = dict(G=25.6914396869,
                     BP=25.3488107670,
                     RP=24.7626744847)
@@ -99,9 +99,9 @@ Vega magnitudes (as the official gaia catalog is in vega)
 
 def get_magnitude(stdwave, model, model_filters, cur_filt):
     """ Obtain magnitude for a filter taking into
-account the ab/vega correction if needed.
-Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
-    """ 
+    account the ab/vega correction if needed.
+    We assume the flux is in units of 1e-17 erg/s/cm^2/A
+    """
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
 
     # AB/Vega correction
@@ -111,7 +111,7 @@ Wwe assume the flux is in units of 1e-17 erg/s/cm^2/A
         corr = 0
     if not(cur_filt in model_filters):
         raise Exception(('Filter {} is not present in models').format(cur_filt))
-    # see https://github.com/desihub/speclite/issues/34 
+    # see https://github.com/desihub/speclite/issues/34
     # to explain copy()
     retmag = model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
     return retmag
@@ -137,7 +137,7 @@ def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
         else:
             bprp = (unextincted_mags['GAIA-BP'] -
                     unextincted_mags['GAIA-RP'])
-            
+
         for band in ['G','BP','RP']:
             curp = gaia_poly_coeff[band]
             dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
@@ -195,7 +195,7 @@ def main(args, comm=None) :
     std_targetids = None
     if args.std_targetids is not None:
         std_targetids = args.std_targetids
-            
+
     # READ DATA
     ############################################
     # First loop through and group by exposure and spectrograph
@@ -356,8 +356,7 @@ def main(args, comm=None) :
         # select appropriate subset of standards
         starindices = starindices[legacy_indices]
         starfibers = starfibers[legacy_indices]
-    
-        
+
     # excessive check but just in case
     if not color in ['G-R', 'R-Z', 'GAIA-BP-RP', 'GAIA-G-RP']:
         raise ValueError('Unknown color {}'.format(color))
@@ -547,7 +546,7 @@ def main(args, comm=None) :
             dec = fibermap['TARGET_DEC'] * units.deg))
     else:
         ebv = fibermap['EBV']
-    
+
     photometric_systems = np.unique(fibermap['PHOTSYS'])
     if not gaia_std:
         for band in ['G', 'R', 'Z']:
@@ -568,7 +567,7 @@ def main(args, comm=None) :
     for band in ['G','BP','RP']:
         star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
     unextinct_gaia_mags(star_mags, star_unextincted_mags, ebv)
-    
+
     star_colors = dict()
     star_unextincted_colors = dict()
 
@@ -618,7 +617,7 @@ def main(args, comm=None) :
 
         # preselect models based on magnitudes
         photsys=fibermap['PHOTSYS'][star]
-        
+
         if gaia_std:
             model_colors = model_mags[color_band1] - model_mags[color_band2]
         else:
