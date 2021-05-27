@@ -901,7 +901,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
 
     ## special case: no etc equivalent.
     tsnr_fiberfracs['lrg']  = etc_fiberfracs['bgs'] / fa.value('BULGE', avg_sigmas_um,offsets=np.zeros_like(avg_sigmas_um),hlradii=1.50 * np.ones_like(avg_sigmas_um))
-    tsnr_fiberfracs['lrg'] *= fa.value('BULGE', iso_sigmas_um,offsets=offsets_um,hlradii=1.50 * np.ones_like(iso_sigmas_um))
+    tsnr_fiberfracs['lrg'] *= fa.value('BULGE', iso_sigmas_um,offsets=offsets_um,hlradii=1.00 * np.ones_like(iso_sigmas_um))
 
     # mean_psf_loss derived from flux calib.                                                                                                                                                                                             
     tsnr_fiberfracs['lrg'][notnull] /= mean_psf_loss
@@ -963,7 +963,7 @@ def calc_tsnr2_cframe(cframe):
 
     return calc_tsnr2(frame, fiberflat, skymodel, fluxcalib)
 
-def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_poisson=True, include_fiberfracs=False) :
+def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_poisson=True, include_fiberfracs=True):
     '''
     Compute template SNR^2 values for a given frame
 
