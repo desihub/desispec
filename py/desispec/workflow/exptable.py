@@ -510,15 +510,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     datpath = os.path.join(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
     etcpath = os.path.join(raw_data_dir, night, exp, f'etc-{exp}.json')
 
-    ## fiberassign is based on TILEID, so glob it. (Could just as easily
-    ## also move this later in code when we know TILEID)
-    fbapaths = glob.glob(os.path.join(raw_data_dir, night, exp, 'fiberassign-*.fits.?z'))
-    if len(fbapaths) == 1:
-        fbapath = fbapaths[0]
-    else:
-        fbapath = ''
-        log.error(f"Found {len(fbapaths)} fiberassign files: {fbapaths}")
-
     ## If there is a manifest file, open it and see what it says
     if os.path.isfile(manpath):
         log.info(f'Found manifest file: {manpath}')
@@ -727,6 +718,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
     ## Now for science exposures,
     if obstype == 'science':
+        ## fiberassign is based on TILEID, so glob it. (Could just as easily
+        ## use TILEID but need to glob fz vs gz anyway)
+        tilestr = f"{outdict['TILEID']:06d}"
+        fbapath = os.path.join(raw_data_dir, night, exp, f'fiberassign-{tilestr}.fits.gz')
+
         ## Load fiberassign file. If not available return empty dict
         if os.path.isfile(fbapath):
             log.info(f"Found fiberassign file: {fbapath}.")
