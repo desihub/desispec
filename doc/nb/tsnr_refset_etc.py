@@ -71,3 +71,26 @@ tokeep.write(opath, format='csv', overwrite=True, comment='#')
 tokeepcsv = Table.read(opath, comment='#')
 print(tokeepcsv.meta)
 tokeepcsv.pprint()
+
+
+##  Check.
+for i, (night, expid, ffrac_psf, ffrac_elg, ffrac_bgs) in enumerate(zip(tokeep['NIGHT'], tokeep['EXPID'], tokeep['ETCFFRAC_PSF'], tokeep['ETCFFRAC_ELG'], tokeep['ETCFFRAC_BGS'])):
+    etcpath=findfile('etc', night=night, expid=expid)
+    etcdata=None
+
+    with open(etcpath) as f:
+        etcdata = json.load(f)
+
+    etc_fiberfracs = {}
+    
+    for tracer in ['psf', 'elg', 'bgs']:
+        etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
+
+    assert  ffrac_psf == etc_fiberfracs['psf']
+    assert  ffrac_elg == etc_fiberfracs['elg']
+    assert  ffrac_bgs == etc_fiberfracs['bgs']
+
+    print('Row {}: expid {} on night {} passes etc check'.format(i, expid, night))
+
+print('\n\nDone.\n\n')
+    
