@@ -13,7 +13,7 @@ import glob
 from desispec.workflow.tableio import load_tables, write_tables, write_table
 from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, get_printable_banner
 from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
-from desispec.workflow.exptable import default_exptypes_for_exptable, get_exposure_table_column_defs, validate_badamps, \
+from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, validate_badamps, \
                                        get_exposure_table_path, get_exposure_table_name, summarize_exposure
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, get_processing_table_name, erow_to_prow
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
@@ -106,7 +106,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Define the obstypes to save information for in the exposure table
     if expobstypes is None:
-        expobstypes = default_exptypes_for_exptable()
+        expobstypes = default_obstypes_for_exptable()
     elif isinstance(expobstypes, str):
         expobstypes = expobstypes.split(',')
 

@@ -7,7 +7,7 @@ import numpy as np
 from astropy.table import Table
 from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.utils import define_variable_from_environment, pathjoin, get_json_dict
+from desispec.workflow.utils import define_variable_from_environment, get_json_dict
 from desispec.workflow.desi_proc_funcs import load_raw_data_header, cameras_from_raw_data
 from desiutil.log import get_logger
 from desispec.util import header2night
@@ -55,34 +55,34 @@ def exposure_table_column_defs():
     Returns:
         columns, list. List of tuples (name, type, default).
     """
-    columns  = [
-                 ('EXPID', int, -99),
-                 ('EXPTIME', float, 0.0),
-                 ('EFFTIME_ETC', float, -99.),
-                 ('OBSTYPE', 'S8', 'unknown'),
-                 ('CAMWORD', 'S30', 'a0123456789'),
-                 ('TILEID', int, -99),
-                 ('TARGTRA', float, 89.99),
-                 ('TARGTDEC', float, -89.99),
-                 ('NIGHT', int, 20000101),
-                 ('PURPOSE', 'S30', 'unknown'),
-                 ('FA_SURV', 'S10', 'unknown'),
-                 ('FAPRGRM', 'S10', 'unknown'),
-                 ('GOALTIME', float, -99.),
-                 ('GOALTYPE', 'S10', 'unknown'),
-                 ('EBVFAC', float, 1.0),
-                 ('AIRFAC', float, 1.0),
-                 ('SEQNUM', int, 1),
-                 ('SEQTOT', int, 1),
-                 ('PROGRAM', 'S60', 'unknown'),
-                 ('MJD-OBS', float, 50000.0),
-                 ('BADCAMWORD', 'S30', ''),
-                 ('BADAMPS', 'S30', ''),
-                 ('LASTSTEP', 'S30', 'all'),
-                 ('EXPFLAG', np.ndarray, np.array([], dtype=str)),
-                 ('HEADERERR', np.ndarray, np.array([], dtype=str)),
-                 ('COMMENTS', np.ndarray, np.array([], dtype=str))
-               ]
+    columns = [
+                ('EXPID', int, -99),
+                ('EXPTIME', float, 0.0),
+                ('EFFTIME_ETC', float, -99.),
+                ('OBSTYPE', 'S8', 'unknown'),
+                ('CAMWORD', 'S30', 'a0123456789'),
+                ('TILEID', int, -99),
+                ('TARGTRA', float, 89.99),
+                ('TARGTDEC', float, -89.99),
+                ('NIGHT', int, 20000101),
+                ('PURPOSE', 'S30', 'unknown'),
+                ('FA_SURV', 'S10', 'unknown'),
+                ('FAPRGRM', 'S10', 'unknown'),
+                ('GOALTIME', float, -99.),
+                ('GOALTYPE', 'S10', 'unknown'),
+                ('EBVFAC', float, 1.0),
+                ('AIRFAC', float, 1.0),
+                ('SEQNUM', int, 1),
+                ('SEQTOT', int, 1),
+                ('PROGRAM', 'S60', 'unknown'),
+                ('MJD-OBS', float, 50000.0),
+                ('LASTSTEP', 'S30', 'all'),
+                ('BADCAMWORD', 'S30', ''),
+                ('BADAMPS', 'S30', ''),
+                ('EXPFLAG', np.ndarray, np.array([], dtype=str)),
+                ('HEADERERR', np.ndarray, np.array([], dtype=str)),
+                ('COMMENTS', np.ndarray, np.array([], dtype=str))
+              ]
     return columns
 
 def get_exposure_table_column_defs(return_default_values=False):
@@ -187,7 +187,7 @@ def get_exposure_table_column_defaults(asdict=True):
 
     return coldefs
 
-def default_exptypes_for_exptable():
+def default_obstypes_for_exptable():
     """
     Defines the exposure types to be recognized by the workflow and saved in the exposure table by default.
 
@@ -293,15 +293,15 @@ def get_exposure_table_path(night=None, usespecprod=True):
                                                       var_descr="The specprod path")
         # subdir = define_variable_from_environment(env_name='USER', var_descr="Username for unique exposure table directories")
         subdir = define_variable_from_environment(env_name='SPECPROD', var_descr="Use SPECPROD for unique exposure table directories")
-        basedir = pathjoin(basedir, subdir)
+        basedir = os.path.join(basedir, subdir)
     else:
         basedir = define_variable_from_environment(env_name='DESI_SPECTRO_LOG',
                                                    var_descr="The exposure table repository path")
     if night is None:
-        return pathjoin(basedir,'exposure_tables')
+        return os.path.join(basedir,'exposure_tables')
     else:
         month = night_to_month(night)
-        path = pathjoin(basedir,'exposure_tables',month)
+        path = os.path.join(basedir,'exposure_tables',month)
         return path
 
 def get_exposure_table_pathname(night, usespecprod=True, extension='csv'):#base_path,specprod
@@ -318,7 +318,7 @@ def get_exposure_table_pathname(night, usespecprod=True, extension='csv'):#base_
     """
     path = get_exposure_table_path(night, usespecprod=usespecprod)
     table_name = get_exposure_table_name(night, extension)
-    return pathjoin(path,table_name)
+    return os.path.join(path,table_name)
 
 def instantiate_exposure_table(colnames=None, coldtypes=None, rows=None):
     """
@@ -448,7 +448,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         obstypes, list or np.array of str's. The list of 'OBSTYPE' keywords to match to. If a match is found, the
                                              information about that exposure is taken and returned for the exposure
                                              table. Otherwise None is returned (or str if it is an end-of-cal manifest).
-                                             If None, the default list in default_exptypes_for_exptable() is used.
+                                             If None, the default list in default_obstypes_for_exptable() is used.
         colnames, list or np.array. List of column names for an exposure table. If None, the defaults are taken from
                                     get_exposure_table_column_defs().
         coldefaults, list or np.array. List of default values for the corresponding colnames. If None, the defaults
@@ -473,35 +473,53 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         exp = f'{exp:08d}'
     night = str(night)
 
-    ## Use defaults if things aren't defined
-    if obstypes is None:
-        obstypes = default_exptypes_for_exptable()
-    if colnames is None or coldefaults is None:
-        cnames, cdtypes, cdflts = get_exposure_table_column_defs(return_default_values=True)
-        if colnames is None:
-            colnames = cnames
-        if coldefaults is None or len(coldefaults)!=len(colnames):
-            coldefaults = cdflts
-    colnames,coldefaults = np.asarray(colnames),np.asarray(coldefaults,dtype=object)
-
-    manpath = pathjoin(raw_data_dir, night, exp, f'manifest_{exp}.json')
-    reqpath = pathjoin(raw_data_dir, night, exp, f'request-{exp}.json')
-    datpath = pathjoin(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
-    etcpath = pathjoin(raw_data_dir, night, exp, f'etc-{exp}.json')
-
-    fbapaths = glob.glob(pathjoin(raw_data_dir, night, exp, 'fiberassign-*.fits.?z'))
-    if len(fbapaths) == 1:
-        fbapath = fbapaths[0]
-    else:
-        fbapath = ''
-        log.error(f"Found {len(fbapaths)} fiberassing files: {fbapaths}")
-
     ## Give a header for the exposure
     if verbosely:
         log.info(f'\n\n###### Summarizing exposure: {exp} ######\n')
     else:
         log.info(f'Summarizing exposure: {exp}')
 
+    ## Use defaults if things aren't defined
+    if obstypes is None:
+        obstypes = default_obstypes_for_exptable()
+
+    ## Figure out what columns to fill from the data
+    coldefault_dict = get_exposure_table_column_defaults(asdict=True)
+    if colnames is None and coldefaults is not None:
+        log.warning("Can't interpret coldefaults without corresponding colnames. Ignoring user specified coldefaults.")
+    elif colnames is not None and coldefaults is not None:
+        if len(colnames) != len(coldefaults):
+            log.warning("Lengths of colnames and coldefaults must be equal. Ignoring user specified values.")
+        else:
+            log.info("Using user specified colnames and coldefaults.")
+            coldefault_dict = {}
+            for name,default in zip(colnames,coldefaults):
+                coldefault_dict[name] = default
+    elif colnames is not None:
+        for name in colnames:
+            if name not in coldefault_dict:
+                log.warning(f"User specified {name} not in available colnames {coldefault_dict.keys()}.")
+        for key in list(coldefault_dict.keys()):
+            if key not in colnames:
+                coldefault_dict.pop(key)
+
+    ## Define the pathnames to the various data products
+    ## TODO: tie these back in with desispec.io.meta
+    manpath = os.path.join(raw_data_dir, night, exp, f'manifest_{exp}.json')
+    reqpath = os.path.join(raw_data_dir, night, exp, f'request-{exp}.json')
+    datpath = os.path.join(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
+    etcpath = os.path.join(raw_data_dir, night, exp, f'etc-{exp}.json')
+
+    ## fiberassign is based on TILEID, so glob it. (Could just as easily
+    ## also move this later in code when we know TILEID)
+    fbapaths = glob.glob(os.path.join(raw_data_dir, night, exp, 'fiberassign-*.fits.?z'))
+    if len(fbapaths) == 1:
+        fbapath = fbapaths[0]
+    else:
+        fbapath = ''
+        log.error(f"Found {len(fbapaths)} fiberassign files: {fbapaths}")
+
+    ## If there is a manifest file, open it and see what it says
     if os.path.isfile(manpath):
         log.info(f'Found manifest file: {manpath}')
         ## Load the json file in as a dictionary
@@ -617,11 +635,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         return None
 
     ## Define the column values for the current exposure in a dictionary
-    outdict = {}
-
-    ## Set HEADERERR and EXPFLAG before loop because they may be set if other columns have missing information
-    outdict['HEADERERR'] = coldefaults[colnames == 'HEADERERR'][0]
-    outdict['EXPFLAG'] = coldefaults[colnames == 'EXPFLAG'][0]
+    outdict = coldefault_dict.copy()
 
     ## Get the cameras available in the raw data and summarize with camword
     cams = cameras_from_raw_data(fx)
@@ -629,14 +643,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     fx.close()
 
     ## Loop over columns and fill in the information. If unavailable report/flag if necessary and assign default
-    for key,default in zip(colnames,coldefaults):
+    for key,default in coldefault_dict.items():
         ## These are dealt with separately
-        if key in ['NIGHT','HEADERERR','EXPFLAG','CAMWORD']:
+        if key in ['EFFTIME_ETC', 'CAMWORD', 'NIGHT', 'FA_SURV', 'FAPRGRM', 'GOALTIME', 'GOALTYPE',
+                   'EBVFAC', 'AIRFAC', 'LASTSTEP', 'BADCAMWORD', 'BADAMPS', 'EXPFLAG', 'HEADERERR', 'COMMENTS']:
             continue
-        ## These just need defaults, as they are user defined
-        elif key in ['AIRFAC','GOALTIME', 'GOALTYPE', 'EBVFAC', 'FA_SURV', 'FAPRGRM',
-                     'BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'COMMENTS']:
-            outdict[key] = default
         ## Try to find the key in the raw data header
         elif key in dat_header:
             val = dat_header[key]
@@ -647,18 +658,18 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         ## If key not in the dat_header, identify that and place a default value
         ## If obstype isn't arc or flat, don't worry about seqnum or seqtot
         elif key in ['SEQNUM','SEQTOT'] and obstype not in ['arc','flat']:
-            outdict[key] = default
+            continue
         ## If tileid or TARGT and not science, just replace with default
         elif key in ['TILEID','TARGTRA','TARGTDEC'] and obstype not in ['science']:
-            outdict[key] = default
+            continue
         ## If trying to assign purpose and it's before that was defined, just give default
         elif key in ['PURPOSE'] and int(night) < 20201201:
-            outdict[key] = default
+            continue
         ## if something else, flag as missing metadata and replace with default
         else:
+            log.warning(f"Missing header keyword: {key}. Using default {default}")
             if 'metadata_missing' not in outdict['EXPFLAG']:
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_missing')
-            outdict[key] = default
             if np.isscalar(default):
                 reporting = keyval_change_reporting(key, '', default)
                 outdict['HEADERERR'] = np.append(outdict['HEADERERR'], reporting)
@@ -676,6 +687,12 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             orig = ''
         reporting = keyval_change_reporting('NIGHT',orig,outdict['NIGHT'])
         outdict['HEADERERR'] = np.append(outdict['HEADERERR'],reporting)
+
+    ## Verify we agree on what we're looking at
+    if int(exp) != outdict['EXPID']:
+        log.error(f"Input exposure id doesn't match that derived from the header! {int(exp)}!={outdict['EXPID']}")
+    if int(night) != outdict['NIGHT']:
+        log.error(f"Input exposure id doesn't match that derived from the header! {int(exp)}!={outdict['EXPID']}")
 
     ## For Things defined in both request and data, if they don't match, flag in the
     ##     output file for followup/clarity
@@ -710,24 +727,19 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
     ## Now for science exposures,
     if obstype == 'science':
+        ## Load fiberassign file. If not available return empty dict
         if os.path.isfile(fbapath):
             log.info(f"Found fiberassign file: {fbapath}.")
             fba = fits.open(fbapath)
-            extra_in_fba = 'EXTRA' in fba
+            extra_in_fba = ('EXTRA' in fba)
             fba_header = fba['PRIMARY'].header
             fba.close()
         else:
             log.error(f"Couldn't find fiberassign file: {fbapath}.")
             fba_header = {}
+            extra_in_fba = False
 
-        if os.path.isfile(etcpath):
-            log.info(f"Found etc file: {etcpath}.")
-            etc_dict = get_json_dict(etcpath)
-        else:
-            log.warning(f"Couldn't find etc file: {etcpath}.")
-            etc_dict = {}
-
-        ## Add the fiber assign survey, if it doesn't exist use the pre-defined one
+        ## Add the fiber assign info. Try fiberassign file first, then raw data, then req
         for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE","EBVFAC"]:
             for location in [fba_header,dat_header,req_dict]:
                 if name in location:
@@ -737,17 +749,31 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                     outdict[name] = val
                     break
 
-        if outdict['EBVFAC'] == coldefaults[colnames=='EBVFAC'] and 'fassign' in etc_dict:
+        ## Load etc json file. If not available return empty dict
+        if os.path.isfile(etcpath):
+            log.info(f"Found etc file: {etcpath}.")
+            etc_dict = get_json_dict(etcpath)
+        else:
+            log.warning(f"Couldn't find etc file: {etcpath}.")
+            etc_dict = {}
+
+        ## If EBVFAC wasn't found above, look in etc dict
+        ## Default if both fail is 1 (already set)
+        if outdict['EBVFAC'] == coldefault_dict['EBVFAC'] and 'fassign' in etc_dict:
             if 'EBVFAC' in etc_dict['fassign']:
                 outdict['EBVFAC'] = etc_dict['fassign']['EBVFAC']
             elif 'MW_transp' in etc_dict['fassign']:
                 outdict['EBVFAC'] = 1.0 / etc_dict['fassign']['MW_transp']
 
+        ## Get EFFTIME from etc if available, then check in raw data.
+        ## Default if both fail is -99 (already set)
         if 'expinfo' in etc_dict and 'efftime' in etc_dict['expinfo']:
             outdict['EFFTIME_ETC'] = etc_dict['expinfo']['efftime']
         elif 'ACTTEFF' in dat_header:
             outdict['EFFTIME_ETC'] = dat_header['ACTTEFF']
 
+        ## Get the airmass factor from the etc. If unavailable, try to calculate from the airmass in the raw data
+        ## Default if both fail is 1 (already set)
         if 'expinfo' in etc_dict and 'atm_extinction' in etc_dict['expinfo']:
             outdict['AIRFAC'] = 1.0 / etc_dict['expinfo']['atm_extinction']
         elif 'AIRMASS' in dat_header:
@@ -755,8 +781,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
         ## If main survey data, report when varibles weren't available
         if int(night) > 20210500:
-            for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE",'AIRFAC','EBVFAC','EFFTIME_ETC']:
-                if outdict[name] == coldefaults[colnames==name][0]:
+            for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE",'AIRFAC','EBVFAC']:#,'EFFTIME_ETC']:
+                if outdict[name] == coldefault_dict[name]:
                     log.warning(f"Couldn't find or derive {name}, so leaving {name} with default value of {outdict[name]}")
 
         ## Flag the exposure based on PROGRAM information
@@ -772,52 +798,68 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             outdict['LASTSTEP'] = 'skysub'
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
             log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
+        ## Otherwise flag exposure based on "extra" hdu being in the fiberassign file
         elif extra_in_fba:
             outdict['LASTSTEP'] = 'skysub'
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
             log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
+        ## Otherwise check that the data meets quality standards
         else:
-            efftime = outdict['EFFTIME_ETC']
+            ## If defined, use GOALTIME. Otherwise set to 0 so that we always pass the relevant cuts
+            if outdict['GOALTIME'] > 0.:
+                goaltime = outdict['GOALTIME']
+            else:
+                log.info("No GOALTIME found. Not performing S/N cut.")
+                goaltime = 0.
+
+            ## If defined, use effective speed. Otherwise set to very high value so we pass the relevant cuts
+            if outdict['EFFTIME_ETC'] > 0.:
+                efftime = outdict['EFFTIME_ETC']
+            else:
+                log.info("No EFFTIME_ETC found. Not performing speed cut.")
+                efftime = 1.0E5
+
+            ## Define survey speed for QA
             speed = (efftime / outdict['EXPTIME']) * (outdict['EBVFAC'] * outdict['AIRFAC']) ** 2
 
             ## Define thresholds
             threshold_exptime = 60.
-            threshold_efftime = 0.05 * outdict['GOALTIME']  # 0.0 by default if GOALTIME not defined in headers
+            threshold_percent_goal = 0.05
+            threshold_speed_dark = 1/5.  # = 0.5*(1/2.5) = half the survey threshold
+            threshold_speed_bright = 1/12.  # = 0.5*(1/6) = half the survey threshold
+            threshold_efftime = threshold_percent_goal * goaltime  # 0.0 if GOALTIME not defined in headers
+
             threshold_speed = 0.
-            if outdict['GOALTYPE'] != coldefaults[colnames=='GOALTYPE'][0]:
-                goaltype = outdict['GOALTYPE']
-                if   goaltype == 'dark':
-                    threshold_speed = 1 / 5.   # = 0.5*(1/2.5) = half the survey threshold
-                elif goaltype == 'bright':
-                    threshold_speed = 1 / 12.  # = 0.5*(1/6) = half the survey threshold
-                elif goaltype == 'backup':
+            if outdict['GOALTYPE'] != coldefault_dict['GOALTYPE']:
+                if outdict['GOALTYPE'] == 'dark':
+                    threshold_speed = threshold_speed_dark
+                elif outdict['GOALTYPE'] == 'bright':
+                    threshold_speed = threshold_speed_bright
+                elif outdict['GOALTYPE'] == 'backup':
                     pass
                 else:
                     log.warning(f"Couldn't understand GOALTYPE={outdict['GOALTYPE']}")
 
+            ## Perform the data quality cuts
             ## Cut on signal:
             if float(outdict['EXPTIME']) < threshold_exptime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
-                log.info(f"Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less than 60s. " + \
+                log.info(f"Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less than {threshold_exptime}s. " + \
                          "Processing through sky subtraction.")
-            ## If we failed above, we're done. Otherwise, if efftime available (not -99), we're also done
-            elif outdict['EFFTIME_ETC'] < -98.:
-                log.info("No etc efftime, so NOT performing S/N or speed cuts.")
-            ## Otherwise if we have enough EXPTIME and have an efftime, continue to S/N and speed checksß
-            else:
-                ## Cut on S/N:
-                if efftime < threshold_efftime:
-                    outdict['LASTSTEP'] = 'skysub'
-                    outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
-                    log.info(f"Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} less than 5% goaltime={threshold_efftime}." + \
-                             "Processing through sky subtraction.")
-                ## Cut on Speed:
-                elif speed < threshold_speed:
-                    outdict['LASTSTEP'] = 'skysub'
-                    outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
-                    log.info(f"Science exposure {exp} with speed={speed} less than threshold speed={threshold_speed}." + \
-                             "Processing through sky subtraction.")
+            ## Cut on S/N:
+            elif efftime < threshold_efftime:
+                outdict['LASTSTEP'] = 'skysub'
+                outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
+                log.info(f"Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} less than " + \
+                         f"{threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']})={threshold_efftime}." + \
+                         "Processing through sky subtraction.")
+            ## Cut on Speed:
+            elif speed < threshold_speed:
+                outdict['LASTSTEP'] = 'skysub'
+                outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
+                log.info(f"Science exposure {exp} with speed={speed} less than threshold speed={threshold_speed}." + \
+                         "Processing through sky subtraction.")
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
