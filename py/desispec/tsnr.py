@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import time
+import desispec
 
 import astropy.io.fits as fits
 from astropy.table import Table
