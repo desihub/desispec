@@ -625,7 +625,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         return None
 
     ## If obstype isn't in our list of ones we care about, skip it
-    obstype = dat_header['OBSTYPE']
+    obstype = dat_header['OBSTYPE'].lower()
     if obstype not in obstypes:
         ## If obstype is wrong
         if verbosely:
