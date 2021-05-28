@@ -42,6 +42,14 @@ def parse_args():#options=None):
     parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
                         help="The basic data obstypes to submit for processing. " +
                              "E.g. science, dark, twilight, flat, arc, zero.")
+    parser.add_argument("--z-submit-types", type=str, default='cumulative', required=False,
+                        help="The group types of redshifts that should be submitted with each exposure. If not "+
+                             "specified, default for daily processing is 'cumulative'. If "+
+                             "'false' or 'None' then no redshifts are submitted")
+    parser.add_argument("--dry-run-level", type=int, default=0, required=False,
+                        help="If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. "+
+                             "If dry_run=2, the scripts will not be writter or submitted. Logging will remain the same "+
+                             "for testing as though scripts are being submitted. Default is 0 (false).")
     # File and dir defs
     parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
                         help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
@@ -76,7 +84,10 @@ def parse_args():#options=None):
     parser.add_argument("--ignore-cori-node", action="store_true",
                         help="Allow script to run on nodes other than cori21")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Perform a dry run where no jobs are actually created or submitted.")
+                        help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
+                        "dry-run-level is defined as nonzero.")
+    parser.add_argument("--no-redshifts", action="store_true",
+                        help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
     parser.add_argument("--continue-looping-debug",action="store_true",help= "FOR DEBUG purposes only."+
                          "Will continue looping in search of new data until the process is terminated externally.")
     parser.add_argument("--dont-check-job-outputs", action="store_true",
@@ -140,8 +151,10 @@ if __name__ == '__main__':
     daily_processing_manager(specprod=args.specprod, exp_table_path=args.exp_table_path,
                              proc_table_path=args.proc_table_path, path_to_data=args.raw_data_path,
                              expobstypes=args.exp_obstypes, procobstypes=args.proc_obstypes,
-                             dry_run=args.dry_run, tab_filetype=args.table_file_type, camword=camword,
+                             z_submit_types=args.z_submit_types,
+                             tab_filetype=args.table_file_type, camword=camword,
                              badcamword=badcamword, badamps=args.badamps, queue=args.queue,
+                            dry_run_level=args.dry_run_level, dry_run=args.dry_run, no_redshifts=args.no_redshifts,
                              override_night=args.override_night, exps_to_ignore=exps_to_ignore,
                              continue_looping_debug=args.continue_looping_debug,
                              data_cadence_time=args.data_cadence_time, queue_cadence_time=args.queue_cadence_time,

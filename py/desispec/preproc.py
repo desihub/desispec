@@ -192,8 +192,8 @@ def _global_background(image,patch_width=200) :
     Returns background image with same shape as input image
     '''
     bkg=np.zeros_like(image)
-    bins0=np.linspace(0,image.shape[0],float(image.shape[0])/patch_width).astype(int)
-    bins1=np.linspace(0,image.shape[1],float(image.shape[1])/patch_width).astype(int)
+    bins0=np.linspace(0,image.shape[0],image.shape[0]//patch_width).astype(int)
+    bins1=np.linspace(0,image.shape[1],image.shape[1]//patch_width).astype(int)
     bkg_grid=np.zeros((bins0.size-1,bins1.size-1))
     for j in range(bins1.size-1) :
         for i in range(bins0.size-1) :

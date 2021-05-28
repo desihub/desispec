@@ -2,8 +2,15 @@
 desispec Change Log
 ===================
 
-0.41.1 (unreleased)
+0.42.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.42.0 (2021-05-14)
+-------------------
+
+Requires desiutil >= 3.2.1 for new dust extinction calculations.
 
 * Wrap ``bin/desi_proc`` and ``bin/desi_proc_joint_fit`` in functions to
   facilitate pipeline wrappers (PRs `#1242`_ and `#1244`_).
@@ -12,7 +19,11 @@ desispec Change Log
 * Add MPI to stdstar ``match_templates`` (PR `#1248`_).
 * Updates to ``desi_average_flux_calibration`` (PR `#1252`_).
 * ``desi_fit_stdstars --std-targetids`` option to override stdstars for testing
-  and custom fields (PR `#1257`_).
+  and custom fields (PR `#1257`_, `#1259`_).
+* Launch redshifts automatically as part of pipeline (PR `#1260`_).
+* Support stuck positioners assigned to sky locations (PR `#1266`_).
+* Use desiutil.dust for extinction including Gaia (PR `#1269`_).
+* Fix running instance checking in daily pipeline (PR `#1270`_).
 
 .. _`#1242`: https://github.com/desihub/desispec/issues/1242
 .. _`#1244`: https://github.com/desihub/desispec/issues/1244
@@ -20,6 +31,11 @@ desispec Change Log
 .. _`#1248`: https://github.com/desihub/desispec/issues/1248
 .. _`#1252`: https://github.com/desihub/desispec/issues/1252
 .. _`#1257`: https://github.com/desihub/desispec/issues/1257
+.. _`#1259`: https://github.com/desihub/desispec/issues/1259
+.. _`#1260`: https://github.com/desihub/desispec/issues/1260
+.. _`#1266`: https://github.com/desihub/desispec/issues/1266
+.. _`#1269`: https://github.com/desihub/desispec/issues/1269
+.. _`#1270`: https://github.com/desihub/desispec/issues/1270
 
 0.41.0 (2021-04-16)
 -------------------

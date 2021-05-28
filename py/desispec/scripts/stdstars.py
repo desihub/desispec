@@ -22,7 +22,7 @@ from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 from desispec.parallel import default_nproc
 from desispec.io.filters import load_legacy_survey_filter, load_gaia_filter
-from desiutil.dust import ext_odonnell,extinction_total_to_selective_ratio, SFDMap
+from desiutil.dust import dust_transmission,extinction_total_to_selective_ratio, SFDMap, gaia_extinction
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 def parse(options=None):
@@ -73,11 +73,6 @@ def safe_read_key(header,key) :
         value=header[key.ljust(8).upper()]
     return value
 
-def dust_transmission(wave,ebv) :
-    Rv = 3.1
-    extinction = ext_odonnell(wave,Rv=Rv)
-    return 10**(-Rv*extinction*ebv/2.5)
-
 def get_gaia_ab_correction():
     """
     Get the dictionary with corrections from AB magnitudes to
@@ -115,35 +110,6 @@ def get_magnitude(stdwave, model, model_filters, cur_filt):
     # to explain copy()
     retmag = model_filters[cur_filt].get_ab_magnitude(model * fluxunits, stdwave.copy())+ corr
     return retmag
-
-def unextinct_gaia_mags(star_mags, unextincted_mags, ebv_sfd):
-    # correction of gaia magnitudes based on Babusiaux2018 (eqn1/tab1)
-    # we assume the inputs are in the original SFD scale
-    # The input dictionary unextincted_mags is *MODIFIED*
-    gaia_poly_coeff = {'G':[0.9761, -0.1704,
-                           0.0086, 0.0011, -0.0438, 0.0013, 0.0099],
-                      'BP': [1.1517, -0.0871, -0.0333, 0.0173,
-                             -0.0230, 0.0006, 0.0043],
-                      'RP':[0.6104, -0.0170, -0.0026,
-                            -0.0017, -0.0078, 0.00005, 0.0006]}
-    ebv = 0.86 * ebv_sfd # Apply Schlafly+11 correction
-    gaia_a0 = 3.1 * ebv
-    # here I apply a second-order correction for extinction
-    # i.e. I use corrected colors after 1 iteration to determine
-    # the best final correction
-    for i in range(2):
-        if i == 0:
-            bprp = star_mags['GAIA-BP'] - star_mags["GAIA-RP"]
-        else:
-            bprp = (unextincted_mags['GAIA-BP'] -
-                    unextincted_mags['GAIA-RP'])
-
-        for band in ['G','BP','RP']:
-            curp = gaia_poly_coeff[band]
-            dmag = (np.poly1d(gaia_poly_coeff[band][:4][::-1])(bprp) +
-                 curp[4]*gaia_a0 + curp[5]*gaia_a0**2 + curp[6]*bprp*gaia_a0
-                 )*gaia_a0
-            unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - dmag
 
 def main(args, comm=None) :
     """ finds the best models of all standard stars in the frame
@@ -531,7 +497,8 @@ def main(args, comm=None) :
         log.warning("    EBV = 0.0")
         fibermap['PHOTSYS'] = 'S'
         fibermap['EBV'] = 0.0
-    if not np.isin(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
+
+    if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
         log.error('Unknown PHOTSYS found')
         raise Exception('Unknown PHOTSYS found')
     # Fetching Filter curves
@@ -585,7 +552,7 @@ def main(args, comm=None) :
                 # E(B-V) is a difference of magnitudes (dimensionless)
                 # a_band = -2.5*log10(effective dust transmission) , dimensionless
                 # effective dust transmission =
-                #                  integral( SED(lambda) * filter_transmission(lambda,band) * milkyway_dust_transmission(lambda,E(B-V)) dlamdba)
+                #                  integral( SED(lambda) * filter_transmission(lambda,band) * dust_transmission(lambda,E(B-V)) dlamdba)
                 #                / integral( SED(lambda) * filter_transmission(lambda,band) dlamdba)
                 selection = (fibermap['PHOTSYS'] == photsys)
                 a_band = r_band * ebv[selection]  # dimensionless
@@ -593,7 +560,11 @@ def main(args, comm=None) :
 
     for band in ['G','BP','RP']:
         star_mags['GAIA-'+band] = fibermap['GAIA_PHOT_'+band+'_MEAN_MAG']
-    unextinct_gaia_mags(star_mags, star_unextincted_mags, ebv)
+
+    for band, extval in gaia_extinction(star_mags['GAIA-G'],
+                                        star_mags['GAIA-BP'],
+                                        star_mags['GAIA-RP'], ebv).items():
+        star_unextincted_mags['GAIA-'+band] = star_mags['GAIA-'+band] - extval
 
     star_colors = dict()
     star_unextincted_colors = dict()
