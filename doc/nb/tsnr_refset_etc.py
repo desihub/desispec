@@ -22,11 +22,15 @@ tokeep = []
 
 for night, expid in zip(daily_tsnrs['NIGHT'], daily_tsnrs['EXPID']):
     etcpath=findfile('etc', night=night, expid=expid)
+    etcdata=None
     
     if os.path.exists(etcpath):
         with open(etcpath) as f:
                 etcdata = json.load(f)
 
+    else:
+        continue
+                
     etc_fiberfracs = {}
                 
     try:
@@ -46,7 +50,6 @@ tokeep['EXPID'] = tokeep['EXPID'].data.astype(np.int)
 # tokeep.pprint()
 
 tokeep = join(daily_tsnrs[np.isin(daily_tsnrs['EXPID'], tokeep['EXPID'])], tokeep, join_type='left', keys='EXPID')
-tokeep.pprint()
 
 for x in ['PSF', 'ELG', 'BGS']:
     print(np.sort(tokeep['ETCFFRAC_{}'.format(x)].data))
@@ -65,5 +68,6 @@ tokeep.meta['comments'] = ['----  TSNR reference catalog 20210528 ----',\
 
 tokeep.write(opath, format='csv', overwrite=True, comment='#')
 
-# tokeepcsv = Table.read('tsnr_refset_etc.csv')
-# tokeepcsv.pprint()
+tokeepcsv = Table.read(opath, comment='#')
+print(tokeepcsv.meta)
+tokeepcsv.pprint()
