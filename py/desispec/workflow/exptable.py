@@ -85,6 +85,64 @@ def exposure_table_column_defs():
               ]
     return columns
 
+def default_obstypes_for_exptable():
+    """
+    Defines the exposure types to be recognized by the workflow and saved in the exposure table by default.
+
+    Returns:
+        list. A list of default obstypes to be included in an exposure table.
+    """
+    ## Define the science types to be included in the exposure table (case insensitive)
+    return ['arc','flat','twilight','science','dark','zero']
+
+def get_exposure_flags():
+    """
+    Defines the exposure flags that can be saved in the exposure table.
+
+    Returns:
+        list. A list of exposure flags that can be included in an exposure table.
+    """
+    return [
+            'good',
+            'extra_cal', # if more than one series of cals are run, it would be nice to flag and skip others in some circumstances
+
+            ## Might potentially crash, but nothing fundamentally wrong
+            'low_flux',
+            'short_exposure',
+            'low_sn',
+            'low_speed',
+            'aborted',
+
+            ## Missing or incorrect data
+            'metadata_missing', # important header keywords or fiberassign values missing
+            'metadata_mismatch', # the raw data header and accompanying files disagree on something
+
+            ## Hardware issues
+            'misconfig_cal', # cal lamps weren't on, etc.
+            'misconfig_petal', # positioners in wrong places, etc.
+
+            ## Targeting issues
+            'off_target',  # telescope wasn't pointed, etc.
+            'no_stdstars',  # data is missing standard stars
+
+            ## Others
+            'test', # a test exposure that shouldn't be processed
+            'corrupted', # data is corrupted
+            'junk',
+
+            ## No explanation, but don't use
+            'bad'
+           ]
+
+def get_last_step_options():
+    """
+    Defines the LASTSTEP options that can be saved in the exposure table that will be understood by the pipeline.
+
+    Returns:
+        list. A list of LASTSTEP's that can be included in an exposure table.
+    """
+    return ['ignore', 'skysub', 'stdstarfit', 'fluxcal', 'all']
+
 def get_exposure_table_column_defs(return_default_values=False):
     """
     Contains the column names, data types, and default row values for a DESI Exposure table. It returns
@@ -186,64 +244,6 @@ def get_exposure_table_column_defaults(asdict=True):
             coldefs.append(coldef)
 
     return coldefs
-
-def default_obstypes_for_exptable():
-    """
-    Defines the exposure types to be recognized by the workflow and saved in the exposure table by default.
-
-    Returns:
-        list. A list of default obstypes to be included in an exposure table.
-    """
-    ## Define the science types to be included in the exposure table (case insensitive)
-    return ['arc','flat','twilight','science','sci','dither','dark','bias','zero']
-
-def get_exposure_flags():
-    """
-    Defines the exposure flags that can be saved in the exposure table.
-
-    Returns:
-        list. A list of exposure flags that can be included in an exposure table.
-    """
-    return [
-            'good',
-            'extra_cal', # if more than one series of cals are run, it would be nice to flag and skip others in some circumstances
-
-            ## Might potentially crash, but nothing fundamentally wrong
-            'low_flux',
-            'short_exposure',
-            'low_sn',
-            'low_speed',
-            'aborted',
-
-            ## Missing or incorrect data
-            'metadata_missing', # important header keywords or fiberassign values missing
-            'metadata_mismatch', # the raw data header and accompanying files disagree on something
-
-            ## Hardware issues
-            'misconfig_cal', # cal lamps weren't on, etc.
-            'misconfig_petal', # positioners in wrong places, etc.
-
-            ## Targeting issues
-            'off_target',  # telescope wasn't pointed, etc.
-            'no_stdstars',  # data is missing standard stars
-
-            ## Others
-            'test', # a test exposure that shouldn't be processed
-            'corrupted', # data is corrupted
-            'junk',
-
-            ## No explanation, but don't use
-            'bad'
-           ]
-
-def get_last_step_options():
-    """
-    Defines the LASTSTEP options that can be saved in the exposure table that will be understood by the pipeline.
-
-    Returns:
-        list. A list of LASTSTEP's that can be included in an exposure table.
-    """
-    return ['ignore', 'skysub', 'stdstarfit', 'fluxcal', 'all']
 
 def night_to_month(night):
     """
@@ -625,7 +625,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.info(f'{exp}: skipped  -- {obstype} not relevant obstype')
         return None
     else:
-        log.info(f"Exposure {exp} has obstype: {obstype}.")
+        log.info(f"Exposure {exp} has obstype: {obstype}")
 
     ## Define the column values for the current exposure in a dictionary
     outdict = coldefault_dict.copy()
@@ -847,20 +847,20 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
-                         " than {threshold_exptime}s. Processing through sky subtraction.")
+                            f" than {threshold_exptime}s. Processing through sky subtraction.")
             ## Cut on S/N:
             elif efftime < threshold_efftime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} " +
-                         f"less than {threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']})={threshold_efftime}." +
-                         " Processing through sky subtraction.")
+                            f"less than {threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']}) = " +
+                            f"{threshold_efftime}. Processing through sky subtraction.")
             ## Cut on Speed:
             elif speed < threshold_speed:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with speed={speed} less than threshold " +
-                         "speed={threshold_speed}. Processing through sky subtraction.")
+                            f"speed={threshold_speed}. Processing through sky subtraction.")
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
