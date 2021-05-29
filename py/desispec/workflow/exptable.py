@@ -810,14 +810,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             if outdict['GOALTIME'] > 0.:
                 goaltime = outdict['GOALTIME']
             else:
-                log.info("No GOALTIME found. Not performing S/N cut.")
+                log.warning("No GOALTIME found. Not performing S/N cut.")
                 goaltime = 0.
 
             ## If defined, use effective speed. Otherwise set to very high value so we pass the relevant cuts
             if outdict['EFFTIME_ETC'] > 0.:
                 efftime = outdict['EFFTIME_ETC']
             else:
-                log.info("No EFFTIME_ETC found. Not performing speed cut.")
+                log.warning("No EFFTIME_ETC found. Not performing speed cut.")
                 efftime = 1.0E5
 
             ## Define survey speed for QA
