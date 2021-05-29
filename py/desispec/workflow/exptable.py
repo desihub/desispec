@@ -624,6 +624,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         else:
             log.info(f'{exp}: skipped  -- {obstype} not relevant obstype')
         return None
+    else:
+        log.info(f"Exposure {exp} has obstype: {obstype}.")
 
     ## Define the column values for the current exposure in a dictionary
     outdict = coldefault_dict.copy()
@@ -720,8 +722,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     if obstype == 'science':
         ## fiberassign is based on TILEID, so glob it. (Could just as easily
         ## use TILEID but need to glob fz vs gz anyway)
-        tilestr = f"{outdict['TILEID']:06d}"
-        fbapath = os.path.join(raw_data_dir, night, exp, f'fiberassign-{tilestr}.fits.gz')
+        fbapath = os.path.join(raw_data_dir, night, exp, f"fiberassign-{outdict['TILEID']:06d}.fits.gz")
 
         ## Load fiberassign file. If not available return empty dict
         if os.path.isfile(fbapath):
@@ -779,26 +780,30 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         if int(night) > 20210500:
             for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE",'AIRFAC','EBVFAC']:#,'EFFTIME_ETC']:
                 if outdict[name] == coldefault_dict[name]:
-                    log.warning(f"Couldn't find or derive {name}, so leaving {name} with default value of {outdict[name]}")
+                    log.warning(f"Couldn't find or derive {name}, so leaving {name} with default value " +
+                                "of {outdict[name]}")
 
         ## Flag the exposure based on PROGRAM information
         if 'system test' in outdict['PROGRAM'].lower():
             outdict['LASTSTEP'] = 'ignore'
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
-            log.info(f"Exposure {exp} identified as system test. Not processing.")
+            log.warning(f"LASTSTEP CHANGE. Exposure {exp} identified as system test. Not processing.")
         elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
             outdict['LASTSTEP'] = 'fluxcal'
-            log.info(f"Science exposure {exp} identified as undithered. Processing through flux calibration.")
+            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as undithered. Processing through " +
+                        "flux calibration.")
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'undithered dither')
         elif obstype == 'science' and 'dither' in outdict['PROGRAM']:
             outdict['LASTSTEP'] = 'skysub'
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
-            log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
+            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as dither. Processing " +
+                        "through sky subtraction.")
         ## Otherwise flag exposure based on "extra" hdu being in the fiberassign file
         elif extra_in_fba:
             outdict['LASTSTEP'] = 'skysub'
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
-            log.info(f"Science exposure {exp} identified as dither. Processing through sky subtraction.")
+            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as dither. Processing " +
+                        "through sky subtraction.")
         ## Otherwise check that the data meets quality standards
         else:
             ## If defined, use GOALTIME. Otherwise set to 0 so that we always pass the relevant cuts
@@ -841,21 +846,21 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             if float(outdict['EXPTIME']) < threshold_exptime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
-                log.info(f"Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less than {threshold_exptime}s. " + \
-                         "Processing through sky subtraction.")
+                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
+                         " than {threshold_exptime}s. Processing through sky subtraction.")
             ## Cut on S/N:
             elif efftime < threshold_efftime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
-                log.info(f"Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} less than " + \
-                         f"{threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']})={threshold_efftime}." + \
-                         "Processing through sky subtraction.")
+                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} " +
+                         f"less than {threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']})={threshold_efftime}." +
+                         " Processing through sky subtraction.")
             ## Cut on Speed:
             elif speed < threshold_speed:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
-                log.info(f"Science exposure {exp} with speed={speed} less than threshold speed={threshold_speed}." + \
-                         "Processing through sky subtraction.")
+                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with speed={speed} less than threshold " +
+                         "speed={threshold_speed}. Processing through sky subtraction.")
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
