@@ -74,10 +74,12 @@ tokeepcsv.pprint()
 
 
 ##  Check.
-for i, (night, expid, ffrac_psf, ffrac_elg, ffrac_bgs) in enumerate(zip(tokeep['NIGHT'], tokeep['EXPID'], tokeep['ETCFFRAC_PSF'], tokeep['ETCFFRAC_ELG'], tokeep['ETCFFRAC_BGS'])):
+daily_tsnrs=Table.read(fname, 'TSNR2_EXPID')
+
+for i, (night, expid, ffrac_psf, ffrac_elg, ffrac_bgs, efftime_spec) in enumerate(zip(tokeepcsv['NIGHT'], tokeepcsv['EXPID'], tokeepcsv['ETCFFRAC_PSF'], tokeepcsv['ETCFFRAC_ELG'], tokeepcsv['ETCFFRAC_BGS'], tokeepcsv['EFFTIME_SPEC'])):
     etcpath=findfile('etc', night=night, expid=expid)
     etcdata=None
-
+    
     with open(etcpath) as f:
         etcdata = json.load(f)
 
@@ -90,6 +92,8 @@ for i, (night, expid, ffrac_psf, ffrac_elg, ffrac_bgs) in enumerate(zip(tokeep['
     assert  ffrac_elg == etc_fiberfracs['elg']
     assert  ffrac_bgs == etc_fiberfracs['bgs']
 
+    assert  efftime_spec == daily_tsnrs[daily_tsnrs['EXPID'] == expid]['EFFTIME_SPEC']
+    
     print('Row {}: expid {} on night {} passes etc check'.format(i, expid, night))
 
 print('\n\nDone.\n\n')
