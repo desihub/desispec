@@ -468,9 +468,9 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     log = get_logger()
 
     ## Make sure the inputs are in the right format
-    if type(exp) is not str:
-        exp = int(exp)
-        exp = f'{exp:08d}'
+    exp = int(exp)
+    expstr = f'{exp:08d}'
+
     night = str(night)
 
     ## Give a header for the exposure
@@ -505,10 +505,10 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
     ## Define the pathnames to the various data products
     ## TODO: tie these back in with desispec.io.meta
-    manpath = os.path.join(raw_data_dir, night, exp, f'manifest_{exp}.json')
-    reqpath = os.path.join(raw_data_dir, night, exp, f'request-{exp}.json')
-    datpath = os.path.join(raw_data_dir, night, exp, f'desi-{exp}.fits.fz')
-    etcpath = os.path.join(raw_data_dir, night, exp, f'etc-{exp}.json')
+    manpath = os.path.join(raw_data_dir, night, expstr, f'manifest_{expstr}.json')
+    reqpath = os.path.join(raw_data_dir, night, expstr, f'request-{expstr}.json')
+    datpath = os.path.join(raw_data_dir, night, expstr, f'desi-{expstr}.fits.fz')
+    etcpath = os.path.join(raw_data_dir, night, expstr, f'etc-{expstr}.json')
 
     ## If there is a manifest file, open it and see what it says
     if os.path.isfile(manpath):
@@ -682,10 +682,10 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         outdict['HEADERERR'] = np.append(outdict['HEADERERR'],reporting)
 
     ## Verify we agree on what we're looking at
-    if int(exp) != outdict['EXPID']:
-        log.error(f"Input exposure id doesn't match that derived from the header! {int(exp)}!={outdict['EXPID']}")
+    if exp != outdict['EXPID']:
+        log.error(f"Input exposure id doesn't match that derived from the header! {exp}!={outdict['EXPID']}")
     if int(night) != outdict['NIGHT']:
-        log.error(f"Input exposure id doesn't match that derived from the header! {int(exp)}!={outdict['EXPID']}")
+        log.error(f"Input night doesn't match that derived from the header! {night}!={outdict['NIGHT']}")
 
     ## For Things defined in both request and data, if they don't match, flag in the
     ##     output file for followup/clarity
@@ -722,7 +722,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     if obstype == 'science':
         ## fiberassign is based on TILEID, so glob it. (Could just as easily
         ## use TILEID but need to glob fz vs gz anyway)
-        fbapath = os.path.join(raw_data_dir, night, exp, f"fiberassign-{outdict['TILEID']:06d}.fits.gz")
+        fbapath = os.path.join(raw_data_dir, night, expstr, f"fiberassign-{outdict['TILEID']:06d}.fits.gz")
 
         ## Load fiberassign file. If not available return empty dict
         if os.path.isfile(fbapath):
@@ -854,13 +854,13 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} " +
                             f"less than {threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']}) = " +
-                            f"{threshold_efftime}. Processing through sky subtraction.")
+                            f"{threshold_efftime:.4f}. Processing through sky subtraction.")
             ## Cut on Speed:
             elif speed < threshold_speed:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
-                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with speed={speed} less than threshold " +
-                            f"speed={threshold_speed}. Processing through sky subtraction.")
+                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with speed={speed:.4f} less than threshold " +
+                            f"speed={threshold_speed:.4f}. Processing through sky subtraction.")
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
