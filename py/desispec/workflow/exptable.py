@@ -71,6 +71,7 @@ def exposure_table_column_defs():
                 ('GOALTYPE', 'S10', 'unknown'),
                 ('EBVFAC', float, 1.0),
                 ('AIRFAC', float, 1.0),
+                ('SPEED', float, -99.0),
                 ('TARGTRA', float, 89.99),
                 ('TARGTDEC', float, -89.99),
                 ('SEQNUM', int, 1),
@@ -822,6 +823,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
             ## Define survey speed for QA
             speed = (efftime / outdict['EXPTIME']) * (outdict['EBVFAC'] * outdict['AIRFAC']) ** 2
+            outdict['SPEED'] = speed
 
             ## Define thresholds
             threshold_exptime = 60.
@@ -846,12 +848,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             if float(outdict['EXPTIME']) < threshold_exptime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
+                outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'EXPTIME={outdict["EXPTIME"]:.1f}s lt {threshold_exptime:.1f}')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
                             f" than {threshold_exptime}s. Processing through sky subtraction.")
             ## Cut on S/N:
             elif efftime < threshold_efftime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
+                outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'efftime={outdict["EFFTIME_ETC"]:.1f}s lt {threshold_efftime:.1f}')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} " +
                             f"less than {threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']}) = " +
                             f"{threshold_efftime:.4f}. Processing through sky subtraction.")
@@ -859,6 +863,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             elif speed < threshold_speed:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
+                outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'speed={speed:.4f} lt {threshold_speed:.4f}')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with speed={speed:.4f} less than threshold " +
                             f"speed={threshold_speed:.4f}. Processing through sky subtraction.")
 
