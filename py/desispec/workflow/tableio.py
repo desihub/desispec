@@ -313,9 +313,14 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
 
         if len(table) > 0:
             outcolumns = []
+            first_err = True
             for nam, typ, default in zip(colnames, coltypes, coldefaults):
                 if nam not in table.colnames:
-                    log.error(f"{nam} not in column names of loaded table: {table.colnames}")
+                    if first_err:
+                        log.error(f"{nam} not in column names of loaded table: {table.colnames}")
+                        first_err = False
+                    else:
+                        log.error(f"{nam} not in column names of loaded table")
                     continue
                 elif type(table[nam]) is Table.MaskedColumn:
                     data, mask = table[nam].data, table[nam].mask
@@ -362,7 +367,7 @@ def guess_default_by_dtype(typ):
     elif typ == list:
         return []
     elif typ in [np.array, np.ndarray]:
-        return np.array([])
+        return np.array([], dtype=str)
     else:
         return -99
 
@@ -426,7 +431,7 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
             log.warning("Found mixin column with scalar datatype:")
             log.info("\tcolname={nam}, first={first}, typefirst={firsttyp}, dtype={typ}")
             log.info("\tchanging to np.array datatype")
-            dtyp = np.array
+            dtyp = np.ndarray
     else:
         do_split_str = False
 
