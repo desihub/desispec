@@ -311,10 +311,13 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
             coldefaults = [guess_default_by_dtype(typ) for typ in coltypes]
         colnames, coltypes = np.array(colnames), np.array(coltypes)
 
-        if len(table ) >0:
+        if len(table) > 0:
             outcolumns = []
-            for nam, typ, default in zip(colnames ,coltypes, coldefaults):
-                if type(table[nam]) is Table.MaskedColumn:
+            for nam, typ, default in zip(colnames, coltypes, coldefaults):
+                if nam not in table.colnames:
+                    log.error(f"{nam} not in column names of loaded table: {table.colnames}")
+                    continue
+                elif type(table[nam]) is Table.MaskedColumn:
                     data, mask = table[nam].data, table[nam].mask
                 else:
                     data, mask = table[nam].data, None
@@ -327,7 +330,7 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                         out[ii] = np.atleast_1d(col[ii])
                     newcol = Table.Column(name=nam, data=out, dtype=dtyp)
                 else:
-                    newcol = Table.Column(name=nam, data=col, dtype=dtyp)    
+                    newcol = Table.Column(name=nam, data=col, dtype=dtyp)
                 outcolumns.append(newcol)
             table = Table(outcolumns)
         else:
