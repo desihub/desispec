@@ -14,6 +14,7 @@ from astropy.io import fits
 from astropy import units
 from astropy.table import Table
 import astropy.coordinates as acoo
+import time
 
 import desispec.fluxcalibration
 from desispec import io
@@ -117,6 +118,13 @@ def main(args, comm=None) :
     """
 
     log = get_logger()
+    t0_main_start = time.time()
+
+    def log_time(msg, t0):
+        delta = time.time() - t0
+        log.info("{}: {}".format(msg, delta))
+
+    t0_init = time.time()
 
     log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
 
@@ -162,9 +170,13 @@ def main(args, comm=None) :
     if args.std_targetids is not None:
         std_targetids = args.std_targetids
 
+    if rank == 0:
+        log_time('Init', t0_init)
+
     # READ DATA
     ############################################
     # First loop through and group by exposure and spectrograph
+    t0_read_data = time.time()
     if rank == 0:
         frames_by_expid = {}
         rows = list()
@@ -260,14 +272,18 @@ def main(args, comm=None) :
         del frames_by_expid
 
     if comm is not None:
+        t0 = time.time()
         starfibers = comm.bcast(starfibers, root=0)
         starindices = comm.bcast(starindices, root=0)
         fibermap = comm.bcast(fibermap, root=0)
+        log.info(f'{rank}th MPI bcast time: starfibers, starindices, fibermap: {time.time() - t0}')
 
+        t0 = time.time() # TODO: temporary bcast
         gaia_indices = comm.bcast(gaia_indices, root=0)
         legacy_indices = comm.bcast(legacy_indices, root=0)
         n_legacy_std = comm.bcast(n_legacy_std, root=0)
         n_gaia_std = comm.bcast(n_gaia_std, root=0)
+        log.info(f'{rank}th MPI bcast time: gaia_indices, legacy_indices: {time.time() - t0}')
 
     if rank == 0:
         flats={}
@@ -292,6 +308,10 @@ def main(args, comm=None) :
             else :
                 flats[camera]=flat
 
+    if rank == 0:
+        log_time('Read data', t0_read_data)
+
+    t0_post_read = time.time()
     # if color is not specified we decide on the fly
     color = args.color
     if color is not None:
@@ -342,12 +362,15 @@ def main(args, comm=None) :
     if not color in ['G-R', 'R-Z', 'GAIA-BP-RP', 'GAIA-G-RP']:
         raise ValueError('Unknown color {}'.format(color))
 
+    if rank == 0:
+        log_time('Post-read data', t0_post_read)
     # log.warning("Not using flux errors for Standard Star fits!")
 
     # DIVIDE FLAT AND SUBTRACT SKY , TRIM DATA
     ############################################
     # since poping dict, we need to copy keys to iterate over to avoid
     # RuntimeError due to changing dict
+    t0_sky_and_trim = time.time()
     if rank == 0:
         frame_cams = list(frames.keys())
         for cam in frame_cams:
@@ -411,11 +434,17 @@ def main(args, comm=None) :
                 frames[cam] = [ coadded_frame ]
 
     if comm is not None:
+        t0 = time.time()
         frames = comm.bcast(frames, root=0)
+        log.info(f'{rank}th MPI bcast time: frames: {time.time() - t0}')
+
+    if rank == 0:
+        log_time('Sky subtraction and trim data', t0_sky_and_trim)
 
     # CHECK S/N
     ############################################
     # for each band in 'brz', record quadratic sum of median S/N across wavelength
+    t0_check_sn = time.time()
     snr=dict()
     for band in ['b','r','z'] :
         snr[band]=np.zeros(starindices.size)
@@ -426,7 +455,10 @@ def main(args, comm=None) :
             msnr *= (msnr>0)
             snr[band] = np.sqrt( snr[band]**2 + msnr**2 )
     log.info("SNR(B) = {}".format(snr['b']))
+    if rank == 0:
+        log_time('Check S/N', t0_check_sn)
 
+    t0_filter_stars = time.time()
     ###############################
     max_number_of_stars = 50
     min_blue_snr = 4.
@@ -460,8 +492,12 @@ def main(args, comm=None) :
     nstars = starindices.size
     fibermap = Table(fibermap[starindices])
 
+    if rank == 0:
+        log_time('Filter stars', t0_filter_stars)
+
     # MASK OUT THROUGHPUT DIP REGION
     ############################################
+    t0_mask_throughput_dip = time.time()
     mask_throughput_dip_region = True
     if mask_throughput_dip_region :
         wmin=4300.
@@ -472,25 +508,48 @@ def main(args, comm=None) :
             ii=np.where( (frame.wave>=wmin)&(frame.wave<=wmax) )[0]
             if ii.size>0 :
                 frame.ivar[:,ii] = 0
+    if rank == 0:
+        log_time('Mask throughput dip', t0_mask_throughput_dip)
 
     # READ MODELS
     ############################################
+    t0_read_models = time.time()
     stdwave,stdflux,templateid,teff,logg,feh = [None]*6
     if rank == 0:
         log.info("reading star models in %s"%args.starmodels)
         stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
     if comm is not None:
+        t0 = time.time()
         stdwave = comm.bcast(stdwave, root=0)
+        log.info(f'{rank}th MPI bcast time: stdwave: {time.time() - t0}')
+
+        t0 = time.time()
         stdflux = comm.bcast(stdflux, root=0)
+        log.info(f'{rank}th MPI bcast time: stdflux: {time.time() - t0}')
+
+        t0 = time.time()
         templateid = comm.bcast(templateid, root=0)
+        log.info(f'{rank}th MPI bcast time: templateid: {time.time() - t0}')
+
+        t0 = time.time()
         teff = comm.bcast(teff, root=0)
+        log.info(f'{rank}th MPI bcast time: teff: {time.time() - t0}')
+
+        t0 = time.time()
         logg = comm.bcast(logg, root=0)
+        log.info(f'{rank}th MPI bcast time: logg: {time.time() - t0}')
+
+        t0 = time.time()
         feh = comm.bcast(feh, root=0)
+        log.info(f'{rank}th MPI bcast time: feh: {time.time() - t0}')
+    if rank == 0:
+        log_time('Read models', t0_read_models)
 
     # COMPUTE MAGS OF MODELS FOR EACH STD STAR MAG
     ############################################
-
+    t0_compute_model_mag = time.time()
     #- Support older fibermaps
+    t0_checks = time.time()
     if 'PHOTSYS' not in fibermap.colnames:
         log.warning('Old fibermap format; using defaults for missing columns')
         log.warning("    PHOTSYS = 'S'")
@@ -501,7 +560,12 @@ def main(args, comm=None) :
     if not np.in1d(np.unique(fibermap['PHOTSYS']),['','N','S','G']).all():
         log.error('Unknown PHOTSYS found')
         raise Exception('Unknown PHOTSYS found')
+
+    if rank == 0:
+        log_time('## Checks', t0_checks)
+
     # Fetching Filter curves
+    t0_fetch_filter_curves = time.time()
     model_filters = dict()
     for band in ["G","R","Z"] :
         for photsys in np.unique(fibermap['PHOTSYS']) :
@@ -514,20 +578,33 @@ def main(args, comm=None) :
     for band in ["G", "BP", "RP"] :
         model_filters["GAIA-" + band] = load_gaia_filter(band=band, dr=2)
 
+    if rank == 0:
+        log_time('## Fetch filter curves', t0_fetch_filter_curves)
+
     # Compute model mags on rank 0 and bcast result to other ranks
     # This sidesteps an OOM event on Cori Haswell with "-c 2"
+    t0_compute = time.time()
     model_mags = None
     if rank == 0:
         log.info("computing model mags for %s"%sorted(model_filters.keys()))
         model_mags = dict()
+        t0_compute_for = time.time()
         for filter_name in model_filters.keys():
             model_mags[filter_name] = get_magnitude(stdwave, stdflux, model_filters, filter_name)
+        log_time('#### Compute for loop of {} items'.format(len(model_filters)), t0_compute_for)
         log.info("done computing model mags")
     if comm is not None:
+        t0 = time.time()
         model_mags = comm.bcast(model_mags, root=0)
+        log.info(f'{rank}th MPI bcast time: model_mags: {time.time() - t0}')
+
+    if rank == 0:
+        log_time('## Compute', t0_compute)
+        log_time('Compute mags of models for each std star mag', t0_compute_model_mag)
 
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
+    t0_pre_parallel = time.time()
     star_mags = dict()
     star_unextincted_mags = dict()
 
@@ -596,6 +673,10 @@ def main(args, comm=None) :
         # The color 1 in head_comm contains all ranks that are have rank 0 in local_comm
         head_comm = comm.Split(rank < nstars, rank)
 
+    if rank == 0:
+        log_time('Pre parallel', t0_pre_parallel)
+
+    t0_parralel = time.time()
     for star in range(rank % nstars, nstars, size):
 
         log.info("rank %d: finding best model for observed star #%d"%(rank, star))
@@ -665,6 +746,7 @@ def main(args, comm=None) :
         # Apply redshift to original spectrum at full resolution
         model=np.zeros(stdwave.size)
         redshifted_stdwave = stdwave*(1+redshift[star])
+        log.info("linear_coefficients[star].shape: {}, stdflux.shape: {}".format(linear_coefficients[star].shape, stdflux.shape))
         for i,c in enumerate(linear_coefficients[star]) :
             if c != 0 :
                 model += c*np.interp(stdwave,redshifted_stdwave,stdflux[i])
@@ -712,7 +794,10 @@ def main(args, comm=None) :
         chi2dof = head_comm.reduce(chi2dof, op=MPI.SUM, root=0)
         fitted_model_colors = head_comm.reduce(fitted_model_colors, op=MPI.SUM, root=0)
         normflux = head_comm.reduce(normflux, op=MPI.SUM, root=0)
+    if rank == 0:
+        log_time("Parallel section", t0_parralel)
 
+    t0_post_parallel = time.time()
     # Check at least one star was fit. The check is peformed on rank 0 and
     # the result is bcast to other ranks so that all ranks exit together if
     # the check fails.
@@ -755,3 +840,6 @@ def main(args, comm=None) :
         io.write_stdstar_models(args.outfile,normflux,stdwave,
                 starfibers[fitted_stars],data,
                 fibermap, input_frames_table)
+    if rank == 0:
+        log_time('Post parallel', t0_post_parallel)
+        log_time('Total main', t0_main_start)
