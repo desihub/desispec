@@ -231,8 +231,6 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         pass
 
     def read_and_prepare_inputs():
-        print(f"{coordinator.rank=} {coordinator}")
-
         #- Read preproc image
         img = io.read_image(args.input)
         #- Extraction uses pix and mask-applied ivar
