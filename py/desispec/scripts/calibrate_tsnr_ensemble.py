@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 
 from desiutil.log import get_logger
 from desispec.tsnr import template_ensemble
+from desimodel.io import load_desiparams
+from desimodel.fastfiberacceptance import FastFiberAcceptance
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate a sim. template ensemble stack of given type and write it to disk at --outdir.")
@@ -26,10 +28,11 @@ def parse(options=None):
     parser.add_argument('--plot', action='store_true',
                         help='plot the fit.')
     parser.add_argument('--exclude', type=str, default=None, required=False,
-                        help='comma separated list of expids to ignore.')    
+                        help='comma separated list of expids to ignore.')
     parser.add_argument('-o','--outfile', type = str, required=False,
                         help='tsnr-ensemble fits output')
-
+    parser.add_argument('--sv1', action='store_true',
+                        help='calibration on sv1-exposures.csv, default uses data from May 2021')
     args = None
 
     if options is None:
@@ -39,7 +42,7 @@ def parse(options=None):
 
     return args
 
-def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=True, exclude=None):
+def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=True, exclude=None, use_sv1=False):
     '''
     Given an external calibration, e.g.
     /global/cfs/cdirs/desi/survey/observations/SV1/sv1-exposures.fits
@@ -58,29 +61,41 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     tsnr_col  = 'TSNR2_{}'.format(tracer.upper())
 
     ext_calib = Table.read(exposures_table_filename)
-    
+
     # Quality cuts.
     ext_calib = ext_calib[(ext_calib['EXPTIME'] > 0.)]
 
     log.info('Calibrating tracer {}'.format(tracer))
-    
-    if tracer in ['bgs', 'mws' , 'gpbbright']:
-        ext_col   = 'EFFTIME_BRIGHT'
 
-        # Expected BGS exposure is 180s nominal.
-        #ext_calib = ext_calib[(ext_calib['EFFTIME_BRIGHT'] > 120.)]
-        ext_calib = ext_calib[(ext_calib['TARGETS']=='BGS+MWS')]
+
+    if tracer in ['bgs', 'mws' , 'gpbbright', 'gpbbackup']:
+
+        if use_sv1 :
+            efftime_col   = 'EFFTIME_BRIGHT'
+        else :
+            efftime_col   = 'BGS_EFFTIME_BRIGHT'
+
+        if use_sv1 :
+            ext_calib = ext_calib[(ext_calib['TARGETS']=='BGS+MWS')]
+        else :
+            ext_calib = ext_calib[ext_calib['GOALTYPE']=='bright']
 
     elif tracer in ['elg', 'lrg', 'qso', 'lya', 'gpbdark']:
-        ext_col   = 'EFFTIME_DARK'
+        if use_sv1 :
+            efftime_col   = 'EFFTIME_DARK'
+        else :
+            efftime_col   = 'ELG_EFFTIME_DARK'
 
-        # Expected dark exposure is 900s nominal.
-        ext_calib = ext_calib[(ext_calib['TARGETS']=='ELG')
-                              |(ext_calib['TARGETS']=='QSO+ELG')
-                              |(ext_calib['TARGETS']=='QSO+LRG')]
+        if use_sv1 :
+            ext_calib = ext_calib[(ext_calib['TARGETS']=='ELG')
+                                  |(ext_calib['TARGETS']=='QSO+ELG')
+                                  |(ext_calib['TARGETS']=='QSO+LRG')]
+        else :
+            ext_calib = ext_calib[ext_calib['GOALTYPE']=='dark']
+
     else:
         log.critical('External calibration for tracer {} is not defined.'.format(tracer))
-        
+
     tsnr_run  = Table.read(tsnr_table_filename)
 
     # TSNR == 0.0 if exposure was not successfully reduced.
@@ -91,73 +106,94 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
 
     if exclude is not None:
         log.info('Excluding exposure list of: {}'.format(exclude))
-    
+
     tsnr_run  = tsnr_run[~np.isin(tsnr_run['EXPID'], exclude)]
-    
+
     # Keep common exposures.
     ref_extexpids = ext_calib['EXPID']
-    
+
     ext_calib = ext_calib[np.isin(ext_calib['EXPID'], tsnr_run['EXPID'])]
     tsnr_run  = tsnr_run[np.isin(tsnr_run['EXPID'], ext_calib['EXPID'])]
 
     ref_frac  = np.mean(np.isin(ref_extexpids, ext_calib['EXPID']))
-    
+
     log.info('Found {:.6f} of ref. exposures in provided tsnr'.format(ref_frac))
 
     if ref_frac < 0.7:
         log.critical('Provided TSNR is likely missing exposures required to calibrate (!)')
-    
-    tsnr_run  = join(tsnr_run, ext_calib['EXPID', ext_col], join_type='left', keys='EXPID')
+
+    e2i={e:i for i,e in enumerate(ext_calib['EXPID'])}
+    ii=[e2i[e] for e in tsnr_run["EXPID"]]
+    efftime_col_ref=efftime_col+"_REF"
+    tsnr_run[efftime_col_ref] = ext_calib[efftime_col]
+
+    print(ext_calib[efftime_col])
+    print(tsnr_run[efftime_col_ref])
+
     with_reference_tsnr = (tsnr_col in ext_calib.dtype.names)
     if with_reference_tsnr :
-        tsnr_run[tsnr_col+"_REF"] = ext_calib[tsnr_col]
+        tsnr_col_ref = tsnr_col+"_REF"
+        tsnr_run[tsnr_col_ref] = ext_calib[tsnr_col]
     else :
         log.warning("no {} column in ref, cannot calibrate it".format(tsnr_col))
 
-    tsnr_run.sort(ext_col)
+    tsnr_run.sort(efftime_col_ref)
 
     tsnr_run.pprint()
 
-    log.info('Calibrating {} [{}, {}] against {} [{}, {}].'.format(tsnr_col, tsnr_run[tsnr_col].min(), tsnr_run[tsnr_col].max(), ext_col, tsnr_run[ext_col].min(), tsnr_run[ext_col].max()))
-    
-    slope_efftime  = np.sum(tsnr_run[ext_col] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
+    log.info('Calibrating {} [{}, {}] against {} [{}, {}].'.format(tsnr_col, tsnr_run[tsnr_col].min(), tsnr_run[tsnr_col].max(), efftime_col_ref, tsnr_run[efftime_col_ref].min(), tsnr_run[efftime_col_ref].max()))
+
+    slope_efftime  = np.sum(tsnr_run[efftime_col_ref] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
 
     if with_reference_tsnr :
-        slope_tsnr2    = np.sum(tsnr_run[tsnr_col+"_REF"] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
+        slope_tsnr2    = np.sum(tsnr_run[tsnr_col_ref] * tsnr_run[tsnr_col]) / np.sum(tsnr_run[tsnr_col]**2.)
     else :
         slope_tsnr2    = 1.
 
-    if plot:       
+
+    if not use_sv1 :
+        # also compute the mean seeing
+        ffrac=ext_calib["ETCFFRAC_PSF"]
+        fa=FastFiberAcceptance()
+        exposure_seeing_fwhm_um = fa.psf_seeing_fwhm(ffrac) # [microns]
+        fiber_params = load_desiparams()['fibers']
+        exposure_seeing_fwhm_arcsec = exposure_seeing_fwhm_um / fiber_params['diameter_um'] *fiber_params['diameter_arcsec']
+        median_exposure_seeing_fwhm_arcsec = np.median(exposure_seeing_fwhm_arcsec)
+        log.info("Median derived ETC FWHM = {:4.3f} arcsec".format(median_exposure_seeing_fwhm_arcsec))
+
+    if plot:
         plt.figure("efftime-vs-tsnr2-{}".format(tracer))
-        plt.plot(tsnr_run[tsnr_col], tsnr_run[ext_col], c='k', marker='.', lw=0.0, markersize=1)
+        plt.plot(tsnr_run[tsnr_col], tsnr_run[efftime_col_ref], c='k', marker='.', lw=0.0, markersize=1)
         plt.plot(tsnr_run[tsnr_col], slope_efftime*tsnr_run[tsnr_col], c='k', lw=0.5)
-        plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(ext_col, slope_efftime, tsnr_col, ref_frac))
+        plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(efftime_col_ref, slope_efftime, tsnr_col, ref_frac))
         plt.xlabel("new "+tsnr_col)
-        plt.ylabel("SV1 reference "+ext_col)
+        plt.ylabel("reference "+efftime_col_ref)
         plt.grid()
-        
+
         plt.figure("efftime-vs-tsnr2-{}-ratio".format(tracer))
-        plt.plot(slope_efftime*tsnr_run[tsnr_col], tsnr_run[ext_col] / (slope_efftime*tsnr_run[tsnr_col]), c='k', lw=0.0, marker='.', markersize=2)
+        plt.plot(slope_efftime*tsnr_run[tsnr_col], tsnr_run[efftime_col_ref] / (slope_efftime*tsnr_run[tsnr_col]), c='k', lw=0.0, marker='.', markersize=2)
         plt.axhline(1.1, c='c', alpha=0.75, lw=0.5)
         plt.axhline(0.9, c='c', alpha=0.75, lw=0.5)
         plt.axhline(1.2, c='b', alpha=0.50, lw=0.5)
         plt.axhline(0.8, c='b', alpha=0.50, lw=0.5)
-        plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(ext_col, slope_efftime, tsnr_col, ref_frac))
+        plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(efftime_col_ref, slope_efftime, tsnr_col, ref_frac))
         plt.xlabel("efftime "+tsnr_col)
-        plt.ylabel("SV1 reference "+ext_col+"/"+"new efftime "+tsnr_col)
+        plt.ylabel("reference "+efftime_col_ref+"/"+"new efftime "+tsnr_col)
         plt.ylim(0.0, 2.5)
         plt.grid()
-        
+
         if with_reference_tsnr :
             plt.figure("tsnr2-vs-tsnr2-{}".format(tracer))
-            plt.plot(tsnr_run[tsnr_col], tsnr_run[tsnr_col+"_REF"], c='k', marker='.', lw=0.0, markersize=1)
+            plt.plot(tsnr_run[tsnr_col], tsnr_run[tsnr_col_ref], c='k', marker='.', lw=0.0, markersize=1)
             plt.plot(tsnr_run[tsnr_col], slope_tsnr2*tsnr_run[tsnr_col], c='k', lw=0.5)
-            plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(tsnr_col+"_REF", slope_tsnr2, tsnr_col, ref_frac))
+            plt.title('{} = {:.3f} x {} (ref. frac. {:.2f})'.format(tsnr_col_ref, slope_tsnr2, tsnr_col, ref_frac))
             plt.xlabel("new "+tsnr_col)
-            plt.ylabel("SV1 reference "+tsnr_col)
+            plt.ylabel("reference "+tsnr_col)
             plt.grid()
-        
+
         plt.show()
+
+
 
     return  slope_efftime , slope_tsnr2
 
@@ -166,7 +202,11 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
 def main(args):
     log = get_logger()
 
-    effective_time_calibration_table_filename = resource_filename('desispec', 'data/tsnr/sv1-exposures.csv')
+    if args.sv1 :
+        effective_time_calibration_table_filename = resource_filename('desispec', 'data/tsnr/sv1-exposures.csv')
+    else :
+        effective_time_calibration_table_filename = resource_filename('desispec', 'data/tsnr/tsnr_refset_etc.csv')
+
 
 
     ens = fits.open(args.infile)
@@ -177,8 +217,8 @@ def main(args):
 
     if args.exclude is not None:
         args.exclude = [np.int(x) for x in args.exclude.split(',')]
-    
-    slope_efftime,slope_tsnr2 = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot, exclude=args.exclude)
+
+    slope_efftime,slope_tsnr2 = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot, exclude=args.exclude, use_sv1=args.sv1)
 
     # TSNR2_REF = slope_tsnr2 * TSNR2_CURRENT
     # so I have to apply to delta_flux a scale:
