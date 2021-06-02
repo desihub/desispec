@@ -105,8 +105,21 @@ def compute_skymag(night, expid, specprod_dir=None):
             acal = _get_average_calibration(cal_filename)
             begin, end = istitch[camera]
             flux = np.interp(fullwave[begin:end], skywave, skyflux)
-            acal_val = np.interp(fullwave[begin:end], acal.wave, acal.value())
-            sky[begin:end] = flux / exptime / acal_val * fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
+            acal_val = acal.value()
+
+            if acal.ffracflux_wave is not None :
+                acal_val /= acal.ffracflux_wave
+            else :
+                default_ffracflux = 0.6 # see DESI-6043
+                log.warning("use a default fiber acceptance correction = {}".format(default_ffracflux))
+                acal_val /= default_ffracflux
+
+            acal_val = np.interp(fullwave[begin:end], acal.wave, acal_val)
+
+            mean_fiber_diameter_arcsec = 1.52 # see DESI-6043
+            fiber_area_arcsec = np.pi*(mean_fiber_diameter_arcsec/2)**2
+
+            sky[begin:end] = flux / exptime / acal_val / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
 
         if not ok : continue # to next spectrograph
         sky_spectra.append(sky)
