@@ -168,18 +168,20 @@ def gpu_specter_check_input_options(args):
         return False, msg
 
     if args.gpu:
+        is_numba_cuda_available = False
         try:
             import numba.cuda
-            numba.cuda.is_available()
-            import cupy as cp
+            is_numba_cuda_available = numba.cuda.is_available()
         except ImportError:
-            return False, 'cannot import module cupy'
-        if not cp.is_available():
+            return False, 'cannot import numba.cuda'
+        is_cupy_available = False
+        try:
+            import cupy
+            is_cupy_available = cupy.is_available()
+        except ImportError:
+            return False, 'cannot import cupy'
+        if not (is_numba_cuda_available and is_cupy_available):
             return False, 'gpu is not available'
-
-    if args.fibermap:
-        msg = "--fibermap not implemented with --gpu-specter"
-        return False, msg
 
     if args.decorrelate_fibers:
         msg = "--decorrelate-fibers not implemented with --gpu-specter"
@@ -191,7 +193,7 @@ def gpu_specter_check_input_options(args):
 
     return True, 'OK'
 
-def main_gpu_specter(args, comm=None, timing=None):
+def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
     freeze_iers()
 
     time_start = time.time()
@@ -206,30 +208,39 @@ def main_gpu_specter(args, comm=None, timing=None):
 
     import gpu_specter.io
     import gpu_specter.core
-    from gpu_specter.mpi import NoMPIComm, SyncIOComm, AsyncIOComm
+    import gpu_specter.mpi
 
-    #- Load MPI only if requested
-    if comm is not None:
-        from mpi4py import MPI
-        if isinstance(comm, MPI.Intracomm):
-            #- use gpu_specter mpi comm wrapper
-            comm = gpu_specter.mpi.SyncIOComm(comm)
-        elif isinstance(comm, (NoMPIComm, SyncIOComm, AsyncIOComm)):
-            #- comm is already good to go
-            pass
+    #- MPI and IO coordinator setup
+    if coordinator is None:
+        if comm is not None or args.mpi:
+            #- Use MPI if comm is provided or args.mpi is specified
+            if comm is None:
+                #- Initialize MPI
+                from mpi4py import MPI
+                comm = MPI.COMM_WORLD
+            else:
+                #- MPI is already initialized
+                pass
+            #- Initialize IO coordinator
+            coordinator = gpu_specter.mpi.SerialIOCoordinator(comm)
         else:
-            raise TypeError("Invalid comm type")
+            #- No MPI
+            coordinator = gpu_specter.mpi.NoMPIIOCoordinator()
     else:
-        #- use gpu_specter no mpi comm wrapper
-        comm = gpu_specter.mpi.NoMPIComm()
+        #- Use provided coordinator, MPI is already intialized
+        pass
 
-    #- Load inputs
-    def read_data():
+    def read_and_prepare_inputs():
+        print(f"{coordinator.rank=} {coordinator}")
+
+        #- Read preproc image
         img = io.read_image(args.input)
+        #- Extraction uses pix and mask-applied ivar
         image = {
             'image': img.pix,
             'ivar': img.ivar*(img.mask==0)
         }
+        #- If GPU, move image and ivar arrays to device
         if args.gpu:
             import cupy as cp
             image['image'] = cp.asarray(image['image'])
@@ -238,10 +249,13 @@ def main_gpu_specter(args, comm=None, timing=None):
         #- TODO: check compatibility with specter.psf.load_psf
         psf = gpu_specter.io.read_psf(args.psf)
 
-        try:
-            fibermap = io.read_fibermap(args.input)
-        except:
-            fibermap = None
+        if args.fibermap is not None:
+            fibermap = io.read_fibermap(args.fibermap)
+        else:
+            try:
+                fibermap = io.read_fibermap(args.input)
+            except:
+                fibermap = None
 
         image['fibermap'] = fibermap
 
@@ -280,6 +294,7 @@ def main_gpu_specter(args, comm=None, timing=None):
         corrected_dw = dw/barycentric_correction_factor
 
         #- Reconstruct wavelength string using corrected values
+        #- TODO: update gpu_specter to accept a tuple or str
         corrected_wavelength = ','.join(map(str, (corrected_wmin, corrected_wmax, corrected_dw)))
 
         log.info('Applying barycentric_correction_factor: {}'.format(barycentric_correction_factor))
@@ -304,24 +319,38 @@ def main_gpu_specter(args, comm=None, timing=None):
         img.meta['SPECTER'] = ('dev', 'https://github.com/sbailey/gpu_specter')
         img.meta['IN_PSF']  = (_trim(args.psf), 'Input spectral PSF')
         img.meta['IN_IMG']  = (_trim(args.input), 'Input image')
+        depend.add_dependencies(img.meta)
+
+        #- Check if input PSF was itself a traceshifted version of another PSF
+        orig_psf = None
+        try:
+            psfhdr = fits.getheader(args.psf, 'PSF')
+            orig_psf = psfhdr['IN_PSF']
+            img.meta['ORIG_PSF'] = orig_psf
+        except KeyError:
+            #- could happen due to PSF format not having "PSF" extension,
+            #- or due to PSF header not having 'IN_PSF' keyword.  Either is OK
+            pass
 
         image['meta'] = img.meta
 
         return image, psf, corrected_wavelength
 
-
-    image, psf, corrected_wavelength = comm.read(read_data, (None, None, None))
+    #- Pass the read func defined above and placeholder return values to the IO coordinator.
+    image, psf, corrected_wavelength = coordinator.read(read_and_prepare_inputs, (None, None, None))
 
     time_setup = time.time()
 
     #- Perform extraction
     core_timing = dict()
 
-    result = None
-    if comm.is_extract_rank():
-
-        if comm.extract_comm is not None:
-            corrected_wavelength = comm.extract_comm.bcast(corrected_wavelength, root=0)
+    def extract_frame():
+        #- Need to broadcast the corrected wavelength to other workers since
+        #- extract_frame doesn't know about barycentric correction.
+        #- TODO: add corrected_wavelength this to the psf object? extract_frame already broadcasts that object.
+        nonlocal corrected_wavelength
+        if coordinator.work_comm is not None:
+            corrected_wavelength = coordinator.work_comm.bcast(corrected_wavelength, root=0)
 
         result = gpu_specter.core.extract_frame(
             image, psf, args.bundlesize,       # input data
@@ -331,24 +360,27 @@ def main_gpu_specter(args, comm=None, timing=None):
             args.model,
             args.regularize,
             args.psferr,
-            comm.extract_comm,                 # mpi parameters
+            coordinator.work_comm,             # mpi parameters
             args.gpu,                          # gpu parameters
             loglevel=None,
             timing=core_timing,
         )
 
-        if comm.is_extract_root():
+        #- Pass additional info from inputs through result
+        if coordinator.is_worker_root(coordinator.rank):
             result['fibermap'] = image['fibermap']
             result['wave'] = image['wave']
             result['meta'] = image['meta']
-    else:
-        # READ_RANK / WRITE_RANK
-        pass
+
+        return result
+
+    #- Pass the process func defined above and placeholder return values to the IO coordinator.
+    result = coordinator.process(extract_frame, None)
 
     time_extract = time.time()
 
     #- Write output
-    def write_data(result):
+    def finalize_result_and_write_frame(result):
         flux = result['specflux']
         ivar = result['specivar']
         mask = result['specmask']
@@ -364,7 +396,7 @@ def main_gpu_specter(args, comm=None, timing=None):
         mask[pixmask_fraction == 1.0] |= specmask.ALLBADPIX
         mask[chi2pix > 100.0] |= specmask.BAD2DFIT
 
-        #- TODO: what should this be?
+        #- TODO: compare with cpu-specter
         if fibermap is not None:
             fibermap = fibermap[args.specmin:args.specmin+args.nspec]
             fibers = fibermap['FIBER']
@@ -380,7 +412,7 @@ def main_gpu_specter(args, comm=None, timing=None):
         #   In specter.extract.ex2d one has flux /= dwave
         #   to convert the measured total number of electrons per
         #   wavelength node to an electron 'density'
-        frame.meta['BUNIT'] = 'count/Angstrom'
+        frame.meta['BUNIT'] = 'electron/Angstrom'
 
         #- Add scores to frame                                                               
         if not args.no_scores:
@@ -398,7 +430,7 @@ def main_gpu_specter(args, comm=None, timing=None):
             fits.writeto(args.model+'.tmp', modelimage, header=frame.meta, overwrite=True, checksum=True)
             os.rename(args.model+'.tmp', args.model)
 
-    comm.write(write_data, result)
+    coordinator.write(finalize_result_and_write_frame, result)
 
     time_write = time.time()
 
@@ -409,7 +441,7 @@ def main_gpu_specter(args, comm=None, timing=None):
         timing["frame-extract"] = time_extract
         timing["frame-write"] = time_write
 
-    if comm.is_extract_root():
+    if coordinator.is_worker_root(coordinator.rank):
         name = os.path.basename(args.output)
         log.info(f"{name} setup-time: {time_setup - time_start:0.2f}")
         log.info(f"{name} extract-time: {time_extract - time_setup:0.2f}")
