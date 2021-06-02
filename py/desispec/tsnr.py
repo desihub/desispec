@@ -774,7 +774,7 @@ def calc_tsnr_fiberfracs(fibermap, etc_fiberfracs, no_offsets=False):
     if not etc_fiberfracs:
         log.warning('Failed to inherit from etc json.  Assuming median values from tsnr_refset_etc.csv.')
         # mean values in the calibration table desispec/data/tsnr/tsnr_refset_etc.csv
-        # and scale factor to match he TSNR and exptime values of SV1 where we did not have the ETC info
+        # and scale factor to match the TSNR and exptime values of SV1 where we did not have the ETC info.
         etc_fiberfracs['psf'] = 0.537283
         etc_fiberfracs['elg'] = 0.973*0.391030
         etc_fiberfracs['bgs'] = 0.985*0.174810
@@ -982,43 +982,42 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     psfpath=findcalibfile([frame.meta],"PSF")
     tset=read_xytraceset(psfpath)
 
+    expid=frame.meta["EXPID"]
+    night=frame.meta["NIGHT"]
+
     etc_fiberfracs={}
-    load_etcjson = False
 
-    for tracer in ['psf', 'elg', 'bgs']:
-        ffrac = 'FFRAC_{}'.format(tracer.upper())
+    etcpath=findfile('etc', night=night, expid=expid)
+        
+    ##  https://github.com/desihub/desietc/blob/main/header.md
+    if 'ETCFRACP' in frame.meta:            
+        ## Transparency-weighted average of FFRAC over the exposure calculated for a PSF source profile. Calculated as (ETCTHRUP/ETCTRANS)*0.56198 where the constant is the nominal PSF FFRAC.
+        ## Note: unnormalized equivalent to ETCTHRUP, etc. 
+        etc_fiberfracs['psf'] = frame.meta['ETCFRACP']
+            
+        ## PSF -> ELG
+        etc_fiberfracs['elg'] = frame.meta['ETCFRACE']
 
-        if ffrac in frame.meta:
-            etc_fiberfracs[tracer] = frame.meta[ffrac]
+        ## PSF -> BGS
+        etc_fiberfracs['bgs'] = frame.meta['ETCFRACB']
 
-        else:
-            log.warning('TSNR failed to find a full set of ETC fiberfracs by tracer in frame.meta; loading etc json.')
-            load_etcjson = True
-            break
+        log.info('Retrieved etc data from frame hdr.')
+        
+    elif os.path.exists(etcpath):
+        with open(etcpath) as f:
+            etcdata = json.load(f)
 
-    if load_etcjson:
-        expid=frame.meta["EXPID"]
-        night=frame.meta["NIGHT"]
+        try:
+            for tracer in ['psf', 'elg', 'bgs']:
+                etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
 
-        etcpath=findfile('etc', night=night, expid=expid)
-
-        etc_fiberfracs={}
-
-        if os.path.exists(etcpath):
             log.info('Retrieved etc data from {}'.format(etcpath))
+                
+        except:
+            log.warning('Failed to find etc expinfo/ffrac for all tracers.')
 
-            with open(etcpath) as f:
-                etcdata = json.load(f)
-
-            try:
-                for tracer in ['psf', 'elg', 'bgs']:
-                    etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
-
-            except:
-                log.warning('Failed to find etc expinfo/ffrac for all tracers.')
-
-                # Reset.
-                etc_fiberfracs={}
+            # Reset, will default to nominal values on empty dict.
+            etc_fiberfracs={}
 
     tsnr_fiberfracs = calc_tsnr_fiberfracs(frame.fibermap, etc_fiberfracs, no_offsets=False)
 
@@ -1140,20 +1139,14 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     log.info('computation time = {:4.2f} sec'.format(time.time()-t0))
     return results, alpha
 
-def tsnr2_to_efftime(tsnr2,target_type,program="DARK") :
+def tsnr2_to_efftime(tsnr2,target_type) :
     """ Converts TSNR2 values to effective exposure time.
     Args:
       tsnr2: TSNR**2 values, float or numpy array
       target_type: str, "ELG","BGS","LYA", or other depending on content of  data/tsnr/tsnr-efftime.yaml
-      program: str, "DARK", "BRIGHT", or other depending on content of data/tsnr/tsnr-efftime.yaml
 
     Returns: exptime in seconds, same type and shape if applicable as input tsnr2
     """
-
-    #keyword="TSNR2_{}_TO_EFFTIME_{}".format(target_type,program)
-    #if not keyword in efftime_config :
-    #    message="no calibration for TSNR2_{} to EFFTIME_{}".format(target_type,program)
-    #    raise KeyError(message)
 
     tracer=target_type.lower()
     tsnr_ensembles = get_ensemble()
