@@ -51,12 +51,14 @@ ccdmask:
     - [BADREADNOISE,    8, "Very high CCD amplifier read noise"]
 
 #- Mask bits that apply to an entire fiber
+#- Note: some of these are informational and aren't necessarily bad
 fibermask:
-    - [STUCKPOSITIONER, 1, "Stuck positioner"]
+    - [UNASSIGNED,      0, "Fiber is not assigned to a known target or sky location"]
+    - [STUCKPOSITIONER, 1, "INFO: Stuck positioner (but could still be on a good sky location)"]
     - [BROKENFIBER,     2, "Broken fiber"]
-    - [BADTARGET,       3, "Fiber is not a known target"]
+    - [RESTRICTED,      3, "INFO: Positioner has restricted reach (but might still be on valid target)"]
     - [MISSINGPOSITION, 8, "Fiber location information is missing"]
-    - [BADPOSITION,     9, "ICS flag that positioner is not at target location"]
+    - [BADPOSITION,     9, "Fiber >100 microns from target location"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]
     - [BADFLAT,        18, "Bad fiber flat"]

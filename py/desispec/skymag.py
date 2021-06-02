@@ -62,9 +62,13 @@ def compute_skymag(night, expid, specprod_dir=None):
     # AR/DK DESI spectra wavelengths
     wmin, wmax, wdelta = 3600, 9824, 0.8
     fullwave = np.round(np.arange(wmin, wmax + wdelta, wdelta), 1)
-    cslice = {"b": slice(0, 2751), "r": slice(2700, 5026), "z": slice(4900, 7781)}
-    # AR (wmin,wmax) to "stich" all three cameras
-    wstich = {"b": (wmin, 5780), "r": (5780, 7570), "z": (7570, 9824)}
+
+    # AR (wmin,wmax) to "stitch" all three cameras
+    wstitch = {"b": (wmin, 5790), "r": (5790, 7570), "z": (7570, 9824)}
+    istitch = {}
+    for camera in ["b", "r", "z"]:
+        ii = np.where((fullwave >= wstitch[camera][0]) & (fullwave < wstitch[camera][1]))[0]
+        istitch[camera] = (ii[0], ii[-1]+1) # begin (included), end (excluded)
 
     if specprod_dir is None :
         specprod_dir = specprod_root()
@@ -100,8 +104,12 @@ def compute_skymag(night, expid, specprod_dir=None):
             fiber_area_arcsec = np.pi*(mean_fiber_diameter_arcsec/2)**2
 
             acal = _get_average_calibration(cal_filename)
-            flux = np.interp(fullwave[cslice[camera]], skywave, skyflux)
-            sky[cslice[camera]] = flux / exptime / acal.value() * fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
+
+            begin, end = istitch[camera]
+            flux = np.interp(fullwave[begin:end], skywave, skyflux)
+            acal_val = np.interp(fullwave[begin:end], acal.wave, acal.value())
+
+            sky[begin:end] = flux / exptime / acal_val * fiber_acceptance_for_point_sources / fiber_area_arcsec * 1e-17 # ergs/s/cm2/A/arcsec2
 
         if not ok : continue # to next spectrograph
         sky_spectra.append(sky)

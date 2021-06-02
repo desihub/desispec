@@ -245,7 +245,7 @@ for legacy standards
         self._write_fiberflat(camera='b0')
         self._write_skymodel(camera='b0')
         self._write_models()
-        for opt in ['','--color=R-Z']:
+        for opt in ['','--color=R-Z', '--std-targetids 0 1 2 3 4 5']:
             cmd = "{} {}/desi_fit_stdstars {} --delta-color 1000 --frames {} --skymodels {}  --fiberflats {} --starmodels {} --outfile {}".format(
                 sys.executable, self.binDir, opt, self.framefile, self.skyfile, self.fiberflatfile, self.modelfile, self.stdfile)
             inputs  = [self.framefile, self.fiberflatfile, self.skyfile, self.modelfile]

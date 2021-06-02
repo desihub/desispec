@@ -43,6 +43,8 @@ def parse(options=None):
                         help = 'only consider stars with color greater than this')
     parser.add_argument('--delta-color-cut', type = float, default = 0.2, required=False,
                         help = 'discard model stars with different broad-band color from imaging')
+    parser.add_argument('--nostdcheck', dest='nostdcheck',
+                        help='Do not check the standards against flags in the FIBERMAP; just use objects in the model file', action='store_true')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
@@ -53,6 +55,7 @@ def parse(options=None):
                         help = 'use this number of stars ranked by highest throughput to normalize transmission (for DESI commissioning)')
     parser.add_argument('--seeing-fwhm', type = float, default = 1.1, required=False,
                         help = 'seeing FWHM in arcsec, used for fiberloss correction')
+    parser.set_defaults(nostdcheck=False)
     args = None
     if options is None:
         args = parser.parse_args()
@@ -131,8 +134,15 @@ def main(args) :
             sys.exit(16)
 
     if args.delta_color_cut > 0 :
-        log.info("apply cut |delta color|<{}".format(args.delta_color_cut))
-        good = (np.abs(model_metadata["MODEL_"+color]-model_metadata["DATA_"+color])<args.delta_color_cut)
+        # check dust extinction values for those stars
+        stars_ebv = np.array(frame.fibermap[model_fibers % 500]["EBV"])
+        log.info("min max E(B-V) for std stars = {:4.3f} {:4.3f}".format(np.min(stars_ebv),np.max(stars_ebv)))
+        star_gr_reddening_relative_error = 0.2 * stars_ebv
+        log.info("Consider a g-r reddening sys. error in the range {:4.3f} {:4.3f}".format(np.min(star_gr_reddening_relative_error),np.max(star_gr_reddening_relative_error)))
+
+
+        log.info("apply cut |delta color|<{}+reddening error".format(args.delta_color_cut))
+        good = (np.abs(model_metadata["MODEL_"+color]-model_metadata["DATA_"+color])<args.delta_color_cut+star_gr_reddening_relative_error)
         bad  = ok&(~good)
         ok  &= good
         if np.any(bad) :
@@ -172,26 +182,30 @@ def main(args) :
         model_fibers=model_fibers[ok]
         model_metadata=model_metadata[:][ok]
 
+    stdcheck = not args.nostdcheck
+
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
 
     ## check whether star fibers from args.models are consistent with fibers from fibermap
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
-    fibermap_std_indices = np.where(isStdStar(fibermap))[0]
-    if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
-        target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
-        colname =  target_colnames[0]
-        for i in model_fibers%500:
-            log.error("inconsistency with spectrum {}, OBJTYPE={}, {}={} in fibermap".format(
+    if stdcheck:
+        fibermap_std_indices = np.where(isStdStar(fibermap))[0]
+        if np.any(~np.in1d(model_fibers%500, fibermap_std_indices)):
+            target_colnames, target_masks, survey = main_cmx_or_sv(fibermap)
+            colname =  target_colnames[0]
+            for i in model_fibers%500:
+                log.error("inconsistency with spectrum {}, OBJTYPE={}, {}={} in fibermap".format(
                 i, fibermap["OBJTYPE"][i], colname, fibermap[colname][i]))
-        sys.exit(12)
-
+            sys.exit(12)
+    else:
+        fibermap_std_indices = model_fibers % 500
     # Make sure the fibers of interest aren't entirely masked.
     if np.sum(np.sum(frame.ivar[model_fibers%500, :] == 0, axis=1) == frame.nwave) == len(model_fibers):
         log.warning('All standard-star spectra are masked!')
         return
 
-    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput, exposure_seeing_fwhm = args.seeing_fwhm)
+    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput, exposure_seeing_fwhm = args.seeing_fwhm, stdcheck=stdcheck)
 
     # QA
     if (args.qafile is not None):
