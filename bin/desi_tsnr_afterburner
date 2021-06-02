@@ -526,9 +526,9 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         try:
             entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
         except:
-            entry['EFFTIME_ETC'] = np.float32(-99.)
+            entry['EFFTIME_ETC'] = np.float32(0.)
     else:
-        entry['EFFTIME_ETC'] = np.float32(-99.)
+        entry['EFFTIME_ETC'] = np.float32(.)
 
     entry['CAMERA'] = camera
     for key in table.colnames:
