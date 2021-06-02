@@ -95,6 +95,7 @@ def main(args=None):
     hdulist   = fits.open(args.image)
     is_input_preprocessed = ("IMAGE" in hdulist)&("IVAR" in hdulist)
     primary_header  = hdulist[0].header
+    input_has_fibermap = ("FIBERMAP" in hdulist)
     hdulist.close()
 
     
@@ -124,10 +125,16 @@ def main(args=None):
             
         indir = os.path.dirname(args.image)
         if args.fibermap is None :
-            filename = '{}/fibermap-{:08d}.fits'.format(indir, expid)
-            if os.path.isfile(filename) :
-                log.debug("auto-mode: found a fibermap, {}, using it!".format(filename))
-                args.fibermap =filename
+            #- first check if input image has a fibermap
+            if input_has_fibermap:
+                log.debug('auto-mode: using FIBERMAP in input image file')
+                args.fibermap = args.image
+            else:
+                filename = '{}/fibermap-{:08d}.fits'.format(indir, expid)
+                if os.path.isfile(filename) :
+                    log.debug("auto-mode: found a fibermap, {}, using it!".format(filename))
+                    args.fibermap = filename
+
         if args.output_preproc is None :
             if not is_input_preprocessed : 
                 args.output_preproc = '{}/preproc-{}-{:08d}.fits'.format(args.auto_output_dir, args.camera.lower(), expid)
@@ -264,7 +271,7 @@ def main(args=None):
         log.info("sky subtraction")
         if args.output_skyframe is not None :
             skyflux=qproc_sky_subtraction(qframe,return_skymodel=True)
-            sqframe=QFrame(qframe.wave,skyflux,np.ones(skyflux.shape))
+            sqframe=QFrame(qframe.wave,skyflux,np.ones(skyflux.shape),fibermap=fibermap)
             write_qframe(args.output_skyframe,sqframe)
             log.info("wrote sky model in {}".format(args.output_skyframe))
         else :
@@ -278,16 +285,22 @@ def main(args=None):
             fluxcalib_filename = cfinder.findfile("FLUXCALIB")
             fluxcalib = read_average_flux_calibration(fluxcalib_filename)
             log.info("read average calib in {}".format(fluxcalib_filename))
-            if "SEEING" in qframe.meta :
+            if "SEEING" in qframe.meta and qframe.meta["SEEING"] is not None:
                 seeing  = qframe.meta["SEEING"]
+            elif "ETCSEENG" in qframe.meta and qframe.meta["ETCSEENG"] is not None:
+                seeing  = qframe.meta["ETCSEENG"]
+            elif "PMSEEING" in qframe.meta and qframe.meta["PMSEEING"] is not None:
+                seeing  = qframe.meta["PMSEEING"]
             else :
-                log.warning("no SEEING information")
-                seeing = 1
-            if "AIRMASS" in qframe.meta :
+                log.warning("no SEEING information; using 1.1 arcsec FWHM")
+                seeing = 1.1
+
+            if "AIRMASS" in qframe.meta and qframe.meta["AIRMASS"] is not None:
                 airmass = qframe.meta["AIRMASS"]
             else :
-                log.warning("no AIRMASS information")
-                airmass = 1
+                log.warning("no AIRMASS information; using 1.0")
+                airmass = 1.0
+
             exptime = qframe.meta["EXPTIME"]
             exposure_calib = fluxcalib.value(seeing=seeing,airmass=airmass)
             for q in range(qframe.nspec) :

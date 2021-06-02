@@ -134,8 +134,15 @@ def main(args) :
             sys.exit(16)
 
     if args.delta_color_cut > 0 :
-        log.info("apply cut |delta color|<{}".format(args.delta_color_cut))
-        good = (np.abs(model_metadata["MODEL_"+color]-model_metadata["DATA_"+color])<args.delta_color_cut)
+        # check dust extinction values for those stars
+        stars_ebv = np.array(frame.fibermap[model_fibers % 500]["EBV"])
+        log.info("min max E(B-V) for std stars = {:4.3f} {:4.3f}".format(np.min(stars_ebv),np.max(stars_ebv)))
+        star_gr_reddening_relative_error = 0.2 * stars_ebv
+        log.info("Consider a g-r reddening sys. error in the range {:4.3f} {:4.3f}".format(np.min(star_gr_reddening_relative_error),np.max(star_gr_reddening_relative_error)))
+
+
+        log.info("apply cut |delta color|<{}+reddening error".format(args.delta_color_cut))
+        good = (np.abs(model_metadata["MODEL_"+color]-model_metadata["DATA_"+color])<args.delta_color_cut+star_gr_reddening_relative_error)
         bad  = ok&(~good)
         ok  &= good
         if np.any(bad) :
@@ -176,7 +183,7 @@ def main(args) :
         model_metadata=model_metadata[:][ok]
 
     stdcheck = not args.nostdcheck
-        
+
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
 
