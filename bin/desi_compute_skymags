@@ -19,6 +19,8 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desispec.io import specprod_root
 from desispec.skymag import compute_skymag
+from desispec.util import parse_int_args
+
 
 
 def parse(options=None):
@@ -33,7 +35,7 @@ def parse(options=None):
     parser.add_argument('-e','--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to process')
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
-                        help = 'Comma separated list of nights to process')
+                        help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
 
@@ -93,7 +95,7 @@ def main():
             except ValueError as e :
                 log.warning("ignore {}".format(dirname))
     else :
-        nights=[int(val) for val in args.nights.split(",")]
+        nights=parse_int_args(args.nights)
 
     log.info("nights = {}".format(nights))
     if expids is not None : log.info('expids = {}'.format(expids))

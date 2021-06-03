@@ -64,8 +64,8 @@ def compute_efftime(table,
     fiber_area_arcsec2 = np.pi*(fiber_diameter_arcsec/2)**2
 
     # flux in fiber artificially divided by fiber_area_arcsec2  because the sky flux is per arcsec2
-    fflux_bright = flux_bright_nom * fiber_fracflux_bgs / airfac / ebvfac / fiber_area_arcsec2
-    fflux_backup = flux_backup_nom * fiber_fracflux_psf / airfac / ebvfac / fiber_area_arcsec2
+    fflux_bright = flux_bright_nom * transparency * fiber_fracflux_bgs / airfac / ebvfac / fiber_area_arcsec2
+    fflux_backup = flux_backup_nom * transparency * fiber_fracflux_psf / airfac / ebvfac / fiber_area_arcsec2
 
     # AR effective sky
     effsky_dark = (sky + sky_rdn * exptime_nom / exptime) / (1.0 + sky_rdn / sky_nom)
