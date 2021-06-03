@@ -639,7 +639,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     ## Loop over columns and fill in the information. If unavailable report/flag if necessary and assign default
     for key,default in coldefault_dict.items():
         ## These are dealt with separately
-        if key in ['EFFTIME_ETC', 'CAMWORD', 'NIGHT', 'FA_SURV', 'FAPRGRM', 'GOALTIME', 'GOALTYPE',
+        if key in ['EFFTIME_ETC', 'CAMWORD', 'NIGHT', 'FA_SURV', 'FAPRGRM', 'GOALTIME', 'GOALTYPE', 'SPEED',
                    'EBVFAC', 'AIRFAC', 'LASTSTEP', 'BADCAMWORD', 'BADAMPS', 'EXPFLAG', 'HEADERERR', 'COMMENTS']:
             continue
         ## Try to find the key in the raw data header
@@ -672,9 +672,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     try:
         outdict['NIGHT'] = int(dat_header['NIGHT'])
     except (KeyError, ValueError, TypeError):
+        log.error(f"int(dat_header['NIGHT']) failed for exp={exp}")
         if 'metadata_missing' not in outdict['EXPFLAG']:
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'metadata_missing')
-        outdict['NIGHT'] = header2night(dat_header)
+        try:
+            outdict['NIGHT'] = header2night(dat_header)
+        except (KeyError, ValueError, TypeError):
+            log.error(f"Even header2night failed for exp={exp}")
+            outdict['NIGHT'] = night
         try:
             orig = str(dat_header['NIGHT'])
         except (KeyError, ValueError, TypeError):

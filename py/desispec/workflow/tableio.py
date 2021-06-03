@@ -409,7 +409,7 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
         default = guess_default_by_dtype(typ)
 
     if mask is not None and np.sum(np.bitwise_not(mask)) == 0:
-        return [default ] *len(data), typ
+        return [default]*len(data), typ
 
     if mask is None:
         mask = np.zeros(len(data)).astype(bool)
