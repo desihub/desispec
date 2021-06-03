@@ -440,13 +440,13 @@ def healpix_degrade_fixed(nside, pixel):
     return (subnside, subpixel)
 
 
-def parse_fibers(fiber_string) :
+def parse_int_args(arg_string) :
     """
-    Short func that parses a string containing a comma separated list of 
+    Short func that parses a string containing a comma separated list of
     integers, which can include ":" or ".." or "-" labeled ranges
 
     Args:
-        fiber_string (str) : list of integers or integer ranges
+        arg_string (str) : list of integers or integer ranges
 
     Returns (array 1-D):
         1D numpy array listing all of the integers given in the list,
@@ -454,18 +454,18 @@ def parse_fibers(fiber_string) :
 
     Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
     """
-    if fiber_string is None :
+    if arg_string is None :
         return np.array([])
     else:
-        fiber_string = str(fiber_string)
+        arg_string = str(arg_string)
 
-    if len(fiber_string.strip(' \t'))==0:
+    if len(arg_string.strip(' \t'))==0:
         return np.array([])
 
     fibers=[]
 
     log = get_logger()
-    for sub in fiber_string.split(',') :
+    for sub in arg_string.split(',') :
         sub = sub.replace(' ','')
         if sub.isdigit() :
             fibers.append(int(sub))
@@ -485,3 +485,19 @@ def parse_fibers(fiber_string) :
             sys.exit(1)
 
     return np.array(fibers)
+
+def parse_fibers(fiber_string) :
+    """
+    Short func that parses a string containing a comma separated list of
+    integers, which can include ":" or ".." or "-" labeled ranges
+
+    Args:
+        fiber_string (str) : list of integers or integer ranges
+
+    Returns (array 1-D):
+        1D numpy array listing all of the integers given in the list,
+        including enumerations of ranges given.
+
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    """
+    return parse_int_args(fiber_string)

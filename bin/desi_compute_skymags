@@ -19,7 +19,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desispec.io import specprod_root
 from desispec.skymag import compute_skymag
-from desispec.util import parse_fibers
+from desispec.util import parse_int_args
 
 
 
@@ -95,7 +95,7 @@ def main():
             except ValueError as e :
                 log.warning("ignore {}".format(dirname))
     else :
-        nights=parse_fibers(args.nights)
+        nights=parse_int_args(args.nights)
 
     log.info("nights = {}".format(nights))
     if expids is not None : log.info('expids = {}'.format(expids))
