@@ -67,7 +67,9 @@ def parse(options=None):
     parser.add_argument("--barycentric-correction", action="store_true", help="apply barycentric correction to wavelength")
     parser.add_argument("--gpu-specter", action="store_true", help="use gpu_specter instead of specter")
     parser.add_argument("--gpu", action="store_true", help="use gpu device for extraction when using gpu_specter")
-    
+    parser.add_argument("--pixpad-frac", type=float, default=0.8, help="fraction of a PSF spotsize to pad in pixels when extracting")
+    parser.add_argument("--wavepad-frac", type=float, default=0.2, help="fraction of a PSF spotsize to pad in wavelengths when extracting")
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -292,8 +294,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         corrected_dw = dw/barycentric_correction_factor
 
         #- Reconstruct wavelength string using corrected values
-        #- TODO: update gpu_specter to accept a tuple or str
-        corrected_wavelength = ','.join(map(str, (corrected_wmin, corrected_wmax, corrected_dw)))
+        corrected_wavelength = (corrected_wmin, corrected_wmax, corrected_dw)
 
         log.info('Applying barycentric_correction_factor: {}'.format(barycentric_correction_factor))
 
@@ -362,6 +363,8 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
             args.gpu,                          # gpu parameters
             loglevel=None,
             timing=core_timing,
+            wavepad_frac=args.wavepad_frac,
+            pixpad_frac=args.pixpad_frac,
         )
 
         #- Pass additional info from inputs through result
@@ -741,7 +744,8 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin,
                    bnspec, wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                    bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                   full_output=True, nsubbundles=args.nsubbundles)
+                   full_output=True, nsubbundles=args.nsubbundles,
+                   wavepad_frac=args.wavepad_frac, pixpad_frac=args.pixpad_frac)
 
     flux = results['flux']
     ivar = results['ivar']
