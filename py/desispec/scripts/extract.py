@@ -315,7 +315,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         img.meta['WAVEMIN'] = (wmin, 'First wavelength [Angstroms]')
         img.meta['WAVEMAX'] = (wmax, 'Last wavelength [Angstroms]')
         img.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
-        img.meta['SPECTER'] = ('dev', 'https://github.com/sbailey/gpu_specter')
+        img.meta['SPECTER'] = ('dev', 'https://github.com/desihub/gpu_specter')
         img.meta['IN_PSF']  = (_trim(args.psf), 'Input spectral PSF')
         img.meta['IN_IMG']  = (_trim(args.input), 'Input image')
         depend.add_dependencies(img.meta)
