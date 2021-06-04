@@ -536,10 +536,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         x_of_y     = np.interp(y,ty,tx)
 
         swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix,ivar,x_of_y,wave_of_y,hw=hw)
-        jj      = np.where(sw>0)[0]
 
         # rebin
-        tn0   = jj.size
+        tn0   = sw.size
         rebin = 100//image_rebin
         sw  = sw[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swdx = swdx[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
@@ -548,8 +547,6 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         swy = swy[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swl = swl[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
 
-
-
         snr = sw/np.sqrt(svar+(svar==0)) # signal to noise in bin
         ok             = (snr>3) # keep only high snr pixels
         fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
@@ -557,11 +554,6 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fx             = (swx/(sw+(sw==0)))[ok]
         fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
         fl             = (swl/(sw+(sw==0)))[ok]
-
-        """
-        import matplotlib.pyplot as plt
-        plt.errorbar(fy,fdx,fex,fmt="o")
-        """
 
         good_fiber=True
         for loop in range(10) :
