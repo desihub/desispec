@@ -21,6 +21,8 @@ def parse(options=None):
     p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
     p.add_argument("-g", "--group", type=str, required=True,
                    help="cumulative, pernight, perexp, or a custom name")
+    p.add_argument("--run_zqso", action="store_true",
+                   help="also run make_zqso_files")
     p.add_argument("--explist", type=str,
                    help="file with columns TILE NIGHT EXPID to use")
     p.add_argument("--nosubmit", action="store_true",
@@ -127,8 +129,8 @@ def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
     return suffix
 
 def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
-                         submit=False, queue='realtime', reservation=None, dependency=None,
-                         system_name=None):
+                         submit=False, queue='realtime', reservation=None,
+                         dependency=None, system_name=None, run_zqso=False):
     """
     Generate batch script for spectra+coadd+redshifts for a tile
 
@@ -145,6 +147,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         reservation (str): batch reservation name
         dependency (str): passed to sbatch --dependency upon submit
         system_name (str): batch system name, e.g. cori-haswell, perlmutter-gpu
+        run_zqso (bool): if True, also run make_zqso_files
 
     Returns tuple (scriptpath, error):
         scriptpath (str): full path to generated script
@@ -306,8 +309,33 @@ for SPECTRO in {spectro_string}; do
 done
 echo Waiting for redrock to finish at $(date)
 wait
-echo Done at $(date)
 """)
+        if run_zqso:
+            fx.write(f"""
+# These run fast; use a single node for all 10 petals without srun overhead
+echo Running make_zqso_files at $(date)
+for SPECTRO in {spectro_string}; do
+    coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
+    zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
+    zqso={outdir}/zqso-$SPECTRO-{suffix}.fits
+    zqsolog={outdir}/zqso-$SPECTRO-{suffix}.log
+
+    if [ -f $zqso ]; then
+        echo $(basename $zqso) already exists, skipping make_zqso_files
+    elif [[ -f $coadd && -f $zbest ]]; then
+        echo Running make_zqso_files on $(basename $zbest), see $zqsolog
+        cmd="make_zqso_files -in $zbest -out $zqso"
+        echo RUNNING $cmd &> $zqsolog
+        $cmd &>> $zqsolog &
+    else
+        echo ERROR: missing $(basename $zbest) or $(basename $coadd), skipping zqso
+    fi
+done
+echo Waiting for zqso to finish at $(date)
+wait
+""")
+
+        fx.write('echo Done at $(date)\n')
 
     log.info(f'Wrote {batchscript}')
 
@@ -376,6 +404,7 @@ def _read_minimal_exptables(nights=None):
 
 
 def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, explist=None,
+                                   run_zqso=False,
                                    batch_queue='realtime', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
     """
@@ -383,16 +412,17 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
     is True, the script is created but not submitted to Slurm.
 
     Args:
+        group (str): Type of coadd redshifts to run. Options are cumulative, pernight, perexp, or a custom name.
         night (int, or list or np.array of int's): YEARMMDD nights.
         tileid (int): Tile ID.
         expid (int, or list or np.array of int's): Exposure IDs.
-        group (str): Type of coadd redshifts to run. Options are cumulative, pernight, perexp, or a custom name.
         explist (str): File with columns TILE NIGHT EXPID to use
-        nosubmit (bool): Generate scripts but don't submit batch jobs. Default is False.
+        run_zqso (bool): Also run make_zqso_files
         batch_queue (str): Batch queue name. Default is 'realtime'.
         batch_reservation (str): Batch reservation name.
         batch_dependency (str): Job dependencies passed to sbatch --dependency .
         system_name (str): Batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu.
+        nosubmit (bool): Generate scripts but don't submit batch jobs. Default is False.
 
     Returns:
         batch_scripts (list of str): The path names of the scripts created during the function call
@@ -495,6 +525,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
             for i in range(len(exptable[tilerows])):
                 batchscript, batcherr = batch_tile_redshifts(
                     tileid, exptable[tilerows][i:i + 1], group, submit=submit,
+                    run_zqso=run_zqso,
                     queue=batch_queue, reservation=batch_reservation,
                     dependency=batch_dependency, system_name=system_name
                 )
@@ -503,12 +534,14 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
                 thisnight = exptable['NIGHT'] == night
                 batchscript, batcherr = batch_tile_redshifts(
                     tileid, exptable[tilerows & thisnight], group, submit=submit,
+                    run_zqso=run_zqso,
                     queue=batch_queue, reservation=batch_reservation,
                     dependency=batch_dependency, system_name=system_name
                 )
         else:
             batchscript, batcherr = batch_tile_redshifts(
                 tileid, exptable[tilerows], group, submit=submit,
+                run_zqso=run_zqso,
                 queue=batch_queue, reservation=batch_reservation,
                 dependency=batch_dependency, system_name=system_name
             )
