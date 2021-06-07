@@ -78,7 +78,7 @@ def parse(options=None):
                         help = 'recompute sky mags')
     parser.add_argument('--multinode', action='store_true',
                         help = 'Paralleize TSNR recomputation across multiple nodes using mpi4py. Requires args.update to be False.')
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -207,6 +207,10 @@ def update_table(table1,table2,keys) :
     log.info("keep {} entries, replace {}, add {}".format(np.sum(keep),np.sum(replace),len(table2)-np.sum(replace)))
 
     if np.sum(keep)>0 :
+        for k in table2.dtype.names :
+            if k not in table1.dtype.names :
+                log.info("add new column {}".format(k))
+                table1[k]=np.zeros(len(table1),dtype=table2[k].dtype)
         return vstack([table1[keep],table2])
     else :
         return table2
@@ -348,7 +352,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     log.info("Add effective times from TSNR2 values")
 
-    exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG")    
+    exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG")
     exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS")
 
     if 'TSNR2_GPBDARK' in exp_summary.colnames :
@@ -362,14 +366,14 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG.
     exp_summary['EFFTIME_SPEC'] = exp_summary['ELG_EFFTIME_DARK']
 
-    # EFFTIME SPEC FOR GOALTYPE bright determined by TSNR2_BGS.  
+    # EFFTIME SPEC FOR GOALTYPE bright determined by TSNR2_BGS.
     ii = (exp_summary['GOALTYPE']=='bright')
     exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
-    # EFFTIME SPEC FOR GOALTYPE backup determined by TSNR2_GPBBACKUP.  
+    # EFFTIME SPEC FOR GOALTYPE backup determined by TSNR2_GPBBACKUP.
     ii = (exp_summary['GOALTYPE']=='backup')
     exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
-    
+
     # sort table rows
     ii = np.argsort(exp_summary['EXPID'])
     exp_summary = exp_summary[ii]
@@ -534,7 +538,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         entry['SEEING_ETC'] = np.float32(hdr['ACQFWHM'])
 
         log.debug('Retrieved ACQFWHM from frame hdr.')
-        
+
     elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):
         with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file:
             etcdata = json.load(etc_file)
@@ -548,13 +552,13 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         entry['SEEING_ETC'] = 0.
 
         log.debug('Failed to retrieved ACQFWHM from frame hdr.')
-        
+
     ##  https://github.com/desihub/desietc/blob/main/header.md
     if "ETCTEFF" in hdr :
         entry['EFFTIME_ETC'] = np.float32(hdr['ETCTEFF'])
 
         log.debug('Retrieved ETCTEFF from frame hdr.')
-        
+
     elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):
         with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file:
             etcdata = json.load(etc_file)
@@ -565,7 +569,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
             entry['EFFTIME_ETC'] = np.float32(0.)
 
         log.debug('Retrieved ETCTEFF from etc json.')
-        
+
     else:
         entry['EFFTIME_ETC'] = np.float32(0.)
 
@@ -688,7 +692,7 @@ def main():
     if args.details_dir is not None : log.info('details-dir = {}'.format(args.details_dir))
 
     log.info('prod = {}'.format(args.prod))
-        
+
     if args.multinode & use_mpi():
         from mpi4py import  MPI
         from desispec.parallel import default_nproc
@@ -700,27 +704,27 @@ def main():
         args.nproc = default_nproc
 
         multinode = True
-        
+
         if args.update:
             log.critical('--update is not supported for the --multinode option.  Remove --update.')
             raise RuntimeError()
-            
+
         if not args.recompute:
             log.critical('--recompute for the --multinode option.  Add --recompute.')
             raise RuntimeError()
-            
+
         if (args.tile_completeness is not None):
             if os.path.isfile(args.tile_completeness):
-                log.critical('Tile file exists.  Provide a new tile file path..')            
+                log.critical('Tile file exists.  Provide a new tile file path..')
                 raise RuntimeError()
-            
+
     else:
         comm  = None
         rank  = 0
         size  = 1
 
         multinode = False
-        
+
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
         cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
