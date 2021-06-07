@@ -317,10 +317,10 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
             for nam, typ, default in zip(colnames, coltypes, coldefaults):
                 if nam not in table.colnames:
                     if first_err:
-                        log.error(f"{nam} not in column names of loaded table: {table.colnames}")
+                        log.warning(f"{nam} not in column names of loaded table: {table.colnames}")
                         first_err = False
                     else:
-                        log.error(f"{nam} not in column names of loaded table")
+                        log.warning(f"{nam} not in column names of loaded table")
                     continue
                 elif type(table[nam]) is Table.MaskedColumn:
                     data, mask = table[nam].data, table[nam].mask

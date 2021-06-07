@@ -790,6 +790,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                                 "of {outdict[name]}")
 
         ## Flag the exposure based on PROGRAM information
+        ## Define thresholds
+        threshold_exptime = 60.
         if 'system test' in outdict['PROGRAM'].lower():
             outdict['LASTSTEP'] = 'ignore'
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
@@ -811,7 +813,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as dither. Processing " +
                         "through sky subtraction.")
         ## Otherwise check that the data meets quality standards
-        else:
+        ## Cut on signal:
+        elif float(outdict['EXPTIME']) < threshold_exptime:
+            outdict['LASTSTEP'] = 'skysub'
+            outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
+            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'EXPTIME={outdict["EXPTIME"]:.1f}s lt {threshold_exptime:.1f}')
+            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
+                        f" than {threshold_exptime}s. Processing through sky subtraction.")
+        elif outdict['FA_SURV'].lower() == 'main':
             ## If defined, use GOALTIME. Otherwise set to 0 so that we always pass the relevant cuts
             if outdict['GOALTIME'] > 0.:
                 goaltime = outdict['GOALTIME']
@@ -831,7 +840,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             outdict['SPEED'] = speed
 
             ## Define thresholds
-            threshold_exptime = 60.
             threshold_percent_goal = 0.05
             threshold_speed_dark = 1/5.  # = 0.5*(1/2.5) = half the survey threshold
             threshold_speed_bright = 1/12.  # = 0.5*(1/6) = half the survey threshold
@@ -849,15 +857,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                     log.warning(f"Couldn't understand GOALTYPE={outdict['GOALTYPE']}")
 
             ## Perform the data quality cuts
-            ## Cut on signal:
-            if float(outdict['EXPTIME']) < threshold_exptime:
-                outdict['LASTSTEP'] = 'skysub'
-                outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
-                outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'EXPTIME={outdict["EXPTIME"]:.1f}s lt {threshold_exptime:.1f}')
-                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
-                            f" than {threshold_exptime}s. Processing through sky subtraction.")
             ## Cut on S/N:
-            elif efftime < threshold_efftime:
+            if efftime < threshold_efftime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
                 outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'efftime={outdict["EFFTIME_ETC"]:.1f}s lt {threshold_efftime:.1f}')
