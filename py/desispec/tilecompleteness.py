@@ -170,7 +170,8 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         log.info(f"checking redshifts for tile {tileid} on night {night}")
         nok = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir)
         if nok >= min_number_of_petals :
-            res["ZDONE"][i]="true"
+            log.info("Tile {} is done but need final vetting.".format(tileid))
+            #res["ZDONE"][i]="true"
         elif nok > 0 :
             log.warning("keep ZDONE=false for tile {} because only {} good petals (requirement is >={})".format(tileid,nok,min_number_of_petals))
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
