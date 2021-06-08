@@ -1,0 +1,25 @@
+# QA parameters read by exposure_qa.py
+exposure_qa:
+
+ # cutoff fiber positioning offset in mm
+ max_fiber_offset_mm : 0.03
+
+ # maximum read noise rms per CCD pixel in electrons
+ max_readnoise : 10
+
+ # maximum fraction of fibers with bad positioning
+ # per petal
+ max_frac_of_bad_positions_per_petal : 0.5
+
+ # minimum number of valid standard stars per petal
+ min_number_of_good_stdstars_per_petal : 3
+
+ # maximum rms of calibration error per star
+ # (ratio of calibrated flux to model in rband)
+ max_rms_of_rflux_ratio_of_stdstars : 0.2
+
+ # tsnr parameters
+ tsnr2_band : r
+ tsnr2_key : TSNR2_LRG_R
+ tsnr2_petal_minfrac : 0.7
+ tsnr2_petal_maxfrac : 1.3
