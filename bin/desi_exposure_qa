@@ -15,6 +15,7 @@ import glob
 import numpy as np
 import multiprocessing
 from astropy.table import Table
+import fitsio
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root,findfile
@@ -48,9 +49,6 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-
-
-
 def func(night,expid,specprod_dir,outfile=None) :
     """
     Wrapper function to compute_skymag for multiprocessing
@@ -62,7 +60,7 @@ def func(night,expid,specprod_dir,outfile=None) :
         if not os.path.isdir(outdir) :
             os.makedirs(outdir)
         table.write(outfile,overwrite=True)
-    return(table)
+    return(table.meta)
 
 def _func(arg) :
     """
@@ -106,7 +104,7 @@ def main():
     log.info("nights = {}".format(nights))
     if expids is not None : log.info('expids = {}'.format(expids))
 
-    #summary_rows  = list()
+    summary_rows  = list()
     for count,night in enumerate(nights) :
 
         dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
@@ -129,23 +127,41 @@ def main():
             if not args.recompute :
                 if os.path.isfile(filename) :
                     log.info("skip existing {}".format(filename))
+                    head = fitsio.read_header(filename,1)
+                    entry=dict()
+                    for r in head.records() :
+                        k=r['name']
+                        if k in ['SIMPLE','XTENSION','BITPIX','NAXIS','NAXIS1','NAXIS2','EXTEND','PCOUNT','GCOUNT','TFIELDS'] : continue
+                        if k.find('TTYPE')>=0 or k.find('TFORM')>=0 : continue
+                        entry[k]=r['value']
+                    summary_rows.append(entry)
                     continue
             func_args.append({'night':night,'expid':expid,'specprod_dir':args.prod,'outfile':filename})
 
         if args.nproc == 1 :
             for func_arg in func_args :
                 entry = func(**func_arg)
-                #if entry is not None :
-                #    summary_rows.append(entry)
+                if entry is not None :
+                    summary_rows.append(entry)
         else :
             log.info("Multiprocessing with {} procs".format(args.nproc))
             pool = multiprocessing.Pool(args.nproc)
             results  =  pool.map(_func, func_args)
-            #for entry in results :
-            #    if entry is not None :
-            #        summary_rows.append(entry)
+            for entry in results :
+                if entry is not None :
+                    summary_rows.append(entry)
             pool.close()
             pool.join()
+
+    if len(summary_rows)>0 :
+        colnames = list(summary_rows[0].keys())
+        table = Table(rows=summary_rows, names=colnames)
+        print(table)
+        if args.outfile is not None :
+            table.write(args.outfile,overwrite=True)
+            log.info("wrote {}".format(args.outfile))
+    else :
+        print("no data")
 
 if __name__ == '__main__':
     main()

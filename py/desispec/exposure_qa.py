@@ -28,7 +28,7 @@ def get_qa_params() :
             _qa_params = yaml.safe_load(f)
     return _qa_params
 
-def compute_exposure_qa(night, expid, specprod_dir=None):
+def compute_exposure_qa(night, expid, specprod_dir):
     """
     Computes the exposure_qa
     Args:
@@ -59,6 +59,11 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
               'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y'] :
         table[k]=fibermap[k]
 
+    table.meta["NIGHT"]=night
+    table.meta["EXPID"]=expid
+    #table.meta["PRODDIR"]=specprod_dir
+
+
     x_mm  = fibermap["FIBER_X"]
     y_mm  = fibermap["FIBER_Y"]
     dx_mm = fibermap["DELTA_X"]
@@ -80,6 +85,7 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
     table['FIBERSTATUS'][poorposition] |= fibermask.mask('POORPOSITION')
 
     petal_tsnr2=np.zeros(10)
+    worst_rdnoise = 0
 
     for petal in petal_locs :
         spectro=petal # same number
@@ -90,7 +96,6 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
         ####################################################################
         bad_rdnoise_mask = fibermask.mask('BADREADNOISE')
         max_rdnoise      = qa_params["max_readnoise"]
-
         for band in ["b","r","z"] :
             camera=f"{band}{spectro}"
             cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
@@ -98,8 +103,10 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
 
             readnoise_is_bad = False
             for amp in ["A","B","C","D"] :
-                if head['OBSRDN'+amp] > max_rdnoise :
-                    log.warning("readnoise is bad in camera {} amplifier {} : {}".format(camera,amp,head['OBSRDN'+amp]))
+                rdnoise=head['OBSRDN'+amp]
+                worst_rdnoise = max(worst_rdnoise,rdnoise)
+                if rdnoise > max_rdnoise :
+                    log.warning("readnoise is bad in camera {} amplifier {} : {}".format(camera,amp,rdnoise))
                     readnoise_is_bad = True
 
 
@@ -209,4 +216,15 @@ def compute_exposure_qa(night, expid, specprod_dir=None):
             entries=(table['PETAL_LOC'] == petal)
             table['FIBERSTATUS'][entries] |= fibermask.mask("BADPETALSNR")
             log.warning("petal #{} TSNR2 frac = {:3.2f}".format(petal,petal_tsnr2_frac[petal]))
+
+    bad_fibers_mask=bad_positions
+    good_fibers = np.where((table['FIBERSTATUS']&bad_fibers_mask)==0)[0]
+    good_petals = np.unique(table['PETAL_LOC'][good_fibers])
+    table.meta["NGOODFIBERS"]=good_fibers.size
+    table.meta["NGOODPETALS"]=good_petals.size
+    table.meta["WORSTREADNOISE"]=worst_rdnoise
+    table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
+    table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
+    table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
+
     return table
