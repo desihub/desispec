@@ -183,7 +183,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                                      queue=queue, reservation=reservation, strictly_successful=False,
                                                                      check_for_outputs=check_for_outputs,
                                                                      resubmit_partial_complete=resubmit_partial_complete,
-                                                                     z_submit_types=z_submit_types)
+                                                                     z_submit_types=z_submit_types, system_name=system_name)
 
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
@@ -230,7 +230,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                               queue=queue, reservation=reservation, strictly_successful=False,
                                                               check_for_outputs=check_for_outputs,
                                                               resubmit_partial_complete=resubmit_partial_complete,
-                                                              z_submit_types=z_submit_types)
+                                                              z_submit_types=z_submit_types, system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
         write_table(ptable, tablename=proc_table_pathname)
