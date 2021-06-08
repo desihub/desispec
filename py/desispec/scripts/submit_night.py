@@ -180,7 +180,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             ptable, arcjob, flatjob, \
             sciences, internal_id    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                                      lasttype, internal_id, dry_run=dry_run_level,
-                                                                     queue=queue, strictly_successful=False,
+                                                                     queue=queue, reservation=reservation, strictly_successful=False,
                                                                      check_for_outputs=check_for_outputs,
                                                                      resubmit_partial_complete=resubmit_partial_complete,
                                                                      z_submit_types=z_submit_types)
@@ -227,7 +227,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         ptable, arcjob, flatjob, \
         sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                               lasttype, internal_id, dry_run=dry_run_level,
-                                                              queue=queue, strictly_successful=False,
+                                                              queue=queue, reservation=reservation, strictly_successful=False,
                                                               check_for_outputs=check_for_outputs,
                                                               resubmit_partial_complete=resubmit_partial_complete,
                                                               z_submit_types=z_submit_types)
