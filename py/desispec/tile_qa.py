@@ -15,7 +15,8 @@ import glob
 
 from desiutil.log import get_logger
 
-from desispec.io import read_fibermap,findfile,read_exposure_qa
+from desispec.exposure_qa import compute_exposure_qa
+from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
 from desispec.maskbits import fibermask
 
 """
@@ -76,9 +77,17 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     for expid in expids :
         exposure_night = (fmap["NIGHT"][fmap["EXPID"]==expid][0])
         filename=findfile("exposureqa",night=exposure_night,expid=expid,specprod_dir=exposure_qa_dir)
-        if not os.path.isfile(filename) : continue
-        log.info(f"reading {filename}")
-        exposure_fiberqa_table , exposure_petalqa_table = read_exposure_qa(filename)
+        if not os.path.isfile(filename) :
+            log.info("running missing exposure qa")
+            exposure_fiberqa_table , exposure_petalqa_table = compute_exposure_qa(night, expid, specprod_dir)
+            if exposure_fiberqa_table is not None :
+                write_exposure_qa(filename, exposure_fiberqa_table , exposure_petalqa_table)
+            else :
+                log.warning("failed to compute exposure qa")
+                continue
+        else :
+            log.info(f"reading {filename}")
+            exposure_fiberqa_table , exposure_petalqa_table = read_exposure_qa(filename)
         exposure_fiberqa_tables.append(exposure_fiberqa_table)
         exposure_petalqa_tables.append(exposure_petalqa_table)
 
