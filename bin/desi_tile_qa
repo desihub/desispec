@@ -79,10 +79,11 @@ def main():
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
         args.prod = specprod_root(args.prod)
-    if args.exposure_qa_dir is None :
-        args.exposure_qa_dir = args.prod
     if args.outdir is None :
         args.outdir = args.prod
+    if args.exposure_qa_dir is None :
+        args.exposure_qa_dir = args.outdir
+
 
     log.info('prod    = {}'.format(args.prod))
     log.info('outfile = {}'.format(args.outfile))
