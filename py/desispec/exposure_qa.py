@@ -48,20 +48,22 @@ def compute_exposure_qa(night, expid, specprod_dir):
     fibermap_filename=f'{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits'
     if not os.path.isfile(fibermap_filename) :
         log.warning("no {}".format(fibermap_filename))
-        return Table()
+        return None , None
 
     fibermap = read_fibermap(fibermap_filename)
     print(fibermap.dtype.names)
     petal_locs=np.unique(fibermap["PETAL_LOC"])
 
-    table = Table()
-    for k in ['TARGETID', 'PETAL_LOC', 'DEVICE_LOC', 'LOCATION', 'FIBER', 'FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC',
+    fiberqa_table = Table()
+    for k in ['TARGETID', 'PETAL_LOC', 'DEVICE_LOC', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC',
               'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y'] :
-        table[k]=fibermap[k]
+        fiberqa_table[k]=fibermap[k]
 
-    table.meta["NIGHT"]=night
-    table.meta["EXPID"]=expid
-    #table.meta["PRODDIR"]=specprod_dir
+    fiberqa_table['QAFIBERSTATUS']=fibermap['FIBERSTATUS']  # copy because content will be different
+
+    fiberqa_table.meta["NIGHT"]=night
+    fiberqa_table.meta["EXPID"]=expid
+    #fiberqa_table.meta["PRODDIR"]=specprod_dir
 
 
     x_mm  = fibermap["FIBER_X"]
@@ -78,19 +80,23 @@ def compute_exposure_qa(night, expid, specprod_dir):
     dy_mm[nan_positions]=0.
 
     # nan = no data
-    table['FIBERSTATUS'][nan_positions] |= fibermask.mask('MISSINGPOSITION')
+    fiberqa_table['QAFIBERSTATUS'][nan_positions] |= fibermask.mask('MISSINGPOSITION')
 
     dist_mm = np.sqrt(dx_mm**2+dy_mm**2)
     poorposition=(dist_mm>qa_params["max_fiber_offset_mm"])
-    table['FIBERSTATUS'][poorposition] |= fibermask.mask('POORPOSITION')
+    fiberqa_table['QAFIBERSTATUS'][poorposition] |= fibermask.mask('POORPOSITION')
 
     petal_tsnr2=np.zeros(10)
     worst_rdnoise = 0
 
+    petalqa_table = Table()
+    petalqa_table["PETAL_LOC"]=petal_locs
+    # need to add things
+
     for petal in petal_locs :
         spectro=petal # same number
         log.info("spectro {}".format(spectro))
-        entries = np.where(table['PETAL_LOC'] == petal)[0]
+        entries = np.where(fiberqa_table['PETAL_LOC'] == petal)[0]
 
         # checking readnoise level
         ####################################################################
@@ -123,17 +129,17 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 xfiber=tset.x_vs_wave(fiber=np.arange(tset.nspec),wavelength=twave)[:,0]
                 print(xfiber.shape)
                 if rdnoise_left>max_rdnoise :
-                    table['FIBERSTATUS'][entries[xfiber<xtrans]] |= bad_rdnoise_mask
+                    fiberqa_table['QAFIBERSTATUS'][entries[xfiber<xtrans]] |= bad_rdnoise_mask
                 elif rdnoise_right>max_rdnoise :
-                    table['FIBERSTATUS'][entries[xfiber>=xtrans]] |= bad_rdnoise_mask
+                    fiberqa_table['QAFIBERSTATUS'][entries[xfiber>=xtrans]] |= bad_rdnoise_mask
 
         # checking statistics of positioning
         ####################################################################
         bad_positions = fibermask.mask("STUCKPOSITIONER|BROKENFIBER|RESTRICTED|MISSINGPOSITION|BADPOSITION|POORPOSITION")
-        n_bad_positions = np.sum((table['FIBERSTATUS'][entries]&bad_positions)>0)
+        n_bad_positions = np.sum((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)>0)
         if n_bad_positions > qa_params["max_frac_of_bad_positions_per_petal"]*entries.size :
             log.warning("petal #{} has {} fibers with bad positions".format(petal,n_bad_positions))
-            table['FIBERSTATUS'][entries] |= fibermask.mask("BADPETALPOS")
+            fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALPOS")
 
         # checking standard stars
         ####################################################################
@@ -148,7 +154,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
             ngood=np.sum(good)
             if ngood < qa_params["min_number_of_good_stdstars_per_petal"] :
                 log.warning("petal #{} has only {} good std stars for calibration".format(petal,ngood))
-                table['FIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
+                fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
             else :
                 log.info("petal #{} has {} good std stars for calibration".format(petal,ngood))
 
@@ -179,7 +185,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 calib_rms=np.sqrt(np.mean((scale-1)**2))
                 if calib_rms>qa_params["max_rms_of_rflux_ratio_of_stdstars"] :
                     log.warning("petal #{} has std stars calib rms={:3.2f}>{:3.2f}".format(petal,calib_rms,qa_params["max_rms_of_rflux_ratio_of_stdstars"]))
-                    table['FIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
+                    fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
                 else :
                     log.info("petal #{} has std stars calib rms={:3.2f}".format(petal,calib_rms))
 
@@ -189,7 +195,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
 
         else :
             log.warning("petal #{} does not have a standard star file. expected path='{}'".format(petal,stdstars_filename))
-            table['FIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
+            fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
 
         # checking fluxcalibration vs GFA?
         ####################################################################
@@ -201,30 +207,30 @@ def compute_exposure_qa(night, expid, specprod_dir):
         scores = fitsio.read(cframe_filename,"SCORES")
         tsnr2_key  = qa_params["tsnr2_key"]
         tsnr2_vals = scores[tsnr2_key]
-        good = ((table['FIBERSTATUS'][entries]&bad_positions)==0)
+        good = ((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)==0)
         petal_tsnr2[petal] = np.median(tsnr2_vals[good])
         log.info("petal #{} median {} = {}".format(petal,tsnr2_key,petal_tsnr2[petal]))
 
     if np.all(petal_tsnr2==0) :
-         table['FIBERSTATUS'] |= fibermask.mask("BADPETALTSNR")
+         fiberqa_table['QAFIBERSTATUS'] |= fibermask.mask("BADPETALTSNR")
          log.error("all petals have TSNR2=0")
     else :
         mean_tsnr2 = np.mean(petal_tsnr2[petal_tsnr2!=0])
         petal_tsnr2_frac = petal_tsnr2/mean_tsnr2
         badpetals=(petal_tsnr2_frac<qa_params["tsnr2_petal_minfrac"])|(petal_tsnr2_frac>qa_params["tsnr2_petal_maxfrac"])
         for petal in np.where(badpetals)[0] :
-            entries=(table['PETAL_LOC'] == petal)
-            table['FIBERSTATUS'][entries] |= fibermask.mask("BADPETALSNR")
+            entries=(fiberqa_table['PETAL_LOC'] == petal)
+            fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSNR")
             log.warning("petal #{} TSNR2 frac = {:3.2f}".format(petal,petal_tsnr2_frac[petal]))
 
     bad_fibers_mask=bad_positions
-    good_fibers = np.where((table['FIBERSTATUS']&bad_fibers_mask)==0)[0]
-    good_petals = np.unique(table['PETAL_LOC'][good_fibers])
-    table.meta["NGOODFIBERS"]=good_fibers.size
-    table.meta["NGOODPETALS"]=good_petals.size
-    table.meta["WORSTREADNOISE"]=worst_rdnoise
-    table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
-    table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
-    table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
+    good_fibers = np.where((fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
+    good_petals = np.unique(fiberqa_table['PETAL_LOC'][good_fibers])
+    fiberqa_table.meta["NGOODFIBERS"]=good_fibers.size
+    fiberqa_table.meta["NGOODPETALS"]=good_petals.size
+    fiberqa_table.meta["WORSTREADNOISE"]=worst_rdnoise
+    fiberqa_table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
+    fiberqa_table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
+    fiberqa_table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
 
-    return table
+    return fiberqa_table , petalqa_table

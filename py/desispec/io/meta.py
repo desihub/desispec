@@ -81,8 +81,10 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
-        # exposure qa
-        exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.fits',
+        #  qa
+        exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
+        tileqa     = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-{night}.fits',
+        tileqapng  = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-{night}.png',
         #
         # calibnight/
         #
