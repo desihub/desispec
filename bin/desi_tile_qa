@@ -59,6 +59,7 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
     fiberqa_table , petalqa_table = compute_tile_qa(night,tileid,specprod_dir,exposure_qa_dir)
     if fiberqa_table is None : return None
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
+    log.info("wrote {}".format(outfile))
     if "EXTNAME" in fiberqa_table.meta : fiberqa_table.meta.pop("EXTNAME")
     return(fiberqa_table.meta)
 
@@ -171,7 +172,11 @@ def main():
             else :
                 print("empty row",i)
         table = Table(rows=good_rows, names=colnames)
+
+        print()
         print(table)
+        print()
+
         if args.outfile is not None :
             table.write(args.outfile,overwrite=True)
             log.info("wrote {}".format(args.outfile))

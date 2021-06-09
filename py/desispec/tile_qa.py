@@ -31,14 +31,25 @@ def get_qa_params() :
     return _qa_params
 """
 def mystack(tables) :
-   if len(tables)==1 : return tables[0]
-   stack=Table()
-   for key in tables[0].dtype.names :
-       vals=[]
-       for table in tables :
-           vals.append(table[key])
-       stack[key]=np.hstack(vals)
-   return stack
+
+    if len(tables)==1 :
+        return tables[0]
+
+    log = get_logger()
+    stack=Table()
+    length=None
+    for key in tables[0].dtype.names :
+        vals=[]
+        for table in tables :
+            vals.append(table[key])
+        vals=np.hstack(vals)
+        if length is not None :
+            if vals.size != length :
+                log.warning("skip column {}".format(key))
+                continue
+        stack[key]=vals
+        length=vals.size
+    return stack
 
 def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     """
@@ -105,20 +116,52 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
 
     # collect fibermaps and scores of all coadds
     coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-thru{night}.fits"))
+    zbest_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-thru{night}.fits"))
     fibermaps=[]
     scores=[]
+    zbests=[]
     for coadd_file in coadd_files :
+        log.info("reading {}".format(coadd_file))
         fibermaps.append(Table.read(coadd_file,"FIBERMAP"))
         scores.append(Table.read(coadd_file,"SCORES"))
+        zbest_file = coadd_file.replace("coadd","zbest")
+        log.info("reading {}".format(zbest_file))
+        zbests.append(Table.read(zbest_file,"ZBEST"))
+    log.info("stacking")
     fibermap=mystack(fibermaps)
     scores=mystack(scores)
+    zbests=mystack(zbests)
+    targetids=fibermap["TARGETID"]
 
     tile_fiberqa_table = Table()
-    for k in ['TARGETID','PETAL_LOC','DEVICE_LOC', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC', 'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y'] :
+    for k in ['TARGETID','PETAL_LOC','DEVICE_LOC', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC', 'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y','DESI_TARGET', 'BGS_TARGET'] :
         if k in fibermap.dtype.names :
             tile_fiberqa_table[k]=fibermap[k]
 
-    targetids=tile_fiberqa_table["TARGETID"]
+    # add TSNR info
+    scores_tid_to_index = {tid:index for index,tid in enumerate(scores["TARGETID"])}
+    tsnr2_key="TSNR2_LRG"
+    if tsnr2_key in scores.dtype.names :
+        tile_fiberqa_table[tsnr2_key] = np.zeros(targetids.size)
+        for i,tid in enumerate(targetids) :
+            if tid in scores_tid_to_index :
+                tile_fiberqa_table[tsnr2_key][i] = scores[tsnr2_key][scores_tid_to_index[tid]]
+
+    # add ZBEST info
+    zbest_tid_to_index = {tid:index for index,tid in enumerate(zbests["TARGETID"])}
+    keys=["Z","SPECTYPE","DELTACHI2"]
+    for k in keys :
+        tile_fiberqa_table[k] = np.zeros(targetids.size,dtype=zbests[k].dtype)
+    zbest_ii=[]
+    fiberqa_ii=[]
+    for i,tid in enumerate(targetids) :
+        if tid in zbest_tid_to_index :
+            zbest_ii.append(zbest_tid_to_index[tid])
+            fiberqa_ii.append(i)
+    for k in keys :
+        tile_fiberqa_table[k][fiberqa_ii] = zbests[k][zbest_ii]
+
+
 
     # QAFIBERSTATUS is OR of input exposures
     tile_fiberqa_table["QAFIBERSTATUS"]=np.zeros(targetids.size,dtype=exposure_fiberqa_tables["QAFIBERSTATUS"].dtype)

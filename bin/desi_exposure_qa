@@ -58,6 +58,7 @@ def func(night,expid,specprod_dir,outfile=None) :
     fiberqa_table , petalqa_table = compute_exposure_qa(night,expid,specprod_dir)
     if fiberqa_table is None : return None
     write_exposure_qa(outfile,fiberqa_table,petalqa_table)
+    log.info("wrote {}".format(outfile))
     if "EXTNAME" in fiberqa_table.meta : fiberqa_table.meta.pop("EXTNAME")
     return(fiberqa_table.meta)
 
