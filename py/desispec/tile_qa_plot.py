@@ -531,7 +531,10 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, program, org=120):
             rasterized=True,
         )
         # AR our tileid
-        if tilera > org:
+        tmpra = np.remainder(tilera + 360 - org, 360)
+        if tmpra > 180:
+            tmpra -= 360
+        if tmpra > 0:
             dra = -40
         else:
             dra = 40
