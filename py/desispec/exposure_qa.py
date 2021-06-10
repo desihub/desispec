@@ -19,9 +19,11 @@ from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
 
-# only read it once per process
 _qa_params = None
-def get_qa_params() :
+def _get_qa_params() :
+    """
+    Returns a dictionnary with the content of data/qa/qa-params.yaml
+    """
     global _qa_params
     if _qa_params is None :
         param_filename =resource_filename('desispec', 'data/qa/qa-params.yaml')
@@ -37,13 +39,14 @@ def compute_exposure_qa(night, expid, specprod_dir):
        expid: int, exposure id
        specprod_dir: str, optional, specify the production directory.
                      default is $DESI_SPECTRO_REDUX/$SPECPROD
-    returns an astropy.table.Table with one row per target and at least a TARGETID column
+    returns two tables (astropy.table.Table), fiberqa (with one row per target and at least a TARGETID column)
+            and petalqa (with one row per petal and at least a PETAL_LOC column)
     """
 
     log=get_logger()
 
     ##################################################################
-    qa_params=get_qa_params()["exposure_qa"]
+    qa_params=_get_qa_params()["exposure_qa"]
     ##################################################################
 
     fibermap_filename=f'{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits'

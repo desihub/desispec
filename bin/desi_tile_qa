@@ -54,7 +54,7 @@ def parse(options=None):
 
 def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
     """
-    Wrapper function to compute_skymag for multiprocessing
+    Wrapper function to compute_tile_qa for multiprocessing
     """
     log = get_logger()
     fiberqa_table , petalqa_table = compute_tile_qa(night,tileid,specprod_dir,exposure_qa_dir)
@@ -68,7 +68,7 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
 
 def _func(arg) :
     """
-    Wrapper function to compute_skymag for multiprocessing
+    Wrapper function to compute_tile_qa for multiprocessing
     """
     return func(**arg)
 

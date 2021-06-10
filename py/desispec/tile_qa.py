@@ -19,17 +19,7 @@ from desispec.exposure_qa import compute_exposure_qa
 from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
 from desispec.maskbits import fibermask
 
-"""
-# only read it once per process
-_qa_params = None
-def get_qa_params() :
-    global _qa_params
-    if _qa_params is None :
-        param_filename =resource_filename('desispec', 'data/qa/qa-params.yaml')
-        with open(param_filename) as f:
-            _qa_params = yaml.safe_load(f)
-    return _qa_params
-"""
+
 def mystack(tables) :
 
     if len(tables)==1 :
@@ -60,13 +50,11 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
        specprod_dir: str, specify the production directory.
                      default is $DESI_SPECTRO_REDUX/$SPECPROD
        exposure_qa_dir: str, optional, directory where the exposure qa are saved
-    returns an astropy.table.Table with one row per target and at least a TARGETID column
+    returns two tables (astropy.table.Table), fiberqa (with one row per target and at least a TARGETID column)
+            and petalqa (with one row per petal and at least a PETAL_LOC column)
     """
 
     log=get_logger()
-
-
-    #qa_params=get_qa_params()["tile_qa"]
 
     # get list of exposures used for the tile
     tiledir=f"{specprod_dir}/tiles/cumulative/{tileid:d}/{night}"

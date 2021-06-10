@@ -10,6 +10,13 @@ import astropy.io.fits as pyfits
 from astropy.table import Table
 
 def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
+    """Writes an exposure-qa fits file.
+
+    Args:
+        filename: full path to file
+        fiber_qa_table: astropy.table.Table object with one row per target
+        petal_qa_table: astropy.table.Table object with one row per petal
+    """
     hdus=pyfits.HDUList()
     fiber_qa_table.meta['EXTNAME']='FIBERQA'
     hdus.append(pyfits.convenience.table_to_hdu(fiber_qa_table) )
@@ -22,6 +29,14 @@ def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     hdus.writeto(filename, overwrite=True, checksum=True)
 
 def read_exposure_qa(filename) :
+    """Reads an exposure-qa fits file.
+
+    Args:
+        filename: full path to file
+    Returns : fiber_qa_table, petal_qa_table
+        two astropy.table.Table objects
+    """
+
     hdus=pyfits.open(filename)
     fiber_qa_table = Table.read(filename,'FIBERQA')
     if 'PETALQA' in hdus :
@@ -33,6 +48,13 @@ def read_exposure_qa(filename) :
 
 
 def write_tile_qa(filename,fiber_qa_table,petal_qa_table=None) :
+    """Writes an tile-qa fits file.
+
+    Args:
+        filename: full path to file
+        fiber_qa_table: astropy.table.Table object with one row per target
+        petal_qa_table: astropy.table.Table object with one row per petal
+    """
     hdus=pyfits.HDUList()
     fiber_qa_table.meta['EXTNAME']='FIBERQA'
     hdus.append(pyfits.convenience.table_to_hdu(fiber_qa_table) )
@@ -45,6 +67,13 @@ def write_tile_qa(filename,fiber_qa_table,petal_qa_table=None) :
     hdus.writeto(filename, overwrite=True, checksum=True)
 
 def read_tile_qa(filename) :
+    """Reads an tile-qa fits file.
+
+    Args:
+        filename: full path to file
+    Returns : fiber_qa_table, petal_qa_table
+        two astropy.table.Table objects
+    """
     hdus=pyfits.open(filename)
     fiber_qa_table = Table.read(filename,'FIBERQA')
     if 'PETALQA' in hdus :
