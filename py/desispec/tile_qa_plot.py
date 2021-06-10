@@ -380,17 +380,48 @@ def get_petalqa_props(key):
     if key == "PETAL_LOC":
         short, precision = "PETAL", 0
     if key == "WORSTREADNOISE":
-        short, precision, okmax, combine = "RDN", 1, config["exposure_qa"]["max_readnoise"], "mean"
+        short, precision, okmax, combine = (
+            "RDN",
+            1,
+            config["exposure_qa"]["max_readnoise"],
+            "mean",
+        )
     if key == "NGOODPOS":
-        short, precision, okmin, combine = "GOODPOS", 0, 500 * config["exposure_qa"]["max_frac_of_bad_positions_per_petal"], "sum"
+        short, precision, okmin, combine = (
+            "GOODPOS",
+            0,
+            500 * config["exposure_qa"]["max_frac_of_bad_positions_per_petal"],
+            "sum",
+        )
     if key == "NSTDSTAR":
-        short, precision, okmin, combine = "NSTD", 0, config["exposure_qa"]["min_number_of_good_stdstars_per_petal"], "sum"
+        short, precision, okmin, combine = (
+            "NSTD",
+            0,
+            config["exposure_qa"]["min_number_of_good_stdstars_per_petal"],
+            "sum",
+        )
     if key == "STARRMS":
-        short, precision, okmax, combine = "*RMS", 3, config["exposure_qa"]["max_rms_of_rflux_ratio_of_stdstars"], "mean"
+        short, precision, okmax, combine = (
+            "*RMS",
+            3,
+            config["exposure_qa"]["max_rms_of_rflux_ratio_of_stdstars"],
+            "mean",
+        )
     if key == "TSNR2FRA":
-        short, precision, okmin, okmax, combine = "TSNR2FRA", 2, config["exposure_qa"]["tsnr2_petal_minfrac"], config["exposure_qa"]["tsnr2_petal_maxfrac"], "mean"
+        short, precision, okmin, okmax, combine = (
+            "TSNR2FRA",
+            2,
+            config["exposure_qa"]["tsnr2_petal_minfrac"],
+            config["exposure_qa"]["tsnr2_petal_maxfrac"],
+            "mean",
+        )
     if key in ["BTHRUFRAC", "RTHRUFRAC", "ZTHRUFRAC", "THRUFRAC"]:
-        short, precision, okmin, okmax = key, 2, config["tile_qa_plot"]["thrufrac_min"], config["tile_qa_plot"]["thrufrac_max"]
+        short, precision, okmin, okmax = (
+            key,
+            2,
+            config["tile_qa_plot"]["thrufrac_min"],
+            config["tile_qa_plot"]["thrufrac_max"],
+        )
         if key == "THRUFRAC":
             short = "THRUFRAC_X"
     if key in ["BSKYTHRURMS", "RSKYTHRURMS", "ZSKYTHRURMS"]:
@@ -411,19 +442,37 @@ def print_petal_infos(ax, petalqa):
     """
     # AR keys to compute stats
     keys = [
-        "PETAL_LOC", "WORSTREADNOISE", "NGOODPOS", "NSTDSTAR", "STARRMS", "TSNR2FRA",
-        "BTHRUFRAC", "RTHRUFRAC", "ZTHRUFRAC", "THRUFRAC",
-        "BSKYTHRURMS", "RSKYTHRURMS", "ZSKYTHRURMS",
-        "BSKYCHI2PDF", "RSKYCHI2PDF", "ZSKYCHI2PDF",
+        "PETAL_LOC",
+        "WORSTREADNOISE",
+        "NGOODPOS",
+        "NSTDSTAR",
+        "STARRMS",
+        "TSNR2FRA",
+        "BTHRUFRAC",
+        "RTHRUFRAC",
+        "ZTHRUFRAC",
+        "THRUFRAC",
+        "BSKYTHRURMS",
+        "RSKYTHRURMS",
+        "ZSKYTHRURMS",
+        "BSKYCHI2PDF",
+        "RSKYCHI2PDF",
+        "ZSKYCHI2PDF",
     ]
     # AR keys to display
-    disp_keys = ["PETAL_LOC","NGOODPOS", "NSTDSTAR", "STARRMS", "TSNR2FRA", "THRUFRAC"]
+    disp_keys = ["PETAL_LOC", "NGOODPOS", "NSTDSTAR", "STARRMS", "TSNR2FRA", "THRUFRAC"]
 
     # AR storing properties in a dictionary
     mydict = {}
     for key in keys:
         mydict[key] = {}
-        mydict[key]["short"], mydict[key]["precision"], mydict[key]["okmin"], mydict[key]["okmax"], mydict[key]["combine"] = get_petalqa_props(key)
+        (
+            mydict[key]["short"],
+            mydict[key]["precision"],
+            mydict[key]["okmin"],
+            mydict[key]["okmax"],
+            mydict[key]["combine"],
+        ) = get_petalqa_props(key)
 
     # AR to record {PETAL}-{KEY} where issue
     fails = []
@@ -452,9 +501,13 @@ def print_petal_infos(ax, petalqa):
             # AR value for the considered petal
             # AR THRUFRAC: taking the value the furthest from 1
             if key == "THRUFRAC":
-                tmpvals = np.array([
-                    petalqa["BTHRUFRAC"][i], petalqa["RTHRUFRAC"][i], petalqa["ZTHRUFRAC"][i]
-                ])
+                tmpvals = np.array(
+                    [
+                        petalqa["BTHRUFRAC"][i],
+                        petalqa["RTHRUFRAC"][i],
+                        petalqa["ZTHRUFRAC"][i],
+                    ]
+                )
                 val = tmpvals[np.argmax(np.abs(tmpvals - 1))]
             else:
                 val = petalqa[key][i]
@@ -468,7 +521,9 @@ def print_petal_infos(ax, petalqa):
                 if val > mydict[key]["okmax"]:
                     isfail = True
             if isfail:
-                fails.append("{}-{}".format(petalqa["PETAL_LOC"][i], mydict[key]["short"]))
+                fails.append(
+                    "{}-{}".format(petalqa["PETAL_LOC"][i], mydict[key]["short"])
+                )
                 fontweight, color = "bold", "r"
             # AR print if in disp_keys
             if key in disp_keys:
@@ -800,7 +855,12 @@ def make_tile_qa_plot(
     for ang, p in zip(np.linspace(2 * np.pi, 0, 11), [3, 2, 1, 0, 9, 8, 7, 6, 5, 4]):
         anglab = ang + 0.1 * np.pi
         ax.text(
-            450 * np.cos(anglab), 450 * np.sin(anglab), "{:.0f}".format(p), color="k", va="center", ha="center",
+            450 * np.cos(anglab),
+            450 * np.sin(anglab),
+            "{:.0f}".format(p),
+            color="k",
+            va="center",
+            ha="center",
         )
 
     # AR sky map
@@ -824,23 +884,43 @@ def make_tile_qa_plot(
         ["TILEID", "{:06d}".format(hdr["TILEID"])],
         ["thruNIGHT", "{}".format(hdr["NIGHT"])],
         ["SURVEY", hdr["SURVEY"]],
-        ["PROGRAM",  hdr["FAPRGRM"]],
+        ["PROGRAM", hdr["FAPRGRM"]],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
         ["", ""],
         ["efftime / goaltime", "{:.2f}".format(hdr["EFFTIME_SPEC"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
-        ["tsnr2 / tsnr2_ref",  "{:.2f}".format(ratio_tsnr2)],
+        ["tsnr2 / tsnr2_ref", "{:.2f}".format(ratio_tsnr2)],
     ]:
         fontweight, col = "normal", "k"
-        if (txt[0] == "efftime / goaltime") & (hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < hdr["MINTFRAC"]):
+        if (txt[0] == "efftime / goaltime") & (
+            hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < hdr["MINTFRAC"]
+        ):
             fontweight, col = "bold", "r"
         if (txt[0] == "n(z) / n_ref(z)") & (ratio_nz < 0.8):
             fontweight, col = "bold", "r"
         if (txt[0] == "tsnr2 / tsnr2_ref") & (ratio_tsnr2 < 0.8):
             fontweight, col = "bold", "r"
-        ax.text(x0, y, txt[0], color=col, fontsize=fs, fontweight=fontweight, ha="right", transform=ax.transAxes)
-        ax.text(x1, y, txt[1], color=col, fontsize=fs, fontweight=fontweight, ha="left", transform=ax.transAxes)
+        ax.text(
+            x0,
+            y,
+            txt[0],
+            color=col,
+            fontsize=fs,
+            fontweight=fontweight,
+            ha="right",
+            transform=ax.transAxes,
+        )
+        ax.text(
+            x1,
+            y,
+            txt[1],
+            color=col,
+            fontsize=fs,
+            fontweight=fontweight,
+            ha="left",
+            transform=ax.transAxes,
+        )
         y += dy
 
     # AR per petal diagnoses
