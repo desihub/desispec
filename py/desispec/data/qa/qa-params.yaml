@@ -74,3 +74,11 @@ tile_qa_plot:
    program : DARK
    zmin : 0.9
    zmax : 2.1
+
+ # {BRZ}THRUFRAC
+ thrufrac_min : 0.8
+ thrufrac_max : 1.2
+
+ # sky
+ skythrurms_max : 0.05
+ skychi2pdf_max : 1.5
