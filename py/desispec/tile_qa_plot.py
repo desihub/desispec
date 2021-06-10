@@ -429,11 +429,11 @@ def print_petal_infos(ax, petalqa):
     for i in range(10):
         for key in list(mydict.keys()):
             #
-            color = "k"
+            fontweight, color = "normal", "k"
             if (petalqa[key][i] < mydict[key]["MIN"]) | (
                 petalqa[key][i] > mydict[key]["MAX"]
             ):
-                color = "r"
+                fontweight, color = "bold", "r"
             #
             ax.text(
                 mydict[key]["X"],
@@ -441,6 +441,7 @@ def print_petal_infos(ax, petalqa):
                 "{:.{}f}".format(petalqa[key][i], mydict[key]["PRECISION"]),
                 color=color,
                 fontsize=fs,
+                fontweight=fontweight,
                 ha="center",
                 transform=ax.transAxes,
             )
@@ -745,12 +746,12 @@ def make_tile_qa_plot(
         # AR    hence we report EFFTIME_SPEC to make it more intuitive
         "ratio efftime / efftime_ref = {:.2f}".format(ratio_tsnr2),
     ]:
-        col = "k"
+        fontweight, col = "normal", "k"
         if (t[:10] == "ratio n(z)") & (ratio_nz < 0.8):
-            col = "r"
+            fontweight, col = "bold", "r"
         if (t[:13] == "ratio efftime") & (ratio_tsnr2 < 0.8):
-            col = "r"
-        ax.text(x, y, t.expandtabs(), color=col, fontsize=fs, transform=ax.transAxes)
+            fontweight, col = "bold", "r"
+        ax.text(x, y, t.expandtabs(), color=col, fontsize=fs, fontweight=fontweight, transform=ax.transAxes)
         y += dy
 
     # AR per petal diagnoses
