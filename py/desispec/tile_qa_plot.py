@@ -740,12 +740,15 @@ def make_tile_qa_plot(
         "RA , DEC = {:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"]),
         "",
         "ratio n(z) / n_ref(z) = {:.2f}".format(ratio_nz),
-        "ratio tsnr2 / tsnr2_ref = {:.2f}".format(ratio_tsnr2),
+        # AR as we are computing the ratio of some TSNR2 quantity,
+        # AR    it is the same as the ratio of EFFTIME_SPEC
+        # AR    hence we report EFFTIME_SPEC to make it more intuitive
+        "ratio efftime / efftime_ref = {:.2f}".format(ratio_tsnr2),
     ]:
         col = "k"
         if (t[:10] == "ratio n(z)") & (ratio_nz < 0.8):
             col = "r"
-        if (t[:11] == "ratio tsnr2") & (ratio_tsnr2 < 0.8):
+        if (t[:13] == "ratio efftime") & (ratio_tsnr2 < 0.8):
             col = "r"
         ax.text(x, y, t.expandtabs(), color=col, fontsize=fs, transform=ax.transAxes)
         y += dy
