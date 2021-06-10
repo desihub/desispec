@@ -359,6 +359,48 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
     ax.axis("off")
 
 
+def get_petalqa_props(key):
+    """
+    For a given key, returns specific properties, to display diagnoses on the QA plot.
+
+    Args:
+        key: column name present in the PETALQA extension of qa-tile-TILEID-NIGHT.fits (string)
+
+    Returns:
+        short: shortname of the key (string)
+        precision: number of digits to report (int)
+        okmin: minimum value to be considered as ok (float)
+        okmax: maximum value to be considered as ok (float)
+        combine: None, "sum", "mean", i.e. how to combine the stats for all petals (string)
+    """
+    config = get_qa_config()
+    # AR set to None by default
+    short, precision, okmin, okmax, combine = None, None, None, None, None
+    # AR updating values
+    if key == "PETAL_LOC":
+        short, precision = "PETAL", 0
+    if key == "WORSTREADNOISE":
+        short, precision, okmax, combine = "RDN", 1, config["exposure_qa"]["max_readnoise"], "mean"
+    if key == "NGOODPOS":
+        short, precision, okmin, combine = "GOODPOS", 0, 500 * config["exposure_qa"]["max_frac_of_bad_positions_per_petal"], "sum"
+    if key == "NSTDSTAR":
+        short, precision, okmin, combine = "NSTD", 0, config["exposure_qa"]["min_number_of_good_stdstars_per_petal"], "sum"
+    if key == "STARRMS":
+        short, precision, okmax, combine = "*RMS", 3, config["exposure_qa"]["max_rms_of_rflux_ratio_of_stdstars"], "mean"
+    if key == "TSNR2FRA":
+        short, precision, okmin, okmax, combine = "TSNR2FRA", 2, config["exposure_qa"]["tsnr2_petal_minfrac"], config["exposure_qa"]["tsnr2_petal_maxfrac"], "mean"
+    if key in ["BTHRUFRAC", "RTHRUFRAC", "ZTHRUFRAC", "THRUFRAC"]:
+        short, precision, okmin, okmax = key, 2, config["tile_qa_plot"]["thrufrac_min"], config["tile_qa_plot"]["thrufrac_max"]
+        if key == "THRUFRAC":
+            short = "THRUFRAC_X"
+    if key in ["BSKYTHRURMS", "RSKYTHRURMS", "ZSKYTHRURMS"]:
+        short, precision, okmax = key, 3, config["tile_qa_plot"]["skythrurms_max"]
+    if key in ["BSKYCHI2PDF", "RSKYCHI2PDF", "ZSKYCHI2PDF"]:
+        short, precision, okmax = key, 2, config["tile_qa_plot"]["skychi2pdf_max"]
+    # AR return
+    return short, precision, okmin, okmax, combine
+
+
 def print_petal_infos(ax, petalqa):
     """
     Print some diagnoses for each petal, and for the whole tile.
@@ -367,123 +409,117 @@ def print_petal_infos(ax, petalqa):
         ax: pyplot object
         petalqa: the PETALQA extension data of the tile-qa-TILEID-NIGHT.fits file
     """
-    config = get_qa_config()
+    # AR keys to compute stats
+    keys = [
+        "PETAL_LOC", "WORSTREADNOISE", "NGOODPOS", "NSTDSTAR", "STARRMS", "TSNR2FRA",
+        "BTHRUFRAC", "RTHRUFRAC", "ZTHRUFRAC", "THRUFRAC",
+        "BSKYTHRURMS", "RSKYTHRURMS", "ZSKYTHRURMS",
+        "BSKYCHI2PDF", "RSKYCHI2PDF", "ZSKYCHI2PDF",
+    ]
+    # AR keys to display
+    disp_keys = ["PETAL_LOC","NGOODPOS", "NSTDSTAR", "STARRMS", "TSNR2FRA", "THRUFRAC"]
 
-    # AR stats per petal
-    mydict = {
-        "PETAL_LOC": {
-            "SHORT": "PETAL",
-            "PRECISION": 0,
-            "MIN": -1e99,
-            "MAX": 1e99,
-            "COMBINE" : "-",
-        },
-        "WORSTREADNOISE": {
-            "SHORT": "RDN",
-            "PRECISION": 1,
-            "MIN": -1e99,
-            "MAX": config["exposure_qa"]["max_readnoise"],
-            "COMBINE" : "MEAN",
-        },
-        "NGOODPOS": {
-            "SHORT": "GOODPOS",
-            "PRECISION": 0,
-            "MIN": 500 * config["exposure_qa"]["max_frac_of_bad_positions_per_petal"],
-            "MAX": 1e99,
-            "COMBINE" : "SUM",
-        },
-        "NSTDSTAR": {
-            "SHORT": "NSTD",
-            "PRECISION": 0,
-            "MIN": config["exposure_qa"]["min_number_of_good_stdstars_per_petal"],
-            "MAX": 1e99,
-            "COMBINE" : "SUM",
-        },
-        "STARRMS": {
-            "SHORT": "*RMS",
-            "PRECISION": 3,
-            "MIN": -1e99,
-            "MAX": config["exposure_qa"]["max_rms_of_rflux_ratio_of_stdstars"],
-            "COMBINE" : "MEAN",
-        },
-        "TSNR2FRA": {
-            "SHORT": "TSNR2FRA",
-            "PRECISION": 2,
-            "MIN": config["exposure_qa"]["tsnr2_petal_minfrac"],
-            "MAX": config["exposure_qa"]["tsnr2_petal_maxfrac"],
-            "COMBINE" : "MEAN",
-        },
-        "BTHRUFRAC": {
-            "SHORT": "BTHRUFRAC",
-            "PRECISION": 2,
-            "MIN": config["exposure_qa"]["tsnr2_petal_minfrac"],
-            "MAX": config["exposure_qa"]["tsnr2_petal_maxfrac"],
-            "COMBINE" : "MEAN",
-        },
+    # AR storing properties in a dictionary
+    mydict = {}
+    for key in keys:
+        mydict[key] = {}
+        mydict[key]["short"], mydict[key]["precision"], mydict[key]["okmin"], mydict[key]["okmax"], mydict[key]["combine"] = get_petalqa_props(key)
 
-    }
-    y, dy = 0.95, -0.1
+    # AR to record {PETAL}-{KEY} where issue
+    fails = []
+
+    #
+    y, dy = 0.95, -0.08
     x0, dx = 0.05, 0.20
     fs = 10
     x = x0
-    for key in list(mydict.keys()):
+    # AR header
+    for key in disp_keys:
         ax.text(
             x,
             y,
-            mydict[key]["SHORT"],
+            mydict[key]["short"],
             fontsize=fs,
             ha="center",
             transform=ax.transAxes,
         )
         x += dx
     y += dy
+    # AR stats per petal
     for i in range(10):
         x = x0
-        for key in list(mydict.keys()):
-            #
+        for key in keys:
+            # AR value for the considered petal
+            # AR THRUFRAC: taking the value the furthest from 1
+            if key == "THRUFRAC":
+                tmpvals = np.array([
+                    petalqa["BTHRUFRAC"][i], petalqa["RTHRUFRAC"][i], petalqa["ZTHRUFRAC"][i]
+                ])
+                val = tmpvals[np.argmax(np.abs(tmpvals - 1))]
+            else:
+                val = petalqa[key][i]
+            # AR failure?
             fontweight, color = "normal", "k"
-            if (petalqa[key][i] < mydict[key]["MIN"]) | (
-                petalqa[key][i] > mydict[key]["MAX"]
-            ):
+            isfail = False
+            if mydict[key]["okmin"] is not None:
+                if val < mydict[key]["okmin"]:
+                    isfail = True
+            if mydict[key]["okmax"] is not None:
+                if val > mydict[key]["okmax"]:
+                    isfail = True
+            if isfail:
+                fails.append("{}-{}".format(petalqa["PETAL_LOC"][i], mydict[key]["short"]))
                 fontweight, color = "bold", "r"
-            #
-            ax.text(
-                x,
-                y,
-                "{:.{}f}".format(petalqa[key][i], mydict[key]["PRECISION"]),
-                color=color,
-                fontsize=fs,
-                fontweight=fontweight,
-                ha="center",
-                transform=ax.transAxes,
-            )
-            x += dx
+            # AR print if in disp_keys
+            if key in disp_keys:
+                ax.text(
+                    x,
+                    y,
+                    "{:.{}f}".format(val, mydict[key]["precision"]),
+                    color=color,
+                    fontsize=fs,
+                    fontweight=fontweight,
+                    ha="center",
+                    transform=ax.transAxes,
+                )
+                x += dx
         y += dy
 
     # AR stats for all petals
-    for key in list(mydict.keys()):
+    x = x0
+    for key in disp_keys:
+        txt = "-"
         if key == "PETAL_LOC":
             txt = "ALL"
-        else:
-            txt = "{:.{}f}".format(petalqa[key], mydict[key]["PRECISION"])
-    ts = [
-        "ALL",
-        "{:.0f}".format(len(petals["sky"])),
-        "{:.0f}".format(len(petals["bad"])),
-        "{:.0f}".format(len(petals["wd"])),
-        "{:.0f}".format(len(petals["std"])),
-        "{:.0f}".format(np.isfinite(assign["PETAL_LOC"]).sum()),
-    ]
-    for i in range(6):
+        if mydict[key]["combine"] is not None:
+            if mydict[key]["combine"] == "sum":
+                txt = "{:.{}f}".format(petalqa[key].sum(), mydict[key]["precision"])
+            if mydict[key]["combine"] == "mean":
+                txt = "{:.{}f}".format(petalqa[key].mean(), mydict[key]["precision"])
         ax.text(
-            xs[i],
+            x,
             y,
-            ts[i],
-            color=color,
+            txt,
+            color="b",
             fontsize=fs,
+            fontweight="normal",
             ha="center",
             transform=ax.transAxes,
         )
+        x += dx
+    y += 2 * dy
+    # AR failed cases
+    ax.text(
+        x0,
+        y,
+        "Failed: {}".format(", ".join(fails)),
+        color="r",
+        fontsize=fs,
+        fontweight="bold",
+        ha="left",
+        transform=ax.transAxes,
+    )
+
     ax.axis("off")
 
 
@@ -761,7 +797,7 @@ def make_tile_qa_plot(
     else:
         ratio_tsnr2 = -1
     # AR TSNR2: display petal ids
-    for ang, p in zip(np.linspace(2 * np.pi, 0, 11), [7, 8, 9, 0, 1, 2, 3, 4, 5, 6]):
+    for ang, p in zip(np.linspace(2 * np.pi, 0, 11), [3, 2, 1, 0, 9, 8, 7, 6, 5, 4]):
         anglab = ang + 0.1 * np.pi
         ax.text(
             450 * np.cos(anglab), 450 * np.sin(anglab), "{:.0f}".format(p), color="k", va="center", ha="center",
@@ -783,26 +819,28 @@ def make_tile_qa_plot(
     # AR overall infos
     ax = plt.subplot(gs[0, 0])
     ax.axis("off")
-    x, y, dy, fs = 0.05, 0.95, -0.1, 15
-    for t in [
-        "TILEID, thruNIGHT = {:06d} , {}".format(hdr["TILEID"], hdr["NIGHT"]),
-        "SURVEY , PROGRAM = {} , {}".format(hdr["SURVEY"], hdr["FAPRGRM"]),
-        "RA , DEC = {:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"]),
-        "EBVFAC = {:.2f}".format(hdr["EBVFAC"]),
-        "",
-        "efftime / goaltime = {:.2f}".format(hdr["EFFTIME_SPEC"] / hdr["GOALTIME"]),
-        "ratio n(z) / n_ref(z) = {:.2f}".format(ratio_nz),
-        "ratio tsnr2 / tsnr2_ref = {:.2f}".format(ratio_tsnr2),
+    x0, x1, y, dy, fs = 0.45, 0.55, 0.95, -0.08, 10
+    for txt in [
+        ["TILEID", "{:06d}".format(hdr["TILEID"])],
+        ["thruNIGHT", "{}".format(hdr["NIGHT"])],
+        ["SURVEY", hdr["SURVEY"]],
+        ["PROGRAM",  hdr["FAPRGRM"]],
+        ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
+        ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
+        ["", ""],
+        ["efftime / goaltime", "{:.2f}".format(hdr["EFFTIME_SPEC"] / hdr["GOALTIME"])],
+        ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
+        ["tsnr2 / tsnr2_ref",  "{:.2f}".format(ratio_tsnr2)],
     ]:
         fontweight, col = "normal", "k"
-        # if (t[:18] == "efftime / goaltime") & (hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < hdr["MINTFRAC"]):
-        if (t[:18] == "efftime / goaltime") & (hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < 0.85): # TBD: replace by MINTFRAC
+        if (txt[0] == "efftime / goaltime") & (hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < hdr["MINTFRAC"]):
             fontweight, col = "bold", "r"
-        if (t[:10] == "ratio n(z)") & (ratio_nz < 0.8):
+        if (txt[0] == "n(z) / n_ref(z)") & (ratio_nz < 0.8):
             fontweight, col = "bold", "r"
-        if (t[:11] == "ratio tsnr2") & (ratio_tsnr2 < 0.8):
+        if (txt[0] == "tsnr2 / tsnr2_ref") & (ratio_tsnr2 < 0.8):
             fontweight, col = "bold", "r"
-        ax.text(x, y, t.expandtabs(), color=col, fontsize=fs, fontweight=fontweight, transform=ax.transAxes)
+        ax.text(x0, y, txt[0], color=col, fontsize=fs, fontweight=fontweight, ha="right", transform=ax.transAxes)
+        ax.text(x1, y, txt[1], color=col, fontsize=fs, fontweight=fontweight, ha="left", transform=ax.transAxes)
         y += dy
 
     # AR per petal diagnoses
