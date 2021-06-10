@@ -22,6 +22,7 @@ from desispec.io import specprod_root,findfile,read_tile_qa,write_tile_qa
 from desispec.tile_qa import compute_tile_qa
 from desispec.util import parse_int_args
 
+from desispec.tile_qa_plot import make_tile_qa_plot
 
 
 def parse(options=None):
@@ -60,6 +61,8 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
     if fiberqa_table is None : return None
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
+    make_tile_qa_plot(outfile)
+    log.info("QA plot for {} generated".format(outfile))
     if "EXTNAME" in fiberqa_table.meta : fiberqa_table.meta.pop("EXTNAME")
     return(fiberqa_table.meta)
 
