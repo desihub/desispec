@@ -63,6 +63,7 @@ def input2(message):
     return user_input
 
 blank_responses = {'', '(no entry)'}
+viewer=None
 
 def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
     '''Wrapper for user input which cleans up human-entered values and returns
@@ -92,10 +93,12 @@ def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
         res=yesnohelp("Are you sure you want to exit without saving?",_pass=False,_save=False,_exit=False,_help=False)
         if res=="yes" :
             print('Exiting at user request.')
+            if viewer is not None: viewer.kill()
             sys.exit(0)
     return yesnohelp(message)
 
 def main():
+    global viewer
 
     log = get_logger()
 
@@ -131,9 +134,9 @@ def main():
     tiles_table = Table.read(args.infile)
 
     if not "QA" in tiles_table.dtype.names :
-        tiles_table["QA"]=np.repeat("none",len(tiles_table))
+        tiles_table["QA"]=np.repeat("none      ",len(tiles_table))
     if not "USER" in tiles_table.dtype.names :
-        tiles_table["USER"]=np.repeat("        ",len(tiles_table))
+        tiles_table["USER"]=np.repeat("none     ",len(tiles_table))
 
     log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
     selection=(tiles_table["ZDONE"]=="false")&(tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))&(tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad")
@@ -157,6 +160,7 @@ def main():
     for tileid,night in zip(tileids,nights) :
         log.info(" TILE={} NIGHT={}".format(tileid,night))
 
+    viewer=None
     for tileid,night in zip(tileids,nights) :
         log.info("Inspecting TILE={} NIGHT={} ...".format(tileid,night))
 
@@ -166,6 +170,7 @@ def main():
             log.error("Missing {}, did you run desi_tile_qa?".format(qaplot_filename))
             continue
         print("Showing {} ...".format(qaplot_filename))
+        if viewer is not None : viewer.kill()
         viewer = subprocess.Popen(['eog',qaplot_filename ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
         index=np.where(tiles_table["TILEID"]==tileid)[0][0]
@@ -195,6 +200,7 @@ def main():
                 break
 
         viewer.kill()
+        viewer=None
     res=yesnohelp("all done, save result in {}?".format(args.outfile),save=False,_exit=False,_pass=False)
 
 
