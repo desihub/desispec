@@ -65,6 +65,7 @@ def exposure_table_column_defs():
                 ('BADAMPS', 'S30', ''),
                 ('EXPTIME', float, 0.0),
                 ('EFFTIME_ETC', float, -99.),
+                ('SURVEY', 'S10', 'unknown'),
                 ('FA_SURV', 'S10', 'unknown'),
                 ('FAPRGRM', 'S10', 'unknown'),
                 ('GOALTIME', float, -99.),
@@ -639,7 +640,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     ## Loop over columns and fill in the information. If unavailable report/flag if necessary and assign default
     for key,default in coldefault_dict.items():
         ## These are dealt with separately
-        if key in ['EFFTIME_ETC', 'CAMWORD', 'NIGHT', 'FA_SURV', 'FAPRGRM', 'GOALTIME', 'GOALTYPE', 'SPEED',
+        if key in ['EFFTIME_ETC', 'CAMWORD', 'NIGHT', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTIME', 'GOALTYPE', 'SPEED',
                    'EBVFAC', 'AIRFAC', 'LASTSTEP', 'BADCAMWORD', 'BADAMPS', 'EXPFLAG', 'HEADERERR', 'COMMENTS']:
             continue
         ## Try to find the key in the raw data header
@@ -743,7 +744,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             extra_in_fba = False
 
         ## Add the fiber assign info. Try fiberassign file first, then raw data, then req
-        for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE","EBVFAC"]:
+        for name in ["SURVEY","FA_SURV","FAPRGRM","GOALTIME","GOALTYPE","EBVFAC"]:
             for location in [fba_header,dat_header,req_dict]:
                 if name in location:
                     val = location[name]
@@ -820,7 +821,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'EXPTIME={outdict["EXPTIME"]:.1f}s lt {threshold_exptime:.1f}')
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
                         f" than {threshold_exptime}s. Processing through sky subtraction.")
-        elif outdict['FA_SURV'].lower() == 'main':
+        elif outdict['SURVEY'] == 'main':
             ## If defined, use GOALTIME. Otherwise set to 0 so that we always pass the relevant cuts
             if outdict['GOALTIME'] > 0.:
                 goaltime = outdict['GOALTIME']
@@ -846,15 +847,14 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             threshold_efftime = threshold_percent_goal * goaltime  # 0.0 if GOALTIME not defined in headers
 
             threshold_speed = 0.
-            if outdict['GOALTYPE'] != coldefault_dict['GOALTYPE']:
-                if outdict['GOALTYPE'] == 'dark':
-                    threshold_speed = threshold_speed_dark
-                elif outdict['GOALTYPE'] == 'bright':
-                    threshold_speed = threshold_speed_bright
-                elif outdict['GOALTYPE'] == 'backup':
-                    pass
-                else:
-                    log.warning(f"Couldn't understand GOALTYPE={outdict['GOALTYPE']}")
+            if outdict['GOALTYPE'] == 'dark':
+                threshold_speed = threshold_speed_dark
+            elif outdict['GOALTYPE'] == 'bright':
+                threshold_speed = threshold_speed_bright
+            elif outdict['GOALTYPE'] == 'backup':
+                pass
+            elif outdict['GOALTYPE'] != coldefault_dict['GOALTYPE']:
+                log.warning(f"Couldn't understand GOALTYPE={outdict['GOALTYPE']}")
 
             ## Perform the data quality cuts
             ## Cut on S/N:
