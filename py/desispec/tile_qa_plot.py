@@ -735,10 +735,10 @@ def make_tile_qa_plot(
     ax.axis("off")
     x, y, dy, fs = 0.05, 0.95, -0.1, 15
     for t in [
-        "TILEID = {:06d}".format(hdr["TILEID"]),
-        "thruNIGHT = {}".format(hdr["NIGHT"]),
-        "PROGRAM = {}".format(hdr["FAPRGRM"]),
+        "TILEID, thruNIGHT = {:06d} , {}".format(hdr["TILEID"], hdr["NIGHT"]),
+        "SURVEY , PROGRAM = {} , {}".format(hdr["SURVEY"], hdr["FAPRGRM"]),
         "RA , DEC = {:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"]),
+        "EBVFAC = {:.2f}".format(hdr["EBVFAC"]),
         "",
         "efftime / goaltime = {:.2f}".format(hdr["EFFTIME_SPEC"] / hdr["GOALTIME"]),
         "ratio n(z) / n_ref(z) = {:.2f}".format(ratio_nz),
