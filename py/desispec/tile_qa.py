@@ -211,7 +211,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     tile_fiberqa_table.meta["NGOODPETALS"]=good_petals.size
     tile_fiberqa_table.meta["EFFTIME_SPEC"]=np.mean(tile_petalqa_table['EFFTIME_SPEC'][good_petals])
 
-    keys = ["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC"]
+    keys = ["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC"]
     for k in keys :
         if k in exposure_qa_meta :
             tile_fiberqa_table.meta[k] = exposure_qa_meta[k]
