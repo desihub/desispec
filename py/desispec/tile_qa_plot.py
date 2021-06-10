@@ -372,61 +372,73 @@ def print_petal_infos(ax, petalqa):
     # AR stats per petal
     mydict = {
         "PETAL_LOC": {
-            "X": 0.05,
             "SHORT": "PETAL",
             "PRECISION": 0,
             "MIN": -1e99,
             "MAX": 1e99,
+            "COMBINE" : "-",
         },
         "WORSTREADNOISE": {
-            "X": 0.25,
             "SHORT": "RDN",
             "PRECISION": 1,
             "MIN": -1e99,
             "MAX": config["exposure_qa"]["max_readnoise"],
+            "COMBINE" : "MEAN",
         },
         "NGOODPOS": {
-            "X": 0.45,
             "SHORT": "GOODPOS",
             "PRECISION": 0,
             "MIN": 500 * config["exposure_qa"]["max_frac_of_bad_positions_per_petal"],
             "MAX": 1e99,
+            "COMBINE" : "SUM",
         },
         "NSTDSTAR": {
-            "X": 0.65,
             "SHORT": "NSTD",
             "PRECISION": 0,
             "MIN": config["exposure_qa"]["min_number_of_good_stdstars_per_petal"],
             "MAX": 1e99,
+            "COMBINE" : "SUM",
         },
         "STARRMS": {
-            "X": 0.85,
             "SHORT": "*RMS",
             "PRECISION": 3,
             "MIN": -1e99,
             "MAX": config["exposure_qa"]["max_rms_of_rflux_ratio_of_stdstars"],
+            "COMBINE" : "MEAN",
         },
         "TSNR2FRA": {
-            "X": 1.05,
             "SHORT": "TSNR2FRA",
-            "PRECISION": 1,
+            "PRECISION": 2,
             "MIN": config["exposure_qa"]["tsnr2_petal_minfrac"],
             "MAX": config["exposure_qa"]["tsnr2_petal_maxfrac"],
+            "COMBINE" : "MEAN",
         },
+        "BTHRUFRAC": {
+            "SHORT": "BTHRUFRAC",
+            "PRECISION": 2,
+            "MIN": config["exposure_qa"]["tsnr2_petal_minfrac"],
+            "MAX": config["exposure_qa"]["tsnr2_petal_maxfrac"],
+            "COMBINE" : "MEAN",
+        },
+
     }
     y, dy = 0.95, -0.1
+    x0, dx = 0.05, 0.20
     fs = 10
+    x = x0
     for key in list(mydict.keys()):
         ax.text(
-            mydict[key]["X"],
+            x,
             y,
             mydict[key]["SHORT"],
             fontsize=fs,
             ha="center",
             transform=ax.transAxes,
         )
+        x += dx
     y += dy
     for i in range(10):
+        x = x0
         for key in list(mydict.keys()):
             #
             fontweight, color = "normal", "k"
@@ -436,7 +448,7 @@ def print_petal_infos(ax, petalqa):
                 fontweight, color = "bold", "r"
             #
             ax.text(
-                mydict[key]["X"],
+                x,
                 y,
                 "{:.{}f}".format(petalqa[key][i], mydict[key]["PRECISION"]),
                 color=color,
@@ -445,7 +457,33 @@ def print_petal_infos(ax, petalqa):
                 ha="center",
                 transform=ax.transAxes,
             )
+            x += dx
         y += dy
+
+    # AR stats for all petals
+    for key in list(mydict.keys()):
+        if key == "PETAL_LOC":
+            txt = "ALL"
+        else:
+            txt = "{:.{}f}".format(petalqa[key], mydict[key]["PRECISION"])
+    ts = [
+        "ALL",
+        "{:.0f}".format(len(petals["sky"])),
+        "{:.0f}".format(len(petals["bad"])),
+        "{:.0f}".format(len(petals["wd"])),
+        "{:.0f}".format(len(petals["std"])),
+        "{:.0f}".format(np.isfinite(assign["PETAL_LOC"]).sum()),
+    ]
+    for i in range(6):
+        ax.text(
+            xs[i],
+            y,
+            ts[i],
+            color=color,
+            fontsize=fs,
+            ha="center",
+            transform=ax.transAxes,
+        )
     ax.axis("off")
 
 
