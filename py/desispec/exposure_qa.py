@@ -51,7 +51,6 @@ def compute_exposure_qa(night, expid, specprod_dir):
         return None , None
 
     fibermap = read_fibermap(fibermap_filename)
-    print(fibermap.dtype.names)
     petal_locs=np.unique(fibermap["PETAL_LOC"])
 
     fiberqa_table = Table()
@@ -132,7 +131,6 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 twave=np.linspace(tset.wavemin,tset.wavemax,20)
                 xtrans=float(head['CCDSIZE'].split(',')[0])/2.
                 xfiber=tset.x_vs_wave(fiber=np.arange(tset.nspec),wavelength=twave)[:,0]
-                print(xfiber.shape)
                 if rdnoise_left>max_rdnoise :
                     fiberqa_table['QAFIBERSTATUS'][entries[xfiber<xtrans]] |= bad_rdnoise_mask
                 elif rdnoise_right>max_rdnoise :
@@ -178,25 +176,16 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 frameflux=cframe.flux[goodfibers]
                 scale=np.zeros(ngood)
                 wave=np.linspace(6000,7500,100) # coarse
-                #import matplotlib.pyplot as plt
                 for i in range(ngood) :
                     mflux=resample_flux(wave,modelwave,modelflux[i])
                     dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers[i]],cframe.ivar[goodfibers[i]])
-                    #plt.plot(cframe.wave,frameflux[i])
-                    #plt.plot(wave,dflux,"o",color="C{}".format(i))
-                    #plt.plot(wave,mflux,"-",color="C{}".format(i))
                     scale[i] = np.sum(dflux*mflux)/np.sum(mflux**2)
-                #print(scale)
                 calib_rms=np.sqrt(np.mean((scale-1)**2))
                 if calib_rms>qa_params["max_rms_of_rflux_ratio_of_stdstars"] :
                     log.warning("petal #{} has std stars calib rms={:3.2f}>{:3.2f}".format(petal,calib_rms,qa_params["max_rms_of_rflux_ratio_of_stdstars"]))
                     fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
                 else :
                     log.info("petal #{} has std stars calib rms={:3.2f}".format(petal,calib_rms))
-
-                #plt.show()
-
-
 
         else :
             log.warning("petal #{} does not have a standard star file. expected path='{}'".format(petal,stdstars_filename))
