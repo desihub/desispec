@@ -17,6 +17,7 @@ from desiutil.log import get_logger
 from desispec.io import findfile,specprod_root,read_fibermap,read_xytraceset,read_stdstar_models,read_frame
 from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
+from desispec.tsnr import tsnr2_to_efftime
 
 # only read it once per process
 _qa_params = None
@@ -88,29 +89,45 @@ def compute_exposure_qa(night, expid, specprod_dir):
     petal_tsnr2=np.zeros(10)
     worst_rdnoise = 0
 
+    fiberqa_table["EFFTIME_SPEC"]=np.zeros(fiberqa_table["TARGETID"].size)
 
     petalqa_table = Table()
-    petalqa_table["PETAL_LOC"]=petal_locs
-    petalqa_table["WORSTREADNOISE"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["NGOODPOS"]=np.zeros(petal_locs.size,dtype=int)
-    petalqa_table["NSTDSTAR"]=np.zeros(petal_locs.size,dtype=int)
-    petalqa_table["STARRMS"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["TSNR2FRA"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["NCFRAME"]=np.zeros(petal_locs.size,dtype=int)
-    petalqa_table["BSKYTHRURMS"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["BSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["RSKYTHRURMS"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["RSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["ZSKYTHRURMS"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["ZSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["BTHRUFRAC"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["RTHRUFRAC"]=np.zeros(petal_locs.size,dtype=float)
-    petalqa_table["ZTHRUFRAC"]=np.zeros(petal_locs.size,dtype=float)
+    npetal=10
+    petalqa_table["PETAL_LOC"]=np.arange(npetal)
+    petalqa_table["WORSTREADNOISE"]=np.zeros(npetal,dtype=float)
+    petalqa_table["NGOODPOS"]=np.zeros(npetal,dtype=int)
+    petalqa_table["NSTDSTAR"]=np.zeros(npetal,dtype=int)
+    petalqa_table["STARRMS"]=np.zeros(npetal,dtype=float)
+    petalqa_table["TSNR2FRA"]=np.zeros(npetal,dtype=float)
+    petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal,dtype=float)
+    petalqa_table["NCFRAME"]=np.zeros(npetal,dtype=int)
+    petalqa_table["BSKYTHRURMS"]=np.zeros(npetal,dtype=float)
+    petalqa_table["BSKYCHI2PDF"]=np.zeros(npetal,dtype=float)
+    petalqa_table["RSKYTHRURMS"]=np.zeros(npetal,dtype=float)
+    petalqa_table["RSKYCHI2PDF"]=np.zeros(npetal,dtype=float)
+    petalqa_table["ZSKYTHRURMS"]=np.zeros(npetal,dtype=float)
+    petalqa_table["ZSKYCHI2PDF"]=np.zeros(npetal,dtype=float)
+    petalqa_table["BTHRUFRAC"]=np.zeros(npetal,dtype=float)
+    petalqa_table["RTHRUFRAC"]=np.zeros(npetal,dtype=float)
+    petalqa_table["ZTHRUFRAC"]=np.zeros(npetal,dtype=float)
 
     # need to add things
 
     frame_header = None
     fibermap_header = None
+
+    # EFFTIME
+    goaltype="dark"
+    if fibermap_header is not None and "GOALTYPE" in fibermap_header :
+        goaltype=fibermap_header["GOALTYPE"]
+    else :
+        log.warning("no GOALTYPE info, assume 'dark'")
+    param_name="tsnr2_for_efftime_{}".format(goaltype.lower())
+    if param_name in qa_params :
+        tsnr2_for_efftime_key = qa_params[param_name]
+    else :
+        tsnr2_for_efftime_key = "TSNR2_ELG"
+        log.warning("no parameter '{}', use '{}'".format(param_name,tsnr2_for_efftime_key))
 
     for petal in petal_locs :
         worst_rdnoise_per_petal = 0
@@ -238,11 +255,23 @@ def compute_exposure_qa(night, expid, specprod_dir):
         if not os.path.isfile(cframe_filename) :
             continue
         scores = fitsio.read(cframe_filename,"SCORES")
+        print(scores.dtype.names)
         tsnr2_key  = qa_params["tsnr2_key"]
         tsnr2_vals = scores[tsnr2_key]
         good = ((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)==0)
         petal_tsnr2[petal] = np.median(tsnr2_vals[good])
         log.info("petal #{} median {} = {}".format(petal,tsnr2_key,petal_tsnr2[petal]))
+
+        tsnr2_for_efftime_vals = np.zeros(entries.size)
+        for band in ["B","R","Z"] :
+             camera="{}{}".format(band.lower(),spectro)
+             cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+             scores = fitsio.read(cframe_filename,"SCORES")
+             tsnr2_for_efftime_vals += scores[tsnr2_for_efftime_key+"_"+band]
+        target_type=tsnr2_for_efftime_key.split("_")[1].upper()
+        efftime = tsnr2_to_efftime(tsnr2_for_efftime_vals,target_type)
+        fiberqa_table['EFFTIME_SPEC'][entries]=efftime
+        petalqa_table['EFFTIME_SPEC'][petal]=np.median(efftime)
 
         # checking sky rms
         ####################################################################
@@ -288,7 +317,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
             petalqa_table[k] /= mval
             log.info("{} = {}".format(k,list(petalqa_table[k])))
 
-    petal_tsnr2_frac = np.zeros(petal_locs.size)
+    petal_tsnr2_frac = np.zeros(npetal)
     if np.all(petal_tsnr2==0) :
          fiberqa_table['QAFIBERSTATUS'] |= fibermask.mask("BADPETALSNR")
          log.error("all petals have TSNR2=0")
@@ -312,6 +341,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
     fiberqa_table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
     fiberqa_table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
     fiberqa_table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
+    fiberqa_table.meta['EFFTIME_SPEC']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
 
     if frame_header is not None :
         # copy some keys from the frame header

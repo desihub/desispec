@@ -174,28 +174,42 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
         tile_fiberqa_table["QAFIBERSTATUS"][i] = np.bitwise_or.reduce(exposure_fiberqa_tables['QAFIBERSTATUS'][jj])
 
+    # EFFTIME
+    tile_fiberqa_table["EFFTIME_SPEC"]=np.zeros(targetids.size,dtype=exposure_fiberqa_tables["EFFTIME_SPEC"].dtype)
+    for i,tid in enumerate(targetids) :
+        jj = (exposure_fiberqa_tables["TARGETID"]==tid)
+        tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj])
+
     bad_fibers_mask=fibermask.mask("STUCKPOSITIONER|BROKENFIBER|RESTRICTED|MISSINGPOSITION|BADPOSITION|POORPOSITION")
     good_fibers = np.where((tile_fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
     good_petals = np.unique(tile_fiberqa_table['PETAL_LOC'][good_fibers])
 
+    npetal=10
     tile_petalqa_table = Table()
     petals=np.unique(exposure_fiberqa_tables["PETAL_LOC"])
-    tile_petalqa_table["PETAL_LOC"]=petals
+    tile_petalqa_table["PETAL_LOC"]=np.arange(npetal,dtype=int)
     keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'TSNR2FRA', 'NCFRAME',\
           'BSKYTHRURMS', 'BSKYCHI2PDF', 'RSKYTHRURMS', 'RSKYCHI2PDF', 'ZSKYTHRURMS', 'ZSKYCHI2PDF',\
           'BTHRUFRAC', 'RTHRUFRAC', 'ZTHRUFRAC']
     for k in keys :
-        tile_petalqa_table[k]=np.zeros(petals.size)
-    for p,petal in enumerate(petals) :
+        tile_petalqa_table[k]=np.zeros(npetal)
+    for petal in petals :
         ii=(exposure_petalqa_tables["PETAL_LOC"]==petal)
         for k in keys :
-            tile_petalqa_table[k][p]=np.mean(exposure_petalqa_tables[k][ii])
+            tile_petalqa_table[k][petal]=np.mean(exposure_petalqa_tables[k][ii])
+
+    # EFFTIME
+    tile_petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal)
+    for petal in petals :
+        entries=(tile_fiberqa_table['PETAL_LOC'] == petal)
+        tile_petalqa_table['EFFTIME_SPEC'][petal]=np.median(tile_fiberqa_table["EFFTIME_SPEC"][entries])
 
     # add meta info
     tile_fiberqa_table.meta["TILEID"]=tileid
     tile_fiberqa_table.meta["NIGHT"]=night
     tile_fiberqa_table.meta["NGOODFIBERS"]=good_fibers.size
     tile_fiberqa_table.meta["NGOODPETALS"]=good_petals.size
+    tile_fiberqa_table.meta["EFFTIME_SPEC"]=np.mean(tile_petalqa_table['EFFTIME_SPEC'][good_petals])
 
     keys = ["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC"]
     for k in keys :
