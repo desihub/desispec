@@ -705,14 +705,14 @@ def make_tile_qa_plot(
         )
         ax.set_xlabel("FIBERASSIGN_X [mm]")
         ax.set_ylabel("FIBERASSIGN_Y [mm]")
+        # AR 2*505 mm matches the 4 deg width of the cutout
+        ax.set_xlim(-505, 505)
+        ax.set_ylim(-505, 505)
         ax.grid(True)
         ax.set_aspect("equal")
         cbar = plt.colorbar(sc, extend="both")
         cbar.mappable.set_clim(clim)
-        # AR as we are plotting the ratio of some TSNR2 quantity,
-        # AR    it is the same as the ratio of EFFTIME_SPEC
-        # AR    hence we report EFFTIME_SPEC to make it more intuitive
-        cbar.set_label("EFFTIME_SPEC / EFFTIME_SPEC_REFERENCE")
+        cbar.set_label("{} / {}_REFERENCE".format(tsnr2_key, tsnr2_key))
         # AR ratio of the median TSNR2 w.r.t ref
         sel = np.isfinite(ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())])
         sel &= np.isfinite(tsnr2s)
@@ -722,6 +722,12 @@ def make_tile_qa_plot(
     # AR TSNR2: if not bright/dark, just put dummy -1
     else:
         ratio_tsnr2 = -1
+    # AR TSNR2: display petal ids
+    for ang, p in zip(np.linspace(2 * np.pi, 0, 11), [7, 8, 9, 0, 1, 2, 3, 4, 5, 6]):
+        anglab = ang + 0.1 * np.pi
+        ax.text(
+            450 * np.cos(anglab), 450 * np.sin(anglab), "{:.0f}".format(p), color="k", va="center", ha="center",
+        )
 
     # AR sky map
     ax = plt.subplot(gs[0, 1], projection="mollweide")
@@ -748,10 +754,7 @@ def make_tile_qa_plot(
         "",
         "efftime / goaltime = {:.2f}".format(hdr["EFFTIME_SPEC"] / hdr["GOALTIME"]),
         "ratio n(z) / n_ref(z) = {:.2f}".format(ratio_nz),
-        # AR as we are computing the ratio of some TSNR2 quantity,
-        # AR    it is the same as the ratio of EFFTIME_SPEC
-        # AR    hence we report EFFTIME_SPEC to make it more intuitive
-        "ratio efftime / efftime_ref = {:.2f}".format(ratio_tsnr2),
+        "ratio tsnr2 / tsnr2_ref = {:.2f}".format(ratio_tsnr2),
     ]:
         fontweight, col = "normal", "k"
         # if (t[:18] == "efftime / goaltime") & (hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < hdr["MINTFRAC"]):
@@ -759,7 +762,7 @@ def make_tile_qa_plot(
             fontweight, col = "bold", "r"
         if (t[:10] == "ratio n(z)") & (ratio_nz < 0.8):
             fontweight, col = "bold", "r"
-        if (t[:13] == "ratio efftime") & (ratio_tsnr2 < 0.8):
+        if (t[:11] == "ratio tsnr2") & (ratio_tsnr2 < 0.8):
             fontweight, col = "bold", "r"
         ax.text(x, y, t.expandtabs(), color=col, fontsize=fs, fontweight=fontweight, transform=ax.transAxes)
         y += dy
