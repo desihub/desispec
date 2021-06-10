@@ -3,6 +3,7 @@ import datetime
 import subprocess
 
 import astropy.io.fits as pyfits
+from astropy.time import Time
 import numpy as np
 from scipy.signal import savgol_filter
 
@@ -469,6 +470,19 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         msg = 'Must specify days or nights'
         log.critical(msg)
         raise ValueError(msg)
+
+    #- Create exposure log so that N>>1 jobs don't step on each other
+    nightlist = [int(tmp) for tmp in nights.split()]
+    log.info(f'Scanning {len(nightlist)} night directories')
+    speclog = io.util.get_speclog(nightlist)
+
+    t = Time(speclog['MJD']-7/24, format='mjd')
+    speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+    speclogfile = os.path.join(tempdir, 'speclog.csv')
+    tmpfile = speclogfile + '.tmp-' + str(os.getpid())
+    speclog.write(tmpfile, format='ascii.csv')
+    os.rename(tmpfile, speclogfile)
+    log.info(f'Wrote speclog to {speclogfile}')
 
     for camera in cameras:
         sp = 'sp' + camera[1]
