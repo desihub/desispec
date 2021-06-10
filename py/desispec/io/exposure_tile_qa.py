@@ -22,12 +22,13 @@ def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     hdus.writeto(filename, overwrite=True, checksum=True)
 
 def read_exposure_qa(filename) :
-    hdus=pyfits.HDUList()
+    hdus=pyfits.open(filename)
     fiber_qa_table = Table.read(filename,'FIBERQA')
     if 'PETALQA' in hdus :
         petal_qa_table = Table.read(filename,'PETALQA')
     else :
         petal_qa_table = None
+    hdus.close()
     return fiber_qa_table , petal_qa_table
 
 
@@ -44,10 +45,11 @@ def write_tile_qa(filename,fiber_qa_table,petal_qa_table=None) :
     hdus.writeto(filename, overwrite=True, checksum=True)
 
 def read_tile_qa(filename) :
-    hdus=pyfits.HDUList()
+    hdus=pyfits.open(filename)
     fiber_qa_table = Table.read(filename,'FIBERQA')
     if 'PETALQA' in hdus :
         petal_qa_table = Table.read(filename,'PETALQA')
     else :
         petal_qa_table = None
+    hdus.close()
     return fiber_qa_table , petal_qa_table

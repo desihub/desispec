@@ -181,6 +181,13 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     tile_petalqa_table = Table()
     petals=np.unique(exposure_fiberqa_tables["PETAL_LOC"])
     tile_petalqa_table["PETAL_LOC"]=petals
+    keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'TSNR2FRA', 'NCFRAME', 'BSKYTHRURMS', 'BSKYCHI2PDF', 'RSKYTHRURMS', 'RSKYCHI2PDF', 'ZSKYTHRURMS', 'ZSKYCHI2PDF']
+    for k in keys :
+        tile_petalqa_table[k]=np.zeros(petals.size)
+    for p,petal in enumerate(petals) :
+        ii=(exposure_petalqa_tables["PETAL_LOC"]==petal)
+        for k in keys :
+            tile_petalqa_table[k][p]=np.mean(exposure_petalqa_tables[k][ii])
 
     #for k in
 

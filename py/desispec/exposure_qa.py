@@ -91,12 +91,18 @@ def compute_exposure_qa(night, expid, specprod_dir):
 
     petalqa_table = Table()
     petalqa_table["PETAL_LOC"]=petal_locs
-    petalqa_table["WORSTREADNOISE"]=np.zeros(petal_locs.size)
+    petalqa_table["WORSTREADNOISE"]=np.zeros(petal_locs.size,dtype=float)
     petalqa_table["NGOODPOS"]=np.zeros(petal_locs.size,dtype=int)
     petalqa_table["NSTDSTAR"]=np.zeros(petal_locs.size,dtype=int)
-    petalqa_table["STARRMS"]=np.zeros(petal_locs.size)
-    petalqa_table["TSNR2FRA"]=np.zeros(petal_locs.size)
+    petalqa_table["STARRMS"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["TSNR2FRA"]=np.zeros(petal_locs.size,dtype=float)
     petalqa_table["NCFRAME"]=np.zeros(petal_locs.size,dtype=int)
+    petalqa_table["BSKYTHRURMS"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["BSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["RSKYTHRURMS"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["RSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["ZSKYTHRURMS"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["ZSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
 
     # need to add things
 
@@ -221,6 +227,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
         # checking fluxcalibration vs GFA?
         ####################################################################
 
+
         # record TSNR2
         ####################################################################
         camera="{}{}".format(qa_params["tsnr2_band"],spectro)
@@ -233,6 +240,29 @@ def compute_exposure_qa(night, expid, specprod_dir):
         good = ((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)==0)
         petal_tsnr2[petal] = np.median(tsnr2_vals[good])
         log.info("petal #{} median {} = {}".format(petal,tsnr2_key,petal_tsnr2[petal]))
+
+        # checking sky rms
+        ####################################################################
+        for band in ["b","r","z"]:
+            camera="{}{}".format(band,spectro)
+            sky_filename=findfile('sky',night,expid,camera,specprod_dir=specprod_dir)
+            if not os.path.isfile(sky_filename) :
+                continue
+            sky_throughput_corr=fitsio.read(sky_filename,"THRPUTCORR")
+            petalqa_table[band.upper()+'SKYTHRURMS'][petal]=1.48*np.median(np.abs(sky_throughput_corr-1))
+            log.info("petal #{} {} sky throughput rms={:4.3f}".format(petal,band,petalqa_table[band.upper()+"SKYTHRURMS"][petal]))
+            cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+            if not os.path.isfile(cframe_filename) :
+                continue
+            cframe=read_frame(cframe_filename)
+            skyfibers=cframe.fibermap["OBJTYPE"]=="SKY"
+            chi2=np.sum(cframe.ivar[skyfibers]*cframe.flux[skyfibers]**2*(cframe.mask[skyfibers]==0))
+            ndata=np.sum((cframe.ivar[skyfibers]>0)*(cframe.mask[skyfibers]==0))
+            npar=cframe.wave.size
+            ndf=ndata-npar
+            if ndf>0 :
+                petalqa_table[band.upper()+"SKYCHI2PDF"][petal]=chi2/ndf
+                log.info("petal #{} {} sky chi2pdf={:4.3f}".format(petal,band,petalqa_table[band.upper()+"SKYCHI2PDF"][petal]))
 
     petal_tsnr2_frac = np.zeros(petal_locs.size)
     if np.all(petal_tsnr2==0) :
