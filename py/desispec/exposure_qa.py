@@ -103,6 +103,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
     petalqa_table["RSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
     petalqa_table["ZSKYTHRURMS"]=np.zeros(petal_locs.size,dtype=float)
     petalqa_table["ZSKYCHI2PDF"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["BTHRUFRAC"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["RTHRUFRAC"]=np.zeros(petal_locs.size,dtype=float)
+    petalqa_table["ZTHRUFRAC"]=np.zeros(petal_locs.size,dtype=float)
 
     # need to add things
 
@@ -263,6 +266,27 @@ def compute_exposure_qa(night, expid, specprod_dir):
             if ndf>0 :
                 petalqa_table[band.upper()+"SKYCHI2PDF"][petal]=chi2/ndf
                 log.info("petal #{} {} sky chi2pdf={:4.3f}".format(petal,band,petalqa_table[band.upper()+"SKYCHI2PDF"][petal]))
+
+        # check calib
+        ####################################################################
+        for band in ["b","r","z"]:
+            camera="{}{}".format(band,spectro)
+            calib_filename=findfile('fluxcalib',night,expid,camera,specprod_dir=specprod_dir)
+            if os.path.isfile(calib_filename) :
+                # calib value of central fibers, central wavelength
+                calib=fitsio.read(calib_filename,0)
+                nwave=calib.shape[1]
+                cal=np.median(calib[230:270,nwave//2-200:nwave//2+200])
+                petalqa_table[band.upper()+"THRUFRAC"][petal]=cal
+            else :
+                log.warning("missing {}".format(calib_filename))
+
+    for band in ["b","r","z"]:
+        k=band.upper()+"THRUFRAC"
+        mval=np.mean(petalqa_table[k][petalqa_table[k]!=0])
+        if mval!=0 :
+            petalqa_table[k] /= mval
+            log.info("{} = {}".format(k,list(petalqa_table[k])))
 
     petal_tsnr2_frac = np.zeros(petal_locs.size)
     if np.all(petal_tsnr2==0) :
