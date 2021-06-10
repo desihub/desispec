@@ -88,14 +88,24 @@ def compute_exposure_qa(night, expid, specprod_dir):
     petal_tsnr2=np.zeros(10)
     worst_rdnoise = 0
 
+
     petalqa_table = Table()
     petalqa_table["PETAL_LOC"]=petal_locs
+    petalqa_table["WORSTREADNOISE"]=np.zeros(petal_locs.size)
+    petalqa_table["NGOODPOS"]=np.zeros(petal_locs.size,dtype=int)
+    petalqa_table["NSTDSTAR"]=np.zeros(petal_locs.size,dtype=int)
+    petalqa_table["STARRMS"]=np.zeros(petal_locs.size)
+    petalqa_table["TSNR2FRA"]=np.zeros(petal_locs.size)
+    petalqa_table["NCFRAME"]=np.zeros(petal_locs.size,dtype=int)
+
     # need to add things
 
     frame_header = None
     fibermap_header = None
 
     for petal in petal_locs :
+        worst_rdnoise_per_petal = 0
+
         spectro=petal # same number
         log.info("spectro {}".format(spectro))
         entries = np.where(fiberqa_table['PETAL_LOC'] == petal)[0]
@@ -107,18 +117,27 @@ def compute_exposure_qa(night, expid, specprod_dir):
         for band in ["b","r","z"] :
             camera=f"{band}{spectro}"
             cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+            if not os.path.isfile(cframe_filename) :
+                continue
+            petalqa_table["NCFRAME"][petal]+=1
             head=fitsio.read_header(cframe_filename)
             if frame_header is None :
                 frame_header = head
-                fibermap_header = fitsio.read_header(cframe_filename,"FIBERMAP")
+            if fibermap_header is None :
+                try :
+                    fibermap_header = fitsio.read_header(cframe_filename,"FIBERMAP")
+                except OSError as e :
+                    log.error(e)
+
             readnoise_is_bad = False
             for amp in ["A","B","C","D"] :
                 rdnoise=head['OBSRDN'+amp]
                 worst_rdnoise = max(worst_rdnoise,rdnoise)
+                worst_rdnoise_per_petal = max(worst_rdnoise_per_petal,rdnoise)
                 if rdnoise > max_rdnoise :
                     log.warning("readnoise is bad in camera {} amplifier {} : {}".format(camera,amp,rdnoise))
                     readnoise_is_bad = True
-
+            petalqa_table["WORSTREADNOISE"][petal]=worst_rdnoise_per_petal
 
             if readnoise_is_bad :
 
@@ -144,6 +163,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
             log.warning("petal #{} has {} fibers with bad positions".format(petal,n_bad_positions))
             fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALPOS")
 
+        petalqa_table["NGOODPOS"][petal]=np.sum((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)==0)
+
+
         # checking standard stars
         ####################################################################
         stdstars_filename = findfile("stdstars",night,expid,spectrograph=spectro,specprod_dir=specprod_dir)
@@ -155,6 +177,8 @@ def compute_exposure_qa(night, expid, specprod_dir):
             # generous color cut here.
             good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)&(np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.3)
             ngood=np.sum(good)
+            petalqa_table["NSTDSTAR"][petal]=ngood
+
             if ngood < qa_params["min_number_of_good_stdstars_per_petal"] :
                 log.warning("petal #{} has only {} good std stars for calibration".format(petal,ngood))
                 fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
@@ -172,6 +196,8 @@ def compute_exposure_qa(night, expid, specprod_dir):
 
                 camera=f"r{spectro}"
                 cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+                if not os.path.isfile(cframe_filename) :
+                    continue
                 cframe = read_frame(cframe_filename)
                 frameflux=cframe.flux[goodfibers]
                 scale=np.zeros(ngood)
@@ -181,6 +207,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
                     dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers[i]],cframe.ivar[goodfibers[i]])
                     scale[i] = np.sum(dflux*mflux)/np.sum(mflux**2)
                 calib_rms=np.sqrt(np.mean((scale-1)**2))
+                petalqa_table["STARRMS"][petal]=calib_rms
                 if calib_rms>qa_params["max_rms_of_rflux_ratio_of_stdstars"] :
                     log.warning("petal #{} has std stars calib rms={:3.2f}>{:3.2f}".format(petal,calib_rms,qa_params["max_rms_of_rflux_ratio_of_stdstars"]))
                     fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
@@ -198,6 +225,8 @@ def compute_exposure_qa(night, expid, specprod_dir):
         ####################################################################
         camera="{}{}".format(qa_params["tsnr2_band"],spectro)
         cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+        if not os.path.isfile(cframe_filename) :
+            continue
         scores = fitsio.read(cframe_filename,"SCORES")
         tsnr2_key  = qa_params["tsnr2_key"]
         tsnr2_vals = scores[tsnr2_key]
@@ -205,12 +234,15 @@ def compute_exposure_qa(night, expid, specprod_dir):
         petal_tsnr2[petal] = np.median(tsnr2_vals[good])
         log.info("petal #{} median {} = {}".format(petal,tsnr2_key,petal_tsnr2[petal]))
 
+    petal_tsnr2_frac = np.zeros(petal_locs.size)
     if np.all(petal_tsnr2==0) :
-         fiberqa_table['QAFIBERSTATUS'] |= fibermask.mask("BADPETALTSNR")
+         fiberqa_table['QAFIBERSTATUS'] |= fibermask.mask("BADPETALSNR")
          log.error("all petals have TSNR2=0")
     else :
         mean_tsnr2 = np.mean(petal_tsnr2[petal_tsnr2!=0])
         petal_tsnr2_frac = petal_tsnr2/mean_tsnr2
+        for petal in petal_locs :
+            petalqa_table["TSNR2FRA"][petal]=petal_tsnr2_frac[petal]
         badpetals=(petal_tsnr2_frac<qa_params["tsnr2_petal_minfrac"])|(petal_tsnr2_frac>qa_params["tsnr2_petal_maxfrac"])
         for petal in np.where(badpetals)[0] :
             entries=(fiberqa_table['PETAL_LOC'] == petal)
@@ -227,16 +259,18 @@ def compute_exposure_qa(night, expid, specprod_dir):
     fiberqa_table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
     fiberqa_table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
 
-    # copy some keys from the frame header
-    keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF"]
-    for k in keys :
-        if k in frame_header :
-            fiberqa_table.meta[k] = frame_header[k]
+    if frame_header is not None :
+        # copy some keys from the frame header
+        keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF"]
+        for k in keys :
+            if k in frame_header :
+                fiberqa_table.meta[k] = frame_header[k]
 
-    # copy some keys from the fibermap header
-    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC"]
-    for k in keys :
-        if k in fibermap_header :
-            fiberqa_table.meta[k] = fibermap_header[k]
+    if fibermap_header is not None :
+        # copy some keys from the fibermap header
+        keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC"]
+        for k in keys :
+            if k in fibermap_header :
+                fiberqa_table.meta[k] = fibermap_header[k]
 
     return fiberqa_table , petalqa_table

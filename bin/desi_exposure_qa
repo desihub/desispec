@@ -167,7 +167,7 @@ def main():
                         log.error("mismatch")
                         log.error(keys)
                         log.error(colnames)
-                        raise RuntimeError("incompatible rows")
+                        continue
                 good_rows.append(row)
                 colnames=keys
             else :

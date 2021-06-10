@@ -182,6 +182,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     petals=np.unique(exposure_fiberqa_tables["PETAL_LOC"])
     tile_petalqa_table["PETAL_LOC"]=petals
 
+    #for k in
+
     # add meta info
     tile_fiberqa_table.meta["TILEID"]=tileid
     tile_fiberqa_table.meta["NIGHT"]=night
