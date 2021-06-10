@@ -201,7 +201,7 @@ def main():
 
         viewer.kill()
         viewer=None
-    res=yesnohelp("all done, save result in {}?".format(args.outfile),save=False,_exit=False,_pass=False)
+    res=yesnohelp("all done, save result in {}?".format(args.outfile),_save=False,_exit=False,_pass=False)
 
 
 
