@@ -23,12 +23,16 @@ exposure_qa:
  tsnr2_key : TSNR2_LRG_R
  tsnr2_petal_minfrac : 0.7
  tsnr2_petal_maxfrac : 1.3
+ tsnr2_for_efftime_dark : 'TSNR2_ELG'
+ tsnr2_for_efftime_bright : 'TSNR2_BGS'
+ tsnr2_for_efftime_backup : 'TSNR2_BGS'
 
  # bad QAFIBERSTATUS flag
  bad_qafstatus_mask : "STUCKPOSITIONER|BROKENFIBER|RESTRICTED|MISSINGPOSITION|BADPOSITION|POORPOSITION"
 
 # QA parameters read by tile_qa.py
 #tile_qa:
+
 
 # QA parameters read by tile_qa_plot.py
 tile_qa_plot:
