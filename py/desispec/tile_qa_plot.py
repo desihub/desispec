@@ -740,6 +740,7 @@ def make_tile_qa_plot(
         "PROGRAM = {}".format(hdr["FAPRGRM"]),
         "RA , DEC = {:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"]),
         "",
+        "efftime / goaltime = {:.2f}".format(hdr["EFFTIME_SPEC"] / hdr["GOALTIME"]),
         "ratio n(z) / n_ref(z) = {:.2f}".format(ratio_nz),
         # AR as we are computing the ratio of some TSNR2 quantity,
         # AR    it is the same as the ratio of EFFTIME_SPEC
@@ -747,6 +748,9 @@ def make_tile_qa_plot(
         "ratio efftime / efftime_ref = {:.2f}".format(ratio_tsnr2),
     ]:
         fontweight, col = "normal", "k"
+        # if (t[:18] == "efftime / goaltime") & (hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < hdr["MINTFRAC"]):
+        if (t[:18] == "efftime / goaltime") & (hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < 0.85): # TBD: replace by MINTFRAC
+            fontweight, col = "bold", "r"
         if (t[:10] == "ratio n(z)") & (ratio_nz < 0.8):
             fontweight, col = "bold", "r"
         if (t[:13] == "ratio efftime") & (ratio_tsnr2 < 0.8):
