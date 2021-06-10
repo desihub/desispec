@@ -93,6 +93,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
     petalqa_table["PETAL_LOC"]=petal_locs
     # need to add things
 
+    frame_header = None
+    fibermap_header = None
+
     for petal in petal_locs :
         spectro=petal # same number
         log.info("spectro {}".format(spectro))
@@ -106,7 +109,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
             camera=f"{band}{spectro}"
             cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
             head=fitsio.read_header(cframe_filename)
-
+            if frame_header is None :
+                frame_header = head
+                fibermap_header = fitsio.read_header(cframe_filename,"FIBERMAP")
             readnoise_is_bad = False
             for amp in ["A","B","C","D"] :
                 rdnoise=head['OBSRDN'+amp]
@@ -232,5 +237,17 @@ def compute_exposure_qa(night, expid, specprod_dir):
     fiberqa_table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
     fiberqa_table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
     fiberqa_table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
+
+    # copy some keys from the frame header
+    keys=["EXPID","TILEID","EXPTIME","MJD-OBS","TARGTRA","TARGTDEC","MOUNTEL","MOUNTHA","AIRMASS","ETCTEFF"]
+    for k in keys :
+        if k in frame_header :
+            fiberqa_table.meta[k] = frame_header[k]
+
+    # copy some keys from the fibermap header
+    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC"]
+    for k in keys :
+        if k in fibermap_header :
+            fiberqa_table.meta[k] = fibermap_header[k]
 
     return fiberqa_table , petalqa_table

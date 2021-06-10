@@ -7,8 +7,7 @@ I/O routines for exposure and tile qa
 
 import os
 import astropy.io.fits as pyfits
-
-
+from astropy.table import Table
 
 def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     hdus=pyfits.HDUList()
@@ -23,11 +22,10 @@ def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     hdus.writeto(filename, overwrite=True, checksum=True)
 
 def read_exposure_qa(filename) :
-    hdus=pyfits.open(filename)
-
-    fiber_qa_table = hdus['FIBERQA'].data
+    hdus=pyfits.HDUList()
+    fiber_qa_table = Table.read(filename,'FIBERQA')
     if 'PETALQA' in hdus :
-        petal_qa_table = hdus['PETALQA'].data
+        petal_qa_table = Table.read(filename,'PETALQA')
     else :
         petal_qa_table = None
     return fiber_qa_table , petal_qa_table
@@ -46,11 +44,10 @@ def write_tile_qa(filename,fiber_qa_table,petal_qa_table=None) :
     hdus.writeto(filename, overwrite=True, checksum=True)
 
 def read_tile_qa(filename) :
-    hdus=pyfits.open(filename)
-
-    fiber_qa_table = hdus['FIBERQA'].data
+    hdus=pyfits.HDUList()
+    fiber_qa_table = Table.read(filename,'FIBERQA')
     if 'PETALQA' in hdus :
-        petal_qa_table = hdus['PETALQA'].data
+        petal_qa_table = Table.read(filename,'PETALQA')
     else :
         petal_qa_table = None
     return fiber_qa_table , petal_qa_table

@@ -83,6 +83,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     if exposure_qa_dir is None :
         exposure_qa_dir = specprod_dir
 
+    exposure_qa_meta = None
+
     exposure_fiberqa_tables = []
     exposure_petalqa_tables = []
     for expid in expids :
@@ -93,12 +95,15 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
             exposure_fiberqa_table , exposure_petalqa_table = compute_exposure_qa(night, expid, specprod_dir)
             if exposure_fiberqa_table is not None :
                 write_exposure_qa(filename, exposure_fiberqa_table , exposure_petalqa_table)
+                log.info("wrote {}".format(filename))
             else :
                 log.warning("failed to compute exposure qa")
                 continue
         else :
             log.info(f"reading {filename}")
             exposure_fiberqa_table , exposure_petalqa_table = read_exposure_qa(filename)
+        if exposure_qa_meta is None :
+            exposure_qa_meta = exposure_fiberqa_table.meta
         exposure_fiberqa_tables.append(exposure_fiberqa_table)
         exposure_petalqa_tables.append(exposure_petalqa_table)
 
@@ -183,6 +188,9 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     tile_fiberqa_table.meta["NGOODFIBERS"]=good_fibers.size
     tile_fiberqa_table.meta["NGOODPETALS"]=good_petals.size
 
-
+    keys = ["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC"]
+    for k in keys :
+        if k in exposure_qa_meta :
+            tile_fiberqa_table.meta[k] = exposure_qa_meta[k]
 
     return tile_fiberqa_table ,tile_petalqa_table
