@@ -1,0 +1,209 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script is used to do a visual validation of the tiles based on the automated QA results.
+"""
+
+
+import os,sys
+import argparse
+import glob
+import numpy as np
+import multiprocessing
+from astropy.table import Table
+import fitsio
+import subprocess
+from PIL import Image
+
+from desiutil.log import get_logger
+from desispec.io import specprod_root,findfile,read_tile_qa,write_tile_qa
+from desispec.tile_qa import compute_tile_qa
+from desispec.util import parse_int_args
+
+from desispec.tile_qa_plot import make_tile_qa_plot
+
+
+def parse(options=None):
+    parser = argparse.ArgumentParser(
+                description="Tile Visual Inspection")
+    parser.add_argument('--prod', type = str, default = None, required=False,
+                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+    parser.add_argument('--qa-dir', type = str, default = None, required=False,
+                        help = 'Path to qa directory, default is the same as the prod directory')
+    parser.add_argument('-t','--tileids', type = str, default = None, required=False,
+                        help = 'Comma, or colon separated list of nights to process. ex: 12,14 or 12:23')
+    parser.add_argument('-n','--nights', type = str, default = None, required=False,
+                        help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
+    parser.add_argument('-i','--infile', type = str, default = None, required=False,
+                        help = 'Specific input tile file, default is proddir/tiles.csv')
+    parser.add_argument('-o','--outfile', type = str, default = None, required=False,
+                        help = 'Output tile file, default is same as input')
+    parser.add_argument('-u','--user', type = str, default = None, required=True,
+                        help = 'your name or initials')
+
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+# user interaction wrappers
+def input2(message):
+    '''Wrapper for input which will log the interaction.'''
+    print(f'PROMPT: {message}')
+    user_input = input('>>> ')
+    if user_input == '':
+        user_input = '(no entry)'
+    print(f'USER ENTERED >>> {user_input}')
+    return user_input
+
+blank_responses = {'', '(no entry)'}
+viewer=None
+
+def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
+    '''Wrapper for user input which cleans up human-entered values and returns
+    a string of exactly 'yes', 'no', or 'help'. Also can give user option to
+    exit the program.
+
+    Boolean args allow you to turn off options for the user.
+    '''
+    suffix_parts = ['y','n']
+    if _save: suffix_parts.append('save')
+    if _exit: suffix_parts.append('exit')
+    if _pass: suffix_parts.append('pass')
+    if _help: suffix_parts.append('help')
+    suffix = '/'.join(suffix_parts)
+    answer =  input2(f'{message} ({suffix})')
+    if _help and answer.lower() in {'h', 'help', 'doc', 'man'}:
+        return 'help'
+    if answer.lower() in {'n', 'no', 'false'}:
+        return 'no'
+    if _pass and answer.lower() in {'pass'}:
+        return 'pass'
+    if _save and answer.lower() in {'save'}:
+        return 'save'
+    if answer.lower() in {'y', 'yes', 'true'}:
+        return 'yes'
+    if _exit and answer.lower() in {'exit'}:
+        res=yesnohelp("Are you sure you want to exit without saving?",_pass=False,_save=False,_exit=False,_help=False)
+        if res=="yes" :
+            print('Exiting at user request.')
+            if viewer is not None: viewer.kill()
+            sys.exit(0)
+    return yesnohelp(message)
+
+def main():
+    global viewer
+
+    log = get_logger()
+
+    args=parse()
+
+    if args.prod is None:
+        args.prod = specprod_root()
+    elif args.prod.find("/")<0 :
+        args.prod = specprod_root(args.prod)
+    if args.qa_dir is None :
+        args.qa_dir = args.prod
+    log.info('prod    = {}'.format(args.prod))
+    log.info('qa dir  = {}'.format(args.qa_dir))
+
+    if args.infile is None :
+        args.infile = os.path.join(args.prod,"tiles.csv")
+    if args.outfile is None :
+        args.outfile = args.infile
+
+    if args.tileids is not None:
+        requested_tileids = parse_int_args(args.tileids)
+    else:
+        requested_tileids = None
+    if args.nights is not None :
+        requested_nights = parse_int_args(args.nights)
+    else :
+        requested_nights = None
+
+    if not os.path.isfile(args.infile) :
+        print("ERROR: No tiles table file {}".format(args.infile))
+        print("Add or change --prod or --infile ... ?")
+        sys.exit(12)
+    tiles_table = Table.read(args.infile)
+
+    if not "QA" in tiles_table.dtype.names :
+        tiles_table["QA"]=np.repeat("none      ",len(tiles_table))
+    if not "USER" in tiles_table.dtype.names :
+        tiles_table["USER"]=np.repeat("none     ",len(tiles_table))
+
+    log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
+    selection=(tiles_table["ZDONE"]=="false")&(tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))&(tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad")
+    log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
+
+    tileids = tiles_table["TILEID"][selection]
+    nights  = tiles_table["LASTNIGHT"][selection]
+
+    ok = np.repeat(True,tileids.size)
+    if requested_tileids is not None :
+        ok &= np.in1d(tileids,requested_tileids)
+    if requested_nights is not None :
+        ok &= np.in1d(nights,requested_nights)
+    tileids = tileids[ok]
+    nights  = nights[ok]
+
+    if len(tileids)==0 :
+        print("no tile/night selected")
+        sys.exit(12)
+    log.info("Remains {} tiles after selection of tileid/night:".format(tileids.size))
+    for tileid,night in zip(tileids,nights) :
+        log.info(" TILE={} NIGHT={}".format(tileid,night))
+
+    viewer=None
+    for tileid,night in zip(tileids,nights) :
+        log.info("Inspecting TILE={} NIGHT={} ...".format(tileid,night))
+
+        # find qa plot ...
+        qaplot_filename = findfile("tileqapng",night=night,tile=tileid,specprod_dir=args.qa_dir)
+        if not os.path.isfile(qaplot_filename) :
+            log.error("Missing {}, did you run desi_tile_qa?".format(qaplot_filename))
+            continue
+        print("Showing {} ...".format(qaplot_filename))
+        if viewer is not None : viewer.kill()
+        viewer = subprocess.Popen(['eog',qaplot_filename ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+
+        index=np.where(tiles_table["TILEID"]==tileid)[0][0]
+        while True :
+            res=yesnohelp("Is tile {} a valid tile?".format(tileid))
+            if res=="help" :
+                print("y: yes, this tile is valid.")
+                print("n: no, it's bad and we should discard one or several exposures or fix the processing.")
+                print("pass: skip this one, because unsure.")
+                print("exit: exit without saving anything in this session.")
+                print("save: save output file {}".format(args.outfile))
+            elif res=="save" :
+                tiles_table.write(args.outfile,overwrite=True)
+                print("wrote",args.outfile)
+            elif res=="yes" :
+                tiles_table["ZDONE"][index]="true"
+                tiles_table["QA"][index]="good"
+                tiles_table["USER"][index]=args.user
+                break
+            elif res=="no" :
+                tiles_table["QA"][index]="bad"
+                tiles_table["USER"][index]=args.user
+                break
+            elif res=="pass" :
+                tiles_table["QA"][index]="unsure"
+                tiles_table["USER"][index]=args.user
+                break
+
+        viewer.kill()
+        viewer=None
+    res=yesnohelp("all done, save result in {}?".format(args.outfile),save=False,_exit=False,_pass=False)
+
+
+
+if __name__ == '__main__':
+    main()

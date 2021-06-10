@@ -96,6 +96,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
     petalqa_table["PETAL_LOC"]=np.arange(npetal)
     petalqa_table["WORSTREADNOISE"]=np.zeros(npetal,dtype=float)
     petalqa_table["NGOODPOS"]=np.zeros(npetal,dtype=int)
+    petalqa_table["NGOODFIB"]=np.zeros(npetal,dtype=int)
     petalqa_table["NSTDSTAR"]=np.zeros(npetal,dtype=int)
     petalqa_table["STARRMS"]=np.zeros(npetal,dtype=float)
     petalqa_table["TSNR2FRA"]=np.zeros(npetal,dtype=float)
@@ -181,15 +182,20 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 elif rdnoise_right>max_rdnoise :
                     fiberqa_table['QAFIBERSTATUS'][entries[xfiber>=xtrans]] |= bad_rdnoise_mask
 
+        # masks
+        ################
+        bad_positions_mask = fibermask.mask(qa_params["bad_positions_mask"]) # only positioning issues
+        bad_fibers_mask    = fibermask.mask(qa_params["bad_qafstatus_mask"]) # all possible issues
+
+
         # checking statistics of positioning
         ####################################################################
-        bad_positions = fibermask.mask("STUCKPOSITIONER|BROKENFIBER|RESTRICTED|MISSINGPOSITION|BADPOSITION|POORPOSITION")
-        n_bad_positions = np.sum((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)>0)
+        n_bad_positions = np.sum((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions_mask)>0)
         if n_bad_positions > qa_params["max_frac_of_bad_positions_per_petal"]*entries.size :
             log.warning("petal #{} has {} fibers with bad positions".format(petal,n_bad_positions))
             fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALPOS")
 
-        petalqa_table["NGOODPOS"][petal]=np.sum((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)==0)
+        petalqa_table["NGOODPOS"][petal]=np.sum((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions_mask)==0)
 
 
         # checking standard stars
@@ -201,7 +207,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
             # but for clarity on the selection, I repeat the cuts here
             # CHI2DOF and color cut are used in flux calibration
             # generous color cut here.
-            good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)&(np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.3)
+            good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)
+            if "MODEL_G-R" in t.dtype.names :
+                good &= (np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.3)
             ngood=np.sum(good)
             petalqa_table["NSTDSTAR"][petal]=ngood
 
@@ -258,7 +266,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
         print(scores.dtype.names)
         tsnr2_key  = qa_params["tsnr2_key"]
         tsnr2_vals = scores[tsnr2_key]
-        good = ((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions)==0)
+        good = ((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions_mask)==0)
         petal_tsnr2[petal] = np.median(tsnr2_vals[good])
         log.info("petal #{} median {} = {}".format(petal,tsnr2_key,petal_tsnr2[petal]))
 
@@ -332,7 +340,12 @@ def compute_exposure_qa(night, expid, specprod_dir):
             fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSNR")
             log.warning("petal #{} TSNR2 frac = {:3.2f}".format(petal,petal_tsnr2_frac[petal]))
 
-    bad_fibers_mask=bad_positions
+    # count bad fibers
+    for petal in petal_locs :
+        entries=(fiberqa_table['PETAL_LOC'] == petal)
+        petalqa_table["NGOODFIB"][petal]=np.sum((fiberqa_table['QAFIBERSTATUS'][entries]&bad_fibers_mask)==0)
+
+    bad_fibers_mask = fibermask.mask(qa_params["bad_qafstatus_mask"])
     good_fibers = np.where((fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
     good_petals = np.unique(fiberqa_table['PETAL_LOC'][good_fibers])
     fiberqa_table.meta["NGOODFIBERS"]=good_fibers.size
@@ -352,7 +365,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
 
     if fibermap_header is not None :
         # copy some keys from the fibermap header
-        keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC"]
+        keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC"]
         for k in keys :
             if k in fibermap_header :
                 fiberqa_table.meta[k] = fibermap_header[k]
