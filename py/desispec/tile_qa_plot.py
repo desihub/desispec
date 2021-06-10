@@ -485,7 +485,7 @@ def get_radec_mw(ras, decs, org):
     return np.radians(ras), np.radians(decs)
 
 
-def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, program, org=120):
+def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
     """
     Plots the target density sky map with a Mollweide projection, with highlighting the tile position.
 
@@ -495,87 +495,92 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, program, org=120):
         tileid: TILEID (int)
         tilera: tile R.A. in degrees (float)
         tiledec: tile Dec. in degrees (float)
+        survey: usually "main", "sv1", "sv3" (string)
         program: "dark" or "bright" (string)
         org: R.A. at the center of the plot (default=120) (float)
     
     Note:
-        if program is not "bright" or "dark", will not plot anything.
+        If survey is not "main" and program is not "bright" or "dark",
+            will color-code EBV, not the target density.
     """
-    if program in ["bright", "dark"]:
-        # AR reading the pixweight file
-        pixwfn = "{}/target/catalogs/dr9/1.1.1/pixweight/main/resolve/{}/pixweight-1-{}.fits".format(
-            os.getenv("DESI_ROOT"), program, program
-        )
-        hdr = fits.getheader(pixwfn, 1)
-        nside, nest = hdr["HPXNSIDE"], hdr["HPXNEST"]
-        pixwd = fits.open(pixwfn)[1].data
-        npix = hp.nside2npix(nside)
-        thetas, phis = hp.pix2ang(nside, np.arange(npix), nest=nest)
-        ras, decs = np.degrees(phis), 90.0 - np.degrees(thetas)
-        # AR plotting skymap
-        set_mwd(ax, org)
-        # AR dr9
-        ramws, decmws = get_radec_mw(ras, decs, org)
-        sel = pixwd["FRACAREA"] > 0
+    # AR reading the pixweight file
+    pixwfn = "{}/target/catalogs/dr9/1.1.1/pixweight/main/resolve/{}/pixweight-1-{}.fits".format(
+        os.getenv("DESI_ROOT"), program, program
+    )
+    hdr = fits.getheader(pixwfn, 1)
+    nside, nest = hdr["HPXNSIDE"], hdr["HPXNEST"]
+    pixwd = fits.open(pixwfn)[1].data
+    npix = hp.nside2npix(nside)
+    thetas, phis = hp.pix2ang(nside, np.arange(npix), nest=nest)
+    ras, decs = np.degrees(phis), 90.0 - np.degrees(thetas)
+    # AR plotting skymap
+    set_mwd(ax, org)
+    # AR dr9
+    ramws, decmws = get_radec_mw(ras, decs, org)
+    sel = pixwd["FRACAREA"] > 0
+    if (survey == "main") & (program in ["bright", "dark"]):
         dens_med = np.median(pixwd["ALL"][sel])
         clim = (0.75, 1.25)
-        sc = ax.scatter(
-            ramws[sel],
-            decmws[sel],
-            c=pixwd["ALL"][sel] / dens_med,
-            s=1,
-            alpha=0.5,
-            zorder=0,
-            cmap=matplotlib.cm.coolwarm,
-            vmin=clim[0],
-            vmax=clim[1],
-            rasterized=True,
-        )
-        # AR our tileid
-        tmpra = np.remainder(tilera + 360 - org, 360)
-        if tmpra > 180:
-            tmpra -= 360
-        if tmpra > 0:
-            dra = -40
-        else:
-            dra = 40
-        ramws, decmws = get_radec_mw(
-            np.array([tilera, tilera + dra]), np.array([tiledec, tiledec - 30]), org
-        )
-        ax.scatter(
-            ramws[0],
-            decmws[0],
-            edgecolors="k",
-            facecolors="none",
-            marker="o",
-            s=50,
-            zorder=1,
-        )
-        arrow_args = dict(color="k", width=1, headwidth=5, headlength=10)
-        ax.annotate(
-            "",
-            xy=(ramws[0], decmws[0]),
-            xytext=(ramws[1], decmws[1]),
-            arrowprops=arrow_args,
-        )
-        # AR cbar
-        pos = ax.get_position().get_points().flatten()
-        cax = fig.add_axes(
-            [
-                pos[0] + 0.1 * (pos[2] - pos[0]),
-                pos[1] + 0.3 * (pos[3] - pos[1]),
-                0.4 * (pos[2] - pos[0]),
-                0.005,
-            ]
-        )
-        cbar = plt.colorbar(
-            sc, cax=cax, fraction=0.025, orientation="horizontal", extend="both"
-        )
-        cbar.mappable.set_clim(clim)
-        cbar.set_label(
-            "All {} targets / ({:.0f}/deg2)".format(program, dens_med),
-            fontweight="bold",
-        )
+        c = pixwd["ALL"] / dens_med
+        clabel = "All {} targets / ({:.0f}/deg2)".format(program, dens_med)
+    else:
+        clim = (0, 0.1)
+        c = pixwd["EBV"]
+        clabel = "EBV"
+    sc = ax.scatter(
+        ramws[sel],
+        decmws[sel],
+        c=c[sel],
+        s=1,
+        alpha=0.5,
+        zorder=0,
+        cmap=matplotlib.cm.coolwarm,
+        vmin=clim[0],
+        vmax=clim[1],
+        rasterized=True,
+    )
+    # AR cbar
+    pos = ax.get_position().get_points().flatten()
+    cax = fig.add_axes(
+        [
+            pos[0] + 0.1 * (pos[2] - pos[0]),
+            pos[1] + 0.3 * (pos[3] - pos[1]),
+            0.4 * (pos[2] - pos[0]),
+            0.005,
+        ]
+    )
+    cbar = plt.colorbar(
+        sc, cax=cax, fraction=0.025, orientation="horizontal", extend="both"
+    )
+    cbar.mappable.set_clim(clim)
+    cbar.set_label(clabel, fontweight="bold")
+    # AR our tileid
+    tmpra = np.remainder(tilera + 360 - org, 360)
+    if tmpra > 180:
+        tmpra -= 360
+    if tmpra > 0:
+        dra = -40
+    else:
+        dra = 40
+    ramws, decmws = get_radec_mw(
+        np.array([tilera, tilera + dra]), np.array([tiledec, tiledec - 30]), org
+    )
+    ax.scatter(
+        ramws[0],
+        decmws[0],
+        edgecolors="k",
+        facecolors="none",
+        marker="o",
+        s=50,
+        zorder=1,
+    )
+    arrow_args = dict(color="k", width=1, headwidth=5, headlength=10)
+    ax.annotate(
+        "",
+        xy=(ramws[0], decmws[0]),
+        xytext=(ramws[1], decmws[1]),
+        arrowprops=arrow_args,
+    )
 
 
 def make_tile_qa_plot(
@@ -726,6 +731,7 @@ def make_tile_qa_plot(
         hdr["TILEID"],
         hdr["TILERA"],
         hdr["TILEDEC"],
+        hdr["SURVEY"],
         hdr["FAPRGRM"].lower(),
         org=120,
     )
