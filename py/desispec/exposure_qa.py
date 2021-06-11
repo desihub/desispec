@@ -20,7 +20,7 @@ from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
 
 _qa_params = None
-def _get_qa_params() :
+def get_qa_params() :
     """
     Returns a dictionnary with the content of data/qa/qa-params.yaml
     """
@@ -46,7 +46,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
     log=get_logger()
 
     ##################################################################
-    qa_params=_get_qa_params()["exposure_qa"]
+    qa_params=get_qa_params()["exposure_qa"]
     ##################################################################
 
     fibermap_filename=f'{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits'

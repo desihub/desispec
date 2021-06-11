@@ -15,7 +15,7 @@ import glob
 
 from desiutil.log import get_logger
 
-from desispec.exposure_qa import compute_exposure_qa
+from desispec.exposure_qa import compute_exposure_qa,get_qa_params
 from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
 from desispec.maskbits import fibermask
 
@@ -168,7 +168,10 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
         tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj])
 
-    bad_fibers_mask=fibermask.mask("STUCKPOSITIONER|BROKENFIBER|RESTRICTED|MISSINGPOSITION|BADPOSITION|POORPOSITION")
+
+    qa_params=get_qa_params()["exposure_qa"]
+    bad_fibers_mask=fibermask.mask(qa_params["bad_qafstatus_mask"])
+
     good_fibers = np.where((tile_fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
     good_petals = np.unique(tile_fiberqa_table['PETAL_LOC'][good_fibers])
 
