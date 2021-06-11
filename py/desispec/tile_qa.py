@@ -15,21 +15,11 @@ import glob
 
 from desiutil.log import get_logger
 
-from desispec.exposure_qa import compute_exposure_qa
+from desispec.exposure_qa import compute_exposure_qa,get_qa_params
 from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
 from desispec.maskbits import fibermask
 
-"""
-# only read it once per process
-_qa_params = None
-def get_qa_params() :
-    global _qa_params
-    if _qa_params is None :
-        param_filename =resource_filename('desispec', 'data/qa/qa-params.yaml')
-        with open(param_filename) as f:
-            _qa_params = yaml.safe_load(f)
-    return _qa_params
-"""
+
 def mystack(tables) :
 
     if len(tables)==1 :
@@ -60,13 +50,11 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
        specprod_dir: str, specify the production directory.
                      default is $DESI_SPECTRO_REDUX/$SPECPROD
        exposure_qa_dir: str, optional, directory where the exposure qa are saved
-    returns an astropy.table.Table with one row per target and at least a TARGETID column
+    returns two tables (astropy.table.Table), fiberqa (with one row per target and at least a TARGETID column)
+            and petalqa (with one row per petal and at least a PETAL_LOC column)
     """
 
     log=get_logger()
-
-
-    #qa_params=get_qa_params()["tile_qa"]
 
     # get list of exposures used for the tile
     tiledir=f"{specprod_dir}/tiles/cumulative/{tileid:d}/{night}"
@@ -180,7 +168,10 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
         tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj])
 
-    bad_fibers_mask=fibermask.mask("STUCKPOSITIONER|BROKENFIBER|RESTRICTED|MISSINGPOSITION|BADPOSITION|POORPOSITION")
+
+    qa_params=get_qa_params()["exposure_qa"]
+    bad_fibers_mask=fibermask.mask(qa_params["bad_qafstatus_mask"])
+
     good_fibers = np.where((tile_fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
     good_petals = np.unique(tile_fiberqa_table['PETAL_LOC'][good_fibers])
 
