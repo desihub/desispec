@@ -127,7 +127,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     targetids=fibermap["TARGETID"]
 
     tile_fiberqa_table = Table()
-    for k in ['TARGETID','PETAL_LOC','DEVICE_LOC', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC', 'MEAN_FIBER_X', 'MEAN_FIBER_Y', 'MEAN_DELTA_X', 'MEAN_DELTA_Y', 'RMS_DELTA_X', 'RMS_DELTA_Y','DESI_TARGET', 'BGS_TARGET'] :
+    for k in ['TARGETID','PETAL_LOC','DEVICE_LOC', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC', 'MEAN_FIBER_X', 'MEAN_FIBER_Y', 'MEAN_DELTA_X', 'MEAN_DELTA_Y', 'RMS_DELTA_X', 'RMS_DELTA_Y','DESI_TARGET', 'BGS_TARGET', 'EBV'] :
         if k in fibermap.dtype.names :
             tile_fiberqa_table[k]=fibermap[k]
 

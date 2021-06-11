@@ -59,7 +59,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
 
     fiberqa_table = Table()
     for k in ['TARGETID', 'PETAL_LOC', 'DEVICE_LOC', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC',
-              'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y'] :
+              'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y', 'EBV'] :
         fiberqa_table[k]=fibermap[k]
 
     fiberqa_table['QAFIBERSTATUS']=fibermap['FIBERSTATUS']  # copy because content will be different
