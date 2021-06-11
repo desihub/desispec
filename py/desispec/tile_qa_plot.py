@@ -135,9 +135,9 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
     badqa_val, _ = get_qa_badmsks()
     sel = (d[fstatus_key] & badqa_val) == 0
     if tracer in ["BGS_BRIGHT", "BGS_FAINT"]:
-        sel = (d["BGS_TARGET"] & bgs_mask[tracer]) > 0
+        sel &= (d["BGS_TARGET"] & bgs_mask[tracer]) > 0
     else:
-        sel = (d["DESI_TARGET"] & desi_mask[tracer]) > 0
+        sel &= (d["DESI_TARGET"] & desi_mask[tracer]) > 0
     # AR ELG_LOP : excluding ELG_LOP x QSO
     if tracer == "ELG_LOP":
         sel &= (d["DESI_TARGET"] & desi_mask["QSO"]) == 0
