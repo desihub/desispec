@@ -202,7 +202,9 @@ def main():
         viewer.kill()
         viewer=None
     res=yesnohelp("all done, save result in {}?".format(args.outfile),_save=False,_exit=False,_pass=False)
-
+    if res == "yes" :
+        tiles_table.write(args.outfile,overwrite=True)
+        print("wrote",args.outfile)
 
 
 if __name__ == '__main__':
