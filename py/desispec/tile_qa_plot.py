@@ -643,8 +643,11 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
         os.getenv("DESI_ROOT"), program, program
     )
     if not os.path.isfile(pixwfn) :
-        print("missing",pixwfn)
-        return
+        print("use dark pixweight map")
+        tprogram="dark"
+        pixwfn = "{}/target/catalogs/dr9/1.1.1/pixweight/main/resolve/{}/pixweight-1-{}.fits".format(
+            os.getenv("DESI_ROOT"), tprogram, tprogram
+        )
 
     hdr = fits.getheader(pixwfn, 1)
     nside, nest = hdr["HPXNSIDE"], hdr["HPXNEST"]
@@ -899,7 +902,8 @@ def make_tile_qa_plot(
         hdr["FAPRGRM"].lower(),
         org=120,
     )
-    if "RMSDIST" not in hdr : hdr["RMSDIST"]=0
+    for k in ["RMSDIST","EFFTIME_SPEC"] :
+        if k not in hdr : hdr[k]=0
     # AR overall infos
     ax = plt.subplot(gs[0, 0])
     ax.axis("off")
@@ -954,9 +958,13 @@ def make_tile_qa_plot(
     # AR per petal diagnoses
     ax = plt.subplot(gs[1, 0])
     print_petal_infos(ax, petalqa)
+    try :
+        #  AR saving plot
+        plt.savefig(
+            tileqafits.replace(".fits", ".png"), bbox_inches="tight",
+        )
+    except ValueError as e :
+        print("failed to save figure")
+        print(e)
 
-    #  AR saving plot
-    plt.savefig(
-        tileqafits.replace(".fits", ".png"), bbox_inches="tight",
-    )
     plt.close()
