@@ -87,7 +87,7 @@ def get_tracer_zminmax(tracer):
 
     Args:
         tracer: tracer name (see get_tracer_names()) (string)
-    
+
     Returns:
         zmin: minimum redshift (float)
         zmax: minimum redshift (float)
@@ -149,7 +149,7 @@ def get_tracer_zok(tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS"):
     For a given tracer, returns the spectro. valid sample for the tile QA n(z):
         - (fstatus_key & bad_qafstatus_mask) == 0
         - DELTACHI2 > dchi2_min
-        - if QSO: additional cut on SPECTYPE="QSO"    
+        - if QSO: additional cut on SPECTYPE="QSO"
 
     Args:
         tracer: "BGS_BRIGHT", "BGS_FAINT", "LRG", "ELG_LOP", or "QSO" (string)
@@ -182,10 +182,10 @@ def get_zhists(
         d: structured array with at least FIBERSTATUS, DESI_TARGET, BGS_TARGET, DELTACHI2, SPECTYPE, Z
         fstatus_key (optional, defaults to QAFIBERSTATUS): key to use as FIBERSTATUS (string)
         tileid_key (optional, defaults to None): column name for TILEID (string)
-        
+
     Returns:
         bins: the redshift bin grid (float array)
-        zhists: fractional, per tileid, n(z) (numpy array of shape 
+        zhists: fractional, per tileid, n(z) (numpy array of shape
                 (nbin) if tileids is int or has length=1
                 (nbin, len(tileids)) else.
 
@@ -234,7 +234,7 @@ def get_viewer_cutout(
 ):
     """
     Downloads a cutout of the tile region from legacysurvey.org/viewer.
-    
+
     Args:
         tileid: TILEID (int)
         tilera: tile center R.A. (float)
@@ -305,7 +305,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
         tiledec: tile center Dec. (float)
         width_deg: width of the cutout in degrees (np.array of floats)
         c (optional, defaults to "w"): color used to display targets (string)
-    
+
     Notes:
         Different than fiberassign.fba_launch_io.plot_cutout().
     """
@@ -441,7 +441,7 @@ def get_petalqa_props(key):
 def print_petal_infos(ax, petalqa):
     """
     Print some diagnoses for each petal, and for the whole tile.
-    
+
     Args:
         ax: pyplot object
         petalqa: the PETALQA extension data of the tile-qa-TILEID-NIGHT.fits file
@@ -633,7 +633,7 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
         survey: usually "main", "sv1", "sv3" (string)
         program: "dark" or "bright" (string)
         org: R.A. at the center of the plot (default=120) (float)
-    
+
     Note:
         If survey is not "main" and program is not "bright" or "dark",
             will color-code EBV, not the target density.
@@ -752,6 +752,10 @@ def make_tile_qa_plot(
     hdr = h["FIBERQA"].header
     fiberqa = h["FIBERQA"].data
     petalqa = h["PETALQA"].data
+
+    if not "SURVEY" in hdr :
+        print("no SURVEY keyword in header, skip this tile")
+        return
 
     # AR start plotting
     fig = plt.figure(figsize=(20, 15))
