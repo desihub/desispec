@@ -96,17 +96,19 @@ def main():
     else:
         tileids = None
 
-    if args.nights is None:
-        dirnames = sorted(glob.glob('{}/exposures/*'.format(args.prod)))
-        nights=[]
-        for dirname in dirnames :
-            try :
-                night=int(os.path.basename(dirname))
-                nights.append(night)
-            except ValueError as e :
-                log.warning("ignore {}".format(dirname))
-    else :
-        nights=parse_int_args(args.nights)
+
+    dirnames = sorted(glob.glob('{}/exposures/????????'.format(args.prod)))
+    nights=[]
+    for dirname in dirnames :
+        try :
+            night=int(os.path.basename(dirname))
+            nights.append(night)
+        except ValueError as e :
+            log.warning("ignore {}".format(dirname))
+
+    if args.nights :
+        requested_nights = parse_int_args(args.nights)
+        nights=np.intersect1d(nights,requested_nights)
 
     log.info("nights = {}".format(nights))
     if tileids is not None : log.info('tileids = {}'.format(tileids))
