@@ -1,9 +1,12 @@
 import unittest
 
 import numpy as np
+from astropy.table import Table
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
-from desispec.coaddition import coadd,fast_resample_spectra,spectroperf_resample_spectra
+from desispec.coaddition import (coadd, fast_resample_spectra,
+        spectroperf_resample_spectra, coadd_fibermap)
+
 from desispec.maskbits import fibermask
 
 class TestCoadd(unittest.TestCase):
@@ -25,24 +28,105 @@ class TestCoadd(unittest.TestCase):
         
 
         
-    def test_coadd(self):
+    def _test_coadd(self):
         """Test coaddition"""
         s1 = self._random_spectra(3,10)
         coadd(s1)
         
-    def test_spectroperf_resample(self):
+    def _test_spectroperf_resample(self):
         """Test spectroperf_resample"""
         s1 = self._random_spectra(1,20)
         wave = np.linspace(5000, 5100, 10)
         s2 = spectroperf_resample_spectra(s1,wave=wave)
         
-    def test_fast_resample(self):
+    def _test_fast_resample(self):
         """Test fast_resample"""
         s1 = self._random_spectra(1,20)
         wave = np.linspace(5000, 5100, 10)
         s2 = fast_resample_spectra(s1,wave=wave)
 
-    def test_fiberstatus(self):
+    def test_coadd_fibermap_onetile(self):
+        """Test coadding a fibermap of a single tile"""
+        #- one tile, 3 targets, 2 exposures on 2 nights
+        fm = Table()
+        fm['TARGETID'] = [111,111,222,222,333,333]
+        fm['DESI_TARGET'] = [4,4,8,8,16,16]
+        fm['TILEID'] = [1,1,1,1,1,1]
+        fm['NIGHT'] = [20201220,20201221]*3
+        fm['EXPID'] = [10,20,11,21,12,22]
+        fm['FIBER'] = [5,6,]*3
+        fm['FIBERSTATUS'] = [0,0,0,0,0,0]
+        fm['FIBER_X'] = [1.1, 2.1]*3
+        fm['FIBER_Y'] = [10.2, 5.3]*3
+        fm['FLUX_R'] = np.ones(6)
+
+        cofm, expfm = coadd_fibermap(fm, onetile=True)
+
+        #- Single tile coadds include these in the coadded fibermap
+        for col in ['TARGETID', 'DESI_TARGET',
+                'TILEID', 'FIBER', 'FIBERSTATUS', 'FLUX_R',
+                'MEAN_FIBER_X', 'MEAN_FIBER_Y']:
+            self.assertIn(col, cofm.colnames)
+
+        #- but these columns should not be in the coadd
+        for col in ['NIGHT', 'EXPID', 'FIBER_X', 'FIBER_Y']:
+            self.assertNotIn(col, cofm.colnames)
+
+        #- the exposure-level fibermap has columns specific to individual
+        #- exposures, but drops some of the target-level columns
+        for col in ['TARGETID', 'TILEID', 'NIGHT', 'EXPID', 'FIBER',
+                'FIBERSTATUS', 'FIBER_X', 'FIBER_Y']:
+            self.assertIn(col, expfm.colnames)
+
+        for col in ['DESI_TARGET', 'FLUX_R']:
+            self.assertNotIn(col, expfm.colnames)
+
+        #- onetile coadds should fail if input has multiple tiles
+        fm['TILEID'][0] += 1
+        with self.assertRaises(ValueError):
+            cofm, expfm = coadd_fibermap(fm, onetile=True)
+
+
+    def test_coadd_fibermap_multitile(self):
+        """Test coadding a fibermap covering multiple tiles"""
+        #- Target 111 observed on tile 1 on one night
+        #- Target 222 observed on tiles 1 and 2 on two nights
+        #- Target 333 observed on tile 2 on one night
+        fm = Table()
+        fm['TARGETID'] = [111,111,222,222,333,333]
+        fm['DESI_TARGET'] = [4,4,8,8,16,16]
+        fm['TILEID'] = [1,1,1,2,2,2]
+        fm['NIGHT'] = [20201220,]*3 + [20201221,]*3
+        fm['EXPID'] = [100,]*3 + [101,]*3
+        fm['FIBER'] = [5,5,6,7,8,8]
+        fm['FIBERSTATUS'] = [0,0,0,0,0,0]
+        fm['FIBER_X'] = [1.1, 1.1, 2.2, 5.6, 10.2, 10.1]
+        fm['FIBER_Y'] = [2.2, 2.2, 10.3, -0.1, 0.2, 0.3]
+        fm['FLUX_R'] = np.ones(6)
+
+        cofm, expfm = coadd_fibermap(fm, onetile=False)
+
+        #- Multi tile coadds include these in the coadded fibermap
+        for col in ['TARGETID', 'DESI_TARGET', 'FIBERSTATUS',
+                'FIBERSTATUS', 'FLUX_R']:
+            self.assertIn(col, cofm.colnames)
+
+        #- but these columns should not be in the coadd
+        for col in ['NIGHT', 'EXPID', 'TILEID', 'FIBER',
+                'FIBER_X', 'FIBER_Y', 'MEAN_FIBER_X', 'MEAN_FIBER_Y']:
+            self.assertNotIn(col, cofm.colnames)
+
+        #- the exposure-level fibermap has columns specific to individual
+        #- exposures, but drops some of the target-level columns
+        for col in ['TARGETID', 'TILEID', 'NIGHT', 'EXPID', 'FIBER',
+                'FIBERSTATUS', 'FIBER_X', 'FIBER_Y']:
+            self.assertIn(col, expfm.colnames)
+
+        for col in ['DESI_TARGET', 'FLUX_R']:
+            self.assertNotIn(col, expfm.colnames)
+
+
+    def _test_fiberstatus(self):
         """Test that FIBERSTATUS=0 isn't included in coadd"""
         def _makespec(nspec, nwave):
             s1 = self._random_spectra(nspec, nwave)
