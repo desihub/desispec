@@ -835,9 +835,10 @@ def make_tile_qa_plot(
     ax = plt.subplot(gs[1, 2])
     if hdr["FAPRGRM"].lower() in ["bright", "dark"]:
         clim = (0.5, 1.5)
-        # AR TSNR2: ratio
+        # AR TSNR2: ratio (discarding ebv=0 for now, as the TSNR2 is then biased)
         badqa_val, badpet_val = get_qa_badmsks()
         sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) == 0
+        sel &= fiberqa["EBV"] > 0
         tsnr2s = np.nan + np.zeros(5000)
         tsnr2s[fiberqa["FIBER"][sel]] = fiberqa[tsnr2_key][sel]
         # AR TSNR2: plot
@@ -857,6 +858,13 @@ def make_tile_qa_plot(
         ax.scatter(ref["FIBERASSIGN_X"][fibers], ref["FIBERASSIGN_Y"][fibers],
             edgecolor="k", facecolors="none", s=5,
             label="bad_petal_mask")
+        # AR TSNR2: plotting fibers discarded because of EBV=0
+        sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) == 0
+        sel &= fiberqa["EBV"] == 0
+        fibers = fiberqa["FIBER"][sel]
+        ax.scatter(ref["FIBERASSIGN_X"][fibers], ref["FIBERASSIGN_Y"][fibers],
+            marker="x", color="k", s=10, lw=0.5,
+            label="EBV=0")
         #
         ax.set_xlabel("FIBERASSIGN_X [mm]")
         ax.set_ylabel("FIBERASSIGN_Y [mm]")
