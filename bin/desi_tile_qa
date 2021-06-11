@@ -163,18 +163,32 @@ def main():
 
     if len(summary_rows)>0 :
         colnames=None
-        good_rows=[]
+        refrow=None
+
         for i,row in enumerate(summary_rows) :
             keys=list(row.keys())
             if len(keys)>0 :
                 if colnames is not None :
-                    if len(keys) != len(colnames) :
-                        log.error("mismatch")
-                        log.error(keys)
-                        log.error(colnames)
-                        raise RuntimeError("incompatible rows")
+                    if len(keys) > len(colnames) :
+                        colnames=keys
+                        refrow=row
+                else :
+                    colnames=keys
+                    refrow=row
+        good_rows=[]
+        for i,row in enumerate(summary_rows) :
+            keys=list(row.keys())
+            if len(keys)>0 :
+                if len(keys)<len(colnames) :
+                    for k in colnames :
+                        if k in keys: continue
+                        row[k]=refrow[k]
+                        try :
+                            row[k]*=0
+                        except :
+                            row[k]=""
+                        log.warning("missing {} in {}".format(k,row["TILEID"]))
                 good_rows.append(row)
-                colnames=keys
             else :
                 print("empty row",i)
         table = Table(rows=good_rows, names=colnames)
