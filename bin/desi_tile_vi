@@ -44,6 +44,8 @@ def parse(options=None):
                         help = 'Output tile file, default is same as input')
     parser.add_argument('-u','--user', type = str, default = None, required=True,
                         help = 'your name or initials')
+    parser.add_argument('--viewer', type = str, default = "eog", required=False,
+                        help = 'image viewer (default is eog)')
 
     args = None
     if options is None:
@@ -171,7 +173,7 @@ def main():
             continue
         print("Showing {} ...".format(qaplot_filename))
         if viewer is not None : viewer.kill()
-        viewer = subprocess.Popen(['eog',qaplot_filename ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        viewer = subprocess.Popen([args.viewer,qaplot_filename ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
         index=np.where(tiles_table["TILEID"]==tileid)[0][0]
         while True :
