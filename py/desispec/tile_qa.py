@@ -202,6 +202,12 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     tile_fiberqa_table.meta["NGOODPETALS"]=good_petals.size
     tile_fiberqa_table.meta["EFFTIME_SPEC"]=np.mean(tile_petalqa_table['EFFTIME_SPEC'][good_petals])
 
+    # rms dist of good fibers
+    dist2 = (tile_fiberqa_table["MEAN_DELTA_X"]**2+tile_fiberqa_table["RMS_DELTA_X"]**2+tile_fiberqa_table["MEAN_DELTA_Y"]**2+tile_fiberqa_table["RMS_DELTA_Y"]**2)
+    rmsdist = np.sqrt(np.mean(dist2[good_fibers]))
+    tile_fiberqa_table.meta["RMSDIST"]=rmsdist # mm
+
+
     keys = ["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC"]
     for k in keys :
         if k in exposure_qa_meta :

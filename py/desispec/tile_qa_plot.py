@@ -899,7 +899,7 @@ def make_tile_qa_plot(
         hdr["FAPRGRM"].lower(),
         org=120,
     )
-
+    if "RMSDIST" not in hdr : hdr["RMSDIST"]=0
     # AR overall infos
     ax = plt.subplot(gs[0, 0])
     ax.axis("off")
@@ -918,6 +918,7 @@ def make_tile_qa_plot(
         ["", ""],
         ["NGOODFIBERS", "{}".format(hdr["NGOODFIBERS"])],
         ["NGOODPETALS", "{}".format(hdr["NGOODPETALS"])],
+        ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
         if (txt[0] == "efftime / goaltime") & (
