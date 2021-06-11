@@ -43,19 +43,22 @@ def get_qa_config():
     return config
 
 
-def get_qa_fstatus_badmsk():
+def get_qa_badmsks():
     """
-    Returns the bitmask values for bad fibers.
+    Returns the bitmask values for bad_qafstatus_mask and bad_petal_mask..
 
     Args:
         None
 
     Returns:
-        The bitmask value.
+        The bitmask values for bad_qafstatus_mask and bad_petal_mask.
     """
     config = get_qa_config()
-    badmsk_names = config["exposure_qa"]["bad_qafstatus_mask"]
-    return fibermask.mask(badmsk_names)
+    badqa_names = config["exposure_qa"]["bad_qafstatus_mask"]
+    badqa_val = fibermask.mask(badqa_names)
+    badpet_names = config["exposure_qa"]["bad_petal_mask"]
+    badpet_val = fibermask.mask(badpet_names)
+    return badqa_val, badpet_val
 
 
 def assert_tracer(tracer):
@@ -116,7 +119,7 @@ def get_zbins():
 def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
     """
     For a given tracer, returns the selection used for the tile QA n(z):
-        - FIBERSTATUS=0
+        - (fstatus_key & bad_qafstatus_mask) == 0
         - desi_mask or bgs_mask
         - if ELG_LOP: additional cut on (d["DESI_TARGET"] & desi_mask["QSO"]) == 0
 
@@ -129,7 +132,8 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
         sel: selected tracer sample (boolean array)
     """
     assert_tracer(tracer)
-    sel = (d[fstatus_key] & get_qa_fstatus_badmsk()) == 0
+    badqa_val, _ = get_qa_badmsks()
+    sel = (d[fstatus_key] & badqa_val) == 0
     if tracer in ["BGS_BRIGHT", "BGS_FAINT"]:
         sel = (d["BGS_TARGET"] & bgs_mask[tracer]) > 0
     else:
@@ -143,6 +147,7 @@ def get_tracer(tracer, d, fstatus_key="QAFIBERSTATUS"):
 def get_tracer_zok(tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS"):
     """
     For a given tracer, returns the spectro. valid sample for the tile QA n(z):
+        - (fstatus_key & bad_qafstatus_mask) == 0
         - DELTACHI2 > dchi2_min
         - if QSO: additional cut on SPECTYPE="QSO"    
 
@@ -156,7 +161,8 @@ def get_tracer_zok(tracer, dchi2_min, d, fstatus_key="QAFIBERSTATUS"):
         sel: spectro. valid sample (boolean array)
     """
     assert_tracer(tracer)
-    sel = (d[fstatus_key] & get_qa_fstatus_badmsk()) == 0
+    badqa_val, _ = get_qa_badmsks()
+    sel = (d[fstatus_key] & badqa_val) == 0
     sel &= d["DELTACHI2"] > dchi2_min
     if tracer == "QSO":
         sel &= d["SPECTYPE"] == "QSO"
@@ -522,7 +528,7 @@ def print_petal_infos(ax, petalqa):
                     isfail = True
             if isfail:
                 fails.append(
-                    "{}-{}".format(petalqa["PETAL_LOC"][i], mydict[key]["short"])
+                    "{}-{}={:.{}f}".format(petalqa["PETAL_LOC"][i], key, val, mydict[key]["precision"])
                 )
                 fontweight, color = "bold", "r"
             # AR print if in disp_keys
@@ -819,7 +825,8 @@ def make_tile_qa_plot(
     if hdr["FAPRGRM"].lower() in ["bright", "dark"]:
         clim = (0.5, 1.5)
         # AR TSNR2: ratio
-        sel = (fiberqa["QAFIBERSTATUS"] & get_qa_fstatus_badmsk()) == 0
+        badqa_val, badpet_val = get_qa_badmsks()
+        sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) == 0
         tsnr2s = np.nan + np.zeros(5000)
         tsnr2s[fiberqa["FIBER"][sel]] = fiberqa[tsnr2_key][sel]
         # AR TSNR2: plot
@@ -832,6 +839,14 @@ def make_tile_qa_plot(
             vmax=clim[1],
             s=5,
         )
+        # AR TSNR2: plotting fibers discarded because of a petal-masking
+        sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) > 0
+        sel &= (fiberqa["QAFIBERSTATUS"] & badpet_val) > 0
+        fibers = fiberqa["FIBER"][sel]
+        ax.scatter(ref["FIBERASSIGN_X"][fibers], ref["FIBERASSIGN_Y"][fibers],
+            edgecolor="k", facecolors="none", s=5,
+            label="bad_petal_mask")
+        #
         ax.set_xlabel("FIBERASSIGN_X [mm]")
         ax.set_ylabel("FIBERASSIGN_Y [mm]")
         # AR 2*505 mm matches the 4 deg width of the cutout
@@ -839,6 +854,7 @@ def make_tile_qa_plot(
         ax.set_ylim(-505, 505)
         ax.grid(True)
         ax.set_aspect("equal")
+        ax.legend(loc=2)
         cbar = plt.colorbar(sc, extend="both")
         cbar.mappable.set_clim(clim)
         cbar.set_label("{} / {}_REFERENCE".format(tsnr2_key, tsnr2_key))
@@ -888,9 +904,12 @@ def make_tile_qa_plot(
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
         ["", ""],
-        ["efftime / goaltime", "{:.2f}".format(hdr["EFFTIME_SPEC"] / hdr["GOALTIME"])],
+        ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME_SPEC"], hdr["GOALTIME"], hdr["EFFTIME_SPEC"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
         ["tsnr2 / tsnr2_ref", "{:.2f}".format(ratio_tsnr2)],
+        ["", ""],
+        ["NGOODFIBERS", "{}".format(hdr["NGOODFIBERS"])],
+        ["NGOODPETALS", "{}".format(hdr["NGOODPETALS"])],
     ]:
         fontweight, col = "normal", "k"
         if (txt[0] == "efftime / goaltime") & (
