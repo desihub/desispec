@@ -642,6 +642,10 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
     pixwfn = "{}/target/catalogs/dr9/1.1.1/pixweight/main/resolve/{}/pixweight-1-{}.fits".format(
         os.getenv("DESI_ROOT"), program, program
     )
+    if not os.path.isfile(pixwfn) :
+        print("missing",pixwfn)
+        return
+
     hdr = fits.getheader(pixwfn, 1)
     nside, nest = hdr["HPXNSIDE"], hdr["HPXNEST"]
     pixwd = fits.open(pixwfn)[1].data
