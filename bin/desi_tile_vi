@@ -46,6 +46,8 @@ def parse(options=None):
                         help = 'your name or initials')
     parser.add_argument('--viewer', type = str, default = "eog", required=False,
                         help = 'image viewer (default is eog)')
+    parser.add_argument('--new', action = 'store_true', required=False,
+                        help = 'only inspect new tiles')
 
     args = None
     if options is None:
@@ -142,6 +144,9 @@ def main():
 
     log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
     selection=(tiles_table["ZDONE"]=="false")&(tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))&(tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad")
+    if args.new :
+        selection &= (tiles_table["QA"]=="none")
+
     log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
 
     tileids = tiles_table["TILEID"][selection]
@@ -159,8 +164,8 @@ def main():
         print("no tile/night selected")
         sys.exit(12)
     log.info("Remains {} tiles after selection of tileid/night:".format(tileids.size))
-    for tileid,night in zip(tileids,nights) :
-        log.info(" TILE={} NIGHT={}".format(tileid,night))
+    #for tileid,night in zip(tileids,nights) :
+    #    log.info(" TILE={} NIGHT={}".format(tileid,night))
 
     viewer=None
     for tileid,night in zip(tileids,nights) :
