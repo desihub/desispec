@@ -524,6 +524,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             log.error(message)
             raise ValueError(message)
 
+        if np.all(dark==0.0):
+            if exptime == 0.0:
+                log.info(f'Dark model for exptime=0 is all zeros; not applying')
+            else:
+                log.error(f'Dark model for exptime={exptime} unexpectedly all zeros; not applying')
+            dark = False
+
     else:
         dark = False
 
