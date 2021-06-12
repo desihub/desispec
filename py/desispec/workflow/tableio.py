@@ -311,10 +311,18 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
             coldefaults = [guess_default_by_dtype(typ) for typ in coltypes]
         colnames, coltypes = np.array(colnames), np.array(coltypes)
 
-        if len(table ) >0:
+        if len(table) > 0:
             outcolumns = []
-            for nam, typ, default in zip(colnames ,coltypes, coldefaults):
-                if type(table[nam]) is Table.MaskedColumn:
+            first_err = True
+            for nam, typ, default in zip(colnames, coltypes, coldefaults):
+                if nam not in table.colnames:
+                    if first_err:
+                        log.warning(f"{nam} not in column names of loaded table: {table.colnames}")
+                        first_err = False
+                    else:
+                        log.warning(f"{nam} not in column names of loaded table")
+                    continue
+                elif type(table[nam]) is Table.MaskedColumn:
                     data, mask = table[nam].data, table[nam].mask
                 else:
                     data, mask = table[nam].data, None
@@ -327,7 +335,7 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                         out[ii] = np.atleast_1d(col[ii])
                     newcol = Table.Column(name=nam, data=out, dtype=dtyp)
                 else:
-                    newcol = Table.Column(name=nam, data=col, dtype=dtyp)    
+                    newcol = Table.Column(name=nam, data=col, dtype=dtyp)
                 outcolumns.append(newcol)
             table = Table(outcolumns)
         else:
@@ -359,7 +367,7 @@ def guess_default_by_dtype(typ):
     elif typ == list:
         return []
     elif typ in [np.array, np.ndarray]:
-        return np.array([])
+        return np.array([], dtype=str)
     else:
         return -99
 
@@ -401,7 +409,7 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
         default = guess_default_by_dtype(typ)
 
     if mask is not None and np.sum(np.bitwise_not(mask)) == 0:
-        return [default ] *len(data), typ
+        return [default]*len(data), typ
 
     if mask is None:
         mask = np.zeros(len(data)).astype(bool)
@@ -423,7 +431,7 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
             log.warning("Found mixin column with scalar datatype:")
             log.info("\tcolname={nam}, first={first}, typefirst={firsttyp}, dtype={typ}")
             log.info("\tchanging to np.array datatype")
-            dtyp = np.array
+            dtyp = np.ndarray
     else:
         do_split_str = False
 

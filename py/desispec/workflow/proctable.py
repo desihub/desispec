@@ -9,7 +9,7 @@ from astropy.table import Table, vstack
 from collections import OrderedDict
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.exptable import default_exptypes_for_exptable
+from desispec.workflow.exptable import default_obstypes_for_exptable
 
 from desispec.workflow.utils import define_variable_from_environment, pathjoin
 from desispec.io.util import difference_camwords, parse_badamps, create_camword, decode_camword
@@ -239,7 +239,7 @@ def exptable_to_proctable(input_exptable, obstypes=None):
     exptable = input_exptable.copy()
 
     if obstypes is None:
-        obstypes = default_exptypes_for_exptable()
+        obstypes = default_obstypes_for_exptable()
 
     ## Define the column names for the exposure table and their respective datatypes
     colnames, coldtypes, coldefaults = get_processing_table_column_defs(return_default_values=True)
