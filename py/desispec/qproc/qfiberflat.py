@@ -56,8 +56,9 @@ def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_
 
     for i in range(qframe.flux.shape[0]) :
         jj=(qframe.ivar[i]>0)
-        tflux[i]=np.interp(twave,qframe.wave[i,jj],qframe.flux[i,jj])
-        tivar[i]=np.interp(twave,qframe.wave[i,jj],qframe.ivar[i,jj],left=0,right=0)
+        if np.any(jj):
+            tflux[i]=np.interp(twave,qframe.wave[i,jj],qframe.flux[i,jj])
+            tivar[i]=np.interp(twave,qframe.wave[i,jj],qframe.ivar[i,jj],left=0,right=0)
 
     # iterative loop to a absorb constant term in fiber
     if 1 : # simple scaling per fiber
@@ -92,6 +93,14 @@ def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_
 
     # spline fit to reject outliers and smooth the flat
     for fiber in range(fflat.shape[0]) :
+        # check for completely masked fiber
+        if np.all(fivar[fiber] == 0.0):
+            log.warning(f'All wavelengths of fiber {fiber} are masked; setting fflat=1 fivar=0')
+            fflat[fiber] = 1.0
+            fivar[fiber] = 0.0
+            mask[fiber] = 1
+            continue
+
         # iterative spline fit
         max_rej_it=5# not more than 5 pixels at a time
         max_bad=1000
