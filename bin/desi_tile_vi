@@ -19,11 +19,8 @@ import fitsio
 import subprocess
 
 from desiutil.log import get_logger
-from desispec.io import specprod_root,findfile,read_tile_qa,write_tile_qa
-from desispec.tile_qa import compute_tile_qa
+from desispec.io import specprod_root, findfile
 from desispec.util import parse_int_args
-
-from desispec.tile_qa_plot import make_tile_qa_plot
 
 
 def parse(options=None):

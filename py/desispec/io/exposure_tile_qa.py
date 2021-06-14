@@ -26,7 +26,10 @@ def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     outdir = os.path.dirname(filename)
     if not os.path.isdir(outdir) :
         os.makedirs(outdir)
-    hdus.writeto(filename, overwrite=True, checksum=True)
+
+    tmpfile = filename+'.tmp'
+    hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, filename)
 
 def read_exposure_qa(filename) :
     """Reads an exposure-qa fits file.
@@ -64,7 +67,10 @@ def write_tile_qa(filename,fiber_qa_table,petal_qa_table=None) :
     outdir = os.path.dirname(filename)
     if not os.path.isdir(outdir) :
         os.makedirs(outdir)
-    hdus.writeto(filename, overwrite=True, checksum=True)
+
+    tmpfile = filename+'.tmp'
+    hdus.writeto(tmpfile, overwrite=True, checksum=True)
+    os.rename(tmpfile, filename)
 
 def read_tile_qa(filename) :
     """Reads an tile-qa fits file.

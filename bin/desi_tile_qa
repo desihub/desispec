@@ -58,12 +58,16 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
     """
     log = get_logger()
     fiberqa_table , petalqa_table = compute_tile_qa(night,tileid,specprod_dir,exposure_qa_dir)
-    if fiberqa_table is None : return None
+    if fiberqa_table is None :
+        return None
+
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
     make_tile_qa_plot(outfile)
     log.info("QA plot for {} generated".format(outfile))
-    if "EXTNAME" in fiberqa_table.meta : fiberqa_table.meta.pop("EXTNAME")
+    if "EXTNAME" in fiberqa_table.meta :
+        fiberqa_table.meta.pop("EXTNAME")
+
     return(fiberqa_table.meta)
 
 def _func(arg) :
@@ -197,7 +201,9 @@ def main():
         print(table)
         print()
 
-        table.write(args.outfile,overwrite=True)
+        tmpfile = args.outfile + '.tmp'
+        table.write(tmpfile, overwrite=True, format='fits')
+        os.rename(tmpfile, args.outfile)
         log.info("wrote {}".format(args.outfile))
 
     if len(summary_rows)==0 :

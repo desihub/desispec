@@ -755,6 +755,7 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
 
 def make_tile_qa_plot(
     tileqafits,
+    pngoutfile=None,
     dchi2_min=None,
     tsnr2_key=None,
     refdir=resource_filename("desispec", "data/qa"),
@@ -765,6 +766,9 @@ def make_tile_qa_plot(
 
     Args:
         tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
+
+    Options:
+        pngoutfile: output filename; default to tileqafits .fits -> .png
         dchi2_min (optional, defaults to value in qa-params.yaml): minimum DELTACHI2 for a valid zspec (float)
         tsnr2_key (optional, defaults to value in qa-params.yaml): TSNR2 key used for plot (string)
         refdir (optional, defaults to "desispec","data/qa"): path to folder with reference measurements for the n(z) and the TSNR2 (string)
@@ -781,6 +785,11 @@ def make_tile_qa_plot(
         dchi2_min = config["tile_qa_plot"]["dchi2_min"]
     if tsnr2_key is None:
         tsnr2_key = config["tile_qa_plot"]["tsnr2_key"]
+
+    # SB derive output file name, handling case if ".fits" appears in path
+    if pngoutfile is None:
+        base = os.path.splitext(os.path.basename(tileqafits))[0]
+        pngoutfile = os.path.join(os.path.dirname(tileqafits), base+'.png')
 
     # AR reading
     h = fits.open(tileqafits)
@@ -996,9 +1005,7 @@ def make_tile_qa_plot(
     print_petal_infos(ax, petalqa,fiberqa)
     try :
         #  AR saving plot
-        plt.savefig(
-            tileqafits.replace(".fits", ".png"), bbox_inches="tight",
-        )
+        plt.savefig(pngoutfile, bbox_inches="tight")
     except ValueError as e :
         print("failed to save figure")
         print(e)
