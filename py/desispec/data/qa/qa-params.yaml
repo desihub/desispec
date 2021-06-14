@@ -1,0 +1,87 @@
+# QA parameters read by exposure_qa.py
+exposure_qa:
+
+ # cutoff fiber positioning offset in mm
+ max_fiber_offset_mm : 0.03
+
+ # maximum read noise rms per CCD pixel in electrons
+ max_readnoise : 10
+
+ # maximum fraction of fibers with bad positioning
+ # per petal
+ max_frac_of_bad_positions_per_petal : 0.5
+
+ # minimum number of valid standard stars per petal
+ min_number_of_good_stdstars_per_petal : 3
+
+ # maximum rms of calibration error per star
+ # (ratio of calibrated flux to model in rband)
+ max_rms_of_rflux_ratio_of_stdstars : 0.2
+
+ # tsnr parameters
+ tsnr2_band : r
+ tsnr2_key : TSNR2_LRG_R
+ tsnr2_petal_minfrac : 0.5
+ tsnr2_petal_maxfrac : 2.
+ tsnr2_for_efftime_dark : 'TSNR2_ELG'
+ tsnr2_for_efftime_bright : 'TSNR2_BGS'
+ tsnr2_for_efftime_backup : 'TSNR2_BGS'
+
+ # comment: do not include STUCKPOSITIONER and RESTRICTED since they could be validly used for SKY targets
+ # bad POSITIONING flag
+ bad_positions_mask : "BROKENFIBER|MISSINGPOSITION|BADPOSITION|POORPOSITION"
+ # bad QAFIBERSTATUS flag
+ bad_qafstatus_mask : "UNASSIGNED|BROKENFIBER|MISSINGPOSITION|BADPOSITION|POORPOSITION|BADFIBER|BADTRACE|BADFLAT|BADARC|MANYBADCOL|MANYREJECTED|BADAMPB|BADAMPR|BADAMPZ|BADPETALPOS|BADPETALSKY|BADPETALSTDSTAR|BADPETALFLUXCAL|BADPETALSNR|BADREADNOISE"
+ # bad QAFIBERSTATUS per-petal flag
+ bad_petal_mask : "BADPETALPOS|BADPETALSKY|BADPETALSTDSTAR|BADPETALFLUXCAL|BADPETALSNR|BADREADNOISE"
+
+# QA parameters read by tile_qa.py
+#tile_qa:
+
+
+# QA parameters read by tile_qa_plot.py
+tile_qa_plot:
+
+ # redshift grid
+ bins :
+  zmin : -0.05
+  zmax : 5.05
+  dz : 0.05
+
+ # DELTACHI2 cut for the n(z)
+ dchi2_min : 50
+
+ # tsnr key
+ tsnr2_key : TSNR2_LRG
+
+ # tracers
+ tracers :
+
+  BGS_BRIGHT :
+   program : BRIGHT
+   zmin : 0.05
+   zmax : 0.40
+  BGS_FAINT :
+   program : BRIGHT
+   zmin : 0.05
+   zmax : 0.40
+  LRG :
+   program : DARK
+   zmin : 0.40
+   zmax : 1.00
+  ELG_LOP :
+   program : DARK
+   zmin : 0.60
+   zmax : 1.60
+  QSO :
+   program : DARK
+   zmin : 0.9
+   zmax : 2.1
+
+ # {BRZ}THRUFRAC
+ thrufrac_min : 0.8
+ thrufrac_max : 1.2
+
+ # sky
+ skythrurms_max : 0.05
+ skychi2pdf_max : 1.5
