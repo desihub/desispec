@@ -157,7 +157,7 @@ def main():
             pool.close()
             pool.join()
 
-    if len(summary_rows)>0 :
+    if args.outfile is not None and len(summary_rows)>0 :
         colnames=None
         good_rows=[]
         for i,row in enumerate(summary_rows) :
@@ -175,10 +175,11 @@ def main():
                 print("empty row",i)
         table = Table(rows=good_rows, names=colnames)
         print(table)
-        if args.outfile is not None :
-            table.write(args.outfile,overwrite=True)
-            log.info("wrote {}".format(args.outfile))
-    else :
+
+        table.write(args.outfile,overwrite=True)
+        log.info("wrote {}".format(args.outfile))
+
+    if len(summary_rows)==0 :
         print("no data")
 
 if __name__ == '__main__':
