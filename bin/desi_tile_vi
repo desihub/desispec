@@ -17,7 +17,6 @@ import multiprocessing
 from astropy.table import Table
 import fitsio
 import subprocess
-from PIL import Image
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root,findfile,read_tile_qa,write_tile_qa
