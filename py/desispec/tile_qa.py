@@ -20,26 +20,10 @@ from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_q
 from desispec.maskbits import fibermask
 
 
-def mystack(tables) :
-
-    if len(tables)==1 :
-        return tables[0]
-
-    log = get_logger()
-    stack=Table()
-    length=None
-    for key in tables[0].dtype.names :
-        vals=[]
-        for table in tables :
-            vals.append(table[key])
-        vals=np.hstack(vals)
-        if length is not None :
-            if vals.size != length :
-                log.warning("skip column {}".format(key))
-                continue
-        stack[key]=vals
-        length=vals.size
-    return stack
+def _rm_meta_keywords(table) :
+    for k in ['CHECKSUM','DATASUM'] :
+        if k in table.meta : table.meta.pop(k) # otherwise WARNING: MergeConflictWarning
+    return table
 
 def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     """
@@ -101,8 +85,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
 
     # stack qa tables
     if len(expids) > 1 :
-        exposure_fiberqa_tables = mystack(exposure_fiberqa_tables)
-        exposure_petalqa_tables = mystack(exposure_petalqa_tables)
+        exposure_fiberqa_tables = vstack(exposure_fiberqa_tables)
+        exposure_petalqa_tables = vstack(exposure_petalqa_tables)
     else :
         exposure_fiberqa_tables = exposure_fiberqa_tables[0]
         exposure_petalqa_tables = exposure_petalqa_tables[0]
@@ -115,15 +99,17 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     zbests=[]
     for coadd_file in coadd_files :
         log.info("reading {}".format(coadd_file))
-        fibermaps.append(Table.read(coadd_file,"FIBERMAP"))
-        scores.append(Table.read(coadd_file,"SCORES"))
+        fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
+        scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
         zbest_file = coadd_file.replace("coadd","zbest")
         log.info("reading {}".format(zbest_file))
-        zbests.append(Table.read(zbest_file,"ZBEST"))
+        zbest=Table.read(zbest_file,"ZBEST")
+        zbest.remove_column("COEFF") # 1D array per entry, not needed
+        zbests.append(_rm_meta_keywords(zbest))
     log.info("stacking")
-    fibermap=mystack(fibermaps)
-    scores=mystack(scores)
-    zbests=mystack(zbests)
+    fibermap=vstack(fibermaps)
+    scores=vstack(scores)
+    zbests=vstack(zbests)
     targetids=fibermap["TARGETID"]
 
     tile_fiberqa_table = Table()
