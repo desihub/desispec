@@ -938,7 +938,7 @@ def make_tile_qa_plot(
         hdr["FAPRGRM"].lower(),
         org=120,
     )
-    for k in ["RMSDIST","EFFTIME_SPEC"] :
+    for k in ["RMSDIST","EFFTIME"] :
         if k not in hdr : hdr[k]=0
     # AR overall infos
     ax = plt.subplot(gs[0, 0])
@@ -946,23 +946,23 @@ def make_tile_qa_plot(
     x0, x1, y, dy, fs = 0.45, 0.55, 0.95, -0.08, 10
     for txt in [
         ["TILEID", "{:06d}".format(hdr["TILEID"])],
-        ["thruNIGHT", "{}".format(hdr["NIGHT"])],
+        ["thruNIGHT", "{}".format(hdr["LASTNITE"])],
         ["SURVEY", hdr["SURVEY"]],
         ["PROGRAM", hdr["FAPRGRM"]],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
         ["", ""],
-        ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME_SPEC"], hdr["GOALTIME"], hdr["EFFTIME_SPEC"] / hdr["GOALTIME"])],
+        ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
         ["tsnr2 / tsnr2_ref", "{:.2f}".format(ratio_tsnr2)],
         ["", ""],
-        ["NGOODFIBERS", "{}".format(hdr["NGOODFIBERS"])],
-        ["NGOODPETALS", "{}".format(hdr["NGOODPETALS"])],
+        ["NGOODFIB", "{}".format(hdr["NGOODFIB"])],
+        ["NGOODPET", "{}".format(hdr["NGOODPET"])],
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
         if (txt[0] == "efftime / goaltime") & (
-            hdr["EFFTIME_SPEC"] / hdr["GOALTIME"] < hdr["MINTFRAC"]
+            hdr["EFFTIME"] / hdr["GOALTIME"] < hdr["MINTFRAC"]
         ):
             fontweight, col = "bold", "r"
         if (txt[0] == "n(z) / n_ref(z)") & (ratio_nz < 0.8):

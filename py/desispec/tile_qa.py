@@ -21,8 +21,10 @@ from desispec.maskbits import fibermask
 
 
 def _rm_meta_keywords(table) :
-    for k in ['CHECKSUM','DATASUM'] :
-        if k in table.meta : table.meta.pop(k) # otherwise WARNING: MergeConflictWarning
+
+    if table.meta is not None :
+        for k in ['CHECKSUM','DATASUM'] :
+            if k in table.meta : table.meta.pop(k) # otherwise WARNING: MergeConflictWarning
     return table
 
 def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
@@ -76,8 +78,11 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
             exposure_fiberqa_table , exposure_petalqa_table = read_exposure_qa(filename)
         if exposure_qa_meta is None :
             exposure_qa_meta = exposure_fiberqa_table.meta
-        exposure_fiberqa_tables.append(exposure_fiberqa_table)
-        exposure_petalqa_tables.append(exposure_petalqa_table)
+        else :
+            exposure_fiberqa_table.meta=None # otherwise MergeConflictWarning
+            exposure_petalqa_table.meta=None # otherwise MergeConflictWarning
+        exposure_fiberqa_tables.append(_rm_meta_keywords(exposure_fiberqa_table))
+        exposure_petalqa_tables.append(_rm_meta_keywords(exposure_petalqa_table))
 
     if len(exposure_fiberqa_tables)==0 :
         log.error(f"no exposure qa data for tile {tile}")
@@ -183,10 +188,10 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
 
     # add meta info
     tile_fiberqa_table.meta["TILEID"]=tileid
-    tile_fiberqa_table.meta["NIGHT"]=night
-    tile_fiberqa_table.meta["NGOODFIBERS"]=good_fibers.size
-    tile_fiberqa_table.meta["NGOODPETALS"]=good_petals.size
-    tile_fiberqa_table.meta["EFFTIME_SPEC"]=np.mean(tile_petalqa_table['EFFTIME_SPEC'][good_petals])
+    tile_fiberqa_table.meta["LASTNITE"]=night
+    tile_fiberqa_table.meta["NGOODFIB"]=good_fibers.size
+    tile_fiberqa_table.meta["NGOODPET"]=good_petals.size
+    tile_fiberqa_table.meta["EFFTIME"]=np.mean(tile_petalqa_table['EFFTIME_SPEC'][good_petals])
 
     # rms dist of good fibers
     dist2 = (tile_fiberqa_table["MEAN_DELTA_X"]**2+tile_fiberqa_table["RMS_DELTA_X"]**2+tile_fiberqa_table["MEAN_DELTA_Y"]**2+tile_fiberqa_table["RMS_DELTA_Y"]**2)
