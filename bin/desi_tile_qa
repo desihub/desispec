@@ -29,7 +29,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Calculate tile QA")
     parser.add_argument('-o','--outfile', type=str, default=None, required=False,
-                        help = 'Output summary file')
+                        help = 'Output summary file (optional)')
     parser.add_argument('--recompute', action = 'store_true',
                         help = 'recompute')
     parser.add_argument('--prod', type = str, default = None, required=False,
@@ -37,7 +37,7 @@ def parse(options=None):
     parser.add_argument('--exposure-qa-dir', type = str, default = None, required=False,
                         help = 'Path to exposure qa directory, default is the input prod directory')
     parser.add_argument('--outdir', type = str, default = None, required=False,
-                        help = 'Path to ouput directory, default is the input prod directory')
+                        help = 'Path to ouput directory, default is the input prod directory. Files written in {outdir}/tiles/cumulative/{TILEID}/{NIGHT}/')
     parser.add_argument('-t','--tileids', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 12,14 or 12:23')
     parser.add_argument('-n','--nights', type = str, default = None, required=False,

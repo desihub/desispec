@@ -28,13 +28,13 @@ def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Calculate exposure QA")
     parser.add_argument('-o','--outfile', type=str, default=None, required=False,
-                        help = 'Output summary file')
+                        help = 'Output summary file (optional)')
     parser.add_argument('--recompute', action = 'store_true',
                         help = 'recompute')
     parser.add_argument('--prod', type = str, default = None, required=False,
                         help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('--outdir', type = str, default = None, required=False,
-                        help = 'Path to ouput directory, default is the input prod directory')
+                        help = 'Path to ouput directory, default is the input prod directory. Files written in {outdir}/exposures/{NIGHT}/')
     parser.add_argument('-e','--expids', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 12,14 or 12:23')
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
