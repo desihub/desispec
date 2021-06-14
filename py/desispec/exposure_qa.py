@@ -118,12 +118,11 @@ def compute_exposure_qa(night, expid, specprod_dir):
     # need to add things
 
     frame_header = None
-    fibermap_header = None
 
     # EFFTIME
     goaltype="dark"
-    if fibermap_header is not None and "GOALTYPE" in fibermap_header :
-        goaltype=fibermap_header["GOALTYPE"]
+    if "GOALTYPE" in fibermap.meta :
+        goaltype=fibermap.meta["GOALTYPE"]
     else :
         log.warning("no GOALTYPE info, assume 'dark'")
     param_name="tsnr2_for_efftime_{}".format(goaltype.lower())
@@ -153,11 +152,6 @@ def compute_exposure_qa(night, expid, specprod_dir):
             head=fitsio.read_header(cframe_filename)
             if frame_header is None :
                 frame_header = head
-            if fibermap_header is None :
-                try :
-                    fibermap_header = fitsio.read_header(cframe_filename,"FIBERMAP")
-                except OSError as e :
-                    log.error(e)
 
             readnoise_is_bad = False
             for amp in ["A","B","C","D"] :
@@ -367,11 +361,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
             if k in frame_header :
                 fiberqa_table.meta[k] = frame_header[k]
 
-    if fibermap_header is not None :
-        # copy some keys from the fibermap header
-        keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC"]
-        for k in keys :
-            if k in fibermap_header :
-                fiberqa_table.meta[k] = fibermap_header[k]
+    # copy some keys from the fibermap header
+    keys=["TILEID","TILERA","TILEDEC","GOALTIME","GOALTYPE","FAPRGRM","SURVEY","EBVFAC","MINTFRAC"]
+    for k in keys :
+        if k in fibermap.meta :
+            fiberqa_table.meta[k] = fibermap.meta[k]
 
     return fiberqa_table , petalqa_table
