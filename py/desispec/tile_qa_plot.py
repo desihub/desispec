@@ -434,11 +434,15 @@ def get_petalqa_props(key):
         short, precision, okmax = key, 3, config["tile_qa_plot"]["skythrurms_max"]
     if key in ["BSKYCHI2PDF", "RSKYCHI2PDF", "ZSKYCHI2PDF"]:
         short, precision, okmax = key, 2, config["tile_qa_plot"]["skychi2pdf_max"]
+
+    #if key == "BADPETAL" :
+    #    config["tile_qa_plot"]
+
     # AR return
     return short, precision, okmin, okmax, combine
 
 
-def print_petal_infos(ax, petalqa):
+def print_petal_infos(ax, petalqa, fiberqa):
     """
     Print some diagnoses for each petal, and for the whole tile.
 
@@ -446,6 +450,9 @@ def print_petal_infos(ax, petalqa):
         ax: pyplot object
         petalqa: the PETALQA extension data of the tile-qa-TILEID-NIGHT.fits file
     """
+
+    show_bad_petal_cause=True
+
     # AR keys to compute stats
     keys = [
         "PETAL_LOC",
@@ -463,10 +470,10 @@ def print_petal_infos(ax, petalqa):
         "ZSKYTHRURMS",
         "BSKYCHI2PDF",
         "RSKYCHI2PDF",
-        "ZSKYCHI2PDF",
+        "ZSKYCHI2PDF"
     ]
     # AR keys to display
-    disp_keys = ["PETAL_LOC", "NGOODPOS", "NSTDSTAR", "STARRMS", "TSNR2FRA", "THRUFRAC"]
+    disp_keys = ["PETAL_LOC", "NGOODPOS", "NSTDSTAR", "STARRMS", "THRUFRAC"]
 
     # AR storing properties in a dictionary
     mydict = {}
@@ -498,6 +505,9 @@ def print_petal_infos(ax, petalqa):
             ha="center",
             transform=ax.transAxes,
         )
+        x += dx
+    if show_bad_petal_cause :
+        ax.text(x,y,"BAD")
         x += dx
     y += dy
     # AR stats per petal
@@ -531,6 +541,9 @@ def print_petal_infos(ax, petalqa):
                     "{}-{}={:.{}f}".format(petalqa["PETAL_LOC"][i], key, val, mydict[key]["precision"])
                 )
                 fontweight, color = "bold", "r"
+
+
+
             # AR print if in disp_keys
             if key in disp_keys:
                 ax.text(
@@ -544,6 +557,21 @@ def print_petal_infos(ax, petalqa):
                     transform=ax.transAxes,
                 )
                 x += dx
+
+        if show_bad_petal_cause :
+            val=""
+            for cause in ["BADPETALPOS","BADPETALSKY","BADPETALSTDSTAR","BADPETALFLUXCAL","BADPETALSNR","BADREADNOISE"] :
+                n1 = np.sum(fiberqa["PETAL_LOC"]==i)
+                n2 = np.sum((fiberqa["PETAL_LOC"]==i)&(fiberqa["QAFIBERSTATUS"]&fibermask.mask(cause)>0))
+                cause = cause.replace("BADPETAL","")
+                if n2==n1 :
+                    if val == "" :
+                        val=cause
+                    else :
+                        val=val+"&"+cause
+            ax.text(x,y,val,color="red",fontsize="small")
+            x += dx
+
         y += dy
 
     # AR stats for all petals
@@ -965,7 +993,7 @@ def make_tile_qa_plot(
 
     # AR per petal diagnoses
     ax = plt.subplot(gs[1, 0])
-    print_petal_infos(ax, petalqa)
+    print_petal_infos(ax, petalqa,fiberqa)
     try :
         #  AR saving plot
         plt.savefig(
