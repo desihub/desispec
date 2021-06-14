@@ -69,8 +69,8 @@ fibermask:
     - [BADAMPB,        22, "Issues in the amplifier readouts of camera B make this unusable"]
     - [BADAMPR,        23, "Issues in the amplifier readouts of camera R make this unusable"]
     - [BADAMPZ,        24, "Issues in the amplifier readouts of camera Z make this unusable"]
-#- Following bits are reserved for spectro QA
-    - [BADPETALPOS,    25, "Too many fibers with bad positioning (bits 1,2,3,8,9) in petal"]
+#- Following bits are reserved for spectro QA (see more precise definition in data/qa/qa-params.yaml)
+    - [BADPETALPOS,    25, "Too many fibers with bad positioning in petal"]
     - [BADPETALSKY,    26, "Bad sky model across petal"]
     - [BADPETALSTDSTAR,27, "To few standard stars or rms between stars too large in the petal"]
     - [BADPETALFLUXCAL,28, "Unphysical flux calibration for the petal (calib vector too high or too low)"]
