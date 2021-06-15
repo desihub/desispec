@@ -781,9 +781,9 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                     orig = str(dat_header['ACTTEFF'])
                 except:
                     orig = ''
-                reporting = keyval_change_reporting('ACTTEFF', orig, outdict['ACTTEFF'])
+                reporting = keyval_change_reporting('ACTTEFF', orig, outdict['EFFTIME_ETC'])
                 outdict['HEADERERR'] = np.append(outdict['HEADERERR'], reporting)
-                log.error(f"Couldn't convert 'ACTTEFF' with value {orig} to float. Using the default value.")
+                log.error(f"Couldn't convert ACTTEFF with value {orig} to float. Using the default EFFTIME_ETC.")
 
         ## Get the airmass factor from the etc. If unavailable, try to calculate from the airmass in the raw data
         ## Default if both fail is 1 (already set)
