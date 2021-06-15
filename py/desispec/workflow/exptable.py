@@ -773,21 +773,28 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         ## Default if both fail is -99 (already set)
         if 'expinfo' in etc_dict and 'efftime' in etc_dict['expinfo']:
             outdict['EFFTIME_ETC'] = etc_dict['expinfo']['efftime']
-        else:
-            for key in ['ETCTEFF', 'ACTTEFF']:
-                if key in dat_header:
-                    try:
-                        outdict['EFFTIME_ETC'] = float(dat_header[key])
-                    except:
-                        try:
-                            orig = str(dat_header[key])
-                        except:
-                            orig = ''
-                        reporting = keyval_change_reporting(key, orig, outdict['EFFTIME_ETC'])
-                        outdict['HEADERERR'] = np.append(outdict['HEADERERR'], reporting)
-                        log.error(f"Couldn't convert {key} with value {orig} to float.")
-                    else:
-                        break
+        elif 'ETCTEFF' in dat_header:
+            try:
+                outdict['EFFTIME_ETC'] = float(dat_header['ETCTEFF'])
+            except:
+                try:
+                    orig = str(dat_header['ETCTEFF'])
+                except:
+                    orig = ''
+                reporting = keyval_change_reporting('ETCTEFF', orig, outdict['EFFTIME_ETC'])
+                outdict['HEADERERR'] = np.append(outdict['HEADERERR'], reporting)
+                log.error(f"Couldn't convert ETCTEFF with value {orig} to float.")
+        elif int(outdict['NIGHT']) < 20210614 and 'ACTTEFF' in dat_header:
+            try:
+                outdict['EFFTIME_ETC'] = float(dat_header['ACTTEFF'])
+            except:
+                try:
+                    orig = str(dat_header['ACTTEFF'])
+                except:
+                    orig = ''
+                reporting = keyval_change_reporting('ACTTEFF', orig, outdict['EFFTIME_ETC'])
+                outdict['HEADERERR'] = np.append(outdict['HEADERERR'], reporting)
+                log.error(f"Couldn't convert ACTTEFF with value {orig} to float.")
 
         ## Get the airmass factor from the etc. If unavailable, try to calculate from the airmass in the raw data
         ## Default if both fail is 1 (already set)
