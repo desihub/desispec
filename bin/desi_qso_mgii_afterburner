@@ -1,0 +1,192 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import os
+import sys
+
+import argparse
+
+import fitsio
+import numpy as np
+import pandas as pd
+
+from desispec.mgii_afterburner import mgii_fitter
+
+
+def collect_argparser():
+    parser = argparse.ArgumentParser(description="Run MgII fitter on coadd file")
+
+    parser.add_argument("--coadd", type=str, required=True,
+                        help="coadd file containing spectra")
+    parser.add_argument("--zbest", type=str, required=True,
+                        help="zbest file associated (in the same folder) to the coadd file")
+    parser.add_argument("--output", type=str, required=True,
+                        help="output filename where the result of the MgII will be saved")
+
+    parser.add_argument("--target_version", type=str, required=False, default="MAIN",
+                        help="give the name of the target version: SV1 / SV3 / MAIN ")
+    parser.add_argument("--target_selection", type=str, required=False, default="restricted",
+                        help="on each sample the mgII fitter is perform: " +
+                             "restricted (QSO targets with SPECTYPE==GALAXY)" +
+                             " / qso_targets (QSO targets)" +
+                             " / all_targets (All targets in the coadd file)")
+
+    parser.add_argument("--lambda_width", type=str, required=False, default=250,
+                        help="parameter for mgII fitter, see mgii_afterburner.py for more information")
+    parser.add_argument("--max_sigma", type=str, required=False, default=200,
+                        help="parameter for mgII fitter, see mgii_afterburner.py for more information")
+    parser.add_argument("--min_sigma", type=str, required=False, default=10,
+                        help="parameter for mgII fitter, see mgii_afterburner.py for more information")
+    parser.add_argument("--min_deltachi2", type=str, required=False, default=16,
+                        help="parameter for mgII fitter, see mgii_afterburner.py for more information")
+    parser.add_argument("--min_signifiance_A", type=str, required=False, default=3,
+                        help="parameter for mgII fitter, see mgii_afterburner.py for more information")
+    parser.add_argument("--min_A", type=str, required=False, default=0.0,
+                        help="parameter for mgII fitter, see mgii_afterburner.py for more information")
+
+    return parser.parse_args()
+
+
+def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, spectra_name, zbest_name, param_mgii_fitter, DESI_TARGET):
+    # just to speed up the process and don't go in mgii_fitter function for nothing..
+    if sel_to_mgii.sum() == 0:
+        QSO_sel = pd.DataFrame()
+    else:
+        (index_selected_with_mgii_fit,
+        fits_result,
+        index_with_mgii_fit) = mgii_fitter(spectra_name, zbest_name, sel_to_mgii,
+                                           param_mgii_fitter['lambda_width'],
+                                           max_sigma=param_mgii_fitter['max_sigma'],
+                                           min_sigma=param_mgii_fitter['min_sigma'],
+                                           min_deltachi2=param_mgii_fitter['min_deltachi2'],
+                                           min_A=param_mgii_fitter['min_A'],
+                                           min_signifiance_A=param_mgii_fitter['min_signifiance_A'])
+
+        sel_MGII = sel_to_mgii.copy()
+        # we only consider index where the mgii fit was done
+        sel_MGII[sel_to_mgii] = index_with_mgii_fit
+        # we then conserve only index where the mgii fit gives a good result !
+        sel_MGII[sel_MGII] = index_selected_with_mgii_fit
+
+        # Build dataframe to store the result
+        QSO_sel = pd.DataFrame()
+        QSO_sel['TARGETID'] = zbest['TARGETID'][:][sel_MGII]
+        QSO_sel['RA'] = fibermap['TARGET_RA'][:500][index_sorted][sel_MGII]
+        QSO_sel['DEC'] = fibermap['TARGET_DEC'][:500][index_sorted][sel_MGII]
+        QSO_sel['Z'] = zbest['Z'][:][sel_MGII]
+        QSO_sel['ZERR'] = zbest['ZERR'][:][sel_MGII]
+        QSO_sel['COEFFS'] = zbest['COEFF'][:][sel_MGII].tolist()
+        QSO_sel['Z_RR'] = zbest['Z'][:][sel_MGII]
+        QSO_sel['SPECTYPE'] = zbest['SPECTYPE'][:][sel_MGII]
+        QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][:500][index_sorted][sel_MGII]
+
+        # Add info from MgII fitter output:
+        QSO_sel['DELTA_CHI2'] = fits_result[index_selected_with_mgii_fit, 0]
+        QSO_sel['A'] = fits_result[index_selected_with_mgii_fit, 1]
+        QSO_sel['SIGMA'] = fits_result[index_selected_with_mgii_fit, 2]
+        QSO_sel['B'] = fits_result[index_selected_with_mgii_fit, 3]
+        QSO_sel['VAR_A'] = fits_result[index_selected_with_mgii_fit, 4]
+        QSO_sel['VAR_SIGMA'] = fits_result[index_selected_with_mgii_fit, 5]
+        QSO_sel['VAR_B'] = fits_result[index_selected_with_mgii_fit, 6]
+
+    return QSO_sel
+
+
+def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
+    # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f8'),
+                                               ('COEFFS', ('f8', 10)), ('Z_RR', 'f8'), (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'),
+                                               ('DELTA_CHI2', 'f8'), ('A', 'f8'), ('SIGMA', 'f8'), ('B', 'f8'),
+                                               ('VAR_A', 'f8'), ('VAR_SIGMA', 'f8'), ('VAR_B', 'f8')])
+
+    data['TARGETID'] = dataframe['TARGETID']
+    data['RA'] = dataframe['RA']
+    data['DEC'] = dataframe['DEC']
+    data['Z'] = dataframe['Z']
+    data['ZERR'] = dataframe['ZERR']
+    data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
+    data['Z_RR'] = dataframe['Z_RR']
+    data['SPECTYPE'] = dataframe['SPECTYPE']
+    data[DESI_TARGET] = dataframe[DESI_TARGET]
+
+    data['DELTA_CHI2'] = dataframe['DELTA_CHI2']
+    data['A'] = dataframe['A']
+    data['SIGMA'] = dataframe['SIGMA']
+    data['B'] = dataframe['B']
+    data['VAR_A'] = dataframe['VAR_A']
+    data['VAR_SIGMA'] = dataframe['VAR_SIGMA']
+    data['VAR_B'] = dataframe['VAR_B']
+
+    fits = fitsio.FITS(filename, 'rw', clobber=clobber)
+    fits.write(data)
+    if clobber:
+        print(f'OVERWRITE the file : {filename}')
+    else:
+        print(f'EXPAND the file : {filename}')
+    fits.close()
+
+    return
+
+
+if __name__ == "__main__":
+
+    args = collect_argparser()
+
+    spectra_name = args.coadd
+    zbest_name = args.zbest
+    target_version = args.target_version
+    target_selection = args.target_selection
+    output_name = args.output
+
+    # Param for the MgII fitter see desispec/py/desispec/mgii_afterburner.py for additional informations
+    param_mgii_fitter = {'lambda_width':args.lambda_width, 'max_sigma':args.max_sigma, 'min_sigma':args.min_sigma,
+                         'min_deltachi2':args.min_deltachi2, 'min_signifiance_A':args.min_signifiance_A, 'min_A':args.min_A}
+
+
+    if os.path.isfile(spectra_name) & os.path.isfile(zbest_name):
+        # open best fit file generated by redrock
+        zbest_file = fitsio.FITS(zbest_name)
+        zbest = zbest_file[1]
+        fibermap = zbest_file[2]
+        index_sorted = np.argsort(fibermap['TARGETID'][:500]) # in zbest targetid are sorted, it is not the case in the fibermap
+
+        if target_version == 'SV1':
+            DESI_TARGET = 'SV1_DESI_TARGET'
+        elif target_version == 'SV3':
+            DESI_TARGET = 'SV3_DESI_TARGET'
+        elif target_version == 'MAIN':
+            DESI_TARGET = 'DESI_TARGET'
+        else:
+            print("**** CHOOSE CORRECT VERSION OF TARGET ****")
+            sys.exit()
+
+        print(type(fibermap[DESI_TARGET][0]))
+        print(type(zbest['SPECTYPE'][0]))
+
+        is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
+        sel_RR = (zbest['SPECTYPE'][:] == 'QSO')
+
+        if target_selection == 'restricted':
+            # Run MgII fitter only on QSO targets with SPECTYPE!=QSO objects to save time !
+            sel_to_mgii = is_qso_target & ~sel_RR
+        elif target_selection == 'qso_targets':
+            # Run MgII fitter only on QSO targets
+            sel_to_mgii = is_qso_target
+        elif target_selection == 'all_targets':
+            # Run MgII fitter only on all targets
+            sel_to_mgii = np.ones(500, dtype='bool')
+
+        print(f"   Nbr objetcs for mgii: {sel_to_mgii.sum()}")
+        QSO_from_MGII = select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, spectra_name, zbest_name, param_mgii_fitter, DESI_TARGET)
+        print(f"   Selected with mgii: {QSO_from_MGII.shape[0]}")
+
+        # close file !!
+        zbest_file.close()
+
+        save_dataframe_to_fits(QSO_from_MGII, output_name, DESI_TARGET)
+
+
+    else: # file for the consider Tile / Night / petal does not exist
+        print(f"There is problem with files:")
+        print(f"    * coadd file: {spectra_name}")
+        print(f"    * zbest file: {zbest_name}")
