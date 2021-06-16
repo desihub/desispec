@@ -703,6 +703,13 @@ def zmtl_writer(zmtl, outputname,
     if sq_flag:
         hdr['SQMODFIL'] = squeze_model_file
 
+    # SB Check if all fibers were masked due to failing petal QA
+    npetalmask = np.sum(zmtl['ZWARN'] & zwarn['BAD_PETALQA'] != 0)
+    if npetalmask == len(zmtl):
+        hdr['BADPTLQA'] = True
+    else:
+        hdr['BADPTLQA'] = False
+
     # ADM write out the data to the full file name.
     write_with_units(outputname, zmtl, extname='ZMTL', header=hdr)
 
