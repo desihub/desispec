@@ -21,8 +21,8 @@ def parse(options=None):
     p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
     p.add_argument("-g", "--group", type=str, required=True,
                    help="cumulative, pernight, perexp, or a custom name")
-    p.add_argument("--run_zqso", action="store_true",
-                   help="also run make_zqso_files")
+    p.add_argument("--run_zmtl", action="store_true",
+                   help="also run make_zmtl_files")
     p.add_argument("--explist", type=str,
                    help="file with columns TILE NIGHT EXPID to use")
     p.add_argument("--nosubmit", action="store_true",
@@ -130,7 +130,7 @@ def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
 
 def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
                          submit=False, queue='realtime', reservation=None,
-                         dependency=None, system_name=None, run_zqso=False):
+                         dependency=None, system_name=None, run_zmtl=False):
     """
     Generate batch script for spectra+coadd+redshifts for a tile
 
@@ -147,7 +147,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         reservation (str): batch reservation name
         dependency (str): passed to sbatch --dependency upon submit
         system_name (str): batch system name, e.g. cori-haswell, perlmutter-gpu
-        run_zqso (bool): if True, also run make_zqso_files
+        run_zmtl (bool): if True, also run make_zmtl_files
 
     Returns tuple (scriptpath, error):
         scriptpath (str): full path to generated script
@@ -310,28 +310,36 @@ done
 echo Waiting for redrock to finish at $(date)
 wait
 """)
-        if run_zqso:
+
+        if group == 'cumulative':
+            fx.write(f"""
+echo Running desi_tile_qa
+tile_qa_log={outdir}/tile-qa-{tileid}-thru{night}.log
+desi_tile_qa -n {night} -e {expid} &> $tile_qa_log
+""")
+
+        if run_zmtl:
             fx.write(f"""
 # These run fast; use a single node for all 10 petals without srun overhead
-echo Running make_zqso_files at $(date)
+echo Running make_zmtl_files at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
-    zqso={outdir}/zqso-$SPECTRO-{suffix}.fits
-    zqsolog={outdir}/zqso-$SPECTRO-{suffix}.log
+    zmtl={outdir}/zmtl-$SPECTRO-{suffix}.fits
+    zmtllog={outdir}/zmtl-$SPECTRO-{suffix}.log
 
-    if [ -f $zqso ]; then
-        echo $(basename $zqso) already exists, skipping make_zqso_files
+    if [ -f $zmtl ]; then
+        echo $(basename $zmtl) already exists, skipping make_zmtl_files
     elif [[ -f $coadd && -f $zbest ]]; then
-        echo Running make_zqso_files on $(basename $zbest), see $zqsolog
-        cmd="make_zqso_files -in $zbest -out $zqso"
-        echo RUNNING $cmd &> $zqsolog
-        $cmd &>> $zqsolog &
+        echo Running make_zmtl_files on $(basename $zbest), see $zmtllog
+        cmd="make_zmtl_files -in $zbest -out $zmtl"
+        echo RUNNING $cmd &> $zmtllog
+        $cmd &>> $zmtllog &
     else
-        echo ERROR: missing $(basename $zbest) or $(basename $coadd), skipping zqso
+        echo ERROR: missing $(basename $zbest) or $(basename $coadd), skipping zmtl
     fi
 done
-echo Waiting for zqso to finish at $(date)
+echo Waiting for zmtl to finish at $(date)
 wait
 """)
 
@@ -404,7 +412,7 @@ def _read_minimal_exptables(nights=None):
 
 
 def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, explist=None,
-                                   run_zqso=False,
+                                   run_zmtl=False,
                                    batch_queue='realtime', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
     """
@@ -417,7 +425,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         tileid (int): Tile ID.
         expid (int, or list or np.array of int's): Exposure IDs.
         explist (str): File with columns TILE NIGHT EXPID to use
-        run_zqso (bool): Also run make_zqso_files
+        run_zmtl (bool): Also run make_zmtl_files
         batch_queue (str): Batch queue name. Default is 'realtime'.
         batch_reservation (str): Batch reservation name.
         batch_dependency (str): Job dependencies passed to sbatch --dependency .
@@ -525,7 +533,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
             for i in range(len(exptable[tilerows])):
                 batchscript, batcherr = batch_tile_redshifts(
                     tileid, exptable[tilerows][i:i + 1], group, submit=submit,
-                    run_zqso=run_zqso,
+                    run_zmtl=run_zmtl,
                     queue=batch_queue, reservation=batch_reservation,
                     dependency=batch_dependency, system_name=system_name
                 )
@@ -534,14 +542,14 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
                 thisnight = exptable['NIGHT'] == night
                 batchscript, batcherr = batch_tile_redshifts(
                     tileid, exptable[tilerows & thisnight], group, submit=submit,
-                    run_zqso=run_zqso,
+                    run_zmtl=run_zmtl,
                     queue=batch_queue, reservation=batch_reservation,
                     dependency=batch_dependency, system_name=system_name
                 )
         else:
             batchscript, batcherr = batch_tile_redshifts(
                 tileid, exptable[tilerows], group, submit=submit,
-                run_zqso=run_zqso,
+                run_zmtl=run_zmtl,
                 queue=batch_queue, reservation=batch_reservation,
                 dependency=batch_dependency, system_name=system_name
             )

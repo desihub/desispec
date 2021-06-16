@@ -704,7 +704,7 @@ def write_zmtl(zmtl, outputname,
         hdr['SQMODFIL'] = squeze_model_file
 
     # SB Check if all fibers were masked due to failing petal QA
-    npetalmask = np.sum(zmtl['ZWARN'] & zwarn['BAD_PETALQA'] != 0)
+    npetalmask = np.sum(zmtl['ZWARN'] & zwarn_mask['BAD_PETALQA'] != 0)
     if npetalmask == len(zmtl):
         hdr['BADPTLQA'] = True
     else:
