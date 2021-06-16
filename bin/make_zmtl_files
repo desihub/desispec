@@ -58,7 +58,7 @@ arp.add_argument('-n', '--night',
                  help='NIGHTID(s) of tiles to process in YYYYMMDD. Pass a comma \
                  -separated list (e.g. 20210406 or "20210406,20210410,20210412")\
                  which must correspond to the TILEIDs')
-arp.add_argument('-p', '--petal', 
+arp.add_argument('-p', '--petal',
                  default="0,1,2,3,4,5,6,7,8,9",
                  help='Petals to run. Pass comma-separated integers            \
                  (e.g. "1" for petal 1, "3,5,8" for petals 3, 5 and 8)         \

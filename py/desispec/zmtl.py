@@ -1,6 +1,6 @@
 """
 desispec.zmtl
-==================
+=============
 
 Post-redrock ML processing for LyA Quasar object identification for
 creating zmtl files to be used by the merged target list (MTL) updates.
@@ -216,7 +216,7 @@ def load_qn_model(model_filename):
 
 def add_tileqa_data(zmtl, tileqafile):
     """Modifies zmtl['ZWARN'] in-place to add tile QA flags
- 
+
     Parameters
     ----------
     zmtl : :class:`~numpy.array`
@@ -651,9 +651,9 @@ def zcomb_selector(zmtl, proc_flag=False):
     return zmtl
 
 
-def zmtl_writer(zmtl, outputname,
-                qn_flag=False, sq_flag=False, abs_flag=False, zcomb_flag=False,
-                qnp_model_file=None, squeze_model_file=None):
+def write_zmtl(zmtl, outputname,
+               qn_flag=False, sq_flag=False, abs_flag=False, zcomb_flag=False,
+               qnp_model_file=None, squeze_model_file=None):
     """Writes the zmtl structured array out as a FITS file.
 
     Parameters
@@ -840,9 +840,9 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
         if zcomb_flag:
             zmtl = zcomb_selector(zmtl)
 
-        full_outputname = zmtl_writer(zmtl, outputfn, qn_flag,
-                                      sq_flag, abs_flag, zcomb_flag,
-                                      qnp_model_file, squeze_model_file)
+        full_outputname = write_zmtl(zmtl, outputfn, qn_flag,
+                                     sq_flag, abs_flag, zcomb_flag,
+                                     qnp_model_file, squeze_model_file)
 
         tmark('    --{} written out correctly.'.format(full_outputname))
         log.info('='*79)
