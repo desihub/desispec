@@ -770,7 +770,9 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                 outdict['EBVFAC'] = 1.0 / etc_dict['fassign']['MW_transp']
 
         ## Get EFFTIME from etc if available, then check in raw data.
-        ## Default if both fail is -99 (already set)
+        ## If ETCTEFF is then available and it can be transoformed to a float, use it
+        ## And for data before June 2021, check for ACTTEFF.
+        ## Default if all fail is -99 (already set)
         if 'expinfo' in etc_dict and 'efftime' in etc_dict['expinfo']:
             outdict['EFFTIME_ETC'] = etc_dict['expinfo']['efftime']
         elif 'ETCTEFF' in dat_header:
