@@ -160,9 +160,6 @@ if __name__ == "__main__":
             print("**** CHOOSE CORRECT VERSION OF TARGET ****")
             sys.exit()
 
-        print(type(fibermap[DESI_TARGET][0]))
-        print(type(zbest['SPECTYPE'][0]))
-
         is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
         sel_RR = (zbest['SPECTYPE'][:] == 'QSO')
 
