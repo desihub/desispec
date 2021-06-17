@@ -147,6 +147,11 @@ def write_spectra(outfile, spec, units=None):
                     if value in spec.scores_comments.keys() :
                         hdu.header[key] = (value, spec.scores_comments[value])
 
+    if spec.extra_catalog is not None:
+        extra_catalog = encode_table(spec.extra_catalog)
+        extra_catalog.meta['EXTNAME'] = 'EXTRA_CATALOG'
+        all_hdus.append(fits.convenience.table_to_hdu(extra_catalog))
+
     t0 = time.time()
     all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
     os.rename("{}.tmp".format(outfile), outfile)
@@ -211,6 +216,8 @@ def read_spectra(infile, single=False):
             fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
         elif name == "SCORES":
             scores = encode_table(Table(hdus[h].data, copy=True).as_array())
+        elif name == 'EXTRA_CATALOG':
+            extra_catalog = encode_table(Table(hdus[h].data, copy=True).as_array())
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -257,7 +264,8 @@ def read_spectra(infile, single=False):
     # they will be caught by the constructor.
 
     spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
-        fibermap=fmap, meta=meta, extra=extra, single=single, scores=scores)
+        fibermap=fmap, meta=meta, extra=extra, extra_catalog=extra_catalog,
+        single=single, scores=scores)
 
     return spec
 
