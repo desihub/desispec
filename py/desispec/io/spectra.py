@@ -203,6 +203,7 @@ def read_spectra(infile, single=False):
     mask = None
     res = None
     extra = None
+    extra_catalog = None
     scores = None
 
     # For efficiency, go through the HDUs in disk-order.  Use the
