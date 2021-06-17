@@ -4,19 +4,13 @@
 ### Note:
 ### Please see https://desi.lbl.gov/trac/attachment/wiki/TargetSelectionWG/TSTeleconMinutes/DESITS210113/QSO_completeness_Ravoux_13_01_2021_v2.pdf for details about the MgII fitter
 ###
-### For DESI SV deep observation (10 to 12 exposures), the optimal parameters are:
-### max_sigma = 200
-### min_sigma = 10
-### min_deltachi2 = 15
+### the "optimal"/chosen parameters are (can be modify when desi_qso_mgii_afterburner is called):
+### lambda_width      = 250
+### max_sigma         = 200
+### min_sigma         = 10
+### min_deltachi2     = 16
 ### min_signifiance_A = 3
-### min_A = 0
-###
-### For DESI SV single exposures, the optimal parameters are:
-### max_sigma = 200
-### min_sigma = 10
-### min_deltachi2 = 15
-### min_signifiance_A = 2
-### min_A = 0
+### min_A             = 0
 
 import sys
 
