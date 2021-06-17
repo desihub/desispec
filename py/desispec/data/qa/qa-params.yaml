@@ -9,7 +9,7 @@ exposure_qa:
 
  # maximum fraction of fibers with bad positioning
  # per petal
- max_frac_of_bad_positions_per_petal : 0.5
+ max_frac_of_bad_positions_per_petal : 0.6
 
  # minimum number of valid standard stars per petal
  min_number_of_good_stdstars_per_petal : 3
