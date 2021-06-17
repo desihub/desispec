@@ -1,0 +1,330 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import os
+import sys
+
+import argparse
+
+import fitsio
+import numpy as np
+import pandas as pd
+
+from redrock.templates import find_templates
+from redrock.external.desi import rrdesi
+
+from quasarnp.io import load_model
+from quasarnp.utils import process_preds, rebin
+
+
+## LOAD template to RE-RUN redrock
+qso_template_filename = [path for path in find_templates() if os.path.basename(path) == 'rrtemplate-qso.fits'][0]
+
+## INFO FOR QUASAR NET
+lines = ['LYA','CIV(1548)','CIII(1909)', 'MgII(2796)','Hbeta','Halpha']
+lines_bal = ['CIV(1548)']
+model_QN = load_model("/global/cfs/cdirs/desi/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
+
+## Selection param for QuasarNet
+c_thresh = 0.5
+n_thresh = 1
+
+
+def collect_argparser():
+    parser = argparse.ArgumentParser(description="Run QN and rerun RR on a coadd file to find true quasars with correct redshift")
+
+    parser.add_argument("--coadd", type=str, required=True,
+                        help="coadd file containing spectra")
+    parser.add_argument("--zbest", type=str, required=True,
+                        help="zbest file associated (in the same folder) to the coadd file")
+    parser.add_argument("--output", type=str, required=True,
+                        help="output filename where the result of the MgII will be saved")
+
+    parser.add_argument("--target_version", type=str, required=False, default="MAIN",
+                        help="give the name of the target version: SV1 / SV3 / MAIN ")
+
+    parser.add_argument("--template", type=str, required=False, default=qso_template_filename,
+                        help="give the RR template for the new RR run, by default:redrock_qso_template")
+    parser.add_argument("--filename_priors", type=str, required=False, default='priors-tmp.fits',
+                        help="filename for the RR prior file, by default:priors-tmp.fits")
+    parser.add_argument("--filename_output_rerun_RR", type=str, required=False, default="redrock-tmp.h5",
+                        help="filename for the output of the new run of RR, by default:redrock-tmp.h5")
+    parser.add_argument("--filename_zbest_rerun_RR", type=str, required=False, default="zbest-tmp.fits",
+                        help="filename for the zbest file of the new run of RR, by default:zbest-tmp.fits")
+    parser.add_argument("--delete_RR_output", type=str, required=False, default='True',
+                        help="delete RR outputs: True or False, they are useless since everything usefull are saved in output, by defaut:True")
+
+    return parser.parse_args()
+
+
+def load_desi_coadd(filename, rows=None):
+    """Load and renormalize a DESI coadded spectrographic exposure.
+    This method will load a coadd file and renormalize as follows. First, spectra are
+    rebinned to the QuasarNet wavelength grid. Rebinned spectra are divided by
+    the rebinned IVAR to reweight the spectra. Next, rebinned spectra are
+    normalized by subtracting the weighted mean of the spectra and then dividing
+    the resultant spectra by its weighted rms. The rebinned IVAR is used for
+    weighting. Any spectra where the IVAR is 0 for the entire wavelength grid
+    is discarded.
+    Parameters
+    ----------
+    filename : str
+        Full path and filename of the coadd file to load.
+    rows : numpy.ndarray, optional.
+        Boolean array indicating whether each row should be loaded. True
+        if the row should be loaded, False otherwise. Defaults to None, which
+        loads all rows.
+    Returns
+    -------
+    X_out : numpy.ndarray
+        Renormalized and rebinned spectra. Output spectra will have shape
+        `(nspectra, nbins)` where `nbins=443` for the QuasarNet wavelength grid.
+    w : numpy.ndarray
+        Array of length `sum(rows == True)` where each element is True if the spectra
+        was kept in `X_out` and False if the spectra was discarded.
+    See Also
+    --------
+    load_desi_daily : Load a daily exposure.
+    """
+    cams = ["B", "R", "Z"]
+    with fitsio.FITS(filename) as h:
+        # Load each cam sequentially, then rebin and merge
+        # We will be rebinning down to 443, which is the input size of QuasarNet
+        if rows is None:
+            nfibers = len(h['B_FLUX'].read())
+            rows = np.ones(nfibers,dtype='bool')
+        else:
+            nfibers = np.sum(rows > 0)
+        X_out = np.zeros((nfibers, 443))
+        # ivar_out is the weights out, i.e. the ivar, we use this for normalization
+        ivar_out = np.zeros_like(X_out) # Use zeros_like so we only have to change one
+        for c in cams:
+            fluxname,ivarname,wname = f"{c}_FLUX", f"{c}_IVAR", f"{c}_WAVELENGTH"
+            # Load the flux and ivar
+            flux = h[fluxname].read()[rows, :]
+            ivar = h[ivarname].read()[rows, :]
+            w_grid = h[wname].read()
+
+            # Rebin the flux and ivar
+            new_flux, new_ivar = rebin(flux, ivar, w_grid)
+
+            X_out += new_flux
+            ivar_out += new_ivar
+
+    non_zero = ivar_out != 0
+    X_out[non_zero] /= ivar_out[non_zero]
+
+    nonzero_weights = np.sum(ivar_out, axis=1) != 0
+    #print(f"{nfibers - np.sum(nonzero_weights)} spectra with zero weights")
+    X_out = X_out[nonzero_weights]
+    ivar_out = ivar_out[nonzero_weights]
+
+    # axis=1 corresponds to the rebinned spectral axis
+    # Finding the weighted mean both for normalization and for the rms
+    mean = np.average(X_out, axis=1, weights=ivar_out)[:, None]
+    rms = np.sqrt(np.average((X_out - mean) ** 2 ,axis=1, weights=ivar_out))[:, None]
+
+    # Normalize by subtracting the weighted mean and dividing by the rms
+    # as prescribed in the original QuasarNet paper.
+    X_out = (X_out - mean) / rms
+    return X_out, np.where(nonzero_weights)[0]
+
+
+def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
+    """
+        Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
+        with z_prior using the template contained in template_file
+
+        Return: redshit, error_redshift and the coeffs from the best fit of redrock. redshift.size = targetid.size
+    """
+
+    template_filename = param_RR['template_filename']
+    filename_priors =  param_RR['filename_priors']
+    filename_output_rerun_RR =  param_RR['filename_output_rerun_RR']
+    filename_zbest_rerun_RR = param_RR['filename_zbest_rerun_RR']
+
+    def write_prior_for_RR(targetid, z_prior, filename_priors):
+        function = np.array(['tophat'] * z_prior.size) #need to be the same for every one
+        sigma = 0.1*np.ones(z_prior.size)
+        # save
+        out = fitsio.FITS(filename_priors, 'rw', clobber=True)
+        data, names, extname = [targetid, function, z_prior, sigma], ['TARGETID', 'FUNCTION', 'Z', 'SIGMA'], 'PRIORS'
+        out.write(data, names=names, extname=extname)
+        out.close()
+        print(f'INFO: Write prior file for RR with {z_prior.size} objetcs: {filename_priors}')
+
+    def extract_redshift_info_from_RR(filename_zbest):
+        with fitsio.FITS(filename_zbest) as zbest:
+            redshift = zbest[1]['Z'][:]
+            err_redshift = zbest[1]['ZERR'][:]
+            coeffs = np.zeros((redshift.size, 10))
+            coeffs[:, :4] = zbest[1]['COEFF'][:]
+        return redshift, err_redshift, coeffs.tolist()
+
+    write_prior_for_RR(targetid, z_prior, filename_priors)
+
+    argument_for_rerun_RR = [spectra_name,
+                             '--templates', template_filename,
+                             '--targetids', ",".join(targetid.astype(str)),
+                             '--priors', filename_priors,
+                             '--output', filename_output_rerun_RR,
+                             '--zbest', filename_zbest_rerun_RR]
+    # NEW RUN RR
+    rrdesi(argument_for_rerun_RR)
+
+    # Extract information from the new run of RR
+    redshift, err_redshift, coeffs = extract_redshift_info_from_RR(filename_zbest_rerun_RR)
+
+    if param_RR['delete_RR_output'] == 'True':
+        print("INFO: Remove output from the new run of RR")
+        os.remove(filename_priors)
+        os.remove(filename_output_rerun_RR)
+        os.remove(filename_zbest_rerun_RR)
+
+    return redshift, err_redshift, coeffs
+
+
+def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_name, param_RR):
+    """
+        Run QuasarNet to the object with index_to_QN == True from spectra_name.
+        Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
+
+    """
+
+    data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN)
+
+    if len(index_with_QN) == 0: # if there is no object for QN :(
+        QSO_sel = pd.DataFrame()
+    else:
+        p = model_QN.predict(data[:, :, None])
+        c_line, z_line, zbest_QN, c_line_bal, z_line_bal = process_preds(p, lines, lines_bal, verbose=False) # c_line.size = index_with_QN.size and not index_to_QN !!
+
+        # Selection QSO with QN :
+        # sel_index_with_QN.size = zbest_QN.size = index_with_QN.size | is_qso_QN.size = index_to_QN.size | sel_QN.size = 500
+        print(f"INFO: We select QSO from QN with c_thresh={c_thresh} and n_thresh={n_thresh}")
+        sel_index_with_QN = np.sum(c_line > c_thresh, axis=0) >= n_thresh
+        is_qso_QN = np.zeros(sel_to_QN.sum(), dtype=bool)
+        is_qso_QN[index_with_QN] = sel_index_with_QN
+        sel_QN = sel_to_QN.copy()
+        sel_QN[sel_to_QN] = is_qso_QN
+
+        print("INFO: Remove objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.1")
+        sel_QSO_RR_with_z_pb = (zbest['SPECTYPE'][:] == 'QSO')
+        sel_QSO_RR_with_z_pb[sel_QN] &= np.abs(zbest['Z'][:][sel_QN] - zbest_QN[sel_index_with_QN]) <= 0.1
+
+        sel_QN &= ~sel_QSO_RR_with_z_pb
+        index_with_QN_with_pb = sel_QN[sel_to_QN][index_with_QN]
+
+        print(f"INFO: RUN RR on {sel_QN.sum()}")
+        if sel_QN.sum() == 0: # If there is no quasar we don't apply RR: error with RR if targetid == ''
+            QSO_sel = pd.DataFrame()
+        else:
+            # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
+            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, zbest['TARGETID'][:][sel_QN], zbest_QN[index_with_QN_with_pb], param_RR)
+
+            QSO_sel = pd.DataFrame()
+            QSO_sel['TARGETID'] = zbest['TARGETID'][:][sel_QN]
+            QSO_sel['RA'] = fibermap['TARGET_RA'][:500][index_sorted][sel_QN]
+            QSO_sel['DEC'] = fibermap['TARGET_DEC'][:500][index_sorted][sel_QN]
+
+            QSO_sel['Z'] = redshift
+            QSO_sel['ZERR'] = err_redshift
+            QSO_sel['COEFFS'] = coeffs
+
+            QSO_sel['SPECTYPE'] = zbest['SPECTYPE'][:][sel_QN]
+            QSO_sel['Z_RR'] = zbest['Z'][:][sel_QN]
+            QSO_sel['Z_QN'] = zbest_QN[index_with_QN_with_pb]
+            QSO_sel['C_LINES'] = c_line.T[index_with_QN_with_pb].tolist()
+            QSO_sel['Z_LINES'] = z_line.T[index_with_QN_with_pb].tolist()
+
+    return QSO_sel
+
+
+def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
+    # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f8'),
+                                               ('COEFFS', ('f8', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f8'),
+                                                ('Z_QN', 'f8'), ('C_LINES', ('f8', 6)), ('Z_LINES', ('f8', 6))])
+
+    data['TARGETID'] = dataframe['TARGETID']
+    data['RA'] = dataframe['RA']
+    data['DEC'] = dataframe['DEC']
+
+    data['Z'] = dataframe['Z']
+    data['ZERR'] = dataframe['ZERR']
+    data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
+
+    data['SPECTYPE'] = dataframe['SPECTYPE']
+    data['Z_RR'] = dataframe['Z_RR']
+
+    data['Z_QN'] = dataframe['Z_QN']
+    data['C_LINES'] = np.array([np.array(dataframe['C_LINES'][i]) for i in range(dataframe.shape[0])])
+    data['Z_LINES'] = np.array([np.array(dataframe['Z_LINES'][i]) for i in range(dataframe.shape[0])])
+
+    fits = fitsio.FITS(filename, 'rw', clobber=clobber)
+    fits.write(data)
+    if clobber:
+        print(f'OVERWRITE the file : {filename}')
+    else:
+        print(f'EXPAND the file : {filename}')
+    fits.close()
+
+    return
+
+
+if __name__ == "__main__":
+
+    import time
+
+    start = time.time()
+
+    print(" ")
+
+    args = collect_argparser()
+
+    spectra_name = args.coadd
+    zbest_name = args.zbest
+    target_version = args.target_version
+    output_name = args.output
+
+    param_RR = {'template_filename':args.template,
+                'filename_priors':args.filename_priors,
+                'filename_output_rerun_RR':args.filename_output_rerun_RR,
+                'filename_zbest_rerun_RR':args.filename_zbest_rerun_RR,
+                'delete_RR_output':args.delete_RR_output}
+
+    if os.path.isfile(spectra_name) & os.path.isfile(zbest_name):
+        # open best fit file generated by redrock
+        zbest_file = fitsio.FITS(zbest_name)
+        zbest = zbest_file[1]
+        fibermap = zbest_file[2]
+        index_sorted = np.argsort(fibermap['TARGETID'][:500]) # in zbest targetid are sorted, it is not the case in the fibermap
+
+        if target_version == 'SV1':
+            DESI_TARGET = 'SV1_DESI_TARGET'
+        elif target_version == 'SV3':
+            DESI_TARGET = 'SV3_DESI_TARGET'
+        elif target_version == 'MAIN':
+            DESI_TARGET = 'DESI_TARGET'
+        else:
+            print("**** CHOOSE CORRECT VERSION OF TARGET ****")
+            sys.exit()
+
+        is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
+
+        print(f"INFO: Nbr objetcs for QN: {is_qso_target.sum()}")
+        QSO_from_QN = selection_targets_with_QN(zbest, fibermap, index_sorted, is_qso_target, spectra_name, param_RR)
+        print(f"INFO: Selected with QN + new_Z: {QSO_from_QN.shape[0]}")
+
+        # close file !!
+        zbest_file.close()
+
+        save_dataframe_to_fits(QSO_from_QN, output_name, DESI_TARGET)
+
+        print("ELAPSED TIME: ", time.time() - start)
+
+
+    else: # file for the consider Tile / Night / petal does not exist
+        print(f"There is problem with files:")
+        print(f"    * coadd file: {spectra_name}")
+        print(f"    * zbest file: {zbest_name}")
