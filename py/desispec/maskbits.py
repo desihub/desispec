@@ -76,6 +76,7 @@ fibermask:
     - [BADPETALFLUXCAL,28, "Unphysical flux calibration for the petal (calib vector too high or too low)"]
     - [BADPETALSNR,    29, "TSNR is too low for this petal compared to the others"]
     - [BADREADNOISE,   30, "Bad read noise in one of the 3 cameras"]
+    - [LOWEFFTIME,     31, "Effective time for this fiber is too low"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
 specmask:

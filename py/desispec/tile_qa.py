@@ -147,23 +147,36 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
 
 
 
-    # QAFIBERSTATUS is OR of input exposures
-    tile_fiberqa_table["QAFIBERSTATUS"]=np.zeros(targetids.size,dtype=exposure_fiberqa_tables["QAFIBERSTATUS"].dtype)
+    # AND and OR of exposures QAFIBERSTATUS
+    and_qafiberstatus = np.zeros(targetids.size,dtype=exposure_fiberqa_tables["QAFIBERSTATUS"].dtype)
+    or_qafiberstatus  = np.zeros(targetids.size,dtype=exposure_fiberqa_tables["QAFIBERSTATUS"].dtype)
     for i,tid in enumerate(targetids) :
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
-        tile_fiberqa_table["QAFIBERSTATUS"][i] = np.bitwise_or.reduce(exposure_fiberqa_tables['QAFIBERSTATUS'][jj])
+        and_qafiberstatus[i] = np.bitwise_and.reduce(exposure_fiberqa_tables['QAFIBERSTATUS'][jj])
+        or_qafiberstatus[i] = np.bitwise_or.reduce(exposure_fiberqa_tables['QAFIBERSTATUS'][jj])
 
-    # EFFTIME
+    # tile QAFIBERSTATUS is AND of input exposures (+ LOWEFFTIME, see below)
+    tile_fiberqa_table["QAFIBERSTATUS"]= and_qafiberstatus
+
+    qa_params=get_qa_params()
+    bad_fibers_mask=fibermask.mask(qa_params["exposure_qa"]["bad_qafstatus_mask"])
+
+    # fiber EFFTIME is only counted for good data (per exposure and fiber)
     tile_fiberqa_table["EFFTIME_SPEC"]=np.zeros(targetids.size,dtype=exposure_fiberqa_tables["EFFTIME_SPEC"].dtype)
     for i,tid in enumerate(targetids) :
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
-        tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj])
+        tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj]*((exposure_fiberqa_tables['QAFIBERSTATUS'][jj]&bad_fibers_mask)==0))
+
+    # set bit of LOWEFFTIME per fiber
+    minimal_efftime = qa_params["tile_qa"]["fiber_rel_mintfrac"]*exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"]
+    low_efftime_fibers = np.where(tile_fiberqa_table["EFFTIME_SPEC"]<minimal_efftime)[0]
+    tile_fiberqa_table['QAFIBERSTATUS'][low_efftime_fibers] |= fibermask.mask("LOWEFFTIME")
+
+    # good fibers are the fibers with efftime above the threshold
+    good_fibers = np.where((tile_fiberqa_table['QAFIBERSTATUS']&fibermask.mask("LOWEFFTIME"))==0)[0]
 
 
-    qa_params=get_qa_params()["exposure_qa"]
-    bad_fibers_mask=fibermask.mask(qa_params["bad_qafstatus_mask"])
-
-    good_fibers = np.where((tile_fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
+    # set some scores per petal, only to make plots
     good_petals = np.unique(tile_fiberqa_table['PETAL_LOC'][good_fibers])
 
     npetal=10
@@ -180,18 +193,29 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         for k in keys :
             tile_petalqa_table[k][petal]=np.mean(exposure_petalqa_tables[k][ii])
 
-    # EFFTIME
+    # Petal EFFTIME
     tile_petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal)
     for petal in petals :
         entries=(tile_fiberqa_table['PETAL_LOC'] == petal)
         tile_petalqa_table['EFFTIME_SPEC'][petal]=np.median(tile_fiberqa_table["EFFTIME_SPEC"][entries])
+
+
+    # tile EFFTIME is median of efftime of fibers that are good in all exposures
+    always_good_fibers = ((or_qafiberstatus&bad_fibers_mask)==0)
+    tile_efftime = np.median(tile_fiberqa_table["EFFTIME_SPEC"][always_good_fibers])
+
+    # A tile is valid if efftime > mintfrac*goaltime AND number of good fibers > threshold
+    tile_is_valid = (tile_efftime >  exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"] ) & (good_fibers.size > qa_params["tile_qa"]["min_number_of_good_fibers"])
+
+    log.info("Tile {} EFFTIME_SPEC = {:.1f} sec (thres={}), NGOODFIB = {} , valid = {}".format(tileid,tile_efftime,int(exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"]),good_fibers.size,tile_is_valid))
 
     # add meta info
     tile_fiberqa_table.meta["TILEID"]=tileid
     tile_fiberqa_table.meta["LASTNITE"]=night
     tile_fiberqa_table.meta["NGOODFIB"]=good_fibers.size
     tile_fiberqa_table.meta["NGOODPET"]=good_petals.size
-    tile_fiberqa_table.meta["EFFTIME"]=np.mean(tile_petalqa_table['EFFTIME_SPEC'][good_petals])
+    tile_fiberqa_table.meta["EFFTIME"]=tile_efftime
+    tile_fiberqa_table.meta["VALID"]=tile_is_valid
 
     # rms dist of good fibers
     dist2 = (tile_fiberqa_table["MEAN_DELTA_X"]**2+tile_fiberqa_table["RMS_DELTA_X"]**2+tile_fiberqa_table["MEAN_DELTA_Y"]**2+tile_fiberqa_table["RMS_DELTA_Y"]**2)
