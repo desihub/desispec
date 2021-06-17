@@ -273,11 +273,6 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
 
 if __name__ == "__main__":
-
-    import time
-
-    start = time.time()
-
     print(" ")
 
     args = collect_argparser()
@@ -320,9 +315,6 @@ if __name__ == "__main__":
         zbest_file.close()
 
         save_dataframe_to_fits(QSO_from_QN, output_name, DESI_TARGET)
-
-        print("ELAPSED TIME: ", time.time() - start)
-
 
     else: # file for the consider Tile / Night / petal does not exist
         print(f"There is problem with files:")
