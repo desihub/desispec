@@ -183,14 +183,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     tile_petalqa_table = Table()
     petals=np.unique(exposure_fiberqa_tables["PETAL_LOC"])
     tile_petalqa_table["PETAL_LOC"]=np.arange(npetal,dtype=np.int16)
-
-    # integer columns (int16)
-    keys=['NGOODPOS', 'NSTDSTAR', 'NCFRAME']
-    for k in keys :
-        tile_petalqa_table[k]=np.zeros(npetal, dtype=np.int16)
-
-    # floating point columns (single precision)
-    keys=['WORSTREADNOISE', 'STARRMS', 'TSNR2FRA',
+    # all of these will be means of inputs, so get float32 output dtype
+    keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'TSNR2FRA', 'NCFRAME',
           'BSKYTHRURMS', 'BSKYCHI2PDF', 'RSKYTHRURMS', 'RSKYCHI2PDF', 'ZSKYTHRURMS', 'ZSKYCHI2PDF',
           'BTHRUFRAC', 'RTHRUFRAC', 'ZTHRUFRAC']
     for k in keys :
