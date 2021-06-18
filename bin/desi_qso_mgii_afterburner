@@ -12,6 +12,7 @@ import pandas as pd
 
 from desispec.mgii_afterburner import mgii_fitter
 
+log = desiutil.log.get_logger()
 
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Run MgII fitter on coadd file")
@@ -120,9 +121,9 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     fits = fitsio.FITS(filename, 'rw', clobber=clobber)
     fits.write(data)
     if clobber:
-        print(f'OVERWRITE the file : {filename}')
+        log.info(f'OVERWRITE the file : {filename}')
     else:
-        print(f'EXPAND the file : {filename}')
+        log.info(f'EXPAND the file : {filename}')
     fits.close()
 
     return
@@ -157,7 +158,7 @@ if __name__ == "__main__":
         elif target_version == 'MAIN':
             DESI_TARGET = 'DESI_TARGET'
         else:
-            print("**** CHOOSE CORRECT VERSION OF TARGET ****")
+            log.error("**** CHOOSE CORRECT VERSION OF TARGET ****")
             sys.exit()
 
         is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
@@ -173,9 +174,9 @@ if __name__ == "__main__":
             # Run MgII fitter only on all targets
             sel_to_mgii = np.ones(500, dtype='bool')
 
-        print(f"   Nbr objetcs for mgii: {sel_to_mgii.sum()}")
+        log.info(f"Nbr objetcs for mgii: {sel_to_mgii.sum()}")
         QSO_from_MGII = select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, spectra_name, zbest_name, param_mgii_fitter, DESI_TARGET)
-        print(f"   Selected with mgii: {QSO_from_MGII.shape[0]}")
+        log.info(f"Selected with mgii: {QSO_from_MGII.shape[0]}")
 
         # close file !!
         zbest_file.close()
@@ -184,6 +185,4 @@ if __name__ == "__main__":
 
 
     else: # file for the consider Tile / Night / petal does not exist
-        print(f"There is problem with files:")
-        print(f"    * coadd file: {spectra_name}")
-        print(f"    * zbest file: {zbest_name}")
+        log.error(f"There is problem with files: {spectra_name} or {zbest_name}")

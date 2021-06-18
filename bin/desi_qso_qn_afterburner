@@ -14,6 +14,9 @@ from redrock.templates import find_templates
 from redrock.external.desi import rrdesi
 
 from quasarnp.io import load_model, load_desi_coadd
+from quasarnp.utils import process_preds
+
+log = desiutil.log.get_logger()
 
 
 ## LOAD template to RE-RUN redrock
@@ -23,11 +26,6 @@ qso_template_filename = [path for path in find_templates() if os.path.basename(p
 lines = ['LYA','CIV(1548)','CIII(1909)', 'MgII(2796)','Hbeta','Halpha']
 lines_bal = ['CIV(1548)']
 model_QN = load_model("/global/cfs/cdirs/desi/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
-
-## Selection param for QuasarNet
-c_thresh = 0.5
-n_thresh = 1
-
 
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Run QN and rerun RR on a coadd file to find true quasars with correct redshift")
@@ -42,6 +40,13 @@ def collect_argparser():
     parser.add_argument("--target_version", type=str, required=False, default="MAIN",
                         help="give the name of the target version: SV1 / SV3 / MAIN ")
 
+    # for QN
+    parser.add_argument("--c_thresh", type=float, required=False, default=0.5,
+                        help="For QN: is_qso_QN =  np.sum(c_line > c_thresh, axis=0) >= n_thresh")
+    parser.add_argument("--n_thresh", type=int, required=False, default=1,
+                        help="For QN: is_qso_QN =  np.sum(c_line > c_thresh, axis=0) >= n_thresh")
+
+    # for RR
     parser.add_argument("--template", type=str, required=False, default=qso_template_filename,
                         help="give the RR template for the new RR run, by default:redrock_qso_template")
     parser.add_argument("--filename_priors", type=str, required=False, default='priors-tmp.fits',
@@ -77,7 +82,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
         data, names, extname = [targetid, function, z_prior, sigma], ['TARGETID', 'FUNCTION', 'Z', 'SIGMA'], 'PRIORS'
         out.write(data, names=names, extname=extname)
         out.close()
-        print(f'INFO: Write prior file for RR with {z_prior.size} objetcs: {filename_priors}')
+        log.debug(f'Write prior file for RR with {z_prior.size} objetcs: {filename_priors}')
 
     def extract_redshift_info_from_RR(filename_zbest):
         with fitsio.FITS(filename_zbest) as zbest:
@@ -102,7 +107,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     redshift, err_redshift, coeffs = extract_redshift_info_from_RR(filename_zbest_rerun_RR)
 
     if param_RR['delete_RR_output'] == 'True':
-        print("INFO: Remove output from the new run of RR")
+        log.debug("Remove output from the new run of RR")
         os.remove(filename_priors)
         os.remove(filename_output_rerun_RR)
         os.remove(filename_zbest_rerun_RR)
@@ -110,7 +115,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     return redshift, err_redshift, coeffs
 
 
-def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_name, param_RR):
+def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_name, param_QN, param_RR):
     """
         Run QuasarNet to the object with index_to_QN == True from spectra_name.
         Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
@@ -127,21 +132,21 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
 
         # Selection QSO with QN :
         # sel_index_with_QN.size = zbest_QN.size = index_with_QN.size | is_qso_QN.size = index_to_QN.size | sel_QN.size = 500
-        print(f"INFO: We select QSO from QN with c_thresh={c_thresh} and n_thresh={n_thresh}")
-        sel_index_with_QN = np.sum(c_line > c_thresh, axis=0) >= n_thresh
+        log.info(f"We select QSO from QN with c_thresh={param_QN['c_thresh']} and n_thresh={param_QN['n_thresh']}")
+        sel_index_with_QN = np.sum(c_line > param_QN['c_thresh'], axis=0) >= param_QN['n_thresh']
         is_qso_QN = np.zeros(sel_to_QN.sum(), dtype=bool)
         is_qso_QN[index_with_QN] = sel_index_with_QN
         sel_QN = sel_to_QN.copy()
         sel_QN[sel_to_QN] = is_qso_QN
 
-        print("INFO: Remove objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.1")
+        log.info("Remove objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.1")
         sel_QSO_RR_with_z_pb = (zbest['SPECTYPE'][:] == 'QSO')
         sel_QSO_RR_with_z_pb[sel_QN] &= np.abs(zbest['Z'][:][sel_QN] - zbest_QN[sel_index_with_QN]) <= 0.1
 
         sel_QN &= ~sel_QSO_RR_with_z_pb
         index_with_QN_with_pb = sel_QN[sel_to_QN][index_with_QN]
 
-        print(f"INFO: RUN RR on {sel_QN.sum()}")
+        log.info(f"RUN RR on {sel_QN.sum()}")
         if sel_QN.sum() == 0: # If there is no quasar we don't apply RR: error with RR if targetid == ''
             QSO_sel = pd.DataFrame()
         else:
@@ -190,9 +195,9 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     fits = fitsio.FITS(filename, 'rw', clobber=clobber)
     fits.write(data)
     if clobber:
-        print(f'OVERWRITE the file : {filename}')
+        log.info(f'OVERWRITE the file : {filename}')
     else:
-        print(f'EXPAND the file : {filename}')
+        log.info(f'EXPAND the file : {filename}')
     fits.close()
 
     return
@@ -207,6 +212,10 @@ if __name__ == "__main__":
     zbest_name = args.zbest
     target_version = args.target_version
     output_name = args.output
+
+
+    ## Selection param for QuasarNet
+    param_QN = {'c_thresh':args.c_thresh, 'n_thresh':args.n_thresh}
 
     param_RR = {'template_filename':args.template,
                 'filename_priors':args.filename_priors,
@@ -228,14 +237,14 @@ if __name__ == "__main__":
         elif target_version == 'MAIN':
             DESI_TARGET = 'DESI_TARGET'
         else:
-            print("**** CHOOSE CORRECT VERSION OF TARGET ****")
+            log.error("**** CHOOSE CORRECT VERSION OF TARGET ****")
             sys.exit()
 
         is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
 
-        print(f"INFO: Nbr objetcs for QN: {is_qso_target.sum()}")
-        QSO_from_QN = selection_targets_with_QN(zbest, fibermap, index_sorted, is_qso_target, spectra_name, param_RR)
-        print(f"INFO: Selected with QN + new_Z: {QSO_from_QN.shape[0]}")
+        log.info(f"Nbr objetcs for QN: {is_qso_target.sum()}")
+        QSO_from_QN = selection_targets_with_QN(zbest, fibermap, index_sorted, is_qso_target, spectra_name, param_QN, param_RR)
+        log.info(f"Selected with QN + new_Z: {QSO_from_QN.shape[0]}")
 
         # close file !!
         zbest_file.close()
@@ -243,6 +252,4 @@ if __name__ == "__main__":
         save_dataframe_to_fits(QSO_from_QN, output_name, DESI_TARGET)
 
     else: # file for the consider Tile / Night / petal does not exist
-        print(f"There is problem with files:")
-        print(f"    * coadd file: {spectra_name}")
-        print(f"    * zbest file: {zbest_name}")
+        log.error(f"There is problem with files: {spectra_name} or {zbest_name}")
