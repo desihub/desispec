@@ -247,7 +247,7 @@ class Spectra(object):
             return 0
 
 
-    def select(self, nights=None, bands=None, targets=None, fibers=None, invert=False):
+    def select(self, nights=None, bands=None, targets=None, fibers=None, invert=False, include_scores=False):
         """
         Select a subset of the data.
 
@@ -260,6 +260,7 @@ class Spectra(object):
             targets (list): optional list of target IDs to select.
             fibers (list): list/array of fiber indices to select.
             invert (bool): after combining all criteria, invert selection.
+            include_scores (bool): keep scores in returned Spectra.
 
         Returns (Spectra):
             a new Spectra object containing the selected data.
@@ -313,12 +314,16 @@ class Spectra(object):
         keep_mask = None
         keep_res = None
         keep_extra = None
+        keep_scores = None
         if self.mask is not None:
             keep_mask = {}
         if self.resolution_data is not None:
             keep_res = {}
         if self.extra is not None:
             keep_extra = {}
+        if include_scores:
+            if self.scores is not None:
+                keep_scores = self.scores[keep]
 
         for b in keep_bands:
             keep_wave[b] = self.wave[b]
@@ -336,7 +341,7 @@ class Spectra(object):
         ret = Spectra(keep_bands, keep_wave, keep_flux, keep_ivar, 
             mask=keep_mask, resolution_data=keep_res, 
             fibermap=self.fibermap[keep], meta=self.meta, extra=keep_extra,
-            single=self._single)
+            single=self._single, scores=keep_scores)
 
         return ret
 
