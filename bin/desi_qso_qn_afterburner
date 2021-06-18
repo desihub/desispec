@@ -10,20 +10,25 @@ import fitsio
 import numpy as np
 import pandas as pd
 
+from desiutil.log import get_logger
+
 from redrock.templates import find_templates
 from redrock.external.desi import rrdesi
 
 from quasarnp.io import load_model, load_desi_coadd
 from quasarnp.utils import process_preds
 
-log = desiutil.log.get_logger()
+log = get_logger()
 
 
 ## LOAD template to RE-RUN redrock
 qso_template_filename = [path for path in find_templates() if os.path.basename(path) == 'rrtemplate-qso.fits'][0]
 
-
-model_QN = load_model("/global/cfs/cdirs/desi/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
+try: # check if the env variable QN_MODEL_FILE is defined, otherwise load boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5
+     model_QN_path = os.environ['QN_MODEL_FILE']
+except KeyError:
+    model_QN_path = "/global/cfs/cdirs/desi/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5"
+model_QN = load_model(model_QN_path)
 
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Run QN and rerun RR on a coadd file to find true quasars with correct redshift")
@@ -60,12 +65,28 @@ def collect_argparser():
 
 
 def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
-    """
-        Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
-        with z_prior using the template contained in template_file
 
-        Return: redshit, error_redshift and the coeffs from the best fit of redrock. redshift.size = targetid.size
     """
+    Wrapper to run Redrock on targetid (numpy array) from the spectra_name_file
+    with z_prior using the template contained in template_file
+    Args:
+        spectra_name (str): The name of the spectra file.
+        targetid (int array): array of the targetid (contained in the spectra_name_file)
+                              on which RR will be rerun with prior and qso template.
+        z_prior (float array): array of the same size than targetid with the
+                               redshift estimated by QN for the associated targetid
+        param_RR (dict): contains info to re-run RR as the template_filename,
+                        filename_priors, filename_output_rerun_RR, filename_zbest_rerun_RR
+
+    Returns:
+        redshift (numpy array): Array containing best redshift estimation by the new run of RR
+        err_redshift (numpy array): Array containing the associated error for the redshift
+        coeffs (list): List containing the coefficient for the best fit given by RR
+                       even we work only with QSO template, it has a "shape" (not real shape since it is a list)
+                       of redshift.size x 10
+                       WARNING: they are converted to list (with .tolist()) to be added in the pandas dataframe
+    """
+
 
     template_filename = param_RR['template_filename']
     filename_priors =  param_RR['filename_priors']
@@ -73,6 +94,18 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     filename_zbest_rerun_RR = param_RR['filename_zbest_rerun_RR']
 
     def write_prior_for_RR(targetid, z_prior, filename_priors):
+         """
+         Write the prior file for RR associated to the targetid list
+         Args:
+            targetid (int array): array of the targetid
+                                  on which RR will be rerun with prior and qso template.
+            z_prior (float array): array of the same size than targetid with the
+                                   redshift estimated by QN for the associated targetid
+            filename_priors (str): name under which the file will be saved
+         Returns:
+            NONE
+         """
+
         function = np.array(['tophat'] * z_prior.size) #need to be the same for every one
         sigma = 0.1*np.ones(z_prior.size)
         # save
@@ -82,7 +115,19 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
         out.close()
         log.debug(f'Write prior file for RR with {z_prior.size} objetcs: {filename_priors}')
 
-    def extract_redshift_info_from_RR(filename_zbest):
+    def extract_redshift_info_from_RR():
+         """
+         extract information of the zbest file from the new RR run
+         Args:
+             filename_zbest (str): Name of the zbest file from the new run of RR
+         Returns:
+            redshift (numpy array): Array containing best redshift estimation by the new run of RR
+            err_redshift (numpy array): Array containing the associated error for the redshift
+            coeffs (list): List containing the coefficient for the best fit given by RR
+                           even we work only with QSO template, it has a "shape" (not real shape since it is a list)
+                           of redshift.size x 10
+                           WARNING: they are converted to list (with .tolist()) to be added in the pandas dataframe
+         """
         with fitsio.FITS(filename_zbest) as zbest:
             redshift = zbest[1]['Z'][:]
             err_redshift = zbest[1]['ZERR'][:]
@@ -115,10 +160,22 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
 
 def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_name, param_QN, param_RR):
     """
-        Run QuasarNet to the object with index_to_QN == True from spectra_name.
-        Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
-
+    Run QuasarNet to the object with index_to_QN == True from spectra_name.
+    Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
+    Args:
+        zbest: fitsio hdu 'ZBEST' from zbest file
+        fibermap:  fitsio hdu 'FIBERMAP' from zbest file
+        index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
+                      it is build with the TARGETID increasing
+        sel_to_QN (bool array): size 500. Select on which objects QN will be apply (index based on zbest)
+        spectra_name (str): The name of the spectra file
+        param_QN (dict): contains info for QN as n_thresh and c_thresh
+        param_RR (dict): contains info to re-run RR as the template_filename,
+                        filename_priors, filename_output_rerun_RR, filename_zbest_rerun_RR
+    Returns:
+        QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
     """
+
 
     ## INFO FOR QUASAR NET
     lines = ['LYA','CIV(1548)','CIII(1909)', 'MgII(2796)','Hbeta','Halpha']
@@ -174,11 +231,22 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
 
 
 def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
+    """
+    Save info from pandas dataframe in a fits file. Need to write the dtype array
+    because of the list in the pandas dataframe (no other solution found)
+    Args:
+        dataframe (pandas dataframe): dataframe containg the all the necessary QSO info
+        filename (str):  name of the fits file
+        DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
+        clobber (bool): overwrite the fits file defined by filename ?
+    Returns:
+        None
+    """
     # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
     data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'),
-                                               ('COEFFS', ('f4', 10)), (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'),
+                                               ('COEFFS', ('f4', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'),
                                                ('C_LYA', 'f4'), ('C_CIV', 'f4'), ('C_CIII', 'f4'), ('C_MgII', 'f4'), ('C_Hbeta', 'f4'), ('C_Halpha', 'f4'),
-                                               ('Z_LYA', 'f4'), ('Z_CIV', 'f4'), ('Z_CIII', 'f4'), ('Z_MgII', 'f4'), ('Z_Hbeta', 'f4'), ('Z_Halpha', 'f4')]
+                                               ('Z_LYA', 'f4'), ('Z_CIV', 'f4'), ('Z_CIII', 'f4'), ('Z_MgII', 'f4'), ('Z_Hbeta', 'f4'), ('Z_Halpha', 'f4')])
 
     data['TARGETID'] = dataframe['TARGETID']
     data['RA'] = dataframe['RA']
@@ -187,27 +255,26 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['Z'] = dataframe['Z']
     data['ZERR'] = dataframe['ZERR']
     data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
-    data[DESI_TARGET] = dataframe[DESI_TARGET]
     data['SPECTYPE'] = dataframe['SPECTYPE']
     data['Z_RR'] = dataframe['Z_RR']
 
     data['Z_QN'] = dataframe['Z_QN']
-    data['C_LYA'] = dataframe['C_LINES'][0]
-    data['C_CIV'] = dataframe['C_LINES'][1]
-    data['C_CIII'] = dataframe['C_LINES'][2]
-    data['C_MgII'] = dataframe['C_LINES'][3]
-    data['C_Hbeta'] = dataframe['C_LINES'][4]
-    data['C_Halpha'] = dataframe['C_LINES'][5]
+    data['C_LYA'] = np.array([dataframe['C_LINES'][i][0] for i in range(dataframe.shape[0])])
+    data['C_CIV'] = np.array([dataframe['C_LINES'][i][1] for i in range(dataframe.shape[0])])
+    data['C_CIII'] = np.array([dataframe['C_LINES'][i][2] for i in range(dataframe.shape[0])])
+    data['C_MgII'] = np.array([dataframe['C_LINES'][i][3] for i in range(dataframe.shape[0])])
+    data['C_Hbeta'] = np.array([dataframe['C_LINES'][i][4] for i in range(dataframe.shape[0])])
+    data['C_Halpha'] = np.array([dataframe['C_LINES'][i][5] for i in range(dataframe.shape[0])])
 
-    data['Z_LYA'] = dataframe['Z_LINES'][0]
-    data['Z_CIV'] = dataframe['Z_LINES'][1]
-    data['Z_CIII'] = dataframe['Z_LINES'][2]
-    data['Z_MgII'] = dataframe['Z_LINES'][3]
-    data['Z_Hbeta'] = dataframe['Z_LINES'][4]
-    data['Z_Halpha'] = dataframe['Z_LINES'][5]
+    data['Z_LYA'] = np.array([dataframe['Z_LINES'][i][0] for i in range(dataframe.shape[0])])
+    data['Z_CIV'] = np.array([dataframe['Z_LINES'][i][1] for i in range(dataframe.shape[0])])
+    data['Z_CIII'] = np.array([dataframe['Z_LINES'][i][2] for i in range(dataframe.shape[0])])
+    data['Z_MgII'] = np.array([dataframe['Z_LINES'][i][3] for i in range(dataframe.shape[0])])
+    data['Z_Hbeta'] = np.array([dataframe['Z_LINES'][i][4] for i in range(dataframe.shape[0])])
+    data['Z_Halpha'] = np.array([dataframe['Z_LINES'][i][5] for i in range(dataframe.shape[0])])
 
     fits = fitsio.FITS(filename, 'rw', clobber=clobber)
-    fits.write(data)
+    fits.write(data, extname='QN+RR')
     if clobber:
         log.info(f'OVERWRITE the file : {filename}')
     else:
@@ -218,8 +285,6 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
 
 if __name__ == "__main__":
-    print(" ")
-
     args = collect_argparser()
 
     spectra_name = args.coadd

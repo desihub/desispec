@@ -10,9 +10,11 @@ import fitsio
 import numpy as np
 import pandas as pd
 
+from desiutil.log import get_logger
+
 from desispec.mgii_afterburner import mgii_fitter
 
-log = desiutil.log.get_logger()
+log = get_logger()
 
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Run MgII fitter on coadd file")
@@ -49,6 +51,23 @@ def collect_argparser():
 
 
 def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, spectra_name, zbest_name, param_mgii_fitter, DESI_TARGET):
+    """
+    Run QuasarNet to the object with index_to_QN == True from spectra_name.
+    Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
+    Args:
+        zbest: fitsio hdu 'ZBEST' from zbest file
+        fibermap:  fitsio hdu 'FIBERMAP' from zbest file
+        index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
+                      it is build with the TARGETID increasing
+        sel_to_mgii (bool array): size 500. Select on which objects mgii will be apply (index based on zbest)
+        spectra_name (str): The name of the spectra file
+        param_mgii_fitter (dict): contains info for the MgII fitter as lambda_width, max_sigma
+                                  min_sigma, min_deltachi2, min_signifiance_A, min_A
+        DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
+    Returns:
+        QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
+    """
+
     # just to speed up the process and don't go in mgii_fitter function for nothing..
     if sel_to_mgii.sum() == 0:
         QSO_sel = pd.DataFrame()
@@ -94,6 +113,17 @@ def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, 
 
 
 def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
+    """
+    Save info from pandas dataframe in a fits file. Need to write the dtype array
+    because of the list in the pandas dataframe (no other solution found)
+    Args:
+        dataframe (pandas dataframe): dataframe containg the all the necessary QSO info
+        filename (str):  name of the fits file
+        DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
+        clobber (bool): overwrite the fits file defined by filename ?
+    Returns:
+        None
+    """
     # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
     data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'),
                                                ('COEFFS', ('f4', 10)), (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'),
@@ -119,7 +149,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['VAR_B'] = dataframe['VAR_B']
 
     fits = fitsio.FITS(filename, 'rw', clobber=clobber)
-    fits.write(data)
+    fits.write(data, extname='MGII')
     if clobber:
         log.info(f'OVERWRITE the file : {filename}')
     else:
