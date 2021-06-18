@@ -831,7 +831,7 @@ def make_tile_qa_plot(
 
         # compare number of qsos from redrock and QuasarNP
         nqso_rr  = 0
-        nqso_qnp = 0
+        ### nqso_qnp = 0
 
         # AR plot
         ax = plt.subplot(gs[0, 2])
@@ -848,8 +848,8 @@ def make_tile_qa_plot(
 
             if tracer=="QSO" :
                 nqso_rr = int(zhists[sel].sum() * istracer.sum())
-                nqso_qnp = np.sum((fiberqa['IS_QSO_QN']==1)\
-                           &(fiberqa['Z_QN']>=zmin)&(fiberqa['Z_QN']<=zmax))
+                ### nqso_qnp = np.sum((fiberqa['IS_QSO_QN']==1)\
+                ###            &(fiberqa['Z_QN']>=zmin)&(fiberqa['Z_QN']<=zmax))
 
             # AR reference
             sel = ref["TRACER"] == tracer
@@ -876,7 +876,7 @@ def make_tile_qa_plot(
     else:
         ratio_nz = -1
         nqso_rr  = -1
-        nqso_qnp = -1
+        ### nqso_qnp = -1
 
     show_efftime = True # else show TSNR
 
@@ -1048,7 +1048,8 @@ def make_tile_qa_plot(
         ["", ""],
         ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
-        ["nqso(RR) , nqso(QNP)", "{} , {}".format(nqso_rr,nqso_qnp)],
+        ### ["nqso(RR) , nqso(QNP)", "{} , {}".format(nqso_rr,nqso_qnp)],
+        ["nqso(RR)", "{}".format(nqso_rr)],
 
         ["NGOODFIB", "{}".format(hdr["NGOODFIB"])],
         ["NGOODPET", "{}".format(hdr["NGOODPET"])],
