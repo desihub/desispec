@@ -13,8 +13,7 @@ import pandas as pd
 from redrock.templates import find_templates
 from redrock.external.desi import rrdesi
 
-from quasarnp.io import load_model
-from quasarnp.utils import process_preds, rebin
+from quasarnp.io import load_model, load_desi_coadd
 
 
 ## LOAD template to RE-RUN redrock
@@ -55,79 +54,6 @@ def collect_argparser():
                         help="delete RR outputs: True or False, they are useless since everything usefull are saved in output, by defaut:True")
 
     return parser.parse_args()
-
-
-def load_desi_coadd(filename, rows=None):
-    """Load and renormalize a DESI coadded spectrographic exposure.
-    This method will load a coadd file and renormalize as follows. First, spectra are
-    rebinned to the QuasarNet wavelength grid. Rebinned spectra are divided by
-    the rebinned IVAR to reweight the spectra. Next, rebinned spectra are
-    normalized by subtracting the weighted mean of the spectra and then dividing
-    the resultant spectra by its weighted rms. The rebinned IVAR is used for
-    weighting. Any spectra where the IVAR is 0 for the entire wavelength grid
-    is discarded.
-    Parameters
-    ----------
-    filename : str
-        Full path and filename of the coadd file to load.
-    rows : numpy.ndarray, optional.
-        Boolean array indicating whether each row should be loaded. True
-        if the row should be loaded, False otherwise. Defaults to None, which
-        loads all rows.
-    Returns
-    -------
-    X_out : numpy.ndarray
-        Renormalized and rebinned spectra. Output spectra will have shape
-        `(nspectra, nbins)` where `nbins=443` for the QuasarNet wavelength grid.
-    w : numpy.ndarray
-        Array of length `sum(rows == True)` where each element is True if the spectra
-        was kept in `X_out` and False if the spectra was discarded.
-    See Also
-    --------
-    load_desi_daily : Load a daily exposure.
-    """
-    cams = ["B", "R", "Z"]
-    with fitsio.FITS(filename) as h:
-        # Load each cam sequentially, then rebin and merge
-        # We will be rebinning down to 443, which is the input size of QuasarNet
-        if rows is None:
-            nfibers = len(h['B_FLUX'].read())
-            rows = np.ones(nfibers,dtype='bool')
-        else:
-            nfibers = np.sum(rows > 0)
-        X_out = np.zeros((nfibers, 443))
-        # ivar_out is the weights out, i.e. the ivar, we use this for normalization
-        ivar_out = np.zeros_like(X_out) # Use zeros_like so we only have to change one
-        for c in cams:
-            fluxname,ivarname,wname = f"{c}_FLUX", f"{c}_IVAR", f"{c}_WAVELENGTH"
-            # Load the flux and ivar
-            flux = h[fluxname].read()[rows, :]
-            ivar = h[ivarname].read()[rows, :]
-            w_grid = h[wname].read()
-
-            # Rebin the flux and ivar
-            new_flux, new_ivar = rebin(flux, ivar, w_grid)
-
-            X_out += new_flux
-            ivar_out += new_ivar
-
-    non_zero = ivar_out != 0
-    X_out[non_zero] /= ivar_out[non_zero]
-
-    nonzero_weights = np.sum(ivar_out, axis=1) != 0
-    #print(f"{nfibers - np.sum(nonzero_weights)} spectra with zero weights")
-    X_out = X_out[nonzero_weights]
-    ivar_out = ivar_out[nonzero_weights]
-
-    # axis=1 corresponds to the rebinned spectral axis
-    # Finding the weighted mean both for normalization and for the rms
-    mean = np.average(X_out, axis=1, weights=ivar_out)[:, None]
-    rms = np.sqrt(np.average((X_out - mean) ** 2 ,axis=1, weights=ivar_out))[:, None]
-
-    # Normalize by subtracting the weighted mean and dividing by the rms
-    # as prescribed in the original QuasarNet paper.
-    X_out = (X_out - mean) / rms
-    return X_out, np.where(nonzero_weights)[0]
 
 
 def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
