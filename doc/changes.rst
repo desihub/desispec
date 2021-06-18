@@ -17,6 +17,7 @@ desispec Change Log
 * Improve pipeline metadata handling and implement QA cuts (PR `#1304`_).
 * Check for completely masked fibers in qfiberflat (PR `#1306`_).
 * Pipeline robustness when reading ETC values from raw data (PR `#1309`_).
+* Adjust exposure QA cuts, cleanup outputs (PRs `#1316`_, `#1318`_).
 
 .. _`#1273`: https://github.com/desihub/desispec/issues/1273
 .. _`#1274`: https://github.com/desihub/desispec/issues/1274
@@ -36,6 +37,7 @@ desispec Change Log
 .. _`#1306`: https://github.com/desihub/desispec/issues/1306
 .. _`#1309`: https://github.com/desihub/desispec/issues/1309
 .. _`#1316`: https://github.com/desihub/desispec/issues/1316
+.. _`#1318`: https://github.com/desihub/desispec/issues/1318
 
 0.42.0 (2021-05-14)
 -------------------
