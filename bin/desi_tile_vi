@@ -194,7 +194,7 @@ def main():
         if software_answer is not None :
             print("The code thinks it's a valid tile")
         else :
-            print("The code thinks it's not a valid tile")
+            print("The code thinks it's NOT a valid tile")
 
         if viewer is not None : viewer.kill()
         viewer = subprocess.Popen([args.viewer,qaplot_filename ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)

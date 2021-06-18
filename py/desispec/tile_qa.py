@@ -197,15 +197,24 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     tile_petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal)
     for petal in petals :
         entries=(tile_fiberqa_table['PETAL_LOC'] == petal)
-        tile_petalqa_table['EFFTIME_SPEC'][petal]=np.median(tile_fiberqa_table["EFFTIME_SPEC"][entries])
+        if np.any(entries):
+            tile_petalqa_table['EFFTIME_SPEC'][petal]=np.median(tile_fiberqa_table["EFFTIME_SPEC"][entries])
+        else:
+            tile_petaqa_table['EFFTIME_SPEC'][petal] = 0.0
 
 
     # tile EFFTIME is median of efftime of fibers that are good in all exposures
     always_good_fibers = ((or_qafiberstatus&bad_fibers_mask)==0)
-    tile_efftime = np.median(tile_fiberqa_table["EFFTIME_SPEC"][always_good_fibers])
+    if np.any(always_good_fibers):
+        tile_efftime = np.median(tile_fiberqa_table["EFFTIME_SPEC"][always_good_fibers])
+    else:
+        tile_efftime = 0.0
 
     # A tile is valid if efftime > mintfrac*goaltime AND number of good fibers > threshold
-    tile_is_valid = (tile_efftime >  exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"] ) & (good_fibers.size > qa_params["tile_qa"]["min_number_of_good_fibers"])
+    required_tile_efftime = exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"]
+    tile_is_valid = \
+            (tile_efftime > required_tile_efftime) & \
+            (good_fibers.size > qa_params["tile_qa"]["min_number_of_good_fibers"])
 
     log.info("Tile {} EFFTIME_SPEC = {:.1f} sec (thres={}), NGOODFIB = {} , valid = {}".format(tileid,tile_efftime,int(exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"]),good_fibers.size,tile_is_valid))
 
