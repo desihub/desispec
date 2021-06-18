@@ -315,7 +315,7 @@ wait
             fx.write(f"""
 echo Running desi_tile_qa
 tile_qa_log={outdir}/tile-qa-{tileid}-thru{night}.log
-desi_tile_qa -n {night} -e {expid} &> $tile_qa_log
+desi_tile_qa -n {night} -t {tileid} &> $tile_qa_log
 """)
 
         if run_zmtl:

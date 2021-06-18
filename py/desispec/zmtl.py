@@ -791,8 +791,16 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
     # ADM simply read/write files if tile/night/petal_num not specified.
     if tile is None or night is None or petal_num is None:
         zbestfn = zmtldir
-        coaddfn = zbestfn.replace("zbest", "coadd")
-        outputdir, outputname = os.path.split(outputdir)
+        dirname, basename = os.path.split(zbestfn)
+        coaddfn = os.path.join(dirname, basename.replace("zbest", "coadd"))
+        outputfn = os.path.join(dirname, basename.replace("zbest", "zmtl"))
+
+        # SB tile-qa file doesn't have spectro num so requires more parsing
+        # /path/zbest-0-1234-20201220.fits -> /path/tile-qa-1234-20201220.fits
+        tmp = zbestfn.split('-')
+        tileqafn = '-'.join(['tile-qa',] + tmp[2:])
+        tileqafn = os.path.join(dirname, tileqafn)
+
     # EBL Create the filepath for the input tile/night combination
     else:
         ### tiledir = os.path.join(zmtldir, tile)
