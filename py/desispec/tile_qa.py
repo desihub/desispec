@@ -115,15 +115,21 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         zbests.append(_rm_meta_keywords(zbest))
 
         zqso_file = coadd_file.replace("coadd","zqso")
-        log.info("reading {}".format(zqso_file))
-        zqso=Table.read(zqso_file,"ZQSO")
-        zqsos.append(_rm_meta_keywords(zqso))
+        if not os.path.isfile(zqso_file) :
+            log.warning("missing {}".format(zqso_file))
+        else :
+            log.info("reading {}".format(zqso_file))
+            zqso=Table.read(zqso_file,"ZQSO")
+            zqsos.append(_rm_meta_keywords(zqso))
 
     log.info("stacking")
     fibermap=vstack(fibermaps)
     scores=vstack(scores)
     zbests=vstack(zbests)
-    zqsos=vstack(zqsos)
+    if len(zqsos)>0 :
+        zqsos=vstack(zqsos)
+    else :
+        zqsos=None
     targetids=fibermap["TARGETID"]
 
     tile_fiberqa_table = Table()
@@ -155,18 +161,25 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         tile_fiberqa_table[k][fiberqa_ii] = zbests[k][zbest_ii]
 
     # add ZQSO info
-    zqso_tid_to_index = {tid:index for index,tid in enumerate(zqsos["TARGETID"])}
     keys=["Z_QN","Z_QN_CONF","IS_QSO_QN"]
-    for k in keys :
-        tile_fiberqa_table[k] = np.zeros(targetids.size,dtype=zqsos[k].dtype)
-    zqso_ii=[]
-    fiberqa_ii=[]
-    for i,tid in enumerate(targetids) :
-        if tid in zqso_tid_to_index :
-            zqso_ii.append(zqso_tid_to_index[tid])
-            fiberqa_ii.append(i)
-    for k in keys :
-        tile_fiberqa_table[k][fiberqa_ii] = zqsos[k][zqso_ii]
+    if zqsos is not None :
+        zqso_tid_to_index = {tid:index for index,tid in enumerate(zqsos["TARGETID"])}
+        for k in keys :
+            tile_fiberqa_table[k] = np.zeros(targetids.size,dtype=zqsos[k].dtype)
+        zqso_ii=[]
+        fiberqa_ii=[]
+        for i,tid in enumerate(targetids) :
+            if tid in zqso_tid_to_index :
+                zqso_ii.append(zqso_tid_to_index[tid])
+                fiberqa_ii.append(i)
+        for k in keys :
+            tile_fiberqa_table[k][fiberqa_ii] = zqsos[k][zqso_ii]
+    else :
+        for k in keys :
+            if k == "IS_QSO_QN" :
+                tile_fiberqa_table[k] = np.zeros(len(tile_fiberqa_table),dtype=int)
+            else :
+                tile_fiberqa_table[k] = np.zeros(len(tile_fiberqa_table),dtype=float)
 
     # AND and OR of exposures QAFIBERSTATUS
     and_qafiberstatus = np.zeros(targetids.size,dtype=exposure_fiberqa_tables["QAFIBERSTATUS"].dtype)
