@@ -18,6 +18,8 @@ desispec Change Log
 * Check for completely masked fibers in qfiberflat (PR `#1306`_).
 * Pipeline robustness when reading ETC values from raw data (PR `#1309`_).
 * Adjust exposure QA cuts, cleanup outputs (PRs `#1316`_, `#1318`_).
+* Simplified tile QA (PR `#1317`_).
+* zmtl using tile QA to set ZWARN bits (PR `#1310`_).
 
 .. _`#1273`: https://github.com/desihub/desispec/issues/1273
 .. _`#1274`: https://github.com/desihub/desispec/issues/1274
@@ -36,7 +38,9 @@ desispec Change Log
 .. _`#1304`: https://github.com/desihub/desispec/issues/1304
 .. _`#1306`: https://github.com/desihub/desispec/issues/1306
 .. _`#1309`: https://github.com/desihub/desispec/issues/1309
+.. _`#1310`: https://github.com/desihub/desispec/issues/1310
 .. _`#1316`: https://github.com/desihub/desispec/issues/1316
+.. _`#1317`: https://github.com/desihub/desispec/issues/1317
 .. _`#1318`: https://github.com/desihub/desispec/issues/1318
 
 0.42.0 (2021-05-14)
