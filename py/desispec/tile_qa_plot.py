@@ -875,7 +875,8 @@ def make_tile_qa_plot(
     # AR n(z): if not main, just put dummy -1
     else:
         ratio_nz = -1
-
+        nqso_rr  = -1
+        nqso_qnp = -1
 
     show_efftime = True # else show TSNR
 
