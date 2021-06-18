@@ -220,9 +220,14 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     # rms dist of good fibers
     dist2 = (tile_fiberqa_table["MEAN_DELTA_X"]**2+tile_fiberqa_table["RMS_DELTA_X"]**2+tile_fiberqa_table["MEAN_DELTA_Y"]**2+tile_fiberqa_table["RMS_DELTA_Y"]**2)
     if len(good_fibers)>0 :
-        mdist2=np.mean(dist2[good_fibers])
-        if mdist2<0 : mdist2=0
-        rmsdist = np.sqrt(mdist2)
+        dist2=dist2[good_fibers]
+        ii=np.where((~np.isnan(dist2)))[0]
+        if ii.size>0 :
+            mdist2=np.mean(dist2[ii])
+            if mdist2<0 : mdist2=0
+            rmsdist = np.sqrt(mdist2)
+        else :
+            rmsdist = 0.
     else :
         rmsdist = 0.
     tile_fiberqa_table.meta["RMSDIST"]=rmsdist # mm
