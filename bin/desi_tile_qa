@@ -89,7 +89,7 @@ def main():
     if args.outdir is None :
         args.outdir = args.prod
     if args.exposure_qa_dir is None :
-        args.exposure_qa_dir = args.outdir
+        args.exposure_qa_dir = args.prod
 
 
     log.info('prod    = {}'.format(args.prod))
