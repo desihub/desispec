@@ -83,8 +83,8 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
         #  qa
         exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
-        tileqa     = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-{night}.fits',
-        tileqapng  = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-{night}.png',
+        tileqa     = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-thru{night}.fits',
+        tileqapng  = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-thru{night}.png',
         #
         # calibnight/
         #
