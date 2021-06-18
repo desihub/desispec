@@ -490,7 +490,9 @@ class Spectra(object):
 
         indx_original = []
 
-        if self.fibermap is not None:
+        if ( (self.fibermap is not None) and
+            all([x in fm.keys() for x in ['EXPID', 'FIBER']
+                                for fm in [self.fibermap, other.fibermap]]) ):
             for r in range(nother):
                 expid = other.fibermap[r]["EXPID"]
                 fiber = other.fibermap[r]["FIBER"]
@@ -599,7 +601,13 @@ class Spectra(object):
         # Append new spectra
 
         if nnew > 0:
-            newfmap[nold:] = other.fibermap[indx_new]
+            if set(newfmap.keys()) == set(other.fibermap.keys()):
+                newfmap[nold:] = other.fibermap[indx_new]
+            else:
+                # if fibermaps contents do not match, still merge what we can
+                for k in newfmap.keys():
+                    if k in other.fibermap.keys():
+                        newfmap[k][nold:] = other.fibermap[k][indx_new]
 
             for b in other.bands:
                 newflux[b][nold:,:] = other.flux[b][indx_new].astype(self._ftype)
