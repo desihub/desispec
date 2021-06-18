@@ -345,14 +345,14 @@ def compute_exposure_qa(night, expid, specprod_dir):
     bad_fibers_mask = fibermask.mask(qa_params["bad_qafstatus_mask"])
     good_fibers = np.where((fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
     good_petals = np.unique(fiberqa_table['PETAL_LOC'][good_fibers])
-    fiberqa_table.meta["NGOODFIBERS"]=good_fibers.size
-    fiberqa_table.meta["NGOODPETALS"]=good_petals.size
-    fiberqa_table.meta["WORSTREADNOISE"]=worst_rdnoise
+    fiberqa_table.meta["NGOODFIB"]=good_fibers.size
+    fiberqa_table.meta["NGOODPET"]=good_petals.size
+    fiberqa_table.meta["WORSTRDN"]=worst_rdnoise
     if len(good_fibers) > 0 :
         fiberqa_table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
-        fiberqa_table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
-        fiberqa_table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
-        fiberqa_table.meta['EFFTIME_SPEC']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
+        fiberqa_table.meta["PMINEXPF"]=np.min(petal_tsnr2_frac[good_petals])
+        fiberqa_table.meta["PMAXEXPF"]=np.max(petal_tsnr2_frac[good_petals])
+        fiberqa_table.meta['EFFTIME']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
 
     if frame_header is not None :
         # copy some keys from the frame header
