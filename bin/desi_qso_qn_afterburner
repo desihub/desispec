@@ -94,19 +94,15 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     filename_zbest_rerun_RR = param_RR['filename_zbest_rerun_RR']
 
     def write_prior_for_RR(targetid, z_prior, filename_priors):
-         """
-         Write the prior file for RR associated to the targetid list
-         Args:
-            targetid (int array): array of the targetid
-                                  on which RR will be rerun with prior and qso template.
-            z_prior (float array): array of the same size than targetid with the
-                                   redshift estimated by QN for the associated targetid
-            filename_priors (str): name under which the file will be saved
-         Returns:
-            NONE
-         """
-
-        function = np.array(['tophat'] * z_prior.size) #need to be the same for every one
+        # Write the prior file for RR associated to the targetid list
+        # Args:
+        #    targetid (int array): array of the targetid
+        #                          on which RR will be rerun with prior and qso template.
+        #    z_prior (float array): array of the same size than targetid with the
+        #                           redshift estimated by QN for the associated targetid
+        #    filename_priors (str): name under which the file will be saved
+        
+        function = np.array(['tophat'] * z_prior.size) # need to be the same for every one
         sigma = 0.1*np.ones(z_prior.size)
         # save
         out = fitsio.FITS(filename_priors, 'rw', clobber=True)
@@ -114,20 +110,20 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
         out.write(data, names=names, extname=extname)
         out.close()
         log.debug(f'Write prior file for RR with {z_prior.size} objetcs: {filename_priors}')
+        return
 
-    def extract_redshift_info_from_RR():
-         """
-         extract information of the zbest file from the new RR run
-         Args:
-             filename_zbest (str): Name of the zbest file from the new run of RR
-         Returns:
-            redshift (numpy array): Array containing best redshift estimation by the new run of RR
-            err_redshift (numpy array): Array containing the associated error for the redshift
-            coeffs (list): List containing the coefficient for the best fit given by RR
-                           even we work only with QSO template, it has a "shape" (not real shape since it is a list)
-                           of redshift.size x 10
-                           WARNING: they are converted to list (with .tolist()) to be added in the pandas dataframe
-         """
+    def extract_redshift_info_from_RR(filename_zbest):
+         # extract information of the zbest file from the new RR run
+         # Args:
+         #    filename_zbest (str): Name of the zbest file from the new run of RR
+         # Returns:
+         #    redshift (numpy array): Array containing best redshift estimation by the new run of RR
+         #    err_redshift (numpy array): Array containing the associated error for the redshift
+         #    coeffs (list): List containing the coefficient for the best fit given by RR
+         #                   even we work only with QSO template, it has a "shape" (not real shape since it is a list)
+         #                   of redshift.size x 10
+         #                    WARNING: they are converted to list (with .tolist()) to be added in the pandas dataframe """
+
         with fitsio.FITS(filename_zbest) as zbest:
             redshift = zbest[1]['Z'][:]
             err_redshift = zbest[1]['ZERR'][:]
@@ -136,6 +132,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
         return redshift, err_redshift, coeffs.tolist()
 
     write_prior_for_RR(targetid, z_prior, filename_priors)
+
 
     argument_for_rerun_RR = [spectra_name,
                              '--templates', template_filename,
@@ -198,11 +195,11 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
         sel_QN = sel_to_QN.copy()
         sel_QN[sel_to_QN] = is_qso_QN
 
-        log.info("Remove objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.1")
-        sel_QSO_RR_with_z_pb = (zbest['SPECTYPE'][:] == 'QSO')
-        sel_QSO_RR_with_z_pb[sel_QN] &= np.abs(zbest['Z'][:][sel_QN] - zbest_QN[sel_index_with_QN]) <= 0.1
+        log.info("Remove objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.05")
+        sel_QSO_RR_with_no_z_pb = (zbest['SPECTYPE'][:] == 'QSO')
+        sel_QSO_RR_with_no_z_pb[sel_QN] &= np.abs(zbest['Z'][:][sel_QN] - zbest_QN[sel_index_with_QN]) <= 0.05
 
-        sel_QN &= ~sel_QSO_RR_with_z_pb
+        sel_QN &= ~sel_QSO_RR_with_no_z_pb
         index_with_QN_with_pb = sel_QN[sel_to_QN][index_with_QN]
 
         log.info(f"RUN RR on {sel_QN.sum()}")
