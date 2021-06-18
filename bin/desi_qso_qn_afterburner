@@ -22,9 +22,7 @@ log = desiutil.log.get_logger()
 ## LOAD template to RE-RUN redrock
 qso_template_filename = [path for path in find_templates() if os.path.basename(path) == 'rrtemplate-qso.fits'][0]
 
-## INFO FOR QUASAR NET
-lines = ['LYA','CIV(1548)','CIII(1909)', 'MgII(2796)','Hbeta','Halpha']
-lines_bal = ['CIV(1548)']
+
 model_QN = load_model("/global/cfs/cdirs/desi/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5")
 
 def collect_argparser():
@@ -122,6 +120,10 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
 
     """
 
+    ## INFO FOR QUASAR NET
+    lines = ['LYA','CIV(1548)','CIII(1909)', 'MgII(2796)','Hbeta','Halpha']
+    lines_bal = ['CIV(1548)']
+
     data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN)
 
     if len(index_with_QN) == 0: # if there is no object for QN :(
@@ -173,9 +175,10 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
 
 def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
-    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f8'),
-                                               ('COEFFS', ('f8', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f8'),
-                                                ('Z_QN', 'f8'), ('C_LINES', ('f8', 6)), ('Z_LINES', ('f8', 6))])
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'),
+                                               ('COEFFS', ('f4', 10)), (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'),
+                                               ('C_LYA', 'f4'), ('C_CIV', 'f4'), ('C_CIII', 'f4'), ('C_MgII', 'f4'), ('C_Hbeta', 'f4'), ('C_Halpha', 'f4'),
+                                               ('Z_LYA', 'f4'), ('Z_CIV', 'f4'), ('Z_CIII', 'f4'), ('Z_MgII', 'f4'), ('Z_Hbeta', 'f4'), ('Z_Halpha', 'f4')]
 
     data['TARGETID'] = dataframe['TARGETID']
     data['RA'] = dataframe['RA']
@@ -184,13 +187,24 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['Z'] = dataframe['Z']
     data['ZERR'] = dataframe['ZERR']
     data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
-
+    data[DESI_TARGET] = dataframe[DESI_TARGET]
     data['SPECTYPE'] = dataframe['SPECTYPE']
     data['Z_RR'] = dataframe['Z_RR']
 
     data['Z_QN'] = dataframe['Z_QN']
-    data['C_LINES'] = np.array([np.array(dataframe['C_LINES'][i]) for i in range(dataframe.shape[0])])
-    data['Z_LINES'] = np.array([np.array(dataframe['Z_LINES'][i]) for i in range(dataframe.shape[0])])
+    data['C_LYA'] = dataframe['C_LINES'][0]
+    data['C_CIV'] = dataframe['C_LINES'][1]
+    data['C_CIII'] = dataframe['C_LINES'][2]
+    data['C_MgII'] = dataframe['C_LINES'][3]
+    data['C_Hbeta'] = dataframe['C_LINES'][4]
+    data['C_Halpha'] = dataframe['C_LINES'][5]
+
+    data['Z_LYA'] = dataframe['Z_LINES'][0]
+    data['Z_CIV'] = dataframe['Z_LINES'][1]
+    data['Z_CIII'] = dataframe['Z_LINES'][2]
+    data['Z_MgII'] = dataframe['Z_LINES'][3]
+    data['Z_Hbeta'] = dataframe['Z_LINES'][4]
+    data['Z_Halpha'] = dataframe['Z_LINES'][5]
 
     fits = fitsio.FITS(filename, 'rw', clobber=clobber)
     fits.write(data)

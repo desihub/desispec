@@ -95,10 +95,10 @@ def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, 
 
 def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
-    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f8'),
-                                               ('COEFFS', ('f8', 10)), ('Z_RR', 'f8'), (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'),
-                                               ('DELTA_CHI2', 'f8'), ('A', 'f8'), ('SIGMA', 'f8'), ('B', 'f8'),
-                                               ('VAR_A', 'f8'), ('VAR_SIGMA', 'f8'), ('VAR_B', 'f8')])
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'),
+                                               ('COEFFS', ('f4', 10)), (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'),
+                                               ('DELTA_CHI2', 'f4'), ('A', 'f4'), ('SIGMA', 'f4'), ('B', 'f4'),
+                                               ('VAR_A', 'f4'), ('VAR_SIGMA', 'f4'), ('VAR_B', 'f4')])
 
     data['TARGETID'] = dataframe['TARGETID']
     data['RA'] = dataframe['RA']
@@ -106,9 +106,9 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['Z'] = dataframe['Z']
     data['ZERR'] = dataframe['ZERR']
     data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
-    data['Z_RR'] = dataframe['Z_RR']
-    data['SPECTYPE'] = dataframe['SPECTYPE']
     data[DESI_TARGET] = dataframe[DESI_TARGET]
+    data['SPECTYPE'] = dataframe['SPECTYPE']
+
 
     data['DELTA_CHI2'] = dataframe['DELTA_CHI2']
     data['A'] = dataframe['A']
