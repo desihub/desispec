@@ -182,19 +182,27 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     npetal=10
     tile_petalqa_table = Table()
     petals=np.unique(exposure_fiberqa_tables["PETAL_LOC"])
-    tile_petalqa_table["PETAL_LOC"]=np.arange(npetal,dtype=int)
-    keys=['WORSTREADNOISE', 'NGOODPOS', 'NSTDSTAR', 'STARRMS', 'TSNR2FRA', 'NCFRAME',\
-          'BSKYTHRURMS', 'BSKYCHI2PDF', 'RSKYTHRURMS', 'RSKYCHI2PDF', 'ZSKYTHRURMS', 'ZSKYCHI2PDF',\
+    tile_petalqa_table["PETAL_LOC"]=np.arange(npetal,dtype=np.int16)
+
+    # integer columns (int16)
+    keys=['NGOODPOS', 'NSTDSTAR', 'NCFRAME']
+    for k in keys :
+        tile_petalqa_table[k]=np.zeros(npetal, dtype=np.int16)
+
+    # floating point columns (single precision)
+    keys=['WORSTREADNOISE', 'STARRMS', 'TSNR2FRA',
+          'BSKYTHRURMS', 'BSKYCHI2PDF', 'RSKYTHRURMS', 'RSKYCHI2PDF', 'ZSKYTHRURMS', 'ZSKYCHI2PDF',
           'BTHRUFRAC', 'RTHRUFRAC', 'ZTHRUFRAC']
     for k in keys :
-        tile_petalqa_table[k]=np.zeros(npetal)
+        tile_petalqa_table[k]=np.zeros(npetal, dtype=np.float32)
+
     for petal in petals :
         ii=(exposure_petalqa_tables["PETAL_LOC"]==petal)
         for k in keys :
             tile_petalqa_table[k][petal]=np.mean(exposure_petalqa_tables[k][ii])
 
     # Petal EFFTIME
-    tile_petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal)
+    tile_petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal, dtype=np.float32)
     for petal in petals :
         entries=(tile_fiberqa_table['PETAL_LOC'] == petal)
         if np.any(entries):
