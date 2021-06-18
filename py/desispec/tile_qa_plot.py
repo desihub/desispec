@@ -829,6 +829,10 @@ def make_tile_qa_plot(
         # AR number of valid zspec in zmin, zmax
         n_valid, nref_valid = 0.0, 0.0
 
+        # compare number of qsos from redrock and QuasarNP
+        nqso_rr  = 0
+        nqso_qnp = 0
+
         # AR plot
         ax = plt.subplot(gs[0, 2])
         for tracer, col in zip(tracers, cols):
@@ -841,6 +845,12 @@ def make_tile_qa_plot(
             istracer = get_tracer(tracer, fiberqa)
             sel = (bins[:-1] >= zmin) & (bins[1:] <= zmax)
             n_valid += zhists[sel].sum() * istracer.sum()
+
+            if tracer=="QSO" :
+                nqso_rr = int(zhists[sel].sum() * istracer.sum())
+                nqso_qnp = np.sum((fiberqa['IS_QSO_QN']==1)\
+                           &(fiberqa['Z_QN']>=zmin)&(fiberqa['Z_QN']<=zmax))
+
             # AR reference
             sel = ref["TRACER"] == tracer
             ax.fill_between(
@@ -1037,6 +1047,8 @@ def make_tile_qa_plot(
         ["", ""],
         ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
+        ["nqso(RR) , nqso(QNP)", "{} , {}".format(nqso_rr,nqso_qnp)],
+
         ["NGOODFIB", "{}".format(hdr["NGOODFIB"])],
         ["NGOODPET", "{}".format(hdr["NGOODPET"])],
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
@@ -1082,5 +1094,7 @@ def make_tile_qa_plot(
     except ValueError as e :
         print("failed to save figure")
         print(e)
+        pngoutfile=None
 
     plt.close()
+    return pngoutfile
