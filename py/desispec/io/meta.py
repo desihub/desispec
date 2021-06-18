@@ -31,7 +31,7 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
         tile : integer tile (pointing) number
-        groupname : spectral grouping name (brick name or healpix pixel)
+        groupname : spectral grouping name (healpix pixel, tile "cumulative" or "pernight")
         nside : healpix nside
         band : one of 'b','r','z' identifying the camera band
         spectrograph : integer spectrograph number, 0-9
@@ -85,6 +85,7 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
         tileqa     = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-thru{night}.fits',
         tileqapng  = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-thru{night}.png',
+        zmtl  = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/zmtl-{spectrograph:d}-{tile:d}-thru{night}.fits',
         #
         # calibnight/
         #
@@ -101,10 +102,10 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         #
         # spectra- tile based
         #
-        coadd_tile='{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits',
-        redrock_tile='{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5',
-        spectra_tile='{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits',
-        zbest_tile='{specprod_dir}/tiles/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-{night}.fits',
+        coadd_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-thru{night}.fits',
+        redrock_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-thru{night}.h5',
+        spectra_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-thru{night}.fits',
+        zbest_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-thru{night}.fits',
         #
         # spectra- single exp tile based
         #
@@ -139,7 +140,7 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
     location['desi'] = location['raw']
 
     if tile is not None:
-        log.info("Tile-based files selected; healpix-based files and input will be ignored.")
+        log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
         location['coadd'] = location['coadd_tile']
         location['redrock'] = location['redrock_tile']
         location['spectra'] = location['spectra_tile']

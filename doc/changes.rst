@@ -2,10 +2,42 @@
 desispec Change Log
 ===================
 
-0.42.1 (unreleased)
+0.43.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Improved stitching of sky spectra from different cameras (PR `#1273`_).
+* TSNR updates (PR `#1274`_ and branch PRs `#1275`_, `#1277`_, `#1279`_,
+  `#1282`_, `#1283`_, `#1285`_).
+* qproc robust to blank SEEING keyword (PR `#1289`_).
+* update SV1-SV3 average throughtput (PR `#1291`_).
+* fix x traceshift indexing bug (PR `#1292`_).
+* desi_tile_redshifts --run_zqso option (PR `#1293`_).
+* pre-write speclog when generating dark model scripts (PR `#1300`_).
+* Add spectroscopic QA (PR `#1302`_, `#1316`_).
+* Improve pipeline metadata handling and implement QA cuts (PR `#1304`_).
+* Check for completely masked fibers in qfiberflat (PR `#1306`_).
+* Pipeline robustness when reading ETC values from raw data (PR `#1309`_).
+* Adjust exposure QA cuts, cleanup outputs (PRs `#1316`_, `#1318`_).
+
+.. _`#1273`: https://github.com/desihub/desispec/issues/1273
+.. _`#1274`: https://github.com/desihub/desispec/issues/1274
+.. _`#1275`: https://github.com/desihub/desispec/issues/1275
+.. _`#1277`: https://github.com/desihub/desispec/issues/1277
+.. _`#1279`: https://github.com/desihub/desispec/issues/1279
+.. _`#1282`: https://github.com/desihub/desispec/issues/1282
+.. _`#1283`: https://github.com/desihub/desispec/issues/1283
+.. _`#1285`: https://github.com/desihub/desispec/issues/1285
+.. _`#1289`: https://github.com/desihub/desispec/issues/1289
+.. _`#1291`: https://github.com/desihub/desispec/issues/1291
+.. _`#1292`: https://github.com/desihub/desispec/issues/1292
+.. _`#1293`: https://github.com/desihub/desispec/issues/1293
+.. _`#1300`: https://github.com/desihub/desispec/issues/1300
+.. _`#1302`: https://github.com/desihub/desispec/issues/1302
+.. _`#1304`: https://github.com/desihub/desispec/issues/1304
+.. _`#1306`: https://github.com/desihub/desispec/issues/1306
+.. _`#1309`: https://github.com/desihub/desispec/issues/1309
+.. _`#1316`: https://github.com/desihub/desispec/issues/1316
+.. _`#1318`: https://github.com/desihub/desispec/issues/1318
 
 0.42.0 (2021-05-14)
 -------------------

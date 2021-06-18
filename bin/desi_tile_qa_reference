@@ -1,0 +1,239 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+
+"""
+This script computes the reference n(z) and per-fiber TSNR2, used by the per-cumulative-tile QA.
+"""
+
+
+import os
+import argparse
+from astropy.table import Table
+import fitsio
+import numpy as np
+import yaml
+from pkg_resources import resource_filename
+from desispec.tile_qa_plot import (
+    get_qa_config,
+    get_zbins,
+    get_zhists,
+    get_qa_badmsks,
+)
+import matplotlib.pyplot as plt
+
+
+def parse(options=None):
+    parser = argparse.ArgumentParser(
+        description="Generate the reference n(z) and TSNR2 2d-map for tile QA."
+    )
+    parser.add_argument(
+        "--outdir",
+        type=str,
+        default=None,
+        required=False,
+        help="Path to ouput directory, default is desispec/data/qa",
+    )
+    parser.add_argument("--plot", action="store_true", help="produce control plots?")
+    args = parser.parse_args()
+    return args
+
+
+def main():
+
+    args = parse()
+
+    # AR outdir
+    if args.outdir is None:
+        args.outdir = resource_filename("desispec", "data/qa")
+
+    # AR output files
+    outroot_nz = os.path.join(args.outdir, "qa-reference-nz")
+    outroot_tsnr2 = os.path.join(args.outdir, "qa-reference-tsnr2")
+
+    # AR input files
+    infns = {
+        "DARK": "{}/survey/catalogs/main/LSS/datcomb_dark_spec_premtlup.fits".format(
+            os.getenv("DESI_ROOT")
+        ),
+        "BRIGHT": "{}/survey/catalogs/main/LSS/datcomb_bright_spec_premtlup.fits".format(
+            os.getenv("DESI_ROOT")
+        ),
+    }
+
+    # AR config params
+    config = get_qa_config()
+    dchi2_min = config["tile_qa_plot"]["dchi2_min"]
+    tsnr2_key = config["tile_qa_plot"]["tsnr2_key"]
+
+    # AR n(z): tracers
+    tracers = list(config["tile_qa_plot"]["tracers"].keys())
+
+    # AR n(z): redshift grid
+    bins = get_zbins()
+    nbin = len(bins) - 1
+
+    # AR n(z): preparing the table
+    nz = Table()
+    keys = ["TRACER", "ZMIN", "ZMAX", "N_MEAN", "N_MEAN_STD"]
+    for key in keys:
+        tmparr = []
+        for tracer in tracers:
+            if key == "TRACER":
+                tmparr += [tracer for i in range(nbin)]
+            elif key == "ZMIN":
+                tmparr += bins[:-1].tolist()
+            elif key == "ZMAX":
+                tmparr += bins[1:].tolist()
+            else:
+                tmparr += [0.0 for i in range(nbin)]
+        nz[key] = np.array(tmparr)
+
+    # AR n(z): looping over tracers
+    nightmin, nightmax = 99999999, 0
+    for tracer in tracers:
+
+        program = config["tile_qa_plot"]["tracers"][tracer]["program"]
+        d = Table.read(infns[program])
+
+        # AR first/last night
+        # AR (not fully correct, as NIGHT here is from the first
+        # AR    500 rows of each zbest file; but ok for our purpose)
+        if d["NIGHT"].min() < nightmin:
+            nightmin = d["NIGHT"].min()
+        if d["NIGHT"].max() > nightmax:
+            nightmax = d["NIGHT"].max()
+
+        # AR making hist for each TILEID
+        tileids = np.unique(d["TILEID"])
+        _, zhists = get_zhists(tileids, tracer, dchi2_min, d, fstatus_key="FIBERSTATUS", tileid_key="TILEID")
+
+        # AR compressing stats for all TILEIDs
+        sel = nz["TRACER"] == tracer
+        nz["N_MEAN"][sel] = zhists.mean(axis=1).round(4)
+        nz["N_MEAN_STD"][sel] = zhists.std(axis=1).round(
+            4
+        )  # AR I think it s correct to *not* divide by sqrt(ntile)
+
+    # AR n(z): writing to ecsv
+    hdr = fitsio.FITSHDR()
+    hdr["DCHI2MIN"] = dchi2_min
+    hdr["NIGHTMIN"] = nightmin
+    hdr["NIGHTMAX"] = nightmax
+    nz.meta = dict(hdr)
+    nz.write("{}.ecsv".format(outroot_nz), format="ascii.ecsv", overwrite=True)
+
+    # AR n(z): control plot
+    if args.plot:
+        fig, ax = plt.subplots()
+        for tracer in tracers:
+            sel = nz["TRACER"] == tracer
+            x = 0.5 * (nz["ZMIN"][sel] + nz["ZMAX"][sel])
+            y = nz["N_MEAN"][sel]
+            ye = nz["N_MEAN_STD"][sel]
+            p = ax.plot(x, y, label=tracer)
+            ax.fill_between(x, y - ye, y + ye, color=p[0].get_color(), alpha=0.3)
+        ax.legend()
+        ax.grid(True)
+        ax.set_xlabel("Z")
+        ax.set_ylabel("Per tile fractional count")
+        plt.savefig("{}.png".format(outroot_nz), bbox_inches="tight")
+        plt.close()
+
+    # AR TSNR2 = f(FIBERASSIGN_X, FIBERASSIGN_Y, FIBER)
+    keys = ["PROGRAM", "FIBER", "FIBERASSIGN_X", "FIBERASSIGN_Y", tsnr2_key]
+    mydict = {key: [] for key in keys}
+    badqa_val, _ = get_qa_badmsks()
+    #
+    for program in ["BRIGHT", "DARK"]:
+
+        # AR TSNR2: reading (cutting on FIBERSTATUS)
+        d = Table.read(infns[program])
+        sel = (d["FIBERSTATUS"] & badqa_val) == 0
+        d = d[sel]
+
+        # AR TNR2_LRG: populating
+        for key in keys:
+            if key == "PROGRAM":
+                mydict["PROGRAM"] += [program for i in range(len(d))]
+            else:
+                mydict[key] += d[key].tolist()
+
+    # AR TNR2_LRG: converting to numpy array
+    for key in keys:
+        mydict[key] = np.array(mydict[key])
+
+    # AR TSRN2_LRG: initializing
+    tsnr2 = Table()
+    for key in [
+        "FIBER",
+        "FIBERASSIGN_X",
+        "FIBERASSIGN_Y",
+        "{}_BRIGHT".format(tsnr2_key),
+        "{}_DARK".format(tsnr2_key),
+    ]:
+        if key == "FIBER":
+            tsnr2[key] = np.arange(5000, dtype=int)
+        else:
+            tsnr2[key] = np.nan + np.zeros(5000, dtype=float)
+
+    # AR TSNR2: median value per fiber
+    for i in range(5000):
+        sel = mydict["FIBER"] == i
+        if sel.sum() > 0:
+            for key in ["FIBERASSIGN_X", "FIBERASSIGN_Y"]:
+                tsnr2[key][i] = np.nanmedian(mydict[key][sel])
+        for program in ["BRIGHT", "DARK"]:
+            selp = (sel) & (mydict["PROGRAM"] == program)
+            if selp.sum() > 0:
+                tsnr2["{}_{}".format(tsnr2_key, program)][i] = np.nanmedian(
+                    mydict[tsnr2_key][selp]
+                )
+
+    # AR TSNR2: rounding
+    for key in [
+        "FIBERASSIGN_X",
+        "FIBERASSIGN_Y",
+        "{}_BRIGHT".format(tsnr2_key),
+        "{}_DARK".format(tsnr2_key),
+    ]:
+        tsnr2[key] = np.round(tsnr2[key], 2)
+
+    # AR TSNR2: writing to ecsv
+    hdr = fitsio.FITSHDR()
+    hdr["NIGHTMIN"] = d["NIGHT"].min()
+    hdr["NIGHTMAX"] = d["NIGHT"].max()
+    tsnr2.meta = dict(hdr)
+    tsnr2.write("{}.ecsv".format(outroot_tsnr2), format="ascii.ecsv", overwrite=True)
+
+    # AR TSNR2: control plot
+    if args.plot:
+        for program in ["BRIGHT", "DARK"]:
+            fig, ax = plt.subplots()
+            sc = ax.scatter(
+                tsnr2["FIBERASSIGN_X"],
+                tsnr2["FIBERASSIGN_Y"],
+                c=tsnr2["{}_{}".format(tsnr2_key, program)],
+                s=5,
+            )
+            ax.set_title(
+                "PROGRAM={}\nNIGHTMIN={} , NIGHTMAX={}".format(
+                    program, d["NIGHT"].min(), d["NIGHT"].max()
+                )
+            )
+            ax.set_xlabel("FIBERASSIGN_X [mm]")
+            ax.set_ylabel("FIBERASSIGN_Y [mm]")
+            ax.grid(True)
+            cbar = plt.colorbar(sc)
+            cbar.set_label(tsnr2_key)
+            plt.savefig(
+                "{}-{}.png".format(outroot_tsnr2, program), bbox_inches="tight",
+            )
+            plt.close()
+
+
+if __name__ == "__main__":
+    main()
