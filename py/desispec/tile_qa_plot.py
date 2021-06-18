@@ -880,17 +880,18 @@ def make_tile_qa_plot(
         vmin = 0.5*medefftime
         vmax = 1.5*medefftime
 
+        sel = (efftime>0)
         sc = ax.scatter(
-            x,
-            y,
-            c=efftime,
+            x[sel],
+            y[sel],
+            c=efftime[sel],
             cmap=matplotlib.cm.coolwarm_r,
             vmin=vmin,
             vmax=vmax,
             s=5,
         )
 
-        sel = ((fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) > 0)
+        sel = ((fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) > 0)&(efftime>0)
         ax.scatter(x[sel],y[sel],
                    edgecolor="k", facecolors="none", s=5, alpha=0.5,
                    label="LOWEFFTIME")
