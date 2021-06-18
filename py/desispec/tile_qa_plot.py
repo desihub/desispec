@@ -1019,7 +1019,7 @@ def make_tile_qa_plot(
         )
         y += dy
     else :
-        ax.text(0.1,y,"TILE IS NO VALID",color="red",
+        ax.text(0.1,y,"TILE IS NOT VALID",color="red",
                 fontsize=int(fs*1.2),
                 fontweight="bold",
                 ha="left",

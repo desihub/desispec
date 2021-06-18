@@ -202,7 +202,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         if np.any(entries):
             tile_petalqa_table['EFFTIME_SPEC'][petal]=np.median(tile_fiberqa_table["EFFTIME_SPEC"][entries])
         else:
-            tile_petaqa_table['EFFTIME_SPEC'][petal] = 0.0
+            tile_petalqa_table['EFFTIME_SPEC'][petal] = 0.0
 
 
     # tile EFFTIME is median of efftime of fibers that are good in all exposures
