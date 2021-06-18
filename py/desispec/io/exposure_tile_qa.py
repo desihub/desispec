@@ -9,6 +9,8 @@ import os
 import astropy.io.fits as pyfits
 from astropy.table import Table
 
+from desiutil.depend import add_dependencies
+
 def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     """Writes an exposure-qa fits file.
 
@@ -19,6 +21,7 @@ def write_exposure_qa(filename,fiber_qa_table,petal_qa_table=None) :
     """
     hdus=pyfits.HDUList()
     fiber_qa_table.meta['EXTNAME']='FIBERQA'
+    add_dependencies(fiber_qa_table.meta)
     hdus.append(pyfits.convenience.table_to_hdu(fiber_qa_table) )
     if petal_qa_table is not None :
         petal_qa_table.meta['EXTNAME']='PETALQA'
@@ -60,6 +63,7 @@ def write_tile_qa(filename,fiber_qa_table,petal_qa_table=None) :
     """
     hdus=pyfits.HDUList()
     fiber_qa_table.meta['EXTNAME']='FIBERQA'
+    add_dependencies(fiber_qa_table.meta)
     hdus.append(pyfits.convenience.table_to_hdu(fiber_qa_table) )
     if petal_qa_table is not None :
         petal_qa_table.meta['EXTNAME']='PETALQA'
