@@ -247,7 +247,7 @@ class Spectra(object):
             return 0
 
 
-    def select(self, nights=None, bands=None, targets=None, fibers=None, invert=False, include_scores=False, return_index=False):
+    def select(self, nights=None, exposures=None, bands=None, targets=None, fibers=None, invert=False, include_scores=False, return_index=False):
         """
         Select a subset of the data.
 
@@ -256,6 +256,7 @@ class Spectra(object):
 
         Args:
             nights (list): optional list of nights to select.
+            exposures (list): optional list of exposures to select.
             bands (list): optional list of bands to select.
             targets (list): optional list of target IDs to select.
             fibers (list): list/array of fiber indices to select.
@@ -286,6 +287,13 @@ class Spectra(object):
         else:
             keep_nights = np.ones(len(self.fibermap), bool)
 
+        if exposures is None:
+            keep_exposures = np.ones(len(self.fibermap), bool)
+        else:
+            keep_exposures = [ (x in exposures) for x in self.fibermap["EXPID"] ]
+            if sum(keep_exposures) == 0:
+                raise RuntimeError("no valid exposures were selected!")
+
         keep_targets = None
         if targets is None:
             keep_targets = [ True for x in self.fibermap["TARGETID"] ]
@@ -302,7 +310,7 @@ class Spectra(object):
         if sum(keep_fibers) == 0:
             raise RuntimeError("no valid fibers were selected!")
 
-        keep_rows = [ (x and y and z) for x, y, z in zip(keep_nights, keep_targets, keep_fibers) ]
+        keep_rows = [ (x and y and z and t) for x, y, z, t in zip(keep_nights, keep_exposures, keep_targets, keep_fibers) ]
         if invert:
             keep_rows = [ not x for x in keep_rows ]
 
