@@ -537,6 +537,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                 name = manifest_dict['MANIFEST'].lower()
                 if name in ['endofarcs', 'endofflats', 'endofshortflats']:
                     return name
+                elif name in ['endofzeros']:
+                    log.info(f"Found {name} flag. Not using that information.")
                 else:
                     log.error(f"Couldn't understand manifest name: {name}.")
             else:
