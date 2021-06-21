@@ -276,16 +276,12 @@ class Spectra(object):
         if len(keep_bands) == 0:
             raise RuntimeError("no valid bands were selected!")
 
-        if 'NIGHT' in self.fibermap.colnames: # not present in data model of coadds
-            keep_nights = None
-            if nights is None:
-                keep_nights = [ True for x in self.fibermap["NIGHT"] ]
-            else:
-                keep_nights = [ (x in nights) for x in self.fibermap["NIGHT"] ]
+        if nights is None:
+            keep_nights = np.ones(len(self.fibermap), bool)
+        else:
+            keep_nights = [ (x in nights) for x in self.fibermap["NIGHT"] ]
             if sum(keep_nights) == 0:
                 raise RuntimeError("no valid nights were selected!")
-        else:
-            keep_nights = np.ones(len(self.fibermap), bool)
 
         if exposures is None:
             keep_exposures = np.ones(len(self.fibermap), bool)
@@ -294,21 +290,19 @@ class Spectra(object):
             if sum(keep_exposures) == 0:
                 raise RuntimeError("no valid exposures were selected!")
 
-        keep_targets = None
         if targets is None:
-            keep_targets = [ True for x in self.fibermap["TARGETID"] ]
+            keep_targets = np.ones(len(self.fibermap), bool)
         else:
             keep_targets = [ (x in targets) for x in self.fibermap["TARGETID"] ]
-        if sum(keep_targets) == 0:
-            raise RuntimeError("no valid targets were selected!")
+            if sum(keep_targets) == 0:
+                raise RuntimeError("no valid targets were selected!")
 
-        keep_fibers = None
         if fibers is None:
-            keep_fibers = [ True for x in self.fibermap["FIBER"] ]
+            keep_fibers = np.ones(len(self.fibermap), bool)
         else:
             keep_fibers = [ (x in fibers) for x in self.fibermap["FIBER"] ]
-        if sum(keep_fibers) == 0:
-            raise RuntimeError("no valid fibers were selected!")
+            if sum(keep_fibers) == 0:
+                raise RuntimeError("no valid fibers were selected!")
 
         keep_rows = [ (x and y and z and t) for x, y, z, t in zip(keep_nights, keep_exposures, keep_targets, keep_fibers) ]
         if invert:
