@@ -188,7 +188,7 @@ if __name__ == "__main__":
         elif target_version == 'MAIN':
             DESI_TARGET = 'DESI_TARGET'
         else:
-            log.error("**** CHOOSE CORRECT VERSION OF TARGET ****")
+            log.error("**** CHOOSE CORRECT TARGET_VERSION FLAG (SV1 / SV3 / MAIN) ****")
             sys.exit()
 
         is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0

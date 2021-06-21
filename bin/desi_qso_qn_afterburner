@@ -42,6 +42,10 @@ def collect_argparser():
 
     parser.add_argument("--target_version", type=str, required=False, default="MAIN",
                         help="give the name of the target version: SV1 / SV3 / MAIN ")
+    parser.add_argument("--target_selection", type=str, required=False, default="restricted",
+                        help="on each sample the mgII fitter is perform: " +
+                             "restricted (QSO targets with SPECTYPE==GALAXY + QSO targets with SPECTYPE==QSO and |z_QN - z_RR| < 0.05)" +
+                             " / all_targets (All targets in the coadd file)")
 
     # for QN
     parser.add_argument("--c_thresh", type=float, required=False, default=0.5,
@@ -101,7 +105,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
         #    z_prior (float array): array of the same size than targetid with the
         #                           redshift estimated by QN for the associated targetid
         #    filename_priors (str): name under which the file will be saved
-        
+
         function = np.array(['tophat'] * z_prior.size) # need to be the same for every one
         sigma = 0.1*np.ones(z_prior.size)
         # save
@@ -155,7 +159,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     return redshift, err_redshift, coeffs
 
 
-def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_name, param_QN, param_RR):
+def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR):
     """
     Run QuasarNet to the object with index_to_QN == True from spectra_name.
     Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
@@ -165,6 +169,7 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
         index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
                       it is build with the TARGETID increasing
         sel_to_QN (bool array): size 500. Select on which objects QN will be apply (index based on zbest)
+        DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
         spectra_name (str): The name of the spectra file
         param_QN (dict): contains info for QN as n_thresh and c_thresh
         param_RR (dict): contains info to re-run RR as the template_filename,
@@ -188,26 +193,26 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
 
         # Selection QSO with QN :
         # sel_index_with_QN.size = zbest_QN.size = index_with_QN.size | is_qso_QN.size = index_to_QN.size | sel_QN.size = 500
-        log.info(f"We select QSO from QN with c_thresh={param_QN['c_thresh']} and n_thresh={param_QN['n_thresh']}")
         sel_index_with_QN = np.sum(c_line > param_QN['c_thresh'], axis=0) >= param_QN['n_thresh']
+        log.info(f"We select QSO from QN with c_thresh={param_QN['c_thresh']} and n_thresh={param_QN['n_thresh']} --> {sel_index_with_QN.sum()} objects are QSO for QN")
         is_qso_QN = np.zeros(sel_to_QN.sum(), dtype=bool)
         is_qso_QN[index_with_QN] = sel_index_with_QN
         sel_QN = sel_to_QN.copy()
         sel_QN[sel_to_QN] = is_qso_QN
 
-        log.info("Remove objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.05")
         sel_QSO_RR_with_no_z_pb = (zbest['SPECTYPE'][:] == 'QSO')
         sel_QSO_RR_with_no_z_pb[sel_QN] &= np.abs(zbest['Z'][:][sel_QN] - zbest_QN[sel_index_with_QN]) <= 0.05
+        log.info(f"Remove {sel_QSO_RR_with_no_z_pb[sel_QN].sum()} objetcs with SPECTYPE==QSO and |z_RR - z_QN| < 0.05 (since even with the prior, RR will give the same result)")
 
         sel_QN &= ~sel_QSO_RR_with_no_z_pb
-        index_with_QN_with_pb = sel_QN[sel_to_QN][index_with_QN]
+        index_with_QN_with_no_pb = sel_QN[sel_to_QN][index_with_QN]
 
         log.info(f"RUN RR on {sel_QN.sum()}")
         if sel_QN.sum() == 0: # If there is no quasar we don't apply RR: error with RR if targetid == ''
             QSO_sel = pd.DataFrame()
         else:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
-            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, zbest['TARGETID'][:][sel_QN], zbest_QN[index_with_QN_with_pb], param_RR)
+            redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, zbest['TARGETID'][:][sel_QN], zbest_QN[index_with_QN_with_no_pb], param_RR)
 
             QSO_sel = pd.DataFrame()
             QSO_sel['TARGETID'] = zbest['TARGETID'][:][sel_QN]
@@ -216,13 +221,14 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, spectra_
 
             QSO_sel['Z'] = redshift
             QSO_sel['ZERR'] = err_redshift
+            QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][:500][index_sorted][sel_QN]
             QSO_sel['COEFFS'] = coeffs
 
             QSO_sel['SPECTYPE'] = zbest['SPECTYPE'][:][sel_QN]
             QSO_sel['Z_RR'] = zbest['Z'][:][sel_QN]
-            QSO_sel['Z_QN'] = zbest_QN[index_with_QN_with_pb]
-            QSO_sel['C_LINES'] = c_line.T[index_with_QN_with_pb].tolist()
-            QSO_sel['Z_LINES'] = z_line.T[index_with_QN_with_pb].tolist()
+            QSO_sel['Z_QN'] = zbest_QN[index_with_QN_with_no_pb]
+            QSO_sel['C_LINES'] = c_line.T[index_with_QN_with_no_pb].tolist()
+            QSO_sel['Z_LINES'] = z_line.T[index_with_QN_with_no_pb].tolist()
 
     return QSO_sel
 
@@ -240,7 +246,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
         None
     """
     # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
-    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'),
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'), (DESI_TARGET, 'i8'),
                                                ('COEFFS', ('f4', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'),
                                                ('C_LYA', 'f4'), ('C_CIV', 'f4'), ('C_CIII', 'f4'), ('C_MgII', 'f4'), ('C_Hbeta', 'f4'), ('C_Halpha', 'f4'),
                                                ('Z_LYA', 'f4'), ('Z_CIV', 'f4'), ('Z_CIII', 'f4'), ('Z_MgII', 'f4'), ('Z_Hbeta', 'f4'), ('Z_Halpha', 'f4')])
@@ -251,6 +257,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
     data['Z'] = dataframe['Z']
     data['ZERR'] = dataframe['ZERR']
+    data[DESI_TARGET] = dataframe[DESI_TARGET]
     data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
     data['SPECTYPE'] = dataframe['SPECTYPE']
     data['Z_RR'] = dataframe['Z_RR']
@@ -287,6 +294,7 @@ if __name__ == "__main__":
     spectra_name = args.coadd
     zbest_name = args.zbest
     target_version = args.target_version
+    target_selection = args.target_selection
     output_name = args.output
 
 
@@ -313,13 +321,19 @@ if __name__ == "__main__":
         elif target_version == 'MAIN':
             DESI_TARGET = 'DESI_TARGET'
         else:
-            log.error("**** CHOOSE CORRECT VERSION OF TARGET ****")
+            log.error("**** CHOOSE CORRECT TARGET_VERSION FLAG (SV1 / SV3 / MAIN) ****")
             sys.exit()
 
-        is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
+        if target_selection == 'restricted':
+            sel_to_QN = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
+        elif target_selection == 'all_targets':
+            sel_to_QN = np.ones(500, dtype=bool)
+        else:
+            log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (restricted / all_targets) ****")
+            sys.exit()
 
-        log.info(f"Nbr objetcs for QN: {is_qso_target.sum()}")
-        QSO_from_QN = selection_targets_with_QN(zbest, fibermap, index_sorted, is_qso_target, spectra_name, param_QN, param_RR)
+        log.info(f"Nbr objetcs for QN: {sel_to_QN.sum()}")
+        QSO_from_QN = selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR)
         log.info(f"Selected with QN + new_Z: {QSO_from_QN.shape[0]}")
 
         # close file !!
