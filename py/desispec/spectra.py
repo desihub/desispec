@@ -268,7 +268,6 @@ class Spectra(object):
             spectra: a new Spectra object containing the selected data.
             indices (list, optional): indices of selected spectra. Only provided if return_index is True.
         """
-        keep_bands = None
         if bands is None:
             keep_bands = self.bands
         else:
@@ -276,39 +275,19 @@ class Spectra(object):
         if len(keep_bands) == 0:
             raise RuntimeError("no valid bands were selected!")
 
-        if nights is None:
-            keep_nights = np.ones(len(self.fibermap), bool)
-        else:
-            keep_nights = [ (x in nights) for x in self.fibermap["NIGHT"] ]
-            if sum(keep_nights) == 0:
-                raise RuntimeError("no valid nights were selected!")
+        keep_rows = np.ones(len(self.fibermap), bool)
+        for fm_select,fm_var in zip([nights, exposures, targets, fibers],
+                                    ['NIGHT', 'EXPID', 'TARGETID', 'FIBER']):
+            if fm_select is not None:
+                keep_selection = np.isin(self.fibermap[fm_var], fm_select)
+                if sum(keep_selection) == 0:
+                    raise RuntimeError("no valid "+fm_var+" were selected!")
+                keep_rows = keep_rows & keep_selection
 
-        if exposures is None:
-            keep_exposures = np.ones(len(self.fibermap), bool)
-        else:
-            keep_exposures = [ (x in exposures) for x in self.fibermap["EXPID"] ]
-            if sum(keep_exposures) == 0:
-                raise RuntimeError("no valid exposures were selected!")
-
-        if targets is None:
-            keep_targets = np.ones(len(self.fibermap), bool)
-        else:
-            keep_targets = [ (x in targets) for x in self.fibermap["TARGETID"] ]
-            if sum(keep_targets) == 0:
-                raise RuntimeError("no valid targets were selected!")
-
-        if fibers is None:
-            keep_fibers = np.ones(len(self.fibermap), bool)
-        else:
-            keep_fibers = [ (x in fibers) for x in self.fibermap["FIBER"] ]
-            if sum(keep_fibers) == 0:
-                raise RuntimeError("no valid fibers were selected!")
-
-        keep_rows = [ (x and y and z and t) for x, y, z, t in zip(keep_nights, keep_exposures, keep_targets, keep_fibers) ]
         if invert:
-            keep_rows = [ not x for x in keep_rows ]
+            keep_rows = np.invert(keep_rows)
 
-        keep = [ i for i, x in enumerate(keep_rows) if x ]
+        keep, = np.where(keep_rows)
         if len(keep) == 0:
             raise RuntimeError("selection has no spectra")
 
