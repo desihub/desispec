@@ -92,28 +92,28 @@ def compute_exposure_qa(night, expid, specprod_dir):
     petal_tsnr2=np.zeros(10)
     worst_rdnoise = 0
 
-    fiberqa_table["EFFTIME_SPEC"]=np.zeros(fiberqa_table["TARGETID"].size)
+    fiberqa_table["EFFTIME_SPEC"]=np.zeros(fiberqa_table["TARGETID"].size, dtype=np.float32)
 
     petalqa_table = Table()
     npetal=10
-    petalqa_table["PETAL_LOC"]=np.arange(npetal)
-    petalqa_table["WORSTREADNOISE"]=np.zeros(npetal,dtype=float)
-    petalqa_table["NGOODPOS"]=np.zeros(npetal,dtype=int)
-    petalqa_table["NGOODFIB"]=np.zeros(npetal,dtype=int)
-    petalqa_table["NSTDSTAR"]=np.zeros(npetal,dtype=int)
-    petalqa_table["STARRMS"]=np.zeros(npetal,dtype=float)
-    petalqa_table["TSNR2FRA"]=np.zeros(npetal,dtype=float)
-    petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal,dtype=float)
-    petalqa_table["NCFRAME"]=np.zeros(npetal,dtype=int)
-    petalqa_table["BSKYTHRURMS"]=np.zeros(npetal,dtype=float)
-    petalqa_table["BSKYCHI2PDF"]=np.zeros(npetal,dtype=float)
-    petalqa_table["RSKYTHRURMS"]=np.zeros(npetal,dtype=float)
-    petalqa_table["RSKYCHI2PDF"]=np.zeros(npetal,dtype=float)
-    petalqa_table["ZSKYTHRURMS"]=np.zeros(npetal,dtype=float)
-    petalqa_table["ZSKYCHI2PDF"]=np.zeros(npetal,dtype=float)
-    petalqa_table["BTHRUFRAC"]=np.zeros(npetal,dtype=float)
-    petalqa_table["RTHRUFRAC"]=np.zeros(npetal,dtype=float)
-    petalqa_table["ZTHRUFRAC"]=np.zeros(npetal,dtype=float)
+    petalqa_table["PETAL_LOC"]=np.arange(npetal, dtype=np.int16)
+    petalqa_table["WORSTREADNOISE"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["NGOODPOS"]=np.zeros(npetal,dtype=np.int16)
+    petalqa_table["NGOODFIB"]=np.zeros(npetal,dtype=np.int16)
+    petalqa_table["NSTDSTAR"]=np.zeros(npetal,dtype=np.int16)
+    petalqa_table["STARRMS"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["TSNR2FRA"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["NCFRAME"]=np.zeros(npetal,dtype=np.int16)
+    petalqa_table["BSKYTHRURMS"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["BSKYCHI2PDF"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["RSKYTHRURMS"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["RSKYCHI2PDF"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["ZSKYTHRURMS"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["ZSKYCHI2PDF"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["BTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["RTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
+    petalqa_table["ZTHRUFRAC"]=np.zeros(npetal,dtype=np.float32)
 
     # need to add things
 
@@ -345,14 +345,14 @@ def compute_exposure_qa(night, expid, specprod_dir):
     bad_fibers_mask = fibermask.mask(qa_params["bad_qafstatus_mask"])
     good_fibers = np.where((fiberqa_table['QAFIBERSTATUS']&bad_fibers_mask)==0)[0]
     good_petals = np.unique(fiberqa_table['PETAL_LOC'][good_fibers])
-    fiberqa_table.meta["NGOODFIBERS"]=good_fibers.size
-    fiberqa_table.meta["NGOODPETALS"]=good_petals.size
-    fiberqa_table.meta["WORSTREADNOISE"]=worst_rdnoise
+    fiberqa_table.meta["NGOODFIB"]=good_fibers.size
+    fiberqa_table.meta["NGOODPET"]=good_petals.size
+    fiberqa_table.meta["WORSTRDN"]=worst_rdnoise
     if len(good_fibers) > 0 :
         fiberqa_table.meta["FPRMS2D"]=np.sqrt(np.mean(dist_mm[good_fibers]**2))
-        fiberqa_table.meta["PETALMINEXPFRAC"]=np.min(petal_tsnr2_frac[good_petals])
-        fiberqa_table.meta["PETALMAXEXPFRAC"]=np.max(petal_tsnr2_frac[good_petals])
-        fiberqa_table.meta['EFFTIME_SPEC']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
+        fiberqa_table.meta["PMINEXPF"]=np.min(petal_tsnr2_frac[good_petals])
+        fiberqa_table.meta["PMAXEXPF"]=np.max(petal_tsnr2_frac[good_petals])
+        fiberqa_table.meta['EFFTIME']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
 
     if frame_header is not None :
         # copy some keys from the frame header
