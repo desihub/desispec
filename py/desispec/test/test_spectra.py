@@ -122,6 +122,11 @@ class TestSpectra(unittest.TestCase):
             nt.assert_array_almost_equal(spec.ivar[band], self.ivar[band])
             nt.assert_array_equal(spec.mask[band], self.mask[band])
             nt.assert_array_almost_equal(spec.resolution_data[band], self.res[band])
+            if spec.extra is not None:
+                for key, val in self.extra[band].items():
+                    nt.assert_array_almost_equal(spec.extra[band][key], val)
+        if spec.extra_catalog is not None:
+            assert(np.all(spec.extra_catalog == self.extra_catalog))
 
 
     def test_io(self):
@@ -129,7 +134,8 @@ class TestSpectra(unittest.TestCase):
         # manually create the spectra and write.
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
             ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
-            fibermap=self.fmap1, meta=self.meta, extra=self.extra)
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra,
+            extra_catalog=self.extra_catalog)
 
         self.verify(spec, self.fmap1)
 
