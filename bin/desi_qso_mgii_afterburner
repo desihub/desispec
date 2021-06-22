@@ -33,6 +33,11 @@ def collect_argparser():
                              "restricted (QSO targets with SPECTYPE==GALAXY)" +
                              " / qso_targets (QSO targets)" +
                              " / all_targets (All targets in the coadd file)")
+    parser.add_argument("--save_target", type=str, required=False, default="restricted",
+                        help="which objects will be saved in the output files:" +
+                             "restricted (objects which are identify as QSO by the mgII afterburner)" +
+                             " / all (All objects which are tested by the mgII fitter)" +
+                             " --> To have 500 objects in the ouput file: set --target_selection all_targets --save_target all")
 
     parser.add_argument("--lambda_width", type=str, required=False, default=250,
                         help="parameter for mgII fitter, see mgii_afterburner.py for more information")
@@ -50,7 +55,7 @@ def collect_argparser():
     return parser.parse_args()
 
 
-def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, spectra_name, zbest_name, param_mgii_fitter, DESI_TARGET):
+def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, spectra_name, zbest_name, param_mgii_fitter, DESI_TARGET, save_target):
     """
     Run QuasarNet to the object with index_to_QN == True from spectra_name.
     Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
@@ -60,10 +65,11 @@ def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, 
         index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
                       it is build with the TARGETID increasing
         sel_to_mgii (bool array): size 500. Select on which objects mgii will be apply (index based on zbest)
-        spectra_name (str): The name of the spectra file
+        spectra_name /zbest_name (str): The name of the spectra / associated zbest file
         param_mgii_fitter (dict): contains info for the MgII fitter as lambda_width, max_sigma
                                   min_sigma, min_deltachi2, min_signifiance_A, min_A
         DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
+        save_target (str) : restricted (save only IS_QSO_MGII==true targets) / all (save all the sample)
     Returns:
         QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
     """
@@ -82,6 +88,7 @@ def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, 
                                            min_A=param_mgii_fitter['min_A'],
                                            min_signifiance_A=param_mgii_fitter['min_signifiance_A'])
 
+
         sel_MGII = sel_to_mgii.copy()
         # we only consider index where the mgii fit was done
         sel_MGII[sel_to_mgii] = index_with_mgii_fit
@@ -90,24 +97,55 @@ def select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, 
 
         # Build dataframe to store the result
         QSO_sel = pd.DataFrame()
-        QSO_sel['TARGETID'] = zbest['TARGETID'][:][sel_MGII]
-        QSO_sel['RA'] = fibermap['TARGET_RA'][:500][index_sorted][sel_MGII]
-        QSO_sel['DEC'] = fibermap['TARGET_DEC'][:500][index_sorted][sel_MGII]
-        QSO_sel['Z'] = zbest['Z'][:][sel_MGII]
-        QSO_sel['ZERR'] = zbest['ZERR'][:][sel_MGII]
-        QSO_sel['COEFFS'] = zbest['COEFF'][:][sel_MGII].tolist()
-        QSO_sel['Z_RR'] = zbest['Z'][:][sel_MGII]
-        QSO_sel['SPECTYPE'] = zbest['SPECTYPE'][:][sel_MGII]
-        QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][:500][index_sorted][sel_MGII]
+
+        if save_target == 'restricted':
+            index_to_save = sel_MGII.copy()
+            index_to_save_fit_result = index_with_mgii_fit.copy()
+            # keep only object selected by MGII
+            index_to_save_fit_result[index_with_mgii_fit] = index_selected_with_mgii_fit
+        elif save_target == 'all':
+            index_to_save = sel_to_mgii.copy()
+            # save every object with nan value if it is necessary --> there are sel_to_mgii.sum() objects to save
+            # index_with_mgii_fit is size of sel_to_mgii.sum()
+            index_to_save_fit_result = np.ones(sel_to_mgii.sum(), dtype=bool)
+        else:
+            log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
+
+        QSO_sel['TARGETID'] = zbest['TARGETID'][:][index_to_save]
+        QSO_sel['RA'] = fibermap['TARGET_RA'][:500][index_sorted][index_to_save]
+        QSO_sel['DEC'] = fibermap['TARGET_DEC'][:500][index_sorted][index_to_save]
+        QSO_sel['Z_RR'] = zbest['Z'][:][index_to_save]
+        QSO_sel['ZERR'] = zbest['ZERR'][:][index_to_save]
+        QSO_sel['COEFFS'] = zbest['COEFF'][:][index_to_save].tolist()
+        QSO_sel['Z_RR'] = zbest['Z'][:][index_to_save]
+        QSO_sel['SPECTYPE'] = zbest['SPECTYPE'][:][index_to_save]
+        QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][:500][index_sorted][index_to_save]
+        QSO_sel['IS_QSO_MGII'] = sel_MGII[index_to_save]
+
 
         # Add info from MgII fitter output:
-        QSO_sel['DELTA_CHI2'] = fits_result[index_selected_with_mgii_fit, 0]
-        QSO_sel['A'] = fits_result[index_selected_with_mgii_fit, 1]
-        QSO_sel['SIGMA'] = fits_result[index_selected_with_mgii_fit, 2]
-        QSO_sel['B'] = fits_result[index_selected_with_mgii_fit, 3]
-        QSO_sel['VAR_A'] = fits_result[index_selected_with_mgii_fit, 4]
-        QSO_sel['VAR_SIGMA'] = fits_result[index_selected_with_mgii_fit, 5]
-        QSO_sel['VAR_B'] = fits_result[index_selected_with_mgii_fit, 6]
+        # index_with_mgii_fit and index_to_save_fit_result are size of sel_to_mgii.sum()
+        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr[index_with_mgii_fit] = fits_result[:, 0]
+        QSO_sel['DELTA_CHI2'] = tmp_arr[index_to_save_fit_result]
+        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr[index_with_mgii_fit] = fits_result[:, 1]
+        QSO_sel['A'] = tmp_arr[index_to_save_fit_result]
+        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr[index_with_mgii_fit] = fits_result[:, 2]
+        QSO_sel['SIGMA'] = tmp_arr[index_to_save_fit_result]
+        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr[index_with_mgii_fit] = fits_result[:, 3]
+        QSO_sel['B'] =tmp_arr[index_to_save_fit_result]
+        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr[index_with_mgii_fit] = fits_result[:, 4]
+        QSO_sel['VAR_A'] = tmp_arr[index_to_save_fit_result]
+        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr[index_with_mgii_fit] = fits_result[:, 5]
+        QSO_sel['VAR_SIGMA'] = tmp_arr[index_to_save_fit_result]
+        tmp_arr = np.NaN*np.ones(sel_to_mgii.sum())
+        tmp_arr[index_with_mgii_fit] = fits_result[:, 6]
+        QSO_sel['VAR_B'] = tmp_arr[index_to_save_fit_result]
 
     return QSO_sel
 
@@ -125,20 +163,20 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
         None
     """
     # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
-    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'),
-                                               ('COEFFS', ('f4', 10)), (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'),
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z_RR','f8'), ('ZERR', 'f4'), ('IS_QSO_MGII', '?'),
+                                               (DESI_TARGET, 'i8'), ('SPECTYPE', 'U10'), #('COEFFS', ('f4', 10)),
                                                ('DELTA_CHI2', 'f4'), ('A', 'f4'), ('SIGMA', 'f4'), ('B', 'f4'),
                                                ('VAR_A', 'f4'), ('VAR_SIGMA', 'f4'), ('VAR_B', 'f4')])
 
     data['TARGETID'] = dataframe['TARGETID']
     data['RA'] = dataframe['RA']
     data['DEC'] = dataframe['DEC']
-    data['Z'] = dataframe['Z']
+    data['Z_RR'] = dataframe['Z_RR']
     data['ZERR'] = dataframe['ZERR']
-    data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
+    data['IS_QSO_MGII'] = dataframe['IS_QSO_MGII']
     data[DESI_TARGET] = dataframe[DESI_TARGET]
     data['SPECTYPE'] = dataframe['SPECTYPE']
-
+    #data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
 
     data['DELTA_CHI2'] = dataframe['DELTA_CHI2']
     data['A'] = dataframe['A']
@@ -163,29 +201,23 @@ if __name__ == "__main__":
 
     args = collect_argparser()
 
-    spectra_name = args.coadd
-    zbest_name = args.zbest
-    target_version = args.target_version
-    target_selection = args.target_selection
-    output_name = args.output
-
     # Param for the MgII fitter see desispec/py/desispec/mgii_afterburner.py for additional informations
     param_mgii_fitter = {'lambda_width':args.lambda_width, 'max_sigma':args.max_sigma, 'min_sigma':args.min_sigma,
                          'min_deltachi2':args.min_deltachi2, 'min_signifiance_A':args.min_signifiance_A, 'min_A':args.min_A}
 
 
-    if os.path.isfile(spectra_name) & os.path.isfile(zbest_name):
+    if os.path.isfile(args.coadd) & os.path.isfile(args.zbest):
         # open best fit file generated by redrock
-        zbest_file = fitsio.FITS(zbest_name)
+        zbest_file = fitsio.FITS(args.zbest)
         zbest = zbest_file[1]
         fibermap = zbest_file[2]
         index_sorted = np.argsort(fibermap['TARGETID'][:500]) # in zbest targetid are sorted, it is not the case in the fibermap
 
-        if target_version == 'SV1':
+        if args.target_version == 'SV1':
             DESI_TARGET = 'SV1_DESI_TARGET'
-        elif target_version == 'SV3':
+        elif args.target_version == 'SV3':
             DESI_TARGET = 'SV3_DESI_TARGET'
-        elif target_version == 'MAIN':
+        elif args.target_version == 'MAIN':
             DESI_TARGET = 'DESI_TARGET'
         else:
             log.error("**** CHOOSE CORRECT TARGET_VERSION FLAG (SV1 / SV3 / MAIN) ****")
@@ -194,25 +226,25 @@ if __name__ == "__main__":
         is_qso_target = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
         sel_RR = (zbest['SPECTYPE'][:] == 'QSO')
 
-        if target_selection == 'restricted':
+        if args.target_selection == 'restricted':
             # Run MgII fitter only on QSO targets with SPECTYPE!=QSO objects to save time !
             sel_to_mgii = is_qso_target & ~sel_RR
-        elif target_selection == 'qso_targets':
+        elif args.target_selection == 'qso_targets':
             # Run MgII fitter only on QSO targets
             sel_to_mgii = is_qso_target
-        elif target_selection == 'all_targets':
+        elif args.target_selection == 'all_targets':
             # Run MgII fitter only on all targets
             sel_to_mgii = np.ones(500, dtype='bool')
 
         log.info(f"Nbr objetcs for mgii: {sel_to_mgii.sum()}")
-        QSO_from_MGII = select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, spectra_name, zbest_name, param_mgii_fitter, DESI_TARGET)
-        log.info(f"Selected with mgii: {QSO_from_MGII.shape[0]}")
+        QSO_from_MGII = select_targets_with_mgii_fitter(zbest, fibermap, index_sorted, sel_to_mgii, args.coadd, args.zbest, param_mgii_fitter, DESI_TARGET, args.save_target)
+        log.info(f"Number of targets saved : {QSO_from_MGII.shape[0]} -- Selected with mgii: {QSO_from_MGII['IS_QSO_MGII'].sum()}")
 
         # close file !!
         zbest_file.close()
 
-        save_dataframe_to_fits(QSO_from_MGII, output_name, DESI_TARGET)
+        save_dataframe_to_fits(QSO_from_MGII, args.output, DESI_TARGET)
 
 
     else: # file for the consider Tile / Night / petal does not exist
-        log.error(f"There is problem with files: {spectra_name} or {zbest_name}")
+        log.error(f"There is problem with files: {args.coadd} or {args.zbest}")
