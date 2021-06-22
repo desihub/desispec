@@ -30,6 +30,7 @@ except KeyError:
     model_QN_path = "/global/cfs/cdirs/desi/science/lya/qn_models/boss_dr12/qn_train_coadd_indtrain_0_0_boss10.h5"
 model_QN = load_model(model_QN_path)
 
+
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Run QN and rerun RR on a coadd file to find true quasars with correct redshift")
 
@@ -46,6 +47,11 @@ def collect_argparser():
                         help="on each sample the mgII fitter is perform: " +
                              "restricted (QSO targets with SPECTYPE==GALAXY + QSO targets with SPECTYPE==QSO and |z_QN - z_RR| < 0.05)" +
                              " / all_targets (All targets in the coadd file)")
+    parser.add_argument("--save_target", type=str, required=False, default="restricted",
+                        help="which objects will be saved in the output files:" +
+                             "restricted (objects which are identify as QSO by QN and where we have a new run of RR )" +
+                             " / all (All objects which are tested by the mgII fitter)" +
+                             " --> To have 500 objects in the ouput file: set --target_selection all_targets --save_target all")
 
     # for QN
     parser.add_argument("--c_thresh", type=float, required=False, default=0.5,
@@ -85,10 +91,9 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     Returns:
         redshift (numpy array): Array containing best redshift estimation by the new run of RR
         err_redshift (numpy array): Array containing the associated error for the redshift
-        coeffs (list): List containing the coefficient for the best fit given by RR
-                       even we work only with QSO template, it has a "shape" (not real shape since it is a list)
-                       of redshift.size x 10
-                       WARNING: they are converted to list (with .tolist()) to be added in the pandas dataframe
+        coeffs (numpy array): array containing the coefficient for the best fit given by RR
+                       even we work only with QSO template, it has a "shape" of redshift.size x 10
+                        WARNING: they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
     """
 
 
@@ -123,17 +128,16 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
          # Returns:
          #    redshift (numpy array): Array containing best redshift estimation by the new run of RR
          #    err_redshift (numpy array): Array containing the associated error for the redshift
-         #    coeffs (list): List containing the coefficient for the best fit given by RR
-         #                   even we work only with QSO template, it has a "shape" (not real shape since it is a list)
-         #                   of redshift.size x 10
-         #                    WARNING: they are converted to list (with .tolist()) to be added in the pandas dataframe """
+         #    coeffs (numpy array): array containing the coefficient for the best fit given by RR
+         #                   even we work only with QSO template, it has a "shape" of redshift.size x 10
+         #                    WARNING: they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
 
         with fitsio.FITS(filename_zbest) as zbest:
             redshift = zbest[1]['Z'][:]
             err_redshift = zbest[1]['ZERR'][:]
             coeffs = np.zeros((redshift.size, 10))
             coeffs[:, :4] = zbest[1]['COEFF'][:]
-        return redshift, err_redshift, coeffs.tolist()
+        return redshift, err_redshift, coeffs
 
     write_prior_for_RR(targetid, z_prior, filename_priors)
 
@@ -163,7 +167,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     return redshift, err_redshift, coeffs
 
 
-def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR):
+def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR, save_target):
     """
     Run QuasarNet to the object with index_to_QN == True from spectra_name.
     Then, Re-Run RedRock for the targetids which are selected by QN as a QSO.
@@ -178,10 +182,10 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TAR
         param_QN (dict): contains info for QN as n_thresh and c_thresh
         param_RR (dict): contains info to re-run RR as the template_filename,
                         filename_priors, filename_output_rerun_RR, filename_zbest_rerun_RR
+        save_target (str) : restricted (save only IS_QSO_QN_NEW_RR==true targets) / all (save all the sample)
     Returns:
         QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
     """
-
 
     ## INFO FOR QUASAR NET
     lines = ['LYA','CIV(1548)','CIII(1909)', 'MgII(2796)','Hbeta','Halpha']
@@ -212,27 +216,55 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TAR
         index_with_QN_with_no_pb = sel_QN[sel_to_QN][index_with_QN]
 
         log.info(f"RUN RR on {sel_QN.sum()}")
-        if sel_QN.sum() == 0: # If there is no quasar we don't apply RR: error with RR if targetid == ''
-            QSO_sel = pd.DataFrame()
-        else:
+        if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
             redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, zbest['TARGETID'][:][sel_QN], zbest_QN[index_with_QN_with_no_pb], param_RR)
 
-            QSO_sel = pd.DataFrame()
-            QSO_sel['TARGETID'] = zbest['TARGETID'][:][sel_QN]
-            QSO_sel['RA'] = fibermap['TARGET_RA'][:500][index_sorted][sel_QN]
-            QSO_sel['DEC'] = fibermap['TARGET_DEC'][:500][index_sorted][sel_QN]
+        QSO_sel = pd.DataFrame()
 
-            QSO_sel['Z'] = redshift
-            QSO_sel['ZERR'] = err_redshift
-            QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][:500][index_sorted][sel_QN]
-            QSO_sel['COEFFS'] = coeffs
+        if save_target == 'restricted':
+            index_to_save = sel_QN.copy()
+            index_to_save_QN_result = sel_QN[sel_to_QN]
+        elif save_target == 'all':
+            index_to_save = sel_to_QN.copy()
+            # save every object with nan value if it is necessary --> there are sel_to_QN.sum() objects to save
+            # index_with_QN is size of sel_to_QN.sum()
+            index_to_save_QN_result = np.ones(sel_to_QN.sum(), dtype=bool)
+        else:
+            log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
 
-            QSO_sel['SPECTYPE'] = zbest['SPECTYPE'][:][sel_QN]
-            QSO_sel['Z_RR'] = zbest['Z'][:][sel_QN]
-            QSO_sel['Z_QN'] = zbest_QN[index_with_QN_with_no_pb]
-            QSO_sel['C_LINES'] = c_line.T[index_with_QN_with_no_pb].tolist()
-            QSO_sel['Z_LINES'] = z_line.T[index_with_QN_with_no_pb].tolist()
+
+        QSO_sel['TARGETID'] = zbest['TARGETID'][:][index_to_save]
+        QSO_sel['RA'] = fibermap['TARGET_RA'][:500][index_sorted][index_to_save]
+        QSO_sel['DEC'] = fibermap['TARGET_DEC'][:500][index_sorted][index_to_save]
+        QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][:500][index_sorted][index_to_save]
+        QSO_sel['IS_QSO_QN_NEW_RR'] = sel_QN[index_to_save]
+        QSO_sel['SPECTYPE'] = zbest['SPECTYPE'][:][index_to_save]
+        QSO_sel['Z_RR'] = zbest['Z'][:][index_to_save]
+
+        tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
+        tmp_arr[index_with_QN] = zbest_QN
+        QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
+
+        tmp_arr = np.NaN*np.ones((6, sel_to_QN.sum()))
+        tmp_arr[:, index_with_QN] = c_line
+        QSO_sel['C_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
+
+        tmp_arr = np.NaN*np.ones((6, sel_to_QN.sum()))
+        tmp_arr[:, index_with_QN] = z_line
+        QSO_sel['Z_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
+
+        tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redshift
+        QSO_sel['Z_NEW'] = tmp_arr[index_to_save_QN_result]
+
+        tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = err_redshift
+        QSO_sel['ZERR_NEW'] = tmp_arr[index_to_save_QN_result]
+
+        tmp_arr = np.NaN*np.ones((sel_to_QN.sum(), 10))
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb], :] = coeffs
+        QSO_sel['COEFFS'] = tmp_arr[index_to_save_QN_result].tolist()
 
     return QSO_sel
 
@@ -249,9 +281,9 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     Returns:
         None
     """
-    # Ok we cannot use dataframe.to_records() car les coeffs/c_lines sont sauvegarder sous forme de list de type objet et ne peux pas etre convertit ..
-    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z','f8'), ('ZERR', 'f4'), (DESI_TARGET, 'i8'),
-                                               ('COEFFS', ('f4', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'),
+    # Ok we cannot use dataframe.to_records() since coeffs/c_lines are saved in a list form and cannot be easily converted.
+    data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z_NEW','f8'), ('ZERR_NEW', 'f4'), (DESI_TARGET, 'i8'),
+                                               ('COEFFS', ('f4', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'), ('IS_QSO_QN_NEW_RR', '?'),
                                                ('C_LYA', 'f4'), ('C_CIV', 'f4'), ('C_CIII', 'f4'), ('C_MgII', 'f4'), ('C_Hbeta', 'f4'), ('C_Halpha', 'f4'),
                                                ('Z_LYA', 'f4'), ('Z_CIV', 'f4'), ('Z_CIII', 'f4'), ('Z_MgII', 'f4'), ('Z_Hbeta', 'f4'), ('Z_Halpha', 'f4')])
 
@@ -259,12 +291,13 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['RA'] = dataframe['RA']
     data['DEC'] = dataframe['DEC']
 
-    data['Z'] = dataframe['Z']
-    data['ZERR'] = dataframe['ZERR']
+    data['Z_NEW'] = dataframe['Z_NEW']
+    data['ZERR_NEW'] = dataframe['ZERR_NEW']
     data[DESI_TARGET] = dataframe[DESI_TARGET]
     data['COEFFS'] = np.array([np.array(dataframe['COEFFS'][i]) for i in range(dataframe.shape[0])])
     data['SPECTYPE'] = dataframe['SPECTYPE']
     data['Z_RR'] = dataframe['Z_RR']
+    data['IS_QSO_QN_NEW_RR'] = dataframe['IS_QSO_QN_NEW_RR']
 
     data['Z_QN'] = dataframe['Z_QN']
     data['C_LYA'] = np.array([dataframe['C_LINES'][i][0] for i in range(dataframe.shape[0])])
@@ -293,14 +326,8 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
 
 if __name__ == "__main__":
+
     args = collect_argparser()
-
-    spectra_name = args.coadd
-    zbest_name = args.zbest
-    target_version = args.target_version
-    target_selection = args.target_selection
-    output_name = args.output
-
 
     ## Selection param for QuasarNet
     param_QN = {'c_thresh':args.c_thresh, 'n_thresh':args.n_thresh}
@@ -311,39 +338,39 @@ if __name__ == "__main__":
                 'filename_zbest_rerun_RR':args.filename_zbest_rerun_RR,
                 'delete_RR_output':args.delete_RR_output}
 
-    if os.path.isfile(spectra_name) & os.path.isfile(zbest_name):
+    if os.path.isfile(args.coadd) & os.path.isfile(args.zbest):
         # open best fit file generated by redrock
-        zbest_file = fitsio.FITS(zbest_name)
+        zbest_file = fitsio.FITS(args.zbest)
         zbest = zbest_file[1]
         fibermap = zbest_file[2]
         index_sorted = np.argsort(fibermap['TARGETID'][:500]) # in zbest targetid are sorted, it is not the case in the fibermap
 
-        if target_version == 'SV1':
+        if args.target_version == 'SV1':
             DESI_TARGET = 'SV1_DESI_TARGET'
-        elif target_version == 'SV3':
+        elif args.target_version == 'SV3':
             DESI_TARGET = 'SV3_DESI_TARGET'
-        elif target_version == 'MAIN':
+        elif args.target_version == 'MAIN':
             DESI_TARGET = 'DESI_TARGET'
         else:
             log.error("**** CHOOSE CORRECT TARGET_VERSION FLAG (SV1 / SV3 / MAIN) ****")
             sys.exit()
 
-        if target_selection == 'restricted':
+        if args.target_selection == 'restricted':
             sel_to_QN = fibermap[DESI_TARGET][:500][index_sorted] & 2**2 != 0
-        elif target_selection == 'all_targets':
+        elif args.target_selection == 'all_targets':
             sel_to_QN = np.ones(500, dtype=bool)
         else:
             log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (restricted / all_targets) ****")
             sys.exit()
 
         log.info(f"Nbr objetcs for QN: {sel_to_QN.sum()}")
-        QSO_from_QN = selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TARGET, spectra_name, param_QN, param_RR)
-        log.info(f"Selected with QN + new_Z: {QSO_from_QN.shape[0]}")
+        QSO_from_QN = selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TARGET, args.coadd, param_QN, param_RR, args.save_target)
+        log.info(f"Number of targets saved : {QSO_from_QN.shape[0]} -- Selected with mgii: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
 
         # close file !!
         zbest_file.close()
 
-        save_dataframe_to_fits(QSO_from_QN, output_name, DESI_TARGET)
+        save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
 
     else: # file for the consider Tile / Night / petal does not exist
-        log.error(f"There is problem with files: {spectra_name} or {zbest_name}")
+        log.error(f"There is problem with files: {args.coadd} or {args.zbest}")
