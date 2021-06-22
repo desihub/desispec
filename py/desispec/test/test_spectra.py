@@ -131,11 +131,10 @@ class TestSpectra(unittest.TestCase):
 
     def test_io(self):
 
-        # manually create the spectra and write.
+        # manually create the spectra and write
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
             ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
-            fibermap=self.fmap1, meta=self.meta, extra=self.extra,
-            extra_catalog=self.extra_catalog)
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra)
 
         self.verify(spec, self.fmap1)
 
@@ -143,6 +142,18 @@ class TestSpectra(unittest.TestCase):
         assert(path == os.path.abspath(self.fileio))
 
         # read back in and verify
+        comp = read_spectra(self.fileio)
+        self.verify(comp, self.fmap1)
+
+        # test I/O wth the extra_catalog HDU enabled
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra,
+            extra_catalog=self.extra_catalog)
+
+        path = write_spectra(self.fileio, spec)
+        assert(path == os.path.abspath(self.fileio))
+
         comp = read_spectra(self.fileio)
         self.verify(comp, self.fmap1)
 
