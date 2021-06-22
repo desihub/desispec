@@ -145,7 +145,7 @@ class TestSpectra(unittest.TestCase):
         comp = read_spectra(self.fileio)
         self.verify(comp, self.fmap1)
 
-        # test I/O wth the extra_catalog HDU enabled
+        # test I/O with the extra_catalog HDU enabled
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
             ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
             fibermap=self.fmap1, meta=self.meta, extra=self.extra,
@@ -155,6 +155,7 @@ class TestSpectra(unittest.TestCase):
         assert(path == os.path.abspath(self.fileio))
 
         comp = read_spectra(self.fileio)
+        self.assertTrue(comp.extra_catalog is not None)
         self.verify(comp, self.fmap1)
 
 
