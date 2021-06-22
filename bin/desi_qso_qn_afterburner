@@ -137,10 +137,14 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
 
     write_prior_for_RR(targetid, z_prior, filename_priors)
 
+    # Info: in the case where targetid is -7008279, we cannot use it at first element of the targetid list
+    # otherwise RR required at least one argument for --targetids .. (it is a known problem in python this comes from -)
+    # see for example https://webdevdesigner.com/q/can-t-get-argparse-to-read-quoted-string-with-dashes-in-it-47556/
+    # To figure out with this, we just need to add a space before the -
 
     argument_for_rerun_RR = [spectra_name,
                              '--templates', template_filename,
-                             '--targetids', ",".join(targetid.astype(str)),
+                             f'--targetids', ' ' + ",".join(reversed(targetid.astype(str))),
                              '--priors', filename_priors,
                              '--output', filename_output_rerun_RR,
                              '--zbest', filename_zbest_rerun_RR]
