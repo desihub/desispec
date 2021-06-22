@@ -122,11 +122,16 @@ class TestSpectra(unittest.TestCase):
             nt.assert_array_almost_equal(spec.ivar[band], self.ivar[band])
             nt.assert_array_equal(spec.mask[band], self.mask[band])
             nt.assert_array_almost_equal(spec.resolution_data[band], self.res[band])
+            if spec.extra is not None:
+                for key, val in self.extra[band].items():
+                    nt.assert_array_almost_equal(spec.extra[band][key], val)
+        if spec.extra_catalog is not None:
+            assert(np.all(spec.extra_catalog == self.extra_catalog))
 
 
     def test_io(self):
 
-        # manually create the spectra and write.
+        # manually create the spectra and write
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
             ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
             fibermap=self.fmap1, meta=self.meta, extra=self.extra)
@@ -138,6 +143,19 @@ class TestSpectra(unittest.TestCase):
 
         # read back in and verify
         comp = read_spectra(self.fileio)
+        self.verify(comp, self.fmap1)
+
+        # test I/O with the extra_catalog HDU enabled
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra,
+            extra_catalog=self.extra_catalog)
+
+        path = write_spectra(self.fileio, spec)
+        assert(path == os.path.abspath(self.fileio))
+
+        comp = read_spectra(self.fileio)
+        self.assertTrue(comp.extra_catalog is not None)
         self.verify(comp, self.fmap1)
 
 
