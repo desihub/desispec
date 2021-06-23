@@ -396,7 +396,9 @@ class Spectra(object):
         Returns:
             nothing (object updated in place).
 
-        Note: does not support updating extra_catalog
+        Note: if fibermap, scores and extra_catalog exist in the new data, they
+        are appended to the existing tables. If those new tables have different columns,
+        only columns with identical names will be appended. Spectra.meta is unchanged.
         """
 
         # Does the other Spectra object have any data?
@@ -503,6 +505,16 @@ class Spectra(object):
             newfmap = encode_table(np.zeros( (nold + nnew, ),
                                    dtype=self.fibermap.dtype))
         
+        newscores = None
+        if self.scores is not None:
+            newscores = encode_table(np.zeros( (nold + nnew, ),
+                                   dtype=self.scores.dtype))
+
+        newextra_catalog = None
+        if self.extra_catalog is not None:
+            newextra_catalog = encode_table(np.zeros( (nold + nnew, ),
+                                   dtype=self.extra_catalog.dtype))
+
         newwave = {}
         newflux = {}
         newivar = {}
@@ -543,7 +555,10 @@ class Spectra(object):
 
         if nold > 0:
             # We have some data (i.e. we are not starting with an empty Spectra)
-            newfmap[:nold] = self.fibermap
+            for newtable, original_table in zip([newfmap, newscores, newextra_catalog],
+                                           [self.fibermap, self.scores, self.extra_catalog]):
+                if original_table is not None:
+                    newtable[:nold] = original_table
 
             for b in self.bands:
                 newflux[b][:nold,:] = self.flux[b]
@@ -583,13 +598,16 @@ class Spectra(object):
         # Append new spectra
 
         if nnew > 0:
-            if set(newfmap.keys()) == set(other.fibermap.keys()):
-                newfmap[nold:] = other.fibermap[indx_new]
-            else:
-                # if fibermaps contents do not match, still merge what we can
-                for k in newfmap.keys():
-                    if k in other.fibermap.keys():
-                        newfmap[k][nold:] = other.fibermap[k][indx_new]
+            for newtable, othertable in zip([newfmap, newscores, newextra_catalog],
+                                           [other.fibermap, other.scores, other.extra_catalog]):
+                if othertable is not None:
+                    if newtable.dtype == othertable.dtype:
+                        newtable[nold:] = othertable[indx_new]
+                    else:
+                    #- if table contents do not match, still merge what we can, based on key names
+                    # (possibly with numpy automatic casting)
+                        for k in set(newtable.keys()).intersection(set(othertable.keys())):
+                            newtable[k][nold:] = othertable[k][indx_new]
 
             for b in other.bands:
                 newflux[b][nold:,:] = other.flux[b][indx_new].astype(self._ftype)
@@ -624,6 +642,8 @@ class Spectra(object):
         self.resolution_data = newres
         self.R = newR
         self.extra = newextra
+        self.scores = newscores
+        self.extra_catalog = newextra_catalog
 
         return
 
