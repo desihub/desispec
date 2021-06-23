@@ -87,6 +87,53 @@ def parse(options=None):
     return args
 
 
+def get_targ_info(targ_in):
+    """
+    Returns information from targeting.
+
+    Args:
+        targ_in: dictionary with a single value per key (either built from header
+                    or from a Table).
+
+    Returns:
+        targ_out: dictionary with SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME.
+    """
+    targ_keys = list(targ_in.keys())
+    targ_out = {
+        "SURVEY" : "unknown",
+        "GOALTYPE" : "unknown",
+        "FAPRGRM" : "unknown",
+        "FAFLAVOR" : "unknown",
+        "MINTFRAC" : 0.9,
+        "GOALTIME" : 0.,
+    }
+    #
+    for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
+        if k in targ_keys :
+            targ_out[k] = targ_in[k].strip().lower()
+    for k in ["MINTFRAC", "GOALTIME"]:
+        if k in targ_keys :
+            targ_out[k] = targ_in[k]
+    #
+    if "FAFLAVOR" in targ_keys :
+        faflavor=targ_in["FAFLAVOR"].strip().lower()
+        #
+        if targ_out["FAPRGRM"] == "unknown"  :
+            targ_out["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
+        #
+        if targ_out["SURVEY"]=="unknown" :
+            if faflavor.find("sv1")>=0. : targ_out["SURVEY"]="sv1"
+            elif faflavor.find("sv2")>=0. : targ_out["SURVEY"]="sv2"
+            elif faflavor.find("cmx")>=0. : targ_out["SURVEY"]="cmx"
+        #
+    if targ_out["GOALTYPE"]=="unknown" :
+        if targ_out["FAPRGRM"].find("qso")>=0. or targ_out["FAPRGRM"].find("lrg")>=0.  or targ_out["FAPRGRM"].find("elg")>=0. or targ_out["FAPRGRM"].find("dark")>=0. :
+            targ_out["GOALTYPE"]="dark"
+        elif targ_out["FAPRGRM"].find("mws")>=0. or targ_out["FAPRGRM"].find("bgs")>=0. or targ_out["FAPRGRM"].find("bright")>=0. :
+            targ_out["GOALTYPE"]="bright"
+    #
+    return targ_out
+
 
 def read_gfa_data(gfa_proc_dir) :
     """
