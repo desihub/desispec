@@ -287,7 +287,10 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     colnames = list(summary_rows[0].keys())
     for ii,row in enumerate(summary_rows):
         if len(row.keys()) != len(colnames) :
-            log.error("colnames={} but row={}".format(colnames,row))
+            log.info("")
+            log.info(summary_rows)
+            log.info("")
+            log.error(f"row {ii} is row={row} but differs from colnames={colnames}")
             sys.exit(12)
 
     cam_summary = Table(rows=summary_rows, names=colnames)
