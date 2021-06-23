@@ -97,7 +97,7 @@ def get_targ_info(targ_in):
                     or from a Table).
 
     Returns:
-        targ_out: dictionary with SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME.
+        targ_out: dictionary with SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME, EFFTIME_ETC.
     """
     targ_keys = list(targ_in.keys())
     targ_out = {
@@ -107,12 +107,13 @@ def get_targ_info(targ_in):
         "FAFLAVOR" : "unknown",
         "MINTFRAC" : 0.9,
         "GOALTIME" : 0.,
+        "EFFTIME_ETC" : 0.
     }
     #
     for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
         if k in targ_keys :
             targ_out[k] = targ_in[k].strip().lower()
-    for k in ["MINTFRAC", "GOALTIME"]:
+    for k in ["MINTFRAC", "GOALTIME", "EFFTIME_ETC"]:
         if k in targ_keys :
             targ_out[k] = targ_in[k]
     #
@@ -352,9 +353,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                     entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
                 entry['SEEING_ETC']=0.
-                entry['EFFTIME_ETC']=0.
 
-                # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
+                # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME, EFFTIME_ETC
                 targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
                 targ_out = get_targ_info(targ_dict)
                 for k in list(targ_out.keys()):
@@ -406,10 +406,9 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG")
     exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS")
 
-    if 'TSNR2_GPBDARK' in exp_summary.colnames :
-        exp_summary['GPB_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_GPBDARK'],"GPBDARK")
-        exp_summary['GPB_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_GPBBRIGHT'],"GPBBRIGHT")
-        exp_summary['GPB_EFFTIME_BACKUP'] = tsnr2_to_efftime(exp_summary['TSNR2_GPBBACKUP'],"GPBBACKUP")
+    for program in ['DARK','BRIGHT','BACKUP']:
+        if f'TSNR2_GPB{program}' in exp_summary.colnames :
+            exp_summary[f'GPB_EFFTIME_{program}']   = tsnr2_to_efftime(exp_summary[f'TSNR2_GPB{program}'],f'GPB{program}')
 
     if 'TSNR2_LYA' in exp_summary.colnames :
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA")
@@ -422,8 +421,12 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
     # EFFTIME SPEC FOR GOALTYPE backup determined by TSNR2_GPBBACKUP.
+    # If no 'GPB_EFFTIME_BACKUP' then default to the BGS time
     ii = (exp_summary['GOALTYPE']=='backup')
-    exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
+    if 'GPB_EFFTIME_BACKUP' in exp_summary:
+        exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
+    else:
+        exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
     # sort table rows
     ii = np.argsort(exp_summary['EXPID'])
@@ -435,7 +438,10 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
     # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+    if 'GPB_EFFTIME_BACKUP' in exp_summary:
+        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+    else:
+        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
@@ -580,10 +586,11 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['TILEID'] = np.int32(tileid)
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
     entry['AIRMASS'] = np.float32(hdr['AIRMASS'])
-    if 'EBV' in fibermap.dtype.names :
-        entry['EBV'] = np.median(fibermap["EBV"])
-    else :
-        entry['EBV'] = 0.
+    entry['EBV'] = 0.
+    if 'EBV' in fibermap.dtype.names:
+        sel = (fibermap["EBV"] > 0)
+        if sel.sum() > 0:
+            entry['EBV'] = np.median(fibermap['EBV'][sel])
     if "ACQFWHM" in hdr :
         # FWHM of the guide star PSF, in arcseconds, measured in the initial acquisition image.
         entry['SEEING_ETC'] = np.float32(hdr['ACQFWHM'])
