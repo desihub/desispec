@@ -635,43 +635,12 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         if key.startswith('TSNR2_ALPHA'):
             entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
 
-    #- Add information from targeting
+    #- Add information from targeting (SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME)
     fibermap_header = cframe_hdulist["FIBERMAP"].header
-    for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
-        if k in fibermap_header :
-            entry[k] = fibermap_header[k].strip().lower()
-        else :
-            entry[k] = "unknown"
-
-    if "FAFLAVOR" in fibermap_header :
-        faflavor=fibermap_header["FAFLAVOR"].strip().lower()
-
-        if entry["FAPRGRM"] == "unknown"  :
-            entry["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
-
-        if entry["SURVEY"]=="unknown" :
-            if faflavor.find("sv1")>=0. : entry["SURVEY"]="sv1"
-            elif faflavor.find("sv2")>=0. : entry["SURVEY"]="sv2"
-            elif faflavor.find("cmx")>=0. : entry["SURVEY"]="cmx"
-
-    if entry["GOALTYPE"]=="unknown" :
-        if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0.  or entry["FAPRGRM"].find("elg")>=0. or entry["FAPRGRM"].find("dark")>=0. :
-            entry["GOALTYPE"]="dark"
-        elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
-            entry["GOALTYPE"]="bright"
-
-    k="MINTFRAC"
-    if k in fibermap_header :
-        entry[k] = fibermap_header[k]
-    else :
-        entry[k] = 0.9
-
-
-    k="GOALTIME"
-    if k in fibermap_header :
-        entry[k] = fibermap_header[k]
-    else :
-        entry[k] = 0.
+    targ_dict = {key : fibermap_header[key] for key in fibermap_header.keys()}
+    targ_out = get_targ_info(targ_dict)
+    for k in list(targ_out.keys()):
+        entry[k] = targ_out[k]
 
     cframe_hdulist.close()
     return entry
