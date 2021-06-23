@@ -346,6 +346,9 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 entry["TILEID"]=prod_table["TILEID"][i]
                 entry["AIRMASS"]=0.
                 entry["EBV"]=0.
+                # EBVFAC from https://github.com/desihub/fiberassign/blob/466a99b926892be60c3c9679f521785e865ce315/py/fiberassign/fba_launch_io.py#L1658
+                if "EBVFAC" in prod_table.dtype.names:
+                    entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
                 entry['SEEING_ETC']=0.
                 entry['EFFTIME_ETC']=0.
