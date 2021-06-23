@@ -52,7 +52,9 @@ def parse(options=None):
     parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
     parser.add_argument('--prod', type = str, default = None, required=False,
-                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  ' +
+                               'or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. ' +
+                               'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
     parser.add_argument('--expids', type = str, default = None, required=False,
@@ -70,7 +72,8 @@ def parse(options=None):
     parser.add_argument('--tile-completeness', type = str, default = None, required=False,
                         help = 'Output tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
-                        help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits (optional, will not affect exposures after SV1)')
+                        help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits ' +
+                               '(optional, will not affect exposures after SV1)')
     parser.add_argument('--gfa-proc-dir', type = str, default = None, required=False,
                         help = 'Directory where the GFA processing from Aaron can be found, like /global/cfs/cdirs/desi/survey/GFA/')
     parser.add_argument('--skymags', type = str, default = None, required=False,
@@ -129,7 +132,8 @@ def get_targ_info(targ_in):
             elif faflavor.find("cmx")>=0. : targ_out["SURVEY"]="cmx"
         #
     if targ_out["GOALTYPE"]=="unknown" :
-        if targ_out["FAPRGRM"].find("qso")>=0. or targ_out["FAPRGRM"].find("lrg")>=0.  or targ_out["FAPRGRM"].find("elg")>=0. or targ_out["FAPRGRM"].find("dark")>=0. :
+        if targ_out["FAPRGRM"].find("qso")>=0. or targ_out["FAPRGRM"].find("lrg")>=0. or \
+           targ_out["FAPRGRM"].find("elg")>=0. or targ_out["FAPRGRM"].find("dark")>=0. :
             targ_out["GOALTYPE"]="dark"
         elif targ_out["FAPRGRM"].find("mws")>=0. or targ_out["FAPRGRM"].find("bgs")>=0. or targ_out["FAPRGRM"].find("bright")>=0. :
             targ_out["GOALTYPE"]="bright"
@@ -307,7 +311,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE","MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
+        for k in ["NIGHT","EXPID","TILEID","AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE",
+                  "MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
             row[k]=cam_summary[k][ii][0]
         # mean
         row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
@@ -407,10 +412,10 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS")
 
     for program in ['DARK','BRIGHT','BACKUP']:
-        if f'TSNR2_GPB{program}' in exp_summary.colnames :
+        if f'TSNR2_GPB{program}' in exp_summary.dtype.names:
             exp_summary[f'GPB_EFFTIME_{program}']   = tsnr2_to_efftime(exp_summary[f'TSNR2_GPB{program}'],f'GPB{program}')
 
-    if 'TSNR2_LYA' in exp_summary.colnames :
+    if 'TSNR2_LYA' in exp_summary.dtype.names:
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA")
 
     # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG.
@@ -423,7 +428,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     # EFFTIME SPEC FOR GOALTYPE backup determined by TSNR2_GPBBACKUP.
     # If no 'GPB_EFFTIME_BACKUP' then default to the BGS time
     ii = (exp_summary['GOALTYPE']=='backup')
-    if 'GPB_EFFTIME_BACKUP' in exp_summary:
+    if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
     else:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
@@ -439,9 +444,22 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     # sort table columns
     if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names:
-        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+                  'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
+                  'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK',
+                  'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
+                  'TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA',
+                  'FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
+                  'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
+                  'EFFTIME_BACKUP_GFA']
     else:
-        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+                  'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
+                  'TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA',
+                  'FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA',
+                  'FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
+                  'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
+                  'EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
@@ -491,7 +509,8 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),1)
                 except ValueError as e :
                     log.warning("cannot change number of digits for col {}: {}".format(k,e))
-            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("FIBERFAC")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 or k.find("AIRMASS")>=0 or k.find("EBV")>=0 :
+            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("FIBERFAC")>=0 or \
+               k.find("TRANS")>=0 or k.find("MAG")>=0 or k.find("AIRMASS")>=0 or k.find("EBV")>=0 :
                 try :
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),3)
                 except ValueError as e :
@@ -840,7 +859,10 @@ def main():
 
         # write result after every night.
         if len(rows)>0 :
-            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod,add_missing=add_missing)
+            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,efftime_config,
+                                                                         preexisting_tsnr2_expid_table,
+                                                                         preexisting_tsnr2_frame_table,args.prod,
+                                                                         add_missing=add_missing)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(rows),tmpfilename))
 
@@ -919,7 +941,10 @@ def main():
         if multinode:
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
 
-        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod,add_missing=add_missing)
+        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,
+        #                                                               preexisting_tsnr2_expid_table,
+        #                                                               preexisting_tsnr2_frame_table,args.prod,
+        #                                                               add_missing=add_missing)
 
         if args.skymags is not None :
             skymags_table = Table.read(args.skymags)
@@ -1008,7 +1033,8 @@ def main():
 
         # end of loop on nights
         if len(tsnr2_frame_table)>0 :
-            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,output_csv_filename=args.outfile.replace(".fits",".csv"))
+            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,
+                                 output_csv_filename=args.outfile.replace(".fits",".csv"))
 
             # remove temporary file if successful
             if os.path.isfile(args.outfile) :
