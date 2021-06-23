@@ -349,12 +349,12 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
                 entry['SEEING_ETC']=0.
                 entry['EFFTIME_ETC']=0.
-                entry["SURVEY"]="unknown"
-                entry["GOALTYPE"]="unknown"
-                entry["MINTFRAC"]=0.9
-                entry["FAPRGRM"]="unknown"
-                entry["FAFLAVOR"]="unknown"
-                entry["GOALTIME"]=0.
+
+                # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
+                targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
+                targ_out = get_targ_info(targ_dict)
+                for k in list(targ_out.keys()):
+                    entry[k] = targ_out[k]
 
                 vals=[]
                 for j,k in enumerate(exp_summary.dtype.names) :
