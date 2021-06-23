@@ -285,7 +285,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     #- Create camera summary table; specify names to preserve column order
     colnames = list(summary_rows[0].keys())
-    for row in summary_rows :
+    for ii,row in enumerate(summary_rows):
         if len(row.keys()) != len(colnames) :
             log.error("colnames={} but row={}".format(colnames,row))
             sys.exit(12)
@@ -414,6 +414,9 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     for program in ['DARK','BRIGHT','BACKUP']:
         if f'TSNR2_GPB{program}' in exp_summary.dtype.names:
             exp_summary[f'GPB_EFFTIME_{program}']   = tsnr2_to_efftime(exp_summary[f'TSNR2_GPB{program}'],f'GPB{program}')
+        else:
+            exp_summary[f'TSNR2_GPB{program}'] = 0.
+            exp_summary[f'GPB_EFFTIME_{program}'] = 0.
 
     if 'TSNR2_LYA' in exp_summary.dtype.names:
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA")
@@ -428,7 +431,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     # EFFTIME SPEC FOR GOALTYPE backup determined by TSNR2_GPBBACKUP.
     # If no 'GPB_EFFTIME_BACKUP' then default to the BGS time
     ii = (exp_summary['GOALTYPE']=='backup')
-    if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names:
+    if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names and len(ii) > 0 and np.any(exp_summary['EFFTIME_SPEC'][ii]>0.):
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
     else:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
@@ -442,24 +445,14 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
-    # sort table columns
-    if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names:
-        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
-                  'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
-                  'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK',
-                  'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
-                  'TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA',
-                  'FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
-                  'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
-                  'EFFTIME_BACKUP_GFA']
-    else:
-        neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
-                  'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
-                  'TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA',
-                  'FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA',
-                  'FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
-                  'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
-                  'EFFTIME_BACKUP_GFA']
+    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+              'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
+              'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK',
+              'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
+              'TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA',
+              'FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
+              'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
+              'EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
