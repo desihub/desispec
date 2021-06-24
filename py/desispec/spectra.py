@@ -247,6 +247,64 @@ class Spectra(object):
             return 0
 
 
+    def _get_slice(self, index, bands=None):
+        """Slice spectra by index.
+        Args:
+            bands (list): optional list of bands to select.
+
+        Note: This function is intended to be private,
+              to be used by __getitem__() and select().
+        """
+        if isinstance(index, numbers.Integral):
+            index = slice(index, index+1)
+
+        if bands is None:
+            bands = copy.copy(self.bands)
+        flux = dict()
+        ivar = dict()
+        wave = dict()
+        mask = dict() if self.mask is not None else None
+        rdat = dict() if self.resolution_data is not None else None
+        extra = dict() if self.extra is not None else None
+
+        for band in bands:
+            flux[band] = self.flux[band][index].copy()
+            ivar[band] = self.ivar[band][index].copy()
+            wave[band] = self.wave[band].copy()
+            if self.mask is not None:
+                mask[band] = self.mask[band][index].copy()
+            if self.resolution_data is not None:
+                rdat[band] = self.resolution_data[band][index].copy()
+            if self.extra is not None:
+                extra[band] = dict()
+                for col in self.extra[band]:
+                    extra[band][col] = self.extra[band][col][index].copy()
+
+        if self.fibermap is not None:
+            fibermap = self.fibermap[index].copy()
+        else:
+            fibermap = None
+
+        if self.extra_catalog is not None:
+            extra_catalog = self.extra_catalog[index].copy()
+        else:
+            extra_catalog = None
+
+        if self.scores is not None:
+            scores = Table()
+            for col in self.scores.dtype.names:
+                scores[col] = self.scores[col][index].copy()
+        else:
+            scores = None
+
+        sp = Spectra(bands, wave, flux, ivar,
+            mask=mask, resolution_data=rdat, fibermap=fibermap,
+            meta=self.meta, extra=extra, single=self._single,
+            scores=scores, extra_catalog=extra_catalog,
+        )
+        return sp
+
+
     def select(self, nights=None, exposures=None, bands=None, targets=None, fibers=None, invert=False, return_index=False):
         """
         Select a subset of the data.
@@ -290,96 +348,25 @@ class Spectra(object):
         if len(keep) == 0:
             raise RuntimeError("selection has no spectra")
 
-        keep_wave = {}
-        keep_flux = {}
-        keep_ivar = {}
-        keep_mask = None
-        keep_res = None
-        keep_extra = None
-        keep_scores = None
-        keep_extra_catalog = None
-        if self.mask is not None:
-            keep_mask = {}
-        if self.resolution_data is not None:
-            keep_res = {}
-        if self.extra is not None:
-            keep_extra = {}
-        if self.scores is not None:
-            keep_scores = self.scores[keep]
-        if self.extra_catalog is not None:
-            keep_extra_catalog = self.extra_catalog[keep]
-
-        for b in keep_bands:
-            keep_wave[b] = self.wave[b]
-            keep_flux[b] = self.flux[b][keep,:]
-            keep_ivar[b] = self.ivar[b][keep,:]
-            if self.mask is not None:
-                keep_mask[b] = self.mask[b][keep,:]
-            if self.resolution_data is not None:
-                keep_res[b] = self.resolution_data[b][keep,:,:]
-            if self.extra is not None:
-                keep_extra[b] = {}
-                for ex in self.extra[b].items():
-                    keep_extra[b][ex[0]] = ex[1][keep,:]
-
-        ret = Spectra(keep_bands, keep_wave, keep_flux, keep_ivar, 
-            mask=keep_mask, resolution_data=keep_res, 
-            fibermap=self.fibermap[keep], meta=self.meta, extra=keep_extra,
-            single=self._single, scores=keep_scores, extra_catalog=keep_extra_catalog)
+        sp = self._get_slice(keep_rows, bands=keep_bands)
 
         if return_index:
-            return (ret, keep)
+            return (sp, keep)
 
-        return ret
+        return sp
 
     def __getitem__(self, index):
-        """Slice spectra by index"""
-        if isinstance(index, numbers.Integral):
-            index = slice(index, index+1)
+        """ Slice spectra by index.
+            Index can be an arbitrary slice, for example:
+                spectra[0]       #- single index -> slice 0:1
+                spectra[0:10]    #- slice
+                spectra[ [0,12,56,34] ]  #- list of indices, doesn't have to be sorted
+                spectra[ spectra.fibermap['FIBER'] < 20 ]  #- boolean array
 
-        bands = copy.copy(self.bands)
-        flux = dict()
-        ivar = dict()
-        wave = dict()
-        mask = dict() if self.mask is not None else None
-        rdat = dict() if self.resolution_data is not None else None
-        extra = dict() if self.extra is not None else None
+        """
+        #- __getitem__ differs from _slice as it has a single argument
+        return self._get_slice(index)
 
-        for band in bands:
-            flux[band] = self.flux[band][index].copy()
-            ivar[band] = self.ivar[band][index].copy()
-            wave[band] = self.wave[band].copy()
-            if self.mask is not None:
-                mask[band] = self.mask[band][index].copy()
-            if self.resolution_data is not None:
-                rdat[band] = self.resolution_data[band][index].copy()
-            if self.extra is not None:
-                extra[band] = dict()
-                for col in self.extra[band]:
-                    extra[band][col] = self.extra[band][col][index].copy()
-
-        if self.fibermap is not None:
-            fibermap = self.fibermap[index].copy()
-        else:
-            fibermap = None
-
-        if self.extra_catalog is not None:
-            extra_catalog = self.extra_catalog[index].copy()
-        else:
-            extra_catalog = None
-
-        if self.scores is not None:
-            scores = Table()
-            for col in self.scores.dtype.names:
-                scores[col] = self.scores[col][index].copy()
-        else:
-            scores = None
-
-        sp = Spectra(bands, wave, flux, ivar,
-            mask=mask, resolution_data=rdat, fibermap=fibermap,
-            meta=self.meta, extra=extra, scores=scores, extra_catalog=extra_catalog,
-        )
-        return sp
 
     def update(self, other):
         """
