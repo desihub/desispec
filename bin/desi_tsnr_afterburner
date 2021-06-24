@@ -100,7 +100,7 @@ def get_targ_info(targ_in):
                     or from a Table).
 
     Returns:
-        targ_out: dictionary with SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME, EFFTIME_ETC.
+        targ_out: dictionary with SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME.
     """
     targ_keys = list(targ_in.keys())
     targ_out = {
@@ -110,13 +110,12 @@ def get_targ_info(targ_in):
         "FAFLAVOR" : "unknown",
         "MINTFRAC" : 0.9,
         "GOALTIME" : 0.,
-        "EFFTIME_ETC" : 0.
     }
     #
     for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
         if k in targ_keys :
             targ_out[k] = targ_in[k].strip().lower()
-    for k in ["MINTFRAC", "GOALTIME", "EFFTIME_ETC"]:
+    for k in ["MINTFRAC", "GOALTIME"]:
         if k in targ_keys :
             targ_out[k] = targ_in[k]
     #
@@ -374,8 +373,11 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                     entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
                 entry['SEEING_ETC']=0.
+                entry["EFFTIME_ETC"] = 0.
+                if "EFFTIME_ETC" in prod_table.dtype.names:
+                    entry["EFFTIME_ETC"] = prod_table["EFFTIME_ETC"][i]
 
-                # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME, EFFTIME_ETC
+                # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
                 targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
                 targ_out = get_targ_info(targ_dict)
                 for k in list(targ_out.keys()):
