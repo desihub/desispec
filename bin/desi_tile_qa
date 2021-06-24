@@ -63,8 +63,12 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
 
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
-    make_tile_qa_plot(outfile)
-    log.info("QA plot for {} generated".format(outfile))
+    figfile = make_tile_qa_plot(outfile)
+    if figfile is not None :
+        log.info("wrote QA plot {}".format(figfile))
+    else :
+        loq.warning("failed to compute QA plot for {}".format(outfile))
+
     if "EXTNAME" in fiberqa_table.meta :
         fiberqa_table.meta.pop("EXTNAME")
 
@@ -89,7 +93,7 @@ def main():
     if args.outdir is None :
         args.outdir = args.prod
     if args.exposure_qa_dir is None :
-        args.exposure_qa_dir = args.outdir
+        args.exposure_qa_dir = args.prod
 
 
     log.info('prod    = {}'.format(args.prod))

@@ -60,6 +60,7 @@ fibermask:
     - [MISSINGPOSITION, 8, "Fiber location information is missing"]
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
     - [POORPOSITION,   10, "Fiber >30 microns from target location"]
+    - [LOWEFFTIME,     15, "Effective time for this fiber is too low"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]
     - [BADFLAT,        18, "Bad fiber flat"]
@@ -76,6 +77,7 @@ fibermask:
     - [BADPETALFLUXCAL,28, "Unphysical flux calibration for the petal (calib vector too high or too low)"]
     - [BADPETALSNR,    29, "TSNR is too low for this petal compared to the others"]
     - [BADREADNOISE,   30, "Bad read noise in one of the 3 cameras"]
+    - [RESERVED31,     31, "Reserved sign bit; do not use"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
 specmask:

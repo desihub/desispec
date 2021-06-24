@@ -598,16 +598,17 @@ def print_petal_infos(ax, petalqa, fiberqa):
         x += dx
     y += 2 * dy
     # AR failed cases
-    ax.text(
-        x0,
-        y,
-        "Failed: {}".format(", ".join(fails)),
-        color="r",
-        fontsize=fs,
-        fontweight="bold",
-        ha="left",
-        transform=ax.transAxes,
-    )
+    if len(fails)>0 :
+        ax.text(
+            x0,
+            y,
+            "Alert: {}".format(", ".join(fails)),
+            color="r",
+            fontsize=fs,
+            #fontweight="bold",
+            ha="left",
+            transform=ax.transAxes,
+        )
 
     ax.axis("off")
 
@@ -828,6 +829,10 @@ def make_tile_qa_plot(
         # AR number of valid zspec in zmin, zmax
         n_valid, nref_valid = 0.0, 0.0
 
+        # compare number of qsos from redrock and QuasarNP
+        nqso_rr  = 0
+        ### nqso_qnp = 0
+
         # AR plot
         ax = plt.subplot(gs[0, 2])
         for tracer, col in zip(tracers, cols):
@@ -840,6 +845,12 @@ def make_tile_qa_plot(
             istracer = get_tracer(tracer, fiberqa)
             sel = (bins[:-1] >= zmin) & (bins[1:] <= zmax)
             n_valid += zhists[sel].sum() * istracer.sum()
+
+            if tracer=="QSO" :
+                nqso_rr = int(zhists[sel].sum() * istracer.sum())
+                ### nqso_qnp = np.sum((fiberqa['IS_QSO_QN']==1)\
+                ###            &(fiberqa['Z_QN']>=zmin)&(fiberqa['Z_QN']<=zmax))
+
             # AR reference
             sel = ref["TRACER"] == tracer
             ax.fill_between(
@@ -864,47 +875,46 @@ def make_tile_qa_plot(
     # AR n(z): if not main, just put dummy -1
     else:
         ratio_nz = -1
+        nqso_rr  = -1
+        ### nqso_qnp = -1
 
-    # AR TSNR: reference
-    ref = Table.read(os.path.join(refdir, "qa-reference-tsnr2.ecsv"))
+    show_efftime = True # else show TSNR
 
-    # AR TSNR2
-    ax = plt.subplot(gs[1, 2])
-    if hdr["FAPRGRM"].lower() in ["bright", "dark"]:
-        clim = (0.5, 1.5)
-        # AR TSNR2: ratio (discarding ebv=0 for now, as the TSNR2 is then biased)
-        badqa_val, badpet_val = get_qa_badmsks()
-        sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) == 0
-        sel &= fiberqa["EBV"] > 0
-        tsnr2s = np.nan + np.zeros(5000)
-        tsnr2s[fiberqa["FIBER"][sel]] = fiberqa[tsnr2_key][sel]
-        # AR TSNR2: plot
+    if show_efftime :
+
+        ax = plt.subplot(gs[1, 2])
+        x = fiberqa["MEAN_FIBER_X"]
+        y = fiberqa["MEAN_FIBER_Y"]
+        fibers = fiberqa["FIBER"]
+        efftime = fiberqa["EFFTIME_SPEC"]
+        medefftime = np.median(efftime[efftime>0])
+        vmin = 0.5*medefftime
+        vmax = 1.5*medefftime
+
+        sel = (efftime>0)
         sc = ax.scatter(
-            ref["FIBERASSIGN_X"],
-            ref["FIBERASSIGN_Y"],
-            c=tsnr2s / ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())],
+            x[sel],
+            y[sel],
+            c=efftime[sel],
             cmap=matplotlib.cm.coolwarm_r,
-            vmin=clim[0],
-            vmax=clim[1],
+            vmin=vmin,
+            vmax=vmax,
             s=5,
         )
-        # AR TSNR2: plotting fibers discarded because of a petal-masking
-        sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) > 0
-        sel &= (fiberqa["QAFIBERSTATUS"] & badpet_val) > 0
-        fibers = fiberqa["FIBER"][sel]
-        ax.scatter(ref["FIBERASSIGN_X"][fibers], ref["FIBERASSIGN_Y"][fibers],
-            edgecolor="k", facecolors="none", s=5,
-            label="bad_petal_mask")
-        # AR TSNR2: plotting fibers discarded because of EBV=0
-        sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) == 0
-        sel &= fiberqa["EBV"] == 0
-        fibers = fiberqa["FIBER"][sel]
-        ax.scatter(ref["FIBERASSIGN_X"][fibers], ref["FIBERASSIGN_Y"][fibers],
-            marker="x", color="k", s=10, lw=0.5,
-            label="EBV=0")
-        #
-        ax.set_xlabel("FIBERASSIGN_X [mm]")
-        ax.set_ylabel("FIBERASSIGN_Y [mm]")
+
+        sel = ((fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) > 0)&(efftime>0)
+        ax.scatter(x[sel],y[sel],
+                   edgecolor="k", facecolors="none", s=5, alpha=0.5,
+                   label="LOWEFFTIME")
+        # plotting fibers discarded because of EBV=0
+        sel = (fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) == 0
+        sel &= (fiberqa["EBV"] == 0)
+        ax.scatter(x[sel], y[sel],
+                   marker="x", color="purple", s=10, lw=0.5, alpha=0.5,
+                   label="EBV=0")
+
+        ax.set_xlabel("FIBER_X [mm]")
+        ax.set_ylabel("FIBER_Y [mm]")
         # AR 2*505 mm matches the 4 deg width of the cutout
         ax.set_xlim(-505, 505)
         ax.set_ylim(-505, 505)
@@ -912,17 +922,74 @@ def make_tile_qa_plot(
         ax.set_aspect("equal")
         ax.legend(loc=2)
         cbar = plt.colorbar(sc, extend="both")
-        cbar.mappable.set_clim(clim)
-        cbar.set_label("{} / {}_REFERENCE".format(tsnr2_key, tsnr2_key))
+        #cbar.mappable.set_clim(clim)
+        cbar.set_label("EFFTIME (sec)")
+
         # AR ratio of the median TSNR2 w.r.t ref
-        sel = np.isfinite(ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())])
-        sel &= np.isfinite(tsnr2s)
-        ratio_tsnr2 = np.median(tsnr2s[sel]) / np.median(
-            ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())][sel]
-        )
-    # AR TSNR2: if not bright/dark, just put dummy -1
-    else:
-        ratio_tsnr2 = -1
+        #sel = np.isfinite(ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())])
+        #sel &= np.isfinite(tsnr2s)
+        #ratio_tsnr2 = np.median(tsnr2s[sel]) / np.median(
+        #    ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())][sel]
+
+
+    else :
+
+    # AR TSNR: reference
+        ref = Table.read(os.path.join(refdir, "qa-reference-tsnr2.ecsv"))
+
+        # AR TSNR2
+        ax = plt.subplot(gs[1, 2])
+        if hdr["FAPRGRM"].lower() in ["bright", "dark"]:
+            clim = (0.5, 1.5)
+            # AR TSNR2: ratio (discarding ebv=0 for now, as the TSNR2 is then biased)
+            badqa_val, badpet_val = get_qa_badmsks()
+            sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) == 0
+            sel &= fiberqa["EBV"] > 0
+            tsnr2s = np.nan + np.zeros(5000)
+            tsnr2s[fiberqa["FIBER"][sel]] = fiberqa[tsnr2_key][sel]
+            # AR TSNR2: plot
+            sc = ax.scatter(
+                ref["FIBERASSIGN_X"],
+                ref["FIBERASSIGN_Y"],
+                c=tsnr2s / ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())],
+                cmap=matplotlib.cm.coolwarm_r,
+                vmin=clim[0],
+                vmax=clim[1],
+                s=5,
+            )
+            sel = ((fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) > 0)
+            fibers = fiberqa["FIBER"][sel]
+            ax.scatter(ref["FIBERASSIGN_X"][fibers], ref["FIBERASSIGN_Y"][fibers],
+                edgecolor="k", facecolors="none", s=5,
+                label="bad_petal_mask")
+            # AR TSNR2: plotting fibers discarded because of EBV=0
+            sel = (fiberqa["QAFIBERSTATUS"] & badqa_val) == 0
+            sel &= fiberqa["EBV"] == 0
+            fibers = fiberqa["FIBER"][sel]
+            ax.scatter(ref["FIBERASSIGN_X"][fibers], ref["FIBERASSIGN_Y"][fibers],
+                marker="x", color="k", s=10, lw=0.5,
+                label="EBV=0")
+            #
+            ax.set_xlabel("FIBERASSIGN_X [mm]")
+            ax.set_ylabel("FIBERASSIGN_Y [mm]")
+            # AR 2*505 mm matches the 4 deg width of the cutout
+            ax.set_xlim(-505, 505)
+            ax.set_ylim(-505, 505)
+            ax.grid(True)
+            ax.set_aspect("equal")
+            ax.legend(loc=2)
+            cbar = plt.colorbar(sc, extend="both")
+            cbar.mappable.set_clim(clim)
+            cbar.set_label("{} / {}_REFERENCE".format(tsnr2_key, tsnr2_key))
+            # AR ratio of the median TSNR2 w.r.t ref
+            sel = np.isfinite(ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())])
+            sel &= np.isfinite(tsnr2s)
+            ratio_tsnr2 = np.median(tsnr2s[sel]) / np.median(
+                ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())][sel]
+            )
+        # AR TSNR2: if not bright/dark, just put dummy -1
+        else:
+            ratio_tsnr2 = -1
     # AR TSNR2: display petal ids
     for ang, p in zip(np.linspace(2 * np.pi, 0, 11), [3, 2, 1, 0, 9, 8, 7, 6, 5, 4]):
         anglab = ang + 0.1 * np.pi
@@ -953,6 +1020,24 @@ def make_tile_qa_plot(
     ax = plt.subplot(gs[0, 0])
     ax.axis("off")
     x0, x1, y, dy, fs = 0.45, 0.55, 0.95, -0.08, 10
+
+    if hdr["VALID"] :
+        ax.text(0.1,y,"TILE IS VALID",color="green",
+                fontsize=int(fs*1.2),
+                fontweight="bold",
+                ha="left",
+                transform=ax.transAxes,
+        )
+        y += dy
+    else :
+        ax.text(0.1,y,"TILE IS NOT VALID",color="red",
+                fontsize=int(fs*1.2),
+                fontweight="bold",
+                ha="left",
+                transform=ax.transAxes,
+        )
+        y += dy
+
     for txt in [
         ["TILEID", "{:06d}".format(hdr["TILEID"])],
         ["thruNIGHT", "{}".format(hdr["LASTNITE"])],
@@ -963,8 +1048,9 @@ def make_tile_qa_plot(
         ["", ""],
         ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
-        ["tsnr2 / tsnr2_ref", "{:.2f}".format(ratio_tsnr2)],
-        ["", ""],
+        ### ["nqso(RR) , nqso(QNP)", "{} , {}".format(nqso_rr,nqso_qnp)],
+        ["nqso(RR)", "{}".format(nqso_rr)],
+
         ["NGOODFIB", "{}".format(hdr["NGOODFIB"])],
         ["NGOODPET", "{}".format(hdr["NGOODPET"])],
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
@@ -976,8 +1062,8 @@ def make_tile_qa_plot(
             fontweight, col = "bold", "r"
         if (txt[0] == "n(z) / n_ref(z)") & (ratio_nz < 0.8):
             fontweight, col = "bold", "r"
-        if (txt[0] == "tsnr2 / tsnr2_ref") & (ratio_tsnr2 < 0.8):
-            fontweight, col = "bold", "r"
+        #if (txt[0] == "tsnr2 / tsnr2_ref") & (ratio_tsnr2 < 0.8):
+        #    fontweight, col = "bold", "r"
         ax.text(
             x0,
             y,
@@ -1000,6 +1086,7 @@ def make_tile_qa_plot(
         )
         y += dy
 
+
     # AR per petal diagnoses
     ax = plt.subplot(gs[1, 0])
     print_petal_infos(ax, petalqa,fiberqa)
@@ -1009,5 +1096,7 @@ def make_tile_qa_plot(
     except ValueError as e :
         print("failed to save figure")
         print(e)
+        pngoutfile=None
 
     plt.close()
+    return pngoutfile

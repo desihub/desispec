@@ -2,8 +2,17 @@
 desispec Change Log
 ===================
 
-0.43.0 (unreleased)
+0.43.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.43.0 (2021-06-21)
+-------------------
+
+This version was used for QA assessment of the first 315 main survey tiles
+released for unlocking overlapping tiles.  That was done pre-tag under the
+development version "0.42.0.dev5412".
 
 * Improved stitching of sky spectra from different cameras (PR `#1273`_).
 * TSNR updates (PR `#1274`_ and branch PRs `#1275`_, `#1277`_, `#1279`_,
@@ -18,6 +27,9 @@ desispec Change Log
 * Check for completely masked fibers in qfiberflat (PR `#1306`_).
 * Pipeline robustness when reading ETC values from raw data (PR `#1309`_).
 * Adjust exposure QA cuts, cleanup outputs (PRs `#1316`_, `#1318`_).
+* Simplified tile QA (PR `#1317`_).
+* zmtl using tile QA to set ZWARN bits (PR `#1310`_).
+* Look for manifest files in nightly processing (PR `#1320`_).
 
 .. _`#1273`: https://github.com/desihub/desispec/issues/1273
 .. _`#1274`: https://github.com/desihub/desispec/issues/1274
@@ -36,8 +48,11 @@ desispec Change Log
 .. _`#1304`: https://github.com/desihub/desispec/issues/1304
 .. _`#1306`: https://github.com/desihub/desispec/issues/1306
 .. _`#1309`: https://github.com/desihub/desispec/issues/1309
+.. _`#1310`: https://github.com/desihub/desispec/issues/1310
 .. _`#1316`: https://github.com/desihub/desispec/issues/1316
+.. _`#1317`: https://github.com/desihub/desispec/issues/1317
 .. _`#1318`: https://github.com/desihub/desispec/issues/1318
+.. _`#1320`: https://github.com/desihub/desispec/issues/1320
 
 0.42.0 (2021-05-14)
 -------------------

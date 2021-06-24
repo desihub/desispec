@@ -191,8 +191,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     path_to_data = verify_variable_with_environment(var=path_to_data,var_name='path_to_data', env_name='DESI_SPECTRO_DATA')
     specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD')
 
-    ## Define the files to look for
-    file_glob = os.path.join(path_to_data, str(night), '*', 'desi-*.fit*')
+    ## Define the naming scheme for the raw data
+    ## Manifests (describing end of cals, etc.) don't have a data file, so search for those separately
+    data_glob = os.path.join(path_to_data, str(night), '*', 'desi-*.fit*')
+    manifest_glob = os.path.join(path_to_data, str(night), '*', 'manifest_*.json')
 
     ## Determine where the exposure table will be written
     if exp_table_path is None:
@@ -229,7 +231,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     while ( (night == what_night_is_it()) and during_operating_hours(dry_run=dry_run) ) or ( override_night is not None ):
         ## Get a list of new exposures that have been found
         print(f"\n\n\nPreviously known exposures: {all_exps}")
-        located_exps = set(sorted([int(os.path.basename(os.path.dirname(fil))) for fil in glob.glob(file_glob)]))
+        data_exps = set(sorted([int(os.path.basename(os.path.dirname(fil))) for fil in glob.glob(data_glob)]))
+        manifest_exps = set(sorted([int(os.path.basename(os.path.dirname(fil))) for fil in glob.glob(manifest_glob)]))
+        located_exps = data_exps.union(manifest_exps)
+
         new_exps = located_exps.difference(all_exps)
         all_exps = located_exps # i.e. new_exps.union(all_exps)
         print(f"\nNew exposures: {new_exps}\n\n")

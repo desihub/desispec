@@ -705,8 +705,9 @@ class TestIO(unittest.TestCase):
         self.assertEqual(a, b)
         a = findfile('spectra', tile=68000, night='20200314', spectrograph=2)
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                         os.environ['SPECPROD'], 'tiles', '68000', '20200314',
-                         'spectra-2-68000-20200314.fits')
+                         os.environ['SPECPROD'], 'tiles', 'cumulative',
+                         '68000', '20200314',
+                         'spectra-2-68000-thru20200314.fits')
         self.assertEqual(a, b)
 
     def test_findfile_outdir(self):
