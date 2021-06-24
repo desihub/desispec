@@ -364,7 +364,7 @@ class Spectra(object):
                 spectra[ spectra.fibermap['FIBER'] < 20 ]  #- boolean array
 
         """
-        #- __getitem__ differs from _slice as it has a single argument
+        #- __getitem__ differs from _get_slice as it has a single argument
         return self._get_slice(index)
 
 
