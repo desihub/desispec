@@ -8,7 +8,9 @@ desispec Change Log
 * Add QSO afterburners for MgII and QuasarNet (PR `#1312`_).
 * Spectra I/O for extra catalog (PR `#1313`_).
 * Expand Spectra.select and .update functionality (PR `#1319`_).
+* Add optional support for gpu_specter for extractions (PR `#993`_).
 
+.. _`#993`: https://github.com/desihub/desispec/issues/993
 .. _`#1312`: https://github.com/desihub/desispec/issues/1312
 .. _`#1313`: https://github.com/desihub/desispec/issues/1313
 .. _`#1319`: https://github.com/desihub/desispec/issues/1319
