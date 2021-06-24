@@ -34,23 +34,23 @@ model_QN = load_model(model_QN_path)
 
 
 def collect_argparser():
-    parser = argparse.ArgumentParser(description="Run QN and rerun RR on a coadd file to find true quasars with correct redshift")
+    parser = argparse.ArgumentParser(description="Run QN and rerun RR (only for SPECTYPE != QSO or for SPECTYPE == QSO && |z_QN - z_RR| > 0.05) on a coadd file to find true quasars with correct redshift")
 
     parser.add_argument("--coadd", type=str, required=True,
                         help="coadd file containing spectra")
     parser.add_argument("--zbest", type=str, required=True,
                         help="zbest file associated (in the same folder) to the coadd file")
     parser.add_argument("--output", type=str, required=True,
-                        help="output filename where the result of the MgII will be saved")
+                        help="output filename where the result of the QN will be saved")
 
-    parser.add_argument("--target_selection", type=str, required=False, default="restricted",
-                        help="on each sample the mgII fitter is perform: " +
-                             "restricted (QSO targets with SPECTYPE==GALAXY + QSO targets with SPECTYPE==QSO and |z_QN - z_RR| < 0.05)" +
+    parser.add_argument("--target_selection", type=str, required=False, default="qso_targets",
+                        help="on which sample the QN is performed: " +
+                             "qso_targets (QSO targets)" +
                              " / all_targets (All targets in the coadd file)")
     parser.add_argument("--save_target", type=str, required=False, default="restricted",
                         help="which objects will be saved in the output files:" +
-                             "restricted (objects which are identify as QSO by QN and where we have a new run of RR )" +
-                             " / all (All objects which are tested by the mgII fitter)" +
+                             "restricted (objects which are identify as QSO by QN and where we have a new run of RR)" +
+                             " / all (All objects which are tested by QN" +
                              " --> To have 500 objects in the ouput file: set --target_selection all_targets --save_target all")
 
     # for QN
@@ -181,7 +181,7 @@ def selection_targets_with_QN(zbest, fibermap, index_sorted, sel_to_QN, DESI_TAR
         spectra_name (str): The name of the spectra file
         param_QN (dict): contains info for QN as n_thresh and c_thresh
         param_RR (dict): contains info to re-run RR as the template_filename,
-                        filename_priors, filename_output_rerun_RR, filename_zbest_rerun_RR
+                         filename_priors, filename_output_rerun_RR, filename_zbest_rerun_RR
         save_target (str) : restricted (save only IS_QSO_QN_NEW_RR==true targets) / all (save all the sample)
     Returns:
         QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
@@ -356,12 +356,12 @@ if __name__ == "__main__":
         # Find which selection is used (SV1/ SV2 / SV3 / MAIN / ...)
         DESI_TARGET = main_cmx_or_sv(fibermap[:])[0][0]
 
-        if args.target_selection == 'restricted':
+        if args.target_selection == 'qso_targets':
             sel_to_QN = fibermap[DESI_TARGET][:][index_sorted] & desi_mask.QSO != 0
         elif args.target_selection == 'all_targets':
             sel_to_QN = np.ones(zbest['TARGETID'][:].size, dtype=bool)
         else:
-            log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (restricted / all_targets) ****")
+            log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (qso_targets / all_targets) ****")
             sys.exit()
 
         # Check args.save_target to avoid a crash after the QN + new RR Run

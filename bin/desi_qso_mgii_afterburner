@@ -3,7 +3,7 @@
 
 import os
 import sys
-import time 
+import time
 import argparse
 
 import fitsio
@@ -30,7 +30,7 @@ def collect_argparser():
                         help="output filename where the result of the MgII will be saved")
 
     parser.add_argument("--target_selection", type=str, required=False, default="restricted",
-                        help="on each sample the mgII fitter is perform: " +
+                        help="on which sample the mgII fitter is performed: " +
                              "restricted (QSO targets with SPECTYPE==GALAXY)" +
                              " / qso_targets (QSO targets)" +
                              " / all_targets (All targets in the coadd file)")
