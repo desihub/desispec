@@ -60,14 +60,18 @@ class Spectra(object):
         which are arrays of the same size as the flux array.
     single : :class:`bool`, optional
         If ``True``, store data in memory as single precision.
-    scores
+    scores :
         QA scores table.
+    scores_comments :
+        dict[column] = comment to include in output file
     extra_catalog : numpy or astropy Table, optional
         optional table of metadata, rowmatched to fibermap,
         e.g. a redshift catalog for these spectra
     """
-    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None, resolution_data=None,
-        fibermap=None, meta=None, extra=None, single=False, scores=None, extra_catalog=None):
+    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None,
+            resolution_data=None, fibermap=None, meta=None, extra=None,
+            single=False, scores=None, scores_comments=None,
+            extra_catalog=None):
         
         self._bands = bands
         self._single = single
@@ -75,10 +79,14 @@ class Spectra(object):
         if single:
             self._ftype = np.float32
 
+        #- optional "scores" measured from the spectra
         if scores is not None:
             self.scores = Table(scores)
         else:
             self.scores = None
+
+        #- optional comments to document what each score means
+        self.scores_comments = scores_comments
 
         self.meta = None
         if meta is None:

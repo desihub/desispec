@@ -97,6 +97,7 @@ class TestSpectra(unittest.TestCase):
                 self.extra[b]["FOO"] = self.flux[b]
 
         self.scores = dict(BLAT=np.arange(self.nspec), FOO=np.ones(self.nspec))
+        self.scores_comments = dict(BLAT='blat blat', FOO='foo foo')
         self.extra_catalog = Table()
         self.extra_catalog['A'] = np.arange(self.nspec)
         self.extra_catalog['B'] = np.ones(self.nspec)
@@ -137,6 +138,18 @@ class TestSpectra(unittest.TestCase):
         assert(path == os.path.abspath(self.fileio))
 
         # read back in and verify
+        comp = read_spectra(self.fileio)
+        self.verify(comp, self.fmap1)
+
+        # test writing/reading with scores
+        spec.scores = self.scores
+        path = write_spectra(self.fileio, spec)
+        comp = read_spectra(self.fileio)
+        self.verify(comp, self.fmap1)
+
+        # ... and reading/writing with scores + comments
+        spec.scores_comments = self.scores_comments
+        path = write_spectra(self.fileio, spec)
         comp = read_spectra(self.fileio)
         self.verify(comp, self.fmap1)
 
