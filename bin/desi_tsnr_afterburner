@@ -287,13 +287,23 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     colnames = list(summary_rows[0].keys())
     for ii,row in enumerate(summary_rows):
         if len(row.keys()) != len(colnames) :
-            log.info("")
-            log.info(summary_rows)
-            log.info("")
-            log.error(f"row {ii} is row={row} but differs from colnames={colnames}")
-            sys.exit(12)
+            log.warning(f"row {ii} is row={row} but differs from first row with colnames={colnames}")
 
-    cam_summary = Table(rows=summary_rows, names=colnames)
+    masked_cam_summary = Table(rows=summary_rows)
+    for col in masked_cam_summary.colnames:
+        if isinstance(masked_cam_summary[col],Table.MaskedColumn):
+            log.warning(f'Column {col} identified as masked column.')
+            if col in ['NIGHT', 'EXPID', 'TILEID']:
+                log.warning(f'Filling masked rows of column {col} with value 0 .')
+                masked_cam_summary[col].set_fill_value(0)
+            elif col in ['SURVEY', 'FAPRGRM', 'FAFLAVOR', 'GOALTYPE']:
+                log.warning(f'Filling masked rows of column {col} with value "unknown".')
+                masked_cam_summary[col].set_fill_value('unknown')
+            else:
+                log.warning(f'Filling masked rows of column {col} with value 0.0.')
+                masked_cam_summary[col].set_fill_value(0.0)
+    cam_summary = masked_cam_summary.filled()
+
     cam_summary.meta['EXTNAME'] = 'TSNR2_FRAME'
 
     tsnr2_colnames = [x for x in cam_summary.colnames if x.startswith('TSNR2_')]
