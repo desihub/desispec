@@ -2,10 +2,16 @@
 desispec Change Log
 ===================
 
-0.43.1 (unreleased)
+0.44.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Add QSO afterburners for MgII and QuasarNet (PR `#1312`_).
+* Spectra I/O for extra catalog (PR `#1313`_).
+* Expand Spectra.select and .update functionality (PR `#1319`_).
+
+.. _`#1312`: https://github.com/desihub/desispec/issues/1312
+.. _`#1313`: https://github.com/desihub/desispec/issues/1313
+.. _`#1319`: https://github.com/desihub/desispec/issues/1319
 
 0.43.0 (2021-06-21)
 -------------------
