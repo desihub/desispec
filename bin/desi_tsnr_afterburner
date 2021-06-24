@@ -285,22 +285,25 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     #- Create camera summary table; specify names to preserve column order
     colnames = list(summary_rows[0].keys())
+    first_print = True
     for ii,row in enumerate(summary_rows):
         if len(row.keys()) != len(colnames) :
-            log.warning(f"row {ii} is row={row} but differs from first row with colnames={colnames}")
+            if first_print:
+                log.warning(f"First row of summary_rows had colnames={colnames}")
+                first_print = False
+            log.warning(f"Row {ii} differs from first, row={row}" )
 
     masked_cam_summary = Table(rows=summary_rows)
     for col in masked_cam_summary.colnames:
         if isinstance(masked_cam_summary[col],Table.MaskedColumn):
-            log.warning(f'Column {col} identified as masked column.')
             if col in ['NIGHT', 'EXPID', 'TILEID']:
-                log.warning(f'Filling masked rows of column {col} with value 0 .')
+                log.warning(f'Column {col} identified as masked column, filling masked rows with value 0 .')
                 masked_cam_summary[col].set_fill_value(0)
             elif col in ['SURVEY', 'FAPRGRM', 'FAFLAVOR', 'GOALTYPE']:
-                log.warning(f'Filling masked rows of column {col} with value "unknown".')
+                log.warning(f'Column {col} identified as masked column, filling masked rows with value "unknown".')
                 masked_cam_summary[col].set_fill_value('unknown')
             else:
-                log.warning(f'Filling masked rows of column {col} with value 0.0.')
+                log.warning(f'Column {col} identified as masked column, filling masked rows with value 0.0.')
                 masked_cam_summary[col].set_fill_value(0.0)
     cam_summary = masked_cam_summary.filled()
 
@@ -398,7 +401,6 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                             vals.append(0.)
                     log.debug("Adding missing exposure.cam {}".format(vals))
                     cam_summary.add_row(vals)
-
 
     if preexisting_tsnr2_expid_table is not None :
         log.debug("Update to preexisting")
