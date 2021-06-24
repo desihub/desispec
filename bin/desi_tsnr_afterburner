@@ -30,6 +30,7 @@ from   desispec.io.meta import findfile, specprod_root
 from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
+from   desispec.io import findfile
 from   desispec.io.fluxcalibration import read_flux_calibration
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
@@ -380,6 +381,25 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
                 targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
                 targ_out = get_targ_info(targ_dict)
+                # TBD - start (temporary fix)
+                # if SURVEY or FAFLAVOR is "unknown", we try the fiberassign file..
+                # as of 20210624: SURVEY present in table_exposure since 20210611 only
+                # allowing fiberassign-TILEID.fits or fiberassign-TILEID.fits.gz
+                if (
+                    (targ_out["SURVEY"] == "unknown") |
+                    (targ_out["FAFLAVOR"] == "unknown")
+                ):
+                    fns = glob.glob(
+                        os.path.join(
+                            os.path.dirname(findfile("raw", night, entry["EXPID"])),
+                            "fiberassign-{:06d}.fits*".format(entry["TILEID"])
+                        )
+                    )
+                    if len(fns) > 0:
+                        fiberassign_header = fits.getheader(fns[0], 0)
+                        targ_dict = {key : fiberassign_header[key] for key in fiberassign_header.keys()}
+                        targ_out = get_targ_info(targ_dict)
+                # TBD - end
                 for k in list(targ_out.keys()):
                     entry[k] = targ_out[k]
 
