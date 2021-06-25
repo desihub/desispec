@@ -92,19 +92,21 @@ def parse(options=None):
     return args
 
 
-def get_targ_info(targ_in):
+def update_targ_info(entry, targ_in):
     """
-    Returns information from targeting.
+    Updates and returns information from targeting dictionary derived from a header or table row.
 
     Args:
-        targ_in: dictionary with a single value per key (either built from header
+        entry, dict: the currently known information about an exposure
+        targ_in, dict: dictionary with a single value per key (either built from header
                     or from a Table).
 
     Returns:
-        targ_out: dictionary with SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME.
+        entry, dict: the currently known information about an exposure updated with information about
+                    SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, and GOALTIME if available in targ_in
     """
     targ_keys = list(targ_in.keys())
-    targ_out = {
+    targ_defs = {
         "SURVEY" : "unknown",
         "GOALTYPE" : "unknown",
         "FAPRGRM" : "unknown",
@@ -112,33 +114,40 @@ def get_targ_info(targ_in):
         "MINTFRAC" : 0.9,
         "GOALTIME" : 0.,
     }
-    #
-    for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
-        if k in targ_keys :
-            targ_out[k] = targ_in[k].strip().lower()
-    for k in ["MINTFRAC", "GOALTIME"]:
-        if k in targ_keys :
-            targ_out[k] = targ_in[k]
-    #
+
+    for key,default in targ_defs.items():
+        ## If the key is defined to anything other than default, don't overwrite
+        if key in entry.keys() and entry[key] != default:
+            continue
+        ## Otherwise if the key is in the target dict, assign that
+        elif key in targ_keys:
+            if isinstance(default,str):
+                entry[key] = targ_in[key].strip().lower()
+            else:
+                entry[key] = targ_in[key]
+        ## Otherwise if the key isn't in the entry, assign it the default
+        elif key not in entry.keys():
+            entry[key] = default
+
     if "FAFLAVOR" in targ_keys :
         faflavor=targ_in["FAFLAVOR"].strip().lower()
-        #
-        if targ_out["FAPRGRM"] == "unknown"  :
-            targ_out["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
-        #
-        if targ_out["SURVEY"]=="unknown" :
-            if faflavor.find("sv1")>=0. : targ_out["SURVEY"]="sv1"
-            elif faflavor.find("sv2")>=0. : targ_out["SURVEY"]="sv2"
-            elif faflavor.find("cmx")>=0. : targ_out["SURVEY"]="cmx"
-        #
-    if targ_out["GOALTYPE"]=="unknown" :
-        if targ_out["FAPRGRM"].find("qso")>=0. or targ_out["FAPRGRM"].find("lrg")>=0. or \
-           targ_out["FAPRGRM"].find("elg")>=0. or targ_out["FAPRGRM"].find("dark")>=0. :
-            targ_out["GOALTYPE"]="dark"
-        elif targ_out["FAPRGRM"].find("mws")>=0. or targ_out["FAPRGRM"].find("bgs")>=0. or targ_out["FAPRGRM"].find("bright")>=0. :
-            targ_out["GOALTYPE"]="bright"
-    #
-    return targ_out
+
+        if entry["FAPRGRM"] == "unknown"  :
+            entry["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
+
+        if entry["SURVEY"]=="unknown" :
+            if faflavor.find("sv1")>=0. : entry["SURVEY"]="sv1"
+            elif faflavor.find("sv2")>=0. : entry["SURVEY"]="sv2"
+            elif faflavor.find("cmx")>=0. : entry["SURVEY"]="cmx"
+
+    if entry["GOALTYPE"]=="unknown" :
+        if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0. or \
+           entry["FAPRGRM"].find("elg")>=0. or entry["FAPRGRM"].find("dark")>=0. :
+            entry["GOALTYPE"]="dark"
+        elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
+            entry["GOALTYPE"]="bright"
+
+    return entry
 
 
 def read_gfa_data(gfa_proc_dir) :
@@ -380,28 +389,18 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
                 # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
                 targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
-                targ_out = get_targ_info(targ_dict)
+                entry = update_targ_info(entry, targ_dict)
                 # TBD - start (temporary fix)
                 # if SURVEY or FAFLAVOR is "unknown", we try the fiberassign file..
                 # as of 20210624: SURVEY present in table_exposure since 20210611 only
                 # allowing fiberassign-TILEID.fits or fiberassign-TILEID.fits.gz
-                if (
-                    (targ_out["SURVEY"] == "unknown") |
-                    (targ_out["FAFLAVOR"] == "unknown")
-                ):
-                    fns = glob.glob(
-                        os.path.join(
-                            os.path.dirname(findfile("raw", night, entry["EXPID"])),
-                            "fiberassign-{:06d}.fits*".format(entry["TILEID"])
-                        )
-                    )
+                if (entry["SURVEY"] == "unknown") or (entry["FAFLAVOR"] == "unknown"):
+                    dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
+                    fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
                     if len(fns) > 0:
                         fiberassign_header = fits.getheader(fns[0], 0)
                         targ_dict = {key : fiberassign_header[key] for key in fiberassign_header.keys()}
-                        targ_out = get_targ_info(targ_dict)
-                # TBD - end
-                for k in list(targ_out.keys()):
-                    entry[k] = targ_out[k]
+                        entry = update_targ_info(entry, targ_dict)
 
                 vals=[]
                 for j,k in enumerate(exp_summary.dtype.names) :
@@ -698,9 +697,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     #- Add information from targeting (SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME)
     fibermap_header = cframe_hdulist["FIBERMAP"].header
     targ_dict = {key : fibermap_header[key] for key in fibermap_header.keys()}
-    targ_out = get_targ_info(targ_dict)
-    for k in list(targ_out.keys()):
-        entry[k] = targ_out[k]
+    entry = update_targ_info(entry, targ_dict)
 
     cframe_hdulist.close()
     return entry
