@@ -311,8 +311,6 @@ if __name__ == "__main__":
         # close file !!
         zbest_file.close()
 
-        print(QSO_cat)
-
         # Save QSO catalog in a fits file
         save_dataframe_to_fits(QSO_cat, args.output, args.clobber)
 
