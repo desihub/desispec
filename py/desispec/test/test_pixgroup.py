@@ -1,5 +1,6 @@
 import unittest, os, sys, shutil, tempfile
 import numpy as np
+import numpy.testing as nt
 from astropy.io import fits
 from copy import deepcopy
 
@@ -9,9 +10,12 @@ if __name__ == '__main__':
     sys.exit(1)
 
 from ..test.util import get_frame_data
-from ..io import findfile, write_frame, read_spectra, specprod_root
+from ..io import findfile, write_frame, read_spectra, write_spectra, empty_fibermap, specprod_root
+from ..io.util import add_columns
 from ..scripts import group_spectra
+from ..pixgroup import SpectraLite
 from desispec.maskbits import fibermask
+from desiutil.io import encode_table
 
 class TestPixGroup(unittest.TestCase):
 
@@ -72,6 +76,69 @@ class TestPixGroup(unittest.TestCase):
         #- Remove one file to test missing data
         os.remove(findfile('cframe', cls.nights[0], 1, 'r0'))
 
+        # Setup a dummy SpectraLite for I/O tests
+        cls.fileio = 'test_spectralite.fits'
+
+        cls.nwave = 100
+        cls.nspec = 5
+        cls.ndiag = 3
+
+        fmap = empty_fibermap(cls.nspec)
+        fmap = add_columns(fmap,
+                           ['NIGHT', 'EXPID', 'TILEID'],
+                           [np.int32(0), np.int32(0), np.int32(0)],
+                           )
+
+        for s in range(cls.nspec):
+            fmap[s]["TARGETID"] = 456 + s
+            fmap[s]["FIBER"] = 123 + s
+            fmap[s]["NIGHT"] = s
+            fmap[s]["EXPID"] = s
+        cls.fmap1 = encode_table(fmap)
+
+        fmap = empty_fibermap(cls.nspec)
+        fmap = add_columns(fmap,
+                           ['NIGHT', 'EXPID', 'TILEID'],
+                           [np.int32(0), np.int32(0), np.int32(0)],
+                           )
+
+        for s in range(cls.nspec):
+            fmap[s]["TARGETID"] = 789 + s
+            fmap[s]["FIBER"] = 200 + s
+            fmap[s]["NIGHT"] = 1000
+            fmap[s]["EXPID"] = 1000+s
+        cls.fmap2 = encode_table(fmap)
+
+        for s in range(cls.nspec):
+            fmap[s]["TARGETID"] = 1234 + s
+            fmap[s]["FIBER"] = 300 + s
+            fmap[s]["NIGHT"] = 2000
+            fmap[s]["EXPID"] = 2000+s
+        cls.fmap3 = encode_table(fmap)
+
+        cls.bands = ["b", "r", "z"]
+
+        cls.wave = {}
+        cls.flux = {}
+        cls.ivar = {}
+        cls.mask = {}
+        cls.res = {}
+
+        for s in range(cls.nspec):
+            for b in cls.bands:
+                cls.wave[b] = np.arange(cls.nwave)
+                cls.flux[b] = np.repeat(np.arange(cls.nspec),
+                    cls.nwave).reshape( (cls.nspec, cls.nwave) ) + 3.0
+                cls.ivar[b] = 1.0 / cls.flux[b]
+                cls.mask[b] = np.tile(np.arange(2, dtype=np.uint32),
+                    (cls.nwave * cls.nspec) // 2).reshape( (cls.nspec, cls.nwave) )
+                cls.res[b] = np.zeros( (cls.nspec, cls.ndiag, cls.nwave),
+                    dtype=np.float64)
+                cls.res[b][:,1,:] = 1.0
+
+        # In SpectraLite, scores apply to all bands.
+        cls.scores = np.arange(cls.nspec)
+
     @classmethod
     def tearDownClass(cls):
         if os.path.exists(cls.testdir):
@@ -85,6 +152,19 @@ class TestPixGroup(unittest.TestCase):
     def tearDown(self):
         if os.path.exists(self.outdir):
             shutil.rmtree(self.outdir)
+        if os.path.exists(self.fileio):
+            os.remove(self.fileio)
+
+    def verify_spectralite(self, spec, fmap):
+        nt.assert_array_equal(spec.fibermap, fmap)
+        for band in self.bands:
+            nt.assert_array_almost_equal(spec.wave[band], self.wave[band])
+            nt.assert_array_almost_equal(spec.flux[band], self.flux[band])
+            nt.assert_array_almost_equal(spec.ivar[band], self.ivar[band])
+            nt.assert_array_equal(spec.mask[band], self.mask[band])
+            nt.assert_array_almost_equal(spec.resolution_data[band], self.res[band])
+        if spec.scores is not None:
+            nt.assert_array_equal(spec.scores, self.scores)
 
     def test_regroup_per_night(self):
         #- Run for each night and confirm that spectra file is correct size
@@ -174,6 +254,21 @@ class TestPixGroup(unittest.TestCase):
 
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
+
+    def test_spectraliteio(self):
+        # manually create the spectra and write
+        spec = SpectraLite(bands=self.bands, wave=self.wave, flux=self.flux,
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1)
+
+        self.verify_spectralite(spec, self.fmap1)
+
+        path = write_spectra(self.fileio, spec)
+        assert(path == os.path.abspath(self.fileio))
+
+        # read back in and verify
+        comp = read_spectra(self.fileio)
+        self.verify_spectralite(comp, self.fmap1)
 
 def test_suite():
     """Allows testing of only this module with the command::
