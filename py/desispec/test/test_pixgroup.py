@@ -96,28 +96,7 @@ class TestPixGroup(unittest.TestCase):
             fmap[s]["EXPID"] = s
         cls.fmap1 = encode_table(fmap)
 
-        fmap = empty_fibermap(cls.nspec)
-        fmap = add_columns(fmap,
-                           ['NIGHT', 'EXPID', 'TILEID'],
-                           [np.int32(0), np.int32(0), np.int32(0)],
-                           )
-
-        for s in range(cls.nspec):
-            fmap[s]["TARGETID"] = 789 + s
-            fmap[s]["FIBER"] = 200 + s
-            fmap[s]["NIGHT"] = 1000
-            fmap[s]["EXPID"] = 1000+s
-        cls.fmap2 = encode_table(fmap)
-
-        for s in range(cls.nspec):
-            fmap[s]["TARGETID"] = 1234 + s
-            fmap[s]["FIBER"] = 300 + s
-            fmap[s]["NIGHT"] = 2000
-            fmap[s]["EXPID"] = 2000+s
-        cls.fmap3 = encode_table(fmap)
-
         cls.bands = ["b", "r", "z"]
-
         cls.wave = {}
         cls.flux = {}
         cls.ivar = {}
