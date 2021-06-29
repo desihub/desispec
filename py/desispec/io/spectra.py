@@ -73,7 +73,11 @@ def write_spectra(outfile, spec, units=None):
 
     # Next is the fibermap
     fmap = spec.fibermap.copy()
-    fmap.meta["EXTNAME"] = "FIBERMAP"
+    if 'COADD_NUMEXP' in fmap.dtype.names:
+        fmap.meta['EXTNAME'] = 'COADD_FIBERMAP'
+    else:
+        fmap.meta['EXTNAME'] = 'FIBERMAP'
+
     with warnings.catch_warnings():
         #- nanomaggies aren't an official IAU unit but don't complain
         warnings.filterwarnings('ignore', '.*nanomaggies.*')
@@ -87,11 +91,28 @@ def write_spectra(outfile, spec, units=None):
             assert name == colname
             comment = fibermap_comments[name]
             hdu.header[key] = (name, comment)
-        else:
-            pass
-            #print('Unknown comment for {}'.format(colname))
 
     all_hdus.append(hdu)
+
+    # Optional: exposure-fibermap, used in coadds
+    if spec.exp_fibermap is not None:
+        expfmap = spec.exp_fibermap.copy()
+        expfmap.meta["EXTNAME"] = "EXP_FIBERMAP"
+        with warnings.catch_warnings():
+            #- nanomaggies aren't an official IAU unit but don't complain
+            warnings.filterwarnings('ignore', '.*nanomaggies.*')
+            hdu = fits.convenience.table_to_hdu(expfmap)
+
+        # Add comments for exp_fibermap columns.
+        for i, colname in enumerate(expfmap.dtype.names):
+            if colname in fibermap_comments:
+                key = "TTYPE{}".format(i+1)
+                name = hdu.header[key]
+                assert name == colname
+                comment = fibermap_comments[name]
+                hdu.header[key] = (name, comment)
+
+        all_hdus.append(hdu)
 
     # Now append the data for all bands
 
@@ -197,6 +218,7 @@ def read_spectra(infile, single=False):
 
     bands = []
     fmap = None
+    expfmap = None
     wave = None
     flux = None
     ivar = None
@@ -215,6 +237,10 @@ def read_spectra(infile, single=False):
         name = hdus[h].header["EXTNAME"]
         if name == "FIBERMAP":
             fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+        elif name == "COADD_FIBERMAP":
+            fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+        elif name == "EXP_FIBERMAP":
+            expfmap = encode_table(Table(hdus[h].data, copy=True).as_array())
         elif name == "SCORES":
             scores = encode_table(Table(hdus[h].data, copy=True).as_array())
         elif name == 'EXTRA_CATALOG':
@@ -265,7 +291,8 @@ def read_spectra(infile, single=False):
     # they will be caught by the constructor.
 
     spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
-        fibermap=fmap, meta=meta, extra=extra, extra_catalog=extra_catalog,
+        fibermap=fmap, exp_fibermap=expfmap,
+        meta=meta, extra=extra, extra_catalog=extra_catalog,
         single=single, scores=scores)
 
     return spec

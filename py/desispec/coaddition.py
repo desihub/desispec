@@ -392,6 +392,7 @@ def coadd(spectra, cosmics_nsig=0.) :
         orig_scores = None
 
     spectra.fibermap, exp_fibermap = coadd_fibermap(spectra.fibermap)
+    spectra.exp_fibermap = exp_fibermap
     spectra.scores=None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 

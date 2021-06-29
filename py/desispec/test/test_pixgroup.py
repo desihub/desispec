@@ -29,6 +29,13 @@ class TestPixGroup(unittest.TestCase):
         cls.badnight = cls.nights[-1]
         cls.badslice = np.arange(2, int(np.min([6,cls.nspec_per_frame]) ) ).astype(int)
         
+        cls.healpix = 19456
+        cls.survey = 'main'
+        cls.faprogram = 'dark'
+        cls.specfile = findfile('spectra', groupname=cls.healpix,
+                survey=cls.survey, faprogram=cls.faprogram)
+        cls.specbase = os.path.basename(cls.specfile)
+
         frames = dict()
         meta = {'EXPID': 1.0, 'FLAVOR': 'science'}
         frames['b'] = get_frame_data(nspec=cls.nspec_per_frame, wavemin=4500, wavemax=4600,
@@ -67,8 +74,8 @@ class TestPixGroup(unittest.TestCase):
                     curframe.meta['EXPID'] = expid
                     curframe.meta['TILEID'] = expid*10
                     curframe.meta['MJD-OBS'] = 55555.0+ii + 0.1*nfram
-                    curframe.fibermap.meta['SURVEY'] = 'main'
-                    curframe.fibermap.meta['FAPRGRM'] = 'dark'
+                    curframe.fibermap.meta['SURVEY'] = cls.survey
+                    curframe.fibermap.meta['FAPRGRM'] = cls.faprogram
                     write_frame(findfile('cframe', night, expid, camera), curframe)
                     
         #- Remove one file to test missing data
@@ -88,6 +95,15 @@ class TestPixGroup(unittest.TestCase):
         if os.path.exists(self.outdir):
             shutil.rmtree(self.outdir)
 
+        #- don't rely on $DESI_SPECTRO_REDUX/$SPECPROD in case env changed
+        tiledir = os.path.join(self.testdir, 'grouptest', 'tiles')
+        if os.path.exists(tiledir):
+            shutil.rmtree(tiledir)
+
+        hpixdir = os.path.join(self.testdir, 'grouptest', 'healpix')
+        if os.path.exists(hpixdir):
+            shutil.rmtree(hpixdir)
+
     def test_regroup_per_night(self):
         #- Run for each night and confirm that spectra file is correct size
         for i, night in enumerate(self.nights):
@@ -95,7 +111,7 @@ class TestPixGroup(unittest.TestCase):
             args = group_spectra.parse(cmd.split()[1:])
             group_spectra.main(args)
 
-            specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
+            specfile = os.path.join(self.outdir, self.specbase)
             spectra = read_spectra(specfile)
             num_nights = i+1
             nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
@@ -109,7 +125,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
+        specfile = os.path.join(self.outdir, self.specbase)
         spectra = read_spectra(specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night
 
@@ -131,7 +147,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
+        specfile = os.path.join(self.outdir, self.specbase)
         spectra = read_spectra(specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
         
@@ -144,7 +160,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
+        specfile = os.path.join(self.outdir, self.specbase)
         spectra = read_spectra(specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
@@ -169,7 +185,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
+        specfile = os.path.join(self.outdir, self.specbase)
         spectra = read_spectra(specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
@@ -177,9 +193,34 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
-    def test_append(self):
-        """Test appending additional nights to existing spectra files"""
-        pass
+    def test_outdir(self):
+        """Test output directory options"""
+        reduxdir = specprod_root()
+
+        #- output to a specific directory
+        cmd = f'desi_group_spectra --reduxdir {reduxdir} -o {self.outdir}'
+        specfile = os.path.join(self.outdir, self.specbase)
+        self.assertFalse(os.path.exists(specfile))
+        args = group_spectra.parse(cmd.split()[1:])
+        group_spectra.main(args)
+        self.assertTrue(os.path.exists(specfile))
+
+        #- output to a hierarchy under a specific directory
+        cmd = f'desi_group_spectra --reduxdir {reduxdir} --outroot {self.outdir}'
+        specfile = findfile('spectra', groupname=self.healpix,
+                survey=self.survey, faprogram=self.faprogram,
+                specprod_dir=self.outdir)
+        self.assertFalse(os.path.exists(specfile))
+        args = group_spectra.parse(cmd.split()[1:])
+        group_spectra.main(args)
+        self.assertTrue(os.path.exists(specfile))
+
+        #- output to default location under reduxdir
+        cmd = f'desi_group_spectra --reduxdir {reduxdir}'
+        self.assertFalse(os.path.exists(self.specfile))
+        args = group_spectra.parse(cmd.split()[1:])
+        group_spectra.main(args)
+        self.assertTrue(os.path.exists(self.specfile))
 
 
 def test_suite():

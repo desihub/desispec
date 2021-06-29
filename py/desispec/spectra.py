@@ -49,8 +49,10 @@ class Spectra(object):
         Dictionary of arrays specifying the block diagonal resolution matrix.
         The object for each band must be in one of the formats supported
         by the Resolution class constructor.
-    fibermap
+    fibermap, Table-like, optional
         Extended fibermap to use. If not specified, a fake one is created.
+    exp_fibermap, Table-like, optional
+        Exposure-specific fibermap columns, which may not apply to a coadd.
     meta : :class:`dict`, optional
         Dictionary of arbitrary properties.
     extra : :class:`dict`, optional
@@ -69,7 +71,8 @@ class Spectra(object):
         e.g. a redshift catalog for these spectra
     """
     def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None,
-            resolution_data=None, fibermap=None, meta=None, extra=None,
+            resolution_data=None, fibermap=None, exp_fibermap=None,
+            meta=None, extra=None,
             single=False, scores=None, scores_comments=None,
             extra_catalog=None):
         
@@ -143,6 +146,11 @@ class Spectra(object):
             self.fibermap = fibermap.copy()
         else:
             self.fibermap = None
+
+        if exp_fibermap is not None:
+            self.exp_fibermap = exp_fibermap.copy()
+        else:
+            self.exp_fibermap = None
 
         if extra_catalog is not None:
             self.extra_catalog = extra_catalog.copy()

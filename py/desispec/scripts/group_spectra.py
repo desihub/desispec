@@ -68,7 +68,7 @@ def main(args=None, comm=None):
         size = 1
 
     if args.outroot is None and args.outdir is None:
-        args.outroot = io.specprod_dir()
+        args.outroot = io.specprod_root()
 
     #- Combining a set of frame files instead of a healpix?
     if args.inframes is not None:
