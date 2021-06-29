@@ -67,7 +67,7 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
         nightdir = os.path.join(specprod_dir, 'exposures', night)
         for expid in io.get_exposures(night, specprod_dir=specprod_dir,
                                       raw=False):
-            if (expids is None) or (expid not in expids):
+            if (expids is not None) and (expid not in expids):
                 continue
 
             tmpframe = io.findfile('cframe', night, expid, 'r0',
