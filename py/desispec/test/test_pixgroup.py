@@ -105,8 +105,8 @@ class TestPixGroup(unittest.TestCase):
 
         for s in range(cls.nspec):
             for b in cls.bands:
-                cls.wave[b] = np.arange(cls.nwave)
-                cls.flux[b] = np.repeat(np.arange(cls.nspec),
+                cls.wave[b] = np.arange(cls.nwave, dtype=float)
+                cls.flux[b] = np.repeat(np.arange(cls.nspec, dtype=float),
                     cls.nwave).reshape( (cls.nspec, cls.nwave) ) + 3.0
                 cls.ivar[b] = 1.0 / cls.flux[b]
                 cls.mask[b] = np.tile(np.arange(2, dtype=np.uint32),
