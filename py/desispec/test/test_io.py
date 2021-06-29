@@ -652,24 +652,24 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
-            foo = findfile('spectra')
+            foo = findfile('spectra', survey='main', groupname=123)
         the_exception = cm.exception
-        self.assertEqual(str(the_exception), "Required input 'groupname' is not set for type 'spectra'!")
+        self.assertEqual(str(the_exception), "Required input 'faprogram' is not set for type 'spectra'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']
-        x = findfile('spectra', groupname=123)
+        x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
         self.assertTrue(x is not None)
         with self.assertRaises(KeyError):
-            x = findfile('fibermap', night='20150101', expid=123)
+            x = findfile('raw', night='20150101', expid=123)
         os.environ['DESI_SPECTRO_DATA'] = self.testEnv['DESI_SPECTRO_DATA']
 
         #- Some require $DESI_SPECTRO_REDUX; others to not
         del os.environ['DESI_SPECTRO_REDUX']
-        x = findfile('fibermap', night='20150101', expid=123)
+        x = findfile('raw', night='20150101', expid=123)
         self.assertTrue(x is not None)
         with self.assertRaises(KeyError):
-            x = findfile('spectra', groupname=123)
+            x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
         #- Camera is case insensitive
@@ -698,12 +698,13 @@ class TestIO(unittest.TestCase):
             a = findfile('cframe', night=20200317, expid=18, camera='Hasselblad')
 
         # Test healpix versus tiles
-        a = findfile('spectra', groupname='5286')
+        a = findfile('spectra', groupname='5286', survey='main', faprogram='BRIGHT')
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                         os.environ['SPECPROD'], 'spectra-64', '52', '5286',
-                         'spectra-64-5286.fits')
+                         os.environ['SPECPROD'],
+                         'healpix', 'main', 'bright', '52', '5286',
+                         'spectra-main-bright-5286.fits')
         self.assertEqual(a, b)
-        a = findfile('spectra', tile=68000, night='20200314', spectrograph=2)
+        a = findfile('spectra', tile=68000, night=20200314, spectrograph=2)
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                          os.environ['SPECPROD'], 'tiles', 'cumulative',
                          '68000', '20200314',

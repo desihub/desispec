@@ -124,14 +124,17 @@ def main(args=None, comm=None):
         log.debug('Exposure to healpix mapping took {:.1f} sec'.format(dt))
         sys.stdout.flush()
 
-    allpix = sorted(set(exp2pix['HEALPIX']))
+    allpix = np.unique(exp2pix[['SURVEY', 'FAPROGRAM', 'HEALPIX']])
     mypix = np.array_split(allpix, size)[rank]
     log.info('Rank {} will process {} pixels'.format(rank, len(mypix)))
     sys.stdout.flush()
 
     frames = dict()
-    for pix in mypix:
-        iipix = np.where(exp2pix['HEALPIX'] == pix)[0]
+    for survey, faprogram, pix in mypix:
+        keep = (exp2pix['SURVEY'] == survey)
+        keep &= (exp2pix['FAPROGRAM'] == faprogram)
+        keep &= (exp2pix['HEALPIX'] == pix)
+        iipix = np.where(keep)[0]
         ntargets = np.sum(exp2pix['NTARGETS'][iipix])
         log.info('Rank {} pix {} with {} targets on {} spectrograph exposures'.format(
             rank, pix, ntargets, len(iipix)))
@@ -154,6 +157,7 @@ def main(args=None, comm=None):
 
         #- Identify any frames that are already in pre-existing output file
         specfile = io.findfile('spectra', nside=args.nside, groupname=pix,
+                survey=survey, faprogram=faprogram,
                 specprod_dir=args.reduxdir)
         if args.outdir:
             specfile = os.path.join(args.outdir, os.path.basename(specfile))

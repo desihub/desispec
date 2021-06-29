@@ -213,7 +213,7 @@ fibermap_comments = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns])
 fibermap_dtype = [tmp[0:2] for tmp in fibermap_columns]
 
 def empty_fibermap(nspec, specmin=0):
-    """Return an empty fibermap ndarray to be filled in.
+    """Return an empty fibermap Table to be filled in.
 
     Args:
         nspec: (int) number of fibers(spectra) to include

@@ -71,6 +71,8 @@ class TestPixGroup(unittest.TestCase):
                     curframe.meta['EXPID'] = expid
                     curframe.meta['TILEID'] = expid*10
                     curframe.meta['MJD-OBS'] = 55555.0+ii + 0.1*nfram
+                    curframe.fibermap.meta['SURVEY'] = 'main'
+                    curframe.fibermap.meta['FAPRGRM'] = 'dark'
                     write_frame(findfile('cframe', night, expid, camera), curframe)
                     
         #- Remove one file to test missing data
@@ -152,7 +154,7 @@ class TestPixGroup(unittest.TestCase):
             args = group_spectra.parse(cmd.split()[1:])
             group_spectra.main(args)
 
-            specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
+            specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
             spectra = read_spectra(specfile)
             num_nights = i+1
             nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
@@ -166,7 +168,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
+        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
         spectra = read_spectra(specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night
 
@@ -188,7 +190,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
+        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
         spectra = read_spectra(specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
         
@@ -201,7 +203,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
+        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
         spectra = read_spectra(specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
@@ -226,7 +228,7 @@ class TestPixGroup(unittest.TestCase):
         args = group_spectra.parse(cmd.split()[1:])
         group_spectra.main(args)
 
-        specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
+        specfile = os.path.join(self.outdir, 'spectra-main-dark-19456.fits')
         spectra = read_spectra(specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
