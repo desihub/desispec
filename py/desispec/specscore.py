@@ -40,10 +40,16 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
     scores['TARGETID'] = coadd.target_ids()
     comments['TARGETID'] = 'DESI Unique Target ID'
 
+    #- if coadd.fibermap doesn't have FIBER, create dummy for Frame
+    if 'FIBER' in coadd.fibermap:
+        fibers = coadd.fibermap['FIBER']
+    else:
+        fibers = -np.arange(len(coadd.fibermap))
+
     if coadd.bands == ['brz']:
         #- i.e. this is a coadd across cameras
         fr = Frame(coadd.wave['brz'], coadd.flux['brz'], coadd.ivar['brz'],
-                    fibermap=coadd.fibermap, meta=coadd.meta,
+                    fibermap=coadd.fibermap, fibers=fibers, meta=coadd.meta,
                     resolution_data=coadd.resolution_data['brz'])
         for band in ['b', 'r', 'z']:
             bandscores, bandcomments = compute_frame_scores(fr, band=band,
@@ -55,7 +61,7 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
         for band in ['b', 'r', 'z', 'B', 'R', 'Z']:
             if band in coadd.bands:
                 fr = Frame(coadd.wave[band], coadd.flux[band], coadd.ivar[band],
-                        fibermap=coadd.fibermap, meta=coadd.meta,
+                        fibermap=coadd.fibermap, fibers=fibers, meta=coadd.meta,
                         resolution_data=coadd.resolution_data[band])
                 bandscores, bandcomments = compute_frame_scores(fr, band=band,
                         suffix='COADD', flux_per_angstrom=True)

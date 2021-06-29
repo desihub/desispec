@@ -6,6 +6,7 @@ from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
 from desispec.coaddition import (coadd, fast_resample_spectra,
         spectroperf_resample_spectra, coadd_fibermap)
+from desispec.specscore import compute_coadd_scores
 
 from desispec.maskbits import fibermask
 
@@ -24,22 +25,48 @@ class TestCoadd(unittest.TestCase):
         rdat[:,2] *= 0.25
         fmap = empty_fibermap(ns)
         fmap["TARGETID"][:]=12 # same target
-        return Spectra(bands=["x"],wave={"x":wave},flux={"x":flux},ivar={"x":ivar}, mask=None, resolution_data={"x":rdat} , fibermap=fmap)
+        return Spectra(
+                bands=["b"],
+                wave={"b":wave},
+                flux={"b":flux},
+                ivar={"b":ivar},
+                mask=None,
+                resolution_data={"b":rdat},
+                fibermap=fmap
+                )
         
-
-        
-    def _test_coadd(self):
+    def test_coadd(self):
         """Test coaddition"""
-        s1 = self._random_spectra(3,10)
+        nspec, nwave = 3, 10
+        s1 = self._random_spectra(nspec, nwave)
+        self.assertEqual(s1.flux['b'].shape[0], nspec)
+
+        #- All the same targets, coadded in place
+        s1.fibermap['TARGETID'] == 10
         coadd(s1)
+        self.assertEqual(s1.flux['b'].shape[0], 1)
         
-    def _test_spectroperf_resample(self):
+    def test_coadd_scores(self):
+        """Test coaddition"""
+        nspec, nwave = 10, 20
+        s1 = self._random_spectra(nspec, nwave)
+        s1.fibermap['TARGETID'] = np.arange(nspec) // 3
+        coadd(s1)
+        ntargets = len(np.unique(s1.fibermap['TARGETID']))
+        self.assertEqual(s1.flux['b'].shape[0], ntargets)
+
+        scores, comments = compute_coadd_scores(s1)
+
+        self.assertEqual(len(scores['TARGETID']), ntargets)
+        self.assertIn('MEDIAN_COADD_FLUX_B', scores.keys())
+
+    def test_spectroperf_resample(self):
         """Test spectroperf_resample"""
         s1 = self._random_spectra(1,20)
         wave = np.linspace(5000, 5100, 10)
         s2 = spectroperf_resample_spectra(s1,wave=wave)
         
-    def _test_fast_resample(self):
+    def test_fast_resample(self):
         """Test fast_resample"""
         s1 = self._random_spectra(1,20)
         wave = np.linspace(5000, 5100, 10)
@@ -126,12 +153,12 @@ class TestCoadd(unittest.TestCase):
             self.assertNotIn(col, expfm.colnames)
 
 
-    def _test_fiberstatus(self):
+    def test_fiberstatus(self):
         """Test that FIBERSTATUS=0 isn't included in coadd"""
         def _makespec(nspec, nwave):
             s1 = self._random_spectra(nspec, nwave)
-            s1.flux['x'][:,:] = 1.0
-            s1.ivar['x'][:,:] = 1.0
+            s1.flux['b'][:,:] = 1.0
+            s1.ivar['b'][:,:] = 1.0
             return s1
 
         #- Nothing masked
@@ -145,8 +172,8 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec)
         self.assertEqual(s1.fibermap['COADD_EXPTIME'][0], expt*nspec)
         self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 0)
-        self.assertTrue(np.all(s1.flux['x'] == 1.0))
-        self.assertTrue(np.allclose(s1.ivar['x'], 1.0*nspec))
+        self.assertTrue(np.all(s1.flux['b'] == 1.0))
+        self.assertTrue(np.allclose(s1.ivar['b'], 1.0*nspec))
 
         #- Two spectra masked
         nspec, nwave = 5,10
@@ -160,8 +187,8 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec-2)
         self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 0)
-        self.assertTrue(np.all(s1.flux['x'] == 1.0))
-        self.assertTrue(np.allclose(s1.ivar['x'], 1.0*(nspec-2)))
+        self.assertTrue(np.all(s1.flux['b'] == 1.0))
+        self.assertTrue(np.allclose(s1.ivar['b'], 1.0*(nspec-2)))
 
         #- All spectra masked
         nspec, nwave = 5,10
@@ -174,8 +201,15 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], 0)
         self.assertEqual(s1.fibermap['FIBERSTATUS'][0], fibermask.BROKENFIBER)
-        self.assertTrue(np.all(s1.flux['x'] == 0.0))
-        self.assertTrue(np.all(s1.ivar['x'] == 0.0))
+        self.assertTrue(np.all(s1.flux['b'] == 0.0))
+        self.assertTrue(np.all(s1.ivar['b'] == 0.0))
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m desispec.test.test_coadd
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
 
 if __name__ == '__main__':
     unittest.main()           
