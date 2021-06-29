@@ -177,6 +177,11 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
+    def test_append(self):
+        """Test appending additional nights to existing spectra files"""
+        pass
+
+
 def test_suite():
     """Allows testing of only this module with the command::
 

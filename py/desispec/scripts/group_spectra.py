@@ -19,17 +19,24 @@ def parse(options=None):
     import argparse
 
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
-    parser.add_argument("--reduxdir", type=str,  help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
-    parser.add_argument("--nights", type=str,  help="YEARMMDD to add")
+    parser.add_argument("--reduxdir", type=str,
+            help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
+    parser.add_argument("--nights", type=str,
+            help="YEARMMDD to add")
     parser.add_argument("--expfile", type=str,
-        help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
+            help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
     parser.add_argument("--nside", type=int, default=64,
             help="input spectra healpix nside (default %(default)s)")
-    parser.add_argument("-o", "--outdir", type=str,  help="output directory")
+    parser.add_argument("-o", "--outdir", type=str,
+            help="output directory; all outputs in this directory")
+    parser.add_argument("--outroot", type=str,
+            help="output root directory; files in subdirectories of this dir")
     parser.add_argument("--mpi", action="store_true",
             help="Use MPI for parallelism")
-    parser.add_argument("--inframes", type=str, nargs='*', help="input frame files; ignore --reduxdir, --nights, --nside")
-    parser.add_argument("--outfile", type=str, help="output to this file; only used with --inframes")
+    parser.add_argument("--inframes", type=str, nargs='*',
+            help="input frame files; ignore --reduxdir, --nights, --nside")
+    parser.add_argument("--outfile", type=str,
+            help="output to this file; only used with --inframes")
 
     if options is None:
         args = parser.parse_args()
@@ -59,6 +66,9 @@ def main(args=None, comm=None):
     else:
         rank = 0
         size = 1
+
+    if args.outroot is None and args.outdir is None:
+        args.outroot = io.specprod_dir()
 
     #- Combining a set of frame files instead of a healpix?
     if args.inframes is not None:
@@ -137,7 +147,7 @@ def main(args=None, comm=None):
         keep &= (exp2pix['HEALPIX'] == pix)
         iipix = np.where(keep)[0]
         ntargets = np.sum(exp2pix['NTARGETS'][iipix])
-        log.info('Rank {} pix {} with {} targets on {} spectrograph exposures'.format(
+        log.info('Rank {} pix {} with {} targets on {} frames'.format(
             rank, pix, ntargets, len(iipix)))
         sys.stdout.flush()
         framekeys = list()
@@ -159,7 +169,7 @@ def main(args=None, comm=None):
         #- Identify any frames that are already in pre-existing output file
         specfile = io.findfile('spectra', nside=args.nside, groupname=pix,
                 survey=survey, faprogram=faprogram,
-                specprod_dir=args.reduxdir)
+                specprod_dir=args.outroot)
         if args.outdir:
             specfile = os.path.join(args.outdir, os.path.basename(specfile))
 
@@ -167,7 +177,7 @@ def main(args=None, comm=None):
         if os.path.exists(specfile):
             oldspectra = SpectraLite.read(specfile)
             fm = oldspectra.fibermap
-            for night, expid, spectro in set(zip(fm['NIGHT'], fm['EXPID'], fm['SPECTROID'])):
+            for night, expid, spectro in set(zip(fm['NIGHT'], fm['EXPID'], fm['PETAL_LOC'])):
                 for band in ['b', 'r', 'z']:
                     camera = band + str(spectro)
                     if (night, expid, camera) in framekeys:
