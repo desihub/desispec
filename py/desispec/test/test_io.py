@@ -2,10 +2,16 @@
 # -*- coding: utf-8 -*-
 """Test desispec.io.
 """
+
+import sys
+if __name__ == '__main__':
+    print('Run this instead:')
+    print('python setup.py test -m desispec.test.test_io')
+    sys.exit(1)
+
 import unittest
 from unittest.mock import patch, MagicMock
 import os
-import sys
 import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
@@ -433,16 +439,16 @@ class TestIO(unittest.TestCase):
         from ..io.fibermap import empty_fibermap
         fm1 = empty_fibermap(20)
         self.assertTrue(np.all(fm1['FIBER'] == np.arange(20)))
-        self.assertTrue(np.all(fm1['SPECTROID'] == 0))
+        self.assertTrue(np.all(fm1['PETAL_LOC'] == 0))
 
         fm2 = empty_fibermap(25, specmin=10)
         self.assertTrue(np.all(fm2['FIBER'] == np.arange(25)+10))
-        self.assertTrue(np.all(fm2['SPECTROID'] == 0))
+        self.assertTrue(np.all(fm2['PETAL_LOC'] == 0))
         self.assertTrue(np.all(fm2['LOCATION'][0:10] == fm1['LOCATION'][10:20]))
 
         fm3 = empty_fibermap(10, specmin=495)
         self.assertTrue(np.all(fm3['FIBER'] == np.arange(10)+495))
-        self.assertTrue(np.all(fm3['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
+        self.assertTrue(np.all(fm3['PETAL_LOC'] == [0,0,0,0,0,1,1,1,1,1]))
 
     # See https://github.com/astropy/astropy/issues/5267
     # @unittest.skipIf(PY3, "Skipping due to known problem with round-tripping in Python 3.")
