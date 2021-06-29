@@ -23,7 +23,8 @@ def parse(options=None):
     parser.add_argument("--nights", type=str,  help="YEARMMDD to add")
     parser.add_argument("--expfile", type=str,
         help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
-    parser.add_argument("--nside", type=int,default=64,help="input spectra healpix nside")
+    parser.add_argument("--nside", type=int, default=64,
+            help="input spectra healpix nside (default %(default)s)")
     parser.add_argument("-o", "--outdir", type=str,  help="output directory")
     parser.add_argument("--mpi", action="store_true",
             help="Use MPI for parallelism")
