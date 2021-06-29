@@ -18,9 +18,12 @@ from desiutil.log import get_logger
 from .util import healpix_subdirectory
 
 
-def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname=None,
-    nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
-    download=False, outdir=None, qaprod_dir=None):
+def findfile(filetype, night=None, expid=None, camera=None,
+        tile=None, groupname=None, nside=64,
+        band=None, spectrograph=None,
+        survey=None, faprogram=None,
+        rawdata_dir=None, specprod_dir=None,
+        download=False, outdir=None, qaprod_dir=None):
     """Returns location where file should be
 
     Args:
@@ -35,6 +38,8 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         nside : healpix nside
         band : one of 'b','r','z' identifying the camera band
         spectrograph : integer spectrograph number, 0-9
+        survey : e.g. sv1, sv3, main, special
+        faprogram : fiberassign program, e.g. dark, bright
 
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
@@ -56,13 +61,13 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         #
         raw = '{rawdata_dir}/{night}/{expid:08d}/desi-{expid:08d}.fits.fz',
         coordinates = '{rawdata_dir}/{night}/{expid:08d}/coordinates-{expid:08d}.fits',
-        fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        # fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
         # preproc/
         # Note: fibermap files will eventually move to preproc.
         #
-        # fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         #
@@ -92,13 +97,13 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
         #
-        # spectra- hp based
+        # spectra- healpix based
         #
-        zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',
-        coadd_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',
-        redrock_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/redrock-{nside:d}-{groupname}.h5',
-        spectra_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/spectra-{nside:d}-{groupname}.fits',
-        zbest_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/zbest-{nside:d}-{groupname}.fits',
+        zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
+        coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{groupname}.fits',
+        redrock_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{groupname}.h5',
+        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{groupname}.fits',
+        zbest_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/zbest-{survey}-{faprogram}-{groupname}.fits',
         #
         # spectra- tile based
         #
@@ -203,8 +208,12 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band,
-        'spectrograph':spectrograph
+        'spectrograph':spectrograph,
         }
+
+    #- survey and faprogram should be lower, but don't trip on None
+    actual_inputs['survey'] = None if survey is None else survey.lower()
+    actual_inputs['faprogram'] = None if faprogram is None else faprogram.lower()
 
     if 'rawdata_dir' in required_inputs:
         actual_inputs['rawdata_dir'] = rawdata_dir

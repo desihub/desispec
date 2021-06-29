@@ -91,15 +91,28 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
 
                 #- Determine healpix, allowing for NaN
                 columns = ['TARGET_RA', 'TARGET_DEC']
-                fibermap = fitsio.read(filename, 'FIBERMAP', columns=columns)
+                fibermap, hdr = fitsio.read(filename, 'FIBERMAP',
+                        columns=columns, header=True)
                 ra, dec = fibermap['TARGET_RA'], fibermap['TARGET_DEC']
                 ok = ~np.isnan(ra) & ~np.isnan(dec)
                 ra, dec = ra[ok], dec[ok]
                 allpix = desimodel.footprint.radec2pix(nside, ra, dec)
 
+                if 'SURVEY' in hdr:
+                    survey = hdr['SURVEY'].lower()
+                elif 'FA_SURV' in hdr:
+                    survey = hdr['FA_SURV'].lower()
+                else:
+                    survey = 'unknown'
+
+                if 'FAPRGRM' in hdr:
+                    faprogram = hdr['FAPRGRM'].lower()
+                else:
+                    faprogram = 'unknown'
+
                 #- Add rows for final output
                 for pix, ntargets in sorted(Counter(allpix).items()):
-                    rows.append((night, expid, spectro, pix, ntargets))
+                    rows.append((night, expid, spectro, pix, survey, faprogram, ntargets))
 
     #- Collect rows from individual ranks back to rank 0
     if comm:
@@ -116,7 +129,10 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
     #- Create the final output table
     exp2healpix = np.array(rows, dtype=[
         ('NIGHT', 'i4'), ('EXPID', 'i8'), ('SPECTRO', 'i4'),
-        ('HEALPIX', 'i8'), ('NTARGETS', 'i8')])
+        ('HEALPIX', 'i8'),
+        ('SURVEY', 'U12'),
+        ('FAPROGRAM', 'U12'),
+        ('NTARGETS', 'i8')])
 
     return exp2healpix
 
