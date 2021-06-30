@@ -346,21 +346,21 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,use_short_s
         else:
             nnull += 1
         
-
-    heading="Night {night}   Complete: {ngood}/{nnotnull}    Some: {ninter}/{nnotnull}    Bad: {nbad}/{nnotnull}".format(
-                                                                                                         night=night,\
-                                                                                                         ngood=ngood,\
-                                                                                                         nnotnull=n_notnull,\
-                                                                                                         ninter=ninter,\
-                                                                                                         nbad=nbad)        
+    # Night dropdown table
+    heading=f"Night {night}   Complete: {ngood}/{n_notnull}    Some: {ninter}/{n_notnull}    Bad: {nbad}/{n_notnull}"
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
-    nightly_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
-    # Add table
-    nightly_table_str += "<table id='c' class='nightTable'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
-    nightly_table_str += "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>"
-    nightly_table_str += "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>status</th></tr>"
+    nightly_table_str += '<button class="collapsible">' + heading + \
+                         '</button><div class="content" style="display:inline-block;min-height:0%;">\n'
+    # table header
+    nightly_table_str += "<table id='c' class='nightTable'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th>" + \
+                      "<th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>" + \
+                      "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>" + \
+                      "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>status</th></tr>"
 
+    # Add body
     nightly_table_str += main_body
+
+    # End table
     nightly_table_str += "</tbody></table></div>\n"
     nightly_table_str += '<!--End {}-->\n\n'.format(night)
     return nightly_table_str
@@ -383,19 +383,20 @@ def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None
     n_cframe: number of cframe files
     n_sky: number of sky files
     """
-    cams_per_spgrph = 3
-
+    c_per_sp = 3
     totals_by_type = {}
-    totals_by_type['ARC'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': 0,               'sframe': 0}
-    totals_by_type['FLAT'] =   {'psf': cams_per_spgrph, 'ff': cams_per_spgrph, 'frame': cams_per_spgrph, 'sframe': 0}
-    totals_by_type['SKY'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': cams_per_spgrph}
-    totals_by_type['TWILIGHT']={'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': 0}
-    totals_by_type['ZERO'] =   {'psf': 0,               'ff': 0,               'frame': 0,               'sframe': 0}
-    totals_by_type['SCIENCE'], totals_by_type['NONE'] = totals_by_type['SKY'], totals_by_type['SKY']
+    totals_by_type['arc'] =     {'psf': c_per_sp, 'ff': 0,        'frame': 0,        'std': 0, 'sframe': 0}
+    totals_by_type['flat'] =    {'psf': c_per_sp, 'ff': c_per_sp, 'frame': c_per_sp, 'std': 0, 'sframe': 0}
+    totals_by_type['science'] = {'psf': c_per_sp, 'ff': 0,        'frame': c_per_sp, 'std': 1, 'sframe': c_per_sp}
+    totals_by_type['twilight'] ={'psf': c_per_sp, 'ff': 0,        'frame': c_per_sp, 'std': 0, 'sframe': 0}
+    totals_by_type['zero'] =    {'psf': 0,        'ff': 0,        'frame': 0,        'std': 0, 'sframe': 0}
+    totals_by_type['dark'] = totals_by_type['zero']
+    totals_by_type['sky']  = totals_by_type['science']
+    totals_by_type['none'] = totals_by_type['science']
 
-    table_dir =  os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'),'processing_tables')
-    file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
-    #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
+    file_processing = get_processing_table_pathname(specprod=None, prodmod=night)
+    procpath,procname = os.path.split(file_processing)
+    file_unprocessed = os.path.join(procpath,procname.replace('processing','unprocessed'))
     file_exptable=get_exposure_table_pathname(night)
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
@@ -447,28 +448,30 @@ def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None
                 header_info[keyword] = h1[keyword]
         """
         flavor='NULL'
-        obstype = str(d_exp.loc[expid]['OBSTYPE']).upper().strip()
+        obstype = str(d_exp.loc[expid]['OBSTYPE']).lower().strip()
         exptime = d_exp.loc[expid]['EXPTIME']
         spcgrphs = str(d_exp.loc[expid]['CAMWORD'])[1:] #spcgrphs = str(d_exp.loc[expid]['SPECTROGRAPHS'])
         tileid = str(d_exp.loc[expid]['TILEID'])
-        if obstype == 'SCIENCE':
+        if obstype == 'science':
             tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/'+tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
-        elif obstype == 'OTHER' or obstype == 'ZERO':
-            continue
+        # elif obstype == 'other' or obstype == 'zero':
+        #     continue
         else:
-            tileid_str =  tileid
-        file_psf = glob.glob(fileglob.format(zfild_expid, 'psf-[brz]?-????????.fits'))
-        file_fit_psf = glob.glob(fileglob.format(zfild_expid, 'fit-psf-[brz]?-????????.fits'))
-        file_fiberflat = glob.glob(fileglob.format(zfild_expid, 'fiberflat-[brz]?-????????.fits'))
-        file_frame = glob.glob(fileglob.format(zfild_expid, 'frame-??-????????.fits'))
-        file_sframe = glob.glob(fileglob.format(zfild_expid, 'sframe-??-????????.fits'))
-        file_cframe = glob.glob(fileglob.format(zfild_expid, 'cframe-??-????????.fits'))
-        file_sky = glob.glob(fileglob.format(zfild_expid, 'sky*.fits'))
-        file_stdstar = glob.glob(fileglob.format(zfild_expid, 'stdstars-?-????????.fits'))
+            tileid_str = tileid
+
+        cam_glob_suffix = f'[brz][0-9]-{zfild_expid}.fits'
+        file_psf = glob.glob(fileglob.format(zfild_expid, f'psf-{cam_glob_suffix}'))
+        file_fit_psf = glob.glob(fileglob.format(zfild_expid, f'fit-psf-{cam_glob_suffix}'))
+        file_fiberflat = glob.glob(fileglob.format(zfild_expid, f'fiberflat-{cam_glob_suffix}'))
+        file_frame = glob.glob(fileglob.format(zfild_expid, f'frame-{cam_glob_suffix}'))
+        file_sframe = glob.glob(fileglob.format(zfild_expid, f'sframe-{cam_glob_suffix}'))
+        file_cframe = glob.glob(fileglob.format(zfild_expid, f'cframe-{cam_glob_suffix}'))
+        file_sky = glob.glob(fileglob.format(zfild_expid, f'sky-{cam_glob_suffix}'))
+        file_stdstar = glob.glob(fileglob.format(zfild_expid, f'stdstars-[0-9]-{zfild_expid}.fits'))
         if obstype in totals_by_type.keys():
             n_tots = totals_by_type[obstype]
         else:
-            n_tots = totals_by_type['NONE']
+            n_tots = totals_by_type['none']
 
         n_spgrph = int(len(list(spcgrphs)))
         row_color = "NULL"
@@ -483,19 +486,15 @@ def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None
         if obstype.lower() == 'arc':
             nfiles = npsfs
             n_tot_spgrphs = n_spgrph * n_tots['psf']
-            nstdstar_expected = 0
         elif obstype.lower() == 'flat':
             nfiles = nframes
             n_tot_spgrphs = n_spgrph * n_tots['frame']
-            nstdstar_expected = 0
         elif obstype.lower() == 'science':
             nfiles = ncframes
             n_tot_spgrphs = n_spgrph * n_tots['sframe']
-            nstdstar_expected = n_spgrph
         else:
             nfiles = 0
             n_tot_spgrphs = 0
-            nstdstar_expected = 0
 
         if n_tots['psf'] == 0:
             row_color = 'NULL'
@@ -510,8 +509,7 @@ def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None
         else:
             row_color = 'OVERFUL'
 
-        hlink1 = '----'
-        hlink2 = '----'
+        slurm_hlink, log_hlink = '----', '----'
         if expid in expid_processing:
             status = 'processing'
         else:
@@ -539,41 +537,28 @@ def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None
                     spectrographs = log.split('-')[-2]
             if newest_jobid != '00000000' and len(spectrographs)!=0:
                 logname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
-                #logname_only = logname.split('/')[-1]
-
                 slurmname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'','slurm')
-                #slurmname_only = slurmname.split('/')[-1]
 
-                ## Use relative paths to files on disk rather than using sym links
-                relpath_log = os.path.relpath(logname, webpage)
-                relpath_slurm = os.path.relpath(slurmname, webpage)
+                slurm_hlink = _hyperlink( os.path.relpath(slurmname, webpage), 'Slurm')
+                log_hlink   = _hyperlink( os.path.relpath(logname, webpage),   'Log'  )
 
-                #relpath_log = os.path.join('links',night[:-2],logname_only)
-                #relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
-                #if not os.path.exists(os.path.join(webpage,relpath_log)):
-                #    os.symlink(logname,os.path.join(webpage,relpath_log))
-                #if not os.path.exists(os.path.join(webpage, relpath_slurm)):
-                #    os.symlink(slurmname, os.path.join(webpage, relpath_slurm))
-
-                hlink1 = _hyperlink(relpath_slurm, 'Slurm')
-                hlink2 = _hyperlink(relpath_log, 'Log')
-
-        output[str(expid)] = [row_color, \
-                              str(expid), \
-                              flavor,\
-                              obstype,\
-                              str(exptime), \
-                              'SP: '+spcgrphs.replace('SP',''), \
-                              tileid_str, \
-                              _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
-                              _str_frac( nframes,             n_spgrph * n_tots['frame']), \
-                              _str_frac( nfiberflat, n_spgrph * n_tots['ff']), \
-                              _str_frac( nsframe,    n_spgrph * n_tots['sframe']), \
-                              _str_frac( nsky,       n_spgrph * n_tots['sframe']), \
-                              _str_frac( nstdstar,   nstdstar_expected), \
-                              _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
-                              hlink1, \
-                              hlink2, status     ]
+        output[str(expid)] = [ row_color,
+                               str(expid),
+                               flavor,
+                               obstype,
+                               str(exptime),
+                               'SP: '+spcgrphs.replace('SP',''),
+                               tileid_str,
+                               _str_frac( npsfs,      n_spgrph * n_tots['psf'] ),
+                               _str_frac( nframes,    n_spgrph * n_tots['frame'] ),
+                               _str_frac( nfiberflat, n_spgrph * n_tots['ff'] ),
+                               _str_frac( nsframe,    n_spgrph * n_tots['sframe'] ),
+                               _str_frac( nsky,       n_spgrph * n_tots['sframe'] ),
+                               _str_frac( nstdstar,   n_spgrph * n_tots['std'] ),
+                               _str_frac( ncframes,   n_spgrph * n_tots['sframe'] ),
+                               slurm_hlink,
+                               log_hlink,
+                               status            ]
     return output
 
 
