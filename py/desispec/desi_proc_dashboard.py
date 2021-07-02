@@ -338,7 +338,7 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
         if not show_null and 'NULL' in table_row:
             continue
         
-        main_body += table_row
+        main_body += ("\t" + table_row + "\n")
         status = str(row_info[-1]).lower()
         if status == 'processing':
             if 'GOOD' in table_row:
@@ -363,19 +363,20 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
             nnull += 1
         
     # Night dropdown table
-    heading = f"Night {night}   Complete: {ngood}/{n_notnull}    Some: {ninter}/{n_notnull}    Bad: {nbad}/{n_notnull}"
-    heading += f"    Unprocessed: {noprocess}    NoExpTabEntry: {norecord}   Uncategorized: {nnull}"
+    htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
+    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Some: {ninter}/{n_notnull}{htmltab}Bad: {nbad}/{n_notnull}"
+    heading += f"{htmltab}Unprocessed: {noprocess}{htmltab}NoExpTabEntry: {norecord}{htmltab}Uncategorized: {nnull}"
 
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">' + heading + \
                          '</button><div class="content" style="display:inline-block;min-height:0%;">\n'
     # table header
-    nightly_table_str += "<table id='c' class='nightTable'><tbody><tr>" + \
-                         "<th>Expid</th><th>OBSTYPE</th><th>LASTSTEP</th>" + \
+    nightly_table_str += "<table id='c' class='nightTable'><tbody>\n" + \
+                         "\t<tr><th>Expid</th><th>OBSTYPE</th><th>LASTSTEP</th>" + \
                          "<th>EXPTIME</th><th>PROCCAMWORD</th><th>TILEID</th>" + \
                          "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>" + \
                          "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>COMMENTS</th>" + \
-                         "<th>status</th></tr>"
+                         "<th>status</th></tr>\n"
 
     # Add body
     nightly_table_str += main_body
