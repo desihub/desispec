@@ -339,7 +339,7 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
             continue
         
         main_body += table_row
-        if str(row_info[0]).lower() == 'processing':
+        if str(row_info[-1]).lower() == 'processing':
             if 'GOOD' in table_row:
                 ngood += 1
                 n_notnull += 1
