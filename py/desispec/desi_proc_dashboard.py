@@ -516,12 +516,22 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         zfild_expid = str(expid).zfill(8)
         obstype = str(row['OBSTYPE']).lower().strip()
+
+        tileid = str(row['TILEID'])
+        if obstype == 'science':
+            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/' + \
+                         tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
+        elif obstype == 'zero': # or obstype == 'other':
+            continue
+        else:
+            tileid_str = '----'
+
         exptime = np.round(row['EXPTIME'],decimals=1)
         if expid in proccamwords_by_expid.keys():
             proccamword = proccamwords_by_expid[expid]
         else:
             proccamword = row['CAMWORD']
-        tileid = str(row['TILEID'])
+
         laststep = str(row['LASTSTEP'])
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
         comments = list(row['COMMENTS'])
@@ -532,13 +542,6 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         if bad_ind is not None:
             comments.pop(bad_ind)
         comments = ', '.join(comments)
-        if obstype == 'science':
-            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/' + \
-                         tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
-        # elif obstype == 'other' or obstype == 'zero':
-        #     continue
-        else:
-            tileid_str = '----'
 
         if obstype in expected_by_type.keys():
             expected = expected_by_type[obstype].copy()
