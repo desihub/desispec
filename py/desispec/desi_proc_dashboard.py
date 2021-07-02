@@ -521,7 +521,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
         comments = list(row['COMMENTS'])
         bad_ind = None
-        for ii,comment in comments:
+        for ii,comment in enumerate(comments):
             if 'For EXPTIME: req=' in comment:
                 bad_ind = ii
         if bad_ind is not None:
