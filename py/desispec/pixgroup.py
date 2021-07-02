@@ -199,6 +199,10 @@ class FrameLite(object):
             fibermap = fx['FIBERMAP'].read()
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
+                if 'TARGETID' not in scores.dtype.names:
+                    tmp = Table(scores)
+                    tmp.add_column(fibermap['TARGETID'], index=0, name='TARGETID')
+                    scores = np.asarray(tmp)
             else:
                 scores = None
 
@@ -622,10 +626,11 @@ def frames2spectra(frames, pix=None, nside=64):
             names = list()
             data = list()
             for band in bands[1:]:
-                names.extend(scores[band].dtype.names)
                 for colname in scores[band].dtype.names:
-                    data.append(scores[band][colname])
-
+                    #- TARGETID appears in multiple bands; only add once
+                    if colname != 'TARGETID':
+                        names.append(colname)
+                        data.append(scores[band][colname])
             scores = np.lib.recfunctions.append_fields(
                     scores[bands[0]], names, data)
 

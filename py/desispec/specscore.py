@@ -41,7 +41,7 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
     comments['TARGETID'] = 'DESI Unique Target ID'
 
     #- if coadd.fibermap doesn't have FIBER, create dummy for Frame
-    if 'FIBER' in coadd.fibermap:
+    if 'FIBER' in coadd.fibermap.dtype.names:
         fibers = coadd.fibermap['FIBER']
     else:
         fibers = -np.arange(len(coadd.fibermap))
