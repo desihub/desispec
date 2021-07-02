@@ -364,8 +364,8 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
         
     # Night dropdown table
     htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
-    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Some: {ninter}/{n_notnull}{htmltab}Bad: {nbad}/{n_notnull}"
-    heading += f"{htmltab}Unprocessed: {noprocess}{htmltab}NoExpTabEntry: {norecord}{htmltab}Uncategorized: {nnull}"
+    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Incomp: {ninter}/{n_notnull}{htmltab}Failed: {nbad}/{n_notnull}"
+    heading += f"{htmltab}Unproc: {noprocess}{htmltab}NoTabEntry: {norecord}{htmltab}Other: {nnull}"
 
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">' + heading + \
@@ -515,7 +515,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         zfild_expid = str(expid).zfill(8)
         obstype = str(row['OBSTYPE']).lower().strip()
-        exptime = row['EXPTIME']
+        exptime = np.round(row['EXPTIME'],decimals=1)
         if expid in proccamwords_by_expid.keys():
             proccamword = proccamwords_by_expid[expid]
         else:
@@ -537,7 +537,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         # elif obstype == 'other' or obstype == 'zero':
         #     continue
         else:
-            tileid_str = tileid
+            tileid_str = '----'
 
         if obstype in expected_by_type.keys():
             expected = expected_by_type[obstype].copy()
