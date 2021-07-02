@@ -430,17 +430,20 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
 
-    exptab_colnames = ['EXPID', 'CAMWORD', 'EXPTIME', 'OBSTYPE', 'TILEID', 'LASTSTEP', 'COMMENTS']
-    exptab_dtypes = [int,'S20',float,'S10',int,'S10',np.ndarray]
+    exptab_colnames = ['EXPID', 'CAMWORD', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
+    exptab_dtypes = [int, 'S20', float, 'S10', int, np.ndarray, 'S10']
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
-        d_exp = d_exp[exptab_colnames]
+        if 'LASTSTEP' in d_exp.colnames:
+            d_exp = d_exp[exptab_colnames]
+        else:
+            d_exp = d_exp[exptab_colnames[:-1]]
+            d_exp['LASTSTEP'] = 'all'
     except:
         print(f'WARNING: Error reading exptable for {night}. Changing check_on_disk to True and scanning files on disk.')
         d_exp = Table(names=exptab_colnames,dtype=exptab_dtypes)
         check_on_disk = True
 
-    #########################
     unaccounted_for_expids = []
     if check_on_disk:
         rawdatatemplate = os.path.join(rawdata_root(), night, '{zexpid}', 'desi-{zexpid}.fits.fz')
@@ -460,7 +463,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
             if header_info['OBSTYPE'] in default_obstypes:
                 header_info['EXPID'] = expid
-                header_info['LASTSTEP'] = 'unknown'
+                header_info['LASTSTEP'] = 'all'
                 header_info['COMMENTS'] = []
                 if header_info['SPCGRPHS'] != 'unknown':
                     header_info['CAMWORD'] = 'a' + str(header_info['SPCGRPHS']).replace(' ', '').replace(',', '')
@@ -469,7 +472,6 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                 header_info.pop('SPCGRPHS')
                 d_exp.add_row(header_info)
                 unaccounted_for_expids.append(expid)
-    ############################
 
     try:
         d_processing = load_table(file_processing, tabletype='proctable')
@@ -767,6 +769,8 @@ def _table_row(elements,idlabel=None):
                 row_str += _table_element_style(elem,'background-color:'+color_profile['INCOMPLETE']['background'])
             elif chars[0]!='0' and int(chars[0])==int(chars[1]):
                 row_str += _table_element_style(elem,'background-color:'+color_profile['GOOD']['background']) # Medium Aqua Green
+            else:
+                row_str += _table_element_style(elem, 'background-color:' + color_profile['OVERFUL']['background'])  # Medium Aqua Green
 
         else:
             row_str += _table_element(elem)
