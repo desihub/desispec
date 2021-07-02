@@ -444,7 +444,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         check_on_disk = True
 
     #########################
-    unaccounted = []
+    unaccounted_for_expids = []
     if check_on_disk:
         rawdatatemplate = os.path.join(rawdata_root(), night, '{zexpid}', 'desi-{zexpid}.fits.fz')
         rawdata_fileglob = rawdatatemplate.format(zexpid='*')
@@ -472,7 +472,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                     header_info['CAMWORD'] = header_info['SPCGRPHS']
                 header_info.pop('SPCGRPHS')
                 d_exp.add_row(header_info)
-                unaccounted.append(expid)
+                unaccounted_for_expids.append(expid)
     ############################
 
     try:
@@ -506,11 +506,12 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     d_exp.sort('EXPID',reverse=True)
     for row in d_exp:
         expid = int(row['EXPID'])
-        if night_info_pre is not None and str(expid) in night_info_pre and night_info_pre[str(expid)][0] == 'GOOD':
+        ## For those already marked as GOOD or NULL in cached rows, take that and move on
+        if night_info_pre is not None and str(expid) in night_info_pre and night_info_pre[str(expid)][0] in ['GOOD','NULL']:
             output[str(expid)] = night_info_pre[str(expid)]
             continue
-        zfild_expid = str(expid).zfill(8)
 
+        zfild_expid = str(expid).zfill(8)
         obstype = str(row['OBSTYPE']).lower().strip()
         exptime = row['EXPTIME']
         if expid in proccamwords_by_expid.keys():
@@ -581,14 +582,14 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         else:
             row_color = 'OVERFUL'
 
-        slurm_hlink, log_hlink = '----', '----'
         if expid in expid_processing:
             status = 'processing'
-        elif expid in unaccounted:
+        elif expid in unaccounted_for_expids:
             status = 'unaccounted'
         else:
             status = 'unprocessed'
 
+        slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
             file_head = obstype.lower()
             lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
