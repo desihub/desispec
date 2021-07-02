@@ -364,8 +364,9 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
         
     # Night dropdown table
     htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
-    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Incomp: {ninter}/{n_notnull}{htmltab}Failed: {nbad}/{n_notnull}"
-    heading += f"{htmltab}Unproc: {noprocess}{htmltab}NoTabEntry: {norecord}{htmltab}Other: {nnull}"
+    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Incomplete: {ninter}/{n_notnull}{htmltab}"
+    heading += f"Failed: {nbad}/{n_notnull}"
+    heading += f"{htmltab}Unprocessed: {noprocess}{htmltab}NoTabEntry: {norecord}{htmltab}Other: {nnull}"
 
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">' + heading + \
