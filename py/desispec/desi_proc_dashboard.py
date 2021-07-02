@@ -373,8 +373,8 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
                          "<th>Expid</th><th>OBSTYPE</th><th>LASTSTEP</th>" + \
                          "<th>EXPTIME</th><th>PROCCAMWORD</th><th>TILEID</th>" + \
                          "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>" + \
-                         "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>status</th>" + \
-                         "</tr>"
+                         "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>COMMENTS</th>" + \
+                         "<th>status</th></tr>"
 
     # Add body
     nightly_table_str += main_body
@@ -518,7 +518,15 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             proccamword = row['CAMWORD']
         tileid = str(row['TILEID'])
         laststep = str(row['LASTSTEP'])
-        comments = ', '.join(row['COMMENTS'])
+        ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
+        comments = list(row['COMMENTS'])
+        bad_ind = None
+        for ii,comment in comments:
+            if 'For EXPTIME: req=' in comment:
+                bad_ind = ii
+        if bad_ind is not None:
+            comments.pop(bad_ind)
+        comments = ', '.join(comments)
         if obstype == 'science':
             tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/' + \
                          tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
