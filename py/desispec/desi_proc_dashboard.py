@@ -339,7 +339,8 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
             continue
         
         main_body += table_row
-        if str(row_info[-1]).lower() == 'processing':
+        status = str(row_info[-1]).lower()
+        if status == 'processing':
             if 'GOOD' in table_row:
                 ngood += 1
                 n_notnull += 1
@@ -354,9 +355,9 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
                 n_notnull += 1
             else:
                 nnull += 1
-        elif str(row_info[0]).lower() == 'unprocessed':
+        elif status == 'unprocessed':
             noprocess += 1
-        elif str(row_info[0]).lower() == 'unrecorded':
+        elif status == 'unrecorded':
             norecord += 1
         else:
             nnull += 1
