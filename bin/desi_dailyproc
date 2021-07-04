@@ -19,8 +19,21 @@ import numpy as np
 ########################
 ### Helper Functions ###
 ########################
-from desispec.desi_proc_dashboard import what_night_is_it, find_newexp, check_running,\
+from desispec.desi_proc_dashboard import what_night_is_it, check_running,\
                                          get_file_list, get_skipped_expids
+
+def find_new_nightexp(night, fileglob, known_exposures):
+    """
+    Check the path given for new exposures
+    """
+    datafiles = sorted(glob.glob(fileglob))
+    newexp = list()
+    for filepath in datafiles:
+        expid = int(os.path.basename(os.path.dirname(filepath)))
+        if (night, expid) not in known_exposures:
+            newexp.append((night, expid))
+
+    return set(newexp)
 
 def get_catchup_nights(catchup_filename, docatchup=True):
     return get_file_list(filename=catchup_filename, doaction=docatchup)
@@ -186,7 +199,7 @@ def main(args):
 
     for night in get_nights(catchup_filename,args):
         fileglob = '{}/preproc/{}/*/preproc-*'.format(reduxdir, night)
-        newexp = find_newexp(night, fileglob, known_exposures)
+        newexp = find_new_nightexp(night, fileglob, known_exposures)
         print('{} exposures already processed on {}'.format(len(newexp), night))
         known_exposures.update(newexp)
 
@@ -224,7 +237,7 @@ def main(args):
             fileglob = '{}/{}/*/desi-*.fits.fz'.format(
                 os.getenv('DESI_SPECTRO_DATA'), night)
 
-            newexp = find_newexp(night, fileglob, known_exposures)
+            newexp = find_new_nightexp(night, fileglob, known_exposures)
             if len(newexp) > 0:
                 ## If we're still processing new exposures, continue to run while loop
                 new_exposures_run = True
