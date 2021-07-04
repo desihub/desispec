@@ -84,8 +84,8 @@ class TestSpectra(unittest.TestCase):
 
         for s in range(self.nspec):
             for b in self.bands:
-                self.wave[b] = np.arange(self.nwave)
-                self.flux[b] = np.repeat(np.arange(self.nspec), 
+                self.wave[b] = np.arange(self.nwave, dtype=float)
+                self.flux[b] = np.repeat(np.arange(self.nspec, dtype=float),
                     self.nwave).reshape( (self.nspec, self.nwave) ) + 3.0
                 self.ivar[b] = 1.0 / self.flux[b]
                 self.mask[b] = np.tile(np.arange(2, dtype=np.uint32), 
