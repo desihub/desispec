@@ -175,7 +175,7 @@ class FrameLite(object):
         if not isinstance(index, slice):
             index = np.atleast_1d(index)
 
-        if self.scores:
+        if self.scores is not None:
             scores = self.scores[index]
         else:
             scores = None
@@ -491,14 +491,15 @@ def add_missing_frames(frames):
             header['camera'] = bandcam
 
             #- Make new blank scores, replacing trailing band _B/R/Z
-            dtype = list()
             if frame.scores is not None:
+                dtype = [ ('TARGETID', 'i8') ]
                 for name in frame.scores.dtype.names:
                     if name.endswith('_'+frameband.upper()):
                         bandname = name[0:-1] + band.upper()
                         dtype.append((bandname, type(frame.scores[name][0])))
 
                 scores = np.zeros(nspec, dtype=dtype)
+                scores['TARGETID'] = frame.scores['TARGETID']
             else:
                 scores = None
 
@@ -523,6 +524,9 @@ def frames2spectra(frames, pix=None, nside=64):
         the requested healpix pixel `pix`
     '''
     log = get_logger()
+
+    #- shallow copy of frames dict in case we augment with blank frames
+    frames = frames.copy()
 
     #- To support combining old+new data, recalculate TSNR2 if any
     #- frames are missing TSNR2* scores present in other frames of same bad.
