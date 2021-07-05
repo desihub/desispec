@@ -24,7 +24,11 @@ class TestCoadd(unittest.TestCase):
         rdat[:,1] *= 0.5
         rdat[:,2] *= 0.25
         fmap = empty_fibermap(ns)
-        fmap["TARGETID"][:]=12 # same target
+        #- add fibermap columns in spectra from Frame headers
+        fmap["TARGETID"] = 12
+        fmap["TILEID"] = 1000
+        fmap["NIGHT"] = 20200101
+        fmap["EXPID"] = 5000 + np.arange(ns)
         return Spectra(
                 bands=["b"],
                 wave={"b":wave},
@@ -154,7 +158,7 @@ class TestCoadd(unittest.TestCase):
 
 
     def test_fiberstatus(self):
-        """Test that FIBERSTATUS=0 isn't included in coadd"""
+        """Test that FIBERSTATUS != 0 isn't included in coadd"""
         def _makespec(nspec, nwave):
             s1 = self._random_spectra(nspec, nwave)
             s1.flux['b'][:,:] = 1.0
