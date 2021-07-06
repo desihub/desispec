@@ -2,8 +2,25 @@
 desispec Change Log
 ===================
 
-0.43.0 (unreleased)
+0.44.0 (unreleased)
 -------------------
+
+* Add QSO afterburners for MgII and QuasarNet (PR `#1312`_).
+* Spectra I/O for extra catalog (PR `#1313`_).
+* Expand Spectra.select and .update functionality (PR `#1319`_).
+* Add optional support for gpu_specter for extractions (PR `#993`_).
+
+.. _`#993`: https://github.com/desihub/desispec/issues/993
+.. _`#1312`: https://github.com/desihub/desispec/issues/1312
+.. _`#1313`: https://github.com/desihub/desispec/issues/1313
+.. _`#1319`: https://github.com/desihub/desispec/issues/1319
+
+0.43.0 (2021-06-21)
+-------------------
+
+This version was used for QA assessment of the first 315 main survey tiles
+released for unlocking overlapping tiles.  That was done pre-tag under the
+development version "0.42.0.dev5412".
 
 * Improved stitching of sky spectra from different cameras (PR `#1273`_).
 * TSNR updates (PR `#1274`_ and branch PRs `#1275`_, `#1277`_, `#1279`_,
@@ -20,6 +37,7 @@ desispec Change Log
 * Adjust exposure QA cuts, cleanup outputs (PRs `#1316`_, `#1318`_).
 * Simplified tile QA (PR `#1317`_).
 * zmtl using tile QA to set ZWARN bits (PR `#1310`_).
+* Look for manifest files in nightly processing (PR `#1320`_).
 
 .. _`#1273`: https://github.com/desihub/desispec/issues/1273
 .. _`#1274`: https://github.com/desihub/desispec/issues/1274
@@ -42,6 +60,7 @@ desispec Change Log
 .. _`#1316`: https://github.com/desihub/desispec/issues/1316
 .. _`#1317`: https://github.com/desihub/desispec/issues/1317
 .. _`#1318`: https://github.com/desihub/desispec/issues/1318
+.. _`#1320`: https://github.com/desihub/desispec/issues/1320
 
 0.42.0 (2021-05-14)
 -------------------

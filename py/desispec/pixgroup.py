@@ -263,7 +263,8 @@ class SpectraLite(object):
         #- for compatibility with full Spectra objects
         self.meta = None
         self.extra = None
-
+        self.extra_catalog = None
+        
     def target_ids(self):
         """
         Return list of unique target IDs.

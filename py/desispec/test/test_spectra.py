@@ -84,8 +84,8 @@ class TestSpectra(unittest.TestCase):
 
         for s in range(self.nspec):
             for b in self.bands:
-                self.wave[b] = np.arange(self.nwave)
-                self.flux[b] = np.repeat(np.arange(self.nspec), 
+                self.wave[b] = np.arange(self.nwave, dtype=float)
+                self.flux[b] = np.repeat(np.arange(self.nspec, dtype=float),
                     self.nwave).reshape( (self.nspec, self.nwave) ) + 3.0
                 self.ivar[b] = 1.0 / self.flux[b]
                 self.mask[b] = np.tile(np.arange(2, dtype=np.uint32), 
@@ -97,6 +97,7 @@ class TestSpectra(unittest.TestCase):
                 self.extra[b]["FOO"] = self.flux[b]
 
         self.scores = dict(BLAT=np.arange(self.nspec), FOO=np.ones(self.nspec))
+        self.scores_comments = dict(BLAT='blat blat', FOO='foo foo')
         self.extra_catalog = Table()
         self.extra_catalog['A'] = np.arange(self.nspec)
         self.extra_catalog['B'] = np.ones(self.nspec)
@@ -122,11 +123,16 @@ class TestSpectra(unittest.TestCase):
             nt.assert_array_almost_equal(spec.ivar[band], self.ivar[band])
             nt.assert_array_equal(spec.mask[band], self.mask[band])
             nt.assert_array_almost_equal(spec.resolution_data[band], self.res[band])
+            if spec.extra is not None:
+                for key, val in self.extra[band].items():
+                    nt.assert_array_almost_equal(spec.extra[band][key], val)
+        if spec.extra_catalog is not None:
+            assert(np.all(spec.extra_catalog == self.extra_catalog))
 
 
     def test_io(self):
 
-        # manually create the spectra and write.
+        # manually create the spectra and write
         spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
             ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
             fibermap=self.fmap1, meta=self.meta, extra=self.extra)
@@ -138,6 +144,31 @@ class TestSpectra(unittest.TestCase):
 
         # read back in and verify
         comp = read_spectra(self.fileio)
+        self.verify(comp, self.fmap1)
+
+        # test writing/reading with scores
+        spec.scores = self.scores
+        path = write_spectra(self.fileio, spec)
+        comp = read_spectra(self.fileio)
+        self.verify(comp, self.fmap1)
+
+        # ... and reading/writing with scores + comments
+        spec.scores_comments = self.scores_comments
+        path = write_spectra(self.fileio, spec)
+        comp = read_spectra(self.fileio)
+        self.verify(comp, self.fmap1)
+
+        # test I/O with the extra_catalog HDU enabled
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, 
+            ivar=self.ivar, mask=self.mask, resolution_data=self.res, 
+            fibermap=self.fmap1, meta=self.meta, extra=self.extra,
+            extra_catalog=self.extra_catalog)
+
+        path = write_spectra(self.fileio, spec)
+        assert(path == os.path.abspath(self.fileio))
+
+        comp = read_spectra(self.fileio)
+        self.assertTrue(comp.extra_catalog is not None)
         self.verify(comp, self.fmap1)
 
 
@@ -183,11 +214,47 @@ class TestSpectra(unittest.TestCase):
 
         nights = list(range(self.nspec))
 
-        nt = comp.select(nights=nights)
-        self.verify(nt, self.fmap1)
+        nig = comp.select(nights=nights)
+        self.verify(nig, self.fmap1)
 
-        nt = comp.select(nights=nights, invert=True)
-        self.verify(nt, self.fmap2)
+        nig = comp.select(nights=nights, invert=True)
+        self.verify(nig, self.fmap2)
+
+        #- scores and extra_catalog in select+update
+        spec = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
+            meta=self.meta, extra=self.extra, extra_catalog=self.extra_catalog, scores=self.scores)
+
+        nsel = 2
+        expids = list(range(nsel))
+        #- return_index option
+        specsel, inds = spec.select(exposures=expids, return_index=True)
+        nt.assert_array_equal(inds, np.arange(nsel))
+
+        self.assertEqual(len(specsel.extra_catalog), nsel)
+        nt.assert_array_equal(specsel.extra_catalog.dtype, self.extra_catalog.dtype)
+        self.assertEqual(len(specsel.scores['BLAT']), nsel)
+        nt.assert_array_equal(specsel.scores['BLAT'].dtype, self.scores['BLAT'].dtype)
+
+        ntot = 4
+        specsel.update(spec[nsel:ntot])
+        self.assertEqual(specsel.num_spectra(), ntot)
+        self.assertEqual(len(specsel.scores['BLAT']), ntot)
+        self.assertEqual(len(specsel.extra_catalog), ntot)
+
+        #- Behavior of update when fibermaps differ, and FIBER or EXPID is not there
+        fibermap_coadd = copy.deepcopy(self.fmap1)
+        fibermap_coadd.remove_columns(['FIBER', 'EXPID', 'NIGHT'])
+        fibermap_coadd.add_column(10, name='NUM_EXPID')
+        spec_coadd = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
+            mask=self.mask, resolution_data=self.res, meta=self.meta, extra=self.extra,
+            fibermap=fibermap_coadd, scores=None)
+        spec.update(spec_coadd)
+        self.assertEqual(spec.num_spectra(), 2*self.nspec)
+        nt.assert_array_equal(spec.fibermap.dtype, self.fmap1.dtype)
+        nt.assert_array_equal(spec.fibermap['NIGHT'][self.nspec:], 0)
+        nt.assert_array_equal(spec.fibermap['TARGETID'][0:self.nspec], spec.fibermap['TARGETID'][self.nspec:])
+
 
     def test_stack(self):
         """Test desispec.spectra.stack"""
@@ -226,7 +293,7 @@ class TestSpectra(unittest.TestCase):
         spx = stack([sp1, sp2, sp3])
 
     def test_slice(self):
-        """Test desispec.spectra.stack"""
+        """Test desispec.spectra.__getitem__"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
             mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
             meta=self.meta, extra=self.extra, scores=self.scores,

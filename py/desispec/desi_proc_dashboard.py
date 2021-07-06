@@ -2,21 +2,26 @@ import argparse
 import os,glob
 import re
 from astropy.io import fits,ascii
+from astropy.table import Table, vstack
 import time,datetime
 import numpy as np
 import psutil
 from os import listdir
-from collections import OrderedDict
-from desispec.workflow.exptable import get_exposure_table_pathname
-from desispec.workflow.proctable import get_processing_table_pathname, get_processing_table_name
-from desispec.workflow.tableio import load_table
 import json
+
+# import desispec.io.util
+from desispec.workflow.exptable import get_exposure_table_pathname, default_obstypes_for_exptable
+from desispec.workflow.proctable import get_processing_table_pathname
+from desispec.workflow.tableio import load_table
+from desispec.io.meta import specprod_root, rawdata_root
+from desispec.io.util import decode_camword, camword_to_spectros
+
 ########################
 ### Helper Functions ###
 ########################
 
 def return_color_profile():
-    color_profile = {}
+    color_profile = dict()
     color_profile['NULL'] = {'font':'#34495e' ,'background':'#ccd1d1'} # gray
     color_profile['BAD'] = {'font':'#000000' ,'background':'#d98880'}  #  red
     color_profile['INCOMPLETE'] = {'font': '#000000','background':'#f39c12'}  #  orange
@@ -42,8 +47,7 @@ def what_night_is_it():
     tonight = int(d.strftime('%Y%m%d'))
     return tonight
 
-
-def find_newexp(night, fileglob, known_exposures):
+def find_new_exps(fileglob, known_exposures):
     """
     Check the path given for new exposures
     """
@@ -51,12 +55,10 @@ def find_newexp(night, fileglob, known_exposures):
     newexp = list()
     for filepath in datafiles:
         expid = int(os.path.basename(os.path.dirname(filepath)))
-        if (night, expid) not in known_exposures:
-            newexp.append((night, expid))
+        if expid not in known_exposures:
+            newexp.append(expid)
 
     return set(newexp)
-
-
 
 def check_running(proc_name= 'desi_dailyproc',suppress_outputs=False):
     """
@@ -98,16 +100,21 @@ def parse(options):
     #                         "format, one per row. Stored internally as integers, so zero padding is "+\
     #                         "accepted but not required.")
     # Specify Nights of Interest
-    parser.add_argument('-n','--nights', type=str, default = None, required = False, help="nights to monitor. Can be 'all', a "+
-                                                                                          "comma separated list of YYYYMMDD, or"+
-                                                                                          "a number specifying the previous n nights to show"+
-                                                                                          " (counting in reverse chronological order).")
-    parser.add_argument('--start-night', type=str, default = None, required = False, help="This specifies the first night" + \
-                                                                                           " to include in the dashboard. Default is the earliest night available.")
-    parser.add_argument('--end-night', type=str, default = None, required = False, help="This specifies the last night (inclusive)"+\
-                                                                                           " to include in the dashboard. Default is today.")
-    parser.add_argument('--include-short-scis',  action="store_true",  help="Include sci exps < 60s rather than treating as  null/zeros")
-    
+    parser.add_argument('-n','--nights', type=str, default = None, required = False,
+                        help="nights to monitor. Can be 'all', a comma separated list of YYYYMMDD, or a number "+
+                             "specifying the previous n nights to show (counting in reverse chronological order).")
+    parser.add_argument('--start-night', type=str, default = None, required = False,
+                        help="This specifies the first night to include in the dashboard. "+
+                             "Default is the earliest night available.")
+    parser.add_argument('--end-night', type=str, default = None, required = False,
+                        help="This specifies the last night (inclusive) to include in the dashboard. Default is today.")
+    parser.add_argument('--check-on-disk',  action="store_true",
+                        help="Check raw data directory for additional unaccounted for exposures on disk "+
+                             "beyond the exposure table.")
+    parser.add_argument('--ignore-json-archive',  action="store_true",
+                        help="Ignore the existing json archive of good exposure rows, regenerate all rows from "+
+                             "information on disk. As always, this will write out a new json archive," +
+                             " overwriting the existing one.")
     # Read in command line and return
     args = None
     if options is None:
@@ -131,39 +138,38 @@ def main(args):
     desi_proc_dashboard -n 20200101,20200102 --output-dir /global/cfs/cdirs/desi/www/collab/dailyproc/
     """
     args.show_null = True
-    if 'DESI_SPECTRO_REDUX' not in os.environ.keys(): # these are not set by default in cronjob mode.
-        os.environ['DESI_SPECTRO_REDUX']='/global/cfs/cdirs/desi/spectro/redux/'
-        os.environ['DESI_SPECTRO_DATA']='/global/cfs/cdirs/desi/spectro/data/'
+    if 'DESI_SPECTRO_DATA' not in os.environ.keys():
+        os.environ['DESI_SPECTRO_DATA'] = '/global/cfs/cdirs/desi/spectro/data/'
 
     if 'SPECPROD' not in os.environ.keys() and args.specprod is None:
         os.environ['SPECPROD']='daily'
     elif args.specprod is None:
-        args.specprod = os.getenv("SPECPROD")
+        args.specprod = os.environ["SPECPROD"]
     else:
         os.environ['SPECPROD'] = args.specprod
 
     if args.redux_dir is None:
-        args.redux_dir = os.getenv('DESI_SPECTRO_REDUX')
+        if 'DESI_SPECTRO_REDUX' not in os.environ.keys(): # these are not set by default in cronjob mode.
+            os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux/'
+        args.redux_dir = os.environ['DESI_SPECTRO_REDUX']
     else:
         os.environ['DESI_SPECTRO_REDUX'] = args.redux_dir
 
-
-    if 'DESI_DASHBOARD' not in os.environ.keys() and args.output_dir is None:
-        os.environ['DESI_DASHBOARD']=os.getenv("HOME")
-        args.output_dir = os.getenv("DESI_DASHBOARD")
-    elif args.output_dir is None:
-        args.output_dir = os.getenv("DESI_DASHBOARD")
+    if args.output_dir is None:
+        if 'DESI_DASHBOARD' not in os.environ.keys():
+            os.environ['DESI_DASHBOARD']=os.environ["HOME"]
+        args.output_dir = os.environ["DESI_DASHBOARD"]
     else:
         os.environ['DESI_DASHBOARD'] = args.output_dir
-
-    ## Ensure we have directories to output to
-    os.makedirs(args.output_dir, exist_ok=True)
-    os.makedirs(os.path.join(args.output_dir,'files'), exist_ok=True)
 
     ## Verify the production directory exists
     args.prod_dir = os.path.join(args.redux_dir,args.specprod)
     if not os.path.exists(args.prod_dir):
         raise ValueError(f"Path {args.prod_dir} doesn't exist for production directory.")
+
+    ## Ensure we have directories to output to
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir,'files'), exist_ok=True)
 
     ############
     ## Input ###
@@ -175,7 +181,7 @@ def main(args):
         
     if args.nights is None or args.nights=='all' or ',' not in args.nights:
         nights = list()
-        for n in listdir(os.getenv('DESI_SPECTRO_DATA')):
+        for n in listdir( os.path.join(args.prod_dir,'run','scripts','night') ):
             #- nights are 20YYMMDD
             if re.match('^20\d{6}$', n):
                 nights.append(n)
@@ -201,7 +207,7 @@ def main(args):
         else:
             nights = nights[-1*int(args.nights):]
             
-    nights_dict = OrderedDict()
+    nights_dict = dict()
     for night in nights:
         month = night[:6]
         if month not in nights_dict.keys():
@@ -217,13 +223,15 @@ def main(args):
     ## that follows the same directory strucure ##
     ######################################################################
     color_profile = return_color_profile()
-    strTable=_initialize_page(color_profile)
+    strTable = _initialize_page(color_profile)
 
     timestamp=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
-    running='No'
-    if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
-        running='Yes'
-        strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>\n".format(timestamp,'desi_dailyproc',running)
+    # running='No'
+    # if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
+    #     running='Yes'
+    #     strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>\n".format(timestamp,'desi_dailyproc',running)
+    strTable +=  f"<div style='color:#00FF00'> desi_dailyproc running at: {timestamp}</div>\n"
+
     for ctype,cdict in color_profile.items():
         background = cdict['background']
         strTable += "\t<div style='color:{}'>{}</div>".format(background,ctype)
@@ -233,6 +241,7 @@ def main(args):
     <select id="statuslist" onchange="filterByStatus()" class='form-control'>
     <option>processing</option>
     <option>unprocessed</option>
+    <option>unaccounted</option>
     <option>ALL</option>
     </select>
     """
@@ -257,22 +266,20 @@ def main(args):
     #"""
     for month, nights_in_month in nights_dict.items():
         print("Month: {}, nights: {}".format(month,nights_in_month))
-        #webpage = os.path.join(os.getenv('DESI_DASHBOARD'), 'links', month)
-        #if not os.path.exists(webpage):
-        #    os.makedirs(webpage)
         nightly_tables = []
         for night in nights_in_month:
             ####################################
             ### Table for individual night ####
             ####################################
             nightly_tables.append(nightly_table(night, args.output_dir, skipd_expids, show_null=args.show_null,
-                                                use_short_sci=args.include_short_scis))
+                                                check_on_disk=args.check_on_disk,
+                                                ignore_json_archive=args.ignore_json_archive))
         strTable += monthly_table(nightly_tables,month)
 
-    #strTable += js_import_str(os.getenv('DESI_DASHBOARD'))
+    #strTable += js_import_str(os.environ['DESI_DASHBOARD'])
     strTable += js_str()
     strTable += _closing_str()
-    with open(os.path.join(os.getenv('DESI_DASHBOARD'),args.output_name),'w') as hs:
+    with open(os.path.join(os.environ['DESI_DASHBOARD'],args.output_name),'w') as hs:
         hs.write(strTable)
 
 def monthly_table(tables,month):
@@ -299,27 +306,28 @@ def monthly_table(tables,month):
 
     return month_table_str
 
-def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,use_short_sci=False):
+def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_disk=False,ignore_json_archive=False):
     """
     Add a collapsible and extendable table to the html file for one specific night
     Input
     night: like 20200131
     output: The string to be added to the html file
     """
-    filename_json = os.path.join(output_dir,'files','night_info_'+os.getenv('SPECPROD')+'_'+night+'.json')
-    if os.path.exists(filename_json):
+    filename_json = os.path.join(output_dir,'files','night_info_'+os.environ['SPECPROD']+'_'+night+'.json')
+    if not ignore_json_archive and os.path.exists(filename_json):
         with open(filename_json) as json_file:
             try:
                 night_info_pre=json.load(json_file)
-                night_info = calculate_one_night_use_file(night,use_short_sci,night_info_pre=night_info_pre)
+                night_info = calculate_one_night_use_file(night,check_on_disk,night_info_pre=night_info_pre)
             except:
-                night_info = calculate_one_night_use_file(night,use_short_sci)
+                night_info = calculate_one_night_use_file(night,check_on_disk)
     else:
-        night_info = calculate_one_night_use_file(night,use_short_sci)
+        night_info = calculate_one_night_use_file(night,check_on_disk)
+
     with open(filename_json,'w') as json_file:
         json.dump(night_info,json_file)
 
-    ngood,ninter,nbad,nnull,nover,n_notnull = 0,0,0,0,0,0
+    ngood,ninter,nbad,nnull,nover,n_notnull,noprocess,norecord = 0,0,0,0,0,0,0,0
     main_body = ""
     for expid,row_info in night_info.items():
         if int(expid) in skipd_expids:
@@ -330,43 +338,57 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,use_short_s
         if not show_null and 'NULL' in table_row:
             continue
         
-        main_body += table_row
-        if 'GOOD' in table_row:
-            ngood += 1
-            n_notnull += 1
-        elif 'BAD' in table_row:
-            nbad += 1
-            n_notnull += 1
-        elif 'INCOMPLETE' in table_row:
-            ninter += 1
-            n_notnull += 1
-        elif 'OVERFUL' in table_row:
-            nover += 1
-            n_notnull += 1
+        main_body += ("\t" + table_row + "\n")
+        status = str(row_info[-1]).lower()
+        if status == 'processing':
+            if 'GOOD' in table_row:
+                ngood += 1
+                n_notnull += 1
+            elif 'BAD' in table_row:
+                nbad += 1
+                n_notnull += 1
+            elif 'INCOMPLETE' in table_row:
+                ninter += 1
+                n_notnull += 1
+            elif 'OVERFUL' in table_row:
+                nover += 1
+                n_notnull += 1
+            else:
+                nnull += 1
+        elif status == 'unprocessed':
+            noprocess += 1
+        elif status == 'unrecorded':
+            norecord += 1
         else:
             nnull += 1
         
+    # Night dropdown table
+    htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
+    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Incomplete: {ninter}/{n_notnull}{htmltab}"
+    heading += f"Failed: {nbad}/{n_notnull}"
+    heading += f"{htmltab}Unprocessed: {noprocess}{htmltab}NoTabEntry: {norecord}{htmltab}Other: {nnull}"
 
-    heading="Night {night}   Complete: {ngood}/{nnotnull}    Some: {ninter}/{nnotnull}    Bad: {nbad}/{nnotnull}".format(
-                                                                                                         night=night,\
-                                                                                                         ngood=ngood,\
-                                                                                                         nnotnull=n_notnull,\
-                                                                                                         ninter=ninter,\
-                                                                                                         nbad=nbad)        
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
-    nightly_table_str += '<button class="collapsible">'+heading+'</button><div class="content" style="display:inline-block;min-height:0%;">\n'
-    # Add table
-    nightly_table_str += "<table id='c' class='nightTable'><tbody><tr><th>Expid</th><th>FLAVOR</th><th>OBSTYPE</th><th>EXPTIME</th><th>SPECTROGRAPHS</th><th>TILEID</th>"
-    nightly_table_str += "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>"
-    nightly_table_str += "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>status</th></tr>"
+    nightly_table_str += '<button class="collapsible">' + heading + \
+                         '</button><div class="content" style="display:inline-block;min-height:0%;">\n'
+    # table header
+    nightly_table_str += "<table id='c' class='nightTable'><tbody>\n" + \
+                         "\t<tr><th>Expid</th><th>OBSTYPE</th><th>LASTSTEP</th>" + \
+                         "<th>EXPTIME</th><th>PROCCAMWORD</th><th>TILEID</th>" + \
+                         "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>" + \
+                         "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>COMMENTS</th>" + \
+                         "<th>status</th></tr>\n"
 
+    # Add body
     nightly_table_str += main_body
+
+    # End table
     nightly_table_str += "</tbody></table></div>\n"
     nightly_table_str += '<!--End {}-->\n\n'.format(night)
     return nightly_table_str
 
 
-def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None):
+def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None):
     """
     For a given night, return the file counts and other other information for each exposure taken on that night
     input: night
@@ -383,332 +405,221 @@ def calculate_one_night_use_file(night, use_short_sci=False, night_info_pre=None
     n_cframe: number of cframe files
     n_sky: number of sky files
     """
-    cams_per_spgrph = 3
+    ## Note that the following list should be in order of processing. I.e. the first filetype given should be the
+    ## first file type generated. This is assumed for the automated "terminal step" determination that follows
+    expected_by_type = dict()
+    expected_by_type['arc'] =     {'psf': 1, 'frame': 0, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['flat'] =    {'psf': 1, 'frame': 1, 'ff': 1, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['science'] = {'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 1, 'std': 1, 'cframe': 1}
+    expected_by_type['twilight'] ={'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['zero'] =    {'psf': 0, 'frame': 0, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['dark'] = expected_by_type['zero']
+    expected_by_type['sky']  = expected_by_type['science']
+    expected_by_type['null'] = expected_by_type['zero']
 
-    totals_by_type = {}
-    totals_by_type['ARC'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': 0,               'sframe': 0}
-    totals_by_type['FLAT'] =   {'psf': cams_per_spgrph, 'ff': cams_per_spgrph, 'frame': cams_per_spgrph, 'sframe': 0}
-    totals_by_type['SKY'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': cams_per_spgrph}
-    totals_by_type['TWILIGHT']={'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': 0}
-    totals_by_type['ZERO'] =   {'psf': 0,               'ff': 0,               'frame': 0,               'sframe': 0}
-    totals_by_type['SCIENCE'], totals_by_type['NONE'] = totals_by_type['SKY'], totals_by_type['SKY']
+    ## Determine the last filetype that is expected for each obstype
+    terminal_steps = dict()
+    for obstype, expected in expected_by_type.items():
+        terminal_steps[obstype] = None
+        keys = list(expected.keys())
+        for key in reversed(keys):
+            if expected[key] > 0:
+                terminal_steps[obstype] = key
+                break
 
-    table_dir =  os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'),'processing_tables')
-    file_processing = '{}/{}{}-{}.csv'.format(table_dir,'processing_table_',os.getenv('SPECPROD'),night)
-    #file_unprocessed = '{}/{}{}-{}.csv'.format(table_dir,'unprocessed_table_',os.getenv('SPECPROD'),night)
-    file_exptable=get_exposure_table_pathname(night)
+    file_exptable = get_exposure_table_pathname(night)
+    file_processing = get_processing_table_pathname(specprod=None, prodmod=night)
+    # procpath,procname = os.path.split(file_processing)
+    # file_unprocessed = os.path.join(procpath,procname.replace('processing','unprocessed'))
+
+    specproddir = specprod_root()
+    webpage = os.environ['DESI_DASHBOARD']
+    logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
+
+    exptab_colnames = ['EXPID', 'CAMWORD', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
+    exptab_dtypes = [int, 'S20', float, 'S10', int, np.ndarray, 'S10']
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
+        if 'LASTSTEP' in d_exp.colnames:
+            d_exp = d_exp[exptab_colnames]
+        else:
+            d_exp = d_exp[exptab_colnames[:-1]]
+            d_exp['LASTSTEP'] = 'all'
     except:
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Warning ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-        print('Error reading exptable using brute force method of scanning files.')
-        print('All exposures will be marked as unprocessed.')
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-        return calculate_one_night(night, use_short_sci=use_short_sci,night_info_pre = night_info_pre)
+        print(f'WARNING: Error reading exptable for {night}. Changing check_on_disk to True and scanning files on disk.')
+        d_exp = Table(names=exptab_colnames,dtype=exptab_dtypes)
+        check_on_disk = True
+
+    unaccounted_for_expids = []
+    if check_on_disk:
+        rawdatatemplate = os.path.join(rawdata_root(), night, '{zexpid}', 'desi-{zexpid}.fits.fz')
+        rawdata_fileglob = rawdatatemplate.format(zexpid='*')
+        known_exposures = set(list(d_exp['EXPID']))
+        newexpids = list(find_new_exps(rawdata_fileglob, known_exposures))
+        newexpids.sort(reverse=True)
+        default_obstypes = default_obstypes_for_exptable()
+        for expid in newexpids:
+            zfild_expid = str(expid).zfill(8)
+            filename = rawdatatemplate.format(zexpid=zfild_expid)
+            h1 = fits.getheader(filename, 1)
+            header_info = {keyword: 'unknown' for keyword in ['SPCGRPHS', 'EXPTIME', 'OBSTYPE', 'TILEID']}
+            for keyword in header_info.keys():
+                if keyword in h1.keys():
+                    header_info[keyword] = h1[keyword]
+
+            if header_info['OBSTYPE'] in default_obstypes:
+                header_info['EXPID'] = expid
+                header_info['LASTSTEP'] = 'all'
+                header_info['COMMENTS'] = []
+                if header_info['SPCGRPHS'] != 'unknown':
+                    header_info['CAMWORD'] = 'a' + str(header_info['SPCGRPHS']).replace(' ', '').replace(',', '')
+                else:
+                    header_info['CAMWORD'] = header_info['SPCGRPHS']
+                header_info.pop('SPCGRPHS')
+                d_exp.add_row(header_info)
+                unaccounted_for_expids.append(expid)
 
     try:
         d_processing = load_table(file_processing, tabletype='proctable')
     except:
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Warning ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-        print('Error reading proctable. Assuming one does not exist.')
-        print('All exposures will be marked as unprocessed.')
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        print('WARNING: Error reading proctable. All exposures will be marked as unprocessed.')
         d_processing = None
-    
-    expid_processing=[]
+
+    expid_processing = []
+    proccamwords_by_expid = dict()
     if d_processing is not None:
-        for expid_list in d_processing['EXPID']:
+        for row in d_processing:
+            expid_list = row['EXPID']
             expid_processing += expid_list.tolist()
+            if 'PROCCAMWORD' in d_processing.colnames and len(expid_list) == 1:
+                expid = int(expid_list[0])
+                if expid not in proccamwords_by_expid.keys():
+                    proccamwords_by_expid[expid] = row['PROCCAMWORD']
+
     expid_processing = set(expid_processing)
-    expids = list(d_exp['EXPID'])
-    expids.sort(reverse=True)
 
-    fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
-
-    logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
-
-    webpage = os.getenv('DESI_DASHBOARD')
-    logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}') # search for the log file 
-    logfiletemplate = os.path.join(logpath,'{}-{}-{}-{}{}.{}')
-
-    output = OrderedDict()
-    d_exp.add_index('EXPID')
-
-    for expid in expids:
+    logfiletemplate = os.path.join(logpath,'{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
+    fileglob = os.path.join(specproddir, 'exposures', str(night), '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.fits')
+    def count_num_files(ftype, expid):
         zfild_expid = str(expid).zfill(8)
-        """
-        filename = os.path.join(os.getenv('DESI_SPECTRO_DATA'), str(night), zfild_expid,
-                                'desi-' + str(expid).zfill(8) + '.fits.fz')
-        h1 = fits.getheader(filename, 1)
+        if ftype == 'stdstars':
+            cam = ''
+        else:
+            cam = '[brz]'
+        return len( glob.glob( fileglob.format(ftype=ftype, zexpid=zfild_expid, cam=cam) ) )
 
-        header_info = {keyword: 'Unknown' for keyword in ['FLAVOR', 'SPCGRPHS', 'EXPTIME', 'OBSTYPE']}
-        for keyword in header_info.keys():
-            if keyword in h1.keys():
-                header_info[keyword] = h1[keyword]
-        """
-        flavor='NULL'
-        obstype = str(d_exp.loc[expid]['OBSTYPE']).upper().strip()
-        exptime = d_exp.loc[expid]['EXPTIME']
-        spcgrphs = str(d_exp.loc[expid]['CAMWORD'])[1:] #spcgrphs = str(d_exp.loc[expid]['SPECTROGRAPHS'])
-        tileid = str(d_exp.loc[expid]['TILEID'])
-        if obstype == 'SCIENCE':
-            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/'+tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
-        elif obstype == 'OTHER' or obstype == 'ZERO':
+    output = dict()
+    d_exp.sort('EXPID',reverse=True)
+    for row in d_exp:
+        expid = int(row['EXPID'])
+        ## For those already marked as GOOD or NULL in cached rows, take that and move on
+        if night_info_pre is not None and str(expid) in night_info_pre and night_info_pre[str(expid)][0] in ['GOOD','NULL']:
+            output[str(expid)] = night_info_pre[str(expid)]
+            continue
+
+        zfild_expid = str(expid).zfill(8)
+        obstype = str(row['OBSTYPE']).lower().strip()
+
+        tileid = str(row['TILEID'])
+        if obstype == 'science':
+            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/' + \
+                         tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
+        elif obstype == 'zero': # or obstype == 'other':
             continue
         else:
-            tileid_str =  tileid
-        file_psf = glob.glob(fileglob.format(zfild_expid, 'psf-[brz]?-????????.fits'))
-        file_fit_psf = glob.glob(fileglob.format(zfild_expid, 'fit-psf-[brz]?-????????.fits'))
-        file_fiberflat = glob.glob(fileglob.format(zfild_expid, 'fiberflat-[brz]?-????????.fits'))
-        file_frame = glob.glob(fileglob.format(zfild_expid, 'frame-??-????????.fits'))
-        file_sframe = glob.glob(fileglob.format(zfild_expid, 'sframe-??-????????.fits'))
-        file_cframe = glob.glob(fileglob.format(zfild_expid, 'cframe-??-????????.fits'))
-        file_sky = glob.glob(fileglob.format(zfild_expid, 'sky*.fits'))
-        file_stdstar = glob.glob(fileglob.format(zfild_expid, 'stdstars-?-????????.fits'))
-        if obstype in totals_by_type.keys():
-            n_tots = totals_by_type[obstype]
-        else:
-            n_tots = totals_by_type['NONE']
+            tileid_str = '----'
 
-        n_spgrph = int(len(list(spcgrphs)))
-        row_color = "NULL"
-        npsfs = len(file_psf) + len(file_fit_psf)
-        nframes = len(file_frame)
-        ncframes = len(file_cframe)
-        nfiberflat = len(file_fiberflat)
-        nsframe = len(file_sframe)
-        nsky = len(file_sky)
-        nstdstar = len(file_stdstar)
-        
-        if obstype.lower() == 'arc':
-            nfiles = npsfs
-            n_tot_spgrphs = n_spgrph * n_tots['psf']
-            nstdstar_expected = 0
-        elif obstype.lower() == 'flat':
-            nfiles = nframes
-            n_tot_spgrphs = n_spgrph * n_tots['frame']
-            nstdstar_expected = 0
-        elif obstype.lower() == 'science':
-            nfiles = ncframes
-            n_tot_spgrphs = n_spgrph * n_tots['sframe']
-            nstdstar_expected = n_spgrph
+        exptime = np.round(row['EXPTIME'],decimals=1)
+        if expid in proccamwords_by_expid.keys():
+            proccamword = proccamwords_by_expid[expid]
         else:
-            nfiles = 0
-            n_tot_spgrphs = 0
-            nstdstar_expected = 0
+            proccamword = row['CAMWORD']
 
-        if n_tots['psf'] == 0:
+        laststep = str(row['LASTSTEP'])
+        ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
+        comments = list(row['COMMENTS'])
+        bad_ind = None
+        for ii,comment in enumerate(comments):
+            if 'For EXPTIME: req=' in comment:
+                bad_ind = ii
+        if bad_ind is not None:
+            comments.pop(bad_ind)
+        comments = ', '.join(comments)
+
+        if obstype in expected_by_type.keys():
+            expected = expected_by_type[obstype].copy()
+            terminal_step = terminal_steps[obstype]
+        else:
+            expected = expected_by_type['null'].copy()
+            terminal_step = None
+
+        if laststep == 'ignore':
+            expected = expected_by_type['null'].copy()
+            terminal_step = None
+        elif laststep != 'all' and obstype == 'science':
+            if laststep == 'skysub':
+                expected['std'] = 0
+                expected['cframe'] = 0
+                terminal_step = 'sframe'
+            elif laststep == 'fluxcalib':
+                pass
+            else:
+                print(f"WARNING: didn't understand science exposure expid={expid} of night {night}: laststep={laststep}")
+        elif laststep != 'all' and obstype != 'science':
+            print(f"WARNING: didn't understand non-science exposure expid={expid} of night {night}: laststep={laststep}")
+
+        cameras = decode_camword(proccamword)
+        nspecs = len(camword_to_spectros(proccamword, full_spectros_only=False))
+        ncams = len(cameras)
+
+        nfiles = dict()
+        nfiles['psf'] = count_num_files(ftype='psf', expid=expid) + count_num_files(ftype='fit-psf', expid=expid)
+        nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
+        nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
+        nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
+        nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
+        nfiles['std'] = count_num_files(ftype='stdstars', expid=expid)
+        nfiles['cframe'] = count_num_files(ftype='cframe', expid=expid)
+
+        if terminal_step == 'std':
+            nexpected = nspecs
+        else:
+            nexpected = ncams
+
+        if terminal_step is None:
             row_color = 'NULL'
-        elif not use_short_sci and obstype.upper() == 'SCIENCE' and float(exptime)< 60.:
+        elif expected[terminal_step] == 0:
             row_color = 'NULL'
-        elif nfiles == 0:
+        elif nfiles[terminal_step] == 0:
             row_color = 'BAD'
-        elif nfiles < n_tot_spgrphs:
+        elif nfiles[terminal_step] < nexpected:
             row_color = 'INCOMPLETE'
-        elif nfiles == n_tot_spgrphs:
+        elif nfiles[terminal_step] == nexpected:
             row_color = 'GOOD'
         else:
             row_color = 'OVERFUL'
 
-        hlink1 = '----'
-        hlink2 = '----'
         if expid in expid_processing:
             status = 'processing'
+        elif expid in unaccounted_for_expids:
+            status = 'unaccounted'
         else:
             status = 'unprocessed'
 
+        slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
             file_head = obstype.lower()
-            lognames = glob.glob(logfileglob.format(file_head, night,zfild_expid,'log'))
-            if obstype.lower() == 'science': 
-                lognames_pre = glob.glob(logfileglob.format('prestdstar',night,zfild_expid,'log'))
-                lognames_post = glob.glob(logfileglob.format('poststdstar',night,zfild_expid,'log'))
-                if len(lognames_post)>0:
-                    lognames = lognames_post
-                    file_head = 'poststdstar'
-                else:
-                    lognames = lognames_pre
-                    file_head = 'prestdstar'
-            newest_jobid = '00000000'
-            spectrographs = ''
-
-            for log in lognames:
-                jobid = log[-12:-4]
-                if int(jobid) > int(newest_jobid):
-                    newest_jobid = jobid
-                    spectrographs = log.split('-')[-2]
-            if newest_jobid != '00000000' and len(spectrographs)!=0:
-                logname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
-                #logname_only = logname.split('/')[-1]
-
-                slurmname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'','slurm')
-                #slurmname_only = slurmname.split('/')[-1]
-
-                ## Use relative paths to files on disk rather than using sym links
-                relpath_log = os.path.relpath(logname, webpage)
-                relpath_slurm = os.path.relpath(slurmname, webpage)
-
-                #relpath_log = os.path.join('links',night[:-2],logname_only)
-                #relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
-                #if not os.path.exists(os.path.join(webpage,relpath_log)):
-                #    os.symlink(logname,os.path.join(webpage,relpath_log))
-                #if not os.path.exists(os.path.join(webpage, relpath_slurm)):
-                #    os.symlink(slurmname, os.path.join(webpage, relpath_slurm))
-
-                hlink1 = _hyperlink(relpath_slurm, 'Slurm')
-                hlink2 = _hyperlink(relpath_log, 'Log')
-
-        output[str(expid)] = [row_color, \
-                              str(expid), \
-                              flavor,\
-                              obstype,\
-                              str(exptime), \
-                              'SP: '+spcgrphs.replace('SP',''), \
-                              tileid_str, \
-                              _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
-                              _str_frac( nframes,             n_spgrph * n_tots['frame']), \
-                              _str_frac( nfiberflat, n_spgrph * n_tots['ff']), \
-                              _str_frac( nsframe,    n_spgrph * n_tots['sframe']), \
-                              _str_frac( nsky,       n_spgrph * n_tots['sframe']), \
-                              _str_frac( nstdstar,   nstdstar_expected), \
-                              _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
-                              hlink1, \
-                              hlink2, status     ]
-    return output
-
-
-def calculate_one_night(night, use_short_sci=False, night_info_pre = None):
-    """
-    For a given night, return the file counts and other other information for each exposure taken on that night
-    input: night
-    output: a dictionary containing the statistics with expid as key name
-    FLAVOR: FLAVOR of this exposure
-    OBSTYPE: OBSTYPE of this exposure
-    EXPTIME: Exposure time
-    SPECTROGRAPHS: a list of spectrographs used
-    n_spectrographs: number of spectrographs
-    n_psf: number of PSF files
-    n_ff:  number of fiberflat files
-    n_frame: number of frame files
-    n_sframe: number of sframe files
-    n_cframe: number of cframe files
-    n_sky: number of sky files
-    """
-    cams_per_spgrph = 3
-
-    totals_by_type = {}
-    totals_by_type['ARC'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': 0,               'sframe': 0}
-    totals_by_type['FLAT'] =   {'psf': cams_per_spgrph, 'ff': cams_per_spgrph, 'frame': cams_per_spgrph, 'sframe': 0}
-    totals_by_type['SKY'] =    {'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': cams_per_spgrph}
-    totals_by_type['TWILIGHT']={'psf': cams_per_spgrph, 'ff': 0,               'frame': cams_per_spgrph, 'sframe': 0}
-    totals_by_type['ZERO'] =   {'psf': 0,               'ff': 0,               'frame': 0,               'sframe': 0}
-    totals_by_type['SCIENCE'], totals_by_type['NONE'] = totals_by_type['SKY'], totals_by_type['SKY']
-
-    rawdata_fileglob = '{}/{}/*/desi-*.fits.fz'.format(os.getenv('DESI_SPECTRO_DATA'), night)
-    known_exposures = set()
-    newexp = find_newexp(night, rawdata_fileglob, known_exposures)
-    expids = [t[1] for t in newexp]
-    expids.sort(reverse=True)
-
-    fileglob = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'exposures', str(night), '{}', '{}')
-
-    logpath = os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv("SPECPROD"), 'run', 'scripts', 'night', night)
-
-    webpage = os.getenv('DESI_DASHBOARD')
-    logfileglob = os.path.join(logpath,'{}-{}-{}-*.{}')
-    logfiletemplate = os.path.join(logpath,'{}-{}-{}-{}{}.{}')
-
-    output = OrderedDict()
-    for expid in expids:
-        if night_info_pre:
-            if str(expid) in night_info_pre:
-                if night_info_pre[str(expid)][0] =='GOOD':
-                    output[str(expid)]=night_info_pre[str(expid)]
-                    continue
-        zfild_expid = str(expid).zfill(8)
-        # Check the redux folder for reduced files
-        filename = os.path.join(os.getenv('DESI_SPECTRO_DATA'), str(night), zfild_expid,
-                                'desi-' + str(expid).zfill(8) + '.fits.fz')
-        h1 = fits.getheader(filename, 1)
-
-
-        header_info = {keyword: 'Unknown' for keyword in ['FLAVOR', 'SPCGRPHS', 'EXPTIME', 'OBSTYPE','TILEID']}
-        for keyword in header_info.keys():
-            if keyword in h1.keys():
-                header_info[keyword] = h1[keyword]
-
-        file_psf = glob.glob(fileglob.format(zfild_expid, 'psf-[brz]?-????????.fits'))
-        file_fit_psf = glob.glob(fileglob.format(zfild_expid, 'fit-psf-[brz]?-????????.fits'))
-        file_fiberflat = glob.glob(fileglob.format(zfild_expid, 'fiberflat-[brz]?-????????.fits'))
-        file_frame = glob.glob(fileglob.format(zfild_expid, 'frame-??-????????.fits'))
-        file_sframe = glob.glob(fileglob.format(zfild_expid, 'sframe-??-????????.fits'))
-        file_cframe = glob.glob(fileglob.format(zfild_expid, 'cframe-??-????????.fits'))
-        file_sky = glob.glob(fileglob.format(zfild_expid, 'sky*.fits'))
-        file_stdstar = glob.glob(fileglob.format(zfild_expid, 'stdstars-?-????????.fits'))
-
-        obstype = str(header_info['OBSTYPE']).upper().strip()
-        if obstype in totals_by_type.keys():
-            n_tots = totals_by_type[obstype]
-        else:
-            n_tots = totals_by_type['NONE']
-
-        n_spgrph = int(len(header_info['SPCGRPHS'].split(',')))
-        tileid = str(header_info['TILEID'])
-        if obstype == 'SCIENCE':
-            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/'+tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
-        elif obstype == 'OTHER' or obstype == 'ZERO':
-            continue
-        else:
-            tileid_str =  tileid
-
-        row_color = "NULL"
-        npsfs = len(file_psf) + len(file_fit_psf)        
-        nframes = len(file_frame)
-        ncframes = len(file_cframe)
-        nstdstar = len(file_stdstar)
-        if obstype.lower() == 'arc':
-            nfiles = npsfs
-            n_tot_spgrphs = n_spgrph * n_tots['psf']
-            nstdstar_expected = 0
-        elif obstype.lower() == 'flat':
-            nfiles = nframes
-            n_tot_spgrphs = n_spgrph * n_tots['frame']
-            nstdstar_expected = 0
-        elif obstype.lower() == 'science':
-            nfiles = ncframes
-            n_tot_spgrphs = n_spgrph * n_tots['sframe']
-            nstdstar_expected = n_spgrph
-        else:
-            nfiles = 0
-            n_tot_spgrphs = 0
-            nstdstar_expected = 0
-            
-        if n_tots['psf'] == 0:
-            row_color = 'NULL'
-        elif not use_short_sci and obstype.upper() == 'SCIENCE' and float(header_info['EXPTIME'])< 60.:
-            row_color = 'NULL'
-        elif nfiles == 0:
-            row_color = 'BAD'
-        elif nfiles < n_tot_spgrphs:
-            row_color = 'INCOMPLETE'
-        elif nfiles == n_tot_spgrphs:
-            row_color = 'GOOD'
-        else:
-            row_color = 'OVERFUL'
-
-        hlink1 = '----'
-        hlink2 = '----'
-        if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
-            file_head = obstype.lower()
-            lognames = glob.glob(logfileglob.format(file_head, night,zfild_expid,'log'))
+            lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
+                                                        specs='*', jobid='', ext='log'))
             if obstype.lower() == 'science':
-                lognames_pre = glob.glob(logfileglob.format('prestdstar',night,zfild_expid,'log'))
-                lognames_post = glob.glob(logfileglob.format('poststdstar',night,zfild_expid,'log'))
+                lognames_post = glob.glob(logfiletemplate.format(pre='poststdstar',night=night, zexpid=zfild_expid,
+                                                                 specs='*',  jobid='', ext='log'))
                 if len(lognames_post)>0:
                     lognames = lognames_post
                     file_head = 'poststdstar'
                 else:
-                    lognames = lognames_pre
+                    lognames = glob.glob(logfiletemplate.format(pre='prestdstar',night=night, zexpid=zfild_expid,
+                                                                specs='*', jobid='',ext='log'))
                     file_head = 'prestdstar'
             newest_jobid = '00000000'
             spectrographs = ''
@@ -719,43 +630,32 @@ def calculate_one_night(night, use_short_sci=False, night_info_pre = None):
                     newest_jobid = jobid
                     spectrographs = log.split('-')[-2]
             if newest_jobid != '00000000' and len(spectrographs)!=0:
-                logname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'-'+newest_jobid,'log')
-                #logname_only = logname.split('/')[-1]
+                logname = logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
+                                                 specs=spectrographs,  jobid='-'+newest_jobid, ext='log')
+                slurmname = logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
+                                                   specs=spectrographs, jobid='', ext='slurm')
 
-                slurmname = logfiletemplate.format(file_head, night,zfild_expid,spectrographs,'','slurm')
-                #slurmname_only = slurmname.split('/')[-1]
+                slurm_hlink = _hyperlink( os.path.relpath(slurmname, webpage), 'Slurm')
+                log_hlink   = _hyperlink( os.path.relpath(logname, webpage),   'Log'  )
 
-                ## Use relative paths to files on disk rather than using sym links 
-                relpath_log = os.path.relpath(logname, webpage)
-                relpath_slurm = os.path.relpath(slurmname, webpage)
-
-                #relpath_log = os.path.join('links',night[:-2],logname_only)
-                #relpath_slurm = os.path.join('links',night[:-2],slurmname_only)
-                
-                #if not os.path.exists(os.path.join(webpage,relpath_log)):
-                #    os.symlink(logname,os.path.join(webpage,relpath_log))
-                #if not os.path.exists(os.path.join(webpage, relpath_slurm)):
-                #    os.symlink(slurmname, os.path.join(webpage, relpath_slurm))
-
-                hlink1 = _hyperlink(relpath_slurm, 'Slurm')
-                hlink2 = _hyperlink(relpath_log, 'Log')
-        status = 'unprocessed'
-        output[str(expid)] = [row_color, \
-                              str(expid), \
-                              header_info['FLAVOR'],\
-                              obstype,\
-                              header_info['EXPTIME'], \
-                              'SP: '+header_info['SPCGRPHS'].replace('SP',''), \
-                              tileid_str, \
-                              _str_frac( npsfs,               n_spgrph * n_tots['psf']), \
-                              _str_frac( nframes,             n_spgrph * n_tots['frame']), \
-                              _str_frac( len(file_fiberflat), n_spgrph * n_tots['ff']), \
-                              _str_frac( len(file_sframe),    n_spgrph * n_tots['sframe']), \
-                              _str_frac( len(file_sky),       n_spgrph * n_tots['sframe']), \
-                              _str_frac( nstdstar,            nstdstar_expected), \
-                              _str_frac( ncframes,            n_spgrph * n_tots['sframe']), \
-                              hlink1, \
-                              hlink2, status         ]
+        output[str(expid)] = [ row_color,
+                               str(expid),
+                               obstype,
+                               laststep,
+                               str(exptime),
+                               proccamword,
+                               tileid_str,
+                               _str_frac( nfiles['psf'],    ncams * expected['psf'] ),
+                               _str_frac( nfiles['frame'],  ncams * expected['frame'] ),
+                               _str_frac( nfiles['ff'],     ncams * expected['ff'] ),
+                               _str_frac( nfiles['sframe'], ncams * expected['sframe'] ),
+                               _str_frac( nfiles['sky'],    ncams * expected['sframe'] ),
+                               _str_frac( nfiles['std'],   nspecs * expected['std'] ),
+                               _str_frac( nfiles['cframe'], ncams * expected['cframe'] ),
+                               slurm_hlink,
+                               log_hlink,
+                               comments,
+                               status            ]
     return output
 
 
@@ -845,7 +745,7 @@ def _initialize_page(color_profile):
         html_page += 'table tr#'+str(ctype)+'  {background-color:'+str(background)+'; color:'+str(font)+';}\n'
 
     html_page += '</style>\n'
-    html_page += '</head><body><h1>DESI '+os.getenv("SPECPROD").upper()+' Processing Status Monitor</h1>\n'
+    html_page += '</head><body><h1>DESI '+os.environ["SPECPROD"]+' Processing Status Monitor</h1>\n'
 
     return html_page
 
@@ -857,7 +757,7 @@ def _closing_str():
 
 def _table_row(elements,idlabel=None):
     color_profile = return_color_profile()
-    if elements[15]=='unprocessed':
+    if elements[-1]!='processing':
         style_str='display:none;'
     else:
         style_str=''
@@ -878,6 +778,8 @@ def _table_row(elements,idlabel=None):
                 row_str += _table_element_style(elem,'background-color:'+color_profile['INCOMPLETE']['background'])
             elif chars[0]!='0' and int(chars[0])==int(chars[1]):
                 row_str += _table_element_style(elem,'background-color:'+color_profile['GOOD']['background']) # Medium Aqua Green
+            else:
+                row_str += _table_element_style(elem, 'background-color:' + color_profile['OVERFUL']['background'])  # Medium Aqua Green
 
         else:
             row_str += _table_element(elem)
