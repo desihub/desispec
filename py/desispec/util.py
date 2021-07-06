@@ -501,3 +501,25 @@ def parse_fibers(fiber_string) :
     Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
     """
     return parse_int_args(fiber_string)
+
+def ordered_unique(ar, return_index=False):
+    """Find the unique elements of an array in the order they first appear
+
+    Like numpy.unique, but preserves original order instead of sorting
+
+    Args:
+        ar: array-like data to find unique elements
+
+    Options:
+        return_index: if True also return indices in ar where items first appear
+    """
+    ar = np.asarray(ar)
+    unique, sortedidx = np.unique(ar, return_index=True)
+    ii = np.argsort(sortedidx)
+    indices = sortedidx[ii]
+    unique = ar[indices]
+
+    if return_index:
+        return unique, indices
+    else:
+        return unique
