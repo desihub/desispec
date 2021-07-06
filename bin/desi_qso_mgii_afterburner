@@ -73,8 +73,6 @@ def select_targets_with_mgii_fitter(zbest, fibermap, sel_to_mgii, spectra_name, 
         QSO_sel (pandas dataframe): contains all the information useful to build the QSO cat
     """
 
-    print(spectra_name)
-
     # just to speed up the process and don't go in mgii_fitter function for nothing..
     if sel_to_mgii.sum() == 0:
         QSO_sel = pd.DataFrame()
