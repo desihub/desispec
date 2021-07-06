@@ -57,14 +57,30 @@ if args.camera.upper() != "RED" :
        print("error, can only flatfield red cameras for now")
        sys.exit(12)
 
-assert(img.shape==(4130,4200)) # for instance /global/cfs/cdirs/desi/spectro/teststand/rawdata/v0/M1-28_report/Flats/flat_median_700.fits
+if (img.shape==(4114,4200)) : # /global/cfs/cdirs/desi/spectro/teststand/rawdata/v0/M1-22-1_report/Flats/flat_median_700.fits TOO SMALL ?? evidence a central band is missing (see discontinuity of shape in flat at 2055,2055 )
+    img2=np.zeros((4130,4200))
+    img2[:4114//2]=img[:4114//2]
+    img2[4130-4114//2:]=img[4114//2:]
+
+    meanval=(img2[4114//2-1]+img2[4130-4114//2])/2.
+    for j in range(4114//2,4130//2) :
+        img2[j] = img2[4114//2-1]
+    for j in range(4130//2,4130-4114//2) :
+        img2[j] = img2[4130-4114//2]
+    #pyfits.writeto("tmp.fits",img2,overwrite=True)
+    #print("wrote tmp.fits")
+    img=img2
+
+
 
 flat=np.ones((4128,4114)) # for
 n0=flat.shape[0]
 n1=flat.shape[1]
 
+
 i0=2065
 i1=2136
+
 print("flatten quadrant 1")
 tmp=flatten(img[i0:i0+n0//2,i1:i1+n1//2],sigma=args.sigma)
 flat[:n0//2,:n1//2] = tmp[::-1,::-1]
