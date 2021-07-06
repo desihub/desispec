@@ -277,7 +277,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $coadd) already exists, skipping coadd
     elif [ -f $spectra ]; then
         echo Coadding $(basename $spectra) into $(basename $coadd), see $colog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra --nproc 16 -i $spectra -o $coadd"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra --onetile --nproc 16 -i $spectra -o $coadd"
         echo RUNNING $cmd &> $colog
         $cmd &>> $colog &
         sleep 1
@@ -290,21 +290,21 @@ wait
 
 echo Running redrock at $(date)
 for SPECTRO in {spectro_string}; do
-    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.h5
     rrlog={outdir}/redrock-$SPECTRO-{suffix}.log
 
     if [ -f $zbest ]; then
         echo $(basename $zbest) already exists, skipping redshifts
-    elif [ -f $spectra ]; then
-        echo Running redrock on $(basename $spectra), see $rrlog
-        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi $spectra -o $redrock -z $zbest"
+    elif [ -f $coadd ]; then
+        echo Running redrock on $(basename $coadd), see $rrlog
+        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi $coadd -o $redrock -z $zbest"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 1
     else
-        echo ERROR: missing $(basename $spectra), skipping redshifts
+        echo ERROR: missing $(basename $coadd), skipping redshifts
     fi
 done
 echo Waiting for redrock to finish at $(date)
