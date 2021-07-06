@@ -9,6 +9,8 @@ import numpy as np
 from desispec.frame import Frame
 from desiutil.log import get_logger
 
+from desispec.util import ordered_unique
+
 # Definition of hard-coded top hat filter sets for each camera B,R,Z.
 # The top hat filters have to be fully contained in the sensitive region of each camera.
 tophat_wave={"b":[4000,5800],"r":[5800,7600],"z":[7600,9800]}
@@ -69,52 +71,9 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
                 comments.update(bandcomments)
 
     if specscores is not None:
-        #- Derive which TSNR2_XYZ_[BRZ] columns exist
-        tsnrkeys = list()
-        tsnrtypes = list()
-        num_targets = coadd.num_targets()
-
-        if isinstance(specscores, dict):
-            _colnames = specscores.keys()
-        else:
-            _colnames = specscores.dtype.names
-        
-        for colname in _colnames:
-            if colname.startswith('TSNR2_'):
-                parts = colname.split('_')
-
-                # Ignore brz coadded values as handled independently by adding b,r,z.
-                if parts[-1] in ['b', 'r', 'z', 'B', 'R', 'Z']:                
-                    _, targtype, band = parts
-
-                    scores[colname] = np.zeros(num_targets)
-                    comments[colname] = '{} {} template (S/N)^2'.format(targtype, band)
-                    tsnrkeys.append(colname)
-
-                    if targtype not in tsnrtypes:
-                        tsnrtypes.append(targtype)
-                    
-        if len(tsnrkeys) == 0:
-            log.warning('No TSNR2_* scores found to coadd')
-        else:
-            #- Add TSNR2_*_B/R/Z columns summed across exposures
-            for i, tid in enumerate(coadd.target_ids()):
-                jj = specscores['TARGETID'] == tid
-                for colname in tsnrkeys:
-                    scores[colname][i] = np.sum(specscores[colname][jj])
-
-            #- Additionally sum across B/R/Z
-            for targtype in tsnrtypes:
-                col = f'TSNR2_{targtype}'
-                scores[col] = np.zeros(num_targets)
-                comments[col] = f'{targtype} template (S/N)^2 summed over B,R,Z'
-                for band in ['B', 'R', 'Z']:
-                    colbrz = f'TSNR2_{targtype}_{band}'
-
-                    #- Missing cameras can result in missing columns, which
-                    #- should be treated as SNR=0 but not crash
-                    if colbrz in scores.keys():
-                        scores[col] += scores[colbrz]
+        tsnrscores, tsnrcomments = compute_coadd_tsnr_scores(specscores)
+        scores.update(tsnrscores)
+        comments.update(tsnrcomments)
 
     #- convert to float32
     for col in scores.keys():
@@ -131,6 +90,73 @@ def compute_coadd_scores(coadd, specscores=None, update_coadd=True):
             coadd.scores_comments = comments
 
     return scores, comments
+
+def compute_coadd_tsnr_scores(specscores):
+    """
+    Compute coadded TSNR2 scores (TSNR2=Template Signal-to-Noise squared)
+
+    Args:
+        specscores : uncoadded scores with TSNR2* columns (dict or Table-like)
+
+    Returns (tsnrscores, comments) tuple of dictionaries
+    """
+    log = get_logger()
+
+    targetids = ordered_unique(specscores['TARGETID'])
+    num_targets = len(targetids)
+
+    tsnrscores = dict()
+    comments = dict()
+    tsnrscores['TARGETID'] = targetids
+
+    #- Derive which TSNR2_XYZ_[BRZ] columns exist
+    tsnrkeys = list()
+    tsnrtypes = list()
+
+    if isinstance(specscores, dict):
+        _colnames = specscores.keys()
+    else:
+        _colnames = specscores.dtype.names
+
+    for colname in _colnames:
+        if colname.startswith('TSNR2_'):
+            parts = colname.split('_')
+
+            # Ignore brz coadded values as handled independently by adding b,r,z.
+            if parts[-1] in ['b', 'r', 'z', 'B', 'R', 'Z']:
+                _, targtype, band = parts
+
+                tsnrscores[colname] = np.zeros(num_targets, dtype=np.float32)
+                comments[colname] = f'{targtype} {band} template (S/N)^2'
+                tsnrkeys.append(colname)
+
+                if targtype not in tsnrtypes:
+                    tsnrtypes.append(targtype)
+
+    if len(tsnrkeys) == 0:
+        log.warning('No TSNR2_* scores found to coadd')
+    else:
+        #- Add TSNR2_*_B/R/Z columns summed across exposures
+        for i, tid in enumerate(targetids):
+            jj = specscores['TARGETID'] == tid
+            for colname in tsnrkeys:
+                tsnrscores[colname][i] = np.sum(specscores[colname][jj])
+
+        #- Additionally sum across B/R/Z
+        for targtype in tsnrtypes:
+            col = f'TSNR2_{targtype}'
+            tsnrscores[col] = np.zeros(num_targets, dtype=np.float32)
+            comments[col] = f'{targtype} template (S/N)^2 summed over B,R,Z'
+            for band in ['B', 'R', 'Z']:
+                colbrz = f'TSNR2_{targtype}_{band}'
+
+                #- Missing cameras can result in missing columns, which
+                #- should be treated as SNR=0 but not crash
+                if colbrz in tsnrscores.keys():
+                    tsnrscores[col] += tsnrscores[colbrz]
+
+    return tsnrscores, comments
+
 
 def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     """Computes scores in spectra of a frame.
