@@ -99,12 +99,13 @@ fibermap_mtl_cols = (
 #- Fibermap columns that were added by fiberassign
 #- ... same per target, regardless of assignment
 fibermap_fiberassign_target_cols = (
-    'LAMBDA_REF', 'FA_TARGET', 'FA_TYPE', 'OBJTYPE',
+    'FA_TARGET', 'FA_TYPE', 'OBJTYPE',
     )
 #- ... varies per assignment
 fibermap_fiberassign_cols = (
     'PETAL_LOC', 'DEVICE_LOC', 'LOCATION', 'FIBER', 'FIBERSTATUS',
     'FIBERASSIGN_X', 'FIBERASSIGN_Y',
+    'LAMBDA_REF', 'PLATE_RA', 'PLATE_DEC',
     )
 
 #- Fibermap columns added frome the platemaker coordinates file
