@@ -248,6 +248,27 @@ class TestUtil(unittest.TestCase):
         hdr['DATE-OBS'] = '2021-01-06T18:59:59'
         self.assertEqual(util.header2night(hdr), 20210105)
 
+    def test_ordered_unique(self):
+        a = util.ordered_unique([1,2,3])
+        self.assertEqual(list(a), [1,2,3])
+
+        a = util.ordered_unique([2,3,1])
+        self.assertEqual(list(a), [2,3,1])
+
+        a = util.ordered_unique([2,3,2,1])
+        self.assertEqual(list(a), [2,3,1])
+
+        a = util.ordered_unique([3,2,3,2,1])
+        self.assertEqual(list(a), [3,2,1])
+
+        a, idx = util.ordered_unique([3,2,3,2,1], return_index=True)
+        self.assertEqual(list(a), [3,2,1])
+        self.assertEqual(list(idx), [0,1,4])
+
+        a, idx = util.ordered_unique([1,1,2,3,0], return_index=True)
+        self.assertEqual(list(a), [1,2,3,0])
+        self.assertEqual(list(idx), [0,2,3,4])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -22,6 +22,7 @@ from desispec.spectra import Spectra
 from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.specscore import compute_coadd_scores
+from desispec.util import ordered_unique
 
 #- Fibermap columns that come from targeting or MTL files
 fibermap_target_cols = (
@@ -163,13 +164,11 @@ def coadd_fibermap(fibermap, onetile=False):
             log.error(msg)
             raise ValueError(msg)
 
-    targets = np.unique(fibermap["TARGETID"])
+    #- Get TARGETIDs, preserving order in which they first appear
+    targets, ii = ordered_unique(fibermap["TARGETID"], return_index=True)
+    tfmap = fibermap[ii]
+    assert np.all(targets == tfmap['TARGETID'])
     ntarget = targets.size
-
-    jj=np.zeros(ntarget,dtype=int)
-    for i,tid in enumerate(targets) :
-        jj[i]=np.where(fibermap["TARGETID"]==tid)[0][0]
-    tfmap=fibermap[jj]
 
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
@@ -318,7 +317,7 @@ def coadd_fibermap(fibermap, onetile=False):
 
 def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
     """
-    Coadd spectra for each target and each camera, modifying input spectra.
+    Coadd spectra for each target and each camera, modifying input spectra obj.
 
     Args:
        spectra: desispec.spectra.Spectra object
@@ -333,7 +332,7 @@ def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
        be different on different tiles.
     """
     log = get_logger()
-    targets = np.unique(spectra.fibermap["TARGETID"])
+    targets = ordered_unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
     log.debug("number of targets= {}".format(ntarget))
     for b in spectra.bands :
@@ -448,7 +447,25 @@ def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
     spectra.scores=None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
-def coadd_cameras(spectra,cosmics_nsig=0., onetile=False) :
+
+def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
+    """
+    Return coadd across both exposures and cameras
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+
+    Options:
+       cosmics_nsig: float, nsigma clipping threshold for cosmics rays
+       onetile: bool, if True, inputs are from a single tile
+
+    If `onetile` is True, additional tile-specific columns
+    like LOCATION and FIBER are included the COADD_FIBERMAP; otherwise
+    these are only in the EXP_FIBERMAP since for the same target they could
+    be different on different tiles.
+
+    Note: unlike `coadd`, this does not modify the input spectra object
+    """
 
     #check_alignement_of_camera_wavelength(spectra)
 
@@ -481,7 +498,7 @@ def coadd_cameras(spectra,cosmics_nsig=0., onetile=False) :
         number_of_overlapping_cameras[windices] += 1
 
     # targets
-    targets = np.unique(spectra.fibermap["TARGETID"])
+    targets = ordered_unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
     log.debug("number of targets= {}".format(ntarget))
 
