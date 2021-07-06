@@ -131,7 +131,7 @@ fibermap_perexp_cols = \
     fibermap_fiberassign_cols + \
     fibermap_coords_cols + fibermap_cframe_cols
 
-def coadd_fibermap(fibermap, onetile=False):
+def coadd_fibermap(fibermap, onetile=False) :
     """
     Coadds fibermap
 
@@ -142,7 +142,6 @@ def coadd_fibermap(fibermap, onetile=False):
         onetile (bool): this is a coadd of a single tile, not across tiles
 
     Returns: (coadded_fibermap, exp_fibermap) Tables
-
 
     coadded_fibermap contains the coadded_fibermap for the columns that can
     be coadded, while exp_fibermap is the subset of columns of the original
@@ -314,6 +313,7 @@ def coadd_fibermap(fibermap, onetile=False):
         exp_fibermap = Table(fibermap, copy=False)[keepcols].copy()
 
     return tfmap, exp_fibermap
+
 
 def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
     """
