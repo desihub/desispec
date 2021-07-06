@@ -298,7 +298,7 @@ def coadd_fibermap(fibermap, onetile=False) :
     #- Remove columns that don't apply to coadds across tiles
     if not onetile:
         for k in ['TILEID', 'FIBER', 'FIBER_X', 'FIBER_Y',
-                'PRIORITY',
+                'PRIORITY', 'PETAL_RA', 'PETAL_DEC', 'LAMBDA_REF',
                 'FIBERASSIGN_X', 'FIBERASSIGN_Y',
                 'PETAL_LOC', 'DEVICE_LOC', 'LOCATION'
                 ]:
