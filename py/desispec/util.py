@@ -523,3 +523,31 @@ def ordered_unique(ar, return_index=False):
         return unique, indices
     else:
         return unique
+
+#- Not yet used, but a snippet of code that might be useful
+#- e.g. for mapping TARGETID to the rows in which they appear
+def itemindices(a):
+    """
+    Return dict[key] -> list of indices i where a[i] == key
+
+    Args:
+        a : array-like of hashable values
+
+    Return dict[key] -> list of indices i where a[i] == key
+
+    The dict keys are inserted in the order that they first appear in a,
+    and the value lists of indices are sorted
+
+    e.g. itemindices([10,30,20,30]) -> {10: [0], 30: [1, 3], 20: [2]}
+    """
+    #- there is probably a more efficient way of doing this, but this code
+    #- can map 100k targetids in <50ms which is sufficient
+    idmap = dict()
+    for i, x in enumerate(a):
+        if x not in idmap:
+            idmap[x] = [i,]
+        else:
+            idmap[x].append(i)
+
+    return idmap
+
