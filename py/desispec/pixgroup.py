@@ -232,8 +232,8 @@ class SpectraLite(object):
     '''
     Lightweight spectra I/O object for regrouping
     '''
-    def __init__(self, bands, wave, flux, ivar, mask, resolution_data, fibermap,
-            scores=None):
+    def __init__(self, bands, wave, flux, ivar, mask, resolution_data,
+            fibermap, exp_fibermap=None, scores=None):
         '''
         Create a SpectraLite object
 
@@ -247,6 +247,7 @@ class SpectraLite(object):
             fibermap: fibermap table, applies to all bands
 
         Options:
+            exp_fibermap: per-exposure fibermap table
             scores: scores table, applies to all bands
         '''
 
@@ -285,6 +286,7 @@ class SpectraLite(object):
         self.mask = mask.copy()
         self.resolution_data = resolution_data.copy()
         self.fibermap = fibermap
+        self.exp_fibermap = exp_fibermap
         self.scores = scores
 
         #- for compatibility with full Spectra objects
@@ -358,7 +360,13 @@ class SpectraLite(object):
         else:
             scores = None
 
-        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
+        if self.exp_fibermap is not None:
+            exp_fibermap = np.hstack([self.exp_fibermap, other.exp_fibermap])
+        else:
+            exp_fibermap = None
+
+        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
+                fibermap, exp_fibermap, scores)
 
     def write(self, filename, header=None):
         '''
@@ -377,13 +385,22 @@ class SpectraLite(object):
 
         from astropy.table import Table
         fm = Table(self.fibermap)
-        fm.meta['EXTNAME'] = 'FIBERMAP'
+        if self.exp_fibermap is not None:
+            fm.meta['EXTNAME'] = 'COADD_FIBERMAP'
+        else:
+            fm.meta['EXTNAME'] = 'FIBERMAP'
 
         header = io.fitsheader(header)
         desiutil.depend.add_dependencies(header)
         hdus = fits.HDUList()
         hdus.append(fits.PrimaryHDU(None, header))
         hdus.append(fits.convenience.table_to_hdu(fm))
+
+        if self.exp_fibermap is not None:
+            expfm = Table(self.exp_fibermap)
+            expfm.meta['EXTNAME'] = 'EXP_FIBERMAP'
+            hdus.append(fits.convenience.table_to_hdu(expfm))
+
         hdus.writeto(tmpout, overwrite=True, checksum=True)
 
         #- then proceed with more efficient fitsio for everything else
@@ -416,7 +433,18 @@ class SpectraLite(object):
             ivar = dict()
             mask = dict()
             resolution_data = dict()
-            fibermap = fx['FIBERMAP'].read()
+            if 'FIBERMAP' in fx:
+                fibermap = fx['FIBERMAP'].read()
+            elif 'COADD_FIBERMAP' in fx:
+                fibermap = fx['COADD_FIBERMAP'].read()
+            else:
+                raise ValueError(f'{filename} missing FIBERMAP or COADD_FIBERMAP')
+
+            if 'EXP_FIBERMAP' in fx:
+                exp_fibermap = fx['EXP_FIBERMAP'].read()
+            else:
+                exp_fibemrap = None
+
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
             else:
@@ -431,7 +459,8 @@ class SpectraLite(object):
                 mask[band] = fx[upperband+'_MASK'].read()
                 resolution_data[band] = fx[upperband+'_RESOLUTION'].read()
 
-        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
+        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
+                fibermap, exp_fibermap, scores)
 
 def add_missing_frames(frames):
     '''
