@@ -38,12 +38,13 @@ class TestFibermap(unittest.TestCase):
             #- spot check existence of a few other columns
             for col in (
                 'TARGETID', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC',
+                'PLATE_RA', 'PLATE_DEC',
                 ):
                 self.assertIn(col, fm.colnames)
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC") 
-    def test_missing_inputs(self):
-        """Test creation of fibermaps with missing inputs"""
+    def test_missing_input_files(self):
+        """Test creation of fibermaps with missing input files"""
         #- missing coordinates file for this exposure
         night, expid = 20200219, 51053
         with self.assertRaises(FileNotFoundError):
@@ -55,6 +56,26 @@ class TestFibermap(unittest.TestCase):
         #- ...albeit with FIBER_X/Y == 0
         assert np.all(fm['FIBER_X'] == 0.0)
         assert np.all(fm['FIBER_Y'] == 0.0)
+
+    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
+    def test_missing_input_columns(self):
+        """Test creation of fibermaps with missing input columns"""
+        #- second exposure of split, missing fiber location information
+        #- in coordinates file, but info is present in previous exposure
+        #- that was same tile and first in sequence
+        fm1 = assemble_fibermap(20210406, 83714)
+        fm2 = assemble_fibermap(20210406, 83714)
+
+        def nanequal(a, b):
+            """Compare two arrays treating NaN==NaN"""
+            return np.equal(a, b, where=~np.isnan(a))
+
+        assert np.all(nanequal(fm1['FIBER_X'], fm2['FIBER_X']))
+        assert np.all(nanequal(fm1['FIBER_Y'], fm2['FIBER_Y']))
+        assert np.all(nanequal(fm1['FIBER_RA'], fm2['FIBER_RA']))
+        assert np.all(nanequal(fm1['FIBER_DEC'], fm2['FIBER_DEC']))
+        assert np.all(nanequal(fm1['DELTA_X'], fm2['DELTA_X']))
+        assert np.all(nanequal(fm1['DELTA_Y'], fm2['DELTA_Y']))
 
 def test_suite():
     """Allows testing of only this module with the command::

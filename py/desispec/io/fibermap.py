@@ -441,6 +441,13 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
 
+    #- add missing columns for data model consistency
+    if 'PLATE_RA' not in fa.colnames:
+        fa['PLATE_RA'] = fa['TARGET_RA']
+
+    if 'PLATE_DEC' not in fa.colnames:
+        fa['PLATE_DEC'] = fa['TARGET_DEC']
+
     #- also read extra keywords from HDU 0
     fa_hdr0 = fits.getheader(fafile, 0)
     if 'OUTDIR' in fa_hdr0:
