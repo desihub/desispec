@@ -2,18 +2,32 @@
 desispec Change Log
 ===================
 
-0.44.0 (unreleased)
+0.45.0 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.44.0 (2021-07-06)
+-------------------
+
+First tag used for initial Everest arc/flat calibs
 
 * Add QSO afterburners for MgII and QuasarNet (PR `#1312`_).
 * Spectra I/O for extra catalog (PR `#1313`_).
 * Expand Spectra.select and .update functionality (PR `#1319`_).
 * Add optional support for gpu_specter for extractions (PR `#993`_).
+* Look for manifest files in nightly processing (PR `#1320`_).
+* Fix extra_catalog support for grouping by healpix (PR `#1325`_).
+* Pipeline progress bug fixes and features (PRs `#1326`_, `#1329`_).
 
 .. _`#993`: https://github.com/desihub/desispec/issues/993
 .. _`#1312`: https://github.com/desihub/desispec/issues/1312
 .. _`#1313`: https://github.com/desihub/desispec/issues/1313
 .. _`#1319`: https://github.com/desihub/desispec/issues/1319
+.. _`#1320`: https://github.com/desihub/desispec/issues/1320
+.. _`#1325`: https://github.com/desihub/desispec/issues/1325
+.. _`#1326`: https://github.com/desihub/desispec/issues/1326
+.. _`#1329`: https://github.com/desihub/desispec/issues/1329
 
 0.43.0 (2021-06-21)
 -------------------
