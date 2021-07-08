@@ -86,7 +86,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
     fiberqa_table['QAFIBERSTATUS'][nan_positions] |= fibermask.mask('MISSINGPOSITION')
 
     dist_mm = np.sqrt(dx_mm**2+dy_mm**2)
-    poorposition=(dist_mm>qa_params["max_fiber_offset_mm"])
+    poorposition=(dist_mm>qa_params["poor_fiber_offset_mm"])
     fiberqa_table['QAFIBERSTATUS'][poorposition] |= fibermask.mask('POORPOSITION')
 
     petal_tsnr2=np.zeros(10)

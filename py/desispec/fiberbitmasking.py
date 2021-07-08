@@ -139,13 +139,15 @@ def get_fluxcalib_fiberbitmask_val():
     return get_all_fiberbitmask_val()
 
 def get_stdstars_fiberbitmask_val():
-    return get_all_fiberbitmask_val()
+    return get_all_fiberbitmask_val() | fmsk.POORPOSITION
 
 def get_all_nonamp_fiberbitmask_val():
-    """Return a mask for all bad FIBERSTATUS bits except BADAMPB/R/Z
+    """Return a mask for all fatally bad FIBERSTATUS bits except BADAMPB/R/Z
 
     Note: does not include STUCKPOSITIONER or RESTRICTED, which could still
     be on a valid sky location, or even a target for RESTRICTED.
+    Also does not include POORPOSITION which is bad for stdstars
+    but not necessarily fatal for otherwise processing a normal fiber.
     """
     return (fmsk.UNASSIGNED | fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | fmsk.BADPOSITION | \
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \

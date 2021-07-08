@@ -1,8 +1,9 @@
 # QA parameters read by exposure_qa.py
 exposure_qa:
 
- # cutoff fiber positioning offset in mm
- max_fiber_offset_mm : 0.03
+ # max cutoff on fiber offset in mm for poor and bad positioning
+ poor_fiber_offset_mm : 0.030
+ bad_fiber_offset_mm  : 0.100
 
  # maximum read noise rms per CCD pixel in electrons
  max_readnoise : 10
