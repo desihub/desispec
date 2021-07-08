@@ -270,7 +270,7 @@ def save_dataframe_to_fits(dataframe, filename, clobber=True):
         log.warning(f'OVERWRITE the file : {filename}')
     else:
         log.warning(f'EXPAND the file : {filename}')
-    fits.write(dataframe.to_records())
+    fits.write(dataframe.to_records(index=False), extname="QSO_CAT")
     fits.close()
 
 
