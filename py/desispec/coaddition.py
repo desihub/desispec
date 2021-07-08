@@ -181,6 +181,7 @@ def coadd_fibermap(fibermap, onetile=False):
     mean_cols = [
         'DELTA_X', 'DELTA_Y',
         'FIBER_RA', 'FIBER_DEC',
+        'PSF_TO_FIBER_SPECFLUX',
         ]
     if onetile:
         mean_cols.extend(['FIBER_X', 'FIBER_Y'])
