@@ -328,7 +328,7 @@ def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
        onetile: bool, if True, inputs are from a single tile
 
     Notes: if `onetile` is True, additional tile-specific columns
-       like LOCATION and FIBER are included the COADD_FIBERMAP; otherwise
+       like LOCATION and FIBER are included the FIBERMAP; otherwise
        these are only in the EXP_FIBERMAP since for the same target they could
        be different on different tiles.
     """
@@ -461,7 +461,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
        onetile: bool, if True, inputs are from a single tile
 
     If `onetile` is True, additional tile-specific columns
-    like LOCATION and FIBER are included the COADD_FIBERMAP; otherwise
+    like LOCATION and FIBER are included the FIBERMAP; otherwise
     these are only in the EXP_FIBERMAP since for the same target they could
     be different on different tiles.
 

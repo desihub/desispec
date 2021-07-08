@@ -385,10 +385,7 @@ class SpectraLite(object):
 
         from astropy.table import Table
         fm = Table(self.fibermap)
-        if self.exp_fibermap is not None:
-            fm.meta['EXTNAME'] = 'COADD_FIBERMAP'
-        else:
-            fm.meta['EXTNAME'] = 'FIBERMAP'
+        fm.meta['EXTNAME'] = 'FIBERMAP'
 
         header = io.fitsheader(header)
         desiutil.depend.add_dependencies(header)
@@ -433,13 +430,7 @@ class SpectraLite(object):
             ivar = dict()
             mask = dict()
             resolution_data = dict()
-            if 'FIBERMAP' in fx:
-                fibermap = fx['FIBERMAP'].read()
-            elif 'COADD_FIBERMAP' in fx:
-                fibermap = fx['COADD_FIBERMAP'].read()
-            else:
-                raise ValueError(f'{filename} missing FIBERMAP or COADD_FIBERMAP')
-
+            fibermap = fx['FIBERMAP'].read()
             if 'EXP_FIBERMAP' in fx:
                 exp_fibermap = fx['EXP_FIBERMAP'].read()
             else:

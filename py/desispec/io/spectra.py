@@ -73,10 +73,7 @@ def write_spectra(outfile, spec, units=None):
 
     # Next is the fibermap
     fmap = spec.fibermap.copy()
-    if 'COADD_NUMEXP' in fmap.dtype.names:
-        fmap.meta['EXTNAME'] = 'COADD_FIBERMAP'
-    else:
-        fmap.meta['EXTNAME'] = 'FIBERMAP'
+    fmap.meta['EXTNAME'] = 'FIBERMAP'
 
     with warnings.catch_warnings():
         #- nanomaggies aren't an official IAU unit but don't complain
@@ -236,8 +233,6 @@ def read_spectra(infile, single=False):
     for h in range(1, nhdu):
         name = hdus[h].header["EXTNAME"]
         if name == "FIBERMAP":
-            fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
-        elif name == "COADD_FIBERMAP":
             fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
         elif name == "EXP_FIBERMAP":
             expfmap = encode_table(Table(hdus[h].data, copy=True).as_array())
