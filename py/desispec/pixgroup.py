@@ -434,7 +434,7 @@ class SpectraLite(object):
             if 'EXP_FIBERMAP' in fx:
                 exp_fibermap = fx['EXP_FIBERMAP'].read()
             else:
-                exp_fibemrap = None
+                exp_fibermap = None
 
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
