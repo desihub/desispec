@@ -5,7 +5,7 @@ desispec Change Log
 0.45.0 (unreleased)
 -------------------
 
-* No changes yet
+* tune tile QA parameters
 
 0.44.2 (2021-07-07)
 -------------------
