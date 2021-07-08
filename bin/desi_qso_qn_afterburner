@@ -217,7 +217,6 @@ def selection_targets_with_QN(zbest, fibermap, sel_to_QN, DESI_TARGET, spectra_n
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
             redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, zbest['TARGETID'][:][sel_QN], zbest_QN[index_with_QN_with_no_pb], param_RR)
-
         QSO_sel = pd.DataFrame()
 
         if save_target == 'restricted':
@@ -231,7 +230,6 @@ def selection_targets_with_QN(zbest, fibermap, sel_to_QN, DESI_TARGET, spectra_n
         else:
             # never happen since a test is performed before running this function in desi_qso_qn_afterburner
             log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
-
 
         QSO_sel['TARGETID'] = zbest['TARGETID'][:][index_to_save]
         QSO_sel['RA'] = fibermap['TARGET_RA'][:][index_to_save]
@@ -254,15 +252,18 @@ def selection_targets_with_QN(zbest, fibermap, sel_to_QN, DESI_TARGET, spectra_n
         QSO_sel['Z_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
 
         tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redshift
+        if index_with_QN_with_no_pb.sum() != 0: # in case where sel_QN.sum() == 0 and redshift is so not defined
+            tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redshift
         QSO_sel['Z_NEW'] = tmp_arr[index_to_save_QN_result]
 
         tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = err_redshift
+        if index_with_QN_with_no_pb.sum() != 0:
+            tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = err_redshift
         QSO_sel['ZERR_NEW'] = tmp_arr[index_to_save_QN_result]
 
         tmp_arr = np.NaN*np.ones((sel_to_QN.sum(), 10))
-        tmp_arr[index_with_QN[index_with_QN_with_no_pb], :] = coeffs
+        if index_with_QN_with_no_pb.sum() != 0:
+            tmp_arr[index_with_QN[index_with_QN_with_no_pb], :] = coeffs
         QSO_sel['COEFFS'] = tmp_arr[index_to_save_QN_result].tolist()
 
     return QSO_sel
