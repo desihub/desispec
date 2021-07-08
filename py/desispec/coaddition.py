@@ -27,11 +27,6 @@ from desispec.util import ordered_unique
 #- Fibermap columns that come from targeting or MTL files
 fibermap_target_cols = (
     'TARGETID',
-    'PETAL_LOC',
-    'DEVICE_LOC',
-    'LOCATION',
-    'FIBER',
-    'FIBERSTATUS',
     'TARGET_RA',
     'TARGET_DEC',
     'PMRA',
@@ -226,11 +221,13 @@ def coadd_fibermap(fibermap, onetile=False):
     #             xx = Column(np.arange(ntarget, dtype=np.int16))
     #             tfmap.add_column(xx,name='NUM_'+k)
 
+    tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
+
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
 
         #- coadded FIBERSTATUS = bitwise AND of input FIBERSTATUS
-        tfmap['FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap['FIBERSTATUS'][jj])
+        tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap['FIBERSTATUS'][jj])
 
         #- Only FIBERSTATUS=0 were included in the coadd
         fiberstatus_nonamp_bits = get_all_nonamp_fiberbitmask_val()
@@ -349,7 +346,12 @@ def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
         trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
 
         fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
-        good_fiberstatus = ( (spectra.fibermap["FIBERSTATUS"] & fiberstatus_bits) == 0 )
+        if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
+            fiberstatus = spectra.fibermap['FIBERSTATUS']
+        else:
+            fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
+
+        good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
         for i,tid in enumerate(targets) :
             jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 
@@ -533,7 +535,12 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         band_ndiag = spectra.resolution_data[b].shape[1]
 
         fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
-        good_fiberstatus = ( (spectra.fibermap["FIBERSTATUS"] & fiberstatus_bits) == 0 )
+        if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
+            fiberstatus = spectra.fibermap['FIBERSTATUS']
+        else:
+            fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
+
+        good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
         for i,tid in enumerate(targets) :
             jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 

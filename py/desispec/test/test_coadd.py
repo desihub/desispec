@@ -50,6 +50,21 @@ class TestCoadd(unittest.TestCase):
         coadd(s1)
         self.assertEqual(s1.flux['b'].shape[0], 1)
         
+#   def test_coadd_coadd(self):
+#       """Test re-coaddition of a coadd"""
+#       nspec, nwave = 6, 10
+#       s1 = self._random_spectra(nspec, nwave)
+#       s1.fibermap['TARGETID'][0:nspec//2] = 11
+#       s1.fibermap['TARGETID'][nspec//2:] = 22
+#       self.assertEqual(s1.flux['b'].shape[0], nspec)
+#
+#       coadd(s1)
+#       self.assertEqual(s1.flux['b'].shape[0], 2)
+#
+#       #- re-coadding should be ok
+#       coadd(s1)
+#       self.assertEqual(s1.flux['b'].shape[0], 2)
+
     def test_coadd_scores(self):
         """Test coaddition"""
         nspec, nwave = 10, 20
@@ -95,12 +110,12 @@ class TestCoadd(unittest.TestCase):
 
         #- Single tile coadds include these in the coadded fibermap
         for col in ['TARGETID', 'DESI_TARGET',
-                'TILEID', 'FIBER', 'FIBERSTATUS', 'FLUX_R',
+                'TILEID', 'FIBER', 'COADD_FIBERSTATUS', 'FLUX_R',
                 'MEAN_FIBER_X', 'MEAN_FIBER_Y']:
             self.assertIn(col, cofm.colnames)
 
         #- but these columns should not be in the coadd
-        for col in ['NIGHT', 'EXPID', 'FIBER_X', 'FIBER_Y']:
+        for col in ['NIGHT', 'EXPID', 'FIBERSTATUS', 'FIBER_X', 'FIBER_Y']:
             self.assertNotIn(col, cofm.colnames)
 
         #- the exposure-level fibermap has columns specific to individual
@@ -138,12 +153,11 @@ class TestCoadd(unittest.TestCase):
         cofm, expfm = coadd_fibermap(fm, onetile=False)
 
         #- Multi tile coadds include these in the coadded fibermap
-        for col in ['TARGETID', 'DESI_TARGET', 'FIBERSTATUS',
-                'FIBERSTATUS', 'FLUX_R']:
+        for col in ['TARGETID', 'DESI_TARGET', 'COADD_FIBERSTATUS', 'FLUX_R']:
             self.assertIn(col, cofm.colnames)
 
         #- but these columns should not be in the coadd
-        for col in ['NIGHT', 'EXPID', 'TILEID', 'FIBER',
+        for col in ['NIGHT', 'EXPID', 'TILEID', 'FIBER', 'FIBERSTATUS',
                 'FIBER_X', 'FIBER_Y', 'MEAN_FIBER_X', 'MEAN_FIBER_Y']:
             self.assertNotIn(col, cofm.colnames)
 
@@ -175,7 +189,7 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec)
         self.assertEqual(s1.fibermap['COADD_EXPTIME'][0], expt*nspec)
-        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 0)
+        self.assertEqual(s1.fibermap['COADD_FIBERSTATUS'][0], 0)
         self.assertTrue(np.all(s1.flux['b'] == 1.0))
         self.assertTrue(np.allclose(s1.ivar['b'], 1.0*nspec))
 
@@ -190,7 +204,7 @@ class TestCoadd(unittest.TestCase):
         coadd(s1)
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], nspec-2)
-        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], 0)
+        self.assertEqual(s1.fibermap['COADD_FIBERSTATUS'][0], 0)
         self.assertTrue(np.all(s1.flux['b'] == 1.0))
         self.assertTrue(np.allclose(s1.ivar['b'], 1.0*(nspec-2)))
 
@@ -204,7 +218,7 @@ class TestCoadd(unittest.TestCase):
         coadd(s1)
         self.assertEqual(len(s1.fibermap), 1)
         self.assertEqual(s1.fibermap['COADD_NUMEXP'][0], 0)
-        self.assertEqual(s1.fibermap['FIBERSTATUS'][0], fibermask.BROKENFIBER)
+        self.assertEqual(s1.fibermap['COADD_FIBERSTATUS'][0], fibermask.BROKENFIBER)
         self.assertTrue(np.all(s1.flux['b'] == 0.0))
         self.assertTrue(np.all(s1.ivar['b'] == 0.0))
 

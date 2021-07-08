@@ -618,7 +618,7 @@ def get_speclog(nights, rawdir=None):
 
 def replace_prefix(filepath, oldprefix, newprefix):
     """
-    Replace prefix in filepath even if prefix is elsewhere in filepath
+    Replace filename prefix even if prefix is elsewhere in path or filename
 
     Args:
         filepath : filename, optionally including path

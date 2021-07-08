@@ -366,7 +366,7 @@ class SpectraLite(object):
             exp_fibermap = None
 
         return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
-                fibermap, exp_fibermap, scores)
+                fibermap, exp_fibermap=exp_fibermap, scores=scores)
 
     def write(self, filename, header=None):
         '''
@@ -451,7 +451,7 @@ class SpectraLite(object):
                 resolution_data[band] = fx[upperband+'_RESOLUTION'].read()
 
         return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
-                fibermap, exp_fibermap, scores)
+                fibermap, exp_fibermap=exp_fibermap, scores=scores)
 
 def add_missing_frames(frames):
     '''
@@ -700,7 +700,8 @@ def frames2spectra(frames, pix=None, nside=64):
     #- Combine all the individual fibermaps from the exposures and spectrographs
     fibermap = np.hstack(merged_over_cams_fmaps)
 
-    return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
+    return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
+            fibermap, scores=scores)
 
 def update_frame_cache(frames, framekeys, specprod_dir=None):
     '''
