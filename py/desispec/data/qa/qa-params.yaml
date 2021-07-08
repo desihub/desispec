@@ -43,7 +43,7 @@ tile_qa:
 # where mintfrac and goaltime are read in the FIBERMAP header of the spectro files where they
 # have been copied from the fiberassign file.
 
- fiber_rel_mintfrac : 0.9
+ fiber_rel_mintfrac : 0.85
 
 # minimum number of valid fibers (best in 2021/06 would be 4400 and we would 'allow' 3 non-functional petals)
  min_number_of_good_fibers : 3000
