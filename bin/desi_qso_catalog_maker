@@ -45,90 +45,84 @@ def collect_argparser():
     return parser.parse_args()
 
 
-def extract_info_from_fibermap(fibermap, index_sorted, dataframe, sel):
+def extract_info_from_fibermap(fibermap, exp_fibermap, dataframe, sel):
     """
     Extract information from the fibermap. We save: TARGETID, RA, DEC, DESI_TARGET, MASKBIT,
     r, g, z, W1, W2, TILE, LAST_NIGHT, PETAL, FIBER
     Args:
-        fibermap:  fitsio hdu 'FIBERMAP' from zbest file
-        index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
-                      it is built with the TARGETID increasing
-                      --> IT IS HOW WE DECIDED TO FILL THE DATAFRAME MATCHING THE REDSHIFT FROM ZBEST
+        fibermap:  fitsio hdu 'COADD_FIBERMAP' from zbest file
+        exp_fibermap: fitsio hdu 'EXP_FIBERMAP' from zbest file
         dataframe: dataframe to fill with useful information extracted from the fibermap
         sel: mask to select which objects from the fibermap have to be saved. Order given by the zbest file
-             --> need to apply [index_sorted][sel]
     Returns:
         QSO_cat (pandas dataframe): Dataframe containing all the information
     """
 
-    def compute_grzW1W2(fibermap, index_sorted, sel):
+    def compute_grzW1W2(fibermap, sel):
         # Compute g, r, z, W1, w2 magnitudes corrected by the Milky Way transmission
         # Args:
-        #     fibermap: fitsio hdu 'FIBERMAP' from zbest file
-        #     index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
-        #                               it is built with the TARGETID increasing
+        #     fibermap: fitsio hdu 'COADD_FIBERMAP' from zbest file
         #     sel: mask to select which objects from the fibermap have to be saved.
         # Returns:
         #     g, r, z, W1, W2: magnitudes corrected
 
-        north = (fibermap['TARGET_RA'][:][index_sorted][sel] > 80) & (fibermap['TARGET_RA'][:][index_sorted][sel] < 300 ) & (fibermap['TARGET_DEC'][:][index_sorted][sel] > desitarget_resolve_dec())
+        north = (fibermap['TARGET_RA'][:][sel] > 80) & (fibermap['TARGET_RA'][:][sel] < 300 ) & (fibermap['TARGET_DEC'][:][sel] > desitarget_resolve_dec())
 
-        gflux  = fibermap['FLUX_G'][:][index_sorted][sel]
-        rflux  = fibermap['FLUX_R'][:][index_sorted][sel]
-        zflux  = fibermap['FLUX_Z'][:][index_sorted][sel]
-        W1flux  = fibermap['FLUX_W1'][:][index_sorted][sel]
-        W2flux  = fibermap['FLUX_W2'][:][index_sorted][sel]
+        gflux  = fibermap['FLUX_G'][:][sel]
+        rflux  = fibermap['FLUX_R'][:][sel]
+        zflux  = fibermap['FLUX_Z'][:][sel]
+        W1flux  = fibermap['FLUX_W1'][:][sel]
+        W2flux  = fibermap['FLUX_W2'][:][sel]
 
         RV = 3.1
-        EBV =  fibermap['EBV'][:][index_sorted][sel]
+        EBV =  fibermap['EBV'][:][sel]
 
         mw_transmission = np.array([10**(-0.4 * EBV[i] * RV * ext_odonnell(bassmzlswise.effective_wavelengths.value, Rv=RV)) if north[i]
                                     else 10**(-0.4 * EBV[i] * RV * ext_odonnell(decamwise.effective_wavelengths.value, Rv=RV)) for i in range(EBV.size)])
 
         with np.errstate(divide='ignore', invalid='ignore'):
-            g = np.where( gflux>0,22.5-2.5*np.log10(gflux/mw_transmission[:, 0]), 0.)
-            r = np.where( rflux>0,22.5-2.5*np.log10(rflux/mw_transmission[:, 1]), 0.)
-            z = np.where( zflux>0,22.5-2.5*np.log10(zflux/mw_transmission[:, 2]), 0.)
-            W1 = np.where( W1flux>0,22.5-2.5*np.log10(W1flux/mw_transmission[:, 3]), 0.)
-            W2 = np.where( W2flux>0,22.5-2.5*np.log10(W2flux/mw_transmission[:, 4]), 0.)
+            g = np.where(gflux>0, 22.5-2.5*np.log10(gflux/mw_transmission[:, 0]), 0.)
+            r = np.where(rflux>0, 22.5-2.5*np.log10(rflux/mw_transmission[:, 1]), 0.)
+            z = np.where(zflux>0, 22.5-2.5*np.log10(zflux/mw_transmission[:, 2]), 0.)
+            W1 = np.where(W1flux>0, 22.5-2.5*np.log10(W1flux/mw_transmission[:, 3]), 0.)
+            W2 = np.where(W2flux>0, 22.5-2.5*np.log10(W2flux/mw_transmission[:, 4]), 0.)
 
         return g, r, z, W1, W2
 
-    dataframe['TARGETID'] = fibermap['TARGETID'][:][index_sorted][sel]
-    dataframe['RA'] = fibermap['TARGET_RA'][:][index_sorted][sel]
-    dataframe['DEC'] = fibermap['TARGET_DEC'][:][index_sorted][sel]
+    dataframe['TARGETID'] = fibermap['TARGETID'][:][sel]
+    dataframe['RA'] = fibermap['TARGET_RA'][:][sel]
+    dataframe['DEC'] = fibermap['TARGET_DEC'][:][sel]
 
     DESI_TARGET = main_cmx_or_sv(fibermap[:])[0][0]
-    dataframe[DESI_TARGET] = fibermap[DESI_TARGET][:][index_sorted][sel]
-    dataframe['MASKBITS'] = fibermap["MASKBITS"][:][index_sorted][sel]
+    dataframe[DESI_TARGET] = fibermap[DESI_TARGET][:][sel]
+    dataframe['MASKBITS'] = fibermap["MASKBITS"][:][sel]
 
-    g, r, z, W1, W2 = compute_grzW1W2(fibermap, index_sorted, sel)
+    g, r, z, W1, W2 = compute_grzW1W2(fibermap, sel)
     dataframe['G_MAG'] = g
     dataframe['R_MAG'] = r
     dataframe['Z_MAG'] = z
     dataframe['W1_MAG'] = W1
     dataframe['W2_MAG'] = W2
 
-    dataframe['TILE'] = fibermap['TILEID'][:][index_sorted][sel]
+    dataframe['TILE'] = fibermap['TILEID'][:][sel]
     last_night = np.zeros(sel.sum(), dtype=int)
-    for i, targetid in enumerate(fibermap['TARGETID'][:][index_sorted][sel]):
-        last_night[i] = np.max(fibermap['NIGHT'][:][fibermap['TARGETID'][:] == targetid])
+    for i, targetid in enumerate(fibermap['TARGETID'][:][sel]):
+        last_night[i] = np.max(exp_fibermap['NIGHT'][:][exp_fibermap['TARGETID'][:] == targetid])
     dataframe['LAST_NIGHT'] = last_night
-    dataframe['PETAL'] = fibermap['PETAL_LOC'][:][index_sorted][sel]
-    dataframe['FIBER'] = fibermap['FIBER'][:][index_sorted][sel]
+    dataframe['PETAL'] = fibermap['PETAL_LOC'][:][sel]
+    dataframe['FIBER'] = fibermap['FIBER'][:][sel]
 
     return dataframe
 
 
-def select_qso_with_RR(zbest, fibermap, index_sorted, qn_cat):
+def select_qso_with_RR(zbest, fibermap, exp_fibermap, qn_cat):
     """
     Apply the selection based on Redrock when there is no discrepancy with QuasarNet
     or if the objects are not selected by QuasarNet.
     Args:
         zbest: fitsio hdu 'ZBEST' from zbest file
-        fibermap:  fitsio hdu 'FIBERMAP' from zbest file
-        index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
-                      it is built with the TARGETID increasing
+        fibermap:  fitsio hdu 'COADD_FIBERMAP' from zbest file
+        exp_fibermap: fitsio hdu 'EXP_FIBERMAP' from zbest file
         qn_cat: fitsio hdu 'QN+RR' from qn file
     Returns:
         QSO_cat (pandas dataframe): Dataframe containing all the information
@@ -142,26 +136,27 @@ def select_qso_with_RR(zbest, fibermap, index_sorted, qn_cat):
     sel[is_in_qn_cat] &= ~qn_cat['IS_QSO_QN_NEW_RR'][:]
 
     QSO_cat = pd.DataFrame()
-    QSO_cat = extract_info_from_fibermap(fibermap, index_sorted, QSO_cat, sel)
+    #to avoid error with np.where in extract_info_from_fibermap
+    if sel.sum() != 0:
+        QSO_cat = extract_info_from_fibermap(fibermap, exp_fibermap, QSO_cat, sel)
 
-    QSO_cat.insert(3, 'Z', zbest['Z'][:][sel])
-    QSO_cat.insert(4, 'ZERR', zbest['ZERR'][:][sel])
-    QSO_cat.insert(5, 'SELECTION_METHOD', "sel:RR - z:RR")
-    QSO_cat.insert(6, 'Z_QN', np.NaN)
-    QSO_cat.insert(7, 'Z_RR_ini', np.NaN)
+        QSO_cat.insert(3, 'Z', zbest['Z'][:][sel])
+        QSO_cat.insert(4, 'ZERR', zbest['ZERR'][:][sel])
+        QSO_cat.insert(5, 'SELECTION_METHOD', "sel:RR - z:RR")
+        QSO_cat.insert(6, 'Z_QN', np.NaN)
+        QSO_cat.insert(7, 'Z_RR_ini', np.NaN)
 
     return QSO_cat
 
 
-def select_qso_with_RR_new_run_RR(zbest, fibermap, index_sorted, qn_cat):
+def select_qso_with_RR_new_run_RR(zbest, fibermap, exp_fibermap, qn_cat):
     """
     Apply the selection based on Redrock when there is a discrepancy with QuasarNet
     Choosing the redshift found with a new run of Redrock with prior
     Args:
         zbest: fitsio hdu 'ZBEST' from zbest file
-        fibermap:  fitsio hdu 'FIBERMAP' from zbest file
-        index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
-                      it is built with the TARGETID increasing
+        fibermap:  fitsio hdu 'COADD_FIBERMAP' from zbest file
+        exp_fibermap: fitsio hdu 'EXP_FIBERMAP' from zbest file
         qn_cat: fitsio hdu 'QN+RR' from qn file
     Returns:
         QSO_cat (pandas dataframe): Dataframe containing all the information
@@ -176,24 +171,25 @@ def select_qso_with_RR_new_run_RR(zbest, fibermap, index_sorted, qn_cat):
     sel_in_qn_cat = (qn_cat['SPECTYPE'][:] == 'QSO') & qn_cat['IS_QSO_QN_NEW_RR'][:]
 
     QSO_cat = pd.DataFrame()
-    QSO_cat = extract_info_from_fibermap(fibermap, index_sorted, QSO_cat, sel)
-    QSO_cat.insert(3, 'Z', qn_cat['Z_NEW'][:][sel_in_qn_cat])
-    QSO_cat.insert(4, 'ZERR', qn_cat['ZERR_NEW'][:][sel_in_qn_cat])
-    QSO_cat.insert(5, 'SELECTION_METHOD', "sel:RR - z:QN/RR")
-    QSO_cat.insert(6, 'Z_QN', qn_cat['Z_QN'][:][sel_in_qn_cat])
-    QSO_cat.insert(7, 'Z_RR_ini', zbest['Z'][:][sel])
+    #to avoid error with np.where in extract_info_from_fibermap
+    if sel.sum() != 0:
+        QSO_cat = extract_info_from_fibermap(fibermap, exp_fibermap, QSO_cat, sel)
+        QSO_cat.insert(3, 'Z', qn_cat['Z_NEW'][:][sel_in_qn_cat])
+        QSO_cat.insert(4, 'ZERR', qn_cat['ZERR_NEW'][:][sel_in_qn_cat])
+        QSO_cat.insert(5, 'SELECTION_METHOD', "sel:RR - z:QN/RR")
+        QSO_cat.insert(6, 'Z_QN', qn_cat['Z_QN'][:][sel_in_qn_cat])
+        QSO_cat.insert(7, 'Z_RR_ini', zbest['Z'][:][sel])
 
     return QSO_cat
 
 
-def select_qso_with_MgII(zbest, fibermap, index_sorted, mgii_cat):
+def select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat):
     """
     Apply the selection based on the MgII fitter, keeping the redshift estimated by Redrock
     Args:
         zbest: fitsio hdu 'ZBEST' from zbest file
-        fibermap:  fitsio hdu 'FIBERMAP' from zbest file
-        index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
-                      it is built with the TARGETID increasing
+        fibermap:  fitsio hdu 'COADD_FIBERMAP' from zbest file
+        exp_fibermap: fitsio hdu 'EXP_FIBERMAP' from zbest file
         mgii_cat: fitsio hdu 'MGII' from mgii file
     Returns:
         QSO_cat (pandas dataframe): Dataframe containing all the information
@@ -208,24 +204,25 @@ def select_qso_with_MgII(zbest, fibermap, index_sorted, mgii_cat):
     sel_in_mgii_cat = (mgii_cat['SPECTYPE'][:] != 'QSO') & mgii_cat['IS_QSO_MGII'][:]
 
     QSO_cat = pd.DataFrame()
-    QSO_cat = extract_info_from_fibermap(fibermap, index_sorted, QSO_cat, sel)
-    QSO_cat.insert(3, 'Z', mgii_cat['Z_RR'][:][sel_in_mgii_cat])
-    QSO_cat.insert(4, 'ZERR', mgii_cat['ZERR'][:][sel_in_mgii_cat])
-    QSO_cat.insert(5, 'SELECTION_METHOD', "sel:MgII - z:RR")
-    QSO_cat.insert(6, 'Z_QN', np.NaN)
-    QSO_cat.insert(7, 'Z_RR_ini', np.NaN)
+    #to avoid error with np.where in extract_info_from_fibermap
+    if sel.sum() != 0:
+        QSO_cat = extract_info_from_fibermap(fibermap, exp_fibermap, QSO_cat, sel)
+        QSO_cat.insert(3, 'Z', mgii_cat['Z_RR'][:][sel_in_mgii_cat])
+        QSO_cat.insert(4, 'ZERR', mgii_cat['ZERR'][:][sel_in_mgii_cat])
+        QSO_cat.insert(5, 'SELECTION_METHOD', "sel:MgII - z:RR")
+        QSO_cat.insert(6, 'Z_QN', np.NaN)
+        QSO_cat.insert(7, 'Z_RR_ini', np.NaN)
 
     return QSO_cat
 
 
-def select_qso_with_QN_new_run_RR(zbest, fibermap, index_sorted, qn_cat, targetid_already_selected_with_mgII):
+def select_qso_with_QN_new_run_RR(zbest, fibermap, exp_fibermap, qn_cat, targetid_already_selected_with_mgII):
     """
     Apply the selection based on QN with a new run of Redrock with prior
     Args:
         zbest: fitsio hdu 'ZBEST' from zbest file
-        fibermap:  fitsio hdu 'FIBERMAP' from zbest file
-        index_sorted (int array): index to have fibermap[index_sorted] in the same order than zbest
-                      it is built with the TARGETID increasing
+        fibermap:  fitsio hdu 'COADD_FIBERMAP' from zbest file
+        exp_fibermap: fitsio hdu 'EXP_FIBERMAP' from zbest file
         qn_cat: fitsio hdu 'QN+RR' from qn file
         targetid_already_selected_with_mgII (int array): targetid already selected by the selection based on the MgII
     Returns:
@@ -245,12 +242,14 @@ def select_qso_with_QN_new_run_RR(zbest, fibermap, index_sorted, qn_cat, targeti
     sel_in_qn_cat = (qn_cat['SPECTYPE'][:] != 'QSO') & qn_cat['IS_QSO_QN_NEW_RR'][:] & ~selected_by_mgii_in_qn_cat
 
     QSO_cat = pd.DataFrame()
-    QSO_cat = extract_info_from_fibermap(fibermap, index_sorted, QSO_cat, sel)
-    QSO_cat.insert(3, 'Z', qn_cat['Z_NEW'][:][sel_in_qn_cat])
-    QSO_cat.insert(4, 'ZERR', qn_cat['ZERR_NEW'][:][sel_in_qn_cat])
-    QSO_cat.insert(5, 'SELECTION_METHOD', "sel:QN - z:QN/RR")
-    QSO_cat.insert(6, 'Z_QN', qn_cat['Z_QN'][:][sel_in_qn_cat])
-    QSO_cat.insert(7, 'Z_RR_ini', zbest['Z'][:][sel])
+    #to avoid error with np.where in extract_info_from_fibermap
+    if sel.sum() != 0:
+        QSO_cat = extract_info_from_fibermap(fibermap, exp_fibermap, QSO_cat, sel)
+        QSO_cat.insert(3, 'Z', qn_cat['Z_NEW'][:][sel_in_qn_cat])
+        QSO_cat.insert(4, 'ZERR', qn_cat['ZERR_NEW'][:][sel_in_qn_cat])
+        QSO_cat.insert(5, 'SELECTION_METHOD', "sel:QN - z:QN/RR")
+        QSO_cat.insert(6, 'Z_QN', qn_cat['Z_QN'][:][sel_in_qn_cat])
+        QSO_cat.insert(7, 'Z_RR_ini', zbest['Z'][:][sel])
 
     return QSO_cat
 
@@ -285,13 +284,16 @@ if __name__ == "__main__":
         # load best fit info generated by redrock
         zbest_file = fitsio.FITS(args.zbest)
         zbest = zbest_file['ZBEST']
-        fibermap = zbest_file['FIBERMAP']
+        fibermap = zbest_file['COADD_FIBERMAP']
+        # from Everest NIGHT was put in the EXP_FIBERMAP hdu ...
+        exp_fibermap = zbest_file['EXP_FIBERMAP']
 
-        # in zbest targetid are sorted, it is not the case in the fibermap
-        # sorted with unique and conserve only one iteration of each target
-        index_sorted = np.unique(fibermap['TARGETID'][:], return_index=True)[1]
-        log.info(f"SANITY CHECK: The index_sorted for fibermap gives the same TARGETIG "
-               + f"in the same order than in zbest: {np.sum(zbest['TARGETID'][:] == fibermap['TARGETID'][:][index_sorted])} / {zbest['TARGETID'][:].size}")
+        # from everest zbest hdu and coadd_fibermap hdu have the same order (the indices match)
+        if np.sum(zbest['TARGETID'][:] == fibermap['TARGETID'][:]) == zbest['TARGETID'][:].size:
+            log.info("SANITY CHECK: The indices of ZBEST HDU and COADD_FIBERMAP HDU match.")
+        else:
+            log.error("**** The indices of ZBEST HDU AND COADD_FIBERMAP DHU do not match. This is not expected ! ****")
+            sys.exit()
 
         # load info from mgii
         mgii_cat = fitsio.FITS(args.mgii)['MGII']
@@ -299,10 +301,14 @@ if __name__ == "__main__":
         qn_cat = fitsio.FITS(args.qn)['QN+RR']
 
         # Apply the selection following the flowchart
-        QSO_from_RR = select_qso_with_RR(zbest, fibermap, index_sorted, qn_cat)
-        QSO_from_RR_with_QN = select_qso_with_RR_new_run_RR(zbest, fibermap, index_sorted, qn_cat)
-        QSO_from_MgII = select_qso_with_MgII(zbest, fibermap, index_sorted, mgii_cat)
-        QSO_from_QN = select_qso_with_QN_new_run_RR(zbest, fibermap, index_sorted, qn_cat, QSO_from_MgII['TARGETID'])
+        QSO_from_RR = select_qso_with_RR(zbest, fibermap, exp_fibermap, qn_cat)
+        QSO_from_RR_with_QN = select_qso_with_RR_new_run_RR(zbest, fibermap, exp_fibermap, qn_cat)
+        QSO_from_MgII = select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat)
+        if QSO_from_MgII.size != 0:
+            targetid_already_selected_with_mgII = QSO_from_MgII['TARGETID']
+        else:
+            targetid_already_selected_with_mgII = np.array([])
+        QSO_from_QN = select_qso_with_QN_new_run_RR(zbest, fibermap, exp_fibermap, qn_cat, targetid_already_selected_with_mgII)
 
         # Concatene the different selection
         QSO_cat = pd.concat([QSO_from_RR, QSO_from_RR_with_QN, QSO_from_MgII, QSO_from_QN], ignore_index=True)
@@ -316,5 +322,6 @@ if __name__ == "__main__":
 
     else: # file for the consider Tile / Night / petal does not exist
         log.error(f"There is problem with files: {args.zbest} or {args.mgii} or {args.qn}")
+        sys.exit()
 
     log.info(f"EXECUTION TIME: {time.time() - start:3.2f} s.")
