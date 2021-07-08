@@ -5,12 +5,26 @@ desispec Change Log
 0.45.0 (unreleased)
 -------------------
 
-* No changes yet.
+* No changes yet
+
+0.44.1 (2021-07-07)
+-------------------
+
+Intended for Everest science exposures through cframes; in 21.7b.
+
+* Add fibermap PLATE_RA,PLATE_DEC if missing from fiberassign file for
+  sv3 and main survey data model consistency (PR `#1331`_).
+* Set FIBERSTATUS POORPOSITION bit when positioner is offset by
+  30-100 microns.  Don't use these for stdstar fitting but otherwise
+  process as normal. (PR `#1333`_).
+
+.. _`#1331`: https://github.com/desihub/desispec/issues/1331
+.. _`#1333`: https://github.com/desihub/desispec/issues/1333
 
 0.44.0 (2021-07-06)
 -------------------
 
-First tag used for initial Everest arc/flat calibs
+First tag used for Everest arc/flat calibs; in 21.7a.
 
 * Add QSO afterburners for MgII and QuasarNet (PR `#1312`_).
 * Spectra I/O for extra catalog (PR `#1313`_).
