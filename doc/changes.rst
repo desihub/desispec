@@ -7,10 +7,15 @@ desispec Change Log
 
 * No changes yet
 
-0.44.1 (2021-07-07)
+0.44.2 (2021-07-07)
 -------------------
 
 Intended for Everest science exposures through cframes; in 21.7b.
+
+* Fixed data/qa/ installation.
+
+0.44.1 (2021-07-07)
+-------------------
 
 * Add fibermap PLATE_RA,PLATE_DEC if missing from fiberassign file for
   sv3 and main survey data model consistency (PR `#1331`_).
