@@ -106,10 +106,11 @@ def make_new_zmtl(zbestname, qn_flag=False, sq_flag=False, abs_flag=False,
         log.error(f'Missing {zbestname}')
         return False
 
-    # ADM recover the information for unique targets based on the
-    # ADM first entry for each TARGETID.
-    _, ii = np.unique(fms['TARGETID'], return_index=True)
-    fms = fms[ii]
+    # SB check assumption that FIBERMAP is row-matched to ZBEST
+    if len(zs) != len(fms) or np.any(zs['TARGETID'] != fms['TARGETID']):
+        msg = "ZBEST and FIBERMAP TARGETIDs aren't row-matched"
+        log.critical(msg)
+        raise ValueError(msg)
 
     # ADM check for some glitches.
     if len(zs) != len(set(zs["TARGETID"])):
@@ -139,7 +140,7 @@ def make_new_zmtl(zbestname, qn_flag=False, sq_flag=False, abs_flag=False,
     zmtl["RA"] = fms[zid]["TARGET_RA"]
     zmtl["DEC"] = fms[zid]["TARGET_DEC"]
     zmtl["ZTILEID"] = fms[zid]["TILEID"]
-    zmtl["NUMOBS"] = zs["NUMTILE"]
+    zmtl["NUMOBS"] = fms["COADD_NUMTILE"]
 
     # ADM also add the appropriate bit-columns.
     Mxcols, _, _, = main_cmx_or_sv(fms, scnd=True)
