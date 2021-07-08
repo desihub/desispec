@@ -17,6 +17,7 @@ from desiutil.log import get_logger
 
 from desispec.exposure_qa import compute_exposure_qa,get_qa_params
 from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
+from desispec.io.util import replace_prefix
 from desispec.maskbits import fibermask
 
 
@@ -108,7 +109,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
         scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
 
-        zbest_file = coadd_file.replace("coadd","zbest")
+        zbest_file = replace_prefix(coadd_file, "coadd", "zbest")
         log.info("reading {}".format(zbest_file))
         zbest=Table.read(zbest_file,"ZBEST")
         zbest.remove_column("COEFF") # 1D array per entry, not needed
