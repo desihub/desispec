@@ -121,10 +121,12 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
         log.debug(f'Write prior file for RR with {z_prior.size} objetcs: {filename_priors}')
         return
 
-    def extract_redshift_info_from_RR(filename_zbest):
+    def extract_redshift_info_from_RR(filename_zbest, targetid):
          # extract information of the zbest file from the new RR run
          # Args:
          #    filename_zbest (str): Name of the zbest file from the new run of RR
+         #    targetid (int array): array of the targetid (contained in the spectra_name_file)
+         #                          on which RR will be rerun with prior and qso template.
          # Returns:
          #    redshift (numpy array): Array containing best redshift estimation by the new run of RR
          #    err_redshift (numpy array): Array containing the associated error for the redshift
@@ -133,10 +135,23 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
          #                    WARNING: they have to be converted into a list (with .tolist()) to be added in the pandas dataframe
 
         with fitsio.FITS(filename_zbest) as zbest:
-            redshift = zbest['ZBEST']['Z'][:]
-            err_redshift = zbest['ZBEST']['ZERR'][:]
+            # 9 July 2021:
+            # The new run of RR does not save the targetid in the correct order ...
+            # The TARGETID from ZBEST HDU and COADD_FIBERMAP HDU are not the same
+            # To avoid any kind of problem in the future --> sort zbest
+
+            zbest_tgid = zbest['ZBEST']['TARGETID'][:]
+
+            # targetid.size is the number of target in new-run zbest file
+            log.info('SANITY CHECK: Match the order of the zbest HDU from new RR run with the original order of targetid')
+            correct_index = np.zeros(targetid.size, dtype=int)
+            for i, tgid in enumerate(targetid):
+                correct_index[i] = int(np.where(zbest_tgid == tgid)[0])
+
+            redshift = zbest['ZBEST']['Z'][:][correct_index]
+            err_redshift = zbest['ZBEST']['ZERR'][:][correct_index]
             coeffs = np.zeros((redshift.size, 10))
-            coeffs[:, :4] = zbest['ZBEST']['COEFF'][:]
+            coeffs[:, :4] = zbest['ZBEST']['COEFF'][:][correct_index]
         return redshift, err_redshift, coeffs
 
     write_prior_for_RR(targetid, z_prior, filename_priors)
@@ -156,7 +171,7 @@ def collect_redshift_with_new_RR_run(spectra_name, targetid, z_prior, param_RR):
     rrdesi(argument_for_rerun_RR)
 
     # Extract information from the new run of RR
-    redshift, err_redshift, coeffs = extract_redshift_info_from_RR(filename_zbest_rerun_RR)
+    redshift, err_redshift, coeffs = extract_redshift_info_from_RR(filename_zbest_rerun_RR, targetid)
 
     if param_RR['delete_RR_output'] == 'True':
         log.debug("Remove output from the new run of RR")
