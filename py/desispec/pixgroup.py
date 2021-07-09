@@ -700,6 +700,23 @@ def frames2spectra(frames, pix=None, nside=64):
     #- Combine all the individual fibermaps from the exposures and spectrographs
     fibermap = np.hstack(merged_over_cams_fmaps)
 
+    #- assemble_fibermap now sets NaN to 0,
+    #- but reset here too if combining older data
+    for col in [
+        'FIBER_X', 'FIBER_Y',
+        'DELTA_X', 'DELTA_Y',
+        'FIBER_RA', 'FIBER_DEC',
+        'GAIA_PHOT_G_MEAN_MAG',
+        'GAIA_PHOT_BP_MEAN_MAG',
+        'GAIA_PHOT_RP_MEAN_MAG',
+        ]:
+        ii = np.isnan(fibermap[col])
+        if np.any(ii):
+            n = np.sum(ii)
+            log.warning(f'Setting {n} {col} NaN to 0.0')
+            fibermap[col][ii] = 0.0
+
+
     return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
             fibermap, scores=scores)
 

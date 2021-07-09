@@ -673,6 +673,21 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
             ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
             fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
 
+    #- NaN are a pain; reset to dummy values
+    for col in [
+        'FIBER_X', 'FIBER_Y',
+        'DELTA_X', 'DELTA_Y',
+        'FIBER_RA', 'FIBER_DEC',
+        'GAIA_PHOT_G_MEAN_MAG',
+        'GAIA_PHOT_BP_MEAN_MAG',
+        'GAIA_PHOT_RP_MEAN_MAG',
+        ]:
+        ii = np.isnan(fibermap[col])
+        if np.any(ii):
+            n = np.sum(ii)
+            log.warning(f'Setting {n} {col} NaN to 0.0')
+            fibermap[col][ii] = 0.0
+
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table
     fibermap.sort('FIBER')
