@@ -213,7 +213,7 @@ if __name__ == "__main__":
         zbest = zbest_file['ZBEST']
         fibermap = zbest_file['FIBERMAP']
 
-        # from everest zbest hdu and fibermap hdu have the same order (the indices match)
+        # from everest zbest hdu and FIBERMAP hdu have the same order (the indices match)
         if np.sum(zbest['TARGETID'][:] == fibermap['TARGETID'][:]) == zbest['TARGETID'][:].size:
             log.info("SANITY CHECK: The indices of ZBEST HDU and FIBERMAP HDU match.")
         else:
