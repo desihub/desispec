@@ -9,6 +9,9 @@ import sys
 import glob
 import warnings
 import time
+from pkg_resources import resource_filename
+
+import yaml
 
 import numpy as np
 from astropy.table import Table, Column, join
@@ -428,6 +431,16 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
         raise RuntimeError(
             f'Multiple guide-*.fits.fz files in fiberassign dir {dirname}')
 
+    #- Read QA parameters to find max offset for POOR and BAD positioning
+    #- replicates desispec.exposure_qa.get_qa_params, but that has
+    #- circular import if loaded from here
+    param_filename = resource_filename('desispec', 'data/qa/qa-params.yaml')
+    with open(param_filename) as f:
+        qa_params = yaml.safe_load(f)['exposure_qa']
+
+    poor_offset_um = qa_params['poor_fiber_offset_mm']*1000
+    bad_offset_um = qa_params['bad_fiber_offset_mm']*1000
+
     #- Preflight announcements
     log.info(f'Night {night} spectro expid {expid}')
     log.info(f'Raw data file {rawfile}')
@@ -440,6 +453,13 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
 
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
+
+    #- add missing columns for data model consistency
+    if 'PLATE_RA' not in fa.colnames:
+        fa['PLATE_RA'] = fa['TARGET_RA']
+
+    if 'PLATE_DEC' not in fa.colnames:
+        fa['PLATE_DEC'] = fa['TARGET_DEC']
 
     #- also read extra keywords from HDU 0
     fa_hdr0 = fits.getheader(fafile, 0)
@@ -512,68 +532,66 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
             fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
             fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
         else:
-            log.warning('No FIBER_X/Y or DELTA_X/Y information from platemaker')
+            log.error('No FIBER_X/Y or DELTA_X/Y information from platemaker')
             fibermap['FIBER_X'] = np.zeros(len(pm))
             fibermap['FIBER_Y'] = np.zeros(len(pm))
             fibermap['DELTA_X'] = np.zeros(len(pm))
             fibermap['DELTA_Y'] = np.zeros(len(pm))
 
+        if ('FIBER_RA' in pm.colnames) and ('FIBER_DEC' in pm.colnames):
+            fibermap['FIBER_RA'] = pm['FIBER_RA']
+            fibermap['FIBER_DEC'] = pm['FIBER_DEC']
+        else:
+            log.error('No FIBER_RA or FIBER_DEC from platemaker')
+            fibermap['FIBER_RA'] = np.zeros(len(pm))
+            fibermap['FIBER_DEC'] = np.zeros(len(pm))
+
         #- Bit definitions at https://desi.lbl.gov/trac/wiki/FPS/PositionerFlags
 
         #- FLAGS_EXP bit 2 is for positioners (not FIF, GIF, ...)
-        #- These should match what is in fiberassign
+        #- These should match what is in fiberassign, except broken fibers
         expflags = pm[f'FLAGS_EXP_{numiter-1}']
-        good = ((expflags & 4) == 4)
-        if np.any(~good):
-            badloc = list(pm['LOCATION'][~good])
-            log.error(f'Flagging {len(badloc)} locations without POS_POS bit set: {badloc}')
+        goodmatch = ((expflags & 4) == 4)
+        if np.any(~goodmatch):
+            badloc = list(pm['LOCATION'][~goodmatch])
+            log.warning(f'Flagging {len(badloc)} locations without POS_POS bit set: {badloc}')
 
         #- Keep only matched positioners (FLAGS_CNT_n bit 0)
         cntflags = pm[f'FLAGS_CNT_{numiter-1}']
         spotmatched = ((cntflags & 1) == 1)
 
-        num_nomatch = np.sum(good & ~spotmatched)
+        num_nomatch = np.sum(goodmatch & ~spotmatched)
         if num_nomatch > 0:
-            badloc = list(pm['LOCATION'][good & ~spotmatched])
+            badloc = list(pm['LOCATION'][goodmatch & ~spotmatched])
             log.error(f'Flagging {num_nomatch} unmatched fiber locations: {badloc}')
 
-        good &= spotmatched
+        goodmatch &= spotmatched
 
-        #- Add our own requirement on good positioning
-        if ((f'DX_{numiter-1}' in pm.colnames) and
-            (f'DY_{numiter-1}' in pm.colnames)):
-                #- offset in cm -> um
-                dr = np.sqrt(pm[f'DX_{numiter-1}']**2 + pm[f'DY_{numiter-1}']**2) * 1000
-                goodpos = (dr < 100)  #- HARDCODE
-                num_badpos = np.sum(good & ~goodpos)
-                if num_badpos > 0:
-                    log.error(f'Flagging {num_badpos} positioners >100 um off target')
+        #- pass forward dummy column for joining with fiberassign
+        fibermap['_GOODMATCH'] = goodmatch
 
-                good &= goodpos
-
-        bad = ~good
-
-        fibermap['_BADPOS'] = np.zeros(len(fibermap), dtype=bool)
-        fibermap['_BADPOS'][bad] = True
-
-        #- Missing columns from coordinates file...
-        if ('FIBER_RA' in pm.colnames) and ('FIBER_DEC' in pm.colnames):
-            fibermap['FIBER_RA'] = pm['FIBER_RA']
-            fibermap['FIBER_DEC'] = pm['FIBER_DEC']
-        else:
-            log.warning('No FIBER_RA or FIBER_DEC from platemaker')
-            fibermap['FIBER_RA'] = np.zeros(len(pm))
-            fibermap['FIBER_DEC'] = np.zeros(len(pm))
-
+        #- WARNING: this join can re-order the table
         fibermap = join(fa, fibermap, join_type='left')
+
+        #- poor and bad positioning
+        dr = np.sqrt(fibermap['DELTA_X']**2 + fibermap['DELTA_Y']**2) * 1000
+        poorpos = ((poor_offset_um < dr) & (dr <= bad_offset_um))
+        badpos = (dr > bad_offset_um) | np.isnan(dr)
+        numpoor = np.count_nonzero(poorpos)
+        numbad = np.count_nonzero(badpos)
+        if numpoor > 0:
+            log.warning(f'Flagging {numpoor} POOR positions with {poor_offset_um} < offset <= {bad_offset_um} microns')
+        if numbad > 0:
+            log.warning(f'Flagging {numbad} BAD positions with offset > {bad_offset_um} microns')
 
         #- Set fiber status bits
         missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
+        missing |= ~fibermap['_GOODMATCH']
         fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
-
-        badpos = fibermap['_BADPOS']
+        fibermap['FIBERSTATUS'][poorpos] |= fibermask.POORPOSITION
         fibermap['FIBERSTATUS'][badpos] |= fibermask.BADPOSITION
-        fibermap.remove_column('_BADPOS')
+
+        fibermap.remove_column('_GOODMATCH')
 
     else:
         #- No coordinates file or no positioning iterations;

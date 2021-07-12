@@ -1,8 +1,9 @@
 # QA parameters read by exposure_qa.py
 exposure_qa:
 
- # cutoff fiber positioning offset in mm
- max_fiber_offset_mm : 0.03
+ # max cutoff on fiber offset in mm for poor and bad positioning
+ poor_fiber_offset_mm : 0.030
+ bad_fiber_offset_mm  : 0.100
 
  # maximum read noise rms per CCD pixel in electrons
  max_readnoise : 10
@@ -41,8 +42,14 @@ tile_qa:
 # fibers in a tile are considered valid if their efftime > fiber_rel_mintfrac * mintfrac * goaltime
 # where mintfrac and goaltime are read in the FIBERMAP header of the spectro files where they
 # have been copied from the fiberassign file.
+# The value of 0.85 has been chosen based on the redshift success rate as a function of TSNR2_ELG, TSNR2_LRG, and TSNR2_BGS.
+# Approximate thresholds:
+# TSNR2_ELG = 80   -> EFFTIME_SPEC = 688.0 sec -> fiber_rel_mintfrac*MINTFRAC = 0.688 -> fiber_rel_mintfrac = 0.81
+# TSNR2_LRG = 60   -> EFFTIME_SPEC = 739.6 sec -> fiber_rel_mintfrac*MINTFRAC = 0.739 -> fiber_rel_mintfrac = 0.87
+# TSNR2_BGS = 1000 -> EFFTIME_SPEC = 140.0 sec -> fiber_rel_mintfrac*MINTFRAC = 0.78  -> fiber_rel_mintfrac = 0.91
+ fiber_rel_mintfrac : 0.85
 
- fiber_rel_mintfrac : 0.9
+
 
 # minimum number of valid fibers (best in 2021/06 would be 4400 and we would 'allow' 3 non-functional petals)
  min_number_of_good_fibers : 3000

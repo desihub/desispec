@@ -405,16 +405,19 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     n_cframe: number of cframe files
     n_sky: number of sky files
     """
+    ## Note that the following list should be in order of processing. I.e. the first filetype given should be the
+    ## first file type generated. This is assumed for the automated "terminal step" determination that follows
     expected_by_type = dict()
-    expected_by_type['arc'] =     {'psf': 1, 'ff': 0, 'frame': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
-    expected_by_type['flat'] =    {'psf': 1, 'ff': 1, 'frame': 1, 'sframe': 0, 'std': 0, 'cframe': 0}
-    expected_by_type['science'] = {'psf': 1, 'ff': 0, 'frame': 1, 'sframe': 1, 'std': 1, 'cframe': 1}
-    expected_by_type['twilight'] ={'psf': 1, 'ff': 0, 'frame': 1, 'sframe': 0, 'std': 0, 'cframe': 0}
-    expected_by_type['zero'] =    {'psf': 0, 'ff': 0, 'frame': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['arc'] =     {'psf': 1, 'frame': 0, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['flat'] =    {'psf': 1, 'frame': 1, 'ff': 1, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['science'] = {'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 1, 'std': 1, 'cframe': 1}
+    expected_by_type['twilight'] ={'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['zero'] =    {'psf': 0, 'frame': 0, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
     expected_by_type['dark'] = expected_by_type['zero']
     expected_by_type['sky']  = expected_by_type['science']
     expected_by_type['null'] = expected_by_type['zero']
 
+    ## Determine the last filetype that is expected for each obstype
     terminal_steps = dict()
     for obstype, expected in expected_by_type.items():
         terminal_steps[obstype] = None
@@ -571,10 +574,10 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         nfiles = dict()
         nfiles['psf'] = count_num_files(ftype='psf', expid=expid) + count_num_files(ftype='fit-psf', expid=expid)
-        nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
         nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
-        nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
+        nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
         nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
+        nfiles['sframe'] = count_num_files(ftype='sframe', expid=expid)
         nfiles['std'] = count_num_files(ftype='stdstars', expid=expid)
         nfiles['cframe'] = count_num_files(ftype='cframe', expid=expid)
 

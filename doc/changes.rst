@@ -2,18 +2,51 @@
 desispec Change Log
 ===================
 
-0.44.0 (unreleased)
+0.45.0 (unreleased)
 -------------------
+
+* tune tile QA parameters
+
+0.44.2 (2021-07-07)
+-------------------
+
+Intended for Everest science exposures through cframes; in 21.7b.
+
+* Fixed data/qa/ installation.
+
+0.44.1 (2021-07-07)
+-------------------
+
+* Add fibermap PLATE_RA,PLATE_DEC if missing from fiberassign file for
+  sv3 and main survey data model consistency (PR `#1331`_).
+* Set FIBERSTATUS POORPOSITION bit when positioner is offset by
+  30-100 microns.  Don't use these for stdstar fitting but otherwise
+  process as normal. (PR `#1333`_).
+
+.. _`#1331`: https://github.com/desihub/desispec/issues/1331
+.. _`#1333`: https://github.com/desihub/desispec/issues/1333
+
+0.44.0 (2021-07-06)
+-------------------
+
+First tag used for Everest arc/flat calibs; in 21.7a.
 
 * Add QSO afterburners for MgII and QuasarNet (PR `#1312`_).
 * Spectra I/O for extra catalog (PR `#1313`_).
 * Expand Spectra.select and .update functionality (PR `#1319`_).
 * Add optional support for gpu_specter for extractions (PR `#993`_).
+* Look for manifest files in nightly processing (PR `#1320`_).
+* Fix extra_catalog support for grouping by healpix (PR `#1325`_).
+* Pipeline progress bug fixes and features (PRs `#1326`_, `#1329`_).
 
 .. _`#993`: https://github.com/desihub/desispec/issues/993
 .. _`#1312`: https://github.com/desihub/desispec/issues/1312
 .. _`#1313`: https://github.com/desihub/desispec/issues/1313
 .. _`#1319`: https://github.com/desihub/desispec/issues/1319
+.. _`#1320`: https://github.com/desihub/desispec/issues/1320
+.. _`#1325`: https://github.com/desihub/desispec/issues/1325
+.. _`#1326`: https://github.com/desihub/desispec/issues/1326
+.. _`#1329`: https://github.com/desihub/desispec/issues/1329
 
 0.43.0 (2021-06-21)
 -------------------
