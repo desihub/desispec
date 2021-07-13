@@ -28,8 +28,12 @@ class TestFibermap(unittest.TestCase):
 
             #- unmatched positioners aren't in coords files and have
             #- FIBER_X/Y == 0, but most should be non-zero
-            self.assertLess(np.count_nonzero(fm['FIBER_X'] == 0.0), 5)
-            self.assertLess(np.count_nonzero(fm['FIBER_Y'] == 0.0), 5)
+            self.assertLess(np.count_nonzero(fm['FIBER_X'] == 0.0), 50)
+            self.assertLess(np.count_nonzero(fm['FIBER_Y'] == 0.0), 50)
+
+            #- all with FIBER_X/Y == 0 should have a FIBERSTATUS flag
+            ii = (fm['FIBER_X'] == 0.0) & (fm['FIBER_Y'] == 0.0)
+            self.assertTrue(np.all(fm['FIBERSTATUS'][ii] != 0))
 
             #- and platemaker x/y shouldn't match fiberassign x/y
             self.assertTrue(np.all(fm['FIBER_X'] != fm['FIBERASSIGN_X']))
