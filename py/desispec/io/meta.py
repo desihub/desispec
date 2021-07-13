@@ -101,23 +101,23 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
         coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{groupname}.fits',
-        redrock_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{groupname}.h5',
+        rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{groupname}.h5',
         spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{groupname}.fits',
-        zbest_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/zbest-{survey}-{faprogram}-{groupname}.fits',
+        redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{groupname}.fits',
         #
         # spectra- tile based
         #
         coadd_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-thru{night}.fits',
-        redrock_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-thru{night}.h5',
+        rrdetails_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-thru{night}.h5',
         spectra_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-thru{night}.fits',
-        zbest_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-thru{night}.fits',
+        redrock_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-thru{night}.fits',
         #
         # spectra- single exp tile based
         #
         coadd_single='{specprod_dir}/tiles/{tile:d}/exposures/coadd-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        redrock_single='{specprod_dir}/tiles/{tile:d}/exposures/redrock-{spectrograph:d}-{tile:d}-{expid:08d}.h5',
+        rrdetails_single='{specprod_dir}/tiles/{tile:d}/exposures/rrdetails-{spectrograph:d}-{tile:d}-{expid:08d}.h5',
         spectra_single='{specprod_dir}/tiles/{tile:d}/exposures/spectra-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        zbest_single='{specprod_dir}/tiles/{tile:d}/exposures/zbest-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
+        redrock_single='{specprod_dir}/tiles/{tile:d}/exposures/redrock-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
         #
         # Deprecated QA files below this point.
         #
@@ -149,12 +149,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
         location['coadd'] = location['coadd_tile']
         location['redrock'] = location['redrock_tile']
         location['spectra'] = location['spectra_tile']
-        location['zbest'] = location['zbest_tile']
+        location['rrdetails'] = location['rrdetails_tile']
     else:
         location['coadd'] = location['coadd_hp']
         location['redrock'] = location['redrock_hp']
         location['spectra'] = location['spectra_hp']
-        location['zbest'] = location['zbest_hp']
+        location['rrdetails'] = location['rrdetails_hp']
 
     if groupname is not None:
         hpix = int(groupname)

@@ -34,8 +34,8 @@ from desispec.qa.qalib import s2n_funcs
 
 from desiutil.log import get_logger
 
-def brick_zbest(outfil, zf, qabrick):
-    """ QA plots for Flux calibration in a Frame
+def brick_redrock(outfil, zf, qabrick):
+    """ QA plots for redrock fits
 
     Args:
         outfil:
@@ -47,7 +47,7 @@ def brick_zbest(outfil, zf, qabrick):
     """
     sty_otype = get_sty_otype()
     # Convert types (this should become obsolete)
-    param = qabrick.data['ZBEST']['PARAMS']
+    param = qabrick.data['REDROCK']['PARAMS']
     zftypes = []
     for ztype in zf.spectype:
         if ztype in param['ELG_TYPES']:
@@ -86,14 +86,14 @@ def brick_zbest(outfil, zf, qabrick):
     # Meta text
     ax2 = plt.subplot(gs[1,1])
     ax2.set_axis_off()
-    show_meta(ax2, qabrick, 'ZBEST', outfil)
+    show_meta(ax2, qabrick, 'REDROCK', outfil)
 
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     plt.savefig(outfil)
     plt.close()
-    print('Wrote QA ZBEST file: {:s}'.format(outfil))
+    print('Wrote QA REDROCK file: {:s}'.format(outfil))
 
 
 

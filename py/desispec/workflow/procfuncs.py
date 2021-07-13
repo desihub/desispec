@@ -85,11 +85,11 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
 
     job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstars', 'poststdstar': 'cframe',
                        'arc': 'psf', 'flat': 'fiberflat', 'psfnight': 'psfnight', 'nightlyflat': 'fiberflatnight',
-                       'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'zbest_tile'}
+                       'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'redrock_tile'}
 
     night = prow['NIGHT']
     if prow['JOBDESC'] in ['cumulative','pernight-v0','pernight','perexp']:
-        filetype = 'zbest_tile'
+        filetype = 'redrock_tile'
     else:
         filetype = job_to_file_map[prow['JOBDESC']]
     orig_camword = prow['PROCCAMWORD']
@@ -125,7 +125,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         suffix = get_tile_redshift_script_suffix(tileid, group=prow['JOBDESC'], night=night, expid=expid)
         existing_spectros = []
         for spectro in spectros:
-            if os.path.exists(os.path.join(outdir, f"zbest-{spectro}-{suffix}.fits")):
+            if os.path.exists(os.path.join(outdir, f"redrock-{spectro}-{suffix}.fits")):
                 existing_spectros.append(spectro)
         completed = (len(existing_spectros) == n_desired)
         if not completed and resubmit_partial_complete and len(existing_spectros) > 0:

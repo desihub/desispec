@@ -357,7 +357,7 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
     return spec
 
 def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
-        single=False, targets=None, fibers=None, zbest=True):
+        single=False, targets=None, fibers=None, redrock=True):
     """
     Read and return combined spectra for a tile/night
 
@@ -372,11 +372,11 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         single (bool) : if True, use float32 instead of double precision
         targets (array-like) : filter by TARGETID
         fibers (array-like) : filter by FIBER
-        zbest (bool) : if True, also return row-matched zbest redshift catalog
+        redrock (bool) : if True, also return row-matched redrock redshift catalog
 
-    Returns: spectra or (spectra, zbest)
+    Returns: spectra or (spectra, redrock)
         combined Spectra obj for all matching targets/fibers filter
-        row-matched zbest catalog (if zbest=True)
+        row-matched redrock catalog (if redrock=True)
 
     Raises:
         ValueError if no files or matching spectra are found
@@ -406,7 +406,7 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
     specfiles = sorted(specfiles)
 
     spectra = list()
-    zbests = list()
+    redshifts = list()
     for filename in specfiles:
         log.debug(f'reading {os.path.basename(filename)}')
         sp = read_spectra(filename, single=single)
@@ -419,46 +419,46 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
 
         if sp.num_spectra() > 0:
             spectra.append(sp)
-            if zbest:
-                #- Read matching zbest file for this spectra/coadd file
-                zbfile = os.path.basename(filename).replace(prefix, 'zbest', 1)
-                log.debug(f'Reading {zbfile}')
-                zbfile = os.path.join(tiledir, zbfile)
-                zb = Table.read(zbfile, 'ZBEST')
+            if redrock:
+                #- Read matching redrock file for this spectra/coadd file
+                rrfile = os.path.basename(filename).replace(prefix, 'redrock', 1)
+                log.debug(f'Reading {rrfile}')
+                rrfile = os.path.join(tiledir, rrfile)
+                rr = Table.read(rrfile, 'REDSHIFTS')
 
-                #- Trim zb to only have TARGETIDs in filtered spectra sp
-                keep = np.in1d(zb['TARGETID'], sp.fibermap['TARGETID'])
-                zb = zb[keep]
+                #- Trim rr to only have TARGETIDs in filtered spectra sp
+                keep = np.in1d(rr['TARGETID'], sp.fibermap['TARGETID'])
+                rr = rr[keep]
 
                 #- spectra files can have multiple entries per TARGETID,
-                #- while zbest files have only 1.  Expand to match spectra.
+                #- while redrock files have only 1.  Expand to match spectra.
                 #- Note: astropy.table.join changes the order
-                if len(sp.fibermap) > len(zb):
-                    zbx = Table()
-                    zbx['TARGETID'] = sp.fibermap['TARGETID']
-                    zbx = astropy.table.join(zbx, zb, keys='TARGETID')
+                if len(sp.fibermap) > len(rr):
+                    rrx = Table()
+                    rrx['TARGETID'] = sp.fibermap['TARGETID']
+                    rrx = astropy.table.join(rrx, rr, keys='TARGETID')
                 else:
-                    zbx = zb
+                    rrx = rr
 
-                #- Sort the zbx Table to match the order of sp['TARGETID']
+                #- Sort the rrx Table to match the order of sp['TARGETID']
                 ii = np.argsort(sp.fibermap['TARGETID'])
-                jj = np.argsort(zbx['TARGETID'])
+                jj = np.argsort(rrx['TARGETID'])
                 kk = np.argsort(ii[jj])
-                zbx = zbx[kk]
+                rrx = rrx[kk]
 
                 #- Confirm that we got all that expanding and sorting correct
-                assert np.all(sp.fibermap['TARGETID'] == zbx['TARGETID'])
-                zbests.append(zbx)
+                assert np.all(sp.fibermap['TARGETID'] == rrx['TARGETID'])
+                redshifts.append(rrx)
 
     if len(spectra) == 0:
         raise ValueError('No spectra found matching filters')
 
     spectra = stack(spectra)
 
-    if zbest:
-        zbests = astropy.table.vstack(zbests)
-        assert np.all(spectra.fibermap['TARGETID'] == zbests['TARGETID'])
-        return (spectra, zbests)
+    if redrock:
+        redshifts = astropy.table.vstack(redshifts)
+        assert np.all(spectra.fibermap['TARGETID'] == redshifts['TARGETID'])
+        return (spectra, redshifts)
     else:
         return spectra
 

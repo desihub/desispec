@@ -49,22 +49,22 @@ def load_redrock_templates(template_dir=None):
     return templates
 
 
-def create_model(spectra, zbest,
+def create_model(spectra, redshifts,
                  archetype_fit=False,
                  archetypes_dir=None,
                  template_dir=None):
     '''
     < COPY from prospect.plotframes to avoid to load prospect in desispec >
 
-    Returns model_wave[nwave], model_flux[nspec, nwave], row matched to zbest,
+    Returns model_wave[nwave], model_flux[nspec, nwave], row matched to redshifts,
     which can be in a different order than spectra.
-    - zbest must be entry-matched to spectra.
+    - redshifts must be entry-matched to spectra.
     '''
 
     if archetype_fit:
         from redrock.archetypes import All_archetypes
 
-    if np.any(zbest['TARGETID'] != spectra.fibermap['TARGETID']) :
+    if np.any(redshifts['TARGETID'] != spectra.fibermap['TARGETID']) :
         raise RuntimeError('zcatalog and spectra do not match (different targetids)')
 
     templates = load_redrock_templates(template_dir=template_dir)
@@ -74,8 +74,8 @@ def create_model(spectra, zbest,
     for band in spectra.bands:
         model_flux[band] = np.zeros(spectra.flux[band].shape)
 
-    for i in range(len(zbest)):
-        zb = zbest[i]
+    for i in range(len(redshifts)):
+        zb = redshifts[i]
 
         if archetype_fit:
           archetypes = All_archetypes(archetypes_dir=archetypes_dir).archetypes
@@ -126,13 +126,13 @@ def create_model(spectra, zbest,
     return model_wave, mflux
 
 
-def get_spectra(spectra_name, zbest_name, lambda_width, index_to_fit,
+def get_spectra(spectra_name, redrock_name, lambda_width, index_to_fit,
                 template_dir=None, archetypes_dir=None):
     """
-    Get the spectra and the best fit model from a given spectra and zbest file.
+    Get the spectra and the best fit model from a given spectra and redrock file.
     Args:
         spectra_name (str): The name of the spectra file.
-        zbest_name (str): The name of the zbest file associated to the spectra
+        redrock_name (str): The name of the redrock file associated to the spectra
                           file.
         lambda_width (float): The width in wavelength (in Angstrom) considered
                               for the fitting arount the MgII peak
@@ -163,21 +163,21 @@ def get_spectra(spectra_name, zbest_name, lambda_width, index_to_fit,
     if 'brz' not in spectra.bands:
         spectra = coadd_cameras(spectra)
 
-    zbest = Table.read(zbest_name, 'ZBEST')[index_to_fit]
+    redshifts = Table.read(redrock_name, 'REDSHIFTS')[index_to_fit]
     if archetypes_dir is not None:
         model_wave, model_flux = create_model(spectra,
-                                              zbest,
+                                              redshifts,
                                               archetype_fit=True,
                                               archetypes_dir=archetypes_dir,
                                               template_dir=template_dir)
     else:
         model_wave, model_flux = create_model(spectra,
-                                              zbest,
+                                              redshifts,
                                               archetype_fit=False,
                                               archetypes_dir=None,
                                               template_dir=template_dir)
 
-    redshift_redrock = zbest["Z"]
+    redshift_redrock = redshifts["Z"]
     wavelength = spectra.wave['brz']
 
     mgii_peak_1, mgii_peak_2 = 2803.5324, 2796.3511
@@ -340,7 +340,7 @@ def create_mask_fit(fit_results,
 
 
 def mgii_fitter(spectra_name,
-                zbest_name,
+                redrock_name,
                 index_to_fit,
                 lambda_width,
                 add_linear_term=False,
@@ -354,12 +354,12 @@ def mgii_fitter(spectra_name,
                 min_signifiance_A=None):
     """
     MgII fitter afterburner main function. For a given spectra file and its
-    associated zbest file (redrock output), returns a numpy mask which indicates
+    associated redrock file (redrock output), returns a numpy mask which indicates
     the objects fitted by redrock as galaxies and considered as QSO by the
     MgII fitter. The mask is determined following input parameters.
     Args:
         spectra_name (str): The name of the spectra file.
-        zbest_name (str): The name of the zbest file associated to the spectra
+        redrock_name (str): The name of the redrock file associated to the spectra
                           file.
         lambda_width (float): The width in wavelength (in Angstrom) considered
                               for the fitting arount the MgII peak
@@ -399,7 +399,7 @@ def mgii_fitter(spectra_name,
      model_flux,
      wavelength,
      index_with_fit) = get_spectra(spectra_name,
-                                   zbest_name,
+                                   redrock_name,
                                    lambda_width,
                                    index_to_fit,
                                    template_dir=template_dir,

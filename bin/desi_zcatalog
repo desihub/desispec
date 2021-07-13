@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Combine individual zbest files into a single zcatalog
+Combine individual redrock files into a single zcatalog
 
 NOTE: this could get factored out into script vs. algorithm vs. I/O, but
 that would obfuscate the current short simplicity of this script.  Do that
@@ -82,8 +82,8 @@ parser.add_argument("-i", "--indir",   type=str,  help="input directory")
 parser.add_argument("-o", "--outfile", type=str,  help="output file")
 parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
 parser.add_argument("--match", type=str, nargs="*", help="match other tables (targets,truth...)")
-parser.add_argument("--fibermap", action = "store_true", help="add some columns from fibermap stored in zbest files")
-parser.add_argument("--spectra-scores", action = "store_true", help="add some columns from scores stored in spectra files (found in same directory as zbest file)")
+parser.add_argument("--fibermap", action = "store_true", help="add some columns from fibermap stored in redrock files")
+parser.add_argument("--spectra-scores", action = "store_true", help="add some columns from scores stored in spectra files (found in same directory as redrock file)")
 
 args = parser.parse_args()
 
@@ -102,63 +102,70 @@ if args.outfile is None:
     args.outfile = io.findfile('zcatalog')
 
 import fitsio
-zbestfiles = sorted(io.iterfiles(args.indir, 'zbest'))
+redrockfiles = sorted(io.iterfiles(args.indir, 'redrock'))
 data = list()
-for zbestfile in zbestfiles:
-    zbest = fitsio.read(zbestfile, 'ZBEST')
-    log.debug("{} {}".format(zbestfile, len(zbest)))
+for rrfile in redrockfiles:
+
+    #- avoid logs and hdf5 files
+    if not rrfile.endswith('.fits'):
+        continue
+
+    redshifts = fitsio.read(rrfile, 'REDSHIFTS')
+    log.debug("{} {}".format(rrfile, len(redshifts)))
     if args.fibermap :
-        fibermap = fitsio.read(zbestfile, 'FIBERMAP')
-        # new zbest structured array with two more columns ...
-        ndtype=np.dtype( zbest.dtype.descr + [
+        fibermap = fitsio.read(rrfile, 'FIBERMAP')
+        # new redshifts structured array with two more columns ...
+        ndtype=np.dtype( redshifts.dtype.descr + [
             ("RA", "f8"),
             ("DEC", "f8"),
             ("FLUX_G", "f4"),
             ("FLUX_R", "f4"),
             ("FLUX_Z", "f4"),
             ])
-        nzbest=np.zeros(zbest.shape,dtype=ndtype)
+        nredshifts=np.zeros(redshifts.shape,dtype=ndtype)
         # copy 
-        for k in zbest.dtype.names : nzbest[k]=zbest[k]
+        for k in redshifts.dtype.names:
+            nredshifts[k] = redshifts[k]
+
         # add RA and Dec
         # we have to match the targetids and get a unique set of values
         # because the fibermap can contain several entries for the same target
         tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
-        tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
+        tmp2  = [tmp1[tid] for tid in nredshifts["TARGETID"]]
         if "TARGET_RA" in fibermap.dtype.names:
             #- new format: TARGET_RA/DEC + FLUX
-            nzbest["RA"] = fibermap["TARGET_RA"][tmp2]
-            nzbest["DEC"] = fibermap["TARGET_DEC"][tmp2]
-            nzbest["FLUX_G"] = fibermap["FLUX_G"][tmp2]
-            nzbest["FLUX_R"] = fibermap["FLUX_R"][tmp2]
-            nzbest["FLUX_Z"] = fibermap["FLUX_Z"][tmp2]
+            nredshifts["RA"] = fibermap["TARGET_RA"][tmp2]
+            nredshifts["DEC"] = fibermap["TARGET_DEC"][tmp2]
+            nredshifts["FLUX_G"] = fibermap["FLUX_G"][tmp2]
+            nredshifts["FLUX_R"] = fibermap["FLUX_R"][tmp2]
+            nredshifts["FLUX_Z"] = fibermap["FLUX_Z"][tmp2]
         else:
             #- old format: RA/DEC_TARGET + MAG
-            nzbest["RA"] = fibermap["RA_TARGET"][tmp2]
-            nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
-            nzbest["FLUX_G"] = 10**(0.4*(22.5 - fibermap["MAG"][:,0][tmp2]))
-            nzbest["FLUX_R"] = 10**(0.4*(22.5 - fibermap["MAG"][:,1][tmp2]))
-            nzbest["FLUX_Z"] = 10**(0.4*(22.5 - fibermap["MAG"][:,2][tmp2]))
+            nredshifts["RA"] = fibermap["RA_TARGET"][tmp2]
+            nredshifts["DEC"] = fibermap["DEC_TARGET"][tmp2]
+            nredshifts["FLUX_G"] = 10**(0.4*(22.5 - fibermap["MAG"][:,0][tmp2]))
+            nredshifts["FLUX_R"] = 10**(0.4*(22.5 - fibermap["MAG"][:,1][tmp2]))
+            nredshifts["FLUX_Z"] = 10**(0.4*(22.5 - fibermap["MAG"][:,2][tmp2]))
 
-        zbest=nzbest
+        redshifts=nredshifts
 
 
     if args.spectra_scores :
-        specfile=os.path.join(os.path.dirname(zbestfile),os.path.basename(zbestfile).replace("zbest","spectra"))
+        specfile=os.path.join(os.path.dirname(rrfile),os.path.basename(rrfile).replace("redrock","spectra"))
         scores = fitsio.read(specfile, 'SCORES')
         newtypes=[]
         for k in scores.dtype.names :
              newtypes.append((k,"f4"))
-        ndtype=np.dtype( zbest.dtype.descr + newtypes )
-        nzbest=np.zeros(zbest.shape,dtype=ndtype)
-        for k in zbest.dtype.names : nzbest[k]=zbest[k]
+        ndtype=np.dtype( redshifts.dtype.descr + newtypes )
+        nredshifts=np.zeros(redshifts.shape,dtype=ndtype)
+        for k in redshifts.dtype.names : nredshifts[k]=redshifts[k]
         tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
-        tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
+        tmp2  = [tmp1[tid] for tid in nredshifts["TARGETID"]]
         for k in scores.dtype.names :
-            nzbest[k] = scores[k][tmp2]
-        zbest=nzbest
+            nredshifts[k] = scores[k][tmp2]
+        redshifts=nredshifts
 
-    data.append(zbest)
+    data.append(redshifts)
    
 
 zcat = np.hstack(data)
@@ -169,7 +176,7 @@ if args.match:
         log.info("matching {}".format(filename))
         zcat = match(zcat,fitsio.read(filename))
 
-header = fitsio.read_header(zbestfiles[0], 0)
+header = fitsio.read_header(redrockfiles[0], 0)
 
 fitsio.write(args.outfile, zcat, header=header, extname='ZCATALOG', clobber=True)
 log.info("wrote {}".format(args.outfile))

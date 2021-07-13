@@ -170,7 +170,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         tileid=res["TILEID"][i]
         night=res["LASTNIGHT"][i]
         log.info(f"checking redshifts for tile {tileid} on night {night}")
-        nok = number_of_good_zbest(tileid=tileid,night=night,specprod_dir=specprod_dir)
+        nok = number_of_good_redrock(tileid=tileid,night=night,specprod_dir=specprod_dir)
         if nok >= min_number_of_petals :
             log.info("Tile {} is done but need final vetting.".format(tileid))
             #res["ZDONE"][i]="true"
@@ -283,7 +283,7 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
     return res
 
-def number_of_good_zbest(tileid,night,specprod_dir,warn=True) :
+def number_of_good_redrock(tileid,night,specprod_dir,warn=True) :
 
     log=get_logger()
     nok=0
@@ -293,9 +293,9 @@ def number_of_good_zbest(tileid,night,specprod_dir,warn=True) :
         if not os.path.isfile(coadd_filename) :
             if warn : log.warning("missing {}".format(coadd_filename))
             continue
-        zbest_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/zbest-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
-        if not os.path.isfile(zbest_filename) :
-            if warn : log.warning("missing {}".format(zbest_filename))
+        redrock_filename = os.path.join(specprod_dir,"tiles/cumulative/{}/{}/redrock-{}-{}-thru{}.fits".format(tileid,night,spectro,tileid,night))
+        if not os.path.isfile(redrock_filename) :
+            if warn : log.warning("missing {}".format(redrock_filename))
             continue
 
         # do more tests
