@@ -207,6 +207,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     os.makedirs(scriptdir, exist_ok=True)
 
     outdir = get_tile_redshift_relpath(tileid, group, night=night, expid=expid)
+    logdir = os.path.join(outdir, 'logs')
     suffix = get_tile_redshift_script_suffix(tileid,group,night=night,expid=expid)
     jobname = f'redrock-{suffix}'
 
@@ -225,7 +226,6 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     threads_per_core = batch_config['threads_per_core']
     threads_per_node = cores_per_node * threads_per_core
 
-
     with open(batchscript, 'w') as fx:
         fx.write(f"""#!/bin/bash
 
@@ -242,10 +242,11 @@ echo Starting at $(date)
 
 pushd $DESI_SPECTRO_REDUX/$SPECPROD
 mkdir -p {outdir}
+mkdir -p {logdir}
 echo Generating files in $(pwd)/{outdir}
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
-    splog={outdir}/spectra-$SPECTRO-{suffix}.log
+    splog={logdir}/spectra-$SPECTRO-{suffix}.log
 
     if [ -f $spectra ]; then
         echo $(basename $spectra) already exists, skipping grouping
@@ -275,7 +276,7 @@ echo Coadding spectra at $(date)
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
-    colog={outdir}/coadd-$SPECTRO-{suffix}.log
+    colog={logdir}/coadd-$SPECTRO-{suffix}.log
 
     if [ -f $coadd ]; then
         echo $(basename $coadd) already exists, skipping coadd
@@ -297,7 +298,7 @@ for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.h5
-    rrlog={outdir}/redrock-$SPECTRO-{suffix}.log
+    rrlog={logdir}/redrock-$SPECTRO-{suffix}.log
 
     if [ -f $zbest ]; then
         echo $(basename $zbest) already exists, skipping redshifts
@@ -322,7 +323,7 @@ if [ -f $tileqa ]; then
     echo $(basename $tileqa) already exists, skipping desi_tile_qa
 else
     echo Running desi_tile_qa
-    tile_qa_log={outdir}/tile-qa-{tileid}-thru{night}.log
+    tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
     desi_tile_qa -n {night} -t {tileid} &> $tile_qa_log
 fi
 """)
@@ -335,7 +336,7 @@ for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
     zmtl={outdir}/zmtl-$SPECTRO-{suffix}.fits
-    zmtllog={outdir}/zmtl-$SPECTRO-{suffix}.log
+    zmtllog={logdir}/zmtl-$SPECTRO-{suffix}.log
 
     if [ -f $zmtl ]; then
         echo $(basename $zmtl) already exists, skipping make_zmtl_files
@@ -360,8 +361,8 @@ for SPECTRO in {spectro_string}; do
     zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
     qsomgii={outdir}/qso_mgii-$SPECTRO-{suffix}.fits
     qsoqn={outdir}/qso_qn-$SPECTRO-{suffix}.fits
-    qsomgiilog={outdir}/qso_mgii-$SPECTRO-{suffix}.log
-    qsoqnlog={outdir}/qso_qn-$SPECTRO-{suffix}.log
+    qsomgiilog={logdir}/qso_mgii-$SPECTRO-{suffix}.log
+    qsoqnlog={logdir}/qso_qn-$SPECTRO-{suffix}.log
 
     # QSO MgII afterburner
     if [ -f $qsomgii ]; then
