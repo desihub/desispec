@@ -228,10 +228,10 @@ if __name__ == "__main__":
         if args.target_selection == 'restricted':
             # Run MgII fitter only on QSO targets with SPECTYPE!=QSO objects to save time !
             sel_to_mgii = is_qso_target & ~sel_RR
-        elif args.target_selection == 'qso_targets':
+        elif args.target_selection.lower() in ('qso', 'qso_targets'):
             # Run MgII fitter only on QSO targets
             sel_to_mgii = is_qso_target
-        elif args.target_selection == 'all_targets':
+        elif args.target_selection.lower() in ('all', 'all_targets'):
             # Run MgII fitter only on all targets available in the zbest file (500 for a petal)
             sel_to_mgii = np.ones(zbest['TARGETID'][:].size, dtype='bool')
         else:

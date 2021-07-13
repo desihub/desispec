@@ -27,6 +27,8 @@ def parse(options=None):
                    help="file with columns TILE NIGHT EXPID to use")
     p.add_argument("--nosubmit", action="store_true",
                    help="generate scripts but don't submit batch jobs")
+    p.add_argument("--noafterburners", action="store_true",
+                   help="Do not run afterburners (like QSO fits)")
     p.add_argument("--batch-queue", type=str, default='realtime',
                    help="batch queue name")
     p.add_argument("--batch-reservation", type=str,
@@ -130,7 +132,8 @@ def get_tile_redshift_script_suffix(tileid,group,night=None,expid=None):
 
 def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
                          submit=False, queue='realtime', reservation=None,
-                         dependency=None, system_name=None, run_zmtl=False):
+                         dependency=None, system_name=None, run_zmtl=False,
+                         noafterburners=False):
     """
     Generate batch script for spectra+coadd+redshifts for a tile
 
@@ -148,6 +151,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
         dependency (str): passed to sbatch --dependency upon submit
         system_name (str): batch system name, e.g. cori-haswell, perlmutter-gpu
         run_zmtl (bool): if True, also run make_zmtl_files
+        noafterburners (bool): if True, do not run QSO afterburners
 
     Returns tuple (scriptpath, error):
         scriptpath (str): full path to generated script
@@ -236,7 +240,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
 echo Starting at $(date)
 
-cd $DESI_SPECTRO_REDUX/$SPECPROD
+pushd $DESI_SPECTRO_REDUX/$SPECPROD
 mkdir -p {outdir}
 echo Generating files in $(pwd)/{outdir}
 for SPECTRO in {spectro_string}; do
@@ -258,7 +262,7 @@ for SPECTRO in {spectro_string}; do
             cmd="srun -N 1 -n 1 -c {threads_per_node} desi_group_spectra --inframes $CFRAMES --outfile $spectra"
             echo RUNNING $cmd &> $splog
             $cmd &>> $splog &
-            sleep 1
+            sleep 0.5
         else
             echo ERROR: no input cframes for spectrograph $SPECTRO, skipping
         fi
@@ -280,7 +284,7 @@ for SPECTRO in {spectro_string}; do
         cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra --onetile --nproc 16 -i $spectra -o $coadd"
         echo RUNNING $cmd &> $colog
         $cmd &>> $colog &
-        sleep 1
+        sleep 0.5
     else
         echo ERROR: missing $(basename $spectra), skipping coadd
     fi
@@ -302,7 +306,7 @@ for SPECTRO in {spectro_string}; do
         cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi $coadd -o $redrock -z $zbest"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
-        sleep 1
+        sleep 0.5
     else
         echo ERROR: missing $(basename $coadd), skipping redshifts
     fi
@@ -313,9 +317,14 @@ wait
 
         if group == 'cumulative':
             fx.write(f"""
-echo Running desi_tile_qa
-tile_qa_log={outdir}/tile-qa-{tileid}-thru{night}.log
-desi_tile_qa -n {night} -t {tileid} &> $tile_qa_log
+tileqa={outdir}/tile-qa-{suffix}.fits
+if [ -f $tileqa ]; then
+    echo $(basename $tileqa) already exists, skipping desi_tile_qa
+else
+    echo Running desi_tile_qa
+    tile_qa_log={outdir}/tile-qa-{tileid}-thru{night}.log
+    desi_tile_qa -n {night} -t {tileid} &> $tile_qa_log
+fi
 """)
 
         if run_zmtl:
@@ -343,6 +352,49 @@ echo Waiting for zmtl to finish at $(date)
 wait
 """)
 
+        if not noafterburners:
+            fx.write(f"""
+echo Running QSO afterburners at $(date)
+for SPECTRO in {spectro_string}; do
+    coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
+    zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
+    qsomgii={outdir}/qso_mgii-$SPECTRO-{suffix}.fits
+    qsoqn={outdir}/qso_qn-$SPECTRO-{suffix}.fits
+    qsomgiilog={outdir}/qso_mgii-$SPECTRO-{suffix}.log
+    qsoqnlog={outdir}/qso_qn-$SPECTRO-{suffix}.log
+
+    # QSO MgII afterburner
+    if [ -f $qsomgii ]; then
+        echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
+    elif [ -f $zbest ]; then
+        echo Running QSO MgII afterburner, see $qsomgiilog
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_mgii_afterburner --coadd $coadd --zbest $zbest --output $qsomgii --target_selection qso --save_target all"
+        echo RUNNING $cmd &> $qsomgiilog
+        $cmd &>> $qsomgiilog &
+        sleep 0.5
+    else
+        echo ERROR: missing $(basename $zbest), skipping QSO MgII afterburner
+    fi
+
+    # QSO QuasarNet (QN) afterburner
+    if [ -f $qsoqn ]; then
+        echo $(basename $qsoqn) already exists, skipping QSO QuasarNet afterburner
+    elif [ -f $zbest ]; then
+        echo Running QSO QuasarNet afterburner, see $qsoqnlog
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_qn_afterburner --coadd $coadd --zbest $zbest --output $qsoqn --target_selection qso --save_target all"
+        echo RUNNING $cmd &> $qsoqnlog
+        $cmd &>> $qsoqnlog &
+        sleep 0.5
+    else
+        echo ERROR: missing $(basename $zbest), skipping QSO QN afterburner
+    fi
+
+done
+echo Waiting for QSO afterburners to finish at $(date)
+wait
+""")
+
+        fx.write('\npopd\n')
         fx.write('echo Done at $(date)\n')
 
     log.info(f'Wrote {batchscript}')
@@ -412,7 +464,7 @@ def _read_minimal_exptables(nights=None):
 
 
 def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, explist=None,
-                                   run_zmtl=False,
+                                   run_zmtl=False, noafterburners=False,
                                    batch_queue='realtime', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
     """
@@ -425,7 +477,8 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         tileid (int): Tile ID.
         expid (int, or list or np.array of int's): Exposure IDs.
         explist (str): File with columns TILE NIGHT EXPID to use
-        run_zmtl (bool): Also run make_zmtl_files
+        run_zmtl (bool): If True, also run make_zmtl_files
+        noafterburners (bool): If True, do not run QSO afterburners
         batch_queue (str): Batch queue name. Default is 'realtime'.
         batch_reservation (str): Batch reservation name.
         batch_dependency (str): Job dependencies passed to sbatch --dependency .
@@ -529,30 +582,27 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         expids = np.unique(np.array(exptable['EXPID'][tilerows]))
         log.info(f'Tile {tileid} nights={nights} expids={expids}')
         submit = (not nosubmit)
+        opts = dict(
+                submit=submit,
+                run_zmtl=run_zmtl,
+                noafterburners=noafterburners,
+                queue=batch_queue,
+                reservation=batch_reservation,
+                dependency=batch_dependency,
+                system_name=system_name,
+            )
         if group == 'perexp':
             for i in range(len(exptable[tilerows])):
                 batchscript, batcherr = batch_tile_redshifts(
-                    tileid, exptable[tilerows][i:i + 1], group, submit=submit,
-                    run_zmtl=run_zmtl,
-                    queue=batch_queue, reservation=batch_reservation,
-                    dependency=batch_dependency, system_name=system_name
-                )
+                    tileid, exptable[tilerows][i:i + 1], group, **opts)
         elif group in ['pernight', 'pernight-v0']:
             for night in nights:
                 thisnight = exptable['NIGHT'] == night
                 batchscript, batcherr = batch_tile_redshifts(
-                    tileid, exptable[tilerows & thisnight], group, submit=submit,
-                    run_zmtl=run_zmtl,
-                    queue=batch_queue, reservation=batch_reservation,
-                    dependency=batch_dependency, system_name=system_name
-                )
+                    tileid, exptable[tilerows & thisnight], group, **opts)
         else:
             batchscript, batcherr = batch_tile_redshifts(
-                tileid, exptable[tilerows], group, submit=submit,
-                run_zmtl=run_zmtl,
-                queue=batch_queue, reservation=batch_reservation,
-                dependency=batch_dependency, system_name=system_name
-            )
+                tileid, exptable[tilerows], group, **opts)
         if batcherr != 0:
             failed_jobs.append(batchscript)
         else:

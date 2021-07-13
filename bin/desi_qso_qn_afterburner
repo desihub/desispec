@@ -34,6 +34,7 @@ model_QN = load_model(model_QN_path)
 
 
 def collect_argparser():
+    pid = os.getpid()
     parser = argparse.ArgumentParser(description="Run QN and rerun RR (only for SPECTYPE != QSO or for SPECTYPE == QSO && |z_QN - z_RR| > 0.05) on a coadd file to find true quasars with correct redshift")
 
     parser.add_argument("--coadd", type=str, required=True,
@@ -62,12 +63,12 @@ def collect_argparser():
     # for RR
     parser.add_argument("--template", type=str, required=False, default=qso_template_filename,
                         help="give the RR template for the new RR run, by default:redrock_qso_template")
-    parser.add_argument("--filename_priors", type=str, required=False, default='priors-tmp.fits',
-                        help="filename for the RR prior file, by default:priors-tmp.fits")
-    parser.add_argument("--filename_output_rerun_RR", type=str, required=False, default="redrock-tmp.h5",
-                        help="filename for the output of the new run of RR, by default:redrock-tmp.h5")
-    parser.add_argument("--filename_zbest_rerun_RR", type=str, required=False, default="zbest-tmp.fits",
-                        help="filename for the zbest file of the new run of RR, by default:zbest-tmp.fits")
+    parser.add_argument("--filename_priors", type=str, required=False, default=f'priors-{pid}.fits',
+                        help="filename for the RR prior file, default priors-PID.fits")
+    parser.add_argument("--filename_output_rerun_RR", type=str, required=False, default=f"redrock-{pid}.h5",
+                        help="filename for the output of the new run of RR, by default:redrock-PID.h5")
+    parser.add_argument("--filename_zbest_rerun_RR", type=str, required=False, default=f"zbest-{pid}.fits",
+                        help="filename for the zbest file of the new run of RR, by default:zbest-PID.fits")
     parser.add_argument("--delete_RR_output", type=str, required=False, default='True',
                         help="delete RR outputs: True or False, they are useless since everything usefull are saved in output, by defaut:True")
 
@@ -370,9 +371,9 @@ if __name__ == "__main__":
         # Find which selection is used (SV1/ SV2 / SV3 / MAIN / ...)
         DESI_TARGET = main_cmx_or_sv(fibermap[:])[0][0]
 
-        if args.target_selection == 'qso_targets':
+        if args.target_selection.lower() in ('qso', 'qso_targets'):
             sel_to_QN = fibermap[DESI_TARGET][:] & desi_mask.QSO != 0
-        elif args.target_selection == 'all_targets':
+        elif args.target_selection.lower() in ('all', 'all_targets'):
             sel_to_QN = np.ones(zbest['TARGETID'][:].size, dtype=bool)
         else:
             log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (qso_targets / all_targets) ****")
