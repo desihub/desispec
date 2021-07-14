@@ -16,14 +16,16 @@ Fall 2015
 from __future__ import absolute_import, division, print_function
 
 import sys, os
-import numpy as np
-from astropy.table import Table, vstack
-from desiutil.log import get_logger,DEBUG
-from desispec import io
-
 import argparse
 
+import numpy as np
 from numpy.lib.recfunctions import append_fields
+
+import fitsio
+from astropy.table import Table, vstack
+
+from desiutil.log import get_logger,DEBUG
+from desispec import io
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -95,21 +97,18 @@ else :
     log=get_logger()
 
 if args.indir is None:
-    log.error('--input directory required')
+    log.error('--indir directory required')
     sys.exit(1)
     
 if args.outfile is None:
     args.outfile = io.findfile('zcatalog')
 
-import fitsio
+#- Get redrock*.fits files in subdirs, excluding e.g. redrock*.log
 redrockfiles = sorted(io.iterfiles(args.indir, 'redrock'))
+redrockfiles = [tmp for tmp in redrockfiles if tmp.endswith('.fits')]
+
 data = list()
 for rrfile in redrockfiles:
-
-    #- avoid logs and hdf5 files
-    if not rrfile.endswith('.fits'):
-        continue
-
     redshifts = fitsio.read(rrfile, 'REDSHIFTS')
     log.debug("{} {}".format(rrfile, len(redshifts)))
     if args.fibermap :
@@ -155,7 +154,9 @@ for rrfile in redrockfiles:
         scores = fitsio.read(specfile, 'SCORES')
         newtypes=[]
         for k in scores.dtype.names :
-             newtypes.append((k,"f4"))
+            if k != 'TARGETID':
+                 newtypes.append((k,"f4"))
+
         ndtype=np.dtype( redshifts.dtype.descr + newtypes )
         nredshifts=np.zeros(redshifts.shape,dtype=ndtype)
         for k in redshifts.dtype.names : nredshifts[k]=redshifts[k]
