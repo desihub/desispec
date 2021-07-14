@@ -238,12 +238,17 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 #SBATCH --exclusive
 {batch_opts}
 
-echo Starting at $(date)
+echo --- Starting at $(date)
+START_TIME=$SECONDS
 
 pushd $DESI_SPECTRO_REDUX/$SPECPROD
 mkdir -p {outdir}
 mkdir -p {logdir}
-echo Generating files in $(pwd)/{outdir}
+
+echo
+echo --- Generating files in $(pwd)/{outdir}
+echo
+echo --- Grouping frames to spectra at $(date)
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
     splog={logdir}/spectra-$SPECTRO-{suffix}.log
@@ -272,7 +277,8 @@ done
 echo Waiting for desi_group_spectra to finish at $(date)
 wait
 
-echo Coadding spectra at $(date)
+echo
+echo --- Coadding spectra at $(date)
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
@@ -293,7 +299,8 @@ done
 echo Waiting for desi_coadd_spectra to finish at $(date)
 wait
 
-echo Running redrock at $(date)
+echo
+echo --- Running redrock at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
@@ -318,11 +325,12 @@ wait
 
         if group == 'cumulative':
             fx.write(f"""
+echo
 tileqa={outdir}/tile-qa-{suffix}.fits
 if [ -f $tileqa ]; then
-    echo $(basename $tileqa) already exists, skipping desi_tile_qa
+    echo --- $(basename $tileqa) already exists, skipping desi_tile_qa
 else
-    echo Running desi_tile_qa
+    echo --- Running desi_tile_qa
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
     desi_tile_qa -n {night} -t {tileid} &> $tile_qa_log
 fi
@@ -331,7 +339,8 @@ fi
         if run_zmtl:
             fx.write(f"""
 # These run fast; use a single node for all 10 petals without srun overhead
-echo Running make_zmtl_files at $(date)
+echo
+echo --- Running make_zmtl_files at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
@@ -355,7 +364,8 @@ wait
 
         if not noafterburners:
             fx.write(f"""
-echo Running QSO afterburners at $(date)
+echo
+echo --- Running QSO afterburners at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
@@ -395,8 +405,22 @@ echo Waiting for QSO afterburners to finish at $(date)
 wait
 """)
 
-        fx.write('\npopd\n')
-        fx.write('echo Done at $(date)\n')
+        fx.write(f"""
+popd &> /dev/null
+
+echo
+echo --- Files in {outdir}:
+for prefix in spectra coadd redrock zmtl qso_qn qso_mgii tile-qa; do
+    echo  "   " $(ls {outdir}/$prefix*.fits | wc -l) $prefix
+done
+
+END_TIME=$SECONDS
+DURATION_MINUTES=$(( ($END_TIME - $START_TIME)/60 ))
+DURATION_SECONDS=$(( ($END_TIME - $START_TIME)%60 ))
+
+echo
+echo --- Done at $(date) in ${{DURATION_MINUTES}}m${{DURATION_SECONDS}}s
+        """)
 
     log.info(f'Wrote {batchscript}')
 
