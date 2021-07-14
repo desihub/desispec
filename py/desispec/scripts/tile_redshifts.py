@@ -304,7 +304,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $redrock) already exists, skipping redshifts
     elif [ -f $coadd ]; then
         echo Running redrock on $(basename $coadd), see $rrlog
-        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi $coadd -o $redrock -d $rrdetails"
+        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 0.5
