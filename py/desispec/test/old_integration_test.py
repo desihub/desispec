@@ -20,7 +20,7 @@ except TypeError: # This can happen during documentation builds.
 from ..util import runcmd
 from .. import io
 from ..qa import QA_Exposure
-from ..database.redshift import get_options, setup_db, load_zbest
+from ..database.redshift import get_options, setup_db, load_redrock
 
 from desiutil.log import get_logger
 
@@ -303,10 +303,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     #- Redshifts!
     for pix in pixels:
         specfile = io.findfile('spectra', groupname=pix)
-        zbestfile = io.findfile('zbest', groupname=pix)
+        redrockfile = io.findfile('redrock', groupname=pix)
         inputs = [specfile, ]
-        outputs = [zbestfile, ]
-        cmd = "rrdesi {} --zbest {}".format(specfile, zbestfile)
+        outputs = [redrockfile, ]
+        cmd = "rrdesi {} --outfile {}".format(specfile, redrockfile)
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('rrdesi failed for healpixel {}'.format(pix))
 
@@ -317,7 +317,7 @@ def integration_test(night=None, nspec=5, clobber=False):
                           os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                                        os.environ['SPECPROD']))
     postgresql = setup_db(options)
-    load_zbest(options.datapath)
+    load_redrock(options.datapath)
     # ztruth QA
     # qafile = io.findfile('qa_ztruth', night)
     # qafig = io.findfile('qa_ztruth_fig', night)
@@ -330,7 +330,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     #-----
     #- Did it work?
-    #- (this combination of fibermap, simspec, and zbest is a pain)
+    #- (this combination of fibermap, simspec, and redrock is a pain)
     simdir = os.path.dirname(io.findfile('fibermap', night=night, expid=expid))
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
     siminfo = fits.getdata(simspec, 'TRUTH')
@@ -344,16 +344,16 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Pixel     True  z        -> Class   z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for pix in pixels:
-        zbest = fits.getdata(io.findfile('zbest', groupname=pix))
-        for i in range(len(zbest)):
-            objtype = zbest['SPECTYPE'][i]
-            z, zwarn = zbest['Z'][i], zbest['ZWARN'][i]
+        redrock = fits.getdata(io.findfile('redrock', groupname=pix))
+        for i in range(len(redrock)):
+            objtype = redrock['SPECTYPE'][i]
+            z, zwarn = redrock['Z'][i], redrock['ZWARN'][i]
 
-            j = np.where(fibermap['TARGETID'] == zbest['TARGETID'][i])[0][0]
+            j = np.where(fibermap['TARGETID'] == redrock['TARGETID'][i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
             oiiflux = 0.0
             if truetype == 'ELG':
-                k = np.where(elginfo['TARGETID'] == zbest['TARGETID'][i])[0][0]
+                k = np.where(elginfo['TARGETID'] == redrock['TARGETID'][i])[0][0]
                 oiiflux = elginfo['OIIFLUX'][k]
 
             truez = siminfo['REDSHIFT'][j]

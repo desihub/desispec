@@ -296,15 +296,15 @@ wait
 echo Running redrock at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
-    zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
-    redrock={outdir}/redrock-$SPECTRO-{suffix}.h5
+    redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
+    rrdetails={outdir}/rrdetails-$SPECTRO-{suffix}.h5
     rrlog={logdir}/redrock-$SPECTRO-{suffix}.log
 
-    if [ -f $zbest ]; then
-        echo $(basename $zbest) already exists, skipping redshifts
+    if [ -f $redrock ]; then
+        echo $(basename $redrock) already exists, skipping redshifts
     elif [ -f $coadd ]; then
         echo Running redrock on $(basename $coadd), see $rrlog
-        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi $coadd -o $redrock -z $zbest"
+        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 0.5
@@ -334,19 +334,19 @@ fi
 echo Running make_zmtl_files at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
-    zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
+    redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
     zmtl={outdir}/zmtl-$SPECTRO-{suffix}.fits
     zmtllog={logdir}/zmtl-$SPECTRO-{suffix}.log
 
     if [ -f $zmtl ]; then
         echo $(basename $zmtl) already exists, skipping make_zmtl_files
-    elif [[ -f $coadd && -f $zbest ]]; then
-        echo Running make_zmtl_files on $(basename $zbest), see $zmtllog
-        cmd="make_zmtl_files -in $zbest -out $zmtl"
+    elif [[ -f $coadd && -f $redrock ]]; then
+        echo Running make_zmtl_files on $(basename $redrock), see $zmtllog
+        cmd="make_zmtl_files -in $redrock -out $zmtl"
         echo RUNNING $cmd &> $zmtllog
         $cmd &>> $zmtllog &
     else
-        echo ERROR: missing $(basename $zbest) or $(basename $coadd), skipping zmtl
+        echo ERROR: missing $(basename $redrock) or $(basename $coadd), skipping zmtl
     fi
 done
 echo Waiting for zmtl to finish at $(date)
@@ -358,7 +358,7 @@ wait
 echo Running QSO afterburners at $(date)
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
-    zbest={outdir}/zbest-$SPECTRO-{suffix}.fits
+    redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
     qsomgii={outdir}/qso_mgii-$SPECTRO-{suffix}.fits
     qsoqn={outdir}/qso_qn-$SPECTRO-{suffix}.fits
     qsomgiilog={logdir}/qso_mgii-$SPECTRO-{suffix}.log
@@ -367,27 +367,27 @@ for SPECTRO in {spectro_string}; do
     # QSO MgII afterburner
     if [ -f $qsomgii ]; then
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
-    elif [ -f $zbest ]; then
+    elif [ -f $redrock ]; then
         echo Running QSO MgII afterburner, see $qsomgiilog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_mgii_afterburner --coadd $coadd --zbest $zbest --output $qsomgii --target_selection qso --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_mgii_afterburner --coadd $coadd --redrock $redrock --output $qsomgii --target_selection qso --save_target all"
         echo RUNNING $cmd &> $qsomgiilog
         $cmd &>> $qsomgiilog &
         sleep 0.5
     else
-        echo ERROR: missing $(basename $zbest), skipping QSO MgII afterburner
+        echo ERROR: missing $(basename $redrock), skipping QSO MgII afterburner
     fi
 
     # QSO QuasarNet (QN) afterburner
     if [ -f $qsoqn ]; then
         echo $(basename $qsoqn) already exists, skipping QSO QuasarNet afterburner
-    elif [ -f $zbest ]; then
+    elif [ -f $redrock ]; then
         echo Running QSO QuasarNet afterburner, see $qsoqnlog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_qn_afterburner --coadd $coadd --zbest $zbest --output $qsoqn --target_selection qso --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_qn_afterburner --coadd $coadd --redrock $redrock --output $qsoqn --target_selection qso --save_target all"
         echo RUNNING $cmd &> $qsoqnlog
         $cmd &>> $qsoqnlog &
         sleep 0.5
     else
-        echo ERROR: missing $(basename $zbest), skipping QSO QN afterburner
+        echo ERROR: missing $(basename $redrock), skipping QSO QN afterburner
     fi
 
 done

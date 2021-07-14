@@ -141,10 +141,10 @@ class TestQA(unittest.TestCase):
     def _write_qabrick(self):
         """Write a QA data brick file"""
         qabrck = QA_Brick()
-        # ZBEST
-        qabrck.init_zbest()
-        qabrck.data['ZBEST']['METRICS'] = {}
-        qabrck.data['ZBEST']['METRICS']['NFAIL'] = 10
+        # REDROCK
+        qabrck.init_redrock()
+        qabrck.data['REDROCK']['METRICS'] = {}
+        qabrck.data['REDROCK']['METRICS']['NFAIL'] = 10
         write_qa_brick(self.qafile_brick, qabrck)
         self.files_written.append(self.qafile_brick)
 
@@ -248,8 +248,8 @@ class TestQA(unittest.TestCase):
         qabrck = QA_Brick(name='tst_brick')
         assert qabrck.brick_name == 'tst_brick'
         #
-        qabrck.init_zbest()
-        assert qabrck.data['ZBEST']['PARAMS']['MAX_NFAIL'] > 0
+        qabrck.init_redrock()
+        assert qabrck.data['REDROCK']['PARAMS']['MAX_NFAIL'] > 0
 
     def test_init_qa_prod(self):
         self._write_qaframes()

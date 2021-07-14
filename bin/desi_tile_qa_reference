@@ -101,7 +101,7 @@ def main():
 
         # AR first/last night
         # AR (not fully correct, as NIGHT here is from the first
-        # AR    500 rows of each zbest file; but ok for our purpose)
+        # AR    500 rows of each redrock file; but ok for our purpose)
         if d["NIGHT"].min() < nightmin:
             nightmin = d["NIGHT"].min()
         if d["NIGHT"].max() > nightmax:

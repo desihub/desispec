@@ -45,9 +45,9 @@ class TaskRedshift(BaseTask):
         props = self.name_split(name)
         hpix = props["pixel"]
         nside = props["nside"]
-        zbest = findfile("zbest", groupname=hpix, nside=nside)
         redrock = findfile("redrock", groupname=hpix, nside=nside)
-        return [zbest, redrock]
+        rrdetails = findfile("rrdetails", groupname=hpix, nside=nside)
+        return [redrock, rrdetails]
 
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
@@ -123,12 +123,12 @@ class TaskRedshift(BaseTask):
         options.
         """
 
-        zbestfile, redrockfile = self.paths(name)
-        outdir  = os.path.dirname(zbestfile)
+        redrockfile, rrdetailsfile = self.paths(name)
+        outdir  = os.path.dirname(redrockfile)
 
         options = {}
-        options["output"] = redrockfile
-        options["zbest"] = zbestfile
+        options["details"] = rrdetailsfile
+        options["outfile"] = redrockfile
         options.update(opts)
 
         optarray = option_list(options)

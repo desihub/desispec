@@ -525,8 +525,8 @@ def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
                      min((k+1)*chunksize, finalrows), tn)
 
 
-def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
-    """Load zbest files into the zcat table.
+def load_redrock(datapath=None, hdu='REDSHIFTS', q3c=False):
+    """Load redrock files into the zcat table.
 
     This function is deprecated since there should now be a single
     redshift catalog file.
@@ -534,25 +534,25 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
     Parameters
     ----------
     datapath : :class:`str`
-        Full path to the directory containing zbest files.
+        Full path to the directory containing redrock files.
     hdu : :class:`int` or :class:`str`, optional
-        Read a data table from this HDU (default 'ZBEST').
+        Read a data table from this HDU (default 'REDSHIFTS').
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     """
     if datapath is None:
         datapath = specprod_root()
-    zbestpath = os.path.join(datapath, 'spectra-64', '*', '*', 'zbest-64-*.fits')
-    log.info("Using zbest file search path: %s.", zbestpath)
-    zbest_files = glob.glob(zbestpath)
-    if len(zbest_files) == 0:
-        log.error("No zbest files found!")
+    redrockpath = os.path.join(datapath, 'spectra-64', '*', '*', 'redrock-64-*.fits')
+    log.info("Using redrock file search path: %s.", redrockpath)
+    redrock_files = glob.glob(redrockpath)
+    if len(redrock_files) == 0:
+        log.error("No redrock files found!")
         return
-    log.info("Found %d zbest files.", len(zbest_files))
+    log.info("Found %d redrock files.", len(redrock_files))
     #
-    # Read the identified zbest files.
+    # Read the identified redrock files.
     #
-    for f in zbest_files:
+    for f in redrock_files:
         brickname = os.path.basename(os.path.dirname(f))
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
@@ -587,7 +587,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
             data_list.insert(i + j, data[col][:, j].tolist())
         log.debug(data_names)
         #
-        # zbest files don't contain the same columns as zcatalog.
+        # redrock files don't contain the same columns as zcatalog.
         #
         for col in ZCat.__table__.columns:
             if col.name not in data_names:
@@ -875,8 +875,8 @@ def get_options(*args):
                       help="If specified, connect to a PostgreSQL database with USERNAME.")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
-    prsr.add_argument('-z', '--zbest', action='store_true', dest='zbest',
-                      help='Force loading of the zcat table from zbest files.')
+    prsr.add_argument('-z', '--redrock', action='store_true', dest='redrock',
+                      help='Force loading of the zcat table from redrock files.')
     prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
     if len(args) > 0:
         options = prsr.parse_args(args)
@@ -960,9 +960,9 @@ def main():
         #
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            if options.zbest and tn == 'zcat':
-                log.info("Loading %s from zbest files in %s.", tn, options.datapath)
-                load_zbest(datapath=options.datapath, q3c=postgresql)
+            if options.redrock and tn == 'zcat':
+                log.info("Loading %s from redrock files in %s.", tn, options.datapath)
+                load_redrock(datapath=options.datapath, q3c=postgresql)
             else:
                 log.info("Loading %s from %s.", tn, l['filepath'])
                 load_file(**l)
