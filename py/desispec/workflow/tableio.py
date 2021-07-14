@@ -443,7 +443,7 @@ def process_column(data, typ, mask=None, default=None, joinsymb='|', process_mix
             col.append(split_str(rowdat, joinsymb=joinsymb))
         elif array_like:
             col.append(np.array([rowdat]))
-        elif type(rowdat) in [str, np.str, np.str_] and ',' in rowdat:
+        elif type(rowdat) in [str, np.str, np.str_] and comma_replacement in rowdat:
             col.append(rowdat.replace(comma_replacement, ','))
         else:
             col.append(rowdat)
