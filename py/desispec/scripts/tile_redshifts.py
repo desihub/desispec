@@ -406,13 +406,13 @@ wait
 """)
 
         fx.write(f"""
-popd &> /dev/null
-
 echo
 echo --- Files in {outdir}:
 for prefix in spectra coadd redrock zmtl qso_qn qso_mgii tile-qa; do
     echo  "   " $(ls {outdir}/$prefix*.fits | wc -l) $prefix
 done
+
+popd &> /dev/null
 
 END_TIME=$SECONDS
 DURATION_MINUTES=$(( ($END_TIME - $START_TIME)/60 ))
