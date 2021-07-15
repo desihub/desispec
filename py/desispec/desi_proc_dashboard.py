@@ -437,7 +437,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
 
-    exptab_colnames = ['EXPID', 'CAMWORD', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
+    exptab_colnames = ['EXPID', 'CAMWORD', 'BADCAMWORD', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
     exptab_dtypes = [int, 'S20', float, 'S10', int, np.ndarray, 'S10']
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
