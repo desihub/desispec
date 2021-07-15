@@ -14,7 +14,8 @@ from desispec.workflow.exptable import get_exposure_table_pathname, default_obst
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
-from desispec.io.util import decode_camword, camword_to_spectros
+from desispec.io.util import decode_camword, camword_to_spectros, difference_camwords
+
 
 ########################
 ### Helper Functions ###
@@ -486,15 +487,15 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         d_processing = None
 
     expid_processing = []
-    proccamwords_by_expid = dict()
+    # proccamwords_by_expid = dict()
     if d_processing is not None:
         for row in d_processing:
             expid_list = row['EXPID']
             expid_processing += expid_list.tolist()
-            if 'PROCCAMWORD' in d_processing.colnames and len(expid_list) == 1:
-                expid = int(expid_list[0])
-                if expid not in proccamwords_by_expid.keys():
-                    proccamwords_by_expid[expid] = row['PROCCAMWORD']
+            # if 'PROCCAMWORD' in d_processing.colnames and len(expid_list) == 1:
+            #     expid = int(expid_list[0])
+            #     if expid not in proccamwords_by_expid.keys():
+            #         proccamwords_by_expid[expid] = row['PROCCAMWORD']
 
     expid_processing = set(expid_processing)
 
@@ -530,8 +531,12 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             tileid_str = '----'
 
         exptime = np.round(row['EXPTIME'],decimals=1)
-        if expid in proccamwords_by_expid.keys():
-            proccamword = proccamwords_by_expid[expid]
+        # if expid in proccamwords_by_expid.keys():
+        #     proccamword = proccamwords_by_expid[expid]
+        # else:
+        #     proccamword = row['CAMWORD']
+        if 'BADCAMWORD' in d_exp.colnames:
+            proccamword = difference_camwords(row['CAMWORD'],row['BADCAMWORD'])
         else:
             proccamword = row['CAMWORD']
 
