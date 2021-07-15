@@ -36,12 +36,12 @@ log = get_logger()
 if args.reduxdir is None:
     args.reduxdir = os.path.expandvars('$DESI_SPECTRO_REDUX/$SPECPROD')
 
-tiledir = f'{args.reduxdir}/tiles'
-log.info(f'Looking for per-tile redrock files in {tiledir}/TILEID/{args.group}/')
+tiledir = f'{args.reduxdir}/tiles/{args.group}'
+log.info(f'Looking for per-tile redrock files in {tiledir}/TILEID')
 assert os.path.isdir(tiledir)
 
 rrfiles = list()
-for filename in sorted(glob.glob(f'{tiledir}/*/{args.group}/redrock-*.fits')):
+for filename in sorted(glob.glob(f'{tiledir}/*/*/redrock-*.fits')):
     tileid = int(os.path.basename(os.path.dirname(os.path.dirname(filename))))
     if args.first_tile is not None and tileid < args.first_tile:
         continue
@@ -51,6 +51,10 @@ for filename in sorted(glob.glob(f'{tiledir}/*/{args.group}/redrock-*.fits')):
         continue
 
     rrfiles.append(filename)
+
+if len(rrfiles) == 0:
+    log.critical('No redrock files found; exiting')
+    sys.exit(1)
 
 nrrfiles = len(rrfiles)
 rrx = list()
@@ -62,7 +66,7 @@ for i, filename in enumerate(rrfiles):
     tmp = os.path.basename(filename).replace('redrock-', 'coadd-', 1)
     coaddfile = os.path.join(os.path.dirname(filename), tmp)
     if not args.no_fibermap:
-        fm = fitsio.read(coaddfile, 'FIBERMAP')
+        fm = fitsio.read(filename, 'FIBERMAP')
         #- Sorted the same
         assert np.all(rr['TARGETID'] == fm['TARGETID'])
         #- TARGETID is only column in common
@@ -74,8 +78,11 @@ for i, filename in enumerate(rrfiles):
 
     if not args.no_scores:
         scores = fitsio.read(coaddfile, 'SCORES')
-        #- Sorted the same
-        assert np.all(rr['TARGETID'] == scores['TARGETID'])
+
+        #- Same targets
+        assert len(rr) == len(scores)
+        assert np.all(np.isin(scores['TARGETID'], rr['TARGETID']))
+
         #- TARGETID is only column in common
         assert (set(rr.dtype.names) & set(scores.dtype.names)) == set(['TARGETID',])
         rr = join_by('TARGETID', rr, scores)
@@ -131,13 +138,15 @@ zcat = vstack(rrx)
 
 #- Add record of inputs
 zcat.meta['TILEDIR'] = os.path.normpath(tiledir)
-for i, filename in enumerate(redrockfiles):
+for i, filename in enumerate(rrfiles):
     key = f'IN{i:06d}'
     zcat.meta[key] = filename.replace(tiledir, 'TILEDIR')
 
 depend.add_dependencies(zcat.meta)
 zcat.meta['SPECPROD'] = os.path.basename(os.path.normpath(args.reduxdir))
 zcat.meta['EXTNAME'] = 'ZCATALOG'
-zcat.write(args.output)
+tmpname = args.output+'.tmp'
+zcat.write(tmpname, format='fits')
+os.rename(tmpname, args.output)
 
 
