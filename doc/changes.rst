@@ -2,10 +2,40 @@
 desispec Change Log
 ===================
 
-0.45.0 (unreleased)
+0.45.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.45.0 (2021-07-14)
+-------------------
+
+For Everest tile spectra+coadds+redshifts; in 21.7c
+
+Note: this is a major format change to coadd and redrock (formerly zbest) files:
+
+* FIBERMAP split into FIBERMAP (coadded) + EXP_FIBERMAP (per-exposure)
+* zbest files renamed redrock
+
+Requires redrock >= 0.15.0
+
+Details / PRs:
+
 * tune tile QA parameters
+* Add desi_qso_catalog_maker (PRs `#1322`_, `#1339`_).
+* QSO afterburner cross checks and bug fixes (PRs `#1334`_, `#1335`_)
+* Fix exposure table loading typo (PR `#1337`_).
+* Rename zbest -> redrock (PR `#1338`_).
+* Split coadd FIBERMAP into FIBERMAP + EXP_FIBERMAP (PR `#1330`_).
+* QSO afterburners run in desi_tile_redshifts by default (PR `#1330`_).
+
+.. _`#1322`: https://github.com/desihub/desispec/issues/1322
+.. _`#1330`: https://github.com/desihub/desispec/issues/1330
+.. _`#1334`: https://github.com/desihub/desispec/issues/1334
+.. _`#1335`: https://github.com/desihub/desispec/issues/1335
+.. _`#1337`: https://github.com/desihub/desispec/issues/1337
+.. _`#1338`: https://github.com/desihub/desispec/issues/1338
+.. _`#1339`: https://github.com/desihub/desispec/issues/1339
 
 0.44.2 (2021-07-07)
 -------------------
