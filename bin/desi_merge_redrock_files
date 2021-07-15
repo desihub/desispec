@@ -36,12 +36,12 @@ log = get_logger()
 if args.reduxdir is None:
     args.reduxdir = os.path.expandvars('$DESI_SPECTRO_REDUX/$SPECPROD')
 
-tiledir = f'{args.reduxdir}/tiles'
-log.info(f'Looking for per-tile zbest files in {tiledir}/TILEID/{args.group}/')
+tiledir = f'{args.reduxdir}/tiles/{args.group}'
+log.info(f'Looking for per-tile redrock files in {tiledir}/TILEID')
 assert os.path.isdir(tiledir)
 
-zbestfiles = list()
-for filename in sorted(glob.glob(f'{tiledir}/*/{args.group}/zbest-*.fits')):
+rrfiles = list()
+for filename in sorted(glob.glob(f'{tiledir}/*/*/redrock-*.fits')):
     tileid = int(os.path.basename(os.path.dirname(os.path.dirname(filename))))
     if args.first_tile is not None and tileid < args.first_tile:
         continue
@@ -50,56 +50,63 @@ for filename in sorted(glob.glob(f'{tiledir}/*/{args.group}/zbest-*.fits')):
     if args.tiles is not None and tileid not in args.tiles:
         continue
 
-    zbestfiles.append(filename)
+    rrfiles.append(filename)
 
-nzbfiles = len(zbestfiles)
-zbx = list()
+if len(rrfiles) == 0:
+    log.critical('No redrock files found; exiting')
+    sys.exit(1)
 
-for i, filename in enumerate(zbestfiles):
-    print(f'{i+1}/{nzbfiles}: {filename}')
-    zb = fitsio.read(filename, 'ZBEST')
+nrrfiles = len(rrfiles)
+rrx = list()
 
-    tmp = os.path.basename(filename).replace('zbest-', 'coadd-', 1)
+for i, filename in enumerate(rrfiles):
+    print(f'{i+1}/{nrrfiles}: {filename}')
+    rr = fitsio.read(filename, 'REDSHIFTS')
+
+    tmp = os.path.basename(filename).replace('redrock-', 'coadd-', 1)
     coaddfile = os.path.join(os.path.dirname(filename), tmp)
     if not args.no_fibermap:
-        fm = fitsio.read(coaddfile, 'FIBERMAP')
+        fm = fitsio.read(filename, 'FIBERMAP')
         #- Sorted the same
-        assert np.all(zb['TARGETID'] == fm['TARGETID'])
+        assert np.all(rr['TARGETID'] == fm['TARGETID'])
         #- TARGETID is only column in common
-        assert (set(zb.dtype.names) & set(fm.dtype.names)) == set(['TARGETID',])
-        zb = join_by('TARGETID', zb, fm)
+        assert (set(rr.dtype.names) & set(fm.dtype.names)) == set(['TARGETID',])
+        rr = join_by('TARGETID', rr, fm)
     else:
-        tileid = np.ones(len(zb), dtype=np.int16)*tileid
-        zb = rec_append_fields(zb, 'TILEID', tileid)
+        tileid = np.ones(len(rr), dtype=np.int16)*tileid
+        rr = rec_append_fields(rr, 'TILEID', tileid)
 
     if not args.no_scores:
         scores = fitsio.read(coaddfile, 'SCORES')
-        #- Sorted the same
-        assert np.all(zb['TARGETID'] == scores['TARGETID'])
+
+        #- Same targets
+        assert len(rr) == len(scores)
+        assert np.all(np.isin(scores['TARGETID'], rr['TARGETID']))
+
         #- TARGETID is only column in common
-        assert (set(zb.dtype.names) & set(scores.dtype.names)) == set(['TARGETID',])
-        zb = join_by('TARGETID', zb, scores)
+        assert (set(rr.dtype.names) & set(scores.dtype.names)) == set(['TARGETID',])
+        rr = join_by('TARGETID', rr, scores)
 
     #- Handle a few dtype special cases
-    zb = Table(zb)
-    if 'NUMOBS_MORE' in zb.colnames and zb['NUMOBS_MORE'].dtype != np.dtype('>i4'):
-        zb['NUMOBS_MORE'] = zb['NUMOBS_MORE'].astype('>i4')
-    if 'RELEASE' in zb.colnames and zb['RELEASE'].dtype != np.dtype('>i2'):
-        zb['RELEASE'] = zb['RELEASE'].astype('>i2')
+    rr = Table(rr)
+    if 'NUMOBS_MORE' in rr.colnames and rr['NUMOBS_MORE'].dtype != np.dtype('>i4'):
+        rr['NUMOBS_MORE'] = rr['NUMOBS_MORE'].astype('>i4')
+    if 'RELEASE' in rr.colnames and rr['RELEASE'].dtype != np.dtype('>i2'):
+        rr['RELEASE'] = rr['RELEASE'].astype('>i2')
 
-    zbx.append(zb)
+    rrx.append(rr)
 
 #- Determine union and intersection of columns present in the files
 #- since the fiberassign datamodel evolved for exactly which targeting
 #- columns were provided
 all_columns = set()
 joint_columns = None
-for zb in zbx:
-    all_columns.update(zb.colnames)
+for rr in rrx:
+    all_columns.update(rr.colnames)
     if joint_columns is None:
-        joint_columns = set(zb.colnames)
+        joint_columns = set(rr.colnames)
     else:
-        joint_columns &= set(zb.colnames)
+        joint_columns &= set(rr.colnames)
 
 #- Add *_TARGET columns if needed, and drop other columns that aren't in common
 add_columns = set()
@@ -111,33 +118,35 @@ for colname in (all_columns - joint_columns):
         drop_columns.add(colname)
 
 #- update individual tables to have the same columns
-for zb in zbx:
+for rr in rrx:
     for colname in add_columns:
-        if colname not in zb.colnames:
-            zb[colname] = np.zeros(len(zb), dtype=int)
+        if colname not in rr.colnames:
+            rr[colname] = np.zeros(len(rr), dtype=int)
     for colname in drop_columns:
-        if colname in list(zb.colnames):
-            zb.remove_column(colname)
+        if colname in list(rr.colnames):
+            rr.remove_column(colname)
 
 #- Standardize column order to match last tile
-columns = zbx[-1].colnames
-for i in range(len(zbx)):
-    zb = zbx[i]
-    if zb.columns != columns:
-        zbx[i] = zb[columns]  #- reorders columns
+columns = rrx[-1].colnames
+for i in range(len(rrx)):
+    rr = rrx[i]
+    if rr.columns != columns:
+        rrx[i] = rr[columns]  #- reorders columns
 
 #- Finally! make the stacks redshift catalog
-zcat = vstack(zbx)
+zcat = vstack(rrx)
 
 #- Add record of inputs
 zcat.meta['TILEDIR'] = os.path.normpath(tiledir)
-for i, filename in enumerate(zbestfiles):
+for i, filename in enumerate(rrfiles):
     key = f'IN{i:06d}'
     zcat.meta[key] = filename.replace(tiledir, 'TILEDIR')
 
 depend.add_dependencies(zcat.meta)
 zcat.meta['SPECPROD'] = os.path.basename(os.path.normpath(args.reduxdir))
 zcat.meta['EXTNAME'] = 'ZCATALOG'
-zcat.write(args.output)
+tmpname = args.output+'.tmp'
+zcat.write(tmpname, format='fits')
+os.rename(tmpname, args.output)
 
 

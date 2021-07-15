@@ -146,8 +146,11 @@ class Frame(object):
             fibers = np.asarray(fibers)
             if len(fibers) != self.nspec:
                 raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
-            if fibermap is not None and np.any(fibers != fibermap['FIBER']):
-                raise ValueError("fibermap doesn't match fibers")
+            if ((fibermap is not None) and
+                ('FIBER' in fibermap.dtype.names) and
+                np.any(fibers != fibermap['FIBER'])):
+                    raise ValueError("fibermap doesn't match fibers")
+
             if (spectrograph is not None):
                 minfiber = spectrograph*fibers_per_spectrograph
                 maxfiber = (spectrograph+1)*fibers_per_spectrograph

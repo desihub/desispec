@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function
 import os, sys, time
 
 import numpy as np
+from astropy.table import Table
 
 from desiutil.log import get_logger
 
@@ -18,14 +19,24 @@ def parse(options=None):
     import argparse
 
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
-    parser.add_argument("--reduxdir", type=str,  help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
-    parser.add_argument("--nights", type=str,  help="YEARMMDD to add")
-    parser.add_argument("--nside", type=int,default=64,help="input spectra healpix nside")
-    parser.add_argument("-o", "--outdir", type=str,  help="output directory")
+    parser.add_argument("--reduxdir", type=str,
+            help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
+    parser.add_argument("--nights", type=str,
+            help="YEARMMDD to add")
+    parser.add_argument("--expfile", type=str,
+            help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
+    parser.add_argument("--nside", type=int, default=64,
+            help="input spectra healpix nside (default %(default)s)")
+    parser.add_argument("-o", "--outdir", type=str,
+            help="output directory; all outputs in this directory")
+    parser.add_argument("--outroot", type=str,
+            help="output root directory; files in subdirectories of this dir")
     parser.add_argument("--mpi", action="store_true",
             help="Use MPI for parallelism")
-    parser.add_argument("--inframes", type=str, nargs='*', help="input frame files; ignore --reduxdir, --nights, --nside")
-    parser.add_argument("--outfile", type=str, help="output to this file; only used with --inframes")
+    parser.add_argument("--inframes", type=str, nargs='*',
+            help="input frame files; ignore --reduxdir, --nights, --nside")
+    parser.add_argument("--outfile", type=str,
+            help="output to this file; only used with --inframes")
 
     if options is None:
         args = parser.parse_args()
@@ -56,6 +67,9 @@ def main(args=None, comm=None):
         rank = 0
         size = 1
 
+    if args.outroot is None and args.outdir is None:
+        args.outroot = io.specprod_root()
+
     #- Combining a set of frame files instead of a healpix?
     if args.inframes is not None:
         if rank == 0:
@@ -85,31 +99,55 @@ def main(args=None, comm=None):
             log.error('Only use --outfile with --inframes options')
         return 1
 
-    if args.nights:
+    if args.expfile:
+        if rank == 0:
+            nightexp = Table.read(args.expfile)
+        else:
+            nightexp = None
+
+        if comm is not None:
+            nightexp = comm.bcast(nightexp, root=0)
+
+        #- all ranks parse table so that all will fail if there is a problem
+        if (('NIGHT' not in nightexp.colnames) or
+                ('EXPID' not in nightexp.colnames)):
+            msg = f'{args.explist} missing NIGHT and/or EXPID columns'
+            log.critical(msg)
+            raise ValueError(msg)
+
+        nights = np.unique(nightexp['NIGHT'])
+        expids = np.asarray(nightexp['EXPID'])
+
+    elif args.nights:
         nights = [int(night) for night in args.nights.split(',')]
+        expids = None
     else:
         nights = None
+        expids = None
 
     #- Get table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
     t0 = time.time()
-    exp2pix = get_exp2healpix_map(nights=nights, comm=comm,
-                                  specprod_dir=args.reduxdir)
+    exp2pix = get_exp2healpix_map(nights=nights, expids=expids, comm=comm,
+                                  nside=args.nside, specprod_dir=args.reduxdir)
     assert len(exp2pix) > 0
     if rank == 0:
         dt = time.time() - t0
         log.debug('Exposure to healpix mapping took {:.1f} sec'.format(dt))
         sys.stdout.flush()
 
-    allpix = sorted(set(exp2pix['HEALPIX']))
+    allpix = np.unique(exp2pix[['SURVEY', 'FAPROGRAM', 'HEALPIX']])
     mypix = np.array_split(allpix, size)[rank]
     log.info('Rank {} will process {} pixels'.format(rank, len(mypix)))
     sys.stdout.flush()
 
     frames = dict()
-    for pix in mypix:
-        iipix = np.where(exp2pix['HEALPIX'] == pix)[0]
+    for survey, faprogram, pix in mypix:
+        keep = (exp2pix['SURVEY'] == survey)
+        keep &= (exp2pix['FAPROGRAM'] == faprogram)
+        keep &= (exp2pix['HEALPIX'] == pix)
+        iipix = np.where(keep)[0]
         ntargets = np.sum(exp2pix['NTARGETS'][iipix])
-        log.info('Rank {} pix {} with {} targets on {} spectrograph exposures'.format(
+        log.info('Rank {} pix {} with {} targets on {} frames'.format(
             rank, pix, ntargets, len(iipix)))
         sys.stdout.flush()
         framekeys = list()
@@ -130,7 +168,8 @@ def main(args=None, comm=None):
 
         #- Identify any frames that are already in pre-existing output file
         specfile = io.findfile('spectra', nside=args.nside, groupname=pix,
-                specprod_dir=args.reduxdir)
+                survey=survey, faprogram=faprogram,
+                specprod_dir=args.outroot)
         if args.outdir:
             specfile = os.path.join(args.outdir, os.path.basename(specfile))
 
@@ -138,7 +177,7 @@ def main(args=None, comm=None):
         if os.path.exists(specfile):
             oldspectra = SpectraLite.read(specfile)
             fm = oldspectra.fibermap
-            for night, expid, spectro in set(zip(fm['NIGHT'], fm['EXPID'], fm['SPECTROID'])):
+            for night, expid, spectro in set(zip(fm['NIGHT'], fm['EXPID'], fm['PETAL_LOC'])):
                 for band in ['b', 'r', 'z']:
                     camera = band + str(spectro)
                     if (night, expid, camera) in framekeys:
@@ -153,7 +192,7 @@ def main(args=None, comm=None):
         update_frame_cache(frames, framekeys, specprod_dir=args.reduxdir)
 
         #- convert individual FrameLite objects into SpectraLite
-        newspectra = frames2spectra(frames, pix)
+        newspectra = frames2spectra(frames, pix, nside=args.nside)
 
         #- Combine with any previous spectra if needed
         if oldspectra:
@@ -165,7 +204,6 @@ def main(args=None, comm=None):
         header = dict(HPXNSIDE=args.nside, HPXPIXEL=pix, HPXNEST=True)
         spectra.write(specfile, header=header)
     
-    if rank == 0:
-        dt = time.time() - t0
-        log.info('Done in {:.1f} minutes'.format(dt/60))
+    dt = time.time() - t0
+    log.info('Rank {} done in {:.1f} minutes'.format(rank, dt/60))
 

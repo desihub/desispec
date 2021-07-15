@@ -501,3 +501,53 @@ def parse_fibers(fiber_string) :
     Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
     """
     return parse_int_args(fiber_string)
+
+def ordered_unique(ar, return_index=False):
+    """Find the unique elements of an array in the order they first appear
+
+    Like numpy.unique, but preserves original order instead of sorting
+
+    Args:
+        ar: array-like data to find unique elements
+
+    Options:
+        return_index: if True also return indices in ar where items first appear
+    """
+    ar = np.asarray(ar)
+    unique, sortedidx = np.unique(ar, return_index=True)
+    ii = np.argsort(sortedidx)
+    indices = sortedidx[ii]
+    unique = ar[indices]
+
+    if return_index:
+        return unique, indices
+    else:
+        return unique
+
+#- Not yet used, but a snippet of code that might be useful
+#- e.g. for mapping TARGETID to the rows in which they appear
+def itemindices(a):
+    """
+    Return dict[key] -> list of indices i where a[i] == key
+
+    Args:
+        a : array-like of hashable values
+
+    Return dict[key] -> list of indices i where a[i] == key
+
+    The dict keys are inserted in the order that they first appear in a,
+    and the value lists of indices are sorted
+
+    e.g. itemindices([10,30,20,30]) -> {10: [0], 30: [1, 3], 20: [2]}
+    """
+    #- there is probably a more efficient way of doing this, but this code
+    #- can map 100k targetids in <50ms which is sufficient
+    idmap = dict()
+    for i, x in enumerate(a):
+        if x not in idmap:
+            idmap[x] = [i,]
+        else:
+            idmap[x].append(i)
+
+    return idmap
+

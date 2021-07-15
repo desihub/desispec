@@ -43,7 +43,7 @@ arp = ArgumentParser(description=description)
 
 arp.add_argument('-in', '--input_file',
                  default=None,
-                 help='Full path to an input zbest file. Overrides --tile,     \
+                 help='Full path to an input redrock file. Overrides --tile,     \
                  --night, --petal, --input_dir, --output_dir, --sub_dir')
 arp.add_argument('-out', '--output_file',
                  default=None,
@@ -73,7 +73,7 @@ arp.add_argument('-o', '--output_dir',
                  Defaults to {}'.format(reduxdir))
 arp.add_argument('-sd', '--sub_dir',
                  default=sub_dir,
-                 help='The sub-directories that house zbest files.              \
+                 help='The sub-directories that house redrock files.              \
                  Defaults to {}'.format(sub_dir))
 arp.add_argument('-noq', '--no_quasarnp',
                  action='store_true',

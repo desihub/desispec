@@ -70,14 +70,14 @@ def tmark(istring):
     log.info('\n{}: {}'.format(istring, t_start))
 
 
-def make_new_zmtl(zbestname, qn_flag=False, sq_flag=False, abs_flag=False,
+def make_new_zmtl(redrockname, qn_flag=False, sq_flag=False, abs_flag=False,
                   zcomb_flag=False):
     """Make the initial zmtl array with redrock data.
 
     Parameters
     ----------
-    zbestname : :class:`str`
-        Full filename and path for the zbest file to process.
+    redrockname : :class:`str`
+        Full filename and path for the redrock file to process.
     qn_flag : :class:`bool'` optional
         Flag to add QuasarNP data (or not) to the zmtl file.
     sq_flag : :class:`bool`, optional
@@ -91,34 +91,35 @@ def make_new_zmtl(zbestname, qn_flag=False, sq_flag=False, abs_flag=False,
     -------
     :class:`~numpy.array` or `bool`
         A zmtl in the official format (`zmtldatamodel`) compiled from
-        the `tile', 'night', and 'petal_num', in `zmtldir`. If the zbest
+        the `tile', 'night', and 'petal_num', in `zmtldir`. If the redrock
         file for that petal doesn't exist, returns ``False``.
     """
     tmark('    Making redrock zmtl')
 
-    # ADM read in the zbest and fibermap extensions for the RR
+    # ADM read in the redrock and fibermap extensions for the RR
     # ADM redshift catalog, if they exist.
     try:
-        zs = fitsio.read(zbestname, "ZBEST")
-        fms = fitsio.read(zbestname, "FIBERMAP")
-        log.info(f'Read {zbestname}')
+        zs = fitsio.read(redrockname, "REDSHIFTS")
+        fms = fitsio.read(redrockname, "FIBERMAP")
+        log.info(f'Read {redrockname}')
     except (FileNotFoundError, OSError):
-        log.error(f'Missing {zbestname}')
+        log.error(f'Missing {redrockname}')
         return False
 
-    # ADM recover the information for unique targets based on the
-    # ADM first entry for each TARGETID.
-    _, ii = np.unique(fms['TARGETID'], return_index=True)
-    fms = fms[ii]
+    # SB check assumption that FIBERMAP is row-matched to redrock
+    if len(zs) != len(fms) or np.any(zs['TARGETID'] != fms['TARGETID']):
+        msg = "REDSHIFTS and FIBERMAP TARGETIDs aren't row-matched"
+        log.critical(msg)
+        raise ValueError(msg)
 
     # ADM check for some glitches.
     if len(zs) != len(set(zs["TARGETID"])):
-        msg = "a target is duplicated in file {}!!!".format(zbestname)
+        msg = "a target is duplicated in file {}!!!".format(redrockname)
         log.critical(msg)
         raise ValueError(msg)
     # ADM check for some glitches.
     if len(zs) != len(fms):
-        msg = "TARGETID mismatch for extensions in file {}!!!".format(zbestname)
+        msg = "TARGETID mismatch for extensions in file {}!!!".format(redrockname)
         log.critical(msg)
         raise ValueError(msg)
 
@@ -135,11 +136,11 @@ def make_new_zmtl(zbestname, qn_flag=False, sq_flag=False, abs_flag=False,
             dt += dm
     zmtl = np.full(len(zs), -1, dtype=dt)
 
-    # ADM add the columns from the original zbest file.
+    # ADM add the columns from the original redrock file.
     zmtl["RA"] = fms[zid]["TARGET_RA"]
     zmtl["DEC"] = fms[zid]["TARGET_DEC"]
     zmtl["ZTILEID"] = fms[zid]["TILEID"]
-    zmtl["NUMOBS"] = zs["NUMTILE"]
+    zmtl["NUMOBS"] = fms["COADD_NUMTILE"]
 
     # ADM also add the appropriate bit-columns.
     Mxcols, _, _, = main_cmx_or_sv(fms, scnd=True)
@@ -264,7 +265,7 @@ def add_qn_data(zmtl, coaddname, qnp_model, qnp_lines, qnp_lines_bal):
     zmtl : :class:`~numpy.array`
         The structured array that was created by make_new_zmtl()
     coaddname : :class:`str`
-        The name of the coadd file corresponding to the zbest file used
+        The name of the coadd file corresponding to the redrock file used
         in make_new_zmtl()
     qnp_model : :class:`h5.array`
         The array containing the pre-trained QuasarNP model.
@@ -289,15 +290,15 @@ def add_qn_data(zmtl, coaddname, qnp_model, qnp_lines, qnp_lines_bal):
     data, w = load_desi_coadd(coaddname)
     data = data[:, :, None]
     p = qnp_model.predict(data)
-    c_line, z_line, zbest, *_ = process_preds(p, qnp_lines, qnp_lines_bal,
+    c_line, z_line, redrock, *_ = process_preds(p, qnp_lines, qnp_lines_bal,
                                               verbose=False)
 
-    cbest = np.array(c_line[c_line.argmax(axis=0), np.arange(len(zbest))])
+    cbest = np.array(c_line[c_line.argmax(axis=0), np.arange(len(redrock))])
     c_thresh = 0.5
     n_thresh = 1
     is_qso = np.sum(c_line > c_thresh, axis=0) >= n_thresh
 
-    zmtl['Z_QN'][w] = zbest
+    zmtl['Z_QN'][w] = redrock
     zmtl['Z_QN_CONF'][w] = cbest
     zmtl['IS_QSO_QN'][w] = is_qso
 
@@ -364,7 +365,7 @@ def add_sq_data(zmtl, coaddname, squeze_model):
     zmtl : :class:`~numpy.array`
         The structured array that was created by make_new_zmtl()
     coaddname : class:`str`
-        The name of the coadd file corresponding to the zbest file used
+        The name of the coadd file corresponding to the redrock file used
         in make_new_zmtl()
     squeze_model : :class:`numpy.array`
         The loaded SQUEzE model file
@@ -456,7 +457,7 @@ def add_abs_data(zmtl, coaddname):
     zmtl : :class:'~numpy.array`
         The structured array that was created by make_new_zmtl()
     coaddname : class:`str`
-        The name of the coadd file corresponding to the zbest file used
+        The name of the coadd file corresponding to the redrock file used
         in make_new_zmtl()
 
     Returns
@@ -727,12 +728,12 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
     ----------
     zmtldir : :class:`str`
         If any of `tile`, `night` or `petal_num` are ``None``:
-            The name of a redrock `zbest` file.
+            The name of a redrock `redrock` file.
         If none of `tile`, `night` and `petal_num` are ``None``:
-            The root directory from which to read `zbest` and `coadd`
+            The root directory from which to read `redrock` and `coadd`
             spectro files. The full directory is constructed as
             `zmtldir` + `tile` + `night`, with files
-            zbest-/coadd-`petal_num`*`night`.fits.
+            redrock-/coadd-`petal_num`*`night`.fits.
     outputdir : :class:`str`
         If any of `tile`, `night` or `petal_num` are ``None``:
             The name of an output file.
@@ -775,7 +776,7 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
     -----
     - Writes a FITS catalog that incorporates redrock, and a range of
       afterburner redshifts and confidence values. This will write to the
-      same directory of the zbest and coadd files unless a different
+      same directory of the redrock and coadd files unless a different
       output directory is passed.
     """
     # ADM load the model files, if needed.
@@ -790,14 +791,14 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
 
     # ADM simply read/write files if tile/night/petal_num not specified.
     if tile is None or night is None or petal_num is None:
-        zbestfn = zmtldir
-        dirname, basename = os.path.split(zbestfn)
-        coaddfn = os.path.join(dirname, basename.replace("zbest", "coadd"))
-        outputfn = os.path.join(dirname, basename.replace("zbest", "zmtl"))
+        redrockfn = zmtldir
+        dirname, basename = os.path.split(redrockfn)
+        coaddfn = os.path.join(dirname, basename.replace("redrock", "coadd"))
+        outputfn = os.path.join(dirname, basename.replace("redrock", "zmtl"))
 
         # SB tile-qa file doesn't have spectro num so requires more parsing
-        # /path/zbest-0-1234-20201220.fits -> /path/tile-qa-1234-20201220.fits
-        tmp = zbestfn.split('-')
+        # /path/redrock-0-1234-20201220.fits -> /path/tile-qa-1234-20201220.fits
+        tmp = redrockfn.split('-')
         tileqafn = '-'.join(['tile-qa',] + tmp[2:])
         tileqafn = os.path.join(dirname, tileqafn)
 
@@ -809,31 +810,31 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
         # ADM Create the corresponding output directory.
         ### outputdir = os.path.join(outputdir, tile, night)
 
-        # EBL Create the filename tag that appends to zbest-*, coadd-*,
+        # EBL Create the filename tag that appends to redrock-*, coadd-*,
         # and zmtl-* files.
         ### filename_tag = f'{petal_num}-{tile}-{night}.fits'
         # ADM try a couple of generic options for the file names.
-        ### if not os.path.isfile(os.path.join(ymdir, f'zbest-{filename_tag}')):
+        ### if not os.path.isfile(os.path.join(ymdir, f'redrock-{filename_tag}')):
         ###     filename_tag = f'{petal_num}-{tile}-thru{night}.fits'
 
-        zbestfn = findfile('zbest_tile', tile=tile, night=night, spectrograph=petal_num)
+        redrockfn = findfile('redrock_tile', tile=tile, night=night, spectrograph=petal_num)
         coaddfn = findfile('coadd_tile', tile=tile, night=night, spectrograph=petal_num)
         tileqafn = findfile('tileqa', tile=tile, night=night, spectrograph=petal_num)
         outputfn = findfile('zmtl', tile=tile, night=night, spectrograph=petal_num)
 
-        ### zbestfn = os.path.join(ymdir, zbestname)
+        ### redrockfn = os.path.join(ymdir, redrockname)
         ### coaddfn = os.path.join(ymdir, coaddname)
 
-    if not os.path.exists(zbestfn):
-        log.warning(f'Petal {petal_num} missing zbest file: {zbestfn}')
+    if not os.path.exists(redrockfn):
+        log.warning(f'Petal {petal_num} missing redrock file: {redrockfn}')
     elif not os.path.exists(coaddfn):
         log.warning(f'Petal {petal_num} missing coadd file: {coaddfn}')
     elif not os.path.exists(tileqafn):
         log.warning(f'Petal {petal_num} missing tile-qa file: {tileqafn}')
     else:
-        zmtl = make_new_zmtl(zbestfn, qn_flag, sq_flag, abs_flag, zcomb_flag)
+        zmtl = make_new_zmtl(redrockfn, qn_flag, sq_flag, abs_flag, zcomb_flag)
         if isinstance(zmtl, bool):
-            log.warning(f'make_new_zmtl for {zbestfn} failed')
+            log.warning(f'make_new_zmtl for {redrockfn} failed')
             raise RuntimeError
 
         add_tileqa_data(zmtl, tileqafn)

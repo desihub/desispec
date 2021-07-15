@@ -34,7 +34,7 @@ class QA_Brick(object):
     def init_qatype(self, qatype, param, re_init=False):
         """Initialize parameters for a given qatype
         qatype: str
-          Type of QA to be performed (e.g. ZBEST)
+          Type of QA to be performed (e.g. REDROCK)
         param: dict
           Dict of parameters to guide QA
         re_init: bool, (optional)
@@ -52,25 +52,25 @@ class QA_Brick(object):
             if key not in self.data[qatype]['PARAMS']:
                 self.data[qatype]['PARAMS'][key] = param[key]
 
-    def init_zbest(self, re_init=False):
-        """Initialize parameters for ZBEST output
+    def init_redrock(self, re_init=False):
+        """Initialize parameters for REDROCK output
         QA method is desispec.zfind.zfind
         Parameters:
         ------------
         re_init: bool, (optional)
-          Re-initialize ZBEST parameter dict
+          Re-initialize REDROCK parameter dict
         """
         #
 
         # Standard FIBERFLAT input parameters
-        zbest_dict = dict(MAX_NFAIL=10,  # Maximum number of failed redshifts
+        redrock_dict = dict(MAX_NFAIL=10,  # Maximum number of failed redshifts
                           ELG_TYPES=['ssp_em_galaxy', 'ELG'],
                           LRG_TYPES=['LRG'],
                           QSO_TYPES=['QSO'],
                           STAR_TYPES=['spEigenStar'],
                           )
         # Init
-        self.init_qatype('ZBEST', zbest_dict, re_init=re_init)
+        self.init_qatype('REDROCK', redrock_dict, re_init=re_init)
 
     def run_qa(self, qatype, inputs, clobber=True):
         """Run QA tests of a given type
@@ -82,7 +82,7 @@ class QA_Brick(object):
         clobber: bool, optional [True]
           Over-write previous QA
         """
-        #from desispec.zfind.zfind import qa_zbest
+        #from desispec.zfind.zfind import qa_redrock
         from desispec.zfind import zfind
 
         # Check for previous QA if clobber==False
@@ -91,14 +91,14 @@ class QA_Brick(object):
             if 'METRICS' in self.data[qatype]:
                 return
         # Run
-        if qatype == 'ZBEST':
+        if qatype == 'REDROCK':
             # Expecting: zf, brick
             assert len(inputs) == 2
             # Init parameters (as necessary)
-            self.init_zbest()
+            self.init_redrock()
             # Run
             reload(zfind)
-            qadict = zfind.qa_zbest(self.data[qatype]['PARAMS'], inputs[0], inputs[1])
+            qadict = zfind.qa_redrock(self.data[qatype]['PARAMS'], inputs[0], inputs[1])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update

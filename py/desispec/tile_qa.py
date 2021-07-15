@@ -17,6 +17,7 @@ from desiutil.log import get_logger
 
 from desispec.exposure_qa import compute_exposure_qa,get_qa_params
 from desispec.io import read_fibermap,findfile,read_exposure_qa,write_exposure_qa
+from desispec.io.util import replace_prefix
 from desispec.maskbits import fibermask
 
 
@@ -101,18 +102,18 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
 
     fibermaps=[]
     scores=[]
-    zbests=[]
+    redshifts=[]
     ### zqsos=[]
     for coadd_file in coadd_files :
         log.info("reading {}".format(coadd_file))
         fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
         scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
 
-        zbest_file = coadd_file.replace("coadd","zbest")
-        log.info("reading {}".format(zbest_file))
-        zbest=Table.read(zbest_file,"ZBEST")
-        zbest.remove_column("COEFF") # 1D array per entry, not needed
-        zbests.append(_rm_meta_keywords(zbest))
+        redrock_file = replace_prefix(coadd_file, "coadd", "redrock")
+        log.info("reading {}".format(redrock_file))
+        zz=Table.read(redrock_file,"REDSHIFTS")
+        zz.remove_column("COEFF") # 1D array per entry, not needed
+        redshifts.append(_rm_meta_keywords(zz))
 
         #- SB: commenting out zqso code since these have been replaced by
         #- zmtl, but that has to run after QA to be able to update zwarn.
@@ -130,7 +131,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     log.info("stacking")
     fibermap=vstack(fibermaps)
     scores=vstack(scores)
-    zbests=vstack(zbests)
+    redshifts=vstack(redshifts)
     ### if len(zqsos)>0 :
     ###     zqsos=vstack(zqsos)
     ### else :
@@ -151,19 +152,19 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
             if tid in scores_tid_to_index :
                 tile_fiberqa_table[tsnr2_key][i] = scores[tsnr2_key][scores_tid_to_index[tid]]
 
-    # add ZBEST info
-    zbest_tid_to_index = {tid:index for index,tid in enumerate(zbests["TARGETID"])}
+    # add REDSHIFTS info
+    redshifts_tid_to_index = {tid:index for index,tid in enumerate(redshifts["TARGETID"])}
     keys=["Z","SPECTYPE","DELTACHI2"]
     for k in keys :
-        tile_fiberqa_table[k] = np.zeros(targetids.size,dtype=zbests[k].dtype)
-    zbest_ii=[]
+        tile_fiberqa_table[k] = np.zeros(targetids.size,dtype=redshifts[k].dtype)
+    redshifts_ii=[]
     fiberqa_ii=[]
     for i,tid in enumerate(targetids) :
-        if tid in zbest_tid_to_index :
-            zbest_ii.append(zbest_tid_to_index[tid])
+        if tid in redshifts_tid_to_index :
+            redshifts_ii.append(redshifts_tid_to_index[tid])
             fiberqa_ii.append(i)
     for k in keys :
-        tile_fiberqa_table[k][fiberqa_ii] = zbests[k][zbest_ii]
+        tile_fiberqa_table[k][fiberqa_ii] = redshifts[k][redshifts_ii]
 
     # add ZQSO info
     ### keys=["Z_QN","Z_QN_CONF","IS_QSO_QN"]

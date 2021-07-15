@@ -21,17 +21,20 @@ from . import io
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
-def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
+def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
+        nside=64, comm=None):
     '''
     Returns table with columns NIGHT EXPID SPECTRO HEALPIX NTARGETS
 
     Options:
-        nights: list of YEARMMDD to scan for exposures
+        nights: list of YEARMMDD to scan for exposures (default all)
+        expids: list of exposure IDs to keep (default all)
         specprod_dir: override $DESI_SPECTRO_REDUX/$SPECPROD
         nside: healpix nside, must be power of 2
         comm: MPI communicator
 
-    Note: This could be replaced by a DB query when the production DB exists.
+    Note: This could be replaced by a DB query when the production DB exista,
+    or by parsing the exposure tables.
     '''
     log = get_logger()
     if comm is None:
@@ -47,6 +50,7 @@ def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
 
     if comm:
         nights = comm.bcast(nights, root=0)
+        expids = comm.bcast(expids, root=0)
 
     #-----
     #- Distribute nights over ranks, scanning their exposures to build
@@ -63,6 +67,9 @@ def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
         nightdir = os.path.join(specprod_dir, 'exposures', night)
         for expid in io.get_exposures(night, specprod_dir=specprod_dir,
                                       raw=False):
+            if (expids is not None) and (expid not in expids):
+                continue
+
             tmpframe = io.findfile('cframe', night, expid, 'r0',
                                    specprod_dir=specprod_dir)
             expdir = os.path.split(tmpframe)[0]
@@ -84,15 +91,28 @@ def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
 
                 #- Determine healpix, allowing for NaN
                 columns = ['TARGET_RA', 'TARGET_DEC']
-                fibermap = fitsio.read(filename, 'FIBERMAP', columns=columns)
+                fibermap, hdr = fitsio.read(filename, 'FIBERMAP',
+                        columns=columns, header=True)
                 ra, dec = fibermap['TARGET_RA'], fibermap['TARGET_DEC']
                 ok = ~np.isnan(ra) & ~np.isnan(dec)
                 ra, dec = ra[ok], dec[ok]
                 allpix = desimodel.footprint.radec2pix(nside, ra, dec)
 
+                if 'SURVEY' in hdr:
+                    survey = hdr['SURVEY'].lower()
+                elif 'FA_SURV' in hdr:
+                    survey = hdr['FA_SURV'].lower()
+                else:
+                    survey = 'unknown'
+
+                if 'FAPRGRM' in hdr:
+                    faprogram = hdr['FAPRGRM'].lower()
+                else:
+                    faprogram = 'unknown'
+
                 #- Add rows for final output
                 for pix, ntargets in sorted(Counter(allpix).items()):
-                    rows.append((night, expid, spectro, pix, ntargets))
+                    rows.append((night, expid, spectro, pix, survey, faprogram, ntargets))
 
     #- Collect rows from individual ranks back to rank 0
     if comm:
@@ -109,7 +129,10 @@ def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
     #- Create the final output table
     exp2healpix = np.array(rows, dtype=[
         ('NIGHT', 'i4'), ('EXPID', 'i8'), ('SPECTRO', 'i4'),
-        ('HEALPIX', 'i8'), ('NTARGETS', 'i8')])
+        ('HEALPIX', 'i8'),
+        ('SURVEY', 'U12'),
+        ('FAPROGRAM', 'U12'),
+        ('NTARGETS', 'i8')])
 
     return exp2healpix
 
@@ -152,7 +175,7 @@ class FrameLite(object):
         if not isinstance(index, slice):
             index = np.atleast_1d(index)
 
-        if self.scores:
+        if self.scores is not None:
             scores = self.scores[index]
         else:
             scores = None
@@ -176,6 +199,10 @@ class FrameLite(object):
             fibermap = fx['FIBERMAP'].read()
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
+                if 'TARGETID' not in scores.dtype.names:
+                    tmp = Table(scores)
+                    tmp.add_column(fibermap['TARGETID'], index=0, name='TARGETID')
+                    scores = np.asarray(tmp)
             else:
                 scores = None
 
@@ -205,8 +232,8 @@ class SpectraLite(object):
     '''
     Lightweight spectra I/O object for regrouping
     '''
-    def __init__(self, bands, wave, flux, ivar, mask, resolution_data, fibermap,
-            scores=None):
+    def __init__(self, bands, wave, flux, ivar, mask, resolution_data,
+            fibermap, exp_fibermap=None, scores=None):
         '''
         Create a SpectraLite object
 
@@ -220,6 +247,7 @@ class SpectraLite(object):
             fibermap: fibermap table, applies to all bands
 
         Options:
+            exp_fibermap: per-exposure fibermap table
             scores: scores table, applies to all bands
         '''
 
@@ -258,6 +286,7 @@ class SpectraLite(object):
         self.mask = mask.copy()
         self.resolution_data = resolution_data.copy()
         self.fibermap = fibermap
+        self.exp_fibermap = exp_fibermap
         self.scores = scores
 
         #- for compatibility with full Spectra objects
@@ -331,7 +360,13 @@ class SpectraLite(object):
         else:
             scores = None
 
-        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
+        if self.exp_fibermap is not None:
+            exp_fibermap = np.hstack([self.exp_fibermap, other.exp_fibermap])
+        else:
+            exp_fibermap = None
+
+        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
+                fibermap, exp_fibermap=exp_fibermap, scores=scores)
 
     def write(self, filename, header=None):
         '''
@@ -357,6 +392,12 @@ class SpectraLite(object):
         hdus = fits.HDUList()
         hdus.append(fits.PrimaryHDU(None, header))
         hdus.append(fits.convenience.table_to_hdu(fm))
+
+        if self.exp_fibermap is not None:
+            expfm = Table(self.exp_fibermap)
+            expfm.meta['EXTNAME'] = 'EXP_FIBERMAP'
+            hdus.append(fits.convenience.table_to_hdu(expfm))
+
         hdus.writeto(tmpout, overwrite=True, checksum=True)
 
         #- then proceed with more efficient fitsio for everything else
@@ -364,6 +405,7 @@ class SpectraLite(object):
         #- these are written one-by-one
         if self.scores is not None:
             fitsio.write(tmpout, self.scores, extname='SCORES')
+
         for band in sorted(self.bands):
             upperband = band.upper()
             fitsio.write(tmpout, self.wave[band], extname=upperband+'_WAVELENGTH',
@@ -389,6 +431,11 @@ class SpectraLite(object):
             mask = dict()
             resolution_data = dict()
             fibermap = fx['FIBERMAP'].read()
+            if 'EXP_FIBERMAP' in fx:
+                exp_fibermap = fx['EXP_FIBERMAP'].read()
+            else:
+                exp_fibermap = None
+
             if 'SCORES' in fx:
                 scores = fx['SCORES'].read()
             else:
@@ -403,7 +450,8 @@ class SpectraLite(object):
                 mask[band] = fx[upperband+'_MASK'].read()
                 resolution_data[band] = fx[upperband+'_RESOLUTION'].read()
 
-        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
+        return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
+                fibermap, exp_fibermap=exp_fibermap, scores=scores)
 
 def add_missing_frames(frames):
     '''
@@ -464,14 +512,15 @@ def add_missing_frames(frames):
             header['camera'] = bandcam
 
             #- Make new blank scores, replacing trailing band _B/R/Z
-            dtype = list()
             if frame.scores is not None:
+                dtype = [ ('TARGETID', 'i8') ]
                 for name in frame.scores.dtype.names:
                     if name.endswith('_'+frameband.upper()):
                         bandname = name[0:-1] + band.upper()
                         dtype.append((bandname, type(frame.scores[name][0])))
 
                 scores = np.zeros(nspec, dtype=dtype)
+                scores['TARGETID'] = frame.scores['TARGETID']
             else:
                 scores = None
 
@@ -496,6 +545,9 @@ def frames2spectra(frames, pix=None, nside=64):
         the requested healpix pixel `pix`
     '''
     log = get_logger()
+
+    #- shallow copy of frames dict in case we augment with blank frames
+    frames = frames.copy()
 
     #- To support combining old+new data, recalculate TSNR2 if any
     #- frames are missing TSNR2* scores present in other frames of same bad.
@@ -599,10 +651,11 @@ def frames2spectra(frames, pix=None, nside=64):
             names = list()
             data = list()
             for band in bands[1:]:
-                names.extend(scores[band].dtype.names)
                 for colname in scores[band].dtype.names:
-                    data.append(scores[band][colname])
-
+                    #- TARGETID appears in multiple bands; only add once
+                    if colname != 'TARGETID':
+                        names.append(colname)
+                        data.append(scores[band][colname])
             scores = np.lib.recfunctions.append_fields(
                     scores[bands[0]], names, data)
 
@@ -647,7 +700,25 @@ def frames2spectra(frames, pix=None, nside=64):
     #- Combine all the individual fibermaps from the exposures and spectrographs
     fibermap = np.hstack(merged_over_cams_fmaps)
 
-    return SpectraLite(bands, wave, flux, ivar, mask, resolution_data, fibermap, scores)
+    #- assemble_fibermap now sets NaN to 0,
+    #- but reset here too if combining older data
+    for col in [
+        'FIBER_X', 'FIBER_Y',
+        'DELTA_X', 'DELTA_Y',
+        'FIBER_RA', 'FIBER_DEC',
+        'GAIA_PHOT_G_MEAN_MAG',
+        'GAIA_PHOT_BP_MEAN_MAG',
+        'GAIA_PHOT_RP_MEAN_MAG',
+        ]:
+        ii = np.isnan(fibermap[col])
+        if np.any(ii):
+            n = np.sum(ii)
+            log.warning(f'Setting {n} {col} NaN to 0.0')
+            fibermap[col][ii] = 0.0
+
+
+    return SpectraLite(bands, wave, flux, ivar, mask, resolution_data,
+            fibermap, scores=scores)
 
 def update_frame_cache(frames, framekeys, specprod_dir=None):
     '''

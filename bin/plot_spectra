@@ -20,8 +20,8 @@ parser.add_argument('-t','--targetid', type = int, default = None, required = Fa
                     help = 'plot specific targetid')
 parser.add_argument('--rebin',type = int, default = None, required = False,
                     help = 'rebin')
-parser.add_argument('--zbest',type = str, default = None, required = False,
-                    help = 'zbest file')
+parser.add_argument('--redrock',type = str, default = None, required = False,
+                    help = 'redrock file')
 parser.add_argument('--spectype',type = str, default = None, required = False,
                     help = 'spectype to select')
 parser.add_argument('--ylim', type=float, default=None, required=False, nargs=2,
@@ -38,16 +38,16 @@ parser.add_argument('--only-valid', action='store_true',
 
 args        = parser.parse_args()
 
-if  args.zbest is not None :
+if  args.redrock is not None :
     #- Load redrock templates
     templates = dict()
     for filename in redrock.templates.find_templates():
         tx = redrock.templates.Template(filename)
         templates[(tx.template_type, tx.sub_type)] = tx
 
-if args.zbest is None and args.rest_frame :
+if args.redrock is None and args.rest_frame :
     args.rest_frame = False
-    print("cannot show rest-frame wavelength without a zbest file")
+    print("cannot show rest-frame wavelength without a redrock file")
 
 spectra = []
 for filename in args.infile :
@@ -61,12 +61,15 @@ targetids=None
 if ( targetids is None ) and ( args.targetid is not None ) :
     targetids=[args.targetid,]
 
-zbest=None
-if  args.zbest is not None :
-    zbest=Table.read(args.zbest,"ZBEST")
+redshifts=None
+if  args.redrock is not None :
+    try:
+        redshifts=Table.read(args.redrock, "REDSHIFTS")
+    except KeyError:
+        redshifts=Table.read(args.redrock, "ZBEST")
 
-if ( targetids is None ) and ( zbest is not None ) and ( args.spectype is not None ):
-    selection = np.where((zbest["SPECTYPE"]==args.spectype)&(zbest["ZWARN"]==0))[0]
+if ( targetids is None ) and ( redshifts is not None ) and ( args.spectype is not None ):
+    selection = np.where((redshifts["SPECTYPE"]==args.spectype)&(redshifts["ZWARN"]==0))[0]
     targetids=np.unique(spectra[0].fibermap["TARGETID"][selection])
 
 if targetids is None :
@@ -95,16 +98,16 @@ for tid in targetids :
     line="TARGETID={}".format(tid)
 
     model_flux=dict()
-    if zbest is not None :
-        j=np.where(zbest["TARGETID"]==tid)[0][0]
-        line += " ZBEST={} SPECTYPE={} ZWARN={}".format(zbest["Z"][j],zbest["SPECTYPE"][j],zbest["ZWARN"][j])
-        zval=zbest["Z"][j]
-        tx = templates[(zbest['SPECTYPE'][j], zbest['SUBTYPE'][j])]
+    if redshifts is not None :
+        j=np.where(redshifts["TARGETID"]==tid)[0][0]
+        line += " Z={} SPECTYPE={} ZWARN={}".format(redshifts["Z"][j],redshifts["SPECTYPE"][j],redshifts["ZWARN"][j])
+        zval=redshifts["Z"][j]
+        tx = templates[(redshifts['SPECTYPE'][j], redshifts['SUBTYPE'][j])]
         for band in spectra[0].bands:
             model_flux[band] = np.zeros(spectra[0].wave[band].shape)
-            coeff = zbest['COEFF'][j][0:tx.nbasis]
+            coeff = redshifts['COEFF'][j][0:tx.nbasis]
             model = tx.flux.T.dot(coeff).T
-            mx = resample_flux(spectra[0].wave[band], tx.wave*(1+zbest['Z'][j]), model)
+            mx = resample_flux(spectra[0].wave[band], tx.wave*(1+redshifts['Z'][j]), model)
             k=np.where(spectra[0].fibermap["TARGETID"]==tid)[0][0]
             model_flux[band] = spectra[0].R[band][k].dot(mx)
 
@@ -139,7 +142,7 @@ for tid in targetids :
 
         print(spec.fibermap[jj])
 
-    if zbest is not None :
+    if redshifts is not None :
         for band in spectra[0].bands:
             plt.plot(wavescale*spectra[0].wave[band],model_flux[band],"-",alpha=0.6)
             for elem in lines :
@@ -156,7 +159,7 @@ for tid in targetids :
     props = dict(boxstyle='round', facecolor='yellow', alpha=0.2)
     bla="TID = {}".format(tid)
     bla+="\nFIBER = {}".format(fiber)
-    if zbest is not None :
+    if redshifts is not None :
         bla+="\nZ  = {:4.3f}".format(zval)
     plt.text(0.9,0.9,bla,fontsize=12, bbox=props,transform = ax.transAxes,verticalalignment='top', horizontalalignment='right')
     if args.ylim is not None:

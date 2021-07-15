@@ -33,23 +33,29 @@ target_columns = [
     ('DESI_TARGET', 'i8', '', 'Dark survey + calibration targeting bits'),
     ('BGS_TARGET',  'i8', '', 'Bright Galaxy Survey targeting bits'),
     ('MWS_TARGET',  'i8', '', 'Milky Way Survey targeting bits'),
-    ('SECONDARY_TARGET', 'i8', '', 'Secondary program targeting bits'),
+    ('SCND_TARGET', 'i8', '', 'Secondary program targeting bits'),
     #- TBD: COMM_TARGET, SVn_TARGET, ...
     ('TARGET_RA',   'f8', 'degree', 'Target Right Ascension [degrees]'),
     ('TARGET_DEC',  'f8', 'degree', 'Target declination [degrees]'),
-    ('TARGET_RA_IVAR', 'f8', '1/degree**2', 'Inverse variance of TARGET_RA'),
-    ('TARGET_DEC_IVAR', 'f8','1/degree**2', 'Inverse variance of TARGET_DEC'),
+    ('PLATE_RA',    'f8', 'degree', 'Right Ascension for Platemaker to use [degrees]'),
+    ('PLATE_DEC',   'f8', 'degree', 'declination for Platemaker to use [degrees]'),
+    # ('TARGET_RA_IVAR', 'f8', '1/degree**2', 'Inverse variance of TARGET_RA'),
+    # ('TARGET_DEC_IVAR', 'f8','1/degree**2', 'Inverse variance of TARGET_DEC'),
     ('BRICKID',     'i8', '', 'Imaging Surveys brick ID'),
+    ('BRICKNAME',   'S8', '', 'Imaging Surveys brick name'),
     ('BRICK_OBJID', 'i8', '', 'Imaging Surveys OBJID on that brick'),
     ('MORPHTYPE', (str, 4), '', 'Imaging Surveys morphological type'),
     ('PRIORITY',    'i4', '', 'Assignment priority; larger=higher priority'),
     ('SUBPRIORITY', 'f8', '', 'Assignment subpriority [0-1)'),
     ('REF_ID',      'i8', '', 'Astrometric cat refID (Gaia SOURCE_ID)'),
+    ('MASKBITS',    'i2', '', 'Photometry mask bits'),
     ('PMRA',        'f4', 'marcsec/year', 'PM in +RA dir (already incl cos(dec))'),
     ('PMDEC',       'f4', 'marcsec/year', 'Proper motion in +dec direction'),
+    ('PARALLAX',    'f4', 'marcsec', 'Parallax'),
+    ('REF_CAT',     'S2', '', 'astrometry reference catalog'),
     ('REF_EPOCH',   'f4', '', 'proper motion reference epoch'),
-    ('PMRA_IVAR',   'f4', 'year**2/marcsec**2', 'Inverse variance of PMRA'),
-    ('PMDEC_IVAR',  'f4', 'year**2/marcsec**2', 'Inverse variance of PMDEC'),
+    # ('PMRA_IVAR',   'f4', 'year**2/marcsec**2', 'Inverse variance of PMRA'),
+    # ('PMDEC_IVAR',  'f4', 'year**2/marcsec**2', 'Inverse variance of PMDEC'),
     ('RELEASE',     'i2', '', 'imaging surveys release ID'),
     ('FLUX_G',      'f4', 'nanomaggies', 'g-band flux'),
     ('FLUX_R',      'f4', 'nanomaggies', 'r-band flux'),
@@ -64,26 +70,30 @@ target_columns = [
     ('FIBERFLUX_G', 'f4', 'nanomaggies', 'g-band model flux 1" seeing, 1.5" dia fiber'),
     ('FIBERFLUX_R', 'f4', 'nanomaggies', 'r-band model flux 1" seeing, 1.5" dia fiber'),
     ('FIBERFLUX_Z', 'f4', 'nanomaggies', 'z-band model flux 1" seeing, 1.5" dia fiber'),
-    ('FIBERFLUX_W1', 'f4', 'nanomaggies', 'W1-band model flux 1" seeing, 1.5" dia fiber'),
-    ('FIBERFLUX_W2', 'f4', 'nanomaggies', 'W2-band model flux 1" seeing, 1.5" dia fiber'),
+    # ('FIBERFLUX_W1', 'f4', 'nanomaggies', 'W1-band model flux 1" seeing, 1.5" dia fiber'),
+    # ('FIBERFLUX_W2', 'f4', 'nanomaggies', 'W2-band model flux 1" seeing, 1.5" dia fiber'),
     ('FIBERTOTFLUX_G', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
     ('FIBERTOTFLUX_R', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
     ('FIBERTOTFLUX_Z', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-    ('FIBERTOTFLUX_W1', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
-    ('FIBERTOTFLUX_W2', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    # ('FIBERTOTFLUX_W1', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
+    # ('FIBERTOTFLUX_W2', 'f4', 'nanomaggies', 'fiberflux model incl. all objs at this loc'),
     ('GAIA_PHOT_G_MEAN_MAG',      'f4', 'mag', 'Gaia G band mag'),
     ('GAIA_PHOT_BP_MEAN_MAG',      'f4', 'mag', 'Gaia BP band mag'),
     ('GAIA_PHOT_RP_MEAN_MAG',      'f4', 'mag', 'Gaia RP band mag'),
-    ('MW_TRANSMISSION_G', 'f4', '', 'Milky Way dust transmission in g [0-1]'),
-    ('MW_TRANSMISSION_R', 'f4', '', 'Milky Way dust transmission in r [0-1]'),
-    ('MW_TRANSMISSION_Z', 'f4', '', 'Milky Way dust transmission in z [0-1]'),
+    # ('MW_TRANSMISSION_G', 'f4', '', 'Milky Way dust transmission in g [0-1]'),
+    # ('MW_TRANSMISSION_R', 'f4', '', 'Milky Way dust transmission in r [0-1]'),
+    # ('MW_TRANSMISSION_Z', 'f4', '', 'Milky Way dust transmission in z [0-1]'),
+    ('SERSIC', 'f4', '', 'Power-law index for the Sersic profile model'),
+    ('SHAPE_R', 'f4', 'arcsec', 'Half-light radius of galaxy model'),
+    ('SHAPE_E1', 'f4', '', 'Ellipticity component 1 for galaxy model'),
+    ('SHAPE_E2', 'f4', '', 'Ellipticity component 2 for galaxy model'),
     ('EBV', 'f4', '', 'Galactic extinction E(B-V) reddening from SFD98'),
     ('PHOTSYS', (str, 1), '', 'N for BASS/MzLS, S for DECam'),
     ('OBSCONDITIONS', 'i4', '', 'bitmask of allowable observing conditions'),
     ('NUMOBS_INIT', 'i8', '', 'initial number of requested observations'),
     ('PRIORITY_INIT', 'i8', '', 'initial priority'),
-    ('NUMOBS_MORE', 'i4', '', 'current number of additional obs requested'),
-    ('HPXPIXEL', 'i8', '', 'Healpix pixel number (NESTED)')
+    # ('NUMOBS_MORE', 'i4', '', 'current number of additional obs requested'),
+    # ('HPXPIXEL', 'i8', '', 'Healpix pixel number (NESTED)')
 ]
 
 ### Some additional columns from targeting that I'm not including here yet
@@ -188,7 +198,7 @@ fiberassign_columns.extend([
     ('FA_TYPE',     'u1', '', 'Internal fiberassign target type'),
     # ('DESIGN_Q',    'f4', 'deg', 'Expected CS5 Q azimuthal coordinate'),
     # ('DESIGN_S',    'f4', 'mm', 'Expected CS5 S radial distance along curved focal surface'),
-    ('NUMTARGET',   'i2', '', 'Number of targets covered by positioner'),
+    # ('NUMTARGET',   'i2', '', 'Number of targets covered by positioner'),
 ])
 
 #- Columns added by ICS for final fibermap
@@ -196,18 +206,15 @@ fibermap_columns = fiberassign_columns.copy()
 fibermap_columns.extend([
     ('FIBER_RA',        'f8', 'degree', 'RA of actual fiber position'),
     ('FIBER_DEC',       'f8', 'degree', 'DEC of actual fiber position'),
-    ('FIBER_RA_IVAR',   'f4', '1/degree**2', 'Inverse variance of FIBER_RA [not set yet]'),
-    ('FIBER_DEC_IVAR',  'f4', '1/degree**2', 'Inverse variance of FIBER_DEC [not set yet]'),
-    ('PLATEMAKER_X',    'f4', 'mm', 'CS5 X location requested by PlateMaker'),
-    ('PLATEMAKER_Y',    'f4', 'mm', 'CS5 Y location requested by PlateMaker'),
-    ('PLATEMAKER_RA',   'f4', 'deg', 'ICRS RA requested by PlateMaker'),
-    ('PLATEMAKER_DEC',  'f4', 'deg', 'ICRS dec requested by PlateMaker'),
-    # ('DELTA_X',         'f4', 'mm', 'CS5 X difference between requested and actual position'),
-    # ('DELTA_Y',         'f4', 'mm', 'CS5 Y difference between requested and actual position'),
+    # ('FIBER_RA_IVAR',   'f4', '1/degree**2', 'Inverse variance of FIBER_RA [not set yet]'),
+    # ('FIBER_DEC_IVAR',  'f4', '1/degree**2', 'Inverse variance of FIBER_DEC [not set yet]'),
+    ('FIBER_X',    'f4', 'mm', 'CS5 X location requested by PlateMaker'),
+    ('FIBER_Y',    'f4', 'mm', 'CS5 Y location requested by PlateMaker'),
+    ('DELTA_X',    'f4', 'mm', 'CS5 X diff requested and actual position'),
+    ('DELTA_Y',    'f4', 'mm', 'CS5 Y diff requested and actual position'),
     # ('DELTA_X_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_X [not set yet]'),
     # ('DELTA_Y_IVAR',    'f4', '1/mm**2', 'Inverse variance of DELTA_Y [not set yet]'),
     ('NUM_ITER',        'i4', '', 'Number of positioner iterations'),
-    ('SPECTROID',       'i4', '', 'Hardware ID of spectrograph'),
     ('EXPTIME','f4','s','Exposure time'),
 ])
 
@@ -216,7 +223,7 @@ fibermap_comments = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns])
 fibermap_dtype = [tmp[0:2] for tmp in fibermap_columns]
 
 def empty_fibermap(nspec, specmin=0):
-    """Return an empty fibermap ndarray to be filled in.
+    """Return an empty fibermap Table to be filled in.
 
     Args:
         nspec: (int) number of fibers(spectra) to include
@@ -235,7 +242,7 @@ def empty_fibermap(nspec, specmin=0):
     #- Fill in some values
     fibermap['FIBER'][:] = np.arange(specmin, specmin+nspec)
     fibers_per_spectrograph = 500
-    fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
+    ### fibermap['SPECTROID'][:] = fibermap['FIBER'] // fibers_per_spectrograph
 
     fiberpos = desimodel.io.load_focalplane()[0]
     fiberpos = fiberpos[fiberpos['DEVICE_TYPE'] == 'POS']
@@ -250,9 +257,9 @@ def empty_fibermap(nspec, specmin=0):
     fibermap['LAMBDA_REF'][:]  = 5400.0
     fibermap['NUM_ITER'][:] = 2
     #- Set MW_TRANSMISSION_* to be slightly less than 1 to trigger dust correction code for testing
-    fibermap['MW_TRANSMISSION_G'][:] = 0.999
-    fibermap['MW_TRANSMISSION_R'][:] = 0.999
-    fibermap['MW_TRANSMISSION_Z'][:] = 0.999
+    ### fibermap['MW_TRANSMISSION_G'][:] = 0.999
+    ### fibermap['MW_TRANSMISSION_R'][:] = 0.999
+    ### fibermap['MW_TRANSMISSION_Z'][:] = 0.999
     fibermap['EBV'][:] = 0.001
     fibermap['PHOTSYS'][:] = 'S'
 
@@ -683,6 +690,21 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
                      f'{camera}{petal}{amplifier}')
             ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
             fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
+
+    #- NaN are a pain; reset to dummy values
+    for col in [
+        'FIBER_X', 'FIBER_Y',
+        'DELTA_X', 'DELTA_Y',
+        'FIBER_RA', 'FIBER_DEC',
+        'GAIA_PHOT_G_MEAN_MAG',
+        'GAIA_PHOT_BP_MEAN_MAG',
+        'GAIA_PHOT_RP_MEAN_MAG',
+        ]:
+        ii = np.isnan(fibermap[col])
+        if np.any(ii):
+            n = np.sum(ii)
+            log.warning(f'Setting {n} {col} NaN to 0.0')
+            fibermap[col][ii] = 0.0
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table
