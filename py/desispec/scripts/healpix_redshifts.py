@@ -81,7 +81,7 @@ def main(args):
     if not args.nosubmit:
         cmd = ['sbatch' ,]
         if args.batch_reservation:
-            cmd.extend(['--reservation', batch_reservation])
+            cmd.extend(['--reservation', args.batch_reservation])
         if args.batch_dependency:
             cmd.extend(['--dependency', args.batch_dependency])
 
