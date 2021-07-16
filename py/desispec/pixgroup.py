@@ -22,7 +22,7 @@ from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
 def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
-        nside=64, comm=None):
+        nside=64, survey=None, comm=None):
     '''
     Returns table with columns NIGHT EXPID SPECTRO HEALPIX NTARGETS
 
@@ -31,6 +31,7 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
         expids: list of exposure IDs to keep (default all)
         specprod_dir: override $DESI_SPECTRO_REDUX/$SPECPROD
         nside: healpix nside, must be power of 2
+        survey: only include exposures for this SURVEY (or FA_SURV)
         comm: MPI communicator
 
     Note: This could be replaced by a DB query when the production DB exista,
@@ -99,11 +100,14 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
                 allpix = desimodel.footprint.radec2pix(nside, ra, dec)
 
                 if 'SURVEY' in hdr:
-                    survey = hdr['SURVEY'].lower()
+                    expsurvey = hdr['SURVEY'].lower()
                 elif 'FA_SURV' in hdr:
-                    survey = hdr['FA_SURV'].lower()
+                    expsurvey = hdr['FA_SURV'].lower()
                 else:
-                    survey = 'unknown'
+                    expsurvey = 'unknown'
+
+                if survey is not None and survey != expsurvey:
+                    continue
 
                 if 'FAPRGRM' in hdr:
                     faprogram = hdr['FAPRGRM'].lower()
@@ -112,7 +116,8 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
 
                 #- Add rows for final output
                 for pix, ntargets in sorted(Counter(allpix).items()):
-                    rows.append((night, expid, spectro, pix, survey, faprogram, ntargets))
+                    rows.append((night, expid, spectro, pix,
+                        expsurvey, faprogram, ntargets))
 
     #- Collect rows from individual ranks back to rank 0
     if comm:

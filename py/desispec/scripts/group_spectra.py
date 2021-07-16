@@ -22,9 +22,11 @@ def parse(options=None):
     parser.add_argument("--reduxdir", type=str,
             help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
     parser.add_argument("--nights", type=str,
-            help="YEARMMDD to add")
+            help="comma separated YEARMMDDs to add")
     parser.add_argument("--expfile", type=str,
             help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
+    parser.add_argument("--survey", type=str,
+            help="filter by SURVEY (or FA_SURV if SURVEY is missing in inputs)")
     parser.add_argument("--nside", type=int, default=64,
             help="input spectra healpix nside (default %(default)s)")
     parser.add_argument("-o", "--outdir", type=str,
@@ -125,10 +127,17 @@ def main(args=None, comm=None):
         nights = None
         expids = None
 
+    if rank == 0:
+        if args.survey is not None:
+            log.info(f'Filtering by SURVEY={args.survey}')
+        else:
+            log.info(f'Not filtering by SURVEY')
+
     #- Get table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
     t0 = time.time()
     exp2pix = get_exp2healpix_map(nights=nights, expids=expids, comm=comm,
-                                  nside=args.nside, specprod_dir=args.reduxdir)
+                                  nside=args.nside, specprod_dir=args.reduxdir,
+                                  survey=args.survey)
     assert len(exp2pix) > 0
     if rank == 0:
         dt = time.time() - t0
