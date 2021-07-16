@@ -2,10 +2,19 @@
 desispec Change Log
 ===================
 
-0.45.1 (unreleased)
+0.45.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.45.1 (2021-07-15)
+-------------------
+
+* Recompute proccamword from exptable for proecessing dashboard (PR `#1340`_).
+* Add support for healpix coadd+redshift jobs (PR `#1341`_).
+
+.. _`#1340`: https://github.com/desihub/desispec/issues/1340
+.. _`#1341`: https://github.com/desihub/desispec/issues/1341
 
 0.45.0 (2021-07-14)
 -------------------
