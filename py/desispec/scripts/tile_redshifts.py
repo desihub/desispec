@@ -247,7 +247,27 @@ def write_redshift_script(batchscript, outdir,
         onetile=True,
         run_zmtl=False, noafterburners=False):
     """
-    TODO: document
+    Write a batch script for running coadds, redshifts, and afterburners
+
+    Args:
+        batchscript (str): filepath to batch script to write
+        outdir (str): output directory to write data
+        jobname (str): slurm job name
+        num_nodes (int): number of nodes to allocate
+        group (str): used for tile redshifts, e.g. 'cumulative'
+        spectro_string (str): e.g. '0 1 2 3' spectrographs to run
+        suffix (str): filename suffix (e.g. TILEID-thruNIGHT)
+        frame_glob (str): glob for finding input cframes
+
+    Options:
+        queue (str): queue name
+        system_name (str): e.g. cori-haswell, cori-knl, perlmutter-gpu
+        onetile (bool): coadd assuming input is for a single tile?
+        run_zmtl (bool): if True, also run zmtl
+        noafterburners (bool): if True, skip QSO afterburners
+
+    Note: some of these options are hacked to also be used by healpix_redshifts,
+    e.g. by providing spectro_string='sv3' instead of list of spectrographs.
     """
     log = get_logger()
     batch_config = batch.get_config(system_name)
