@@ -544,7 +544,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                 badcams.append(f'{camera}{petal}')
             badampcamword = create_camword(badcams)
             proccamword = difference_camwords(proccamword, badampcamword)
-ß
+
         laststep = str(row['LASTSTEP'])
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
         comments = list(row['COMMENTS'])
