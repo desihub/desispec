@@ -198,20 +198,88 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
     frame_glob = ' '.join(frame_glob)
 
-    batch_config = batch.get_config(system_name)
-
-    batchscript = get_tile_redshift_script_pathname(tileid, group, night=night, expid=expid)
+    batchscript = get_tile_redshift_script_pathname(
+            tileid, group, night=night, expid=expid)
     batchlog = batchscript.replace('.slurm', r'-%j.log')
 
     scriptdir = os.path.split(batchscript)[0]
     os.makedirs(scriptdir, exist_ok=True)
 
     outdir = get_tile_redshift_relpath(tileid, group, night=night, expid=expid)
-    logdir = os.path.join(outdir, 'logs')
-    suffix = get_tile_redshift_script_suffix(tileid,group,night=night,expid=expid)
+    suffix = get_tile_redshift_script_suffix(
+            tileid, group, night=night, expid=expid)
     jobname = f'redrock-{suffix}'
 
-    # - system specific options, e.g. "--constraint=haswell"
+    write_redshift_script(batchscript, outdir,
+            jobname=jobname,
+            num_nodes=num_nodes,
+            group=group,
+            spectro_string=spectro_string, suffix=suffix,
+            frame_glob=frame_glob,
+            queue=queue, system_name=system_name,
+            onetile=True,
+            run_zmtl=run_zmtl, noafterburners=noafterburners)
+
+    err = 0
+    if submit:
+        cmd = ['sbatch' ,]
+        if reservation:
+            cmd.extend(['--reservation', reservation])
+        if dependency:
+            cmd.extend(['--dependency', dependency])
+
+        # - sbatch requires the script to be last, after all options
+        cmd.append(batchscript)
+
+        err = subprocess.call(cmd)
+        basename = os.path.basename(batchscript)
+        if err == 0:
+            log.info(f'submitted {basename}')
+        else:
+            log.error(f'Error {err} submitting {basename}')
+
+    return batchscript, err
+
+def write_redshift_script(batchscript, outdir,
+        jobname, num_nodes,
+        group, spectro_string, suffix, frame_glob,
+        queue='regular', system_name=None,
+        onetile=True,
+        run_zmtl=False, noafterburners=False):
+    """
+    Write a batch script for running coadds, redshifts, and afterburners
+
+    Args:
+        batchscript (str): filepath to batch script to write
+        outdir (str): output directory to write data
+        jobname (str): slurm job name
+        num_nodes (int): number of nodes to allocate
+        group (str): used for tile redshifts, e.g. 'cumulative'
+        spectro_string (str): e.g. '0 1 2 3' spectrographs to run
+        suffix (str): filename suffix (e.g. TILEID-thruNIGHT)
+        frame_glob (str): glob for finding input cframes
+
+    Options:
+        queue (str): queue name
+        system_name (str): e.g. cori-haswell, cori-knl, perlmutter-gpu
+        onetile (bool): coadd assuming input is for a single tile?
+        run_zmtl (bool): if True, also run zmtl
+        noafterburners (bool): if True, skip QSO afterburners
+
+    Note: some of these options are hacked to also be used by healpix_redshifts,
+    e.g. by providing spectro_string='sv3' instead of list of spectrographs.
+    """
+    log = get_logger()
+    batch_config = batch.get_config(system_name)
+
+    batchlog = batchscript.replace('.slurm', r'-%j.log')
+
+    if onetile:
+        onetileopt = '--onetile'
+    else:
+        onetileopt = ''
+
+    #- system specific options, e.g. "--constraint=haswell"
     batch_opts = list()
     if 'batch_opts' in batch_config:
         for opt in batch_config['batch_opts']:
@@ -225,6 +293,8 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
     cores_per_node = batch_config['cores_per_node']
     threads_per_core = batch_config['threads_per_core']
     threads_per_node = cores_per_node * threads_per_core
+
+    logdir = os.path.join(outdir, 'logs')
 
     with open(batchscript, 'w') as fx:
         fx.write(f"""#!/bin/bash
@@ -247,7 +317,10 @@ mkdir -p {logdir}
 
 echo
 echo --- Generating files in $(pwd)/{outdir}
-echo
+echo""")
+
+        if frame_glob is not None:
+            fx.write(f"""
 echo --- Grouping frames to spectra at $(date)
 for SPECTRO in {spectro_string}; do
     spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
@@ -276,7 +349,9 @@ for SPECTRO in {spectro_string}; do
 done
 echo Waiting for desi_group_spectra to finish at $(date)
 wait
+""")
 
+        fx.write(f"""
 echo
 echo --- Coadding spectra at $(date)
 for SPECTRO in {spectro_string}; do
@@ -288,7 +363,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $coadd) already exists, skipping coadd
     elif [ -f $spectra ]; then
         echo Coadding $(basename $spectra) into $(basename $coadd), see $colog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra --onetile --nproc 16 -i $spectra -o $coadd"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra {onetileopt} --nproc 16 -i $spectra -o $coadd"
         echo RUNNING $cmd &> $colog
         $cmd &>> $colog &
         sleep 0.5
@@ -424,25 +499,6 @@ echo --- Done at $(date) in ${{DURATION_MINUTES}}m${{DURATION_SECONDS}}s
 
     log.info(f'Wrote {batchscript}')
 
-    err = 0
-    if submit:
-        cmd = ['sbatch' ,]
-        if reservation:
-            cmd.extend(['--reservation', reservation])
-        if dependency:
-            cmd.extend(['--dependency', dependency])
-
-        # - sbatch requires the script to be last, after all options
-        cmd.append(batchscript)
-
-        err = subprocess.call(cmd)
-        basename = os.path.basename(batchscript)
-        if err == 0:
-            log.info(f'submitted {basename}')
-        else:
-            log.error(f'Error {err} submitting {basename}')
-
-    return batchscript, err
 
 def _read_minimal_exptables(nights=None):
     """
