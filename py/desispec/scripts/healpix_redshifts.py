@@ -4,6 +4,7 @@ spectral regrouping into healpix has already happened
 """
 
 import os, sys
+import subprocess
 import numpy as np
 
 from desiutil.log import get_logger
@@ -76,5 +77,20 @@ def main(args):
             noafterburners=args.noafterburners
             )
 
-    print(batchscript)
+    log.info(f'Wrote {batchscript}')
+    if not args.nosubmit:
+        cmd = ['sbatch' ,]
+        if args.batch_reservation:
+            cmd.extend(['--reservation', batch_reservation])
+        if args.batch_dependency:
+            cmd.extend(['--dependency', args.batch_dependency])
 
+        # - sbatch requires the script to be last, after all options
+        cmd.append(batchscript)
+
+        err = subprocess.call(cmd)
+        basename = os.path.basename(batchscript)
+        if err == 0:
+            log.info(f'submitted {basename}')
+        else:
+            log.error(f'Error {err} submitting {basename}')
