@@ -571,7 +571,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                 expected['std'] = 0
                 expected['cframe'] = 0
                 terminal_step = 'sframe'
-            elif laststep == 'fluxcalib':
+            elif laststep == 'fluxcal':
                 pass
             else:
                 print(f"WARNING: didn't understand science exposure expid={expid} of night {night}: laststep={laststep}")
