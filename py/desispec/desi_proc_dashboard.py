@@ -14,7 +14,8 @@ from desispec.workflow.exptable import get_exposure_table_pathname, default_obst
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
-from desispec.io.util import decode_camword, camword_to_spectros
+from desispec.io.util import decode_camword, camword_to_spectros, difference_camwords, parse_badamps, create_camword
+
 
 ########################
 ### Helper Functions ###
@@ -436,8 +437,8 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
 
-    exptab_colnames = ['EXPID', 'CAMWORD', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
-    exptab_dtypes = [int, 'S20', float, 'S10', int, np.ndarray, 'S10']
+    exptab_colnames = ['EXPID', 'CAMWORD', 'BADCAMWORD', 'BADAMPS', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
+    exptab_dtypes = [int, 'S20', 'S20', 'S40', float, 'S10', int, np.ndarray, 'S10']
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
         if 'LASTSTEP' in d_exp.colnames:
@@ -486,15 +487,15 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         d_processing = None
 
     expid_processing = []
-    proccamwords_by_expid = dict()
+    # proccamwords_by_expid = dict()
     if d_processing is not None:
         for row in d_processing:
             expid_list = row['EXPID']
             expid_processing += expid_list.tolist()
-            if 'PROCCAMWORD' in d_processing.colnames and len(expid_list) == 1:
-                expid = int(expid_list[0])
-                if expid not in proccamwords_by_expid.keys():
-                    proccamwords_by_expid[expid] = row['PROCCAMWORD']
+            # if 'PROCCAMWORD' in d_processing.colnames and len(expid_list) == 1:
+            #     expid = int(expid_list[0])
+            #     if expid not in proccamwords_by_expid.keys():
+            #         proccamwords_by_expid[expid] = row['PROCCAMWORD']
 
     expid_processing = set(expid_processing)
 
@@ -530,10 +531,19 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             tileid_str = '----'
 
         exptime = np.round(row['EXPTIME'],decimals=1)
-        if expid in proccamwords_by_expid.keys():
-            proccamword = proccamwords_by_expid[expid]
-        else:
-            proccamword = row['CAMWORD']
+        # if expid in proccamwords_by_expid.keys():
+        #     proccamword = proccamwords_by_expid[expid]
+        # else:
+        #     proccamword = row['CAMWORD']
+        proccamword = row['CAMWORD']
+        if 'BADCAMWORD' in d_exp.colnames:
+            proccamword = difference_camwords(proccamword,row['BADCAMWORD'])
+        if obstype != 'science' and 'BADAMPS' in d_exp.colnames and row['BADAMPS'] != '':
+            badcams = []
+            for (camera, petal, amplifier) in parse_badamps(row['BADAMPS']):
+                badcams.append(f'{camera}{petal}')
+            badampcamword = create_camword(list(set(badcams)))
+            proccamword = difference_camwords(proccamword, badampcamword)
 
         laststep = str(row['LASTSTEP'])
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
@@ -561,7 +571,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                 expected['std'] = 0
                 expected['cframe'] = 0
                 terminal_step = 'sframe'
-            elif laststep == 'fluxcalib':
+            elif laststep == 'fluxcal':
                 pass
             else:
                 print(f"WARNING: didn't understand science exposure expid={expid} of night {night}: laststep={laststep}")
