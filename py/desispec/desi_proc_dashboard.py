@@ -14,7 +14,7 @@ from desispec.workflow.exptable import get_exposure_table_pathname, default_obst
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
-from desispec.io.util import decode_camword, camword_to_spectros, difference_camwords
+from desispec.io.util import decode_camword, camword_to_spectros, difference_camwords, parse_badamps, create_camword
 
 
 ########################
@@ -535,11 +535,16 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         #     proccamword = proccamwords_by_expid[expid]
         # else:
         #     proccamword = row['CAMWORD']
+        proccamword = row['CAMWORD']
         if 'BADCAMWORD' in d_exp.colnames:
-            proccamword = difference_camwords(row['CAMWORD'],row['BADCAMWORD'])
-        else:
-            proccamword = row['CAMWORD']
-
+            proccamword = difference_camwords(proccamword,row['BADCAMWORD'])
+        if obstype != 'science' and 'BADAMPS' in d_exp.colnames and row['BADAMPS'] != '':
+            badcams = []
+            for (camera, petal, amplifier) in parse_badamps(row['BADAMPS']):
+                badcams.append(f'{camera}{petal}')
+            badampcamword = create_camword(badcams)
+            proccamword = difference_camwords(proccamword, badampcamword)
+ß
         laststep = str(row['LASTSTEP'])
         ## temporary hack to remove annoying "aborted exposure" comments that happened on every exposure in SV3
         comments = list(row['COMMENTS'])
