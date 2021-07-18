@@ -245,7 +245,9 @@ def write_redshift_script(batchscript, outdir,
         group, spectro_string, suffix, frame_glob,
         queue='regular', system_name=None,
         onetile=True,
-        run_zmtl=False, noafterburners=False):
+        run_zmtl=False, noafterburners=False,
+        redrock_nodes=1, redrock_cores_per_rank=1,
+        ):
     """
     Write a batch script for running coadds, redshifts, and afterburners
 
@@ -265,11 +267,22 @@ def write_redshift_script(batchscript, outdir,
         onetile (bool): coadd assuming input is for a single tile?
         run_zmtl (bool): if True, also run zmtl
         noafterburners (bool): if True, skip QSO afterburners
+        redrock_nodes (int): number of nodes for each redrock call
+        redrock_cores_per_rank (int): number of cores/rank to use for redrock
 
     Note: some of these options are hacked to also be used by healpix_redshifts,
     e.g. by providing spectro_string='sv3' instead of list of spectrographs.
+
+    Note: Use redrock_cores_per_rank > 1 to reserve extra memory per rank
+    for large input coadd files (e.g. sv3 healpix).
     """
     log = get_logger()
+
+    if redrock_nodes > num_nodes:
+        msg = f'redrock_nodes ({redrock_nodes}) cannot be larger than job num_nodes ({num_nodes})'
+        log.error(msg)
+        raise ValueError(msg)
+
     batch_config = batch.get_config(system_name)
 
     batchlog = batchscript.replace('.slurm', r'-%j.log')
@@ -373,9 +386,13 @@ for SPECTRO in {spectro_string}; do
 done
 echo Waiting for desi_coadd_spectra to finish at $(date)
 wait
+""")
 
+        fx.write(f"""
 echo
 echo --- Running redrock at $(date)
+echo Using {redrock_nodes} nodes per redrock call
+echo Using {redrock_cores_per_rank} cores per rank for redrock
 for SPECTRO in {spectro_string}; do
     coadd={outdir}/coadd-$SPECTRO-{suffix}.fits
     redrock={outdir}/redrock-$SPECTRO-{suffix}.fits
@@ -386,7 +403,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $redrock) already exists, skipping redshifts
     elif [ -f $coadd ]; then
         echo Running redrock on $(basename $coadd), see $rrlog
-        cmd="srun -N 1 -n {cores_per_node} -c {threads_per_core} rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
+        cmd="srun -N {redrock_nodes} -n {cores_per_node*redrock_nodes//redrock_cores_per_rank} -c {threads_per_core*redrock_cores_per_rank} rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 0.5

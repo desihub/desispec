@@ -36,6 +36,10 @@ def parse(options=None):
             help="job dependencies passed to sbatch --dependency")
     p.add_argument("--system-name", type=str,
             help="batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu")
+    p.add_argument("--redrock-nodes", type=int, default=1,
+            help="Number of nodes per redrock call (default 1)")
+    p.add_argument("--redrock-cores-per-rank", type=int, default=1,
+            help="cores per rank for redrock; use >1 for more memory per rank")
 
     args = p.parse_args(options)
     return args
@@ -65,7 +69,7 @@ def main(args):
             batchscript=batchscript,
             outdir=outdir,
             jobname=jobname,
-            num_nodes=1,
+            num_nodes=args.redrock_nodes,
             group='healpix',
             spectro_string=args.survey,
             suffix=suffix,
@@ -74,7 +78,9 @@ def main(args):
             system_name=args.system_name,
             onetile=False,
             run_zmtl=False,
-            noafterburners=args.noafterburners
+            noafterburners=args.noafterburners,
+            redrock_nodes=args.redrock_nodes,
+            redrock_cores_per_rank=args.redrock_cores_per_rank,
             )
 
     log.info(f'Wrote {batchscript}')
