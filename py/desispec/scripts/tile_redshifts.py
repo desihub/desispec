@@ -299,7 +299,7 @@ def write_redshift_script(batchscript, outdir,
             batch_opts.append(f'#SBATCH {opt}')
     batch_opts = '\n'.join(batch_opts)
 
-    runtime = 10 + int(10 * batch_config['timefactor'])
+    runtime = 10 + int(10 * batch_config['timefactor'] * redrock_cores_per_rank)
     runtime_hh = runtime // 60
     runtime_mm = runtime % 60
 
