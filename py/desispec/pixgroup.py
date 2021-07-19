@@ -112,7 +112,7 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
                 if 'FAPRGRM' in hdr:
                     faprogram = hdr['FAPRGRM'].lower()
                 else:
-                    faprogram = 'unknown'
+                    faprogram = io.meta.faflavor2program(hdr['FAFLAVOR'])
 
                 #- Add rows for final output
                 for pix, ntargets in sorted(Counter(allpix).items()):
