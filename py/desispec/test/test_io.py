@@ -725,30 +725,38 @@ class TestIO(unittest.TestCase):
         x = findfile('fibermap', night='20150101', expid=123, outdir=outdir)
         self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
 
-    def test_sv1_faflavor2faprgrm(self):
-        """Test desispec.io.meta.sv1_faflavor2faprgrm
+    def test_sv1_faflavor2program(self):
+        """Test desispec.io.meta.sv1_faflavor2program
         """
-        from ..io.meta import sv1_faflavor2faprgrm
+        from ..io.meta import faflavor2program
         flavor = [
             'cmxelg', 'cmxlrgqso',
             'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
-            'sv1bgsmws', 'sv1backup1', 'blat', 'foo']
-        prog = np.array([
+            'sv1bgsmws', 'sv1backup1', 'blat', 'foo',
+            'sv2dark', 'sv3bright', 'mainbackup']
+        program = np.array([
             'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
-            'bright', 'backup', 'other', 'other'])
+            'bright', 'backup', 'other', 'other',
+            'dark', 'bright', 'backup'])
 
         #- list input
-        p = sv1_faflavor2faprgrm(flavor)
-        self.assertTrue(np.all(p==prog))
+        p = faflavor2program(flavor)
+        self.assertTrue(np.all(p==program))
 
         #- array input
-        p = sv1_faflavor2faprgrm(np.array(flavor))
-        self.assertTrue(np.all(p==prog))
+        p = faflavor2program(np.array(flavor))
+        self.assertTrue(np.all(p==program))
 
-        #- scalar input
+        #- bytes
+        p = faflavor2program(np.array(flavor).astype(bytes))
+        self.assertTrue(np.all(p==program))
+
+        #- scalar input, strings or bytes
         for i, f in enumerate(flavor):
-            p = sv1_faflavor2faprgrm(f)
-            self.assertEqual(p, prog[i])
+            p = faflavor2program(f)
+            self.assertEqual(p, program[i])
+            p = faflavor2program(bytes(f, encoding='utf8'))
+            self.assertEqual(p, program[i])
 
     def test_get_nights(self):
         """ Test desispec.io.meta.get_nights
