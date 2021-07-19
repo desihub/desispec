@@ -725,6 +725,31 @@ class TestIO(unittest.TestCase):
         x = findfile('fibermap', night='20150101', expid=123, outdir=outdir)
         self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
 
+    def test_sv1_faflavor2faprgrm(self):
+        """Test desispec.io.meta.sv1_faflavor2faprgrm
+        """
+        from ..io.meta import sv1_faflavor2faprgrm
+        flavor = [
+            'cmxelg', 'cmxlrgqso',
+            'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
+            'sv1bgsmws', 'sv1backup1', 'blat', 'foo']
+        prog = np.array([
+            'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
+            'bright', 'backup', 'other', 'other'])
+
+        #- list input
+        p = sv1_faflavor2faprgrm(flavor)
+        self.assertTrue(np.all(p==prog))
+
+        #- array input
+        p = sv1_faflavor2faprgrm(np.array(flavor))
+        self.assertTrue(np.all(p==prog))
+
+        #- scalar input
+        for i, f in enumerate(flavor):
+            p = sv1_faflavor2faprgrm(f)
+            self.assertEqual(p, prog[i])
+
     def test_get_nights(self):
         """ Test desispec.io.meta.get_nights
         """
