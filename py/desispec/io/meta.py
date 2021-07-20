@@ -543,7 +543,7 @@ def faflavor2program(faflavor):
     dark |= faflavor == 'cmxlrgqso'
     dark |= faflavor == 'sv1elg'
     dark |= faflavor == 'sv1elgqso'
-    dark |= faflavor == 'sv1lrgqso' 
+    dark |= faflavor == 'sv1lrgqso'
     dark |= faflavor == 'sv1lrgqso2'
     dark |= np.char.endswith(faflavor, 'dark')
 
