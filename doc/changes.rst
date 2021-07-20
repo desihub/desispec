@@ -9,7 +9,7 @@ desispec Change Log
 
 .. _`#1321`: https://github.com/desihub/desispec/issues/1321
 
-0.45.2 (unreleased)
+0.45.2 (2021-07-20)
 -------------------
 
 Everest bookkeeping update for sv1 spectra regrouping and sv3 redshift cleanup.
