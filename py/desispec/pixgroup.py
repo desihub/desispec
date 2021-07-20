@@ -22,7 +22,7 @@ from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
 
 def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
-        nside=64, survey=None, comm=None):
+        nside=64, survey=None, faprogram=None, comm=None):
     '''
     Returns table with columns NIGHT EXPID SPECTRO HEALPIX NTARGETS
 
@@ -32,10 +32,14 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
         specprod_dir: override $DESI_SPECTRO_REDUX/$SPECPROD
         nside: healpix nside, must be power of 2
         survey: only include exposures for this SURVEY (or FA_SURV)
+        faprogram: only include exposures in this fiberassign program
         comm: MPI communicator
 
     Note: This could be replaced by a DB query when the production DB exista,
     or by parsing the exposure tables.
+
+    survey e.g. cmx, sv1, sv2, sv3, main, special
+    faprogram e.g. dark, bright, backup, other
     '''
     log = get_logger()
     if comm is None:
@@ -90,15 +94,8 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
                     os.path.basename(filename)))
                 sys.stdout.flush()
 
-                #- Determine healpix, allowing for NaN
-                columns = ['TARGET_RA', 'TARGET_DEC']
-                fibermap, hdr = fitsio.read(filename, 'FIBERMAP',
-                        columns=columns, header=True)
-                ra, dec = fibermap['TARGET_RA'], fibermap['TARGET_DEC']
-                ok = ~np.isnan(ra) & ~np.isnan(dec)
-                ra, dec = ra[ok], dec[ok]
-                allpix = desimodel.footprint.radec2pix(nside, ra, dec)
-
+                #- determine SURVEY and FAPRGRM and whether to include
+                hdr = fitsio.read_header(filename, 'FIBERMAP')
                 if 'SURVEY' in hdr:
                     expsurvey = hdr['SURVEY'].lower()
                 elif 'FA_SURV' in hdr:
@@ -109,15 +106,26 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
                 if survey is not None and survey != expsurvey:
                     continue
 
-                if 'FAPRGRM' in hdr:
-                    faprogram = hdr['FAPRGRM'].lower()
+                if 'FAPRGRM' in hdr and expsurvey != 'sv1':
+                    expprogram = hdr['FAPRGRM'].lower()
                 else:
-                    faprogram = 'unknown'
+                    expprogram = io.meta.faflavor2program(hdr['FAFLAVOR'])
+
+                if faprogram is not None and faprogram != expprogram:
+                    continue
+
+                #- Determine healpix, allowing for NaN
+                columns = ['TARGET_RA', 'TARGET_DEC']
+                fibermap = fitsio.read(filename, 'FIBERMAP', columns=columns)
+                ra, dec = fibermap['TARGET_RA'], fibermap['TARGET_DEC']
+                ok = ~np.isnan(ra) & ~np.isnan(dec)
+                ra, dec = ra[ok], dec[ok]
+                allpix = desimodel.footprint.radec2pix(nside, ra, dec)
 
                 #- Add rows for final output
                 for pix, ntargets in sorted(Counter(allpix).items()):
                     rows.append((night, expid, spectro, pix,
-                        expsurvey, faprogram, ntargets))
+                        expsurvey, expprogram, ntargets))
 
     #- Collect rows from individual ranks back to rank 0
     if comm:

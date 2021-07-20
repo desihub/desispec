@@ -27,6 +27,8 @@ def parse(options=None):
             help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
     parser.add_argument("--survey", type=str,
             help="filter by SURVEY (or FA_SURV if SURVEY is missing in inputs)")
+    parser.add_argument("--faprogram", type=str,
+            help="filter by FAPRGRM.lower() (or FAFLAVOR mapped to a program for sv1")
     parser.add_argument("--nside", type=int, default=64,
             help="input spectra healpix nside (default %(default)s)")
     parser.add_argument("-o", "--outdir", type=str,
@@ -133,11 +135,16 @@ def main(args=None, comm=None):
         else:
             log.info(f'Not filtering by SURVEY')
 
+        if args.faprogram is not None:
+            log.info(f'Filtering by FAPRGRM={args.faprogram}')
+        else:
+            log.info(f'Not filtering by FAPRGRM')
+
     #- Get table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
     t0 = time.time()
     exp2pix = get_exp2healpix_map(nights=nights, expids=expids, comm=comm,
                                   nside=args.nside, specprod_dir=args.reduxdir,
-                                  survey=args.survey)
+                                  survey=args.survey, faprogram=args.faprogram)
     assert len(exp2pix) > 0
     if rank == 0:
         dt = time.time() - t0

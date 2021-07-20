@@ -517,6 +517,53 @@ def qaprod_root(specprod_dir=None):
         specprod_dir = specprod_root()
     return os.path.join(specprod_dir, 'QA')
 
+def faflavor2program(faflavor):
+    """
+    Map FAFLAVOR keywords to what we wish we had set for FAPRGRM
+
+    Args:
+        faflavor (str or array of str): FAFLAVOR keywords from fiberassign
+
+    Returns:
+        faprgm (str or array of str): what FAPRGM would be if we had set it
+        (dark, bright, backup, other)
+
+    Note: this was standardized by sv3 and main, but evolved during sv1 and sv2
+    """
+    #- Handle scalar or array input, upcasting bytes to str as needed
+    scalar_input = np.isscalar(faflavor)
+    faflavor = np.atleast_1d(faflavor).astype(str)
+
+    #- Default FAPRGRM is "other"
+    faprogram = np.tile('other', len(faflavor)).astype('U6')
+
+    #- FAFLAVOR options that map to FAPRGM='dark'
+    #- Note: some sv1 tiles like 80605 had "cmx" in the faflavor name
+    dark  = faflavor == 'cmxelg'
+    dark |= faflavor == 'cmxlrgqso'
+    dark |= faflavor == 'sv1elg'
+    dark |= faflavor == 'sv1elgqso'
+    dark |= faflavor == 'sv1lrgqso'
+    dark |= faflavor == 'sv1lrgqso2'
+    dark |= np.char.endswith(faflavor, 'dark')
+
+    #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
+    bright  = faflavor == 'sv1bgsmws'
+    bright |= np.char.endswith(faflavor, 'bright')
+
+    #- SV1 FAFLAVOR options that map to FAPRGRM='backup'
+    backup  = faflavor == 'sv1backup1'
+    backup |= np.char.endswith(faflavor, 'backup')
+
+    faprogram[dark] = 'dark'
+    faprogram[bright] = 'bright'
+    faprogram[backup] = 'backup'
+
+    if scalar_input:
+        return str(faprogram[0])
+    else:
+        return faprogram
+
 
 def get_pipe_database():
     """Get the production database location based on the environment.
