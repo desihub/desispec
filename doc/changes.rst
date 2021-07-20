@@ -2,13 +2,27 @@
 desispec Change Log
 ===================
 
-0.45.2 (unreleased)
+0.45.3 (unreleased)
 -------------------
 
 * No changes yet.
 
+0.45.2 (unreleased)
+-------------------
+
+Everest bookkeeping update for sv1 spectra regrouping and sv3 redshift cleanup.
+
+* desi_group_spectra options to filter and group by survey and faprogram,
+  including ``desispec.io.meta.faflavor2program`` to handle special cases
+  for sv1 (PR `#1342`_).
+* desi_healpix_redshifts options for memory usage (PR `#1342`_).
+
+.. _`#1342`: https://github.com/desihub/desispec/issues/1342
+
 0.45.1 (2021-07-15)
 -------------------
+
+For Everest tile spectra+coadds+redshifts; in 21.7d
 
 * Recompute proccamword from exptable for proecessing dashboard (PR `#1340`_).
 * Add support for healpix coadd+redshift jobs (PR `#1341`_).
