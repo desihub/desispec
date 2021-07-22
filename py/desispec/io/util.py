@@ -16,14 +16,16 @@ from desiutil.log import get_logger
 from ..util import healpix_degrade_fixed
 
 
-def iterfiles(root, prefix):
+def iterfiles(root, prefix, suffix=None):
     '''
     Returns iterator over files starting with `prefix` found under `root` dir
+    Optionally also check if filename ends with `suffix`
     '''
     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
         for filename in filenames:
             if filename.startswith(prefix):
-                yield os.path.join(dirpath, filename)
+                if suffix is None or filename.endswith(suffix):
+                    yield os.path.join(dirpath, filename)
 
 def header2wave(header):
     """Converts header keywords into a wavelength grid.
