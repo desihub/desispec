@@ -5,7 +5,9 @@ desispec Change Log
 0.45.3 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix "unknown" entries in tsnr/exposures file (PR `#1321`_).
+
+.. _`#1321`: https://github.com/desihub/desispec/issues/1321
 
 0.45.2 (unreleased)
 -------------------
