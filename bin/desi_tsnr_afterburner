@@ -302,7 +302,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 first_print = False
             log.warning(f"Row {ii} differs from first, row={row}" )
 
-    masked_cam_summary = Table(rows=summary_rows)
+    #- specify names to preserve column order
+    masked_cam_summary = Table(rows=summary_rows, names=colnames)
     for col in masked_cam_summary.colnames:
         if isinstance(masked_cam_summary[col],Table.MaskedColumn):
             if col in ['NIGHT', 'EXPID', 'TILEID']:
@@ -481,7 +482,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+    neworder=['NIGHT','EXPID','TILEID','TILERA','TILEDEC','MJD',
+              'SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
               'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
               'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK',
               'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
@@ -632,6 +634,9 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['NIGHT'] = np.int32(night)
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(tileid)
+    entry['TILERA'] = hdr['TILERA']
+    entry['TILEDEC'] = hdr['TILEDEC']
+    entry['MJD'] = hdr['MJD-OBS']
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
     entry['AIRMASS'] = np.float32(hdr['AIRMASS'])
     entry['EBV'] = 0.
