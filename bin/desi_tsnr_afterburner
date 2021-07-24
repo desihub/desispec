@@ -317,7 +317,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 masked_cam_summary[col].set_fill_value(0.0)
     cam_summary = masked_cam_summary.filled()
 
-    cam_summary.meta['EXTNAME'] = 'TSNR2_FRAME'
+    cam_summary.meta['EXTNAME'] = 'FRAMES'
 
     tsnr2_colnames = [x for x in cam_summary.colnames if x.startswith('TSNR2_')]
 
@@ -357,7 +357,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     colnames = list(rows[0].keys())
     exp_summary = Table(rows=rows, names=colnames)
-    exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
+    exp_summary.meta['EXTNAME'] = 'EXPOSURES'
 
     if add_missing:
       # check the production exposure table
@@ -852,8 +852,8 @@ def main():
     preexisting_tsnr2_frame_table = None
     if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
-        preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
-        preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
+        preexisting_tsnr2_expid_table = Table.read(args.outfile,"EXPOSURES")
+        preexisting_tsnr2_frame_table = Table.read(args.outfile,"FRAMES")
 
 
     # starting computing
@@ -965,8 +965,8 @@ def main():
 
             hdr = tmp[0].header
 
-            tsnr2_expid.append(Table(tmp['TSNR2_EXPID'].data))
-            tsnr2_frame.append(Table(tmp['TSNR2_FRAME'].data))
+            tsnr2_expid.append(Table(tmp['EXPOSURES'].data))
+            tsnr2_frame.append(Table(tmp['FRAMES'].data))
 
             # remove temporary file if successful
             if os.path.isfile(tmpfilename) :
@@ -976,8 +976,8 @@ def main():
         tsnr2_expid_table = vstack(tsnr2_expid)
         tsnr2_frame_table = vstack(tsnr2_frame)
 
-        tsnr2_expid_table.meta['EXTNAME'] = 'TSNR2_EXPID'
-        tsnr2_frame_table.meta['EXTNAME'] = 'TSNR2_FRAME'
+        tsnr2_expid_table.meta['EXTNAME'] = 'EXPOSURES'
+        tsnr2_frame_table.meta['EXTNAME'] = 'FRAMES'
 
         if multinode:
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
