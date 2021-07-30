@@ -33,6 +33,13 @@ tilepix = dict()
 
 fibermaps = sorted(iterfiles(f'{args.reduxdir}/preproc', 'fibermap'))
 
+n = len(fibermaps)
+if n == 0:
+    log.error(f'No fibermaps found in {args.reduxdir}')
+    sys.exit(1)
+else:
+    log.info(f'Processing {n} fibermaps from {args.reduxdir}')
+
 columns = ['PETAL_LOC', 'TARGET_RA', 'TARGET_DEC']
 for filename in fibermaps:
     fm, hdr = fitsio.read(filename, 'FIBERMAP', header=True, columns=columns)
@@ -64,6 +71,8 @@ tx = Table(rows=rows, names=('TILEID', 'PETAL_LOC', 'HEALPIX'),
 
 #- Write fits and json outputs
 tx.meta['EXTNAME'] = 'TILEPIX'
+tx.meta['HPXNSIDE'] = args.nside
+tx.meta['HPXNEST'] = True
 tx.write(args.outfile, overwrite=True)
 
 jsonout = os.path.splitext(args.outfile)[0] + '.json'
