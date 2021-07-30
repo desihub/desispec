@@ -2,12 +2,33 @@
 desispec Change Log
 ===================
 
-0.45.3 (unreleased)
+0.45.4 (unreleased)
 -------------------
 
-* Fix "unknown" entries in tsnr/exposures file (PR `#1321`_).
+* No changes yet.
 
-.. _`#1321`: https://github.com/desihub/desispec/issues/1321
+0.45.3 (2021-07-29)
+-------------------
+
+Everest cleanup PRs; in 21.7e software release.
+
+* Fix "unknown" entries in tsnr/exposures file (PR `#1321`_).
+* desi_healpix_redshift options for extra memory (PR `#1343`_).
+* desi_zcatalog for new fibermap format (PR `#1347`_).
+* Include TILERA, TILEDEC, MJD in tiles/exposures output tables (PR `#1348`_).
+* desi_group_spectra --healpix option (PR `#1350`_).
+* desi_tile_redshifts --group cumulative bug fixes (PR `#1353`_).
+* desi_map_tilepix script (PR `#1358`_).
+* merge of above PRs into main/master (PR `#1360`_).
+
+.. _`#1321`: https://github.com/desihub/desispec/pull/1321
+.. _`#1343`: https://github.com/desihub/desispec/pull/1343
+.. _`#1347`: https://github.com/desihub/desispec/pull/1347
+.. _`#1348`: https://github.com/desihub/desispec/pull/1348
+.. _`#1350`: https://github.com/desihub/desispec/pull/1350
+.. _`#1353`: https://github.com/desihub/desispec/pull/1353
+.. _`#1358`: https://github.com/desihub/desispec/pull/1358
+.. _`#1360`: https://github.com/desihub/desispec/pull/1360
 
 0.45.2 (2021-07-20)
 -------------------
@@ -16,10 +37,10 @@ Everest bookkeeping update for sv1 spectra regrouping and sv3 redshift cleanup.
 
 * desi_group_spectra options to filter and group by survey and faprogram,
   including ``desispec.io.meta.faflavor2program`` to handle special cases
-  for sv1 (PR `#1342`_).
-* desi_healpix_redshifts options for memory usage (PR `#1342`_).
+  for sv1 (PR `#1341`_).
+* desi_healpix_redshifts options for memory usage (PR `#1341`_).
 
-.. _`#1342`: https://github.com/desihub/desispec/issues/1342
+.. _`#1342`: https://github.com/desihub/desispec/pull/1341
 
 0.45.1 (2021-07-15)
 -------------------
@@ -29,8 +50,8 @@ For Everest tile spectra+coadds+redshifts; in 21.7d
 * Recompute proccamword from exptable for proecessing dashboard (PR `#1340`_).
 * Add support for healpix coadd+redshift jobs (PR `#1341`_).
 
-.. _`#1340`: https://github.com/desihub/desispec/issues/1340
-.. _`#1341`: https://github.com/desihub/desispec/issues/1341
+.. _`#1340`: https://github.com/desihub/desispec/pull/1340
+.. _`#1341`: https://github.com/desihub/desispec/pull/1341
 
 0.45.0 (2021-07-14)
 -------------------
@@ -54,13 +75,13 @@ Details / PRs:
 * Split coadd FIBERMAP into FIBERMAP + EXP_FIBERMAP (PR `#1330`_).
 * QSO afterburners run in desi_tile_redshifts by default (PR `#1330`_).
 
-.. _`#1322`: https://github.com/desihub/desispec/issues/1322
-.. _`#1330`: https://github.com/desihub/desispec/issues/1330
-.. _`#1334`: https://github.com/desihub/desispec/issues/1334
-.. _`#1335`: https://github.com/desihub/desispec/issues/1335
-.. _`#1337`: https://github.com/desihub/desispec/issues/1337
-.. _`#1338`: https://github.com/desihub/desispec/issues/1338
-.. _`#1339`: https://github.com/desihub/desispec/issues/1339
+.. _`#1322`: https://github.com/desihub/desispec/pull/1322
+.. _`#1330`: https://github.com/desihub/desispec/pull/1330
+.. _`#1334`: https://github.com/desihub/desispec/pull/1334
+.. _`#1335`: https://github.com/desihub/desispec/pull/1335
+.. _`#1337`: https://github.com/desihub/desispec/pull/1337
+.. _`#1338`: https://github.com/desihub/desispec/pull/1338
+.. _`#1339`: https://github.com/desihub/desispec/pull/1339
 
 0.44.2 (2021-07-07)
 -------------------
@@ -78,8 +99,8 @@ Intended for Everest science exposures through cframes; in 21.7b.
   30-100 microns.  Don't use these for stdstar fitting but otherwise
   process as normal. (PR `#1333`_).
 
-.. _`#1331`: https://github.com/desihub/desispec/issues/1331
-.. _`#1333`: https://github.com/desihub/desispec/issues/1333
+.. _`#1331`: https://github.com/desihub/desispec/pull/1331
+.. _`#1333`: https://github.com/desihub/desispec/pull/1333
 
 0.44.0 (2021-07-06)
 -------------------
@@ -90,18 +111,16 @@ First tag used for Everest arc/flat calibs; in 21.7a.
 * Spectra I/O for extra catalog (PR `#1313`_).
 * Expand Spectra.select and .update functionality (PR `#1319`_).
 * Add optional support for gpu_specter for extractions (PR `#993`_).
-* Look for manifest files in nightly processing (PR `#1320`_).
 * Fix extra_catalog support for grouping by healpix (PR `#1325`_).
 * Pipeline progress bug fixes and features (PRs `#1326`_, `#1329`_).
 
-.. _`#993`: https://github.com/desihub/desispec/issues/993
-.. _`#1312`: https://github.com/desihub/desispec/issues/1312
-.. _`#1313`: https://github.com/desihub/desispec/issues/1313
-.. _`#1319`: https://github.com/desihub/desispec/issues/1319
-.. _`#1320`: https://github.com/desihub/desispec/issues/1320
-.. _`#1325`: https://github.com/desihub/desispec/issues/1325
-.. _`#1326`: https://github.com/desihub/desispec/issues/1326
-.. _`#1329`: https://github.com/desihub/desispec/issues/1329
+.. _`#993`: https://github.com/desihub/desispec/pull/993
+.. _`#1312`: https://github.com/desihub/desispec/pull/1312
+.. _`#1313`: https://github.com/desihub/desispec/pull/1313
+.. _`#1319`: https://github.com/desihub/desispec/pull/1319
+.. _`#1325`: https://github.com/desihub/desispec/pull/1325
+.. _`#1326`: https://github.com/desihub/desispec/pull/1326
+.. _`#1329`: https://github.com/desihub/desispec/pull/1329
 
 0.43.0 (2021-06-21)
 -------------------
