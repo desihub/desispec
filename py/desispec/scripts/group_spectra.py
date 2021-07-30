@@ -31,6 +31,8 @@ def parse(options=None):
             help="filter by FAPRGRM.lower() (or FAFLAVOR mapped to a program for sv1")
     parser.add_argument("--nside", type=int, default=64,
             help="input spectra healpix nside (default %(default)s)")
+    parser.add_argument("--healpix", type=str,
+            help="Comma separated list of healpix to generate")
     parser.add_argument("-o", "--outdir", type=str,
             help="output directory; all outputs in this directory")
     parser.add_argument("--outroot", type=str,
@@ -150,6 +152,14 @@ def main(args=None, comm=None):
         dt = time.time() - t0
         log.debug('Exposure to healpix mapping took {:.1f} sec'.format(dt))
         sys.stdout.flush()
+
+    npix = len(np.unique(exp2pix['HEALPIX']))
+    log.info(f'{npix} healpix found on {len(exp2pix)} x3 frames')
+    if args.healpix is not None:
+        keeppix = [int(tmp) for tmp in args.healpix.split(',')]
+        log.info(f'Processing healpix {keeppix}')
+        keep = np.isin(exp2pix['HEALPIX'], keeppix)
+        exp2pix = exp2pix[keep]
 
     allpix = np.unique(exp2pix[['SURVEY', 'FAPROGRAM', 'HEALPIX']])
     mypix = np.array_split(allpix, size)[rank]

@@ -34,11 +34,13 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
 
 
-    tiles=np.unique(exposure_table["TILEID"])
+    tiles, ii = np.unique(exposure_table["TILEID"], return_index=True)
     ntiles=tiles.size
     res=Table()
 
     res["TILEID"]=tiles
+    res["TILERA"]=exposure_table['TILERA'][ii]
+    res["TILEDEC"]=exposure_table['TILEDEC'][ii]
     res["SURVEY"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["FAPRGRM"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["FAFLAVOR"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
@@ -188,7 +190,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER']
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
         print("error, mismatch of some keys")

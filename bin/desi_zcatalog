@@ -22,9 +22,9 @@ import numpy as np
 from numpy.lib.recfunctions import append_fields
 
 import fitsio
-from astropy.table import Table, vstack
+from astropy.table import Table, hstack, vstack
 
-from desiutil.log import get_logger,DEBUG
+from desiutil.log import get_logger
 from desispec import io
 
 def match(table1,table2,key="TARGETID") :
@@ -80,21 +80,21 @@ def match(table1,table2,key="TARGETID") :
     
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("-i", "--indir",   type=str,  help="input directory")
-parser.add_argument("-o", "--outfile", type=str,  help="output file")
-parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
-parser.add_argument("--match", type=str, nargs="*", help="match other tables (targets,truth...)")
-parser.add_argument("--fibermap", action = "store_true", help="add some columns from fibermap stored in redrock files")
-parser.add_argument("--spectra-scores", action = "store_true", help="add some columns from scores stored in spectra files (found in same directory as redrock file)")
+parser.add_argument("-i", "--indir",  type=str,
+        help="input directory")
+parser.add_argument("-o", "--outfile",type=str,
+        help="output file")
+parser.add_argument("--minimal", action='store_true',
+        help="only include minimal output columns")
+parser.add_argument("--tiles", type=str,
+        help="ascii file with tileids to include (one per line)")
+
+# parser.add_argument("--match", type=str, nargs="*",
+#         help="match other tables (targets,truth...)")
 
 args = parser.parse_args()
 
-
 log=get_logger()
-if args.verbose :
-    log=get_logger(DEBUG)
-else :
-    log=get_logger()
 
 if args.indir is None:
     log.error('--indir directory required')
@@ -104,83 +104,80 @@ if args.outfile is None:
     args.outfile = io.findfile('zcatalog')
 
 #- Get redrock*.fits files in subdirs, excluding e.g. redrock*.log
-redrockfiles = sorted(io.iterfiles(args.indir, 'redrock'))
-redrockfiles = [tmp for tmp in redrockfiles if tmp.endswith('.fits')]
+log.info(f'Looking for redrock files in subdirectories of {args.indir}')
+if args.tiles is not None:
+    tiles = np.loadtxt(args.tiles, dtype=int)
+    ntiles = len(tiles)
+    log.info(f'Filtering to {ntiles} tiles from {args.tiles}')
+    redrockfiles = list()
+    for tileid in tiles:
+        tmp = sorted(io.iterfiles(f'{args.indir}/{tileid}', 'redrock', suffix='.fits'))
+        if len(tmp) > 0:
+            redrockfiles.extend(tmp)
+        else:
+            log.error(f'no redrock files found in {args.indir}/{tileid}')
+else:
+    redrockfiles = sorted(io.iterfiles(args.indir, 'redrock', suffix='.fits'))
+
+nfiles = len(redrockfiles)
+if nfiles == 0:
+    msg = f'No redrock files found in {args.indir}'
+    log.critical(msg)
+    raise ValueError(msg)
 
 data = list()
-for rrfile in redrockfiles:
-    redshifts = fitsio.read(rrfile, 'REDSHIFTS')
-    log.debug("{} {}".format(rrfile, len(redshifts)))
-    if args.fibermap :
-        fibermap = fitsio.read(rrfile, 'FIBERMAP')
-        # new redshifts structured array with two more columns ...
-        ndtype=np.dtype( redshifts.dtype.descr + [
-            ("RA", "f8"),
-            ("DEC", "f8"),
-            ("FLUX_G", "f4"),
-            ("FLUX_R", "f4"),
-            ("FLUX_Z", "f4"),
-            ])
-        nredshifts=np.zeros(redshifts.shape,dtype=ndtype)
-        # copy 
-        for k in redshifts.dtype.names:
-            nredshifts[k] = redshifts[k]
+exp_fibermaps = list()
+for ifile, rrfile in enumerate(redrockfiles):
+    log.info(f'Reading {ifile+1}/{nfiles} {rrfile}')
+    with fitsio.FITS(rrfile) as fx:
+        redshifts = fx['REDSHIFTS'].read()
+        fibermap = fx['FIBERMAP'].read()
+        expfibermap = fx['EXP_FIBERMAP'].read()
+        tsnr2 = fx['TSNR2'].read()
 
-        # add RA and Dec
-        # we have to match the targetids and get a unique set of values
-        # because the fibermap can contain several entries for the same target
-        tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
-        tmp2  = [tmp1[tid] for tid in nredshifts["TARGETID"]]
-        if "TARGET_RA" in fibermap.dtype.names:
-            #- new format: TARGET_RA/DEC + FLUX
-            nredshifts["RA"] = fibermap["TARGET_RA"][tmp2]
-            nredshifts["DEC"] = fibermap["TARGET_DEC"][tmp2]
-            nredshifts["FLUX_G"] = fibermap["FLUX_G"][tmp2]
-            nredshifts["FLUX_R"] = fibermap["FLUX_R"][tmp2]
-            nredshifts["FLUX_Z"] = fibermap["FLUX_Z"][tmp2]
-        else:
-            #- old format: RA/DEC_TARGET + MAG
-            nredshifts["RA"] = fibermap["RA_TARGET"][tmp2]
-            nredshifts["DEC"] = fibermap["DEC_TARGET"][tmp2]
-            nredshifts["FLUX_G"] = 10**(0.4*(22.5 - fibermap["MAG"][:,0][tmp2]))
-            nredshifts["FLUX_R"] = 10**(0.4*(22.5 - fibermap["MAG"][:,1][tmp2]))
-            nredshifts["FLUX_Z"] = 10**(0.4*(22.5 - fibermap["MAG"][:,2][tmp2]))
+    assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
+    assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
 
-        redshifts=nredshifts
+    if args.minimal:
+        fmcols = ['TARGET_RA', 'TARGET_DEC', 'FLUX_G', 'FLUX_R', 'FLUX_Z']
+        for colname in fibermap.dtype.names:
+            if colname.endswith('_TARGET') and colname != 'FA_TARGET':
+                fmcols.append(colname)
 
+        data.append(hstack([Table(redshifts), Table(fibermap[fmcols])]))
+    else:
+        fmcols = list(fibermap.dtype.names)
+        fmcols.remove('TARGETID')
+        tsnr2cols = list(tsnr2.dtype.names)
+        tsnr2cols.remove('TARGETID')
+        data.append(hstack(
+            [Table(redshifts), Table(fibermap[fmcols]), Table(tsnr2[tsnr2cols])]
+            ))
 
-    if args.spectra_scores :
-        specfile=os.path.join(os.path.dirname(rrfile),os.path.basename(rrfile).replace("redrock","spectra"))
-        scores = fitsio.read(specfile, 'SCORES')
-        newtypes=[]
-        for k in scores.dtype.names :
-            if k != 'TARGETID':
-                 newtypes.append((k,"f4"))
+    exp_fibermaps.append(expfibermap)
 
-        ndtype=np.dtype( redshifts.dtype.descr + newtypes )
-        nredshifts=np.zeros(redshifts.shape,dtype=ndtype)
-        for k in redshifts.dtype.names : nredshifts[k]=redshifts[k]
-        tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
-        tmp2  = [tmp1[tid] for tid in nredshifts["TARGETID"]]
-        for k in scores.dtype.names :
-            nredshifts[k] = scores[k][tmp2]
-        redshifts=nredshifts
+log.info('Stacking zcat')
+zcat = np.array(vstack(data))
+log.info('Stacking exposure fibermaps')
+expfm = np.hstack(exp_fibermaps)
 
-    data.append(redshifts)
-   
-
-zcat = np.hstack(data)
-
-
-if args.match:
-    for filename in args.match :
-        log.info("matching {}".format(filename))
-        zcat = match(zcat,fitsio.read(filename))
+#- untested with new formats, so commenting out for now
+# if args.match:
+#     for filename in args.match :
+#         log.info("matching {}".format(filename))
+#         zcat = match(zcat,fitsio.read(filename))
 
 header = fitsio.read_header(redrockfiles[0], 0)
 
-fitsio.write(args.outfile, zcat, header=header, extname='ZCATALOG', clobber=True)
-log.info("wrote {}".format(args.outfile))
+log.info(f'Writing {args.outfile}')
+tmpfile = args.outfile + '.tmp'
+fitsio.write(tmpfile, zcat, header=header, extname='ZCATALOG', clobber=True)
+if not args.minimal:
+    fitsio.write(tmpfile, expfm, extname='EXP_FIBERMAP')
+
+os.rename(tmpfile, args.outfile)
+
+log.info("Successfully wrote {}".format(args.outfile))
 
 
 

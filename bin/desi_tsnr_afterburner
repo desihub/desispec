@@ -302,7 +302,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 first_print = False
             log.warning(f"Row {ii} differs from first, row={row}" )
 
-    masked_cam_summary = Table(rows=summary_rows)
+    #- specify names to preserve column order
+    masked_cam_summary = Table(rows=summary_rows, names=colnames)
     for col in masked_cam_summary.colnames:
         if isinstance(masked_cam_summary[col],Table.MaskedColumn):
             if col in ['NIGHT', 'EXPID', 'TILEID']:
@@ -316,7 +317,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 masked_cam_summary[col].set_fill_value(0.0)
     cam_summary = masked_cam_summary.filled()
 
-    cam_summary.meta['EXTNAME'] = 'TSNR2_FRAME'
+    cam_summary.meta['EXTNAME'] = 'FRAMES'
 
     tsnr2_colnames = [x for x in cam_summary.colnames if x.startswith('TSNR2_')]
 
@@ -336,7 +337,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE",
+        for k in ["NIGHT","EXPID","TILEID","TILERA","TILEDEC","MJD",
+                  "AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE",
                   "MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
             row[k]=cam_summary[k][ii][0]
         # mean
@@ -355,7 +357,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     colnames = list(rows[0].keys())
     exp_summary = Table(rows=rows, names=colnames)
-    exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
+    exp_summary.meta['EXTNAME'] = 'EXPOSURES'
 
     if add_missing:
       # check the production exposure table
@@ -376,6 +378,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 entry["EXPID"]=prod_table["EXPID"][i]
                 entry["NIGHT"]=night
                 entry["TILEID"]=prod_table["TILEID"][i]
+                entry["MJD"] = prod_table["MJD-OBS"][i]
                 entry["AIRMASS"]=0.
                 entry["EBV"]=0.
                 # EBVFAC from https://github.com/desihub/fiberassign/blob/466a99b926892be60c3c9679f521785e865ce315/py/fiberassign/fba_launch_io.py#L1658
@@ -390,17 +393,24 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                 # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
                 targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
                 entry = update_targ_info(entry, targ_dict)
-                # TBD - start (temporary fix)
-                # if SURVEY or FAFLAVOR is "unknown", we try the fiberassign file..
+
+                # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
                 # as of 20210624: SURVEY present in table_exposure since 20210611 only
-                # allowing fiberassign-TILEID.fits or fiberassign-TILEID.fits.gz
-                if (entry["SURVEY"] == "unknown") or (entry["FAFLAVOR"] == "unknown"):
-                    dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
-                    fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
-                    if len(fns) > 0:
-                        fiberassign_header = fits.getheader(fns[0], 0)
-                        targ_dict = {key : fiberassign_header[key] for key in fiberassign_header.keys()}
-                        entry = update_targ_info(entry, targ_dict)
+                dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
+                fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
+                if len(fns) > 0:
+                    fiberassign_header = fits.getheader(fns[0], 0)
+                    targ_dict = {key : fiberassign_header[key] for key in fiberassign_header.keys()}
+                    if 'SURVEY' not in targ_dict and 'FA_SURV' in targ_dict:
+                        targ_dict['SURVEY'] = targ_dict['FA_SURV']
+
+                    entry = update_targ_info(entry, targ_dict)
+                    entry['TILERA'] = fiberassign_header['TILERA']
+                    entry['TILEDEC'] = fiberassign_header['TILEDEC']
+                else:
+                    log.error(f'No fiberassign*.fits* file in {dirname}')
+                    entry["TILERA"] = -999.0
+                    entry["TILEDEC"] = -999.0
 
                 vals=[]
                 for j,k in enumerate(exp_summary.dtype.names) :
@@ -481,7 +491,8 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+    neworder=['NIGHT','EXPID','TILEID','TILERA','TILEDEC','MJD',
+              'SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
               'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
               'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK',
               'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
@@ -632,6 +643,9 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['NIGHT'] = np.int32(night)
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(tileid)
+    entry['TILERA'] = hdr['TILERA']
+    entry['TILEDEC'] = hdr['TILEDEC']
+    entry['MJD'] = hdr['MJD-OBS']
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
     entry['AIRMASS'] = np.float32(hdr['AIRMASS'])
     entry['EBV'] = 0.
@@ -838,8 +852,8 @@ def main():
     preexisting_tsnr2_frame_table = None
     if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
-        preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
-        preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
+        preexisting_tsnr2_expid_table = Table.read(args.outfile,"EXPOSURES")
+        preexisting_tsnr2_frame_table = Table.read(args.outfile,"FRAMES")
 
 
     # starting computing
@@ -951,8 +965,8 @@ def main():
 
             hdr = tmp[0].header
 
-            tsnr2_expid.append(Table(tmp['TSNR2_EXPID'].data))
-            tsnr2_frame.append(Table(tmp['TSNR2_FRAME'].data))
+            tsnr2_expid.append(Table(tmp['EXPOSURES'].data))
+            tsnr2_frame.append(Table(tmp['FRAMES'].data))
 
             # remove temporary file if successful
             if os.path.isfile(tmpfilename) :
@@ -962,8 +976,8 @@ def main():
         tsnr2_expid_table = vstack(tsnr2_expid)
         tsnr2_frame_table = vstack(tsnr2_frame)
 
-        tsnr2_expid_table.meta['EXTNAME'] = 'TSNR2_EXPID'
-        tsnr2_frame_table.meta['EXTNAME'] = 'TSNR2_FRAME'
+        tsnr2_expid_table.meta['EXTNAME'] = 'EXPOSURES'
+        tsnr2_frame_table.meta['EXTNAME'] = 'FRAMES'
 
         if multinode:
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
