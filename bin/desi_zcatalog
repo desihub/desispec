@@ -106,7 +106,7 @@ if args.outfile is None:
 #- Get redrock*.fits files in subdirs, excluding e.g. redrock*.log
 log.info(f'Looking for redrock files in subdirectories of {args.indir}')
 if args.tiles is not None:
-    tiles = np.loadtxt(args.tiles, dtype=int)
+    tiles = np.atleast_1d(np.loadtxt(args.tiles, dtype=int))
     ntiles = len(tiles)
     log.info(f'Filtering to {ntiles} tiles from {args.tiles}')
     redrockfiles = list()
