@@ -710,6 +710,20 @@ def stack(speclist):
     else:
         fibermap = None
 
+    if speclist[0].exp_fibermap is not None:
+        if isinstance(speclist[0].exp_fibermap, np.ndarray):
+            #- note named arrays need hstack not vstack
+            exp_fibermap = np.hstack([sp.exp_fibermap for sp in speclist])
+        else:
+            import astropy.table
+            if isinstance(speclist[0].exp_fibermap, astropy.table.Table):
+                exp_fibermap = astropy.table.vstack([sp.exp_fibermap for sp in speclist])
+            else:
+                raise ValueError("Can't stack exp_fibermaps of type {}".format(
+                    type(speclist[0].exp_fibermap)))
+    else:
+        exp_fibermap = None
+
     if speclist[0].extra_catalog is not None:
         if isinstance(speclist[0].extra_catalog, np.ndarray):
             #- note named arrays need hstack not vstack
@@ -741,7 +755,8 @@ def stack(speclist):
         scores = None
 
     sp = Spectra(bands, wave, flux, ivar,
-        mask=mask, resolution_data=rdat, fibermap=fibermap,
+        mask=mask, resolution_data=rdat,
+        fibermap=fibermap, exp_fibermap=exp_fibermap,
         meta=speclist[0].meta, extra=extra, scores=scores,
         extra_catalog=extra_catalog,
     )
