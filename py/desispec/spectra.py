@@ -298,8 +298,14 @@ class Spectra(object):
 
         if self.fibermap is not None:
             fibermap = self.fibermap[index].copy()
+
+            exp_fibermap = None
+            if self.exp_fibermap is not None:
+                j = np.in1d(self.exp_fibermap['TARGETID'], fibermap['TARGETID'])
+                exp_fibermap = self.exp_fibermap[j].copy()
         else:
             fibermap = None
+            exp_fibermap = None
 
         if self.extra_catalog is not None:
             extra_catalog = self.extra_catalog[index].copy()
@@ -314,7 +320,8 @@ class Spectra(object):
             scores = None
 
         sp = Spectra(bands, wave, flux, ivar,
-            mask=mask, resolution_data=rdat, fibermap=fibermap,
+            mask=mask, resolution_data=rdat,
+            fibermap=fibermap, exp_fibermap=exp_fibermap,
             meta=self.meta, extra=extra, single=self._single,
             scores=scores, extra_catalog=extra_catalog,
         )
