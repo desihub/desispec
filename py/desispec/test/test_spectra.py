@@ -12,7 +12,7 @@ import warnings
 import numpy as np
 import numpy.testing as nt
 
-from astropy.table import Table
+from astropy.table import Table, vstack
 
 from desiutil.io import encode_table
 from desispec.io import empty_fibermap
@@ -52,6 +52,7 @@ class TestSpectra(unittest.TestCase):
             fmap[s]["NIGHT"] = s
             fmap[s]["EXPID"] = s
         self.fmap1 = encode_table(fmap)
+        self.efmap1 = vstack([self.fmap1, self.fmap1])
 
         fmap = empty_fibermap(self.nspec)
         fmap = add_columns(fmap,
@@ -65,6 +66,7 @@ class TestSpectra(unittest.TestCase):
             fmap[s]["NIGHT"] = 1000
             fmap[s]["EXPID"] = 1000+s
         self.fmap2 = encode_table(fmap)
+        self.efmap2 = vstack([self.fmap2, self.fmap2])
 
         for s in range(self.nspec):
             fmap[s]["TARGETID"] = 1234 + s
@@ -72,6 +74,7 @@ class TestSpectra(unittest.TestCase):
             fmap[s]["NIGHT"] = 2000
             fmap[s]["EXPID"] = 2000+s
         self.fmap3 = encode_table(fmap)
+        self.efmap3 = vstack([self.fmap3, self.fmap3])
 
         self.bands = ["b", "r", "z"]
 
@@ -259,17 +262,20 @@ class TestSpectra(unittest.TestCase):
     def test_stack(self):
         """Test desispec.spectra.stack"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
             meta=self.meta, extra=self.extra, scores=self.scores,
             extra_catalog=self.extra_catalog)
 
         sp2 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap2,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap2, exp_fibermap=self.efmap2,
             meta=self.meta, extra=self.extra, scores=self.scores,
             extra_catalog=self.extra_catalog)
 
         sp3 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap3,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap3, exp_fibermap=self.efmap3,
             meta=self.meta, extra=self.extra, scores=self.scores,
             extra_catalog=self.extra_catalog)
 
@@ -284,6 +290,7 @@ class TestSpectra(unittest.TestCase):
             self.assertTrue(np.all(spx.ivar[band][0:self.nspec] == sp1.ivar[band]))
 
         self.assertEqual(len(spx.fibermap), 3*self.nspec)
+        self.assertEqual(len(spx.exp_fibermap), 3*2*self.nspec)
         self.assertEqual(len(spx.extra_catalog), 3*self.nspec)
 
         #- Stacking also works if optional params are None
@@ -295,7 +302,8 @@ class TestSpectra(unittest.TestCase):
     def test_slice(self):
         """Test desispec.spectra.__getitem__"""
         sp1 = Spectra(bands=self.bands, wave=self.wave, flux=self.flux, ivar=self.ivar,
-            mask=self.mask, resolution_data=self.res, fibermap=self.fmap1,
+            mask=self.mask, resolution_data=self.res,
+            fibermap=self.fmap1, exp_fibermap=self.efmap1,
             meta=self.meta, extra=self.extra, scores=self.scores,
             extra_catalog=self.extra_catalog)
 
@@ -306,6 +314,7 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(sp2.mask[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.resolution_data[band].shape[0], self.nspec-1)
             self.assertEqual(len(sp2.fibermap), self.nspec-1)
+            self.assertEqual(len(sp2.exp_fibermap), 2*(self.nspec-1))
             self.assertEqual(len(sp2.extra_catalog), self.nspec-1)
             self.assertEqual(sp2.extra[band]['FOO'].shape, sp2.flux[band].shape)
 
@@ -318,6 +327,7 @@ class TestSpectra(unittest.TestCase):
             self.assertEqual(sp2.mask[band].shape[0], self.nspec-1)
             self.assertEqual(sp2.resolution_data[band].shape[0], self.nspec-1)
             self.assertEqual(len(sp2.fibermap), self.nspec-1)
+            self.assertEqual(len(sp2.exp_fibermap), 2*(self.nspec-1))
             self.assertEqual(len(sp2.extra_catalog), self.nspec-1)
 
         #- slicing also works when various optional elements are None
