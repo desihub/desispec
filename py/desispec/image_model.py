@@ -8,6 +8,7 @@ almost not correlated with pixel value.
 import os
 import numpy as np
 import copy
+import time
 
 import numba
 import scipy.interpolate
@@ -18,7 +19,7 @@ from desispec.io.xytraceset import read_xytraceset
 from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qsky import qproc_sky_subtraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat
-
+from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles
 
 @numba.jit
 def numba_proj(image,x,sigma,flux) :
@@ -48,7 +49,7 @@ def numba_proj(image,x,sigma,flux) :
 
 
 def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spectral_smoothing=True,with_sky_model=True,\
-                        spectral_smoothing_sigma_length=10.,spectral_smoothing_nsig=4.,psf=None):
+                        spectral_smoothing_sigma_length=10.,spectral_smoothing_nsig=4.,psf=None,fit_x_shift=True):
     '''
     Returns a model of the input image, using a fast extraction, a processing of
     spectra with a common sky model and a smoothing, followed by a reprojection
@@ -65,11 +66,32 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
        spectral_smoothing_sigma_length: sigma of Gaussian smoothing along wavelength in A
        spectral_smoothing_nsig: number of sigma rejection threshold to fall back to the original extracted spectrum instead of the smooth one
        psf: specter.psf.GaussHermitePSF object to be used for the 1D projection (slow, by default=None, in which case a Gaussian profile is used)
+       fit_x_shift: fit for an offset of the spectral traces.
     returns:
        a 2D np.array of same shape as image.pix
     '''
 
     log=get_logger()
+
+    if fit_x_shift :
+        t0=time.time()
+        log.info("fitting dx ...")
+        x,y,dx,ex,fiber,wave = compute_dx_from_cross_dispersion_profiles(xcoef=xytraceset.x_vs_wave_traceset._coeff,
+                                                                         ycoef=xytraceset.y_vs_wave_traceset._coeff,
+                                                                         wavemin=xytraceset.wavemin,
+                                                                         wavemax=xytraceset.wavemax,
+                                                                         image=image,
+                                                                         fibers=np.arange(xytraceset.nspec,dtype=int))
+        dx = np.median(dx)
+        log.info("measured trace shift dx = {:.3f} pixel".format(dx))
+        log.info("dx fit took {:.2f} sec".format(time.time()-t0))
+        print(xytraceset.x_vs_wave_traceset._coeff.shape)
+        xytraceset.x_vs_wave_traceset._coeff[:,0] += dx
+
+
+
+
+
 
     # first perform a fast boxcar extraction
     log.info("extract spectra")
