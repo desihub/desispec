@@ -571,7 +571,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
     # add mask bits for bad sky fibers
     bad_skyfibers = np.unique(bad_skyfibers)
-    mask[bad_skyfibers] |= specmask.mask("BADSKY")
+    if bad_skyfibers.size > 0 :
+        mask[bad_skyfibers] |= specmask.mask("BADSKY")
 
 
     return SkyModel(frame.wave.copy(), cskyflux, modified_cskyivar, mask,
