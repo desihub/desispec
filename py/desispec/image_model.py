@@ -85,13 +85,7 @@ def compute_image_model(image,xytraceset,fiberflat=None,fibermap=None,with_spect
         dx = np.median(dx)
         log.info("measured trace shift dx = {:.3f} pixel".format(dx))
         log.info("dx fit took {:.2f} sec".format(time.time()-t0))
-        print(xytraceset.x_vs_wave_traceset._coeff.shape)
         xytraceset.x_vs_wave_traceset._coeff[:,0] += dx
-
-
-
-
-
 
     # first perform a fast boxcar extraction
     log.info("extract spectra")
