@@ -5,7 +5,9 @@ desispec Change Log
 0.45.4 (unreleased)
 -------------------
 
-* No changes yet.
+* Adjust spectral traces when computing CCD variance in preprocessing (PR `#1368`_).
+
+.. _`#1368`: https://github.com/desihub/desispec/pull/1368
 
 0.45.3 (2021-07-29)
 -------------------
