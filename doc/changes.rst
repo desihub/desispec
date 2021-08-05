@@ -5,7 +5,9 @@ desispec Change Log
 0.45.4 (unreleased)
 -------------------
 
-* No changes yet.
+* Detect and flag sky fibers affected by a bright source (PR `#1367`_)
+
+ .. _`#1367`: https://github.com/desihub/desispec/pull/1367
 
 0.45.3 (2021-07-29)
 -------------------
