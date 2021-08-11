@@ -60,6 +60,7 @@ fibermask:
     - [MISSINGPOSITION, 8, "Fiber location information is missing"]
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
     - [POORPOSITION,   10, "Fiber >30 microns from target location"]
+    - [BADCOLUMN,      11, "Bad CCD column affecting this fiber"]
     - [LOWEFFTIME,     15, "Effective time for this fiber is too low"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]
