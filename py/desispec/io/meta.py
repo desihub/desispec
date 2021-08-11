@@ -96,7 +96,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
-        badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{camera}-{night}.csv',
+        badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.fits',
         #
         # spectra- healpix based
         #
