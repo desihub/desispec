@@ -11,6 +11,7 @@ import scipy.ndimage
 from desiutil.log import get_logger
 from desispec.calibfinder import findcalibfile
 from desispec.io import read_xytraceset,read_fibermap
+from desispec.maskbits import fibermask
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description="Inspect a dark image to check for changes in the bright columns")
@@ -40,11 +41,11 @@ log = get_logger()
 
 log.info("Reading "+args.infile)
 pix  = fitsio.read(args.infile)
+head = fitsio.read_header(args.infile)
 mask = fitsio.read(args.infile,"MASK")
 
 if not args.nopsf :
     if args.psf is None :
-        head = fitsio.read_header(args.infile)
         args.psf = findcalibfile([head],"PSF")
     log.info("Will read traceset in "+args.psf)
 
@@ -143,6 +144,12 @@ if not args.nopsf : # add fiber info
         t = Table()
         for k in entries.keys() :
             t[k]=entries[k]
+
+        t["FIBERSTATUS"]=np.repeat(fibermask.BADCOLUMN,len(t))
+
+        camera=head["camera"]
+        t["CAMERA"]=np.repeat(camera,len(t))
+
         odir=os.path.dirname(args.badfiber_table)
         if not os.path.isdir(odir):
             os.makedirs(odir)
