@@ -237,7 +237,7 @@ def main(args=None, comm=None):
             if fibermap is not None:
                 cmd += " --fibermap {}".format(fibermap)
             if not args.obstype in ['ARC'] : # never model variance for arcs
-                if not args.no_model_pixel_variance :
+                if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
             runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
@@ -281,6 +281,36 @@ def main(args=None, comm=None):
         input_psf = comm.bcast(input_psf, root=0)
 
     timer.stop('findpsf')
+
+
+    #-------------------------------------------------------------------------
+    #- Dark (to detect bad columns)
+
+    if args.obstype == 'DARK' :
+
+        timer.start('inspect_dark')
+        if rank == 0 :
+            log.info('Starting desi_inspect_dark at {}'.format(time.asctime()))
+
+        for i in range(rank, len(args.cameras), size):
+            camera = args.cameras[i]
+            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            inpsf    = input_psf[camera]
+            badfiberfile = findfile('badfibers', args.night, args.expid, camera)
+            if not os.path.isfile(badfiberfile) :
+                cmd = "desi_inspect_dark"
+                cmd += " -i {}".format(preprocfile)
+                cmd += " --psf {}".format(inpsf)
+                cmd += " --badfiber-table {}".format(badfiberfile)
+                runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[badfiberfile])
+            else :
+                log.info("bad fibers table {} exists".format(badfiberfile))
+
+        if comm is not None :
+            comm.barrier()
+
+        timer.stop('inspect_dark')
+
 
     #-------------------------------------------------------------------------
     #- Traceshift
