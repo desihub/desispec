@@ -296,51 +296,62 @@ def main(args=None, comm=None):
 
     if args.obstype == 'DARK' :
 
-        timer.start('inspect_dark')
+        # check exposure time and perform a dark inspection only
+        # if it is a 300s exposure
+        exptime = None
         if rank == 0 :
-            log.info('Starting desi_inspect_dark at {}'.format(time.asctime()))
+            rawfilename=findfile('raw', args.night, args.expid)
+            head=fitsio.read_header(rawfilename,1)
+            exptime=head["EXPTIME"]
+        if comm is not None :
+            exptime = comm.bcast(exptime, root=0)
 
-        badfiberfile = findfile('badfibers', args.night)
-        if not os.path.isfile(badfiberfile) :
-            for i in range(rank, len(args.cameras), size):
-                camera = args.cameras[i]
-                preprocfile = findfile('preproc', args.night, args.expid, camera)
-                inpsf    = input_psf[camera]
-                vals=os.path.splitext(badfiberfile)
-                tmp_badfiberfile = vals[0]+"_tmp_"+camera+vals[1]
-                if not os.path.isfile(badfiberfile) :
-                    cmd = "desi_inspect_dark"
-                    cmd += " -i {}".format(preprocfile)
-                    cmd += " --psf {}".format(inpsf)
-                    cmd += " --badfiber-table {}".format(tmp_badfiberfile)
-                    runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[tmp_badfiberfile])
-            if comm is not None :
-                comm.barrier()
+        if exptime > 270 and exptime < 330 :
+            timer.start('inspect_dark')
             if rank == 0 :
-                log.info("combining lists of bad fibers")
-                tables=list()
-                tmp_filenames=list()
-                for camera in args.cameras :
+                log.info('Starting desi_inspect_dark at {}'.format(time.asctime()))
+
+            badfiberfile = findfile('badfibers', args.night)
+            if not os.path.isfile(badfiberfile) :
+                for i in range(rank, len(args.cameras), size):
+                    camera = args.cameras[i]
+                    preprocfile = findfile('preproc', args.night, args.expid, camera)
+                    inpsf    = input_psf[camera]
                     vals=os.path.splitext(badfiberfile)
                     tmp_badfiberfile = vals[0]+"_tmp_"+camera+vals[1]
-                    if os.path.isfile(tmp_badfiberfile) :
-                        table=Table.read(tmp_badfiberfile)
-                        if len(table)>0 :
-                            tables.append(table)
-                        tmp_filenames.append(tmp_badfiberfile)
-                table = vstack(tables)
-                table.write(badfiberfile)
-                log.info("wrote {}".format(badfiberfile))
-                for tmp_filename in tmp_filenames :
-                    os.unlink(tmp_filename)
-        else :
-            log.info("bad fibers table {} exists".format(badfiberfile))
+                    if not os.path.isfile(badfiberfile) :
+                        cmd = "desi_inspect_dark"
+                        cmd += " -i {}".format(preprocfile)
+                        cmd += " --psf {}".format(inpsf)
+                        cmd += " --badfiber-table {}".format(tmp_badfiberfile)
+                        runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[tmp_badfiberfile])
+                if comm is not None :
+                    comm.barrier()
+                if rank == 0 :
+                    log.info("combining lists of bad fibers")
+                    tables=list()
+                    tmp_filenames=list()
+                    for camera in args.cameras :
+                        vals=os.path.splitext(badfiberfile)
+                        tmp_badfiberfile = vals[0]+"_tmp_"+camera+vals[1]
+                        if os.path.isfile(tmp_badfiberfile) :
+                            table=Table.read(tmp_badfiberfile)
+                            if len(table)>0 :
+                                tables.append(table)
+                            tmp_filenames.append(tmp_badfiberfile)
+                    table = vstack(tables)
+                    table.write(badfiberfile)
+                    log.info("wrote {}".format(badfiberfile))
+                    for tmp_filename in tmp_filenames :
+                        os.unlink(tmp_filename)
+            else :
+                if rank == 0 :
+                    log.info("bad fibers table {} exists".format(badfiberfile))
 
-        if comm is not None :
-            comm.barrier()
+            if comm is not None :
+                comm.barrier()
 
-        timer.stop('inspect_dark')
-
+            timer.stop('inspect_dark')
 
     #-------------------------------------------------------------------------
     #- Traceshift
