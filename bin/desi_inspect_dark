@@ -143,6 +143,9 @@ if not args.nopsf : # add fiber info
         t = Table()
         for k in entries.keys() :
             t[k]=entries[k]
+        odir=os.path.dirname(args.badfiber_table)
+        if not os.path.isdir(odir):
+            os.makedirs(odir)
         t.write(args.badfiber_table,overwrite=True)
         log.info("wrote {}".format(args.badfiber_table))
 
@@ -152,6 +155,9 @@ if args.badcol_table is not None :
     t = Table()
     t["COLUMN"]=col_x
     t["VALUE"]=col_val
+    odir=os.path.dirname(args.badcol_table)
+    if not os.path.isdir(odir):
+        os.makedirs(odir)
     t.write(args.badcol_table,overwrite=True)
     log.info("wrote {}".format(args.badcol_table))
 
