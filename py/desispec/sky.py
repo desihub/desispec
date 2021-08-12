@@ -190,7 +190,6 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
     current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
-
     Rsky = frame.R[skyfibers]
 
     input_ivar=None
@@ -213,6 +212,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     sqrtwflux=sqrtw*flux
 
     chi2=np.zeros(flux.shape)
+
+    bad_skyfibers = []
 
 
     #max_iterations=2 ; log.warning("DEBUGGING LIMITING NUMBER OF ITERATIONS")
@@ -274,14 +275,30 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
         log.info("iter %d compute chi2"%iteration)
 
+        medflux=np.zeros(nfibers)
         for fiber in range(nfibers) :
             # the parameters are directly the unconvolve sky flux
             # so we simply have to reconvolve it
             fiber_convolved_sky_flux = Rsky[fiber].dot(deconvolved_sky)
             chi2[fiber]=current_ivar[fiber]*(flux[fiber]-fiber_convolved_sky_flux)**2
+            ok=(current_ivar[fiber]>0)
+            if np.sum(ok)>0 :
+                medflux[fiber] = np.median((flux[fiber]-fiber_convolved_sky_flux)[ok])
 
         log.info("rejecting")
 
+        # whole fiber with excess flux
+        if np.sum(medflux!=0) > 2 : # at least 3 valid sky fibers
+            rms_from_nmad = 1.48*np.median(np.abs(medflux[medflux!=0]))
+            # discard fibers that are 7 sigma away
+            badfibers=np.where(np.abs(medflux)>7*rms_from_nmad)[0]
+            for fiber in badfibers :
+                log.warning("discarding fiber {} with median flux = {:.2f} > 7*{:.2f}".format(skyfibers[fiber],medflux[fiber],rms_from_nmad))
+                current_ivar[fiber]=0
+                sqrtw[fiber]=0
+                sqrtwflux[fiber]=0
+                # set a mask bit here
+                bad_skyfibers.append(skyfibers[fiber])
         nout_iter=0
         if iteration<1 :
             # only remove worst outlier per wave
@@ -303,6 +320,9 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             sqrtw *= (bad==0)
             sqrtwflux *= (bad==0)
             nout_iter += np.sum(bad)
+
+
+
 
         nout_tot += nout_iter
 
@@ -546,8 +566,14 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
 
-    # need to do better here
+
     mask = (modified_cskyivar==0).astype(np.uint32)
+
+    # add mask bits for bad sky fibers
+    bad_skyfibers = np.unique(bad_skyfibers)
+    if bad_skyfibers.size > 0 :
+        mask[bad_skyfibers] |= specmask.mask("BADSKY")
+
 
     return SkyModel(frame.wave.copy(), cskyflux, modified_cskyivar, mask,
                     nrej=nout_tot, stat_ivar = cskyivar) # keep a record of the statistical ivar for QA

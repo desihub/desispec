@@ -356,7 +356,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
-            bias_img=None,model_variance=False):
+            bias_img=None,model_variance=False,no_traceshift=False):
 
     '''
     preprocess image using metadata in header
@@ -858,7 +858,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         mimage = compute_image_model(img, xyset, fiberflat=fiberflat,
                                      with_spectral_smoothing=with_spectral_smoothing,
                                      with_sky_model=with_sky_model,
-                                     spectral_smoothing_nsig=nsig, psf=psf)
+                                     spectral_smoothing_nsig=nsig, psf=psf, fit_x_shift=(not no_traceshift))
 
         # here we bring back original image for large outliers
         # this allows to have a correct ivar for cosmic rays and bright sources
