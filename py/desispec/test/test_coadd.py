@@ -272,11 +272,11 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(coadds.ivar['brz'][0][~idx_overlap] == 2.))
 
         # Test exception due to misaligned wavelength grids.
-        self.spectra.wave['r'] += 0.01
+        self.spectra.wave['r'] += 0.001
         with self.assertRaises(ValueError):
-            coadd_cameras(self.spectra)
+            coadds = coadd_cameras(self.spectra)
 
-        self.spectra.wave['r'] -= 0.01
+        self.spectra.wave['r'] -= 0.001
         coadds = coadd_cameras(self.spectra)
         self.assertEqual(len(coadds.wave['brz']), 7781)
 
