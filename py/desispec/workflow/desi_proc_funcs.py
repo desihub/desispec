@@ -66,6 +66,7 @@ def get_shared_desi_proc_parser():
                         help="Do not use a model of the variance in preprocessing")
     parser.add_argument("--no-sky-wavelength-adjustment", action="store_true", help="Do not adjust wavelength of sky lines")
     parser.add_argument("--no-sky-lsf-adjustment", action="store_true", help="Do not adjust width of sky lines")
+    parser.add_argument("--save-sky-adjustments", action="store_true", help="Save sky adjustment terms (wavelength and LSF)")
     parser.add_argument("--starttime", type=str, help='start time; use "--starttime `date +%%s`"')
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
