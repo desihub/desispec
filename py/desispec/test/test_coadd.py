@@ -1,16 +1,46 @@
 import unittest
 
 import numpy as np
+
 from astropy.table import Table
+
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap
 from desispec.coaddition import (coadd, fast_resample_spectra,
-        spectroperf_resample_spectra, coadd_fibermap)
+        spectroperf_resample_spectra, coadd_fibermap, coadd_cameras)
 from desispec.specscore import compute_coadd_scores
 
 from desispec.maskbits import fibermask
 
 class TestCoadd(unittest.TestCase):
+
+    def setUp(self):
+        # Create a dummy 3-camera spectrum.
+        bands = ['b', 'r', 'z']
+        wave = { 'b':np.arange(3600, 5800.8, 0.8),
+                 'r':np.arange(5760, 7620.8, 0.8),
+                 'z':np.arange(7520, 9824.8, 0.8) }
+        flux = { }
+        ivar = { }
+        rdat = { }
+        for b in bands:
+            flux[b] = np.ones((1, len(wave[b])))
+            ivar[b] = np.ones((1, len(wave[b])))
+            rdat[b] = np.ones((1, 1, len(wave[b])))
+
+        fmap = empty_fibermap(1)
+        fmap['TARGETID'] = 12
+        fmap['TILEID'] = 1000
+        fmap['NIGHT'] = 20200101
+        fmap['EXPID'] = 5000 + np.arange(1)
+
+        self.spectra = Spectra(bands=bands,
+                               wave=wave,
+                               flux=flux,
+                               ivar=ivar,
+                               mask=None,
+                               resolution_data=rdat,
+                               fibermap=fmap)
         
     def _random_spectra(self, ns=3, nw=10):
         
@@ -222,12 +252,35 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.all(s1.flux['b'] == 0.0))
         self.assertTrue(np.all(s1.ivar['b'] == 0.0))
 
+
+    def test_coadd_cameras(self):
+        """
+        Test coaddition across cameras in a single spectrum
+        """
+        # Coadd the dummy 3-camera spectrum.
+        for b, nw in zip(self.spectra.bands, [2751, 2326, 2881]):
+            self.assertEqual(len(self.spectra.wave[b]), nw)
+
+        coadds = coadd_cameras(self.spectra)
+        self.assertEqual(len(coadds.wave['brz']), 7781)
+        self.assertTrue(np.all(coadds.flux['brz'][0] == 0.5))
+
+        # Test exception due to misaligned wavelength grids.
+        self.spectra.wave['r'] += 0.01
+        with self.assertRaises(SystemExit):
+            coadd_cameras(self.spectra)
+
+        self.spectra.wave['r'] -= 0.01
+        coadds = coadd_cameras(self.spectra)
+        self.assertEqual(len(coadds.wave['brz']), 7781)
+
 def test_suite():
     """Allows testing of only this module with the command::
 
         python setup.py test -m desispec.test.test_coadd
     """
     return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
 
 if __name__ == '__main__':
     unittest.main()           
