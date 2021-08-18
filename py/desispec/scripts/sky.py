@@ -41,6 +41,10 @@ def parse(options=None):
                         help = 'adjust wavelength calibration of sky model on sky lines to improve sky subtraction for all fibers')
     parser.add_argument('--adjust-lsf', action='store_true',
                         help = 'adjust LSF width of sky model on sky lines to improve sky subtraction for all fibers')
+    parser.add_argument('--save-adjustments', type = str , default = None, required=False,
+                        help = 'save adjustments of wavelength calib and LSF width in table')
+    parser.add_argument('--pca-corr', type = str , default = None, required=False,
+                        help = 'use this PCA frames file for interpolation of wavelength and/or LSF adjustment')
 
     args = None
     if options is None:
@@ -53,6 +57,11 @@ def parse(options=None):
 def main(args) :
 
     log=get_logger()
+
+    if args.save_adjustments and ((not args.adjust_lsf) or (not args.adjust_wavelength)) :
+        mess="need both options --adjust-wavelength and --adjust-lsf to run with --save-adjustments"
+        log.error(mess)
+        raise Exception(mess)
 
     log.info("starting")
 
@@ -74,7 +83,18 @@ def main(args) :
                            angular_variation_deg=args.angular_variation_deg,\
                            chromatic_variation_deg=args.chromatic_variation_deg,\
                            adjust_wavelength=args.adjust_wavelength,\
-                           adjust_lsf=args.adjust_lsf)
+                           adjust_lsf=args.adjust_lsf,\
+                           pca_corr=args.pca_corr
+    )
+
+    if args.save_adjustments is not None :
+        import astropy.io.fits as pyfits
+        h=pyfits.HDUList([pyfits.PrimaryHDU(skymodel.wave),
+                          pyfits.ImageHDU(skymodel.dwave,name="DWAVE"),
+                          pyfits.ImageHDU(skymodel.dlsf,name="DLSF")])
+        h[0].header["EXTNAME"]="WAVELENGTH"
+        h.writeto(args.save_adjustments,overwrite=True)
+        log.info("wrote {}".format(args.save_adjustments))
 
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
