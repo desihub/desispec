@@ -254,16 +254,22 @@ class TestCoadd(unittest.TestCase):
 
 
     def test_coadd_cameras(self):
-        """
-        Test coaddition across cameras in a single spectrum
-        """
+        """Test coaddition across cameras in a single spectrum"""
         # Coadd the dummy 3-camera spectrum.
         for b, nw in zip(self.spectra.bands, [2751, 2326, 2881]):
             self.assertEqual(len(self.spectra.wave[b]), nw)
 
+        # Check flux
         coadds = coadd_cameras(self.spectra)
         self.assertEqual(len(coadds.wave['brz']), 7781)
         self.assertTrue(np.all(coadds.flux['brz'][0] == 0.5))
+
+        # Check ivar inside and outside camera wavelength overlap regions
+        tol = 0.0001
+        wave = coadds.wave['brz']
+        idx_overlap = (5760 <= wave) & (wave <= 5800+tol) | (7520 <= wave) & (wave <= 7620+tol)
+        self.assertTrue(np.all(coadds.ivar['brz'][0][idx_overlap]  == 4.))
+        self.assertTrue(np.all(coadds.ivar['brz'][0][~idx_overlap] == 2.))
 
         # Test exception due to misaligned wavelength grids.
         self.spectra.wave['r'] += 0.01
@@ -273,6 +279,7 @@ class TestCoadd(unittest.TestCase):
         self.spectra.wave['r'] -= 0.01
         coadds = coadd_cameras(self.spectra)
         self.assertEqual(len(coadds.wave['brz']), 7781)
+
 
 def test_suite():
     """Allows testing of only this module with the command::
