@@ -273,7 +273,7 @@ class TestCoadd(unittest.TestCase):
 
         # Test exception due to misaligned wavelength grids.
         self.spectra.wave['r'] += 0.01
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(ValueError):
             coadd_cameras(self.spectra)
 
         self.spectra.wave['r'] -= 0.01

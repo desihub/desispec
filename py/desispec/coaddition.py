@@ -498,8 +498,9 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         nwind, nspec = len(windices), len(spectra.wave[b])
         log.debug("{}: {} matched indices; {} wavelength values".format(b, nwind, nspec))
         if nwind != nspec:
-            log.error("Cannot directly coadd the camera spectra because wavelengths are not aligned, use --lin-step or --log10-step to resample to a common grid")
-            sys.exit(12)
+            errmsg = 'Cannot directly coadd the camera spectra because wavelengths (band "{}") are not aligned. Use --lin-step or --log10-step to resample to a common grid'.format(b)
+            log.error(errmsg)
+            raise ValueError(errmsg)
         number_of_overlapping_cameras[windices] += 1
         windict[b] = windices
 
