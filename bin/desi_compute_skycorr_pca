@@ -16,6 +16,8 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
                     help = 'output fits file with PCA coefficients')
 parser.add_argument('--ncomp', type = int, default = 3, required = False,
                     help = 'number of PCA components to save (in addition to the mean)')
+parser.add_argument('--min-exptime', type = float, default = 700, required = False,
+                    help = 'minimum exposure time (to ensure a good precision on sky lines)')
 args = parser.parse_args()
 
 
@@ -35,24 +37,34 @@ for what in [ "DWAVE" , "DLSF" ] :
     print("processing",what)
     print("reading {} files".format(len(args.infile)))
     for index,filename in enumerate(args.infile) :
+
         print("reading {}/{} {}".format(index+1,len(args.infile),filename))
+
+        frame_filename=filename.replace("skycorr-","frame-")
+        if not os.path.isfile(frame_filename) :
+            print("warning: cannot open frame file {}".format(frame_filename))
+            continue
+
+        head=fitsio.read_header(frame_filename)
+        exptime=head["EXPTIME"]
+        if exptime < args.min_exptime :
+            print("ignore {} with exptime={} < {}".format(filename,exptime,args.min_exptime))
+            continue
+
+        night=head["NIGHT"]
+        if night_min is None :
+            night_min = night
+            night_max = night
+        else :
+            night_min = min(night_min,night)
+            night_max = max(night_max,night)
+
         h=pyfits.open(filename)
         deltas.append(h[what].data)
-        frame_filename=filename.replace("skycorr-","frame-")
-        if os.path.isfile(frame_filename) :
-            head=fitsio.read_header(frame_filename)
-        else :
-            print("warning: cannot open frame file {}".format(frame_filename))
+
         if wave is None :
             wave=h["WAVELENGTH"].data
-        if head is not None :
-            night=head["NIGHT"]
-            if night_min is None :
-                night_min = night
-                night_max = night
-            else :
-                night_min = min(night_min,night)
-                night_max = max(night_max,night)
+
 
     deltas=np.array(deltas)
     print("number of measurements=",deltas.shape[0])
@@ -72,13 +84,13 @@ for what in [ "DWAVE" , "DLSF" ] :
                 mat[j,i] = mat[i,j]
 
     print("eigen decomposition")
-    w,v = np.linalg.eig(mat)
-    ii=np.argsort(w)[::-1]
+    eigenvals,v = np.linalg.eig(mat)
+    ii=np.argsort(eigenvals)[::-1]
     print("eigen vals")
-    print(w[ii])
+    print(eigenvals[ii])
 
     # testing
-    #print(mat.dot(v[:,5]),"=?",w[5]*v[:,5])
+    #print(mat.dot(v[:,5]),"=?",eigenvals[5]*v[:,5])
 
 
     if first :
@@ -95,6 +107,8 @@ for what in [ "DWAVE" , "DLSF" ] :
         for j in range(v.shape[0]) :
             tmp += vv[j]*deltas[j]
         output_hdulist.append(pyfits.ImageHDU(tmp,name=what+"_EIG{}".format(e+1)))
+
+    output_hdulist.append(pyfits.ImageHDU(eigenvals[ii][:40],name=what+"_EIGENVALS"))
 
 output_hdulist.append(pyfits.ImageHDU(wave,name="WAVELENGTH"))
 if head is not None :
