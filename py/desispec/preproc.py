@@ -623,11 +623,17 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_col += o
             rdnoise  += r
             if bias is not False :
+                # the master bias noise is already in the raw data
+                # (because we already subtracted the bias)
+                # so we only need to add the quadratic difference of the master bias read noise
+                # between the active region and the overscan columns
                 jj = parse_sec_keyword(header['DATASEC'+amp])
-                o,biasnoise = _overscan(bias[jj])
-                new_rdnoise = np.sqrt(rdnoise**2+biasnoise**2)
-                log.info("Master bias noise for AMP %s = %4.3f ADU, rdnoise %4.3f -> %4.3f ADU"%(amp,biasnoise,np.mean(rdnoise),np.mean(new_rdnoise)))
+                o,biasnoise_datasec = _overscan(bias[jj])
+                o,biasnoise_ovcol   = _overscan(bias[ov_col])
+                new_rdnoise         = np.sqrt(rdnoise**2+biasnoise_datasec**2-biasnoise_ovcol**2)
+                log.info("Master bias noise for AMP %s = %4.3f ADU, rdnoise %4.3f -> %4.3f ADU"%(amp,biasnoise_datasec,np.mean(rdnoise),np.mean(new_rdnoise)))
                 rdnoise = new_rdnoise
+
         rdnoise *= gain
         median_rdnoise  = np.median(rdnoise)
         median_overscan = np.median(overscan_col)
@@ -700,6 +706,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         #- ADC to electrons
         image[kk] = data*gain
+
+        #- add Poisson noise of bias
+        if ( bias is not False ) and ( bias is not None ) :
+            trimmed_bias_in_electrons = bias[jj]*gain
+            readnoise[kk] = np.sqrt(readnoise[kk]**2+trimmed_bias_in_electrons*(trimmed_bias_in_electrons>0))
 
         if dark is not False :
             if not dark_is_trimmed :
