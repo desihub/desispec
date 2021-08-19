@@ -65,19 +65,19 @@ for what in [ "DWAVE" , "DLSF" ] :
         if wave is None :
             wave=h["WAVELENGTH"].data
 
-
+    print("convert to array")
     deltas=np.array(deltas)
     print("number of measurements=",deltas.shape[0])
 
     print("subtract mean")
     mdeltas=np.mean(deltas,axis=0)
-    print(mdeltas.shape)
     deltas[:] -= mdeltas
 
     print("fill scalar product matrix")
     nmeas=len(deltas)
     mat=np.zeros((nmeas,nmeas))
     for i in range(nmeas) :
+        print("{}/{}".format(i+1,nmeas))
         for j in range(i,nmeas) :
             mat[i,j] = np.sum(deltas[i]*deltas[j])
             if j != i :
