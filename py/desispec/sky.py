@@ -25,7 +25,9 @@ from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberb
 import scipy.ndimage
 from desispec.maskbits import specmask
 
-def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,adjust_wavelength=False,adjust_lsf=False,pca_corr=None) :
+def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,\
+                adjust_wavelength=False,adjust_lsf=False,\
+                only_use_skyfibers_for_adjustments=True,pca_corr=None) :
     """Compute a sky model.
 
     Input flux are expected to be flatfielded!
@@ -48,6 +50,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         chromatic_variation_deg : Wavelength degree for the chromatic x angular terms. If negative, use as many 2D polynomials of x and y as wavelength entries.
         adjust_wavelength : adjust the wavelength of the sky model on sky lines to improve the sky subtraction
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
+        only_use_skyfibers_for_adjustments: interpolate adjustments using sky fibers only
         pca_corr : use PCA frames from this file to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
 
     returns SkyModel object with attributes wave, flux, ivar, mask
@@ -55,7 +58,8 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
     if angular_variation_deg == 0 :
         skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
                                        model_ivar=model_ivar,add_variance=add_variance,\
-                                       adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,pca_corr=pca_corr)
+                                       adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
+                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pca_corr=pca_corr)
     else :
 
         if adjust_wavelength :
@@ -133,7 +137,8 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
         nd=np.sum(tivar[:,b:e]>0)
         while(sigma_wave<2) :
             pivar=(tivar[:,b:e]>0)/(var+(sigma_flat*msky[b:e])**2+(sigma_wave*dskydw[b:e])**2)
-            chi2_of_sky_fibers=np.sum(pivar*res2,axis=1)/np.sum(tivar[:,b:e]>0,axis=1)
+            ndf=np.sum(tivar[:,b:e]>0,axis=1)
+            chi2_of_sky_fibers=(ndf>0)*np.sum(pivar*res2,axis=1)/(ndf+(ndf==0))
             log.debug("sky fibers chi2= {} for sigma_flat= {} and sigma_wave= {}".format(chi2_of_sky_fibers,sigma_flat,sigma_wave))
             median_chi2=np.median(chi2_of_sky_fibers)/0.7888 # normalization from median to mean for chi2 with 3 d.o.f.
             if median_chi2<=1 :
@@ -146,7 +151,9 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
 
 
 
-def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pca_corr=None) :
+def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,\
+                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pca_corr=None) :
+
     """Compute a sky model.
 
     Sky[fiber,i] = R[fiber,i,j] Flux[j]
@@ -169,7 +176,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         add_variance : evaluate calibration error and add this to the sky model variance
         adjust_wavelength : adjust the wavelength of the sky model on sky lines to improve the sky subtraction
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
-        only_use_skyfibers_for_adjustments : interpolate adjustments using sky fibers only (else use median filter across fibers)
+        only_use_skyfibers_for_adjustments : interpolate adjustments using sky fibers only
+        pca_corr : use PCA frames from this file to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -527,23 +535,29 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         cskyflux = interpolated_sky_scale*cskyflux
 
 
-        if pca_corr is None : # interpolation over skyfibers
-
+        if pca_corr is None :
+            if only_use_skyfibers_for_adjustments :
+                goodfibers=skyfibers
+            else : # keep all except bright objects and interpolate over them
+                mflux=np.median(frame.flux,axis=1)
+                mmflux=np.median(mflux)
+                rms=1.48*np.median(np.abs(mflux-mmflux))
+                selection=(mflux<mmflux+2*rms)
+                # at least 80% of good pixels
+                ngood=np.sum((frame.ivar>0)*(frame.mask==0),axis=1)
+                print(ngood)
+                selection &= (ngood>0.8*frame.flux.shape[1])
+                goodfibers=np.where(mflux<mmflux+2*rms)[0]
+                print("number of good fibers=",goodfibers.size)
             allfibers=np.arange(frame.nspec)
             # the actual median filtering
             if adjust_wavelength :
-                if only_use_skyfibers_for_adjustments : # simple interpolation over fibers
-                    for j in range(interpolated_sky_dwave.shape[1]) :
-                        interpolated_sky_dwave[:,j] = np.interp(np.arange(interpolated_sky_dwave.shape[0]),skyfibers,interpolated_sky_dwave[skyfibers,j])
-                else : # median filter
-                    interpolated_sky_dwave = scipy.ndimage.filters.median_filter(interpolated_sky_dwave,(nfibers_for_filter,1))
+                for j in range(interpolated_sky_dwave.shape[1]) :
+                    interpolated_sky_dwave[:,j] = np.interp(np.arange(interpolated_sky_dwave.shape[0]),goodfibers,interpolated_sky_dwave[goodfibers,j])
                 cskyflux += interpolated_sky_dwave*dskydwave
             if adjust_lsf : # simple interpolation over fibers
-                if only_use_skyfibers_for_adjustments :
-                    for j in range(interpolated_sky_dlsf.shape[1]) :
-                        interpolated_sky_dlsf[:,j] = np.interp(np.arange(interpolated_sky_dlsf.shape[0]),skyfibers,interpolated_sky_dlsf[skyfibers,j])
-                else : # median filter
-                    interpolated_sky_dlsf = scipy.ndimage.filters.median_filter(interpolated_sky_dlsf,(nfibers_for_filter,1))
+                for j in range(interpolated_sky_dlsf.shape[1]) :
+                    interpolated_sky_dlsf[:,j] = np.interp(np.arange(interpolated_sky_dlsf.shape[0]),goodfibers,interpolated_sky_dlsf[goodfibers,j])
                 cskyflux += interpolated_sky_dlsf*dskydlsf
 
         else :
@@ -576,7 +590,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 log.debug("B={}".format(BB))
                 AAi=np.linalg.inv(AA)
                 X=AAi.dot(BB)
-                log.info("For LSF, best fit linear coefficients = {}".format(list(X)))
+                log.info("For wavelength, best fit linear coefficients = {}".format(list(X)))
                 interpolated_sky_dwave *= 0
                 for i in range(ncomp) :
                     interpolated_sky_dwave += X[i]*components[i]
