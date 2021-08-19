@@ -41,6 +41,8 @@ def parse(options=None):
                         help = 'adjust wavelength calibration of sky model on sky lines to improve sky subtraction for all fibers')
     parser.add_argument('--adjust-lsf', action='store_true',
                         help = 'adjust LSF width of sky model on sky lines to improve sky subtraction for all fibers')
+    parser.add_argument('--adjust-with-more-fibers', action='store_true',
+                        help = 'use more fibers than just the sky fibers for the adjustements')
     parser.add_argument('--save-adjustments', type = str , default = None, required=False,
                         help = 'save adjustments of wavelength calib and LSF width in table')
     parser.add_argument('--pca-corr', type = str , default = None, required=False,
@@ -84,6 +86,7 @@ def main(args) :
                            chromatic_variation_deg=args.chromatic_variation_deg,\
                            adjust_wavelength=args.adjust_wavelength,\
                            adjust_lsf=args.adjust_lsf,\
+                           only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
                            pca_corr=args.pca_corr
     )
 
