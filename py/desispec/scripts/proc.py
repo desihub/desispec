@@ -813,6 +813,12 @@ def main(args=None, comm=None):
                 cmd += " --save-adjustments {}".format(skyfile.replace("sky-","skycorr-"))
             if args.adjust_sky_with_more_fibers :
                 cmd += " --adjust-with-more-fibers"
+            if (not args.no_sky_wavelength_adjustment) or (not args.no_sky_lsf_adjustment) :
+                pca_corr_filename = findcalibfile([hdr, camhdr[camera]], 'SKYCORR')
+                if pca_corr_filename is not None :
+                    cmd += " --pca-corr {}".format(pca_corr_filename)
+                else :
+                    log.warning("No SKYCORR file, do you need to update DESI_SPECTRO_CALIB?")
             runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
 
             #- sframe = flatfielded sky-subtracted but not flux calibrated frame
