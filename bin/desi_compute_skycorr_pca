@@ -93,6 +93,9 @@ for what in [ "DWAVE" , "DLSF" ] :
 
     print("eigen decomposition")
     eigenvals,v = np.linalg.eig(mat)
+    eigenvals=np.real(eigenvals)
+    v=np.real(v)
+    eigenvals[eigenvals<0]=0.
     ii=np.argsort(eigenvals)[::-1]
     print("eigen vals")
     print(eigenvals[ii])
