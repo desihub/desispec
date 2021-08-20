@@ -60,7 +60,15 @@ for what in [ "DWAVE" , "DLSF" ] :
             night_max = max(night_max,night)
 
         h=pyfits.open(filename)
-        deltas.append(h[what].data)
+        delta=h[what].data
+        rms=np.std(delta)
+        if rms==0 or rms>1.:
+            print("no valid data for {}".format(filename))
+            continue
+        print("{} rms {} = {}".format(filename,what,rms))
+
+
+        deltas.append(delta)
 
         if wave is None :
             wave=h["WAVELENGTH"].data
