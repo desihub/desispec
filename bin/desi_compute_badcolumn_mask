@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+
+import os
+
+import argparse
+import numpy as np
+from astropy.table import Table
+import fitsio
+import scipy.ndimage
+
+from desiutil.log import get_logger
+from desispec.io import read_xytraceset,read_frame,write_frame
+from desispec.maskbits import specmask,fibermask
+from desispec.badcolumn import compute_badcolumn_specmask,compute_badcolumn_fibermask
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                 description="Read traceset and badcolumns table and mask spectra in frame")
+parser.add_argument('-i','--infile', type = str, default = None, required = True,
+                    help = 'input frame file')
+parser.add_argument('-o','--outfile', type = str, default = None, required = False,
+                    help = 'output frame file (or use --overwrite option)')
+parser.add_argument('--overwrite', action = 'store_true',
+                    help = 'overwrite mask in frame file (or use --outframe)')
+parser.add_argument('--psf', type = str, default = None, required = True,
+                    help = 'input psf file for the traceset')
+parser.add_argument('--badcolumns', type = str, default = None, required = True,
+                    help = 'input table with bad columns with at least rows COLUMN and VALUE')
+
+args = parser.parse_args()
+log  = get_logger()
+
+frame   = read_frame(args.infile)
+xyset   = read_xytraceset(args.psf)
+badcols = Table.read(args.badcolumns)
+
+mask    = compute_badcolumn_specmask(frame=frame,xyset=xyset,badcolumns_table=badcols)
+
+if mask is not None :
+    if frame.mask is not None :
+        frame.mask |= mask
+    else :
+        frame.mask = mask
+
+fiber_mask = compute_badcolumn_fibermask(frame.mask)
+frame.fibermap["FIBERSTATUS"] |= fiber_mask
+
+if args.overwrite and mask is not None :
+    write_frame(args.infile,frame)
+    log.info("overwrote "+args.infile)
+else :
+    write_frame(args.outfile,frame)
+    log.info("wrote "+args.outfile)
