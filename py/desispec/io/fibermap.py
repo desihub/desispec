@@ -462,6 +462,18 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None, force
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
 
+    #- Tiles designed before Fall 2021 had a LOCATION:FIBER swap for fibers
+    #- 3402 and 3429 at locations 6098 and 6099; check and correct if needed.
+    #- see desispec #1380
+    #- NOTE: this only swaps them if the incorrect combination is found
+    if (6098 in fa['LOCATION']) and (6099 in fa['LOCATION']):
+        iloc6098 = np.where(fa['LOCATION'] == 6098)[0][0]
+        iloc6099 = np.where(fa['LOCATION'] == 6099)[0][0]
+        if (fa['FIBER'][iloc6098] == 3402) and (fa['FIBER'][iloc6099] == 3429):
+            log.warning(f'FIBERS 3402 and 3429 are swapped in {fafile}; correcting')
+            fa['FIBER'][iloc6098] = 3429
+            fa['FIBER'][iloc6099] = 3402
+
     #- add missing columns for data model consistency
     if 'PLATE_RA' not in fa.colnames:
         fa['PLATE_RA'] = fa['TARGET_RA']
