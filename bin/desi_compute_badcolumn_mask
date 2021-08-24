@@ -10,8 +10,7 @@ import scipy.ndimage
 
 from desiutil.log import get_logger
 from desispec.io import read_xytraceset,read_frame,write_frame
-from desispec.maskbits import specmask,fibermask
-from desispec.badcolumn import compute_badcolumn_specmask,compute_badcolumn_fibermask
+from desispec.badcolumn import add_badcolumn_mask
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description="Read traceset and badcolumns table and mask spectra in frame")
@@ -33,18 +32,9 @@ frame   = read_frame(args.infile)
 xyset   = read_xytraceset(args.psf)
 badcols = Table.read(args.badcolumns)
 
-mask    = compute_badcolumn_specmask(frame=frame,xyset=xyset,badcolumns_table=badcols)
+add_badcolumn_mask(frame=frame,xyset=xyset,badcolumns_table=badcols)
 
-if mask is not None :
-    if frame.mask is not None :
-        frame.mask |= mask
-    else :
-        frame.mask = mask
-
-fiber_mask = compute_badcolumn_fibermask(frame.mask)
-frame.fibermap["FIBERSTATUS"] |= fiber_mask
-
-if args.overwrite and mask is not None :
+if args.overwrite  :
     write_frame(args.infile,frame)
     log.info("overwrote "+args.infile)
 else :

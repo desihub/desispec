@@ -71,3 +71,17 @@ def compute_badcolumn_fibermask(frame_mask,threshold_specfrac=0.4) :
     badfibers  = np.sum((frame_mask & specmask.BADCOLUMN)>0,axis=1) >= (threshold_specfrac*frame_mask.shape[1])
     fiber_mask[badfibers] |= fibermask.BADCOLUMN
     return fiber_mask
+
+def add_badcolumn_mask(frame,xyset,badcolumns_table,threshold_value=2,threshold_specfrac=0.4) :
+
+    mask = compute_badcolumn_specmask(frame=frame,xyset=xyset,badcolumns_table=badcolumns_table)
+    if mask is None :
+        return # don't do anything
+
+    if frame.mask is not None :
+        frame.mask |= mask
+    else :
+        frame.mask = mask
+
+    fiber_mask = compute_badcolumn_fibermask(frame.mask)
+    frame.fibermap["FIBERSTATUS"] |= fiber_mask
