@@ -562,62 +562,44 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
         else :
 
+
+            def fit_and_interpolate(delta,skyfibers,mean,components,label="") :
+                mean_and_components = np.zeros((components.shape[0]+1,
+                                                components.shape[1],
+                                                components.shape[2]))
+                mean_and_components[0]  = mean
+                mean_and_components[1:] = components
+                ncomp=mean_and_components.shape[0]
+                log.info("Will fit a linear combination on {} components for {}".format(ncomp,label))
+                AA=np.zeros((ncomp,ncomp))
+                BB=np.zeros(ncomp)
+                for i in range(ncomp) :
+                    BB[i] = np.sum(delta[skyfibers]*mean_and_components[i][skyfibers])
+                    for j in range(i,ncomp) :
+                        AA[i,j] = np.sum(mean_and_components[i][skyfibers]*mean_and_components[j][skyfibers])
+                        if j!=i :
+                            AA[j,i]=AA[i,j]
+                AAi=np.linalg.inv(AA)
+                X=AAi.dot(BB)
+                log.info("Best fit linear coefficients for {} = {}".format(label,list(X)))
+                result = np.zeros_like(delta)
+                for i in range(ncomp) :
+                    result += X[i]*mean_and_components[i]
+                return result
+
+
             # we are going to fit a linear combination of the PCA coefficients only on the sky fibers
             # and then apply the linear combination to all fibers
             log.info("Use PCA skycorr")
 
             if adjust_wavelength :
-                components=np.zeros((pcacorr.dwave_eigenvectors.shape[0]+1,
-                                     pcacorr.dwave_eigenvectors.shape[1],
-                                     pcacorr.dwave_eigenvectors.shape[2]))
-                components[0]=pcacorr.dwave_mean
-                components[1:]=pcacorr.dwave_eigenvectors
-                ncomp=components.shape[0]
-                log.info("For wavelength, will fit a linear combination on {} components".format(ncomp))
-                AA=np.zeros((ncomp,ncomp))
-                BB=np.zeros(ncomp)
-                for i in range(ncomp) :
-                    BB[i] = np.sum(interpolated_sky_dwave[skyfibers]*components[i][skyfibers])
-                    for j in range(i,ncomp) :
-                        AA[i,j] = np.sum(components[i][skyfibers]*components[j][skyfibers])
-                        if j!=i :
-                            AA[j,i]=AA[i,j]
-                log.debug("A={}".format(AA))
-                log.debug("B={}".format(BB))
-                AAi=np.linalg.inv(AA)
-                X=AAi.dot(BB)
-                log.info("For wavelength, best fit linear coefficients = {}".format(list(X)))
-                interpolated_sky_dwave *= 0
-                for i in range(ncomp) :
-                    interpolated_sky_dwave += X[i]*components[i]
-                cskyflux += interpolated_sky_dwave*dskydwave
+                correction = fit_and_interpolate(interpolated_sky_dwave,skyfibers,\
+                                                 pcacorr.dwave_mean,pcacorr.dwave_eigenvectors,label="wavelength")
+                cskyflux  += correction*dskydwave
             if adjust_lsf :
-                components=np.zeros((pcacorr.dlsf_eigenvectors.shape[0]+1,
-                                     pcacorr.dlsf_eigenvectors.shape[1],
-                                     pcacorr.dlsf_eigenvectors.shape[2]))
-                components[0]=pcacorr.dlsf_mean
-                components[1:]=pcacorr.dlsf_eigenvectors
-                ncomp=components.shape[0]
-                log.info("For LSF, will fit a linear combination on {} components".format(ncomp))
-                AA=np.zeros((ncomp,ncomp))
-                BB=np.zeros(ncomp)
-                for i in range(ncomp) :
-                    BB[i] = np.sum(interpolated_sky_dlsf[skyfibers]*components[i][skyfibers])
-                    for j in range(i,ncomp) :
-                        AA[i,j] = np.sum(components[i][skyfibers]*components[j][skyfibers])
-                        if j!=i :
-                            AA[j,i]=AA[i,j]
-                log.debug("A={}".format(AA))
-                log.debug("B={}".format(BB))
-                AAi=np.linalg.inv(AA)
-                X=AAi.dot(BB)
-                log.info("For LSF, best fit linear coefficients = {}".format(list(X)))
-                interpolated_sky_dlsf *= 0
-                for i in range(ncomp) :
-                    interpolated_sky_dlsf += X[i]*components[i]
-                cskyflux += interpolated_sky_dlsf*dskydlsf
-
-
+                correction = fit_and_interpolate(interpolated_sky_dlsf,skyfibers,\
+                                                 pcacorr.dlsf_mean,pcacorr.dlsf_eigenvectors,label="LSF")
+                cskyflux  += correction*dskydlsf
 
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
