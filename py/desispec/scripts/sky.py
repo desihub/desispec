@@ -8,6 +8,7 @@ from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.io import shorten_filename
 from desispec.io import write_skycorr
+from desispec.io import read_skycorr_pca
 from desispec.skycorr import SkyCorr
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
@@ -82,6 +83,12 @@ def main(args) :
     # apply fiberflat to sky fibers
     apply_fiberflat(frame, fiberflat)
 
+    # load pca corr if set
+    if args.pca_corr is not None :
+        pcacorr = read_skycorr_pca(args.pca_corr)
+    else :
+        pcacorr = None
+
     # compute sky model
     skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),\
                            angular_variation_deg=args.angular_variation_deg,\
@@ -89,7 +96,7 @@ def main(args) :
                            adjust_wavelength=args.adjust_wavelength,\
                            adjust_lsf=args.adjust_lsf,\
                            only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
-                           pca_corr=args.pca_corr
+                           pcacorr=pcacorr
     )
 
     if args.save_adjustments is not None :
