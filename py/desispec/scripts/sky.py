@@ -7,6 +7,8 @@ from desispec.io import write_sky
 from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.io import shorten_filename
+from desispec.io import write_skycorr
+from desispec.skycorr import SkyCorr
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.qa import qa_plots
@@ -91,12 +93,8 @@ def main(args) :
     )
 
     if args.save_adjustments is not None :
-        import astropy.io.fits as pyfits
-        h=pyfits.HDUList([pyfits.PrimaryHDU(skymodel.wave),
-                          pyfits.ImageHDU(skymodel.dwave,name="DWAVE"),
-                          pyfits.ImageHDU(skymodel.dlsf,name="DLSF")])
-        h[0].header["EXTNAME"]="WAVELENGTH"
-        h.writeto(args.save_adjustments,overwrite=True)
+        skycorr=SkyCorr(wave=skymodel.wave,dwave=skymodel.dwave,dlsf=skymodel.dlsf,header=skymodel.header)
+        write_skycorr(args.save_adjustments,skycorr)
         log.info("wrote {}".format(args.save_adjustments))
 
     # QA
