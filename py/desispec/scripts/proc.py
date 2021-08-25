@@ -310,12 +310,12 @@ def main(args=None, comm=None):
             for i in range(rank, len(args.cameras), size):
                 camera = args.cameras[i]
                 preprocfile = findfile('preproc', args.night, args.expid, camera)
-                badcolumnsfile = findfile('badcolumns', args.night, camera)
+                badcolumnsfile = findfile('badcolumns', night=args.night, camera=camera)
                 if not os.path.isfile(badcolumnsfile) :
                     cmd = "desi_inspect_dark"
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --badcol-table {}".format(badcolumnsfile)
-                    runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[badcolumnsfile])
+                    runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
 
             if comm is not None :
                 comm.barrier()
@@ -570,6 +570,7 @@ def main(args=None, comm=None):
                 preprocfile = findfile('preproc', args.night, args.expid, camera)
                 psffile = findfile('psf', args.night, args.expid, camera)
                 framefile = findfile('frame', args.night, args.expid, camera)
+                framefile = framefile.replace(".fits","-no-badcolumn-mask.fits")
                 cmd += ' -i {}'.format(preprocfile)
                 cmd += ' -p {}'.format(psffile)
                 cmd += ' -o {}'.format(framefile)
@@ -622,6 +623,32 @@ def main(args=None, comm=None):
         timer.stop('extract')
         if comm is not None:
             comm.barrier()
+
+    #-------------------------------------------------------------------------
+    #- Badcolumn specmask and fibermask
+    if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
+       ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
+
+        if rank==0 :
+            log.info('Starting desi_compute_badcolumn_mask at {}'.format(time.asctime()))
+
+        for i in range(rank, len(args.cameras), size):
+            camera     = args.cameras[i]
+            outfile    = findfile('frame', args.night, args.expid, camera)
+            infile     = outfile.replace(".fits","-no-badcolumn-mask.fits")
+            psffile    = findfile('psf', args.night, args.expid, camera)
+            badcolfile = findfile('badcolumns', night=args.night, camera=camera)
+            cmd = "desi_compute_badcolumn_mask -i {} -o {} --psf {} --badcolumns {}".format(
+                infile, outfile, psffile, badcolfile)
+
+            runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+
+            if os.path.isfile(outfile) :
+                log.info("rm "+infile)
+                os.unlink(infile)
+
+        if comm is not None :
+                comm.barrier()
 
     #-------------------------------------------------------------------------
     #- Fiberflat
