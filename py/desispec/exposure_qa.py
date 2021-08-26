@@ -206,7 +206,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
             # generous color cut here.
             good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)
             if "MODEL_G-R" in t.dtype.names :
-                good &= (np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.3)
+                good &= (np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.1) # 0.1 is the selection cut used in prod
             ngood=np.sum(good)
             petalqa_table["NSTDSTAR"][petal]=ngood
 
