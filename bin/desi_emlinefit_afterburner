@@ -539,9 +539,13 @@ fitting.
                     ax.axhline(mydict[emname]["CONT"][i], c="r", lw=0.5, ls="--", alpha=1.0)
                     for obs_em_wave in obs_em_waves:
                         ax.axvline(obs_em_wave, c="r", lw=0.5, ls="--", alpha=1.0)
-                    ax.text(0.05, 0.85, "{}".format(mydict["TARGETID"][i]), fontsize=8, transform=ax.transAxes)
-                    ax.text(0.05, 0.75, "Z={:.3f}".format(mydict["Z"][i]), fontsize=8, transform=ax.transAxes)
-                    ax.text(0.05, 0.65, "SNR({})={:.1f}".format(emname, mydict[emname]["FLUX"][i] * mydict[emname]["FLUX_IVAR"][i] ** 0.5), fontsize=8, transform=ax.transAxes)
+                    fs = 8
+                    ax.text(0.05, 0.85, "{}".format(mydict["TARGETID"][i]), fontsize=fs, transform=ax.transAxes)
+                    ax.text(0.05, 0.75, "Z={:.3f}".format(mydict["Z"][i]), fontsize=fs, transform=ax.transAxes)
+                    ax.text(0.05, 0.05, "SNR({})={:.1f}".format(emname, mydict[emname]["FLUX"][i] * mydict[emname]["FLUX_IVAR"][i] ** 0.5), fontsize=fs, transform=ax.transAxes)
+                    ax.text(0.95, 0.85, "OBJTYPE={}".format(mydict["OBJTYPE"][i]), fontsize=fs, ha="right", transform=ax.transAxes)
+                    ax.text(0.95, 0.75, "SPECTYPE={}".format(mydict["SPECTYPE"][i]), fontsize=fs, ha="right", transform=ax.transAxes)
+                    ax.text(0.95, 0.05, "log10(DELTACHI2)={:.1f}".format(np.log10(mydict["DELTACHI2"][i])), fontsize=fs, ha="right", transform=ax.transAxes)
                     ax.grid(True)
                     ax.set_xticklabels([])
                     ax.set_yticklabels([])
