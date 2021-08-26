@@ -9,8 +9,6 @@ Utility functions to compute a sky model and subtract it.
 import numpy as np
 from collections import OrderedDict
 
-import astropy.io.fits as pyfits
-
 from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_invert
