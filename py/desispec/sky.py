@@ -27,7 +27,7 @@ from desispec.maskbits import specmask
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,\
                 adjust_wavelength=False,adjust_lsf=False,\
-                only_use_skyfibers_for_adjustments=True,pca_corr=None) :
+                only_use_skyfibers_for_adjustments=True,pcacorr=None) :
     """Compute a sky model.
 
     Input flux are expected to be flatfielded!
@@ -51,7 +51,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         adjust_wavelength : adjust the wavelength of the sky model on sky lines to improve the sky subtraction
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments: interpolate adjustments using sky fibers only
-        pca_corr : use PCA frames from this file to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
+        pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -59,7 +59,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
                                        model_ivar=model_ivar,add_variance=add_variance,\
                                        adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
-                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pca_corr=pca_corr)
+                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr)
     else :
 
         if adjust_wavelength :
@@ -152,7 +152,7 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
 
 
 def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,\
-                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pca_corr=None) :
+                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None) :
 
     """Compute a sky model.
 
@@ -177,7 +177,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         adjust_wavelength : adjust the wavelength of the sky model on sky lines to improve the sky subtraction
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments : interpolate adjustments using sky fibers only
-        pca_corr : use PCA frames from this file to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
+        pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -535,7 +535,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         cskyflux = interpolated_sky_scale*cskyflux
 
 
-        if pca_corr is None :
+        if pcacorr is None :
             if only_use_skyfibers_for_adjustments :
                 goodfibers=skyfibers
             else : # keep all except bright objects and interpolate over them
@@ -562,69 +562,44 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
         else :
 
+
+            def fit_and_interpolate(delta,skyfibers,mean,components,label="") :
+                mean_and_components = np.zeros((components.shape[0]+1,
+                                                components.shape[1],
+                                                components.shape[2]))
+                mean_and_components[0]  = mean
+                mean_and_components[1:] = components
+                ncomp=mean_and_components.shape[0]
+                log.info("Will fit a linear combination on {} components for {}".format(ncomp,label))
+                AA=np.zeros((ncomp,ncomp))
+                BB=np.zeros(ncomp)
+                for i in range(ncomp) :
+                    BB[i] = np.sum(delta[skyfibers]*mean_and_components[i][skyfibers])
+                    for j in range(i,ncomp) :
+                        AA[i,j] = np.sum(mean_and_components[i][skyfibers]*mean_and_components[j][skyfibers])
+                        if j!=i :
+                            AA[j,i]=AA[i,j]
+                AAi=np.linalg.inv(AA)
+                X=AAi.dot(BB)
+                log.info("Best fit linear coefficients for {} = {}".format(label,list(X)))
+                result = np.zeros_like(delta)
+                for i in range(ncomp) :
+                    result += X[i]*mean_and_components[i]
+                return result
+
+
             # we are going to fit a linear combination of the PCA coefficients only on the sky fibers
             # and then apply the linear combination to all fibers
-            log.info("Reading {}".format(pca_corr))
+            log.info("Use PCA skycorr")
 
-            hdulist = pyfits.open(pca_corr)
             if adjust_wavelength :
-                what="DWAVE"
-                components=[]
-                components.append(hdulist[what+"_MEAN"].data)
-                for e in range(1,12) :
-                    key="{}_EIG{}".format(what,e)
-                    if not key in hdulist :
-                        break
-                    components.append(hdulist[key].data)
-                ncomp=len(components)
-                log.info("For wavelength, will fit a linear combination on {} components".format(ncomp))
-                AA=np.zeros((ncomp,ncomp))
-                BB=np.zeros(ncomp)
-                for i in range(ncomp) :
-                    BB[i] = np.sum(interpolated_sky_dwave[skyfibers]*components[i][skyfibers])
-                    for j in range(i,ncomp) :
-                        AA[i,j] = np.sum(components[i][skyfibers]*components[j][skyfibers])
-                        if j!=i :
-                            AA[j,i]=AA[i,j]
-                log.debug("A={}".format(AA))
-                log.debug("B={}".format(BB))
-                AAi=np.linalg.inv(AA)
-                X=AAi.dot(BB)
-                log.info("For wavelength, best fit linear coefficients = {}".format(list(X)))
-                interpolated_sky_dwave *= 0
-                for i in range(ncomp) :
-                    interpolated_sky_dwave += X[i]*components[i]
-                cskyflux += interpolated_sky_dwave*dskydwave
+                correction = fit_and_interpolate(interpolated_sky_dwave,skyfibers,\
+                                                 pcacorr.dwave_mean,pcacorr.dwave_eigenvectors,label="wavelength")
+                cskyflux  += correction*dskydwave
             if adjust_lsf :
-                what="DLSF"
-                components=[]
-                components.append(hdulist[what+"_MEAN"].data)
-                for e in range(1,12) :
-                    key="{}_EIG{}".format(what,e)
-                    if not key in hdulist :
-                        break
-                    components.append(hdulist[key].data)
-                ncomp=len(components)
-                log.info("For LSF, will fit a linear combination on {} components".format(ncomp))
-                AA=np.zeros((ncomp,ncomp))
-                BB=np.zeros(ncomp)
-                for i in range(ncomp) :
-                    BB[i] = np.sum(interpolated_sky_dlsf[skyfibers]*components[i][skyfibers])
-                    for j in range(i,ncomp) :
-                        AA[i,j] = np.sum(components[i][skyfibers]*components[j][skyfibers])
-                        if j!=i :
-                            AA[j,i]=AA[i,j]
-                log.debug("A={}".format(AA))
-                log.debug("B={}".format(BB))
-                AAi=np.linalg.inv(AA)
-                X=AAi.dot(BB)
-                log.info("For LSF, best fit linear coefficients = {}".format(list(X)))
-                interpolated_sky_dlsf *= 0
-                for i in range(ncomp) :
-                    interpolated_sky_dlsf += X[i]*components[i]
-                cskyflux += interpolated_sky_dlsf*dskydlsf
-
-
+                correction = fit_and_interpolate(interpolated_sky_dlsf,skyfibers,\
+                                                 pcacorr.dlsf_mean,pcacorr.dlsf_eigenvectors,label="LSF")
+                cskyflux  += correction*dskydlsf
 
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
