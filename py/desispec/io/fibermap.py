@@ -410,7 +410,8 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
 
         return badcol
 
-def assemble_fibermap(night, expid, badamps=None, force=False):
+def assemble_fibermap(night, expid, badamps=None, force=False,
+        allow_svn_override=True):
     """
     Create a fibermap for a given night and expid
 
@@ -421,6 +422,7 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
     Options:
         badamps (str): comma separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
         force (bool): create fibermap even if missing coordinates/guide files
+        allow_svn_override (bool): if True (default), allow fiberassign SVN to override raw data
     """
 
     log = get_logger()
@@ -437,14 +439,18 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
 
     #- Look for override fiberassign file in svn
     tileid = rawheader['TILEID']
-    if 'DESI_TARGET' in os.environ:
+    if allow_svn_override and ('DESI_TARGET' in os.environ):
         targdir = os.getenv('DESI_TARGET')
-        testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits.gz'
-        if os.path.exists(testfile):
+        testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
+        if os.path.exists(testfile+'.gz'):
+            fafile = testfile+'.gz'
+        elif os.path.exists(testfile):
             fafile = testfile
+
+        if rawfafile != fafile:
             log.info(f'Overriding raw fiberassign file {rawfafile} with svn {fafile}')
         else:
-            log.info(f'{testfile} not found; sticking with raw data fiberassign file')
+            log.info(f'{testfile}[.gz] not found; sticking with raw data fiberassign file')
 
     #- Find coordinates file in same directory
     dirname, filename = os.path.split(rawfafile)
@@ -515,12 +521,22 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
         rawfa = Table.read(rawfafile, 'FIBERASSIGN')
         rawfa.sort('LOCATION')
         badcol = compare_fiberassign(rawfa, fa)
+
+        #- special case for tile 80713 on 20210110 with PMRA,PMDEC NaN -> 0.0
+        if night == 20210110 and tileid == 80713:
+            for col in ['PMRA', 'PMDEC']:
+                if col in badcol:
+                    ii = rawfa[col] != fa[col]
+                    if np.all(np.isnan(rawfa[col][ii]) & (fa[col][ii] == 0.0)):
+                        log.warning(f'Ignoring {col} mismatch NaN -> 0.0 on tile {tileid} night {night}')
+                        badcol.remove(col)
+
         if len(badcol)>0:
-            msg = 'incompatible raw/svn fiberassign files for columns {badcol}'
+            msg = f'incompatible raw/svn fiberassign files for columns {badcol}'
             log.critical(msg)
             raise ValueError(msg)
         else:
-            log.info('good - svn fiberassign columns used for obervations match raw data')
+            log.info('svn fiberassign columns used for obervations match raw data (good)')
 
     #- Tiles designed before Fall 2021 had a LOCATION:FIBER swap for fibers
     #- 3402 and 3429 at locations 6098 and 6099; check and correct if needed.
