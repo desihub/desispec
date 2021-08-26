@@ -181,6 +181,7 @@ def emlines_gaussfit(
                 FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
                 SIGMA, SIGMA_IVAR: line width in A (observed frame)
                 SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
+                RFEW, RFEW_IVAR: rest-frame equivalent width
         succeed: did the fit succeed? (boolean)
         waves: wavelength values (in A) used for the fitting (numpy array of floats)
         fluxes: flux values (in 1e-17 * erg/cm2/s/A) used for the fitting (numpy array of floats)
@@ -393,6 +394,7 @@ fitting.
                     FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
                     SIGMA, SIGMA_IVAR: line width in A (observed frame)
                     SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
+                    RFEW, RFEW_IVAR: rest-frame equivalent width
                     wave, data, ivar, model: data used for fitting + fitted model
 
     Notes:
