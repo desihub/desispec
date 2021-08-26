@@ -4,7 +4,7 @@ import os
 import sys
 from time import time
 from astropy.io import fits
-from astropy.table import Table
+import fitsio
 from astropy.time import Time
 import numpy as np
 from scipy.optimize import curve_fit
@@ -605,7 +605,12 @@ def main():
                 else:
                     d["{}_{}".format(emname, key)] = emdict[emname][key]
     # AR write to fits
-    Table(d).write(args.outfn, overwrite=True)
+    if os.path.isfile(args.outfn):
+        log.info("Removing existing {}".format(args.outfn))
+        os.remove(args.outfn)
+    fd = fitsio.FITS(args.outfn, "rw")
+    fd.write(d, extname="EMLINEFIT")
+    fd.close()
     log.info("{:.1f}s\tdone\tTIMESTAMP={}".format(time() - start, Time.now().isot))
 
 
