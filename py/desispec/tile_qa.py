@@ -110,8 +110,15 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
 
         redrock_file = replace_prefix(coadd_file, "coadd", "redrock")
+        extname="REDSHIFTS"
+        if not os.path.isfile(redrock_file) :
+            zbest_file = replace_prefix(coadd_file, "coadd", "zbest")
+            if os.path.isfile(zbest_file) :
+                log.warning("switch to zbest file {}".format(zbest_file))
+                redrock_file = zbest_file
+                extname="ZBEST"
         log.info("reading {}".format(redrock_file))
-        zz=Table.read(redrock_file,"REDSHIFTS")
+        zz=Table.read(redrock_file,extname)
         zz.remove_column("COEFF") # 1D array per entry, not needed
         redshifts.append(_rm_meta_keywords(zz))
 
@@ -233,7 +240,10 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     for petal in petals :
         ii=(exposure_petalqa_tables["PETAL_LOC"]==petal)
         for k in keys :
-            tile_petalqa_table[k][petal]=np.mean(exposure_petalqa_tables[k][ii])
+            vals=exposure_petalqa_tables[k][ii]
+            nonnull=(vals!=0)
+            if np.sum(nonnull)>0 :
+                tile_petalqa_table[k][petal]=np.mean(vals[nonnull])
 
     # Petal EFFTIME
     tile_petalqa_table["EFFTIME_SPEC"]=np.zeros(npetal, dtype=np.float32)
