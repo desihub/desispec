@@ -20,7 +20,8 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime', reservation=None, system_name=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
                  dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True, overwrite_existing_tables=False,
-                 dont_check_job_outputs=False, dont_resubmit_partial_jobs=False):
+                 dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
+                 tiles=None):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -37,8 +38,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         queue: str. The name of the queue to submit the jobs to. Default is "realtime".
         reservation: str. The reservation to submit jobs to. If None, it is not submitted to a reservation.
         system_name: batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu
-        dry_run_level, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+        dry_run_level, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written but not submitted.
+                      If dry_run=2, the scripts will not be written nor submitted. Logging will remain the same
                       for testing as though scripts are being submitted. Default is 0 (false).
         dry_run, bool. When to run without submitting scripts or not. If dry_run_level is defined, then it over-rides
                        this flag. dry_run_level not set and dry_run=True, dry_run_level is set to 2 (no scripts
@@ -56,6 +57,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         dont_resubmit_partial_jobs, bool. Default is False. Must be used with dont_check_job_outputs=False. If this flag is
                                           False, jobs with some prior data are pruned using PROCCAMWORD to only process the
                                           remaining cameras not found to exist.
+        tiles, array-like, optional. Only submit jobs for these TILEIDs.
 
     Returns:
         None.
@@ -134,6 +136,15 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## Load in the files defined above
     etable, ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
+
+    ## filter by TILEID if requested
+    if tiles is not None:
+        if etable is not None:
+            keep = np.isin(etable['TILEID'], tiles)
+            etable = etable[keep]
+        if ptable is not None:
+            keep = np.isin(ptable['TILEID'], tiles)
+            ptable = ptable[keep]
 
     ## Get context specific variable values
     true_night = what_night_is_it()
