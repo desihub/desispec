@@ -23,6 +23,8 @@ def parse_args():  # options=None):
                         help="If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. "+
                              "If dry_run=2, the scripts will not be writter or submitted. Logging will remain the same "+
                              "for testing as though scripts are being submitted. Default is 0 (false).")
+    parser.add_argument("--tiles", type=str, required=False,
+                        help="Comma separated list of TILEIDs to include; use -99 to include arcs/flats")
     # File and dir defs
     #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
     #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
@@ -58,6 +60,10 @@ def parse_args():  # options=None):
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     args = parser.parse_args()
+
+    # convert args.tiles str to list of int
+    if args.tiles is not None:
+        args.tiles = [int(tileid) for tileid in args.tiles.split(',')]
 
     return args
 
