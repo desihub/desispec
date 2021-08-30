@@ -284,8 +284,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
         prow, Table.Row or dict. Must include keyword accessible definitions for processing_table columns found in
                                  desispect.workflow.proctable.get_processing_table_column_defs()
         queue, str. The name of the NERSC Slurm queue to submit to. Default is the realtime queue.
-        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
-                      dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
+        dry_run, int. If nonzero, this is a simulated run. If dry_run=1 the scripts will be written but not submitted.
+                      If dry_run=2, the scripts will not be written nor submitted. Logging will remain the same
                       for testing as though scripts are being submitted. Default is 0 (false).
         joint, bool. Whether this is a joint fitting job (the job involves multiple exposures) and therefore needs to be
                      run with desi_proc_joint_fit. Default is False.
@@ -304,7 +304,8 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
     if prow['JOBDESC'] in ['perexp','pernight','pernight-v0','cumulative']:
         if dry_run > 1:
             scriptpathname = get_tile_redshift_script_pathname(tileid=prow['TILEID'],group=prow['JOBDESC'],
-                                                               night=prow['NIGHT'], expid=prow['EXPID'])
+                                                               night=prow['NIGHT'], expid=prow['EXPID'][0])
+
             log.info("Output file would have been: {}".format(scriptpathname))
         else:
             #- run zmtl for cumulative redshifts but not others
