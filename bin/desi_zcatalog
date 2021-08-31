@@ -157,7 +157,7 @@ for ifile, rrfile in enumerate(redrockfiles):
             fibermap_=Table(fibermap[fmcols])
             fibermap_.rename_column('TARGET_RA','RA')
             fibermap_.rename_column('TARGET_DEC','DEC')
-            fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SECONDARY_TARGET'])
+            fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SCND_TARGET'])
             data.append(hstack([Table(redshifts), fibermap_]))
 
         else:
