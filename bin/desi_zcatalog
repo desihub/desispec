@@ -128,8 +128,6 @@ if nfiles == 0:
 
 data = list()
 exp_fibermaps = list()
-
-
 for ifile, rrfile in enumerate(redrockfiles):
     log.info(f'Reading {ifile+1}/{nfiles} {rrfile}')
     with fitsio.FITS(rrfile) as fx:
@@ -176,9 +174,6 @@ for ifile, rrfile in enumerate(redrockfiles):
 
     if "expfibermap" in locals():
         exp_fibermaps.append(expfibermap)
-
-
-
 
 log.info('Stacking zcat')
 zcat = np.array(vstack(data))
