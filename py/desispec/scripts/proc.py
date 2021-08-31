@@ -552,6 +552,7 @@ def main(args=None, comm=None):
         if rank > 0:
             cmds = inputs = outputs = None
         else:
+            #- rank 0 collects commands to broadcast to others
             cmds = dict()
             inputs = dict()
             outputs = dict()
@@ -569,22 +570,26 @@ def main(args=None, comm=None):
 
                 preprocfile = findfile('preproc', args.night, args.expid, camera)
                 psffile = findfile('psf', args.night, args.expid, camera)
-                framefile = findfile('frame', args.night, args.expid, camera)
-                framefile = framefile.replace(".fits","-no-badcolumn-mask.fits")
+                finalframefile = findfile('frame', args.night, args.expid, camera)
+                if os.path.exists(finalframefile):
+                    log.info('{} already exists; not regenerating'.format(
+                        os.path.basename(finalframefile)))
+                    continue
+
+                #- finalframefile doesn't exist; proceed with command
+                framefile = finalframefile.replace(".fits","-no-badcolumn-mask.fits")
                 cmd += ' -i {}'.format(preprocfile)
                 cmd += ' -p {}'.format(psffile)
                 cmd += ' -o {}'.format(framefile)
                 cmd += ' --psferr 0.1'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
-                    if rank == 0:
-                        log.info('Include barycentric correction')
+                    log.info('Include barycentric correction')
                     cmd += ' --barycentric-correction'
 
-                if not os.path.exists(framefile):
-                    cmds[camera] = cmd
-                    inputs[camera] = [preprocfile, psffile]
-                    outputs[camera] = [framefile,]
+                cmds[camera] = cmd
+                inputs[camera] = [preprocfile, psffile]
+                outputs[camera] = [framefile,]
 
         #- TODO: refactor/combine this with PSF comm splitting logic
         if comm is not None:
@@ -641,14 +646,24 @@ def main(args=None, comm=None):
             cmd = "desi_compute_badcolumn_mask -i {} -o {} --psf {} --badcolumns {}".format(
                 infile, outfile, psffile, badcolfile)
 
-            runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+            if os.path.exists(outfile):
+                log.info('{} already exists; not (re-)applying bad column mask'.format(os.path.basename(outfile)))
+                continue
 
-            if os.path.isfile(outfile) :
-                log.info("rm "+infile)
-                os.unlink(infile)
+            if os.path.exists(badcolfile):
+                runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+                #- if successful, remove temporary frame-*-no-badcolumn-mask
+                if os.path.isfile(outfile) :
+                    log.info("rm "+infile)
+                    os.unlink(infile)
+
+            else:
+                log.warning(f'Missing {badcolfile}; not applying badcol mask')
+                log.info(f"mv {infile} {outfile}")
+                os.rename(infile, outfile)
 
         if comm is not None :
-                comm.barrier()
+            comm.barrier()
 
     #-------------------------------------------------------------------------
     #- Fiberflat
