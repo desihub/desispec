@@ -156,11 +156,11 @@ for ifile, rrfile in enumerate(redrockfiles):
             if colname.endswith('_TARGET') and colname != 'FA_TARGET':
                 fmcols.append(colname)
         if args.prefix == 'zbest':
-           fibermap_=Table(fibermap[fmcols])
-           fibermap_.rename_column('TARGET_RA','RA')
-           fibermap_.rename_column('TARGET_DEC','DEC')
-           fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SECONDARY_TARGET'])
-           data.append(hstack([Table(redshifts), fibermap_]))
+            fibermap_=Table(fibermap[fmcols])
+            fibermap_.rename_column('TARGET_RA','RA')
+            fibermap_.rename_column('TARGET_DEC','DEC')
+            fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SECONDARY_TARGET'])
+            data.append(hstack([Table(redshifts), fibermap_]))
 
         else:
             data.append(hstack([Table(redshifts), Table(fibermap[fmcols])]))
@@ -175,7 +175,7 @@ for ifile, rrfile in enumerate(redrockfiles):
             ))
 
     if "expfibermap" in locals():
-       exp_fibermaps.append(expfibermap)
+        exp_fibermaps.append(expfibermap)
 
 
 
@@ -184,8 +184,8 @@ log.info('Stacking zcat')
 zcat = np.array(vstack(data))
 
 if exp_fibermaps:
-       log.info('Stacking exposure fibermaps')
-       expfm = np.hstack(exp_fibermaps)
+    log.info('Stacking exposure fibermaps')
+    expfm = np.hstack(exp_fibermaps)
 
 #- untested with new formats, so commenting out for now
 # if args.match:
