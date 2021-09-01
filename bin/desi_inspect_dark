@@ -25,8 +25,8 @@ parser.add_argument('--badcol-table', type = str, default = None, required = Fal
                     help = 'output table with list of bad columns')
 parser.add_argument('--plot', action = 'store_true',
                     help = 'plot the profiles')
-parser.add_argument('--threshold', type = float , default = 2., required = False,
-                    help = 'threshold in electrons to flag columns.')
+parser.add_argument('--threshold', type = float , default = 0.005, required = False,
+                    help = 'threshold in electrons/sec to flag columns.')
 parser.add_argument('--psf', type = str , default = None, required = False,
                     help = 'specify psf file for trace coordinates, default is automatically found.')
 parser.add_argument('--dist', type = float , default = 3., required = False,
@@ -43,6 +43,11 @@ log.info("Reading "+args.infile)
 pix  = fitsio.read(args.infile)
 head = fitsio.read_header(args.infile)
 mask = fitsio.read(args.infile,"MASK")
+
+exptime = head["EXPTIME"]
+log.info("Exposure time = {:.1f} sec".format(exptime))
+threshold_electrons = args.threshold*exptime
+log.info("Threshold in electrons = {:.2f}".format(threshold_electrons))
 
 if not args.nopsf :
     if args.psf is None :
@@ -63,7 +68,7 @@ profs=[]
 mprofs=[]
 
 col_x=[]
-col_val=[]
+col_elec_per_sec=[]
 col_begin=[]
 col_end=[]
 
@@ -101,7 +106,7 @@ for half in range(2) :
 
     # detect cols
     aprof = np.abs(prof)
-    peak = (aprof>args.threshold/2) # half of threshold to select columns for further inspection
+    peak = (aprof>threshold_electrons/2) # half of threshold to select columns for further inspection
     peak[1:-1] &= (aprof[1:-1]>aprof[:-2])&(aprof[1:-1]>aprof[2:])
     peak=np.where(peak)[0]
 
@@ -111,11 +116,11 @@ for half in range(2) :
         i = np.argmax(np.abs(medval))
         val = medval[i]
         # apply threshold here
-        if np.abs(val)<args.threshold :
+        if np.abs(val)<threshold_electrons :
             continue
-        log.info("Bad column x={} val={:.2f}".format(p,val))
+        log.info("Bad column x={} val={:.2f} electrons -> {:.4f} elec/sec".format(p,val,val/exptime))
         col_x.append(p)
-        col_val.append(val)
+        col_elec_per_sec.append(val/exptime)
 
 
 if not args.nopsf : # add fiber info
@@ -130,16 +135,16 @@ if not args.nopsf : # add fiber info
     entries={}
     entries["FIBER"]=[]
     entries["COLUMN"]=[]
-    entries["VALUE"]=[]
+    entries["ELEC_PER_SEC"]=[]
 
     for i , x in enumerate(col_x) :
         bad = np.any(np.abs(fiberx-x)<args.dist,axis=1)
         badfibers = fibers[bad]
-        log.info("COLUMN={} VALUE={} FIBERS={}".format(x,col_val[i],list(badfibers)))
+        log.info("COLUMN={} ELEC_PER_SEC={} FIBERS={}".format(x,col_elec_per_sec[i],list(badfibers)))
         for badfiber in badfibers :
             entries["FIBER"].append(badfiber)
             entries["COLUMN"].append(x)
-            entries["VALUE"].append(col_val[i])
+            entries["ELEC_PER_SEC"].append(col_elec_per_sec[i])
     if args.badfiber_table is not None :
         t = Table()
         for k in entries.keys() :
@@ -161,7 +166,7 @@ if not args.nopsf : # add fiber info
 if args.badcol_table is not None :
     t = Table()
     t["COLUMN"]=col_x
-    t["VALUE"]=col_val
+    t["ELEC_PER_SEC"]=col_elec_per_sec
     odir=os.path.dirname(args.badcol_table)
     if not os.path.isdir(odir):
         os.makedirs(odir)
