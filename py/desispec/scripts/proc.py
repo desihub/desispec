@@ -310,12 +310,12 @@ def main(args=None, comm=None):
             for i in range(rank, len(args.cameras), size):
                 camera = args.cameras[i]
                 preprocfile = findfile('preproc', args.night, args.expid, camera)
-                badcolumnsfile = findfile('badcolumns', args.night, camera)
+                badcolumnsfile = findfile('badcolumns', night=args.night, camera=camera)
                 if not os.path.isfile(badcolumnsfile) :
                     cmd = "desi_inspect_dark"
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --badcol-table {}".format(badcolumnsfile)
-                    runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[badcolumnsfile])
+                    runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
 
             if comm is not None :
                 comm.barrier()
@@ -552,6 +552,7 @@ def main(args=None, comm=None):
         if rank > 0:
             cmds = inputs = outputs = None
         else:
+            #- rank 0 collects commands to broadcast to others
             cmds = dict()
             inputs = dict()
             outputs = dict()
@@ -569,21 +570,26 @@ def main(args=None, comm=None):
 
                 preprocfile = findfile('preproc', args.night, args.expid, camera)
                 psffile = findfile('psf', args.night, args.expid, camera)
-                framefile = findfile('frame', args.night, args.expid, camera)
+                finalframefile = findfile('frame', args.night, args.expid, camera)
+                if os.path.exists(finalframefile):
+                    log.info('{} already exists; not regenerating'.format(
+                        os.path.basename(finalframefile)))
+                    continue
+
+                #- finalframefile doesn't exist; proceed with command
+                framefile = finalframefile.replace(".fits","-no-badcolumn-mask.fits")
                 cmd += ' -i {}'.format(preprocfile)
                 cmd += ' -p {}'.format(psffile)
                 cmd += ' -o {}'.format(framefile)
                 cmd += ' --psferr 0.1'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
-                    if rank == 0:
-                        log.info('Include barycentric correction')
+                    log.info('Include barycentric correction')
                     cmd += ' --barycentric-correction'
 
-                if not os.path.exists(framefile):
-                    cmds[camera] = cmd
-                    inputs[camera] = [preprocfile, psffile]
-                    outputs[camera] = [framefile,]
+                cmds[camera] = cmd
+                inputs[camera] = [preprocfile, psffile]
+                outputs[camera] = [framefile,]
 
         #- TODO: refactor/combine this with PSF comm splitting logic
         if comm is not None:
@@ -621,6 +627,42 @@ def main(args=None, comm=None):
 
         timer.stop('extract')
         if comm is not None:
+            comm.barrier()
+
+    #-------------------------------------------------------------------------
+    #- Badcolumn specmask and fibermask
+    if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
+       ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
+
+        if rank==0 :
+            log.info('Starting desi_compute_badcolumn_mask at {}'.format(time.asctime()))
+
+        for i in range(rank, len(args.cameras), size):
+            camera     = args.cameras[i]
+            outfile    = findfile('frame', args.night, args.expid, camera)
+            infile     = outfile.replace(".fits","-no-badcolumn-mask.fits")
+            psffile    = findfile('psf', args.night, args.expid, camera)
+            badcolfile = findfile('badcolumns', night=args.night, camera=camera)
+            cmd = "desi_compute_badcolumn_mask -i {} -o {} --psf {} --badcolumns {}".format(
+                infile, outfile, psffile, badcolfile)
+
+            if os.path.exists(outfile):
+                log.info('{} already exists; not (re-)applying bad column mask'.format(os.path.basename(outfile)))
+                continue
+
+            if os.path.exists(badcolfile):
+                runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+                #- if successful, remove temporary frame-*-no-badcolumn-mask
+                if os.path.isfile(outfile) :
+                    log.info("rm "+infile)
+                    os.unlink(infile)
+
+            else:
+                log.warning(f'Missing {badcolfile}; not applying badcol mask')
+                log.info(f"mv {infile} {outfile}")
+                os.rename(infile, outfile)
+
+        if comm is not None :
             comm.barrier()
 
     #-------------------------------------------------------------------------
