@@ -81,14 +81,47 @@ def compute_badcolumn_specmask(frame,xyset,badcolumns_table,threshold_value=0.00
     return mask
 
 def compute_badcolumn_fibermask(frame_mask,threshold_specfrac=0.4) :
+    """
+    fills a mask for fibers affected by a bad CCD column.
+
+    Args:
+
+     frame_mask: 2D integer numpy array (nfibers x nwavelength), with bitmask defined in desispec.maskbits.specmask
+     threshold_specfrac: fraction of specmask.BADCOLUMN masked pixels to trigger a fibermask bitmask fibermask.BADCOLUMN.
+
+    Returns:
+
+     fiber mask 1D numpy array of size nfibers (bitwise OR of the orginal mask with the newly set bits)
+    """
+    log = get_logger()
 
     fiber_mask = np.zeros(frame_mask.shape[0],dtype='uint32')
     badfibers  = np.sum((frame_mask & specmask.BADCOLUMN)>0,axis=1) >= (threshold_specfrac*frame_mask.shape[1])
     fiber_mask[badfibers] |= fibermask.BADCOLUMN
+
+    log.info("Masked {} fibers".format(np.sum(badfibers)))
+
     return fiber_mask
 
 def add_badcolumn_mask(frame,xyset,badcolumns_table,threshold_value=0.005,threshold_specfrac=0.4) :
+    """
+    Modifies the input frame spectral mask and fiber mask (frame.mask and frame.fibermap["FIBERSTATUS"].mask)
+    by adding (bitwise OR) the BADCOLUMN bits for values/fibers affected by bad CCD columns.
 
+    Args:
+
+     frame: desispec.frame.Frame instance
+     xyset: desispec.xytraceset.XYTraceSet instance (valid for the frame)
+     badcolumns_table: astropy.table.Table with columns "COLUMN" (CCD column index)
+                       and "ELEC_PER_SEC", value in CCD column, in electron / sec
+     threshold_value: threshold for masking spectral pixels, in electron / sec
+     threshold_specfrac: fraction of specmask.BADCOLUMN masked pixels to trigger a fibermask bitmask fibermask.BADCOLUMN.
+
+    Returns:
+
+      nothing, the input frame is modified
+
+    """
     mask = compute_badcolumn_specmask(frame=frame,xyset=xyset,badcolumns_table=badcolumns_table,threshold_value=threshold_value)
     if mask is None :
         return # don't do anything
