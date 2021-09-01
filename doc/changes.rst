@@ -2,14 +2,39 @@
 desispec Change Log
 ===================
 
-0.45.4 (unreleased)
+0.46.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.46.0 (2021-09-01)
 -------------------
 
 * Detect and flag sky fibers affected by a bright source (PR `#1367`_)
-* Adjust spectral traces when computing CCD variance in preprocessing (PR `#1368`_).
+* Adjust spectral traces when computing CCD variance in preprocessing (PR `#1368`_, `#1378`_).
+* Detect bad CCD columns in nightly dark; use to mask impacted wavelengths
+  of individual spectra (PR `#1371`_).
+* Model CCD readnoise with Poisson noise from the zero exposure dark current
+  (PR `#1372`_).
+* Speed up coadd_cameras (PR `#1377`_).
+* Improve sky subtraction with PCA model of wavelength and LSF sigma
+  adjustments (PR `#1381`_).
+* Swap fibers 3402 and 3429 if input fiber:location map is wrong (PR `#1382`_).
+* Tile QA minor fixes (PR `#1385`_).
+* Allow fiberassign SVN to override raw data fiberassign (PR `#1387`_).
+* Add ``desi_run_night --tiles`` option (PR `#1391`_).
 
 .. _`#1367`: https://github.com/desihub/desispec/pull/1367
 .. _`#1368`: https://github.com/desihub/desispec/pull/1368
+.. _`#1371`: https://github.com/desihub/desispec/pull/1371
+.. _`#1372`: https://github.com/desihub/desispec/pull/1372
+.. _`#1377`: https://github.com/desihub/desispec/pull/1377
+.. _`#1378`: https://github.com/desihub/desispec/pull/1378
+.. _`#1381`: https://github.com/desihub/desispec/pull/1381
+.. _`#1382`: https://github.com/desihub/desispec/pull/1382
+.. _`#1385`: https://github.com/desihub/desispec/pull/1385
+.. _`#1387`: https://github.com/desihub/desispec/pull/1387
+.. _`#1391`: https://github.com/desihub/desispec/pull/1391
 
 0.45.3 (2021-07-29)
 -------------------
