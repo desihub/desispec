@@ -403,6 +403,53 @@ class TestIO(unittest.TestCase):
             self.assertTrue(xsky.flux.dtype.isnative)
             self.assertEqual(sky.mask.dtype, xsky.mask.dtype)
 
+    def test_skycorr_rw(self):
+        """Test reading and writing skycorr files.
+        """
+        from ..skycorr import SkyCorr
+        from ..io.skycorr import read_skycorr, write_skycorr
+        nspec, nwave = 5,10
+        wave  = np.linspace(4000.,8000,nwave)
+        dwave = 0.02*np.random.uniform(size=(nspec, nwave))
+        dlsf  = 0.1*np.random.uniform(size=(nspec, nwave))
+        header = {"HELLO":"WORLD"}
+        skycorr = SkyCorr(wave=wave, dwave=dwave, dlsf=dlsf, header=header)
+        write_skycorr(self.testfile, skycorr)
+        xskycorr = read_skycorr(self.testfile)
+        self.assertTrue(np.all(skycorr.wave.astype('f8')  == xskycorr.wave))
+        self.assertTrue(np.all(skycorr.dwave.astype('f4').astype('f8') == xskycorr.dwave))
+        self.assertTrue(np.all(skycorr.dlsf.astype('f4').astype('f8')  == xskycorr.dlsf))
+
+    def test_skycorr_pca_rw(self):
+        """Test reading and writing skycorr files.
+        """
+        from ..skycorr import SkyCorrPCA
+        from ..io.skycorr import read_skycorr_pca, write_skycorr_pca
+        nspec, nwave = 5,10
+        wave  = np.linspace(4000.,8000,nwave)
+        dwave_mean = 0.02*np.random.uniform(size=(nspec, nwave))
+        dwave_eigenvectors = 0.02*np.random.uniform(size=(3,nspec, nwave))
+        dwave_eigenvalues = np.random.uniform(size=12)
+        dlsf_mean  = 0.1*np.random.uniform(size=(nspec, nwave))
+        dlsf_eigenvectors = 0.1*np.random.uniform(size=(3,nspec, nwave))
+        dlsf_eigenvalues = np.random.uniform(size=12)
+
+        header = {"HELLO":"WORLD"}
+        skycorr = SkyCorrPCA(wave=wave,
+                             dwave_mean=dwave_mean,
+                             dwave_eigenvectors=dwave_eigenvectors,
+                             dwave_eigenvalues=dwave_eigenvalues,
+                             dlsf_mean=dlsf_mean,
+                             dlsf_eigenvectors=dlsf_eigenvectors,
+                             dlsf_eigenvalues=dlsf_eigenvalues,
+                             header=header)
+        write_skycorr_pca(self.testfile, skycorr)
+        xskycorr = read_skycorr_pca(self.testfile)
+        self.assertTrue(np.all(skycorr.wave.astype('f8')  == xskycorr.wave))
+        self.assertTrue(np.all(skycorr.dwave_mean.astype('f4').astype('f8') == xskycorr.dwave_mean))
+        self.assertTrue(np.all(skycorr.dlsf_mean.astype('f4').astype('f8')  == xskycorr.dlsf_mean))
+
+
     # fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave
     def test_fiberflat_rw(self):
         """Test reading and writing fiberflat files.

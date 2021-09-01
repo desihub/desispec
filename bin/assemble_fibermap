@@ -24,6 +24,8 @@ parser.add_argument("--overwrite", action="store_true",
         help="overwrite pre-existing output file")
 parser.add_argument("--force", action="store_true",
         help="make fibermap even if missing input guide or coordinates files")
+parser.add_argument("--no-svn-override", action="store_true",
+        help="Do not allow fiberassign SVN to override raw data")
 
 args = parser.parse_args()
 
@@ -41,7 +43,9 @@ if os.path.exists(args.outfile):
         log.critical(f'{args.outfile} already exists; remove or use --overwrite')
         sys.exit(1)
 
-fibermap = assemble_fibermap(args.night, args.expid, badamps=args.badamps, badfibers_filename=args.badfibers, force=args.force)
+fibermap = assemble_fibermap(args.night, args.expid, badamps=args.badamps,
+        badfibers_filename=args.badfibers, force=args.force,
+        allow_svn_override=(not args.no_svn_override) )
 
 tmpfile = args.outfile+'.tmp'
 fibermap.write(tmpfile, overwrite=args.overwrite, format='fits')
