@@ -26,6 +26,8 @@ parser.add_argument('--badcolumns', type = str, default = None, required = True,
                     help = 'input table with bad columns with at least rows COLUMN and VALUE')
 parser.add_argument('--threshold-elec-per-sec', type = float, default = 0.005, required = False,
                     help = 'threshold in electrons per sec')
+parser.add_argument('--frac-threshold', type = float, default = 0.4, required = False,
+                    help = 'mask fibers with a number of masked spectral value exceeding this threshold')
 
 
 args = parser.parse_args()
@@ -35,7 +37,7 @@ frame   = read_frame(args.infile)
 xyset   = read_xytraceset(args.psf)
 badcols = Table.read(args.badcolumns)
 
-add_badcolumn_mask(frame=frame,xyset=xyset,badcolumns_table=badcols,threshold_value=args.threshold_elec_per_sec)
+add_badcolumn_mask(frame=frame,xyset=xyset,badcolumns_table=badcols,threshold_value=args.threshold_elec_per_sec,threshold_specfrac=args.frac_threshold)
 
 if args.overwrite  :
     write_frame(args.infile,frame)
