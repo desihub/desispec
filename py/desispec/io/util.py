@@ -640,6 +640,33 @@ def replace_prefix(filepath, oldprefix, newprefix):
     filename = filename.replace(oldprefix, newprefix, 1)
     return os.path.join(path, filename)
 
+def get_tempfilename(filename):
+    """
+    Returns unique tempfile in same directory as filename with same extension
+
+    Args:
+        filename (str): input filename
+
+    Returns unique filename in same directory
+
+    Example intended usage::
+
+       tmpfile = get_tempfile(filename)
+       table.write(tmpfile)
+       os.rename(tmpfile, filename)
+
+    By keeping the same extension as the input file, this preserves the
+    ability of table.write to derive the format to use, and if something
+    goes wrong with the I/O it doesn't leave a corrupted partially written
+    file with the final name.  The tempfile includes the PID to provide some
+    race condition protection (the last one do do os.rename wins, but at least
+    different processes won't corrupt each other's files).
+    """
+    base, extension = os.path.splitext(filename)
+    pid = os.getpid()
+    tempfile = f'{base}_tmp{pid}{extension}'
+    return tempfile
+
 def addkeys(hdr1, hdr2, skipkeys=None):
     """
     Add new header keys from hdr2 to hdr1, skipping skipkeys

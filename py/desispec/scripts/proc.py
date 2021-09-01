@@ -30,6 +30,9 @@ import json
 import numpy as np
 import fitsio
 from astropy.io import fits
+
+from astropy.table import Table,vstack
+
 import glob
 import desiutil.timer
 import desispec.io
@@ -194,6 +197,7 @@ def main(args=None, comm=None):
                     args.night, args.expid, fibermap)
             if args.badamps is not None:
                 cmd += ' --badamps={}'.format(args.badamps)
+
             runcmd(cmd, inputs=[], outputs=[fibermap])
 
         fibermap_ok = os.path.exists(fibermap)
@@ -237,7 +241,7 @@ def main(args=None, comm=None):
             if fibermap is not None:
                 cmd += " --fibermap {}".format(fibermap)
             if not args.obstype in ['ARC'] : # never model variance for arcs
-                if not args.no_model_pixel_variance :
+                if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
             runcmd(cmd, inputs=[args.input], outputs=[outfile])
 
@@ -281,6 +285,42 @@ def main(args=None, comm=None):
         input_psf = comm.bcast(input_psf, root=0)
 
     timer.stop('findpsf')
+
+
+    #-------------------------------------------------------------------------
+    #- Dark (to detect bad columns)
+
+    if args.obstype == 'DARK' :
+
+        # check exposure time and perform a dark inspection only
+        # if it is a 300s exposure
+        exptime = None
+        if rank == 0 :
+            rawfilename=findfile('raw', args.night, args.expid)
+            head=fitsio.read_header(rawfilename,1)
+            exptime=head["EXPTIME"]
+        if comm is not None :
+            exptime = comm.bcast(exptime, root=0)
+
+        if exptime > 270 and exptime < 330 :
+            timer.start('inspect_dark')
+            if rank == 0 :
+                log.info('Starting desi_inspect_dark at {}'.format(time.asctime()))
+
+            for i in range(rank, len(args.cameras), size):
+                camera = args.cameras[i]
+                preprocfile = findfile('preproc', args.night, args.expid, camera)
+                badcolumnsfile = findfile('badcolumns', night=args.night, camera=camera)
+                if not os.path.isfile(badcolumnsfile) :
+                    cmd = "desi_inspect_dark"
+                    cmd += " -i {}".format(preprocfile)
+                    cmd += " --badcol-table {}".format(badcolumnsfile)
+                    runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
+
+            if comm is not None :
+                comm.barrier()
+
+            timer.stop('inspect_dark')
 
     #-------------------------------------------------------------------------
     #- Traceshift
@@ -512,6 +552,7 @@ def main(args=None, comm=None):
         if rank > 0:
             cmds = inputs = outputs = None
         else:
+            #- rank 0 collects commands to broadcast to others
             cmds = dict()
             inputs = dict()
             outputs = dict()
@@ -529,21 +570,26 @@ def main(args=None, comm=None):
 
                 preprocfile = findfile('preproc', args.night, args.expid, camera)
                 psffile = findfile('psf', args.night, args.expid, camera)
-                framefile = findfile('frame', args.night, args.expid, camera)
+                finalframefile = findfile('frame', args.night, args.expid, camera)
+                if os.path.exists(finalframefile):
+                    log.info('{} already exists; not regenerating'.format(
+                        os.path.basename(finalframefile)))
+                    continue
+
+                #- finalframefile doesn't exist; proceed with command
+                framefile = finalframefile.replace(".fits","-no-badcolumn-mask.fits")
                 cmd += ' -i {}'.format(preprocfile)
                 cmd += ' -p {}'.format(psffile)
                 cmd += ' -o {}'.format(framefile)
                 cmd += ' --psferr 0.1'
 
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
-                    if rank == 0:
-                        log.info('Include barycentric correction')
+                    log.info('Include barycentric correction')
                     cmd += ' --barycentric-correction'
 
-                if not os.path.exists(framefile):
-                    cmds[camera] = cmd
-                    inputs[camera] = [preprocfile, psffile]
-                    outputs[camera] = [framefile,]
+                cmds[camera] = cmd
+                inputs[camera] = [preprocfile, psffile]
+                outputs[camera] = [framefile,]
 
         #- TODO: refactor/combine this with PSF comm splitting logic
         if comm is not None:
@@ -581,6 +627,42 @@ def main(args=None, comm=None):
 
         timer.stop('extract')
         if comm is not None:
+            comm.barrier()
+
+    #-------------------------------------------------------------------------
+    #- Badcolumn specmask and fibermask
+    if ( args.obstype in ['FLAT', 'TESTFLAT', 'SKY', 'TWILIGHT']     )   or \
+       ( args.obstype in ['SCIENCE'] and (not args.noprestdstarfit) ):
+
+        if rank==0 :
+            log.info('Starting desi_compute_badcolumn_mask at {}'.format(time.asctime()))
+
+        for i in range(rank, len(args.cameras), size):
+            camera     = args.cameras[i]
+            outfile    = findfile('frame', args.night, args.expid, camera)
+            infile     = outfile.replace(".fits","-no-badcolumn-mask.fits")
+            psffile    = findfile('psf', args.night, args.expid, camera)
+            badcolfile = findfile('badcolumns', night=args.night, camera=camera)
+            cmd = "desi_compute_badcolumn_mask -i {} -o {} --psf {} --badcolumns {}".format(
+                infile, outfile, psffile, badcolfile)
+
+            if os.path.exists(outfile):
+                log.info('{} already exists; not (re-)applying bad column mask'.format(os.path.basename(outfile)))
+                continue
+
+            if os.path.exists(badcolfile):
+                runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+                #- if successful, remove temporary frame-*-no-badcolumn-mask
+                if os.path.isfile(outfile) :
+                    log.info("rm "+infile)
+                    os.unlink(infile)
+
+            else:
+                log.warning(f'Missing {badcolfile}; not applying badcol mask')
+                log.info(f"mv {infile} {outfile}")
+                os.rename(infile, outfile)
+
+        if comm is not None :
             comm.barrier()
 
     #-------------------------------------------------------------------------

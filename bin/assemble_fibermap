@@ -16,6 +16,8 @@ parser.add_argument("-o", "--outfile", type=str, required=True,
 parser.add_argument("-b","--badamps", type=str,
         help="comma separated list of {camera}{petal}{amp}"+\
              ", i.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'")
+parser.add_argument("--badfibers", type=str,
+        help="filename with table of bad fibers (with at least FIBER and FIBERSTATUS columns)")
 parser.add_argument("--debug", action="store_true",
         help="enter ipython debug mode at end")
 parser.add_argument("--overwrite", action="store_true",
@@ -42,7 +44,8 @@ if os.path.exists(args.outfile):
         sys.exit(1)
 
 fibermap = assemble_fibermap(args.night, args.expid, badamps=args.badamps,
-        force=args.force, allow_svn_override=(not args.no_svn_override))
+        badfibers_filename=args.badfibers, force=args.force,
+        allow_svn_override=(not args.no_svn_override) )
 
 tmpfile = args.outfile+'.tmp'
 fibermap.write(tmpfile, overwrite=args.overwrite, format='fits')
@@ -51,10 +54,3 @@ log.info(f'Wrote {args.outfile}')
 
 if args.debug:
     import IPython; IPython.embed()
-
-
-
-
-
-
-

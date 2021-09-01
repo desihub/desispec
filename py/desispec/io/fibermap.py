@@ -410,8 +410,8 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
 
         return badcol
 
-def assemble_fibermap(night, expid, badamps=None, force=False,
-        allow_svn_override=True):
+def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
+                      force=False, allow_svn_override=True):
     """
     Create a fibermap for a given night and expid
 
@@ -421,6 +421,7 @@ def assemble_fibermap(night, expid, badamps=None, force=False,
 
     Options:
         badamps (str): comma separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
+        badfibers_filename (str): filename with table of bad fibers with at least two columns: FIBER and FIBERSTATUS
         force (bool): create fibermap even if missing coordinates/guide files
         allow_svn_override (bool): if True (default), allow fiberassign SVN to override raw data
     """
@@ -764,7 +765,7 @@ def assemble_fibermap(night, expid, badamps=None, force=False,
     else:
         fibermap.meta['COORDFIL'] = 'MISSING'
 
-    #- Lastly, mask the fibers defined by badamps
+    #- mask the fibers defined by badamps
     if badamps is not None:
         maskbits = {'b':fibermask.BADAMPB, 'r':fibermask.BADAMPR, 'z':fibermask.BADAMPZ}
         ampoffsets = {'A': 0, 'B':250, 'C':0, 'D':250}
@@ -779,6 +780,18 @@ def assemble_fibermap(night, expid, badamps=None, force=False,
                      f'{camera}{petal}{amplifier}')
             ampfiblocs = np.in1d(fibermap['FIBER'], ampfibs)
             fibermap['FIBERSTATUS'][ampfiblocs] |= maskbit
+
+    #- mask the fibers defined by bad fibers
+    if badfibers_filename is not None:
+        table=Table.read(badfibers_filename)
+
+        # list of bad fibers that are in the fibermap
+        badfibers=np.intersect1d(np.unique(table["FIBER"]),fibermap["FIBER"])
+
+        for i,fiber in enumerate(badfibers) :
+            # for each of the bad fiber, add the bad bits to the fiber status
+            badfibermask = np.bitwise_or.reduce(table["FIBERSTATUS"][table["FIBER"]==fiber])
+            fibermap['FIBERSTATUS'][fibermap["FIBER"]==fiber] |= badfibermask
 
     #- NaN are a pain; reset to dummy values
     for col in [

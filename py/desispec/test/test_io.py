@@ -1005,6 +1005,20 @@ class TestIO(unittest.TestCase):
         newfile = 'quat-foo-blat.fits'
         self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
 
+    def test_get_tempfilename(self):
+        """test desispec.io.util.get_tempfilename
+        """
+        from ..io.util import get_tempfilename
+        filename = '/a/b/c.fits'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits'))
+
+        filename = 'blat.ecsv'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.ecsv'))
+
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
         from ..io.fibermap import find_fiberassign_file
