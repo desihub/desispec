@@ -24,7 +24,7 @@ parser.add_argument('--psf', type = str, default = None, required = True,
                     help = 'input psf file for the traceset')
 parser.add_argument('--badcolumns', type = str, default = None, required = True,
                     help = 'input table with bad columns with at least rows COLUMN and VALUE')
-parser.add_argument('--threshold-elec-per-sec', type = float, default = 0.005, required = True,
+parser.add_argument('--threshold-elec-per-sec', type = float, default = 0.005, required = False,
                     help = 'threshold in electrons per sec')
 
 
