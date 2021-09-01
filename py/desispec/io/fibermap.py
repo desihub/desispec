@@ -345,7 +345,7 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     Returns first fiberassign file found on or before `expid` on `night`.
 
-    Raises FileNotFoundError if no fibermap is found
+    Raises FileNotFoundError if no fiberassign file is found
     """
     log = get_logger()
     if nightdir is None:
@@ -375,7 +375,43 @@ def find_fiberassign_file(night, expid, tileid=None, nightdir=None):
 
     return fafile
 
-def assemble_fibermap(night, expid, badamps=None, force=False):
+def compare_fiberassign(fa1, fa2, compare_all=False):
+    """
+    Check whether two fiberassign tables agree for cols used by ICS/platemaker
+
+    Args:
+        fa1, fa2: fiberassign astropy Tables or numpy structured arrays
+
+    Options:
+        compare_all: if True, compare all columns, not just those used by ops
+
+    Returns list of columns with mismatches; empty list if all agree
+
+    Note: if both are NaN, it is considered a match
+    """
+    if compare_all:
+        compare_columns = fa1.dtype.names
+    else:
+        compare_columns = (
+                'TARGETID', 'TARGET_RA', 'TARGET_DEC',
+                'PMRA', 'PMDEC', 'REF_EPOCH', 'LAMBDA_REF', 'LOCATION',
+                'PETAL_LOC', 'DEVICE_LOC')
+
+        badcol = list()
+        for col in compare_columns:
+
+            #- check for mismatches, but allow for NaN
+            match = (fa1[col] == fa2[col])
+            if fa1[col].dtype.kind == 'f':
+                match |= (np.isnan(fa1[col]) & np.isnan(fa2[col]))
+
+            if np.any(~match):
+                badcol.append(col)
+
+        return badcol
+
+def assemble_fibermap(night, expid, badamps=None, force=False,
+        allow_svn_override=True):
     """
     Create a fibermap for a given night and expid
 
@@ -386,6 +422,7 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
     Options:
         badamps (str): comma separated list of "{camera}{petal}{amp}", i.e. "[brz][0-9][ABCD]". Example: 'b7D,z8A'
         force (bool): create fibermap even if missing coordinates/guide files
+        allow_svn_override (bool): if True (default), allow fiberassign SVN to override raw data
     """
 
     log = get_logger()
@@ -398,10 +435,25 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
         rawheader = fits.getheader(rawfile, 'SPS')
 
     #- Find fiberassign file
-    fafile = find_fiberassign_file(night, expid)
+    rawfafile = fafile = find_fiberassign_file(night, expid)
+
+    #- Look for override fiberassign file in svn
+    tileid = rawheader['TILEID']
+    if allow_svn_override and ('DESI_TARGET' in os.environ):
+        targdir = os.getenv('DESI_TARGET')
+        testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
+        if os.path.exists(testfile+'.gz'):
+            fafile = testfile+'.gz'
+        elif os.path.exists(testfile):
+            fafile = testfile
+
+        if rawfafile != fafile:
+            log.info(f'Overriding raw fiberassign file {rawfafile} with svn {fafile}')
+        else:
+            log.info(f'{testfile}[.gz] not found; sticking with raw data fiberassign file')
 
     #- Find coordinates file in same directory
-    dirname, filename = os.path.split(fafile)
+    dirname, filename = os.path.split(rawfafile)
     globfiles = glob.glob(dirname+'/coordinates-*.fits')
     if len(globfiles) == 1:
         coordfile = globfiles[0]
@@ -418,7 +470,7 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
             f'Multiple coordinates*.fits files in fiberassign dir {dirname}')
 
     #- And guide file
-    dirname, filename = os.path.split(fafile)
+    dirname, filename = os.path.split(rawfafile)
     globfiles = glob.glob(dirname+'/guide-????????.fits.fz')
     if len(globfiles) == 0:
         #- try falling back to acquisition image
@@ -452,6 +504,8 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
     log.info(f'Night {night} spectro expid {expid}')
     log.info(f'Raw data file {rawfile}')
     log.info(f'Fiberassign file {fafile}')
+    if fafile != rawfafile:
+        log.info(f'Original raw fiberassign file {rawfafile}')
     log.info(f'Platemaker coordinates file {coordfile}')
     log.info(f'Guider file {guidefile}')
 
@@ -460,6 +514,29 @@ def assemble_fibermap(night, expid, badamps=None, force=False):
 
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
+
+    #- if using svn fiberassign override, check consistency of columns that
+    #- ICS / platemaker used for actual observations; they should never change
+    if fafile != rawfafile:
+        rawfa = Table.read(rawfafile, 'FIBERASSIGN')
+        rawfa.sort('LOCATION')
+        badcol = compare_fiberassign(rawfa, fa)
+
+        #- special case for tile 80713 on 20210110 with PMRA,PMDEC NaN -> 0.0
+        if night == 20210110 and tileid == 80713:
+            for col in ['PMRA', 'PMDEC']:
+                if col in badcol:
+                    ii = rawfa[col] != fa[col]
+                    if np.all(np.isnan(rawfa[col][ii]) & (fa[col][ii] == 0.0)):
+                        log.warning(f'Ignoring {col} mismatch NaN -> 0.0 on tile {tileid} night {night}')
+                        badcol.remove(col)
+
+        if len(badcol)>0:
+            msg = f'incompatible raw/svn fiberassign files for columns {badcol}'
+            log.critical(msg)
+            raise ValueError(msg)
+        else:
+            log.info('svn fiberassign columns used for obervations match raw data (good)')
 
     #- Tiles designed before Fall 2021 had a LOCATION:FIBER swap for fibers
     #- 3402 and 3429 at locations 6098 and 6099; check and correct if needed.
