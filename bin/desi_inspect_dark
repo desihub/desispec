@@ -111,8 +111,14 @@ for half in range(2) :
     peak=np.where(peak)[0]
 
     for p in peak :
+
+        # sum over a band of 3 pixels (to account for wide bright columns)
+        pb=max(0,p-1)
+        pe=min(pix.shape[1],p+2)
+        tmpval=np.sum(pix[:,pb:pe],axis=1)
+
         # median filter for column that do not cross the whole amplifier
-        medval = scipy.ndimage.median_filter(pix[b:e,p],400)
+        medval = scipy.ndimage.median_filter(tmpval,400)
         i = np.argmax(np.abs(medval))
         val = medval[i]
         # apply threshold here
