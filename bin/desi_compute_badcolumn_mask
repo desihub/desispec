@@ -24,6 +24,9 @@ parser.add_argument('--psf', type = str, default = None, required = True,
                     help = 'input psf file for the traceset')
 parser.add_argument('--badcolumns', type = str, default = None, required = True,
                     help = 'input table with bad columns with at least rows COLUMN and VALUE')
+parser.add_argument('--threshold-elec-per-sec', type = float, default = 0.005, required = True,
+                    help = 'threshold in electrons per sec')
+
 
 args = parser.parse_args()
 log  = get_logger()
@@ -32,7 +35,7 @@ frame   = read_frame(args.infile)
 xyset   = read_xytraceset(args.psf)
 badcols = Table.read(args.badcolumns)
 
-add_badcolumn_mask(frame=frame,xyset=xyset,badcolumns_table=badcols)
+add_badcolumn_mask(frame=frame,xyset=xyset,badcolumns_table=badcols,threshold_value=args.threshold_elec_per_sec)
 
 if args.overwrite  :
     write_frame(args.infile,frame)
