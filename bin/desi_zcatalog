@@ -139,6 +139,9 @@ for ifile, rrfile in enumerate(redrockfiles):
                 expfibermap = fx['EXP_FIBERMAP'].read()
                 tsnr2 = fx['TSNR2'].read()
                 assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+            else:
+                expfibermap = None
+                tsnr2 = None
 
         else:
             redshifts = fx['REDSHIFTS'].read()
@@ -166,21 +169,29 @@ for ifile, rrfile in enumerate(redrockfiles):
     else:
         fmcols = list(fibermap.dtype.names)
         fmcols.remove('TARGETID')
-        tsnr2cols = list(tsnr2.dtype.names)
-        tsnr2cols.remove('TARGETID')
-        data.append(hstack(
+        if tsnr2 is not None:
+            tsnr2cols = list(tsnr2.dtype.names)
+            tsnr2cols.remove('TARGETID')
+            data.append(hstack(
             [Table(redshifts), Table(fibermap[fmcols]), Table(tsnr2[tsnr2cols])]
             ))
+        else:
+            data.append(hstack(
+            [Table(redshifts), Table(fibermap[fmcols])]
+            ))
 
-    if "expfibermap" in locals():
+    if expfibermap is not None:
         exp_fibermaps.append(expfibermap)
+
 
 log.info('Stacking zcat')
 zcat = np.array(vstack(data))
-
 if exp_fibermaps:
     log.info('Stacking exposure fibermaps')
     expfm = np.hstack(exp_fibermaps)
+else:
+    expfm = None
+
 
 #- untested with new formats, so commenting out for now
 # if args.match:
@@ -193,7 +204,8 @@ header = fitsio.read_header(redrockfiles[0], 0)
 log.info(f'Writing {args.outfile}')
 tmpfile = args.outfile + '.tmp'
 fitsio.write(tmpfile, zcat, header=header, extname='ZCATALOG', clobber=True)
-if not args.minimal:
+
+if not args.minimal and expfm is not None:
     fitsio.write(tmpfile, expfm, extname='EXP_FIBERMAP')
 
 os.rename(tmpfile, args.outfile)
