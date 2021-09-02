@@ -5,7 +5,16 @@ desispec Change Log
 0.46.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Restore ``desi_zcatalog`` backwards compatibility for inputs without a
+  separate EXP_FIBERMAP (PR `#1392`_).
+* ``tsnr_afterburner`` robustness to missing/different columns, e.g. from
+  reprocessed daily exposures (PR `#1396`_).
+* Save STDSTAR_FIBERMAP in fluxcalib file recording which stars were used
+  (PR `#1400`_).
+
+.. _`#1392`: https://github.com/desihub/desispec/pull/1392
+.. _`#1396`: https://github.com/desihub/desispec/pull/1396
+.. _`#1400`: https://github.com/desihub/desispec/pull/1400
 
 0.46.0 (2021-09-01)
 -------------------
