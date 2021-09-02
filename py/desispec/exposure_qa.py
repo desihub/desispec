@@ -14,7 +14,7 @@ from pkg_resources import resource_filename
 
 from desiutil.log import get_logger
 
-from desispec.io import findfile,specprod_root,read_fibermap,read_xytraceset,read_stdstar_models,read_frame
+from desispec.io import findfile,specprod_root,read_fibermap,read_xytraceset,read_stdstar_models,read_frame,read_flux_calibration
 from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
@@ -199,15 +199,43 @@ def compute_exposure_qa(night, expid, specprod_dir):
         ####################################################################
         stdstars_filename = findfile("stdstars",night,expid,spectrograph=spectro,specprod_dir=specprod_dir)
         if os.path.isfile(stdstars_filename) :
-            t = fitsio.read(stdstars_filename,'METADATA')
-            # SNR cut is same as in stdstars.py, this is redundant,
-            # but for clarity on the selection, I repeat the cuts here
-            # CHI2DOF and color cut are used in flux calibration
-            # generous color cut here.
-            good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)
-            if "MODEL_G-R" in t.dtype.names :
-                good &= (np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.1) # 0.1 is the selection cut used in prod
-            ngood=np.sum(good)
+
+            starfibers = fitsio.read(stdstars_filename,'FIBERS')
+
+            # New reductions have list of used standard stars in calibration files
+            camera=f"r{spectro}"
+            fluxcal_filename=findfile('fluxcalib',night,expid,camera,specprod_dir=specprod_dir)
+
+            if not os.path.isfile(fluxcal_filename) :
+                log.warning("no file {}".format(fluxcal_filename))
+                continue
+            fluxcal = read_flux_calibration(fluxcal_filename)
+
+            cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+            if not os.path.isfile(cframe_filename) :
+                continue
+            cframe = read_frame(cframe_filename)
+
+            if fluxcal.stdstar_fibermap is not None :
+                log.info("Use the list of stars from the fluxcalibration file")
+                goodfibers  = fluxcal.stdstar_fibermap["FIBER"]
+                goodindices = []
+                for fiber in goodfibers :
+                    goodindices.append( np.where(starfibers==fiber)[0][0])
+            else :
+                log.info("Apply the same cuts as in compute_flux_calibration to get the list of stars")
+                t = fitsio.read(stdstars_filename,'METADATA')
+                # SNR cut is same as in stdstars.py, this is redundant,
+                # but for clarity on the selection, I repeat the cuts here
+                # CHI2DOF and color cut are used in flux calibration
+                # generous color cut here.
+                good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)
+                if "MODEL_G-R" in t.dtype.names :
+                    good &= (np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.1) # 0.1 is the selection cut used in prod
+                goodindices = np.where(good)[0]
+                goodfibers = starfibers[goodindices]
+
+            ngood=goodfibers.size
             petalqa_table["NSTDSTAR"][petal]=ngood
 
             if ngood < qa_params["min_number_of_good_stdstars_per_petal"] :
@@ -217,26 +245,25 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 log.info("petal #{} has {} good std stars for calibration".format(petal,ngood))
 
                 # measure RMS
-                goodindices = np.where(good)[0]
                 modelwave = fitsio.read(stdstars_filename,'WAVELENGTH')
                 modelflux = fitsio.read(stdstars_filename,'FLUX')
                 modelflux = modelflux[goodindices]
 
-                starfibers = fitsio.read(stdstars_filename,'FIBERS')
-                goodfibers = starfibers[goodindices]%500
+                log.debug("good fibers = {}".format(goodfibers))
+                log.debug("star fibers = {}".format(starfibers))
+                log.debug("goodindices = {}".format(goodindices))
 
-                camera=f"r{spectro}"
-                cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
-                if not os.path.isfile(cframe_filename) :
-                    continue
-                cframe = read_frame(cframe_filename)
-                frameflux=cframe.flux[goodfibers]
+
+
+
+                goodfibers_indices=goodfibers%500
                 scale=np.zeros(ngood)
                 wave=np.linspace(6000,7500,100) # coarse
                 for i in range(ngood) :
                     mflux=resample_flux(wave,modelwave,modelflux[i])
-                    dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers[i]],cframe.ivar[goodfibers[i]])
+                    dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers_indices[i]],cframe.ivar[goodfibers_indices[i]])
                     scale[i] = np.sum(dflux*mflux)/np.sum(mflux**2)
+                log.debug("scale={}".format(scale))
                 calib_rms=np.sqrt(np.mean((scale-1)**2))
                 petalqa_table["STARRMS"][petal]=calib_rms
                 if calib_rms>qa_params["max_rms_of_rflux_ratio_of_stdstars"] :
