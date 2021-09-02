@@ -83,9 +83,9 @@ def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
         return 'help'
     if answer.lower() in {'n', 'no', 'false'}:
         return 'no'
-    if _pass and answer.lower() in {'pass'}:
+    if _pass and answer.lower() in {'p','pass'}:
         return 'pass'
-    if _save and answer.lower() in {'save'}:
+    if _save and answer.lower() in {'s','save'}:
         return 'save'
     if answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
@@ -236,7 +236,7 @@ def main():
         viewer.kill()
         viewer=None
     res=yesnohelp("all done, save result in {}?".format(args.outfile),_save=False,_exit=False,_pass=False)
-    if res == "yes" :
+    if res == "yes" or res == "save" :
         tiles_table.write(args.outfile,overwrite=True)
         print("wrote",args.outfile)
 
