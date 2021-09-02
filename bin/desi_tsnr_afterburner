@@ -293,14 +293,32 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     log = get_logger()
 
     #- Create camera summary table; specify names to preserve column order
+    ## Get copy of the columns, one to preserve the original cols and one to add any new cols encountered
     colnames = list(summary_rows[0].keys())
+    orig_colnames = list(summary_rows[0].keys())
     first_print = True
     for ii,row in enumerate(summary_rows):
-        if len(row.keys()) != len(colnames) :
+        missing = [key for key in orig_colnames if key not in row.keys()]
+        additional =  [key for key in row.keys() if key not in orig_colnames]
+        if len(missing) > 0 or len(additional) > 0:
+            ## Only print the column names once to reduce verbosity
             if first_print:
-                log.warning(f"First row of summary_rows had colnames={colnames}")
+                log.warning(f"First row of summary_rows had colnames={orig_colnames}")
                 first_print = False
-            log.warning(f"Row {ii} differs from first, row={row}" )
+            ## List missing columns compared to the first row (if any)
+            if len(missing) > 0:
+                log.warning(f"Row {ii} differs from first, row is missing columns={missing}" )
+            ## Could have both additional and missing columns, so this is independent check. List additional
+            if len(additional) > 0:
+                log.warning(f"Row {ii} differs from first, row has additional columns={additional}" )
+
+        ## Beyond the differences listed above, make sure to keep a complete list of column names
+        ## for the table generation
+        newcols =  [key for key in row.keys() if key not in colnames]
+        if len(newcols) > 0:
+            log.warning(f"Identified the following new columns: {newcols}. Adding to colnames.")
+            colnames.extend(newcols)
+            
 
     #- specify names to preserve column order
     masked_cam_summary = Table(rows=summary_rows, names=colnames)
