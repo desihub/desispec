@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.46.1 (unreleased)
+0.46.2 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.46.1 (2021-09-03)
 -------------------
 
 * Restore ``desi_zcatalog`` backwards compatibility for inputs without a
@@ -11,10 +16,12 @@ desispec Change Log
   reprocessed daily exposures (PR `#1396`_).
 * Save STDSTAR_FIBERMAP in fluxcalib file recording which stars were used
   (PR `#1400`_).
+* stdstars robust to missing individual frames (PR `#1402`_).
 
 .. _`#1392`: https://github.com/desihub/desispec/pull/1392
 .. _`#1396`: https://github.com/desihub/desispec/pull/1396
 .. _`#1400`: https://github.com/desihub/desispec/pull/1400
+.. _`#1402`: https://github.com/desihub/desispec/pull/1402
 
 0.46.0 (2021-09-01)
 -------------------
