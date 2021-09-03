@@ -868,6 +868,8 @@ def main():
 
     preexisting_tsnr2_expid_table = None
     preexisting_tsnr2_frame_table = None
+    ## Check for existing files
+    ## If opening returns a keyerror due to misnamed HDU, try the old naming convention
     if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
         try:
