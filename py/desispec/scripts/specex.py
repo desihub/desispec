@@ -60,7 +60,7 @@ def main(args, comm=None):
 
     imgfile = args.input_image
     outfile = args.output_psf
-        
+
     nproc = 1
     rank = 0
     if comm is not None:
@@ -187,7 +187,10 @@ def main(args, comm=None):
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
+        t0 = time.time()
         retval = run_specex(com)
+        dt = time.time() - t0
+        log.info(f'PSF fit for bundle {b} on camera {camera} took {dt:.1f} sec')
 
         if retval != 0:
             comstr = " ".join(com)
@@ -218,7 +221,10 @@ def main(args, comm=None):
             sys.stdout.flush()
             time.sleep(5.)
 
+            t0 = time.time()
             merge_psf(inputs,outfits)
+            dt = time.time() - t0
+            log.info(f'PSF merging for camera {camera} took {dt:.1f} sec')
 
             log.info('done merging')
 
@@ -314,6 +320,8 @@ def merge_psf(inputs, output):
 
     # write
     tmpfile = output+'.tmp'
+    if os.environ.get('DESI_LOCALBUFF'):
+        tmpfile=os.environ.get('DESI_LOCALBUFF')+"/{}.fits".format(cam)
     psf_hdulist.writeto(tmpfile, overwrite=True)
     os.rename(tmpfile, output)
     log.info("Wrote PSF {}".format(output))
