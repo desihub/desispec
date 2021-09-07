@@ -215,8 +215,9 @@ def is_same_table_rows(table1,index1,table2,index2) :
     #if table1[index1] == table2[index2] : return True
 
     if sorted(table1.dtype.names) != sorted(table2.dtype.names) :
-        print("not same keys??")
-        return False
+        message="not same columns in the two tables {} != {}".format(sorted(table1.dtype.names),sorted(table2.dtype.names))
+        log.error(message)
+        raise KeyError(message)
     for k in table1.dtype.names :
         if table1[k][index1] != table2[k][index2] :
             return False
@@ -234,6 +235,12 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
     log = get_logger()
 
+    # first check columns and add in previous if missing
+    for k in new_table.dtype.names :
+        if not k in previous_table.dtype.names :
+            log.info("New column {}".format(k))
+            previous_table[k] = np.zeros(len(previous_table),dtype=new_table[k].dtype)
+
     # check whether there is any difference for the new ones
     t2i={t:i for i,t in enumerate(previous_table["TILEID"])}
 
@@ -245,6 +252,9 @@ def merge_tile_completeness_table(previous_table,new_table) :
     keep_from_previous = list(np.where(~np.in1d(previous_table["TILEID"],new_table["TILEID"]))[0])
     nsame = len(keep_from_previous)
 
+    # columns that cannot be altered by this code
+    unchanged_columns = ["QA","ZDONE","USER","OVERRIDE"]
+
     add_from_new = []
     for j,t in enumerate(new_table["TILEID"]) :
         if t not in t2i :
@@ -252,23 +262,38 @@ def merge_tile_completeness_table(previous_table,new_table) :
             add_from_new.append(j)
             continue
         i=t2i[t]
+
+        # copy in the new entries the values of the 'unchanged' columns
+        for k in unchanged_columns :
+            new_table[k][j] = previous_table[k][i]
+
         if is_same_table_rows(previous_table,i,new_table,j) :
             nsame += 1
             keep_from_previous.append(i)
             continue
-        if previous_table["ZDONE"][i]=="true" and new_table["ZDONE"][j]!="true" :
-            if previous_table["OBSSTATUS"][i]==new_table["OBSSTATUS"][j] :
-                nforcekeep += 1
+
+        # do some sanity check
+        any_change=False
+        for k in ["SURVEY","GOALTYPE"] :
+            if new_table[k][j] == "unknown" and previous_table[k][i] != "unknown" :
+                log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
+                new_table[k][j] = previous_table[k][i]
+                any_change=True
+                break
+
+        if "SURVEY" != "main" :
+            for k in ["GOALTIME"] :
+                if new_table[k][j] != previous_table[k][i] :
+                    log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
+                    new_table[k][j] = previous_table[k][i]
+                    any_change=True
+                    break
+
+        if any_change : # recheck if still different
+            if is_same_table_rows(previous_table,i,new_table,j) :
                 nsame += 1
                 keep_from_previous.append(i)
-                log.warning("For tile {} zdone=true for lastnight={} but zdone={} for lastnight={}".format(t,previous_table["LASTNIGHT"][i],new_table["ZDONE"][j],new_table["LASTNIGHT"][j]))
-                log.warning("previously: {}".format(previous_table[i]))
-                log.warning("newly: {}".format(new_table[j]))
                 continue
-            elif previous_table["GOALTIME"][i] != new_table["GOALTIME"][j] :
-                log.warning("For tile {} GOALTIME changed from {} to {} ???".format(t,previous_table["GOALTIME"][i],new_table["GOALTIME"][j]))
-            else :
-                log.warning("For tile {} OBSTATUS changed from {} to {} ???".format(t,previous_table["OBSSTATUS"][i],new_table["OBSSTATUS"][j]))
 
         nmod += 1
         add_from_new.append(j)
