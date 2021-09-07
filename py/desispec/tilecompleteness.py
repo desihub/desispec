@@ -60,6 +60,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["LASTNIGHT"] = np.zeros(ntiles, dtype=np.int32)
     res["QA"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
     res["USER"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
+    res["OVERRIDE"]   = np.zeros(ntiles, dtype=int)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     if auxiliary_table_filenames is not None :
@@ -190,13 +191,14 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER']
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER','OVERRIDE']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
-        print("error, mismatch of some keys")
-        print(sorted(neworder))
-        print(sorted(table.dtype.names))
-        sys.exit(12)
+        log = get_logger()
+        log.critical("error, mismatch of some keys")
+        log.critical("new: {}".format(sorted(neworder)))
+        log.critical("input: {}".format(sorted(table.dtype.names)))
+        raise ValueError('mismatch of input and reordered columns')
 
     if np.all(np.array(neworder)==np.array(table.dtype.names)) : # same
         return table
