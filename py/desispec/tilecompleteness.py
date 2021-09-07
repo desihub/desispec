@@ -239,9 +239,12 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
     nadd=0
     nmod=0
-    nsame=0
     nforcekeep=0
-    keep_from_previous = []
+
+    # keep all tiles that are not in the new table
+    keep_from_previous = list(np.where(~np.in1d(previous_table["TILEID"],new_table["TILEID"]))[0])
+    nsame = len(keep_from_previous)
+
     add_from_new = []
     for j,t in enumerate(new_table["TILEID"]) :
         if t not in t2i :
@@ -269,6 +272,7 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
         nmod += 1
         add_from_new.append(j)
+
 
 
     log.info("{} tiles unchanged".format(nsame))
