@@ -318,7 +318,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
         if len(newcols) > 0:
             log.warning(f"Identified the following new columns: {newcols}. Adding to colnames.")
             colnames.extend(newcols)
-            
+
 
     #- specify names to preserve column order
     masked_cam_summary = Table(rows=summary_rows, names=colnames)
@@ -870,9 +870,13 @@ def main():
     preexisting_tsnr2_frame_table = None
     if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
-        preexisting_tsnr2_expid_table = Table.read(args.outfile,"EXPOSURES")
-        preexisting_tsnr2_frame_table = Table.read(args.outfile,"FRAMES")
-
+        try :
+            preexisting_tsnr2_expid_table = Table.read(args.outfile,"EXPOSURES")
+            preexisting_tsnr2_frame_table = Table.read(args.outfile,"FRAMES")
+        except KeyError as e :
+            log.warning("keyerror, try older names : {}".format(e))
+            preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
+            preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
 
     # starting computing
     # one night at a time
@@ -1111,7 +1115,23 @@ def main():
         if args.tile_completeness is not None :
             # reread the exposure table
             exposure_table = Table.read(args.outfile)
-            new_tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
+
+            # get list of tiles to look at
+            selection = np.repeat(True,len(exposure_table))
+            if args.expids is not None or args.nights is not None :
+                if args.expids is not None :
+                    expids = parse_int_args(args.expids)
+                    selection &= np.in1d(exposure_table["EXPID"],expids)
+                if args.nights is not None :
+                    nights = parse_int_args(args.nights)
+                    selection &= np.in1d(exposure_table["NIGHT"],nights)
+
+                # consider only the tiles observed in this selection of exposures
+                tiles=np.unique(exposure_table["TILEID"][selection])
+                # keep all exposures of those tiles
+                selection = np.in1d(exposure_table["TILEID"],tiles)
+
+            new_tile_table = compute_tile_completeness_table(exposure_table[selection],args.prod,auxiliary_table_filenames=args.aux)
             if os.path.isfile(args.tile_completeness) :
                 previous_table = Table.read(args.tile_completeness)
                 new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
