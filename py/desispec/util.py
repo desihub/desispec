@@ -50,6 +50,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             input_time = max(input_time, os.stat(x).st_mtime)
 
     if err > 0:
+        log.critical("FAILED err={} {}".format(err, cmd))
         return err
 
     #- Check if outputs already exist and that their timestamp is after

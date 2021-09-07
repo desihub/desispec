@@ -391,20 +391,44 @@ def main(args=None, comm=None):
             input_fiberflat = comm.bcast(input_fiberflat, root=0)
 
         # - Group inputs by spectrograph
+        # - collect inputs on rank 0 so only one rank checks for file existence
         framefiles = dict()
         skyfiles = dict()
         fiberflatfiles = dict()
-        for camera in args.cameras:
-            sp = int(camera[1])
-            if sp not in framefiles:
-                framefiles[sp] = list()
-                skyfiles[sp] = list()
-                fiberflatfiles[sp] = list()
+        num_brz = dict()
+        if rank == 0:
+            for camera in args.cameras:
+                sp = int(camera[1])
+                if sp not in framefiles:
+                    framefiles[sp] = list()
+                    skyfiles[sp] = list()
+                    fiberflatfiles[sp] = list()
+                    num_brz[sp] = dict(b=0, r=0, z=0)
 
-            fiberflatfiles[sp].append(input_fiberflat[camera])
-            for expid in args.expids:
-                framefiles[sp].append(findfile('frame', args.night, expid, camera))
-                skyfiles[sp].append(findfile('sky', args.night, expid, camera))
+                fiberflatfiles[sp].append(input_fiberflat[camera])
+                for expid in args.expids:
+                    tmpframefile = findfile('frame', args.night, expid, camera)
+                    tmpskyfile = findfile('sky', args.night, expid, camera)
+
+                    inputsok = True
+                    if not os.path.exists(tmpframefile):
+                        log.error(f'Missing expected frame {tmpframefile}')
+                        inputsok = False
+
+                    if not os.path.exists(tmpskyfile):
+                        log.error(f'Missing expected sky {tmpskyfile}')
+                        inputsok = False
+
+                    if inputsok:
+                        framefiles[sp].append(tmpframefile)
+                        skyfiles[sp].append(tmpskyfile)
+                        num_brz[sp][camera[0]] += 1
+
+        if comm is not None:
+            framefiles = comm.bcast(framefiles, root=0)
+            skyfiles = comm.bcast(skyfiles, root=0)
+            fiberflatfiles = comm.bcast(fiberflatfiles, root=0)
+            num_brz = comm.bcast(num_brz, root=0)
 
         # - Hardcoded stdstar model version
         starmodels = os.path.join(
@@ -415,6 +439,18 @@ def main(args=None, comm=None):
         ## for sp in spectro_nums[rank::size]:
         for i in range(rank, len(spectro_nums), size):
             sp = spectro_nums[i]
+
+            have_all_cameras = True
+            for cam in ['b', 'r', 'z']:
+                if num_brz[sp][cam] == 0:
+                    log.critical(f"Missing {cam}{sp} for all exposures; Can't fit standard stars")
+                    have_all_cameras = False
+
+            if not have_all_cameras:
+                num_cmd += 1
+                num_err += 1
+                continue
+
             # - NOTE: Saving the joint fit file with only the name of the first exposure
             stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
             #stdfile.replace('{:08d}'.format(args.expids[0]),'-'.join(['{:08d}'.format(eid) for eid in args.expids]))
