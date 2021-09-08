@@ -283,15 +283,13 @@ def merge_tile_completeness_table(previous_table,new_table) :
                 log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
                 new_table[k][j] = previous_table[k][i]
                 any_change=True
-                break
 
         if "SURVEY" != "main" :
-            for k in ["GOALTIME"] :
+            for k in ["GOALTIME","OBSSTATUS"] :
                 if new_table[k][j] != previous_table[k][i] :
                     log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
                     new_table[k][j] = previous_table[k][i]
                     any_change=True
-                    break
 
         if any_change : # recheck if still different
             if is_same_table_rows(previous_table,i,new_table,j) :
