@@ -219,7 +219,11 @@ def is_same_table_rows(table1,index1,table2,index2) :
         log.error(message)
         raise KeyError(message)
     for k in table1.dtype.names :
-        if table1[k][index1] != table2[k][index2] :
+        v1=table1[k][index1]
+        v2=table2[k][index2]
+        if np.isreal(v1) :
+            if np.isnan(v1) and np.isnan(v2) : continue
+        if v1 != v2 :
             return False
     return True
 
@@ -297,8 +301,6 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
         nmod += 1
         add_from_new.append(j)
-
-
 
     log.info("{} tiles unchanged".format(nsame))
     log.info("{} tiles modified".format(nmod))
