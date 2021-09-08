@@ -284,7 +284,8 @@ def merge_tile_completeness_table(previous_table,new_table) :
                 new_table[k][j] = previous_table[k][i]
                 any_change=True
 
-        if "SURVEY" != "main" :
+        survey = new_table["SURVEY"][j]
+        if survey in ["cmx","sv1","sv2","sv3"]:
             for k in ["GOALTIME","OBSSTATUS"] :
                 if new_table[k][j] != previous_table[k][i] :
                     log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
