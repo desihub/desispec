@@ -19,6 +19,13 @@ exposure_qa:
  # (ratio of calibrated flux to model in rband)
  max_rms_of_rflux_ratio_of_stdstars : 0.2
 
+ # maximum rms of calibration error per star
+ # (ratio of calibrated flux to model in rband)
+ # in case there are less than the min number of stars
+ # (in practice 2 stars). The requirement is more strict
+ max_rms_of_rflux_ratio_of_stdstars_if_few_stars : 0.05
+
+
  # tsnr parameters
  tsnr2_band : r
  tsnr2_key : TSNR2_LRG_R

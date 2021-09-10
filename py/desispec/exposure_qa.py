@@ -240,8 +240,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
 
             if ngood < qa_params["min_number_of_good_stdstars_per_petal"] :
                 log.warning("petal #{} has only {} good std stars for calibration".format(petal,ngood))
-                fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
-            else :
+                if ngood <= 1 :
+                    fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
+                    # else we will keep the data if the few stars we have give similar calibration
+            if ngood > 1 :
                 log.info("petal #{} has {} good std stars for calibration".format(petal,ngood))
 
                 # measure RMS
@@ -264,9 +266,15 @@ def compute_exposure_qa(night, expid, specprod_dir):
                     dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers_indices[i]],cframe.ivar[goodfibers_indices[i]])
                     scale[i] = np.sum(dflux*mflux)/np.sum(mflux**2)
                 log.debug("scale={}".format(scale))
-                calib_rms=np.sqrt(np.mean((scale-1)**2))
+                calib_rms=np.sqrt(np.mean((scale-1)**2))*np.sqrt(ngood/(ngood-1.))
                 petalqa_table["STARRMS"][petal]=calib_rms
-                if calib_rms>qa_params["max_rms_of_rflux_ratio_of_stdstars"] :
+
+                if ngood >= qa_params["min_number_of_good_stdstars_per_petal"] :
+                    max_rms = qa_params["max_rms_of_rflux_ratio_of_stdstars"]
+                else : # stricter requirement because only few stars
+                    max_rms = qa_params["max_rms_of_rflux_ratio_of_stdstars_if_few_stars"]
+
+                if calib_rms>max_rms :
                     log.warning("petal #{} has std stars calib rms={:3.2f}>{:3.2f}".format(petal,calib_rms,qa_params["max_rms_of_rflux_ratio_of_stdstars"]))
                     fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
                 else :
