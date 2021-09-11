@@ -71,7 +71,7 @@ def exposure_table_column_defs():
                 ('GOALTIME', float, -99.),
                 ('GOALTYPE', 'S10', 'unknown'),
                 ('EBVFAC', float, 1.0),
-                ('AIRFAC', float, 1.0),
+                ('AIRMASS', float, 1.0),
                 ('SPEED', float, -99.0),
                 ('TARGTRA', float, 89.99),
                 ('TARGTDEC', float, -89.99),
@@ -643,7 +643,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     for key,default in coldefault_dict.items():
         ## These are dealt with separately
         if key in ['EFFTIME_ETC', 'CAMWORD', 'NIGHT', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTIME', 'GOALTYPE', 'SPEED',
-                   'EBVFAC', 'AIRFAC', 'LASTSTEP', 'BADCAMWORD', 'BADAMPS', 'EXPFLAG', 'HEADERERR', 'COMMENTS']:
+                   'EBVFAC', 'LASTSTEP', 'BADCAMWORD', 'BADAMPS', 'EXPFLAG', 'HEADERERR', 'COMMENTS']:
             continue
         ## Try to find the key in the raw data header
         elif key in dat_header:
@@ -802,14 +802,12 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
         ## Get the airmass factor from the etc. If unavailable, try to calculate from the airmass in the raw data
         ## Default if both fail is 1 (already set)
-        if 'expinfo' in etc_dict and 'atm_extinction' in etc_dict['expinfo']:
-            outdict['AIRFAC'] = 1.0 / etc_dict['expinfo']['atm_extinction']
-        elif 'AIRMASS' in dat_header:
-            outdict['AIRFAC'] = np.power(10.0, (0.114 * (dat_header['AIRMASS'] - 1.0) / 2.5))
+        if outdict['AIRMASS']==coldefault_dict['AIRMASS'] and 'expinfo' in etc_dict and 'AIRMASS' in etc_dict['expinfo']:
+            outdict['AIRMASS'] = etc_dict['expinfo']['AIRMASS']
 
         ## If main survey data, report when varibles weren't available
         if int(night) > 20210500:
-            for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE",'AIRFAC','EBVFAC']:#,'EFFTIME_ETC']:
+            for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE",'AIRMASS','EBVFAC']:#,'EFFTIME_ETC']:
                 if outdict[name] == coldefault_dict[name]:
                     log.warning(f"Couldn't find or derive {name}, so leaving {name} with default value " +
                                 "of {outdict[name]}")
@@ -861,7 +859,16 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                 efftime = 1.0E5
 
             ## Define survey speed for QA
-            speed = (efftime / outdict['EXPTIME']) * (outdict['EBVFAC'] * outdict['AIRFAC']) ** 2
+            ## Keep historical cuts accurate by only using new survey speed for exposures taken after 2021 shutdown
+            ## Speed ref: https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+            time_ratio = (efftime / outdict['EXPTIME'])
+            ebvfac2 = outdict['EBVFAC'] ** 2
+            if int(night) < 20210900:
+                airfac2 = airmass_to_airfac(outdict['AIRMASS']) ** 2
+                speed = time_ratio * ebvfac2 * airfac2
+            else:
+                aircorr = airmass_to_aircorr(outdict['AIRMASS'])
+                speed = time_ratio * ebvfac2 * aircorr
             outdict['SPEED'] = speed
 
             ## Define thresholds
@@ -900,3 +907,45 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
 
+def airfac_to_airmass(airfac, k=0.114):
+    """
+    Transforms an "AIRFAC" term of survey speed to airmass:
+    AIRFAC = 10^[k*(X-1)/2.5]
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    X = 1+((2.5/k)*np.log10(airfac))
+    return X
+
+def airmass_to_airfac(airmass, k=0.114):
+    """
+    Transforms an airmass to "AIRFAC":
+    AIRFAC = 10^[k*(X-1)/2.5]
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    airfac = 10**(k*(airmass-1)/2.5)
+    return airfac
+
+def airmass_to_aircorr(airmass):
+    """
+    Transforms an airmass to "air correction" term of survey speed:
+    AIRCORR = X^1.75
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    aircorr = np.power(airmass,1.75)
+    return aircorr
+
+def aircorr_to_airmass(aircorr):
+    """
+    Transforms an "air correction" term of survey speed to airmass:
+    AIRCORR = X^1.75
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    airmass = np.power(aircorr,1/1.75)
+    return airmass
+
+def airfac_to_aircorr(airfac):
+    """
+    Transforms an "AIRFAC" term of survey speed to an "air correction" term of survey speed
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    return airmass_to_aircorr(airfac_to_airmass(airfac))
