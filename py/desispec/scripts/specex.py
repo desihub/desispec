@@ -60,7 +60,7 @@ def main(args, comm=None):
 
     imgfile = args.input_image
     outfile = args.output_psf
-        
+
     nproc = 1
     rank = 0
     if comm is not None:
@@ -418,6 +418,7 @@ def mean_psf(inputs, output):
                 coeff.append(tables[p][entry]["COEFF"])
             else :
                 log.info("need to refit legendre polynomial ...")
+                from numpy.polynomial.legendre import legval,legfit
                 icoeff = tables[p][entry]["COEFF"]
                 ocoeff = np.zeros(icoeff.shape)
                 # need to reshape legpol
@@ -482,31 +483,32 @@ def mean_psf(inputs, output):
             hdulist["PSF"].header["B{:02d}RCHI2".format(bundle)] = \
                 output_rchi2[bundle]
 
-        if len(xtrace)>0 :
-            xtrace=np.array(xtrace)
-            ytrace=np.array(ytrace)
-            for p in range(xtrace.shape[0]) :
-                if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
-                    continue
-
-                # need to reshape legpol
-                iu = np.linspace(-1,1,npar+3)
-                iwavemin = wavemins[p]
-                iwavemax = wavemaxs[p]
-                wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
-                ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
-
-                for f in range(icoeff.shape[0]) :
-                    val = legval(iu,xtrace[f])
-                    xtrace[f] = legfit(ou,val,deg=npar-1)
-                    val = legval(iu,ytrace[f])
-                    ytrace[f] = legfit(ou,val,deg=npar-1)
-
-            hdulist["xtrace"].data = np.mean(xtrace,axis=0)
-            hdulist["ytrace"].data = np.mean(ytrace,axis=0)
-
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
+
+    if len(xtrace)>0 :
+        xtrace=np.array(xtrace)
+        ytrace=np.array(ytrace)
+        npar = xtrace.shape[2] # assume all have same npar
+        for p in range(xtrace.shape[0]) :
+            if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
+                continue
+
+
+            # need to reshape legpol
+            iu = np.linspace(-1,1,npar+3)
+            iwavemin = wavemins[p]
+            iwavemax = wavemaxs[p]
+            wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
+            ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
+            for f in range(icoeff.shape[0]):
+                val = legval(iu,xtrace[p][f])
+                xtrace[p][f] = legfit(ou,val,deg=npar-1)
+                val = legval(iu,ytrace[p][f])
+                ytrace[p][f] = legfit(ou,val,deg=npar-1)
+
+        hdulist["xtrace"].data = np.mean(xtrace,axis=0)
+        hdulist["ytrace"].data = np.mean(ytrace,axis=0)
 
     for hdu in ["XTRACE","YTRACE","PSF"] :
         if hdu in hdulist :
