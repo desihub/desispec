@@ -10,8 +10,12 @@ import fitsio
 import numpy as np
 import pandas as pd
 
-from desitarget.targetmask import desi_mask
 from desitarget.targets import main_cmx_or_sv
+from desitarget.targetmask import desi_mask
+from desitarget.sv3.sv3_targetmask import desi_mask as sv3_mask
+from desitarget.sv2.sv2_targetmask import desi_mask as sv2_mask
+from desitarget.sv1.sv1_targetmask import desi_mask as sv1_mask
+from desitarget.cmx.cmx_targetmask import cmx_mask
 
 from desiutil.log import get_logger
 
@@ -302,7 +306,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     Returns:
         None
     """
-    # Ok we cannot use dataframe.to_records() since coeffs/c_lines are saved in a list form and cannot be easily converted.
+    # Ok we cannot use dataframe.to_records() since coeffs are saved in a list form and cannot be easily converted.
     data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z_NEW','f8'), ('ZERR_NEW', 'f4'), (DESI_TARGET, 'i8'),
                                                ('COEFFS', ('f4', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'), ('IS_QSO_QN_NEW_RR', '?'),
                                                ('C_LYA', 'f4'), ('C_CIV', 'f4'), ('C_CIII', 'f4'), ('C_MgII', 'f4'), ('C_Hbeta', 'f4'), ('C_Halpha', 'f4'),
@@ -378,7 +382,21 @@ if __name__ == "__main__":
         DESI_TARGET = main_cmx_or_sv(fibermap)[0][0]
 
         if args.target_selection.lower() in ('qso', 'qso_targets'):
-            sel_to_QN = fibermap[DESI_TARGET] & desi_mask.QSO != 0
+            if DESI_TARGET == 'DESI_TARGET':
+                qso_mask_bit = desi_mask.mask('QSO')
+            elif DESI_TARGET == 'SV3_DESI_TARGET':
+                qso_mask_bit = sv3_mask.mask('QSO')
+            elif DESI_TARGET == 'SV2_DESI_TARGET':
+                qso_mask_bit = sv2_mask.mask('QSO')
+            elif DESI_TARGET == 'SV1_DESI_TARGET':
+                qso_mask_bit = sv1_mask.mask('QSO')
+            elif DESI_TARGET == 'CMX_TARGET':
+                qso_mask_bit = cmx_mask.mask('MINI_SV_QSO|SV0_QSO')
+            else:
+                log.error("**** DESI_TARGET IS NOT CMX / SV1 / SV2 / SV3 / MAIN ****")
+                sys.exit(1)
+            sel_to_QN = fibermap[DESI_TARGET] & qso_mask_bit != 0
+
         elif args.target_selection.lower() in ('all', 'all_targets'):
             sel_to_QN = np.ones(redrock['TARGETID'].size, dtype=bool)
         else:
@@ -399,7 +417,12 @@ if __name__ == "__main__":
                      f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
             save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
         else:
-            log.warning("No objects selected to save; no output written")
+            file = open(os.path.splitext(args.output)[0]+'.notargets', "w")
+            file.write("No targets were selected by QN afterburner to be a QSO.")
+            file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
+            file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
+            file.close()
+            log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets'} is written")
 
 
     else: # file for the consider Tile / Night / petal does not exist
