@@ -729,9 +729,11 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
     ## Now for science exposures,
     if obstype == 'science':
-        ## fiberassign is based on TILEID, so glob it. (Could just as easily
-        ## use TILEID but need to glob fz vs gz anyway)
+        ## fiberassign used to be uncompressed, check the new format first but try old if necessary
         fbapath = os.path.join(raw_data_dir, night, expstr, f"fiberassign-{outdict['TILEID']:06d}.fits.gz")
+        altfbapath = fbapath.replace('.fits.gz', '.fits')
+        if not os.path.isfile(fbapath) and os.path.isfile(altfbapath):
+            fbapath = altfbapath
 
         ## Load fiberassign file. If not available return empty dict
         if os.path.isfile(fbapath):
