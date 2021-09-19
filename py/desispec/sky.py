@@ -195,9 +195,18 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         frame.fibermap['FIBERSTATUS'][skyfibers] &= ~1
 
     nwave=frame.nwave
-    nfibers=len(skyfibers)
 
     current_ivar = get_fiberbitmasked_frame_arrays(frame,bitmask='sky',ivar_framemask=True,return_mask=False)
+
+    # checking ivar because some sky fibers have been disabled
+    bad=(np.sum(current_ivar[skyfibers]>0,axis=1)==0)
+    if np.any(bad) :
+        good=~bad
+        log.warning("{} sky fibers discarded (because ivar=0 or bad FIBERSTATUS), only {} left.".format(np.sum(bad),np.sum(good)))
+        skyfibers = skyfibers[good]
+
+    nfibers=len(skyfibers)
+
     current_ivar = current_ivar[skyfibers]
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
