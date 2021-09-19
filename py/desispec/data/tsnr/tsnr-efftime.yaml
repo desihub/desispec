@@ -1,5 +1,0 @@
-# fitted on cascades data, with a new computation of tsnr including dust extinction
-# multiply the TSNR2 values by these numbers to convert them to effective times
-TSNR2_ELG_TO_EFFTIME_DARK: 8.60
-TSNR2_LYA_TO_EFFTIME_DARK: 9.08
-TSNR2_BGS_TO_EFFTIME_BRIGHT: 0.14
