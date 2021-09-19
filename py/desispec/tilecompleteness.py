@@ -52,6 +52,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["GOALTIME"]  = np.zeros(ntiles)
     res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["ZDONE"]   = np.array(np.repeat("false",ntiles),dtype='<U20')
+    res["LRG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
     res["LYA_EFFTIME_DARK"]=np.zeros(ntiles)
@@ -106,7 +107,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     for i,tile in enumerate(tiles) :
         jj=(exposure_table["TILEID"]==tile)
         res["NEXP"][i]=np.sum(jj)
-        for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK","EFFTIME_ETC","EFFTIME_GFA"] :
+        for k in ["EXPTIME","LRG_EFFTIME_DARK","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK","EFFTIME_ETC","EFFTIME_GFA"] :
             if k in exposure_table.dtype.names :
                 res[k][i] = np.sum(exposure_table[k][jj])
                 if k == "EFFTIME_ETC" or k == "EFFTIME_GFA" :
@@ -139,8 +140,8 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         if k.find("EXPTIME")>=0 or k.find("EFFTIME")>=0 :
             res[k] = np.around(res[k],1)
 
-    # default efftime is ELG_EFFTIME_DARK
-    res["EFFTIME_SPEC"]=res["ELG_EFFTIME_DARK"]
+    # default efftime is LRG_EFFTIME_DARK
+    res["EFFTIME_SPEC"]=res["LRG_EFFTIME_DARK"]
 
     # trivial completeness for now (all of this work for this?)
     efftime_keyword_per_goaltype = {}
@@ -191,7 +192,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER','OVERRIDE']
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER','OVERRIDE']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
         log = get_logger()
