@@ -313,9 +313,11 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
-    tmpfile = output+'.tmp'
+    import tempfile, shutil
+    named_tmpfile = tempfile.NamedTemporaryFile()
+    tmpfile = named_tmpfile.name
     psf_hdulist.writeto(tmpfile, overwrite=True)
-    os.rename(tmpfile, output)
+    shutil.move(tmpfile, output)
     log.info("Wrote PSF {}".format(output))
 
     return
