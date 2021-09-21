@@ -265,7 +265,7 @@ def get_exposure_table_name(night, extension='csv'):
 
     Args:
         night, int or str. The night of the observations going into the exposure table.
-        extension, str. The extension (and therefore data format) without a leading period  of the saved table.
+        extension, str. The extension (and therefore data format) without a leading period of the saved table.
                         Default is 'csv'.
 
     Returns:
