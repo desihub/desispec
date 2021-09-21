@@ -448,24 +448,6 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
                     log.debug("Adding missing exposure.cam {}".format(vals))
                     cam_summary.add_row(vals)
 
-    if preexisting_tsnr2_expid_table is not None :
-        log.debug("Update to preexisting")
-
-        # backward compatibility issue
-        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
-            nentries=len(preexisting_tsnr2_expid_table)
-            if k not in preexisting_tsnr2_expid_table.dtype.names :
-                log.warning("adding column {}".format(k))
-                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
-        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV"]:
-            if k not in preexisting_tsnr2_expid_table.dtype.names :
-                log.warning("adding column {}".format(k))
-                preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
-
-        exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
-    if preexisting_tsnr2_frame_table is not None :
-        log.debug("Update to preexisting")
-        cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
 
     log.info("Add effective times from TSNR2 values")
 
@@ -483,8 +465,12 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
     if 'TSNR2_LYA' in exp_summary.dtype.names:
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA")
 
-    # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_LRG.
-    exp_summary['EFFTIME_SPEC'] = exp_summary['LRG_EFFTIME_DARK']
+    # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG before Sept 1, 2021 and TSNR2_LRG after
+    before_sept2021 = (exp_summary["NIGHT"]<20210901)
+    after_sept2021 = ~before_sept2021
+    exp_summary['EFFTIME_SPEC'] = np.zeros(len(exp_summary))
+    exp_summary['EFFTIME_SPEC'][before_sept2021] = exp_summary['ELG_EFFTIME_DARK'][before_sept2021]
+    exp_summary['EFFTIME_SPEC'][after_sept2021]  = exp_summary['LRG_EFFTIME_DARK'][after_sept2021]
 
     # EFFTIME SPEC FOR GOALTYPE bright determined by TSNR2_BGS.
     ii = (exp_summary['GOALTYPE']=='bright')
@@ -497,6 +483,26 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
     else:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
+
+
+    if preexisting_tsnr2_expid_table is not None :
+        log.debug("Update to preexisting")
+
+        # backward compatibility issue
+        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
+            nentries=len(preexisting_tsnr2_expid_table)
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
+        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV","LRG_EFFTIME_DARK"]:
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
+
+        exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
+    if preexisting_tsnr2_frame_table is not None :
+        log.debug("Update to preexisting")
+        cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
 
     # sort table rows
     ii = np.argsort(exp_summary['EXPID'])
