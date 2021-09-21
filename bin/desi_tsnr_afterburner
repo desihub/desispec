@@ -68,8 +68,6 @@ def parse(options=None):
                         help = 'Only compute the alpha for tsnr.')
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
-    parser.add_argument('--efftime-config', type = str, default = None, required=False,
-                        help = 'Use this config file instead of default data/tsnr/tsnr-efftime.yaml')
     parser.add_argument('--tile-completeness', type = str, default = None, required=False,
                         help = 'Output tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
@@ -277,13 +275,12 @@ def update_table(table1,table2,keys) :
     else :
         return table2
 
-def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_missing=True) :
+def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_missing=True) :
     """ Compute summary tables.
 
     Args:
       summary_rows: list of dictionnaries
       output_filename: str, output filename
-      efftime_config: dictionnary with scaling factors from TSNR2 to effective exp. time
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
@@ -451,27 +448,10 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                     log.debug("Adding missing exposure.cam {}".format(vals))
                     cam_summary.add_row(vals)
 
-    if preexisting_tsnr2_expid_table is not None :
-        log.debug("Update to preexisting")
-
-        # backward compatibility issue
-        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
-            nentries=len(preexisting_tsnr2_expid_table)
-            if k not in preexisting_tsnr2_expid_table.dtype.names :
-                log.warning("adding column {}".format(k))
-                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
-        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV"]:
-            if k not in preexisting_tsnr2_expid_table.dtype.names :
-                log.warning("adding column {}".format(k))
-                preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
-
-        exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
-    if preexisting_tsnr2_frame_table is not None :
-        log.debug("Update to preexisting")
-        cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
 
     log.info("Add effective times from TSNR2 values")
 
+    exp_summary['LRG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_LRG'],"LRG")
     exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG")
     exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS")
 
@@ -485,8 +465,12 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_LYA' in exp_summary.dtype.names:
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA")
 
-    # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG.
-    exp_summary['EFFTIME_SPEC'] = exp_summary['ELG_EFFTIME_DARK']
+    # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG before Sept 1, 2021 and TSNR2_LRG after
+    before_sept2021 = (exp_summary["NIGHT"]<20210901)
+    after_sept2021 = ~before_sept2021
+    exp_summary['EFFTIME_SPEC'] = np.zeros(len(exp_summary))
+    exp_summary['EFFTIME_SPEC'][before_sept2021] = exp_summary['ELG_EFFTIME_DARK'][before_sept2021]
+    exp_summary['EFFTIME_SPEC'][after_sept2021]  = exp_summary['LRG_EFFTIME_DARK'][after_sept2021]
 
     # EFFTIME SPEC FOR GOALTYPE bright determined by TSNR2_BGS.
     ii = (exp_summary['GOALTYPE']=='bright')
@@ -500,6 +484,26 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     else:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
+
+    if preexisting_tsnr2_expid_table is not None :
+        log.debug("Update to preexisting")
+
+        # backward compatibility issue
+        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
+            nentries=len(preexisting_tsnr2_expid_table)
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
+        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV","LRG_EFFTIME_DARK"]:
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
+
+        exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
+    if preexisting_tsnr2_frame_table is not None :
+        log.debug("Update to preexisting")
+        cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
+
     # sort table rows
     ii = np.argsort(exp_summary['EXPID'])
     exp_summary = exp_summary[ii]
@@ -512,7 +516,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     neworder=['NIGHT','EXPID','TILEID','TILERA','TILEDEC','MJD',
               'SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
               'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
-              'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK',
+              'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK',
               'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
               'TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA',
               'FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
@@ -859,13 +863,6 @@ def main():
     log.info("nights = {}".format(nights))
     if expids is not None : log.info('expids = {}'.format(expids))
 
-    efftime_config_filename = args.efftime_config
-    if efftime_config_filename is None :
-        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
-    with open(efftime_config_filename) as f:
-        efftime_config = yaml.load(f, Loader=yaml.FullLoader)
-    log.info("Eff. time scale factors = {}".format(efftime_config))
-
     preexisting_tsnr2_expid_table = None
     preexisting_tsnr2_frame_table = None
     ## Check for existing files
@@ -929,7 +926,7 @@ def main():
 
         # write result after every night.
         if len(rows)>0 :
-            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,efftime_config,
+            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,
                                                                          preexisting_tsnr2_expid_table,
                                                                          preexisting_tsnr2_frame_table,args.prod,
                                                                          add_missing=add_missing)
@@ -1011,7 +1008,7 @@ def main():
         if multinode:
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
 
-        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,
+        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,
         #                                                               preexisting_tsnr2_expid_table,
         #                                                               preexisting_tsnr2_frame_table,args.prod,
         #                                                               add_missing=add_missing)
