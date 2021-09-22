@@ -15,8 +15,6 @@ class schedule:
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
 
-        if(self.rank==0): print(self.comm,self.Njobs,self.group_size,flush=True)
-
         # numpy array for sending and receiving job indices
         self.job_buff = np.zeros(1,dtype=np.int32)
 
@@ -29,13 +27,11 @@ class schedule:
         # assign rank=0 and 'extra' ranks to group Ngroups
         # only ranks with group < Ngroups participate as workers
         if self.rank > self.group_size * self.Ngroups or self.rank == 0:
-            print('rank>group_size',self.rank,self.group_size,flush=True)
             self.group = self.Ngroups
 
-        print(self.rank,self.group,flush=True)
         self.groupcomm = self.comm.Split(color=self.group)
         self.grouprank = self.groupcomm.Get_rank()
-        print('after split',self.rank,self.group,self.grouprank,flush=True)
+
         if self.group_size != self.groupcomm.Get_size() and self.rank != 0:
             print(self.rank,self.group_size,self.groupcomm.Get_size(),flush=True)
             raise Exception("can't have group_size != group_size")
@@ -135,7 +131,6 @@ class schedule:
         elif self.group < self.Ngroups:
             self._work()     # run worker on all other ranks
 
-        print("rank",self.rank,"with group rank",self.grouprank,"finished loadbalancer",flush=True)
         self.comm.barrier()
 
         return
