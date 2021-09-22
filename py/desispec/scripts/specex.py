@@ -18,6 +18,13 @@ from astropy.io import fits
 
 from desiutil.log import get_logger
 
+class timer:
+    def __init__(self, **kwargs):
+        self.tinit = time.time()
+    def report(self,message):
+        dt = time.time() - self.tinit
+        print('TIMING REPORT: ',message.ljust(40), dt,' seconds',flush=True);
+
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for "
         "one frame with specex")
@@ -50,10 +57,10 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-
 def main(args, comm=None):
 
     log = get_logger()
+    total_timer=timer()
 
     #- only import when running, to avoid requiring specex install for import
     from specex.specex import run_specex
@@ -120,7 +127,6 @@ def main(args, comm=None):
 
     # Now we assign bundles to processes
 
-
     mynbundle = int(nbundle / nproc)
     leftover = nbundle % nproc
     if rank < leftover:
@@ -143,7 +149,6 @@ def main(args, comm=None):
             log.info("specex:  broken fibers = {}".format(args.broken_fibers))
 
     # get the root output file
-
     outpat = re.compile(r'(.*)\.fits')
     outmat = outpat.match(outfile)
     if outmat is None:
@@ -164,6 +169,7 @@ def main(args, comm=None):
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         outbundle = "{}_{:02d}".format(outroot, b)
         outbundlefits = "{}.fits".format(outbundle)
+
         com = ['desi_psf_fit']
         com.extend(['-a', imgfile])
         com.extend(['--in-psf', inpsffile])
@@ -187,7 +193,10 @@ def main(args, comm=None):
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
+        specex_timer=timer()
         retval = run_specex(com)
+        specex_timer.report("specex fit for bundle " +
+                           str(b) + " on " + imgfile[-16:-14])
 
         if retval != 0:
             comstr = " ".join(com)
@@ -198,6 +207,9 @@ def main(args, comm=None):
     if comm is not None:
         from mpi4py import MPI
         failcount = comm.allreduce(failcount, op=MPI.SUM)
+
+    if rank == 0:
+        merge_timer=timer()
 
     if failcount > 0:
         # all processes throw
@@ -220,6 +232,9 @@ def main(args, comm=None):
 
             merge_psf(inputs,outfits)
 
+            merge_timer.report("specex merge for bundle " +
+                               str(b) + " on " + imgfile[-16:-14])
+
             log.info('done merging')
 
             if failcount == 0:
@@ -237,6 +252,46 @@ def main(args, comm=None):
 
     return
 
+def run(comm,cmds,cameras,log):
+
+    import desispec.scripts.specex
+    from desispec.workflow.schedule import schedule
+
+    group_size = 20
+    cameras.reverse() # this is to have z and b first since they take longest
+    def fitbundle(comm,job):
+        rank = comm.Get_rank()
+        camera = cameras[job]
+        if camera in cmds:
+            cmdargs = cmds[camera].split()[1:]
+            cmdargs = desispec.scripts.specex.parse(cmdargs)
+            if rank == 0:
+                specex_timer=timer()
+                print("RUNNING: {}".format(cmds[camera]),flush=True)
+                t0 = time.time()
+                timestamp = time.asctime()
+                print("MPI ranks ",rank,"-",rank+group_size-1,"on job",job,
+                      "at camera",camera," at ",timestamp,flush=True)
+                log.info(f'MPI ranks {rank}-{rank+group_size-1}'+
+                         'fitting PSF for {camera} at {timestamp}')
+            try:
+                desispec.scripts.specex.main(cmdargs, comm=comm)
+            except Exception as e:
+                 if rank == 0:
+                     log.error(f'FAILED: MPI group ranks {rank}-{rank+group_size-1}'+
+                               ' on camera {camera}')
+                     log.error('FAILED: {}'.format(cmds[camera]))
+                     log.error(e)
+            if rank == 0:
+                specex_time = time.time() - t0
+                log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
+                specex_timer.report("specex fit for "+camera)
+        return
+
+    sc = schedule(fitbundle,comm=comm,Njobs=len(cameras),group_size=group_size)
+    sc.run()
+
+    return
 
 def compatible(head1, head2) :
     """
@@ -261,6 +316,7 @@ def merge_psf(inputs, output):
     """
 
     log = get_logger()
+    begin_timer=timer()
 
     npsf = len(inputs)
     log.info("Will merge {} PSFs in {}".format(npsf,output))
@@ -313,10 +369,24 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
+    write_timer=timer()
     tmpfile = output+'.tmp'
+    if os.environ.get('DESI_LOCALBUFF'):
+        tmpfile=os.environ.get('DESI_LOCALBUFF')+'/'+os.path.basename(tmpfile)
+        print("using DESI_LOCALBUFF for tmpfile",tmpfile,"in merge_psf",flush=True)
+    t0 = time.time()
     psf_hdulist.writeto(tmpfile, overwrite=True)
-    os.rename(tmpfile, output)
+    dt = time.time() - t0
+    print("writing merged PSF file took",dt,"sec",flush=True)
+
+    if os.environ.get('DESI_LOCALBUFF'):
+        import shutil
+        shutil.move(tmpfile, output)
+    else:
+        os.rename(tmpfile, output)
+
     log.info("Wrote PSF {}".format(output))
+    write_timer.report("writing PSF {}".format(output))
 
     return
 
@@ -418,7 +488,6 @@ def mean_psf(inputs, output):
                 coeff.append(tables[p][entry]["COEFF"])
             else :
                 log.info("need to refit legendre polynomial ...")
-                from numpy.polynomial.legendre import legval,legfit
                 icoeff = tables[p][entry]["COEFF"]
                 ocoeff = np.zeros(icoeff.shape)
                 # need to reshape legpol
@@ -483,32 +552,31 @@ def mean_psf(inputs, output):
             hdulist["PSF"].header["B{:02d}RCHI2".format(bundle)] = \
                 output_rchi2[bundle]
 
+        if len(xtrace)>0 :
+            xtrace=np.array(xtrace)
+            ytrace=np.array(ytrace)
+            for p in range(xtrace.shape[0]) :
+                if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
+                    continue
+
+                # need to reshape legpol
+                iu = np.linspace(-1,1,npar+3)
+                iwavemin = wavemins[p]
+                iwavemax = wavemaxs[p]
+                wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
+                ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
+
+                for f in range(icoeff.shape[0]) :
+                    val = legval(iu,xtrace[f])
+                    xtrace[f] = legfit(ou,val,deg=npar-1)
+                    val = legval(iu,ytrace[f])
+                    ytrace[f] = legfit(ou,val,deg=npar-1)
+
+            hdulist["xtrace"].data = np.mean(xtrace,axis=0)
+            hdulist["ytrace"].data = np.mean(ytrace,axis=0)
+
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
-
-    if len(xtrace)>0 :
-        xtrace=np.array(xtrace)
-        ytrace=np.array(ytrace)
-        npar = xtrace.shape[2] # assume all have same npar
-        for p in range(xtrace.shape[0]) :
-            if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
-                continue
-
-
-            # need to reshape legpol
-            iu = np.linspace(-1,1,npar+3)
-            iwavemin = wavemins[p]
-            iwavemax = wavemaxs[p]
-            wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
-            ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
-            for f in range(icoeff.shape[0]):
-                val = legval(iu,xtrace[p][f])
-                xtrace[p][f] = legfit(ou,val,deg=npar-1)
-                val = legval(iu,ytrace[p][f])
-                ytrace[p][f] = legfit(ou,val,deg=npar-1)
-
-        hdulist["xtrace"].data = np.mean(xtrace,axis=0)
-        hdulist["ytrace"].data = np.mean(ytrace,axis=0)
 
     for hdu in ["XTRACE","YTRACE","PSF"] :
         if hdu in hdulist :
