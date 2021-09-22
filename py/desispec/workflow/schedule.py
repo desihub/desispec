@@ -49,15 +49,6 @@ class schedule:
             reqs.append(self.comm.Irecv(self.job_buff,source=destrank))
         return reqs
 
-    def _dismiss_worker(self,worker):
-
-        # send job = -1 messages to all processes in group worker signaling
-        # there is no more work to be done
-        for grouprank in range(self.group_size):
-            destrank = worker * self.group_size + grouprank + 1
-            self.job_buff[0] = -1
-            self.comm.Send(self.job_buff,dest=destrank)
-
     def _checkreqlist(self,reqs):
 
         # check if all processes with handles in reqs have reported back
@@ -107,9 +98,9 @@ class schedule:
                     # waitlist has been modified so exit waitlist loop with break
                     break
 
-        # no more jobs to assign; dismiss all processes in all groups,
-        # causing all workers to return
-        for group in range(self.Ngroups): self._dismiss_worker(group)
+        # no more jobs to assign; dismiss all processes in all groups by 
+        # assigning job = -1, causing all workers processes to return
+        for worker in range(self.Ngroups): self._assign_job(worker,-1)
 
         return
 
