@@ -1,7 +1,6 @@
 from mpi4py import MPI
 import numpy as np
 import time
-import numpy.random
 
 class schedule:
 
