@@ -814,6 +814,28 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                     log.warning(f"Couldn't find or derive {name}, so leaving {name} with default value " +
                                 "of {outdict[name]}")
 
+        if outdict['SURVEY'] == 'main':
+            ## If defined, use effective speed. Otherwise set to very high value so we pass the relevant cuts
+            if outdict['EFFTIME_ETC'] > 0.:
+                efftime = outdict['EFFTIME_ETC']
+            else:
+                log.warning("No EFFTIME_ETC found. Not performing speed cut.")
+                efftime = 1.0E5
+
+            ## Define survey speed for QA
+            ## Keep historical cuts accurate by only using new survey speed for exposures taken after 2021 shutdown
+            ## Speed ref: https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+            time_ratio = (efftime / outdict['EXPTIME'])
+            ebvfac2 = outdict['EBVFAC'] ** 2
+            if int(night) < 20210900:
+                airfac2 = airmass_to_airfac(outdict['AIRMASS']) ** 2
+                speed = time_ratio * ebvfac2 * airfac2
+            else:
+                aircorr = airmass_to_aircorr(outdict['AIRMASS'])
+                speed = time_ratio * ebvfac2 * aircorr
+            outdict['SPEED'] = speed
+
+                    
         ## Flag the exposure based on PROGRAM information
         ## Define thresholds
         threshold_exptime = 60.
@@ -859,19 +881,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             else:
                 log.warning("No EFFTIME_ETC found. Not performing speed cut.")
                 efftime = 1.0E5
-
-            ## Define survey speed for QA
-            ## Keep historical cuts accurate by only using new survey speed for exposures taken after 2021 shutdown
-            ## Speed ref: https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
-            time_ratio = (efftime / outdict['EXPTIME'])
-            ebvfac2 = outdict['EBVFAC'] ** 2
-            if int(night) < 20210900:
-                airfac2 = airmass_to_airfac(outdict['AIRMASS']) ** 2
-                speed = time_ratio * ebvfac2 * airfac2
-            else:
-                aircorr = airmass_to_aircorr(outdict['AIRMASS'])
-                speed = time_ratio * ebvfac2 * aircorr
-            outdict['SPEED'] = speed
 
             ## Define thresholds
             threshold_percent_goal = 0.05
