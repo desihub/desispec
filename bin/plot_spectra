@@ -116,8 +116,10 @@ for tid in targetids :
     print(line)
     for spec in spectra :
         jj=np.where(spec.fibermap["TARGETID"]==tid)[0]
-        fiber=spec.fibermap["FIBER"][jj[0]]
-
+        if "FIBER" in spec.fibermap :
+            fiber=spec.fibermap["FIBER"][jj[0]]
+        else :
+            fiber=-1
         wavescale=1.
         if args.rest_frame :
             wavescale = 1./(1+zval)
