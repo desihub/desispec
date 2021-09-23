@@ -100,7 +100,8 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
             print(f'Night: {night} original table could not be found {orig_pathname}. Skipping this night.')
         else:
             if dry_run:
-                out_pathname = orig_pathname.replace(f".{orig_filetype}", f".temp.{out_filetype}")
+                out_filetype = f"temp.{out_filetype}"
+                out_pathname = orig_pathname.replace(f".{orig_filetype}", f".{out_filetype}")
             else:
                 ftime = time.strftime("%Y%m%d_%Hh%Mm")
                 replaced_pathname = orig_pathname.replace(f".{orig_filetype}", f".replaced-{ftime}.{orig_filetype}")
@@ -108,13 +109,14 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                 os.rename(orig_pathname,replaced_pathname)
                 orig_pathname = replaced_pathname
 
-            create_exposure_tables(nights=[night], night_range=None, path_to_data=path_to_data,
+            create_exposure_tables(nights=str(night), night_range=None, path_to_data=path_to_data,
                                    exp_table_path=exp_table_path, obstypes=obstypes, exp_filetype=out_filetype,
                                    cameras=cameras, bad_cameras=bad_cameras, badamps=badamps,
                                    verbose=verbose, no_specprod=no_specprod, overwrite_files=False)
 
             newtable = load_table(out_pathname,tabletype='exptab',use_specprod=usespecprod)
             origtable = load_table(orig_pathname, tabletype='exptab', use_specprod=usespecprod)
+            print(f"\n\nNumber of rows in original: {len(origtable)}, Number of rows in new: {len(newtable)}")
             assert len(newtable) >= len(origtable), "Tables must be the same length"
             assert np.all([exp in newtable['EXPID'] for exp in origtable['EXPID']]), \
                                                                  "All old exposures must be present in the new table"
@@ -130,26 +132,49 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                 else:
                     continue
                 for col in mutual_colnames:
+                    origval = origtable[col][origloc]
+                    newval = newtable[col][newloc]
+                    if col == 'EXPFLAG'	and 'EFFTIME_ETC' in newtable.colnames and newtable['EFFTIME_ETC'][newloc] > 0. and 'aborted' in origval:
+                        origorigval = origval.copy()
+                        origval = origval[np.where(origval != 'aborted')]
+                        print(f"Identified outdated aborted exposure flag. Removing that. Original set: {origorigval}, Updated origset: {origval}")
+                    elif col == 'COMMENTS' and 'EFFTIME_ETC' in newtable.colnames and newtable['EFFTIME_ETC'][newloc] > 0. and \
+                                                    'EXPFLAG' in origtable.colnames and 'aborted' in origtable['EXPFLAG'][origloc]:
+                        origorigval = origval.copy()
+                        valcheck = np.array([('For EXPTIME:' not in val) for val in origval])
+                        origval = origval[valcheck]
+                        print(f"Identified outdated aborted exptime COMMENT. Removing that. Original set: {origorigval}, Updated origset: {origval}")
                     if np.isscalar(origtable[col][origloc]):
-                        if origtable[col][origloc] != coldefs[col] and newtable[col][newloc] != origtable[col][origloc]:
+                        if origval != coldefs[col] and newval != origval:
                             print(f"Difference detected for Night {night}, exp {expid}, " + \
-                                  f"col {col}: orig={origtable[col][origloc]}, new={newtable[col][newloc]} ")
-                            newtable[col][newloc] = origtable[col][origloc]
+                                  f"col {col}: orig={origval}, new={newval}. Taking the original value. ")
+                            newtable[col][newloc] = origval
                     else:
-                        if not np.array_equal(origtable[col][origloc], coldefs[col], equal_nan=True) and \
-                           not np.array_equal(newtable[col][newloc], origtable[col][origloc], equal_nan=True):
+                        if not np.array_equal(origval, coldefs[col]) and \
+                           not np.array_equal(newval, origval):
                             print(f"Difference detected for Night {night}, exp {expid}, " + \
-                                  f"col {col}: orig={origtable[col][origloc]}, new={newtable[col][newloc]} ")
-                            newtable[col][newloc] = origtable[col][origloc]
+                                  f"col {col}: orig={origval}, new={newval}. Appending the two arrays.")
+                            combined_val = newval[newval != '']
+                            for val in origval:
+                                if val != '' and val not in newval:
+                                    combined_val = np.append(combined_val,[val])
+                            newtable[col][newloc] = combined_val
+
             if dry_run:
+                print("\n\nOutput file would have been:")
+                newtable.pprint_all()
+
+                names = [col for col in newtable.colnames if col not in ['HEADERERR','EXPFLAG','COMMENTS']]
+                t1 = newtable[names]
+                t2 = load_table(out_pathname,tabletype='exptab',use_specprod=usespecprod)[names]
+                t1.values_equal(t2).pprint_all()
+
                 print(f"Removing the temporary file {out_pathname}")
                 os.remove(out_pathname)
-                print("\n\nOutput file would have been:")
-                print(newtable)
                 print("\n\n")
             else:
                 write_table(newtable, out_pathname, overwrite=True)
-                print(f"Updated file save to {out_pathname}. Original archived as {orig_pathname}")
+                print(f"Updated file save to {out_pathname}. Original archived as {orig_pathname}\n\n")
 
         print("Exposure table regenerations complete")
         ## Flush the outputs
