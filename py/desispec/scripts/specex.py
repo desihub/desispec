@@ -120,6 +120,7 @@ def main(args, comm=None):
 
     # Now we assign bundles to processes
 
+
     mynbundle = int(nbundle / nproc)
     leftover = nbundle % nproc
     if rank < leftover:
@@ -234,6 +235,8 @@ def main(args, comm=None):
         # all processes throw
         raise RuntimeError("merging of per-bundle files failed")
 
+    return
+
 def run(comm,cmds,cameras):
     """
     Run PSF fits with specex on a set of ccd images 
@@ -260,9 +263,6 @@ def run(comm,cmds,cameras):
             comm: MPI communicator 
             job:  job index corresponding to position in list of cmds entries 
         """
-
-        if job > 1: 
-            raise ValueError('Job '+str(job)+' had an exception')
             
         rank = comm.Get_rank()
         camera = cameras[job]
