@@ -333,14 +333,12 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
 
     #- Pending further optimizations, use same number of nodes in all queues
     ### if (queue == 'realtime') and (nodes > max_realtime_nodes):
-    print('DEBUG before',jobdesc,nodes,ncores)
     if (nodes > max_realtime_nodes):
         nodes = max_realtime_nodes
         ncores = config['cores_per_node'] * nodes
         if jobdesc in ('ARC', 'TESTARC'):
             # adjust for workflow.schedule scheduler proc
             ncores = ((ncores - 1) // 20) * 20 + 1 
-    print('DEBUG after',jobdesc,nodes,ncores)
             
     runtime *= config['timefactor']
 
