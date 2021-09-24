@@ -6,7 +6,7 @@ import re
 import time
 from astropy.table import Table
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, \
+from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, default_obstypes_for_exptable,\
                                        night_to_month, get_exposure_table_column_defaults
 from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin
 from desispec.workflow.tableio import write_table, load_table
@@ -72,6 +72,11 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         nights = nights[np.where(int(last_night)>=nights.astype(int))[0]]
 
     print("Nights: ", nights)
+
+    if obstypes is not None:
+        obstypes = [ val.strip('\t ') for val in obstypes.split(",") ]
+    else:
+        obstypes = default_obstypes_for_exptable()
 
     ## Define where to find the data
     if path_to_data is None:
