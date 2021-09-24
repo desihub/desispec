@@ -130,6 +130,8 @@ def main():
             if key not in ["wave", "fitdata", "fitivar", "model"]:
                 if key == "OBSEMWAVES":
                     dtype.append(("{}_OBSEMWAVES".format(emname), "S20"))
+                elif key == "NDOF":
+                    dtype.append(("{}_{}".format(emname, key), ">i4"))
                 else:
                     dtype.append(("{}_{}".format(emname, key), ">f4"))
     # AR store in table

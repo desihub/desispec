@@ -114,7 +114,7 @@ def emlines_gaussfit(
     Notes:
         Adapted/simplified from elgredshiftflag from J. Comparat (used for eBOSS/ELG):
             https://svn.sdss.org/repo/eboss/elgredshiftflag/
-        Returns np.nan in mydict if not enough pixels to fit or if fit fails.
+        Returns np.nan in mydict (and NDOF=-99) if not enough pixels to fit or if fit fails.
         For "OII", let the doublet line ratio free during the fit.
         For "OIII", fits the 4960 and 5007 lines with a fixed line ratio.
         For the Balmer lines, SHARE is not fitted and set to np.nan.
@@ -157,7 +157,10 @@ def emlines_gaussfit(
         "CHI2", "NDOF",
     ]
     for key in keys:
-        mydict[key] = np.nan
+        if key == "NDOF":
+            mydict[key] = -99
+        else:
+            mydict[key] = np.nan
     # AR picking wavelengths
     keep_line = np.zeros(len(waves), dtype=bool)
     keep_cont = np.zeros(len(waves), dtype=bool)
@@ -409,6 +412,8 @@ fitting.
         for key in emkeys:
             if key == "OBSEMWAVES":
                 mydict[emname][key] = np.zeros(nspec, dtype=object)
+            elif key == "NDOF":
+                mydict[emname][key] = -99 + np.zeros(nspec, dtype=int)
             else:
                 mydict[emname][key] = np.nan + np.zeros(nspec)
         for key in ["wave", "fitdata", "fitivar", "model"]:
