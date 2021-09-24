@@ -9,7 +9,7 @@ Tools for scheduling MPI jobs using mpi4py
 """
 from mpi4py import MPI
 import numpy as np
-from logging getLogger
+from logging import getLogger
 
 class Schedule:
 
