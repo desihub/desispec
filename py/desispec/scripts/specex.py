@@ -254,7 +254,6 @@ def run(comm,cmds,cameras):
     group_size = 20
     # reverse to do b cameras last since they take least time
     cameras = sorted(cameras, reverse=True)
-    cameras.reverse() 
     def fitbundles(comm,job):
         """
         Run PSF fit with specex on all bundles for a single ccd image 
@@ -263,7 +262,7 @@ def run(comm,cmds,cameras):
             comm: MPI communicator 
             job:  job index corresponding to position in list of cmds entries 
         """
-            
+      
         rank = comm.Get_rank()
         camera = cameras[job]
         if camera in cmds:
@@ -272,14 +271,14 @@ def run(comm,cmds,cameras):
             if rank == 0:
                 t0 = time.time()
                 timestamp = time.asctime()
-                log.info(f'MPI ranks {rank}-{rank+group_size-1}'+
-                         'fitting PSF for {camera} at {timestamp}')
+                log.info(f'MPI ranks {rank}-{rank+group_size-1} '+
+                         f'fitting PSF for {camera} at {timestamp}')
             try:
                 main(cmdargs, comm=comm)
             except Exception as e:
                  if rank == 0:
                      log.error(f'FAILED: MPI group ranks {rank}-{rank+group_size-1}'+
-                               ' on camera {camera}')
+                               f' on camera {camera}')
                      log.error('FAILED: {}'.format(cmds[camera]))
                      log.error(e)
             if rank == 0:
@@ -288,7 +287,7 @@ def run(comm,cmds,cameras):
 
         return
 
-    sc = Schedule(fitbundles,comm=comm,Njobs=len(cameras),group_size=group_size)
+    sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
     sc.run()
 
     return

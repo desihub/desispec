@@ -82,7 +82,7 @@ class Schedule:
             destrank = worker * self.group_size + grouprank + 1
             self.job_buff[0] = job
             self.comm.Send(self.job_buff,dest=destrank)
-            reqs.append(self.comm.Irecv(self.job_buff,source=destrank))
+            if job >= 0: reqs.append(self.comm.Irecv(self.job_buff,source=destrank))
         return reqs
 
     def _checkreqlist(self,reqs):
