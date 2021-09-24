@@ -100,7 +100,7 @@ def emlines_gaussfit(
         mydict: a dictionary with various quantities, noticely "FLUX" and "FLUX_IVAR" (dictionary of floats)
             list of all keys:
                 TARGETID, ZSPEC, OBSEMWAVES,
-                CHI2, NDOF: chi2 and nb of degrees of freedom
+                CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
                 CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
                 FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
                 SIGMA, SIGMA_IVAR: line width in A (observed frame)
@@ -259,8 +259,9 @@ def emlines_gaussfit(
                             models = myfunc(waves[keep_line], popt[0], popt[1])
                         if balmerfit == "em+abs":
                             models = myfunc(waves[keep_line], popt[0], popt[1], popt[2], popt[3])
-                    mydict["CHI2"]    = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
                     mydict["NDOF"]    = keep_line.sum() - len(p0)
+                    mydict["CHI2"]    = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
+                    mydict["CHI2"]   /= mydict["NDOF"] # AR we define CHI2 as the reduced chi2, as in fastspecfit
                     mydict["SIGMA"]   = popt[0]
                     mydict["SIGMA_IVAR"]= diag[0] ** -1
                     mydict["FLUX"]    = popt[1]
@@ -312,7 +313,7 @@ fitting.
                 TARGETID,TARGET_RA,TARGET_DEC,OBJTYPE,FIBER,Z,ZWARN,SPECTYPE,DELTACHI2: numpy array with len(targetids) objects
                 subdictionaries for each emname in emnames, with:
                     OBSEMWAVES
-                    CHI2, NDOF: chi2 and nb of degrees of freedom
+                    CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
                     CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
                     FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
                     SIGMA, SIGMA_IVAR: line width in A (observed frame)
