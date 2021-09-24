@@ -19,8 +19,9 @@ from astropy.table import Table, Column, join
 from astropy.io import fits
 
 from desitarget.targetmask import desi_mask
+# from desitarget.targets import main_cmx_or_sv
 from desiutil.log import get_logger
-from desiutil.depend import add_dependencies
+from desiutil.depend import add_dependencies, mergedep
 
 from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
 from desispec.io.meta import rawdata_root, findfile
@@ -433,6 +434,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         badfibers_filename (str): filename with table of bad fibers with at least two columns: FIBER and FIBERSTATUS
         force (bool): create fibermap even if missing coordinates/guide files
         allow_svn_override (bool): if True (default), allow fiberassign SVN to override raw data
+
+    Returns:
+        fibermap (HDUList): A representation of a fibermap FITS file.
     """
 
     log = get_logger()
@@ -440,15 +444,28 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- raw data file for header
     rawfile = findfile('raw', night, expid)
     try:
-        rawheader = fits.getheader(rawfile, 'SPEC')
+        rawheader = fits.getheader(rawfile, 'SPEC', disable_image_compression=True)
     except KeyError:
-        rawheader = fits.getheader(rawfile, 'SPS')
+        rawheader = fits.getheader(rawfile, 'SPS', disable_image_compression=True)
 
     #- Find fiberassign file
     rawfafile = fafile = find_fiberassign_file(night, expid)
 
     #- Look for override fiberassign file in svn
-    tileid = rawheader['TILEID']
+    try:
+        tileid = rawheader['TILEID']
+    except KeyError:
+        #
+        # 20210114/00072405 is an example of where this happens.
+        # We use the fiberassign file that find_fiberassign_file() found
+        # by walking backwards through earlier exposures on the same night,
+        # *even if it is actually wrong*.
+        #
+        log.error("TILEID not in the header from %s!", rawfile)
+        rawfafile_expid = int(os.path.basename(os.path.dirname(rawfafile)))
+        if rawfafile_expid != expid:
+            log.error('Determining TILEID from an earlier exposure %08d/%08d!', night, rawfafile_expid)
+        tileid = int(os.path.basename(rawfafile).split('-')[1].split('.')[0])
     if allow_svn_override and ('DESI_TARGET' in os.environ):
         targdir = os.getenv('DESI_TARGET')
         testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
@@ -524,6 +541,19 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
     fa = Table.read(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
+    fa_header = fits.getheader(fafile, 'FIBERASSIGN')
+    #
+    # Obtain the survey name.  Reproduces the logic (though not the exact code) in
+    # desitarget.targets.main_cmx_or_sv(), but can be much faster.
+    # As a bonus, a freeze_iers() call can be avoided.
+    #
+    # survey = main_cmx_or_sv(fa)[2]
+    survey = 'main'
+    notmain = [name.split('_')[0] for name in fa.colnames
+               if name.startswith('CMX') or name.startswith('SV')]
+    if len(notmain) > 0:
+        survey = notmain[0].lower()
+    log.info("Fiberassign file reports survey = '%s'.", survey)
 
     #- if using svn fiberassign override, check consistency of columns that
     #- ICS / platemaker used for actual observations; they should never change
@@ -562,17 +592,34 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
     #- add missing columns for data model consistency
     if 'PLATE_RA' not in fa.colnames:
+        log.debug("Adding PLATE_RA column.")
         fa['PLATE_RA'] = fa['TARGET_RA']
 
     if 'PLATE_DEC' not in fa.colnames:
+        log.debug("Adding PLATE_DEC column.")
         fa['PLATE_DEC'] = fa['TARGET_DEC']
 
     #- also read extra keywords from HDU 0
     fa_hdr0 = fits.getheader(fafile, 0)
     if 'OUTDIR' in fa_hdr0:
+        log.debug("Rename OUTDIR -> FAOUTDIR")
         fa_hdr0.rename_keyword('OUTDIR', 'FAOUTDIR')
-    skipkeys = ['SIMPLE', 'EXTEND', 'COMMENT', 'EXTNAME', 'BITPIX', 'NAXIS']
-    addkeys(fa.meta, fa_hdr0, skipkeys=skipkeys)
+    longstrn = fits.Card('LONGSTRN', 'OGIP 1.0', 'The OGIP Long String Convention may be used.')
+    if 'DEPNAM00' in fa_hdr0:
+        log.debug("Inserting LONGSTRN keyword before DEPNAM00")
+        fa_hdr0.insert('DEPNAM00', longstrn)
+    else:
+        log.debug("Inserting LONGSTRN keyword before TILEID")
+        fa_hdr0.insert('TILEID', longstrn)
+
+    #
+    # Merge fa_hdr0 into fa_header.  unique=True means prefer cards from
+    # fa_header over fa_hdr0
+    #
+    if 'DEPNAM00' in fa_header:
+        log.debug("Merge dependencies from HDU0 into fa_header.")
+        mergedep(fa_hdr0, fa_header, conflict='dst')
+    fa_header.extend(fa_hdr0, unique=True)
 
     #- Read platemaker (pm) coordinates file; 3 formats to support:
     #  1. has FLAGS_CNT/EXP_n and DX_n, DX_n (e.g. 20201214/00067678)
@@ -618,12 +665,14 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             log.info(f'Using FLAGS_CNT_{numiter-1} in {coordfile}')
 
     #- Now let's merge that platemaker coordinates table (pm) with fiberassign
+    fibermap_header = fits.Header({'XTENSION': 'BINTABLE'})
+    fibermap_header.extend(fa_header, unique=True)
     if pm is not None:
         pm['LOCATION'] = 1000*pm['PETAL_LOC'] + pm['DEVICE_LOC']
         keep = np.in1d(pm['LOCATION'], fa['LOCATION'])
         pm = pm[keep]
         pm.sort('LOCATION')
-        log.info('{}/{} fibers in coordinates file'.format(len(pm), len(fa)))
+        log.info('%d/%d fibers in coordinates file', len(pm), len(fa))
 
         #- Create fibermap table to merge with fiberassign file
         fibermap = Table()
@@ -732,8 +781,25 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
     #- Add header information from rawfile
     log.debug(f'Adding header keywords from {rawfile}')
-    skipkeys = ['EXPTIME',]
-    addkeys(fibermap.meta, rawheader, skipkeys=skipkeys)
+
+    #- Early data raw headers had bad >8 char 'FIBERASSIGN' and 'USESPLITS' keyword.
+    for old, new in [('FIBERASSIGN', 'FIBASSGN'), ('USESPLITS', 'USESPLIT')]:
+        if old in rawheader:
+            if new in rawheader:
+                if rawheader[old] == rawheader[new]:
+                    log.warning("%s and %s both exist in header from %s, but they have the same value.", old, new, rawfile)
+                else:
+                    log.error("%s and %s both exist in header from %s, and they have the different values!", old, new, rawfile)
+                log.warning("Deleting header keyword %s.", old)
+                rawheader.remove(old)
+            else:
+                log.warning('Renaming header keyword %s -> %s.', old, new)
+                rawheader.rename_keyword(old, new)
+
+    if 'DEPNAM00' in rawheader:
+        mergedep(rawheader, fibermap_header, conflict='dst')
+    fibermap_header.extend(rawheader, strip=True, unique=True)
+    fibermap_header.remove('EXPTIME')
     fibermap['EXPTIME'] = rawheader['EXPTIME']
     #- Add header info from guide file
     #- sometimes full header is in HDU 0, other times HDU 1...
@@ -743,36 +809,30 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         if 'TILEID' not in guideheader:
             guideheader = fits.getheader(guidefile, 1)
 
-        if fibermap.meta['TILEID'] != guideheader['TILEID']:
+        if fibermap_header['TILEID'] != guideheader['TILEID']:
             raise RuntimeError('fiberassign tile {} != guider tile {}'.format(
-                fibermap.meta['TILEID'], guideheader['TILEID']))
+                fibermap_header['TILEID'], guideheader['TILEID']))
 
-        addkeys(fibermap.meta, guideheader, skipkeys=skipkeys)
+        if 'DEPNAM00' in guideheader:
+            mergedep(guideheader, fibermap_header, conflict='dst')
+        fibermap_header.extend(guideheader, strip=True, unique=True)
+        fibermap_header.remove('EXPTIME')
 
-    fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
-    #- Early data raw headers had bad >8 char 'FIBERASSIGN' keyword
-    if 'FIBERASSIGN' in fibermap.meta:
-        log.warning('Renaming header keyword FIBERASSIGN -> FIBASSGN')
-        fibermap.meta['FIBASSGN'] = fibermap.meta['FIBERASSIGN']
-        del fibermap.meta['FIBERASSIGN']
-
-    #- similarly for early splits in raw data file
-    if 'USESPLITS' in fibermap.meta:
-        log.warning('Renaming header keyword USESPLITS -> USESPLIT')
-        fibermap.meta['USESPLIT'] = fibermap.meta['USESPLITS']
-        del fibermap.meta['USESPLITS']
+    fibermap_header['EXTNAME'] = 'FIBERMAP'
+    for key in ('ZIMAGE', 'ZSIMPLE', 'ZBITPIX', 'ZNAXIS', 'ZNAXIS1', 'ZTILE1', 'ZCMPTYPE', 'ZNAME1', 'ZVAL1', 'ZNAME2', 'ZVAL2'):
+        fibermap_header.remove(key)
 
     #- Record input guide and coordinates files
     if guidefile is not None:
-        fibermap.meta['GUIDEFIL'] = os.path.basename(guidefile)
+        fibermap_header['GUIDEFIL'] = os.path.basename(guidefile)
     else:
-        fibermap.meta['GUIDEFIL'] = 'MISSING'
+        fibermap_header['GUIDEFIL'] = 'MISSING'
 
     if coordfile is not None:
-        fibermap.meta['COORDFIL'] = os.path.basename(coordfile)
+        fibermap_header['COORDFIL'] = os.path.basename(coordfile)
     else:
-        fibermap.meta['COORDFIL'] = 'MISSING'
+        fibermap_header['COORDFIL'] = 'MISSING'
 
     #- mask the fibers defined by badamps
     if badamps is not None:
@@ -816,12 +876,79 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             n = np.sum(ii)
             log.warning(f'Setting {n} {col} NaN to 0.0')
             fibermap[col][ii] = 0.0
+    #
+    # Some SV1-era files had these extraneous columns, make sure they are not propagated.
+    # In the case of CMX_TARGET, those bits have already been copied into DESI_TARGET above.
+    #
+    for col in ('NUMTARGET', 'BLOBDIST', 'FIBERFLUX_IVAR_G', 'FIBERFLUX_IVAR_R', 'FIBERFLUX_IVAR_Z', 'HPXPIXEL'):
+        if col in fibermap.colnames:
+            log.info("Removing column '%s' from fibermap table.", col)
+            fibermap.remove_column(col)
+    if survey != 'cmx' and 'CMX_TARGET' in fibermap.colnames:
+        log.info("Removing column '%s' from fibermap table.", 'CMX_TARGET')
+        fibermap.remove_column(col)
+
+    #
+    # Some SV1-era files did not have SV1_SCND_TARGET.
+    #
+    if 'SV1_DESI_TARGET' in fibermap.colnames and 'SV1_SCND_TARGET' not in fibermap.colnames:
+        log.info('Adding SV1_SCND_TARGET column.')
+        fibermap.add_column(np.zeros(len(fibermap), dtype=np.int64),
+                            index=fibermap.index_column('SV1_MWS_TARGET') + 1,
+                            name='SV1_SCND_TARGET')
+
+    #
+    # Some early files did not have FLUX_IVAR_W1, FLUX_IVAR_W2.
+    #
+    if 'FLUX_IVAR_W1' not in fibermap.columns and 'FLUX_IVAR_W2' not in fibermap.columns:
+        log.info('Adding FLUX_IVAR_W1 and FLUX_IVAR_W2 columns.')
+        fibermap.add_column(-1.0*np.ones(len(fibermap), dtype=np.float32),
+                            index=fibermap.index_column('FLUX_W2') + 1,
+                            name='FLUX_IVAR_W1')
+        fibermap.add_column(-1.0*np.ones(len(fibermap), dtype=np.float32),
+                            index=fibermap.index_column('FLUX_W2') + 2,
+                            name='FLUX_IVAR_W2')
+    #
+    # Some SV1-era file have various columns out of order.
+    #
+    for column, location in (('RELEASE', 20), ('BRICKID', 21),
+                             ('BRICK_OBJID', 22), ('MASKBITS', 30),
+                             ('BRICKNAME', 37), ('PRIORITY_INIT', 54),
+                             ('NUMOBS_INIT', 55)):
+        if fibermap.index_column(column) != location:
+            log.info('Reordering %s column.', column)
+            column_copy = fibermap[column].copy()
+            fibermap.remove_column(column)
+            fibermap.add_column(column_copy, index=location, name=column)
+    #
+    # Some SV1-era files have RELEASE as int32.  Should be int16.
+    #
+    if fibermap['RELEASE'].dtype == np.dtype('>i2'):
+        log.debug("RELEASE has correct type.")
+    else:
+        log.warning("Setting RELEASE to int16.")
+        fibermap['RELEASE'] = fibermap['RELEASE'].astype(np.int16)
+
+    #
+    # Just to reduce complaints by certain FITS tools.
+    #
+    fibermap_header.rename_keyword('EPOCH', 'EQUINOX')
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table
     fibermap.sort('FIBER')
 
-    return fibermap
+    #
+    # Don't propagate fibermap.meta; we'd rather keep the comments from the
+    # explicitly-constructed header.
+    #
+    fibermap.meta.clear()
+    fibermap_hdu = fits.BinTableHDU(fibermap)
+    fibermap_hdu.header.extend(fibermap_header, update=True)
+    fibermap_hdulist = fits.HDUList([fits.PrimaryHDU(), fibermap_hdu])
+
+    return fibermap_hdulist
+
 
 def fibermap_new2old(fibermap):
     '''Converts new format fibermap into old format fibermap
