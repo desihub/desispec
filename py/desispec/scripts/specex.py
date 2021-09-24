@@ -120,7 +120,6 @@ def main(args, comm=None):
 
     # Now we assign bundles to processes
 
-
     mynbundle = int(nbundle / nproc)
     leftover = nbundle % nproc
     if rank < leftover:
@@ -235,7 +234,7 @@ def main(args, comm=None):
         # all processes throw
         raise RuntimeError("merging of per-bundle files failed")
 
-def run(comm,cmds,cameras,log):
+def run(comm,cmds,cameras):
     """
     Run PSF fits with specex on a set of ccd images 
 
@@ -243,10 +242,12 @@ def run(comm,cmds,cameras,log):
         comm:    MPI communicator 
         cmds:    dictionary of command arguments to main method of this module
         cameras: entries in cmds to be run in parallel, one entry per ccd image to be fit
-        log:     logging.Logger object 
     """
     from desispec.workflow.schedule import Schedule
-
+    from desiutil.log import get_logger, DEBUG, INFO
+    
+    log = get_logger()
+    
     group_size = 20
     # reverse to do b cameras last since they take least time
     cameras = sorted(cameras, reverse=True)
@@ -260,11 +261,14 @@ def run(comm,cmds,cameras,log):
             job:  job index corresponding to position in list of cmds entries 
         """
 
+        if job > 1: 
+            raise ValueError('Job '+str(job)+' had an exception')
+            
         rank = comm.Get_rank()
         camera = cameras[job]
         if camera in cmds:
             cmdargs = cmds[camera].split()[1:]
-            cmdargs = desispec.scripts.specex.parse(cmdargs)
+            cmdargs = parse(cmdargs)
             if rank == 0:
                 t0 = time.time()
                 timestamp = time.asctime()

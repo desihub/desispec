@@ -9,8 +9,9 @@ Tools for scheduling MPI jobs using mpi4py
 """
 from mpi4py import MPI
 import numpy as np
+from logging getLogger
 
-class schedule:
+class Schedule:
 
     def __init__(self, workfunc, **kwargs):
         """
@@ -37,6 +38,8 @@ class schedule:
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
 
+        self.log = getLogger(__name__)
+        
         # numpy array for sending and receiving job indices
         self.job_buff = np.zeros(1,dtype=np.int32)
 
@@ -160,7 +163,11 @@ class schedule:
             self.comm.Recv(self.job_buff,source=0) # receive assignment from rank=0 scheduler
             job = self.job_buff[0]                 # unpack job index
             if job < 0: return                     # job < 0 means no more jobs to do
-            self._workfunc(self.groupcomm,job)     # call work function for job
+            try:
+                self._workfunc(self.groupcomm,job)     # call work function for job
+            except Exception as e:
+                self.log.error(f'FAILED: call to workfunc')
+                self.log.error(e)
             self.comm.Isend(self.job_buff,dest=0)  # send non-blocking message on completion
             
         return
