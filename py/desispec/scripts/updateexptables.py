@@ -107,7 +107,7 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
             print(f"\n\nNumber of rows in original: {len(origtable)}, Number of rows in new: {len(newtable)}")
 
             if 'OBSTYPE' in origtable.colnames and set(obstypes) != set(origtable['OBSTYPE']):
-                subset_rows = [obs in obstypes for obs in origtable['OBSTYPE']]
+                subset_rows = np.array([obs in obstypes for obs in origtable['OBSTYPE']])
                 subset_orig = origtable[subset_rows]
             else:
                 subset_orig = origtable
