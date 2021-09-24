@@ -105,7 +105,7 @@ def emlines_gaussfit(
                 FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
                 SIGMA, SIGMA_IVAR: line width in A (observed frame)
                 SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
-                RFEW, RFEW_IVAR: rest-frame equivalent width
+                EW, EW_IVAR: rest-frame equivalent width
         succeed: did the fit succeed? (boolean)
         waves: wavelength values (in A) used for the fitting (numpy array of floats)
         fluxes: flux values (in 1e-17 * erg/cm2/s/A) used for the fitting (numpy array of floats)
@@ -153,7 +153,7 @@ def emlines_gaussfit(
     keys = [
         "FLUX", "FLUX_IVAR", "SIGMA", "SIGMA_IVAR",
         "CONT", "CONT_IVAR", "SHARE", "SHARE_IVAR",
-        "RFEW", "RFEW_IVAR",
+        "EW", "EW_IVAR",
         "CHI2", "NDOF",
     ]
     for key in keys:
@@ -268,8 +268,8 @@ def emlines_gaussfit(
                     mydict["FLUX_IVAR"] = diag[1] ** -1
                     # AR rest-frame equivalent width
                     factor = (1 + zspec) / mydict["CONT"]
-                    mydict["RFEW"] = mydict["FLUX"] * factor
-                    mydict["RFEW_IVAR"] = mydict["FLUX_IVAR"] / factor ** 2
+                    mydict["EW"] = mydict["FLUX"] * factor
+                    mydict["EW_IVAR"] = mydict["FLUX_IVAR"] / factor ** 2
     #
     return mydict, succeed, waves[keep_line], fluxes[keep_line], ivars[keep_line], models
 
@@ -318,7 +318,7 @@ fitting.
                     FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
                     SIGMA, SIGMA_IVAR: line width in A (observed frame)
                     SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
-                    RFEW, RFEW_IVAR: rest-frame equivalent width
+                    EW, EW_IVAR: rest-frame equivalent width
                     wave, data, ivar, model: data used for fitting + fitted model
 
     Notes:
@@ -398,7 +398,7 @@ fitting.
         "OBSEMWAVES",
         "FLUX", "FLUX_IVAR", "SIGMA", "SIGMA_IVAR",
         "CONT", "CONT_IVAR", "SHARE", "SHARE_IVAR",
-        "RFEW", "RFEW_IVAR",
+        "EW", "EW_IVAR",
         "CHI2", "NDOF",
     ]
     mydict = {}
