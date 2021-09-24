@@ -82,11 +82,9 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
     if exp_table_path is None:
         exp_table_path = get_exposure_table_path(night=None,usespecprod=usespecprod)
 
-    ## Make the save directory exists
-    os.makedirs(exp_table_path, exist_ok=True)
-
+    nights_with_data = listpath(path_to_data)
     for night in nights:
-        if str(night) not in listpath(path_to_data):
+        if str(night) not in nights_with_data:
             print(f'Night: {night} not in data directory {path_to_data}. Skipping')
             continue
 
@@ -94,32 +92,30 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         exptab_path = pathjoin(exp_table_path,month)
         orig_name = get_exposure_table_name(night, extension=orig_filetype)
         orig_pathname = pathjoin(exptab_path, orig_name)
-        out_name = get_exposure_table_name(night, extension=out_filetype)
-        out_pathname = pathjoin(exptab_path, out_name)
+        temp_filetype = f"temp.{out_filetype}"
+        temp_pathname = orig_pathname.replace(f".{orig_filetype}", f".{temp_filetype}")
         if not os.path.exists(orig_pathname):
             print(f'Night: {night} original table could not be found {orig_pathname}. Skipping this night.')
         else:
-            if dry_run:
-                out_filetype = f"temp.{out_filetype}"
-                out_pathname = orig_pathname.replace(f".{orig_filetype}", f".{out_filetype}")
-            else:
-                ftime = time.strftime("%Y%m%d_%Hh%Mm")
-                replaced_pathname = orig_pathname.replace(f".{orig_filetype}", f".replaced-{ftime}.{orig_filetype}")
-                print(f"Moving original file from {orig_pathname} to {replaced_pathname}")
-                os.rename(orig_pathname,replaced_pathname)
-                orig_pathname = replaced_pathname
-
             create_exposure_tables(nights=str(night), night_range=None, path_to_data=path_to_data,
-                                   exp_table_path=exp_table_path, obstypes=obstypes, exp_filetype=out_filetype,
+                                   exp_table_path=exp_table_path, obstypes=obstypes, exp_filetype=temp_filetype,
                                    cameras=cameras, bad_cameras=bad_cameras, badamps=badamps,
                                    verbose=verbose, no_specprod=no_specprod, overwrite_files=False)
 
-            newtable = load_table(out_pathname,tabletype='exptab',use_specprod=usespecprod)
+            newtable = load_table(temp_pathname, tabletype='exptab', use_specprod=usespecprod)
             origtable = load_table(orig_pathname, tabletype='exptab', use_specprod=usespecprod)
             print(f"\n\nNumber of rows in original: {len(origtable)}, Number of rows in new: {len(newtable)}")
-            assert len(newtable) >= len(origtable), "Tables must be the same length"
-            assert np.all([exp in newtable['EXPID'] for exp in origtable['EXPID']]), \
-                                                                 "All old exposures must be present in the new table"
+
+            if 'OBSTYPE' in origtable.colnames and set(obstypes) != set(origtable['OBSTYPE']):
+                subset_rows = [obs in obstypes for obs in origtable['OBSTYPE']]
+                subset_orig = origtable[subset_rows]
+            else:
+                subset_orig = origtable
+
+            assert len(newtable) >= len(subset_orig), "Tables for given obstypes must be the same length"
+            assert np.all([exp in newtable['EXPID'] for exp in subset_orig['EXPID']]), \
+                          "All old exposures of given obstype must be present in the new table"
+
             mutual_colnames = [col for col in newtable.colnames if col in origtable.colnames]
             coldefs = get_exposure_table_column_defaults(asdict=True)
             for newloc,expid in enumerate(newtable['EXPID']):
@@ -134,16 +130,19 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                 for col in mutual_colnames:
                     origval = origtable[col][origloc]
                     newval = newtable[col][newloc]
-                    if col == 'EXPFLAG'	and 'EFFTIME_ETC' in newtable.colnames and newtable['EFFTIME_ETC'][newloc] > 0. and 'aborted' in origval:
+                    if col == 'EXPFLAG'	and 'EFFTIME_ETC' in newtable.colnames and \
+                            newtable['EFFTIME_ETC'][newloc] > 0. and 'aborted' in origval:
                         origorigval = origval.copy()
                         origval = origval[np.where(origval != 'aborted')]
-                        print(f"Identified outdated aborted exposure flag. Removing that. Original set: {origorigval}, Updated origset: {origval}")
+                        print(f"Identified outdated aborted exposure flag. Removing that. Original set: " + \
+                              f"{origorigval}, Updated origset: {origval}")
                     elif col == 'COMMENTS' and 'EFFTIME_ETC' in newtable.colnames and newtable['EFFTIME_ETC'][newloc] > 0. and \
-                                                    'EXPFLAG' in origtable.colnames and 'aborted' in origtable['EXPFLAG'][origloc]:
+                            'EXPFLAG' in origtable.colnames and 'aborted' in origtable['EXPFLAG'][origloc]:
                         origorigval = origval.copy()
                         valcheck = np.array([('For EXPTIME:' not in val) for val in origval])
                         origval = origval[valcheck]
-                        print(f"Identified outdated aborted exptime COMMENT. Removing that. Original set: {origorigval}, Updated origset: {origval}")
+                        print(f"Identified outdated aborted exptime COMMENT. Removing that. Original set: " + \
+                              f"{origorigval}, Updated origset: {origval}")
                     if np.isscalar(origtable[col][origloc]):
                         if origval != coldefs[col] and newval != origval:
                             print(f"Difference detected for Night {night}, exp {expid}, " + \
@@ -166,17 +165,24 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
 
                 names = [col for col in newtable.colnames if col not in ['HEADERERR','EXPFLAG','COMMENTS']]
                 t1 = newtable[names]
-                t2 = load_table(out_pathname,tabletype='exptab',use_specprod=usespecprod)[names]
+                t2 = load_table(temp_pathname,tabletype='exptab',use_specprod=usespecprod)[names]
                 t1.values_equal(t2).pprint_all()
-
-                print(f"Removing the temporary file {out_pathname}")
-                os.remove(out_pathname)
-                print("\n\n")
             else:
-                write_table(newtable, out_pathname, overwrite=True)
-                print(f"Updated file save to {out_pathname}. Original archived as {orig_pathname}\n\n")
+                ftime = time.strftime("%Y%m%d_%Hh%Mm")
+                replaced_pathname = orig_pathname.replace(f".{orig_filetype}", f".replaced-{ftime}.{orig_filetype}")
+                print(f"Moving original file from {orig_pathname} to {replaced_pathname}")
+                os.rename(orig_pathname,replaced_pathname)
+                time.sleep(0.1)
+                out_pathname = orig_pathname.replace(f".{orig_filetype}", f".{out_filetype}")
+                write_table(newtable, out_pathname)
+                print(f"Updated file save to {out_pathname}. Original archived as {replaced_pathname}")
+
+            os.remove(temp_pathname)
+            print(f"Removed the temporary file {temp_pathname}")
+            print("\n\n")
 
         print("Exposure table regenerations complete")
+
         ## Flush the outputs
         sys.stdout.flush()
         sys.stderr.flush()
