@@ -320,9 +320,6 @@ fitting.
                     SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
                     EW, EW_IVAR: rest-frame equivalent width
                     wave, data, ivar, model: data used for fitting + fitted model
-
-    Notes:
-        The codes assumes a coaddfn.replace("coadd", "redrock") file exists, to get redshifts.
     """
     # AR sanity checks
     for fn in [redrockfn, coaddfn]:
