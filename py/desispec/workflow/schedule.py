@@ -164,7 +164,7 @@ class Schedule:
             job = self.job_buff[0]                 # unpack job index
             if job < 0: return                     # job < 0 means no more jobs to do
             try:
-                self._workfunc(self.groupcomm,job)     # call work function for job
+                self._workfunc(self.groupcomm,job) # call work function for job
             except Exception as e:
                 self.log.error(f'FAILED: call to workfunc')
                 self.log.error(e)
