@@ -58,8 +58,10 @@ class Schedule:
         self.grouprank = self.groupcomm.Get_rank()
 
         if self.group_size != self.groupcomm.Get_size() and self.rank != 0:
-            print(self.rank,self.group_size,self.groupcomm.Get_size(),flush=True)
-            raise Exception("can't have group_size != group_size")
+            self.log.error(f'FAILED: rank {self.rank} with group_size = '+
+                           f'{self.group_size} and groupcomm.Get_size() returning '+
+                           f'{self.groupcomm.Get_size()}')
+            raise Exception("inconsistent group size")
         
     def _assign_job(self,worker,job):
 
