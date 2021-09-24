@@ -102,8 +102,9 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         if not os.path.exists(orig_pathname):
             print(f'Night: {night} original table could not be found {orig_pathname}. Skipping this night.')
         else:
+            obstypes_str = ','.join(obstypes)
             create_exposure_tables(nights=str(night), night_range=None, path_to_data=path_to_data,
-                                   exp_table_path=exp_table_path, obstypes=obstypes, exp_filetype=temp_filetype,
+                                   exp_table_path=exp_table_path, obstypes=obstypes_str, exp_filetype=temp_filetype,
                                    cameras=cameras, bad_cameras=bad_cameras, badamps=badamps,
                                    verbose=verbose, no_specprod=no_specprod, overwrite_files=False)
 
