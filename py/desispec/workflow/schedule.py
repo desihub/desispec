@@ -1,15 +1,37 @@
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+"""
+desispec.workflow.schedule
+==========================
+
+Tools for scheduling MPI jobs using mpi4py
+"""
 from mpi4py import MPI
 import numpy as np
 
 class schedule:
 
     def __init__(self, workfunc, **kwargs):
-
+        """
+        Intialize class for scheduling MPI jobs using mpi4py 
+        
+        Args:
+            workfunc: function to do each MPI job defined using 
+                      def workfunc(comm,job):
+                          where comm is an MPI communicator 
+                          and job is the index of the job 
+            
+        Keyword Args:
+            comm:       MPI communicator (default=None)
+            njobs:      number of jobs (default=2)
+            group_size: number of MPI processes per job (default=1) 
+        """
         # user provided function that will do the work
         self._workfunc = workfunc
 
         self.comm       = kwargs.get('comm',None)
-        self.Njobs      = kwargs.get('Njobs',2)
+        self.njobs      = kwargs.get('njobs',2)
         self.group_size = kwargs.get('group_size',1)
 
         self.rank = self.comm.Get_rank()
@@ -35,8 +57,19 @@ class schedule:
         if self.group_size != self.groupcomm.Get_size() and self.rank != 0:
             print(self.rank,self.group_size,self.groupcomm.Get_size(),flush=True)
             raise Exception("can't have group_size != group_size")
-
+        
     def _assign_job(self,worker,job):
+
+        """
+        Assign job to a group of processes 
+        
+        Args:
+            worker: index of group of processes 
+            job:    index of job to be assigned
+            
+        Returns:
+            reqs: list of mpi4py.MPI.Request objects, one for each process in group 
+        """
 
         # assign job to all processes in group worker
         # and return list of handles corresponding to
@@ -51,6 +84,16 @@ class schedule:
 
     def _checkreqlist(self,reqs):
 
+        """
+        Check for completion of jobs by all processes in group 
+        
+        Args:
+            reqs: list of mpi4py.MPI.Request objects, one for each process in group 
+            
+        Returns:
+            bool: True if all messages corresponding to reqa received, False otherwise 
+        """
+        
         # check if all processes with handles in reqs have reported back
         for req in reqs:
             if not req.Test():
@@ -59,6 +102,9 @@ class schedule:
 
     def _schedule(self):
 
+        """
+        Schedule, run and assign processes for all jobs in this object        
+        """
         # bookkeeping
         waitlist        = [] # message handles for pending worker groups
         worker_groups   = [] # worker assigned
@@ -76,7 +122,7 @@ class schedule:
         # when one is complete it assigns the next job
         # until there are none left
         Ncomplete = 0
-        while(Ncomplete < self.Njobs):
+        while(Ncomplete < self.njobs):
             # iterate over list of currently pending group of processes
             for i in range(len(waitlist)):
                 # check for completion of all processes in this worker group
@@ -88,7 +134,7 @@ class schedule:
                     Ncomplete += 1
                     waitlist.pop(i)
                     worker_groups.pop(i)
-                    if nextjob < self.Njobs:
+                    if nextjob < self.njobs:
                         # more jobs to do; assign processes in group worker
                         # the job with index nextjob, increment
                         reqs=self._assign_job(worker,nextjob)
@@ -100,12 +146,15 @@ class schedule:
 
         # no more jobs to assign; dismiss all processes in all groups by 
         # assigning job = -1, causing all workers processes to return
-        for worker in range(self.Ngroups): self._assign_job(worker,-1)
+        for worker in range(self.Ngroups): 
+            self._assign_job(worker,-1)
 
-        return
-
+        return 
+    
     def _work(self):
-
+        """
+        Listen for job assignments and run workfunc         
+        """
         # listen for job assignments from the scheduler
         while True:
             self.comm.Recv(self.job_buff,source=0) # receive assignment from rank=0 scheduler
@@ -113,9 +162,13 @@ class schedule:
             if job < 0: return                     # job < 0 means no more jobs to do
             self._workfunc(self.groupcomm,job)     # call work function for job
             self.comm.Isend(self.job_buff,dest=0)  # send non-blocking message on completion
+            
+        return
 
     def run(self):
-
+        """
+        Run schedulers and workers for this object          
+        """
         # main function of class
         if self.rank==0:
             self._schedule() # run scheduler on rank = 0

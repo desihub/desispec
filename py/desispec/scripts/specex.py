@@ -235,16 +235,31 @@ def main(args, comm=None):
         # all processes throw
         raise RuntimeError("merging of per-bundle files failed")
 
-    return
-
 def run(comm,cmds,cameras,log):
+    """
+    Run PSF fits with specex on a set of ccd images 
 
-    import desispec.scripts.specex
-    from desispec.workflow.schedule import schedule
+    Args:
+        comm:    MPI communicator 
+        cmds:    dictionary of command arguments to main method of this module
+        cameras: entries in cmds to be run in parallel, one entry per ccd image to be fit
+        log:     logging.Logger object 
+    """
+    from desispec.workflow.schedule import Schedule
 
     group_size = 20
-    cameras.reverse() # expects b cameras first; reverse to do them last since they take least time
+    # reverse to do b cameras last since they take least time
+    cameras = sorted(cameras, reverse=True)
+    cameras.reverse() 
     def fitbundles(comm,job):
+        """
+        Run PSF fit with specex on all bundles for a single ccd image 
+
+        Args:
+            comm: MPI communicator 
+            job:  job index corresponding to position in list of cmds entries 
+        """
+
         rank = comm.Get_rank()
         camera = cameras[job]
         if camera in cmds:
@@ -256,7 +271,7 @@ def run(comm,cmds,cameras,log):
                 log.info(f'MPI ranks {rank}-{rank+group_size-1}'+
                          'fitting PSF for {camera} at {timestamp}')
             try:
-                desispec.scripts.specex.main(cmdargs, comm=comm)
+                main(cmdargs, comm=comm)
             except Exception as e:
                  if rank == 0:
                      log.error(f'FAILED: MPI group ranks {rank}-{rank+group_size-1}'+
@@ -269,7 +284,7 @@ def run(comm,cmds,cameras,log):
 
         return
 
-    sc = schedule(fitbundles,comm=comm,Njobs=len(cameras),group_size=group_size)
+    sc = Schedule(fitbundles,comm=comm,Njobs=len(cameras),group_size=group_size)
     sc.run()
 
     return
