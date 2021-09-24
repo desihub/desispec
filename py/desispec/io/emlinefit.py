@@ -32,20 +32,20 @@ def get_rf_em_waves(emname):
 
     Notes:
         For OII and OIII returns a two-elements array; one-element array otherwise.
-        http://classic.sdss.org/dr6/algorithms/linestable.html
+        https://github.com/desihub/fastspecfit/blob/60393296e0cc466858f70a5d021d02693eff9375/py/fastspecfit/data/emlines.ecsv
     """
     if emname == "OII":
-        rf_em_waves = np.array([3727.092, 3729.875])
+        rf_em_waves = np.array([3727.092, 3729.874])
     if emname == "OIII":
-        rf_em_waves = np.array([4960.295, 5008.240])
+        rf_em_waves = np.array([4960.295, 5008.239])
     if emname == "HALPHA":
-        rf_em_waves = np.array([6564.61])
+        rf_em_waves = np.array([6564.613])
     if emname == "HBETA":
-        rf_em_waves = np.array([4862.68])
+        rf_em_waves = np.array([4862.683])
     if emname == "HGAMMA":
-        rf_em_waves = np.array([4341.68])
+        rf_em_waves = np.array([4341.684])
     if emname == "HDELTA":
-        rf_em_waves = np.array([4102.89])
+        rf_em_waves = np.array([4102.892])
     return rf_em_waves
 
 
