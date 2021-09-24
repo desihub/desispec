@@ -339,7 +339,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         if jobdesc in ('ARC', 'TESTARC'):
             # adjust for workflow.schedule scheduler proc
             ncores = ((ncores - 1) // 20) * 20 + 1 
-            
+
     runtime *= config['timefactor']
 
     return ncores, nodes, runtime
