@@ -119,7 +119,6 @@ def main():
             ("TARGET_RA", ">f8"),
             ("TARGET_DEC", ">f8"),
             ("OBJTYPE", "S3"),
-            ("FIBER", ">i4"),
             ("Z", ">f8"),
             ("ZWARN", ">i8"),
             ("SPECTYPE", "S6"),
@@ -137,7 +136,7 @@ def main():
     # AR store in table
     d = np.zeros(len(emdict["TARGETID"]), dtype=dtype)
     for key in [
-        "TARGETID", "TARGET_RA", "TARGET_DEC", "OBJTYPE", "FIBER",
+        "TARGETID", "TARGET_RA", "TARGET_DEC", "OBJTYPE",
         "Z", "ZWARN", "SPECTYPE", "DELTACHI2",
     ]:
         d[key] = emdict[key]

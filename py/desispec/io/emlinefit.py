@@ -313,7 +313,7 @@ fitting.
     Returns:
         mydict: a dictionary with various quantities,
             list of all keys:
-                TARGETID,TARGET_RA,TARGET_DEC,OBJTYPE,FIBER,Z,ZWARN,SPECTYPE,DELTACHI2: numpy array with len(targetids) objects
+                TARGETID,TARGET_RA,TARGET_DEC,OBJTYPE,Z,ZWARN,SPECTYPE,DELTACHI2: numpy array with len(targetids) objects
                 subdictionaries for each emname in emnames, with:
                     OBSEMWAVES
                     CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
@@ -403,7 +403,7 @@ fitting.
     ]
     mydict = {}
     mydict["TARGETID"] = targetids
-    for key in ["TARGET_RA", "TARGET_DEC", "OBJTYPE", "FIBER"]:
+    for key in ["TARGET_RA", "TARGET_DEC", "OBJTYPE"]:
         mydict[key] = d_fm[key]
     for key in ["Z", "ZWARN", "SPECTYPE", "DELTACHI2"]:
         mydict[key] = d_rr[key]
