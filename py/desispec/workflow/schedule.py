@@ -46,17 +46,19 @@ class Schedule:
         if self.group_size > self.size - 1:
             raise Exception("can't have group_size larger than world size - 1")
 
-        self.Ngroups  = (self.size-1) // self.group_size
+        # set number of groups and group for this rank 
+        self.ngroups  = (self.size-1) // self.group_size
         self.group    = (self.rank-1) // self.group_size
 
-        # assign rank=0 and 'extra' ranks to group Ngroups
-        # only ranks with group < Ngroups participate as workers
-        if self.rank > self.group_size * self.Ngroups or self.rank == 0:
-            self.group = self.Ngroups
+        # assign rank=0 and 'extra' ranks to group ngroups
+        # only ranks with group < ngroups participate as workers
+        if self.rank > self.group_size * self.ngroups or self.rank == 0:
+            self.group = self.ngroups
 
+        # generate a new communicator for ngroups processes of size group_size 
         self.groupcomm = self.comm.Split(color=self.group)
-        self.grouprank = self.groupcomm.Get_rank()
 
+        # check for consistency between specified group_size and that of new communicator 
         if self.group_size != self.groupcomm.Get_size() and self.rank != 0:
             self.log.error(f'FAILED: rank {self.rank} with group_size = '+
                            f'{self.group_size} and groupcomm.Get_size() returning '+
@@ -114,9 +116,9 @@ class Schedule:
         waitlist        = [] # message handles for pending worker groups
         worker_groups   = [] # worker assigned
 
-        # start by assigning Ngroups jobs, one to each of the Ngroups groups
+        # start by assigning ngroups jobs, one to each of the ngroups groups
         nextjob=0
-        for job in range(self.Ngroups):
+        for job in range(self.ngroups):
             worker = nextjob
             reqs=self._assign_job(worker,nextjob)
             waitlist.append(reqs)
@@ -151,7 +153,7 @@ class Schedule:
 
         # no more jobs to assign; dismiss all processes in all groups by 
         # assigning job = -1, causing all workers processes to return
-        for worker in range(self.Ngroups): 
+        for worker in range(self.ngroups): 
             self._assign_job(worker,-1)
 
         return 
@@ -181,7 +183,7 @@ class Schedule:
         # main function of class
         if self.rank==0:
             self._schedule() # run scheduler on rank = 0
-        elif self.group < self.Ngroups:
+        elif self.group < self.ngroups:
             self._work()     # run worker on all other ranks
 
         self.comm.barrier()
