@@ -96,7 +96,7 @@ class Schedule:
             reqs: list of mpi4py.MPI.Request objects, one for each process in group 
             
         Returns:
-            bool: True if all messages corresponding to reqa received, False otherwise 
+            bool: True if all messages corresponding to reqs received, False otherwise 
         """
         
         # check if all processes with handles in reqs have reported back
@@ -114,7 +114,7 @@ class Schedule:
         waitlist        = [] # message handles for pending worker groups
         worker_groups   = [] # worker assigned
 
-        # start by assigning Ngroups jobs to each of the Ngroup groups
+        # start by assigning Ngroups jobs, one to each of the Ngroups groups
         nextjob=0
         for job in range(self.Ngroups):
             worker = nextjob
