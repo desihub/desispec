@@ -36,13 +36,13 @@ def update_specstatus(specstatus, tiles):
     tiles = tiles.copy()
 
     #- Confirm that they have the same columns except QA-specific ones
-    tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE'])
+    tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT'])
     if tilecol != set(specstatus.colnames):
         log.error('Column mismatch: {tiles.colnames} vs. {specstatus.colnames}')
         raise ValueError('Incompatible specstatus and tiles columns')
 
     #- even if present in tiles, specstatus trumps for these columns
-    qacols = ['USER', 'QA', 'OVERRIDE', 'ZDONE']
+    qacols = ['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT']
 
     #- Add any new tiles
     newtilerows = np.isin(tiles['TILEID'], specstatus['TILEID'], invert=True)
@@ -52,10 +52,11 @@ def update_specstatus(specstatus, tiles):
         log.info(f'Adding {num_newtiles} new tiles: {tt}')
 
         newtiles = tiles[newtilerows]
-        newtiles['USER'] = 'none'
-        newtiles['QA'] = 'none'
-        newtiles['OVERRIDE'] = 0
-        newtiles['ZDONE'] = 'false'
+        newtiles['USER'] = np.repeat('none',num_newtiles)
+        newtiles['QA'] = np.repeat('none',num_newtiles)
+        newtiles['OVERRIDE'] = np.repeat(0,num_newtiles)
+        newtiles['ZDONE'] = np.repeat('false',num_newtiles)
+        newtiles['QANIGHT'] = np.repeat(0,num_newtiles)
         newtiles = newtiles[specstatus.colnames]  #- columns in same order
 
         specstatus = vstack([specstatus, newtiles])
@@ -120,5 +121,3 @@ tmpfile = get_tempfilename(args.outfile)
 specstatus.write(tmpfile, overwrite=True)
 os.rename(tmpfile, args.outfile)
 log.info(f'Wrote {args.outfile}')
-
-
