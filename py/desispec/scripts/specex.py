@@ -242,7 +242,15 @@ def run(comm,cmds,cameras):
     Run PSF fits with specex on a set of ccd images 
 
     Args:
-        comm:    MPI communicator 
+        comm:    MPI communicator containing all processes available for work and scheduling
+                 (usually MPI_COMM_WORLD); at least 21 processes should be available, one for 
+                 scheduling and (group_size=) 20 to fit all bundles for a given ccd image.                  
+                 Otherwise there is no constraint on the number of ranks available, but
+                   (comm.Get_size() - 1 ) % group_size 
+                 will be unused, since every job is assigned exactly group_size=20 ranks. 
+                 The variable group_size is set at the number of bundles on a ccd, and there 
+                 is currently no support for any other number, due to the way merging of 
+                 bundles is currently done. 
         cmds:    dictionary keyed by a camera string (e.g. 'b0', 'r1', ...) with values being 
                  the 'desi_compute_psf ...' string that one would run on the command line
         cameras: list of camera strings identifying the entries in cmds to be run as jobs in 
