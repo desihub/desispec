@@ -11,7 +11,6 @@ from argparse import ArgumentParser
 from desispec.io.emlinefit import (
     allowed_emnames,
     get_rf_em_waves,
-    emlines_gaussfit,
     get_emlines,
 )
 
