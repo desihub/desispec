@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+
+"""
+Update surveyops/ops/tile-specstatus.ecsv with spectro pipeline tiles.csv
+"""
+
+import os
+import argparse
+import numpy as np
+from astropy.table import Table, vstack
+
+from desiutil.log import get_logger
+
+from desispec.io.meta import specprod_root
+from desispec.io.util import get_tempfilename
+
+def update_specstatus(specstatus, tiles):
+    """
+    return new specstatus table, updated with tiles table
+
+    Args:
+        specstatus: astropy Table from surveyops/ops/tiles-specstatus.ecsv
+        tiles: astropy Table from spectro/redux/daily/tiles.csv
+
+    Returns: updated specstatus table, sorted by TILEID
+
+    New TILEID found in tiles are added to specstatus, and any entries
+    where tiles['LASTNIGHT'] > specstatus['LASTNIGHT'] (i.e. new data)
+    have their non-QA columsn updated.
+
+    This does not modify either of the input tables.
+    """
+
+    log = get_logger()
+    specstatus = specstatus.copy()
+    tiles = tiles.copy()
+
+    #- Confirm that they have the same columns except QA-specific ones
+    tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT'])
+    if tilecol != set(specstatus.colnames):
+        log.error('Column mismatch: {tiles.colnames} vs. {specstatus.colnames}')
+        raise ValueError('Incompatible specstatus and tiles columns')
+
+    #- even if present in tiles, specstatus trumps for these columns
+    qacols = ['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT']
+
+    #- Add any new tiles
+    newtilerows = np.isin(tiles['TILEID'], specstatus['TILEID'], invert=True)
+    num_newtiles = np.count_nonzero(newtilerows)
+    if num_newtiles > 0:
+        tt = list(tiles['TILEID'][newtilerows])
+        log.info(f'Adding {num_newtiles} new tiles: {tt}')
+
+        newtiles = tiles[newtilerows]
+        newtiles['USER'] = np.repeat('none',num_newtiles)
+        newtiles['QA'] = np.repeat('none',num_newtiles)
+        newtiles['OVERRIDE'] = np.repeat(0,num_newtiles)
+        newtiles['ZDONE'] = np.repeat('false',num_newtiles)
+        newtiles['QANIGHT'] = np.repeat(0,num_newtiles)
+        newtiles = newtiles[specstatus.colnames]  #- columns in same order
+
+        specstatus = vstack([specstatus, newtiles])
+    else:
+        log.info('No new tiles to add')
+
+    #- At this point, every TILEID in tiles should be in specstatus,
+    #- but ok if specstatus has TILEID not in tiles
+    assert np.all(np.isin(tiles['TILEID'], specstatus['TILEID']))
+
+    #- For rows with more recent LASTNIGHT (new data), update non-QA columns.
+    #- Note: there is probably a more efficient way of doing this in bulk,
+    #- but let's favor obvious over clever unless efficiency is needed
+    num_updatedtiles = 0
+    for i, tileid in enumerate(tiles['TILEID']):
+        j = np.where(specstatus['TILEID'] == tileid)[0][0]
+        if tiles['LASTNIGHT'][i] > specstatus['LASTNIGHT'][j]:
+            log.info('Updating tileid {} LASTNIGHT {} > {}'.format(
+                tileid, tiles['LASTNIGHT'][i], specstatus['LASTNIGHT'][j]))
+
+            num_updatedtiles += 1
+            for col in specstatus.colnames:
+                if col not in qacols:
+                    specstatus[col][j] = tiles[col][i]
+
+    log.info(f'Added {num_newtiles} and updated {num_updatedtiles} tiles')
+
+    specstatus.sort('TILEID')
+
+    return specstatus
+
+#-------------------------------------------------------------------------
+
+p = argparse.ArgumentParser()
+p.add_argument('--specstatus', type=str, required=True,
+        help='Input tiles-specstatus.ecsv file')
+p.add_argument('--tiles', type=str, required=False,
+        help='Input tiles.csv, default from $DESI_SPECTRO_REDUX/$SPECPROD/tiles.csv')
+p.add_argument('-o', '--outfile', type=str, required=False,
+        help='output file; default overrides --specstatus in-place')
+
+args = p.parse_args()
+log = get_logger()
+
+if args.tiles is None:
+    args.tiles = os.path.join(specprod_root(), 'tiles.csv')
+
+if args.outfile is None:
+    args.outfile = args.specstatus
+
+log.info(f'Input specstatus {args.specstatus}')
+log.info(f'Updating with tiles {args.tiles}')
+
+# TODO: check if we need to svn update
+
+tiles = Table.read(args.tiles)
+specstatus = Table.read(args.specstatus)
+
+specstatus = update_specstatus(specstatus, tiles)
+
+tmpfile = get_tempfilename(args.outfile)
+specstatus.write(tmpfile, overwrite=True)
+os.rename(tmpfile, args.outfile)
+log.info(f'Wrote {args.outfile}')

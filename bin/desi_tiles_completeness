@@ -13,6 +13,7 @@ from desiutil.log import get_logger
 
 from desispec.io.meta import findfile, specprod_root
 from desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
+from desispec.util import parse_int_args
 
 
 
@@ -26,7 +27,8 @@ parser.add_argument('--prod', type = str, default = None, required=False,
                     help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
 parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
                     help = 'Path to auxiliary tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits (optional, will not affect exposures after SV1)')
-
+parser.add_argument('--nights', type = str, default = None, required=False,
+                        help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
 args = parser.parse_args()
 
 if args.prod is None and args.infile is None :
@@ -52,6 +54,11 @@ try:
     exposure_table = Table.read(args.infile,"EXPOSURES")
 except KeyError:
     exposure_table = Table.read(args.infile,"TSNR2_EXPID")
+
+if args.nights is not None:
+    nights = parse_int_args(args.nights)
+    ok = np.in1d(exposure_table["NIGHT"],nights)
+    exposure_table = exposure_table[ok]
 
 tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
 print(tile_table)

@@ -51,7 +51,6 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["EFFTIME_GFA"]=np.zeros(ntiles)
     res["GOALTIME"]  = np.zeros(ntiles)
     res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U20')
-    res["ZDONE"]   = np.array(np.repeat("false",ntiles),dtype='<U20')
     res["LRG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
@@ -59,9 +58,6 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
     res["LASTNIGHT"] = np.zeros(ntiles, dtype=np.int32)
-    res["QA"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
-    res["USER"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
-    res["OVERRIDE"]   = np.zeros(ntiles, dtype=int)
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     if auxiliary_table_filenames is not None :
@@ -165,16 +161,6 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
     assert np.all(res['LASTNIGHT'] > 0)
 
-    for i in np.where((res["OBSSTATUS"]=="obsend")&(res["ZDONE"]=="false"))[0] :
-        tileid=res["TILEID"][i]
-        night=res["LASTNIGHT"][i]
-        log.info(f"checking redshifts for tile {tileid} on night {night}")
-        nok = number_of_good_redrock(tileid=tileid,night=night,specprod_dir=specprod_dir)
-        if nok >= min_number_of_petals :
-            log.info("Tile {} is done but need final vetting.".format(tileid))
-            #res["ZDONE"][i]="true"
-        elif nok > 0 :
-            log.warning("keep ZDONE=false for tile {} because only {} good petals (requirement is >={})".format(tileid,nok,min_number_of_petals))
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][partial]="obsstart"
 
@@ -187,7 +173,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER','OVERRIDE']
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
         log = get_logger()
@@ -225,7 +211,7 @@ def is_same_table_rows(table1,index1,table2,index2) :
 
 
 def merge_tile_completeness_table(previous_table,new_table) :
-    """ Merges tile summary tables. Entries with tiles previously marked as ZDONE are not modified.
+    """ Merges tile summary tables.
 
     Args:
       previous_table: astropy.table.Table
@@ -252,9 +238,6 @@ def merge_tile_completeness_table(previous_table,new_table) :
     keep_from_previous = list(np.where(~np.in1d(previous_table["TILEID"],new_table["TILEID"]))[0])
     nsame = len(keep_from_previous)
 
-    # columns that cannot be altered by this code
-    unchanged_columns = ["QA","ZDONE","USER","OVERRIDE"]
-
     add_from_new = []
     for j,t in enumerate(new_table["TILEID"]) :
         if t not in t2i :
@@ -262,10 +245,6 @@ def merge_tile_completeness_table(previous_table,new_table) :
             add_from_new.append(j)
             continue
         i=t2i[t]
-
-        # copy in the new entries the values of the 'unchanged' columns
-        for k in unchanged_columns :
-            new_table[k][j] = previous_table[k][i]
 
         if is_same_table_rows(previous_table,i,new_table,j) :
             nsame += 1
