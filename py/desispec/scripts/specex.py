@@ -243,8 +243,11 @@ def run(comm,cmds,cameras):
 
     Args:
         comm:    MPI communicator 
-        cmds:    dictionary of command arguments to main method of this module
-        cameras: entries in cmds to be run in parallel, one entry per ccd image to be fit
+        cmds:    dictionary keyed by a camera string (e.g. 'b0', 'r1', ...) with values being 
+                 the 'desi_compute_psf ...' string that one would run on the command line
+        cameras: list of camera strings identifying the entries in cmds to be run as jobs in 
+                 parallel jobs, one entry per ccd image to be fit; entries not in the dictionary 
+                 will be logged as an error while still continuing with the others and not crashing
     """
     from desispec.workflow.schedule import Schedule
     from desiutil.log import get_logger, DEBUG, INFO
@@ -265,14 +268,18 @@ def run(comm,cmds,cameras):
       
         rank = comm.Get_rank()
         camera = cameras[job]
+        if not camera in cmds:
+            log.error(f'FAILED: commands for camera {camera} not found for'+
+                      f' MPI group ranks {rank}-{rank+group_size-1}')
+            return        
         if camera in cmds:
             cmdargs = cmds[camera].split()[1:]
             cmdargs = parse(cmdargs)
             if rank == 0:
                 t0 = time.time()
                 timestamp = time.asctime()
-                log.info(f'MPI ranks {rank}-{rank+group_size-1} '+
-                         f'fitting PSF for {camera} at {timestamp}')
+                log.info(f'MPI ranks {rank}-{rank+group_size-1}'+
+                         f' fitting PSF for {camera} at {timestamp}')
             try:
                 main(cmdargs, comm=comm)
             except Exception as e:

@@ -170,7 +170,8 @@ class Schedule:
             try:
                 self._workfunc(self.groupcomm,job) # call work function for job
             except Exception as e:
-                self.log.error(f'FAILED: call to workfunc')
+                self.log.error(f'FAILED: call to workfunc for job {job}'+
+                               f' on rank {self.rank}')
                 self.log.error(e)
             self.comm.Isend(self.job_buff,dest=0)  # send non-blocking message on completion
             
