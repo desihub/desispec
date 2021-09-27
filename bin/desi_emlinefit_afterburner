@@ -154,6 +154,22 @@ def main():
     fd = fitsio.FITS(args.outfn, "rw")
     fd.write(d, extname="EMLINEFIT")
     fd.close()
+    # AR adding infos in the EMLINEFIT header
+    # AR - (some of the) arguments
+    # AR - rest-frame wavelengths
+    fd = fitsio.FITS(args.outfn, "rw")
+    fd["EMLINEFIT"].write_key("RRFN", args.redrockfn)
+    fd["EMLINEFIT"].write_key("COADDFN", args.coaddfn)
+    fd["EMLINEFIT"].write_key("RFHW", args.rf_fit_hw)
+    fd["EMLINEFIT"].write_key("MINRFHW", args.min_rf_fit_hw)
+    fd["EMLINEFIT"].write_key("RFCONTW", args.rf_cont_w)
+    fd["EMLINEFIT"].write_key("RV", args.rv)
+    fd["EMLINEFIT"].write_key("BALMFIT", args.balmerfit)
+    fd["EMLINEFIT"].write_key("EMNAMES", args.emnames)
+    for i_emname, emname in enumerate(args.emnames.split(",")):
+        fd["EMLINEFIT"].write_key("RFWAVE{:02d}".format(i_emname), ",".join(get_rf_em_waves(emname).astype(str)))
+    fd.close()
+    #
     log.info("{:.1f}s\tdone\tTIMESTAMP={}".format(time() - start, Time.now().isot))
 
 
