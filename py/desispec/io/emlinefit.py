@@ -99,7 +99,7 @@ def emlines_gaussfit(
     Returns:
         mydict: a dictionary with various quantities, noticely "FLUX" and "FLUX_IVAR" (dictionary of floats)
             list of all keys:
-                TARGETID, ZSPEC, OBSEMWAVES,
+                TARGETID, ZSPEC,
                 CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
                 CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
                 FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
@@ -149,7 +149,6 @@ def emlines_gaussfit(
     mydict = {}
     mydict["TARGETID"] = targetid
     mydict["Z"] = zspec
-    mydict["OBSEMWAVES"] = obs_em_waves
     keys = [
         "FLUX", "FLUX_IVAR", "SIGMA", "SIGMA_IVAR",
         "CONT", "CONT_IVAR", "SHARE", "SHARE_IVAR",
@@ -315,7 +314,6 @@ fitting.
             list of all keys:
                 TARGETID,TARGET_RA,TARGET_DEC,OBJTYPE,Z,ZWARN,SPECTYPE,DELTACHI2: numpy array with len(targetids) objects
                 subdictionaries for each emname in emnames, with:
-                    OBSEMWAVES
                     CHI2, NDOF: *reduced* chi2 and nb of degrees of freedom
                     CONT, CONT_IVAR: continuum in 1e-17 * erg/cm2/s/A
                     FLUX, FLUX_IVAR: flux in 1e-17 * erg/cm2/s/A
@@ -395,7 +393,6 @@ fitting.
     # AR dictionary to store results
     # AR keys returned by emlines_gaussfit
     emkeys = [
-        "OBSEMWAVES",
         "FLUX", "FLUX_IVAR", "SIGMA", "SIGMA_IVAR",
         "CONT", "CONT_IVAR", "SHARE", "SHARE_IVAR",
         "EW", "EW_IVAR",
@@ -410,9 +407,7 @@ fitting.
     for emname in emnames:
         mydict[emname] = {}
         for key in emkeys:
-            if key == "OBSEMWAVES":
-                mydict[emname][key] = np.zeros(nspec, dtype=object)
-            elif key == "NDOF":
+            if key == "NDOF":
                 mydict[emname][key] = -99 + np.zeros(nspec, dtype=int)
             else:
                 mydict[emname][key] = np.nan + np.zeros(nspec)
@@ -459,7 +454,7 @@ fitting.
                     jj = np.where(w[1:] - w[:-1] > 10)[0]
                     for j in jj:
                         d[j], iv[j], m[j] = np.nan, np.nan, np.nan
-                    obs_em_waves = mydict[emname]["OBSEMWAVES"][i]
+                    obs_em_waves = (1. + mydict["Z"][i]) * get_rf_em_waves(emname)
                     ax.plot(w, d, c="k", lw=0.5, alpha=1.0, label="data")
                     ax.fill_between(w, d - iv ** (-0.5), d + iv ** (-0.5), color="k", alpha=0.3)
                     ax.plot(w, m, c="r", lw=0.5, alpha=1.0, label="model")

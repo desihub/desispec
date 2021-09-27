@@ -126,9 +126,7 @@ def main():
     for emname in args.emnames.split(","):
         for key in list(emdict[emname].keys()):
             if key not in ["wave", "fitdata", "fitivar", "model"]:
-                if key == "OBSEMWAVES":
-                    dtype.append(("{}_OBSEMWAVES".format(emname), "S20"))
-                elif key == "NDOF":
+                if key == "NDOF":
                     dtype.append(("{}_{}".format(emname, key), ">i4"))
                 else:
                     dtype.append(("{}_{}".format(emname, key), ">f4"))
@@ -142,10 +140,7 @@ def main():
     for emname in args.emnames.split(","):
         for key in list(emdict[emname].keys()):
             if key not in ["wave", "fitdata", "fitivar", "model"]:
-                if key == "OBSEMWAVES":
-                    d["{}_{}".format(emname, key)] = [",".join(np.round(obsemwaves, 2).astype(str)) for obsemwaves in emdict[emname]["OBSEMWAVES"]]
-                else:
-                    d["{}_{}".format(emname, key)] = emdict[emname][key]
+                d["{}_{}".format(emname, key)] = emdict[emname][key]
     # AR write to fits
     if os.path.isfile(args.outfn):
         log.info("Removing existing {}".format(args.outfn))
