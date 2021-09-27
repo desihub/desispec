@@ -143,7 +143,7 @@ def main():
         tiles_table["OVERRIDE"]=np.zeros(len(tiles_table),dtype=int)
 
     log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
-    selection=(tiles_table["ZDONE"]=="false")&(tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))&(tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad")
+    selection=(tiles_table["ZDONE"]=="false")&(tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))&((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") | (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
     if args.new :
         selection &= (tiles_table["QA"]=="none")
     if args.survey is not None :
@@ -219,6 +219,7 @@ def main():
                 tiles_table["ZDONE"][index]="true"
                 tiles_table["QA"][index]="good"
                 tiles_table["USER"][index]=args.user
+                tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
                 if software_answer is not None :
                     if software_answer is False :
                         tiles_table["OVERRIDE"][index]=1
@@ -227,6 +228,7 @@ def main():
             elif res=="no" :
                 tiles_table["QA"][index]="bad"
                 tiles_table["USER"][index]=args.user
+                tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
                 if software_answer is not None :
                     if software_answer is True :
                         tiles_table["OVERRIDE"][index]=1
@@ -235,6 +237,7 @@ def main():
             elif res=="pass" :
                 tiles_table["QA"][index]="unsure"
                 tiles_table["USER"][index]=args.user
+                tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
                 break
 
         viewer.kill()
