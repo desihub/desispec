@@ -286,6 +286,8 @@ def get_emlines(
     rv=3.1,
     balmerfit="em",
     outpdf=None,
+    rr_keys="TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2",
+    fm_keys="TARGET_RA,TARGET_DEC,OBJTYPE",
     ylim=(None, None),
     nrow=10,
     log=get_logger(),
@@ -305,6 +307,8 @@ fitting.
         rv (optional, defaults to 3.1): value of R_V (float)
         balmerfit (optional, defaults to "em"): how to fit Balmer lines? "em": emission line only; "em+abs": emission+absorption lines (string)
         outpdf (optional, defaults to None): PDF filename for plotting the OII doublet (data + fit) (string)
+        rr_keys (optional, defaults to "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"): comma-separated list of columns from REDSHIFTS to propagate (string)
+        fm_keys (optional, defaults to "TARGET_RA,TARGET_DEC,OBJTYPE"): comma-separated list of columns from FIBERMAP to propagate (string)
         ylim (optional, defaults to (None, None)): ylim for plotting (float doublet)
         nrow (optional, defaults to 10): number of rows, i.e. galaxy, per pdf page (int)
         log (optional, defaults to get_logger()): Logger object
@@ -321,23 +325,53 @@ fitting.
                     SHARE, SHARE_IVAR: f1/(f0+f1) for OII and OIII doublets
                     EW, EW_IVAR: rest-frame equivalent width
                     wave, data, ivar, model: data used for fitting + fitted model
+        rr_dtype: datamodel for rr_keys
+        fm_dtype: datamodel for fm_keys
+
+    Notes:
+        We add TARGETID and Z to rr_keys if TARGETID not present in rr_keys nor in fm_keys.
+        If keys in rr_keys or fm_keys are not present in the redrockfn, those will be ignored.
     """
     # AR sanity checks
     for fn in [redrockfn, coaddfn]:
         if not os.path.isfile(fn):
             log.error("no {} file; exiting".format(fn))
             sys.exit(1)
+    keys = [key for key in rr_keys.split(",") if key in fm_keys.split(",")]
+    if len(keys) > 0:
+        log.error("the following columns are both present in rr_keys and fm_keys: {}; exiting".format(",".join(keys)))
+        sys.exit(1)
+    # AR grab TARGETID from the REDSHIFTS/ZBEST extension
+    if "TARGETID" in fm_keys.split(","):
+        log.info("removing TARGETID from fm_keys")
+        fm_keys = ",".join([key for key in fm_keys.split(",") if key != "TARGETID"])
+    for key in ["TARGETID", "Z"]:
+        if key not in rr_keys.split(","):
+            log.info("adding {} to rr_keys".format(key))
+            rr_keys = "{},{}".format(key, rr_keys)
 
     # AR redrock: reading TARGETID and ZSPEC (+ cut on TARGETIDs if requested)
     h = fits.open(redrockfn)
     extnames = [h[i].header["EXTNAME"] for i in range(1, len(h))]
     if "REDSHIFTS" in extnames:
-        d_rr = h["REDSHIFTS"].data
+        rr_extname = "REDSHIFTS"
     elif "ZBEST" in extnames:
-        d_rr = h["ZBEST"].data
+        rr_extname = "ZBEST"
     else:
         log.error("{} has neither REDSHIFTS or ZBEST extension; exiting".format(redrockfn))
         sys.exit(1)
+    d_rr = h[rr_extname].data
+    # AR rr_keys, fm_keys: restrict to existing ones + dtype
+    rmv_rr_keys = [key for key in rr_keys.split(",") if key not in h[rr_extname].columns.names]
+    if len(rmv_rr_keys) > 0:
+        log.info("{} removed from rr_keys, as not present in {}".format(",".join(rmv_rr_keys), rr_extname))
+    rr_keys = ",".join([key for key in rr_keys.split(",") if key not in rmv_rr_keys])
+    rmv_fm_keys = [key for key in fm_keys.split(",") if key not in h["FIBERMAP"].columns.names]
+    if len(rmv_fm_keys) > 0:
+        log.info("{} removed from fm_keys, as not present in FIBERMAP".format(",".join(rmv_fm_keys)))
+    fm_keys = ",".join([key for key in fm_keys.split(",") if key not in rmv_fm_keys])
+    rr_dtype = [(key, h[rr_extname].data.dtype[key]) for key in rr_keys.split(",")]
+    fm_dtype = [(key, h["FIBERMAP"].data.dtype[key]) for key in fm_keys.split(",")]
     # AR cutting on TARGETID?
     if targetids is None:
         targetids = d_rr["TARGETID"]
@@ -399,11 +433,18 @@ fitting.
         "CHI2", "NDOF",
     ]
     mydict = {}
-    mydict["TARGETID"] = targetids
-    for key in ["TARGET_RA", "TARGET_DEC", "OBJTYPE"]:
+    # AR adding rr_keys, fm_keys
+    for key in rr_keys.split(","):
+        if key == "TARGETID":
+            mydict["TARGETID"] = targetids
+        else:
+            mydict[key] = d_rr[key]
+    for key in fm_keys.split(","):
         mydict[key] = d_fm[key]
-    for key in ["Z", "ZWARN", "SPECTYPE", "DELTACHI2"]:
-        mydict[key] = d_rr[key]
+    # AR quantities required for the pdf if outpdf
+    if outpdf is not None:
+        spectypes, deltachi2s, objtypes = d_rr["SPECTYPE"], d_rr["DELTACHI2"], d_fm["OBJTYPE"]
+    # AR fit columns
     for emname in emnames:
         mydict[emname] = {}
         for key in emkeys:
@@ -465,9 +506,9 @@ fitting.
                     ax.text(0.05, 0.85, "{}".format(mydict["TARGETID"][i]), fontsize=fs, transform=ax.transAxes)
                     ax.text(0.05, 0.75, "Z={:.3f}".format(mydict["Z"][i]), fontsize=fs, transform=ax.transAxes)
                     ax.text(0.05, 0.05, "SNR({})={:.1f}".format(emname, mydict[emname]["FLUX"][i] * mydict[emname]["FLUX_IVAR"][i] ** 0.5), fontsize=fs, transform=ax.transAxes)
-                    ax.text(0.95, 0.85, "OBJTYPE={}".format(mydict["OBJTYPE"][i]), fontsize=fs, ha="right", transform=ax.transAxes)
-                    ax.text(0.95, 0.75, "SPECTYPE={}".format(mydict["SPECTYPE"][i]), fontsize=fs, ha="right", transform=ax.transAxes)
-                    ax.text(0.95, 0.05, "log10(DELTACHI2)={:.1f}".format(np.log10(mydict["DELTACHI2"][i])), fontsize=fs, ha="right", transform=ax.transAxes)
+                    ax.text(0.95, 0.85, "OBJTYPE={}".format(objtypes[i]), fontsize=fs, ha="right", transform=ax.transAxes)
+                    ax.text(0.95, 0.75, "SPECTYPE={}".format(spectypes[i]), fontsize=fs, ha="right", transform=ax.transAxes)
+                    ax.text(0.95, 0.05, "log10(DELTACHI2)={:.1f}".format(np.log10(deltachi2s[i])), fontsize=fs, ha="right", transform=ax.transAxes)
                     ax.grid(True)
                     ax.set_xticklabels([])
                     ax.set_yticklabels([])
@@ -475,4 +516,4 @@ fitting.
                 if (ix % nrow == nrow - 1) | (i == ii[-1]):
                     pdf.savefig(fig, bbox_inches="tight")
                     plt.close()
-    return mydict
+    return mydict, rr_dtype, fm_dtype

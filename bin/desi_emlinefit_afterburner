@@ -15,7 +15,11 @@ from desispec.io.emlinefit import (
 )
 
 def get_parse(log=get_logger()):
+    # AR some defaults
     default_emnames = "OII,HDELTA,HGAMMA,HBETA,OIII,HALPHA"
+    default_rr_keys = "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"
+    default_fm_keys = "TARGET_RA,TARGET_DEC,OBJTYPE"
+    #
     parser = ArgumentParser()
     parser.add_argument(
         "--redrockfn",
@@ -81,6 +85,20 @@ def get_parse(log=get_logger()):
         default=None,
         required=False
     )
+    parser.add_argument(
+        "--rr_keys",
+        help="comma-separated list of columns from the REDSHIFTS extension to propagate (default={})".format(default_rr_keys),
+        type=str,
+        default=default_rr_keys,
+        required=False,
+    )
+    parser.add_argument(
+        "--fm_keys",
+        help="comma-separated list of columns from the FIBERMAP extension to propagate (default={})".format(default_fm_keys),
+        type=str,
+        default=default_fm_keys,
+        required=False,
+    )
     args = parser.parse_args()
     # AR sanity check
     for emname in args.emnames.split(","):
@@ -100,7 +118,7 @@ def main():
     # AR read arguments
     args = get_parse(log=log)
     # AR fit the emission lines
-    emdict = get_emlines(
+    emdict, rr_dtype, fm_dtype = get_emlines(
         args.redrockfn,
         args.coaddfn,
         emnames=args.emnames.split(","),
@@ -110,19 +128,12 @@ def main():
         rv=args.rv,
         balmerfit=args.balmerfit,
         outpdf=args.outpdf,
+        rr_keys=args.rr_keys,
+        fm_keys=args.fm_keys,
         log=log,
         )
     # AR data model
-    dtype = [
-            ("TARGETID", ">i8"),
-            ("TARGET_RA", ">f8"),
-            ("TARGET_DEC", ">f8"),
-            ("OBJTYPE", "S3"),
-            ("Z", ">f8"),
-            ("ZWARN", ">i8"),
-            ("SPECTYPE", "S6"),
-            ("DELTACHI2", ">f8"),
-    ]
+    dtype = rr_dtype + fm_dtype
     for emname in args.emnames.split(","):
         for key in list(emdict[emname].keys()):
             if key not in ["wave", "fitdata", "fitivar", "model"]:
@@ -132,10 +143,9 @@ def main():
                     dtype.append(("{}_{}".format(emname, key), ">f4"))
     # AR store in table
     d = np.zeros(len(emdict["TARGETID"]), dtype=dtype)
-    for key in [
-        "TARGETID", "TARGET_RA", "TARGET_DEC", "OBJTYPE",
-        "Z", "ZWARN", "SPECTYPE", "DELTACHI2",
-    ]:
+    # AR not using args.rr_keys, args_fm_keys, as keys not present
+    # AR in args.redrockfn would not be propagated
+    for key in [x[0] for x in rr_dtype] + [x[0] for x in fm_dtype]:
         d[key] = emdict[key]
     for emname in args.emnames.split(","):
         for key in list(emdict[emname].keys()):
