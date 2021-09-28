@@ -8,6 +8,8 @@ desi_compute_dark_nonlinear --days 20200729 20200730 --camera b0 \
         --biasfile bias-20200729-b0.fits.gz
 """
 
+import astropy.io.fits as pyfits
+
 import argparse
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -177,8 +179,11 @@ for night in nights:
 
     for row in speclog[ii][args.nskip_zeros:]:
         rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
-        zerofiles.append(rawfile)
-        all_zerofiles.append(rawfile)
+        # check cam exists for this file
+        with pyfits.open(rawfile) as hdulist :
+            if args.camera in hdulist :
+                zerofiles.append(rawfile)
+                all_zerofiles.append(rawfile)
 
     biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
@@ -209,11 +214,17 @@ for exptime in darktimes:
     ii = (speclog['EXPTIME_INT'] == exptime)
     for row in speclog[isDark & ii]:
         day, night, expid = row[daynight], row['NIGHT'], row['EXPID']
-        rawfiles.append(findfile('raw', night, expid, args.camera))
-        biasfiles.append(f'{tempdir}/bias-{day}-{args.camera}.fits')
-
+        filename = findfile('raw', night, expid, args.camera)
+        with pyfits.open(filename) as hdulist :
+            if args.camera in hdulist :
+                biasfile=f'{tempdir}/bias-{day}-{args.camera}.fits'
+                if os.path.isfile(biasfile):
+                    rawfiles.append(filename)
+                    biasfiles.append(biasfile)
     compute_dark_file(rawfiles, darkfile, args.camera, bias=biasfiles,
         exptime=exptime)
+
+
 
 #- Read the individual combined dark images
 log.info('Reading darks for individual EXPTIMEs')
@@ -221,9 +232,10 @@ darkimages = list()
 darkheaders = list()
 for exptime in darktimes:
     darkfile = f'{tempdir}/dark-{args.camera}-{exptime}.fits'
-    img, hdr = fitsio.read(darkfile, 'DARK', header=True)
-    darkimages.append(img*exptime)
-    darkheaders.append(hdr)
+    if os.path.isfile(darkfile) :
+        img, hdr = fitsio.read(darkfile, 'DARK', header=True)
+        darkimages.append(img*exptime)
+        darkheaders.append(hdr)
 
 darkimages = np.array(darkimages)
 
