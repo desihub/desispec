@@ -7,7 +7,6 @@ desispec.workflow.schedule
 
 Tools for scheduling MPI jobs using mpi4py
 """
-from mpi4py import MPI
 import numpy as np
 from logging import getLogger
 
@@ -47,8 +46,8 @@ class Schedule:
         In the case njobs < ngroups, only ranks assigned to the first njobs groups 
         will run workfunc, while the rest will remain idle, until workfunc has returned 
         for all njobs values of job.    
-        
         """
+        
         # user provided function that will do the work
         self._workfunc = workfunc
 
