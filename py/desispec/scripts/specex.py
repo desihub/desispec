@@ -239,23 +239,46 @@ def main(args, comm=None):
 
 def run(comm,cmds,cameras):
     """
-    Run PSF fits with specex on a set of ccd images 
+    Run PSF fits with specex on a set of ccd images in parallel using the run method 
+    of the desispec.workflow.schedule.Schedule (Schedule) class.
 
     Args:
-        comm:    MPI communicator containing all processes available for work and scheduling
-                 (usually MPI_COMM_WORLD); at least 21 processes should be available, one for 
-                 scheduling and (group_size=) 20 to fit all bundles for a given ccd image.                  
-                 Otherwise there is no constraint on the number of ranks available, but
-                 (comm.Get_size() - 1 ) % group_size 
-                 will be unused, since every job is assigned exactly group_size=20 ranks. 
-                 The variable group_size is set at the number of bundles on a ccd, and there 
-                 is currently no support for any other number, due to the way merging of 
-                 bundles is currently done. 
-        cmds:    dictionary keyed by a camera string (e.g. 'b0', 'r1', ...) with values being 
-                 the 'desi_compute_psf ...' string that one would run on the command line
-        cameras: list of camera strings identifying the entries in cmds to be run as jobs in 
-                 parallel jobs, one entry per ccd image to be fit; entries not in the dictionary 
-                 will be logged as an error while still continuing with the others and not crashing
+        comm:    MPI communicator containing all processes available for work and 
+                 scheduling (usually MPI_COMM_WORLD); at least 21 processes should 
+                 be available, one for scheduling and (group_size=) 20 to fit all 
+                 bundles for a given ccd image. Otherwise there is no constraint on 
+                 the number of ranks available, but (comm.Get_size()-1)%group_size 
+                 will be unused, since every job is assigned exactly group_size=20 
+                 ranks. The variable group_size is set at the number of bundles on 
+                 a ccd, and there is currently no support for any other number, due 
+                 to the way merging of bundles is currently done. 
+        cmds:    dictionary keyed by a camera string (e.g. 'b0', 'r1', ...) with 
+                 values being the 'desi_compute_psf ...' string that one would run 
+                 on the command line.
+        cameras: list of camera strings identifying the entries in cmds to be run 
+                 as jobs in parallel jobs, one entry per ccd image to be fit; entries 
+                 not in the dictionary will be logged as an error while still 
+                 continuing with the others and not crashing.
+                 
+    The function first defines the procedure to call specex for a given ccd image 
+    with the "fitbundles" inline function, passes the fitbundles function 
+    to the Schedule initialization method, and then calls the run method of the 
+    Schedule class to call fitbundles len(cameras) times, each with group_size = 20 
+    processes.
+    
+    Initialization of the Schedule class results in 
+        ngroups = (comm.Get_size() - 1) // group_size 
+    new communicators (groups) being created, each with size group_size, using 
+    comm.Split. The process in comm with 
+        rank = 0 
+    will be dedicated to scheduling, while processes with 
+        rank > ngroups * group_size 
+    will remain idle, and processes with 
+        0 < rank < ngroups * group_size 
+    will run fitbundles in groups of size group_size using the run method of the 
+    Schedule class to create a queue of size len(cameras) and assign groups to 
+    to fit ccd images corresponding to elements of the cameras list, as they become 
+    available.  
     """
     from desispec.workflow.schedule import Schedule
     from desiutil.log import get_logger, DEBUG, INFO
@@ -272,6 +295,25 @@ def run(comm,cmds,cameras):
         Args:
             comm: MPI communicator 
             job:  job index corresponding to position in list of cmds entries 
+            
+        This is an inline function for use by desispec.workflow.schedule.Schedule, 
+        i.e. via the lines
+            sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
+            sc.run()
+        immediately after this inline function definition. 
+        
+        This function uses the external variables group_size, cmds, and cameras. In 
+        particular, the list of camera strings (cameras) provides the mapping of the
+        job index (job) to the commands (cmds) that specify the arguments 
+        to the specex.parse method, i.e.
+            camera = cameras[job]
+            ...
+            cmdargs = cmds[camera].split()[1:]
+            cmdargs = parse(cmdargs)
+            ...
+        From the point of view of the Schedule.run method, it is running fitbundles 
+        njobs = len(cameras) times, each time using group_size processes with a new 
+        value of job in the range 0 to len(cameras)-1.  
         """
       
         rank = comm.Get_rank()
