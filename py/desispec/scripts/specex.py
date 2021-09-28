@@ -265,31 +265,18 @@ def run(comm,cmds,cameras):
     to the Schedule initialization method, and then calls the run method of the 
     Schedule class to call fitbundles len(cameras) times, each with group_size = 20 
     processes.
-    
-    Initialization of the Schedule class results in 
-        ngroups = (comm.Get_size() - 1) // group_size 
-    new communicators (groups) being created, each with size group_size, using 
-    comm.Split. The process in comm with 
-        rank = 0 
-    will be dedicated to scheduling, while processes with 
-        rank > ngroups * group_size 
-    will remain idle, and processes with 
-        0 < rank < ngroups * group_size 
-    will run fitbundles in groups of size group_size using the run method of the 
-    Schedule class to create a queue of size len(cameras) and assign groups to 
-    to fit ccd images corresponding to elements of the cameras list, as they become 
-    available.  
     """
+
     from desispec.workflow.schedule import Schedule
     from desiutil.log import get_logger, DEBUG, INFO
-    
+       
     log = get_logger()
     
     group_size = 20
     # reverse to do b cameras last since they take least time
     cameras = sorted(cameras, reverse=True)
     def fitbundles(comm,job):
-        """
+        '''
         Run PSF fit with specex on all bundles for a single ccd image 
 
         Args:
@@ -314,7 +301,7 @@ def run(comm,cmds,cameras):
         From the point of view of the Schedule.run method, it is running fitbundles 
         njobs = len(cameras) times, each time using group_size processes with a new 
         value of job in the range 0 to len(cameras)-1.  
-        """
+        '''
       
         rank = comm.Get_rank()
         camera = cameras[job]
