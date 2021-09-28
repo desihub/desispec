@@ -246,7 +246,7 @@ def run(comm,cmds,cameras):
                  (usually MPI_COMM_WORLD); at least 21 processes should be available, one for 
                  scheduling and (group_size=) 20 to fit all bundles for a given ccd image.                  
                  Otherwise there is no constraint on the number of ranks available, but
-                   (comm.Get_size() - 1 ) % group_size 
+                 (comm.Get_size() - 1 ) % group_size 
                  will be unused, since every job is assigned exactly group_size=20 ranks. 
                  The variable group_size is set at the number of bundles on a ccd, and there 
                  is currently no support for any other number, due to the way merging of 

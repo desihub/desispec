@@ -13,27 +13,57 @@ from logging import getLogger
 
 class Schedule:
 
-    def __init__(self, workfunc, **kwargs):
+    def __init__(self, workfunc, comm=None, njobs=2, group_size=1):
         """
         Intialize class for scheduling MPI jobs using mpi4py 
         
         Args:
             workfunc: function to do each MPI job defined using 
-                      def workfunc(comm,job):
-                          where comm is an MPI communicator 
-                          and job is the index of the job 
+                      def workfunc(groupcomm,job):
+                          where groupcomm is an MPI communicator 
+                          and job is an integer in the range 0 to njobs - 1
+                      
             
         Keyword Args:
             comm:       MPI communicator (default=None)
             njobs:      number of jobs (default=2)
             group_size: number of MPI processes per job (default=1) 
+        
+        Initialization of this class results in 
+            ngroups = (comm.Get_size() - 1) // group_size 
+        new communicators (groups) being created, each with size group_size, 
+        using comm.Split.
+    
+        Functionality of this class is provided via the Schedule.run method. The 
+        process in comm with 
+            rank = 0 
+        will be dedicated to scheduling, while processes with 
+            rank > ngroups * group_size 
+        will remain idle, and processes with 
+            0 < rank < ngroups * group_size 
+        will run workfunc in groups of size group_size.  
+        
+        In the case  
+            njobs >= ngroups 
+        all ranks in each of the groups will first be assigned to call
+        workfunc with arguments job = 0 to job = ngroups-1, in parallel. The 
+        first group to finish workfunc will then call workfunc with job = ngroups, 
+        the next group to finish will call workfunc with job = ngroups + 1, and so 
+        on, until workfunc has returned for all njobs values of job. 
+        
+        In the case  
+            njobs < ngroups 
+        then only ranks assigned to the first njobs groups will run workfunc, 
+        while the rest will remain idle, until workfunc has returned for all njobs 
+        values of job.    
+        
         """
         # user provided function that will do the work
         self._workfunc = workfunc
 
-        self.comm       = kwargs.get('comm',None)
-        self.njobs      = kwargs.get('njobs',2)
-        self.group_size = kwargs.get('group_size',1)
+        self.comm       = comm 
+        self.njobs      = njobs
+        self.group_size = group_size
 
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
