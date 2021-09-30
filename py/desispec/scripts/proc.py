@@ -437,45 +437,7 @@ def main(args=None, comm=None):
 
         if comm is not None:
             cmds = comm.bcast(cmds, root=0)
-            inputs = comm.bcast(inputs, root=0)
-            outputs = comm.bcast(outputs, root=0)
-            #- split communicator by 20 (number of bundles)
-            group_size = 20
-            if (rank == 0) and (size%group_size != 0):
-                log.warning('MPI size={} should be evenly divisible by {}'.format(
-                    size, group_size))
-
-            group = rank // group_size
-            num_groups = (size + group_size - 1) // group_size
-            comm_group = comm.Split(color=group)
-
-            if rank == 0:
-                log.info(f'Fitting PSFs with {num_groups} sub-communicators of size {group_size}')
-
-            for i in range(group, len(args.cameras), num_groups):
-                camera = args.cameras[i]
-                if camera in cmds:
-                    cmdargs = cmds[camera].split()[1:]
-                    cmdargs = desispec.scripts.specex.parse(cmdargs)
-                    if comm_group.rank == 0:
-                        print('RUNNING: {}'.format(cmds[camera]))
-                        t0 = time.time()
-                        timestamp = time.asctime()
-                        log.info(f'MPI group {group} ranks {rank}-{rank+group_size-1} fitting PSF for {camera} at {timestamp}')
-                    try:
-                        desispec.scripts.specex.main(cmdargs, comm=comm_group)
-                    except Exception as e:
-                        if comm_group.rank == 0:
-                            log.error(f'FAILED: MPI group {group} ranks {rank}-{rank+group_size-1} camera {camera}')
-                            log.error('FAILED: {}'.format(cmds[camera]))
-                            log.error(e)
-
-                    if comm_group.rank == 0:
-                        specex_time = time.time() - t0
-                        log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
-
-            comm.barrier()
-
+            desispec.scripts.specex.run(comm,cmds,args.cameras)
         else:
             log.warning('fitting PSFs without MPI parallelism; this will be SLOW')
             for camera in args.cameras:

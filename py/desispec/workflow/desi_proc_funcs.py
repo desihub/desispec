@@ -298,7 +298,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
 
     nspectro = (ncameras - 1) // 3 + 1
     if jobdesc in ('ARC', 'TESTARC'):
-        ncores, runtime = 20 * ncameras, 45
+        ncores, runtime = 20 * ncameras + 1, 45 # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
@@ -336,6 +336,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     if (nodes > max_realtime_nodes):
         nodes = max_realtime_nodes
         ncores = config['cores_per_node'] * nodes
+        if jobdesc in ('ARC', 'TESTARC'):
+            # adjust for workflow.schedule scheduler proc
+            ncores = ((ncores - 1) // 20) * 20 + 1 
 
     runtime *= config['timefactor']
 
