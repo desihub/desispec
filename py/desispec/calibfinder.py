@@ -335,19 +335,19 @@ class CalibFinder() :
         """
         return os.path.join(self.directory,self.data[key])
 
-    def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"]):
+    def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]) :
         """
         Args:
-            keys: ptional, list of keywords, among ["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"]. Default is all of them.
+            keys: ptional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
 
         Returns:
             List of bad fibers from yaml file as a 1D array of intergers
         """
         log = get_logger()
         fibers=[]
-        validkeys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"]
+        badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]
         for key in keys :
-            if key not in validkeys  :
+            if key not in badfiber_keywords  :
                 log.error(f"key '{key}' not in the list of valid keys for bad fibers: {validkeys}")
                 continue
             if self.haskey(key) :
@@ -356,19 +356,3 @@ class CalibFinder() :
         if len(fibers)==0 :
             return np.array([],dtype=int)
         return np.unique(np.hstack(fibers))
-
-    def fibers_to_exclude(self):
-        """
-        Args:
-            None
-        Returns:
-            List of excluded fibers from yaml file as a 1D array of intergers
-            If no excluded fibers, returns None
-        """
-        key = 'EXCLUDEFIBERS'
-        if not self.haskey(key) :
-            excluded = np.array([])
-        else:
-            excluded_str =  self.value(key)
-            excluded = parse_fibers(excluded_str)
-        return excluded
