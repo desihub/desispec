@@ -38,7 +38,7 @@ import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
 from desispec.io.util import create_camword
-from desispec.calibfinder import findcalibfile,CalibFinder
+from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.util import runcmd
