@@ -417,18 +417,16 @@ def main(args=None, comm=None):
                 cmd += ' --input-psf {}'.format(inpsf)
                 cmd += ' --output-psf {}'.format(outpsf)
 
-                # look for fiber blacklist
-                cfinder = CalibFinder([hdr, camhdr[camera]])
-                blacklistkey="FIBERBLACKLIST"
-                if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
-                    log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
-                    blacklistkey="BROKENFIBERS"
-
-                if cfinder.haskey(blacklistkey) :
-                    blacklist = cfinder.value(blacklistkey)
-                    cmd += ' --broken-fibers {}'.format(blacklist)
+                # fibers to ignore for the PSF fit
+                # specex uses the fiber index in a camera
+                fibers_to_ignore = badfibers([hdr, camhdr[camera]],["BROKENFIBERS","BADCOLUMNFIBERS"])%500
+                if fibers_to_ignore.size>0 :
+                    fibers_to_ignore_str=str(fibers_to_ignore[0])
+                    for fiber in fibers_to_ignore[1:] :
+                        fibers_to_ignore_str+=",{}".format(fiber)
+                    cmd += ' --broken-fibers {}'.format(fibers_to_ignore_str)
                     if rank == 0 :
-                        log.warning('broken fibers: {}'.format(blacklist))
+                        log.warning('broken fibers: {}'.format(fibers_to_ignore_str))
 
                 if not os.path.exists(outpsf):
                     cmds[camera] = cmd
@@ -451,27 +449,27 @@ def main(args=None, comm=None):
         for camera in args.cameras[rank::size]:
             t0 = time.time()
             log.info(f'Rank {rank} interpolating {camera} PSF over bad fibers')
-            # look for fiber blacklist
-            cfinder = CalibFinder([hdr, camhdr[camera]])
-            blacklistkey="FIBERBLACKLIST"
-            if not cfinder.haskey(blacklistkey) and cfinder.haskey("BROKENFIBERS") :
-                log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
-                blacklistkey="BROKENFIBERS"
 
-            if cfinder.haskey(blacklistkey):
-                fiberblacklist = cfinder.value(blacklistkey)
+            # fibers to ignore for the PSF fit
+            # specex uses the fiber index in a camera
+            fibers_to_ignore = badfibers([hdr, camhdr[camera]],["BROKENFIBERS","BADCOLUMNFIBERS"])%500
+            if fibers_to_ignore.size>0 :
+                fibers_to_ignore_str=str(fibers_to_ignore[0])
+                for fiber in fibers_to_ignore[1:] :
+                    fibers_to_ignore_str+=",{}".format(fiber)
+
                 tmpname = findfile('psf', args.night, args.expid, camera)
                 inpsf = replace_prefix(tmpname,"psf","fit-psf")
-                outpsf = replace_prefix(tmpname,"psf","fit-psf-fixed-blacklisted")
+                outpsf = replace_prefix(tmpname,"psf","fit-psf-fixed-listed")
                 if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
                     cmd = 'desi_interpolate_fiber_psf'
                     cmd += ' --infile {}'.format(inpsf)
                     cmd += ' --outfile {}'.format(outpsf)
-                    cmd += ' --fibers {}'.format(fiberblacklist)
-                    log.info('For camera {} interpolating PSF for broken fibers: {}'.format(camera,fiberblacklist))
+                    cmd += ' --fibers {}'.format(fibers_to_ignore_str)
+                    log.info('For camera {} interpolating PSF for fibers: {}'.format(camera,fibers_to_ignore_str))
                     runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
                     if os.path.isfile(outpsf) :
-                        os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-blacklisted-fix"))
+                        os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-listed-fix"))
                         subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
 
             dt = time.time() - t0
