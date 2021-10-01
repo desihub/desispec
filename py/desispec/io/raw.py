@@ -196,13 +196,18 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
 
         ## Mask fibers
         cfinder = CalibFinder([header,primary_header])
-        mod_fibers = fibermap['FIBER'].data % 500
+        fibers  = fibermap['FIBER'].data
+        for k in ["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"] :
+            log.debug("{}={}".format(k,cfinder.badfibers([k])))
 
-        ## Mask blacklisted fibers
-        fiberblacklist = cfinder.fiberblacklist()
-        for fiber in fiberblacklist:
-            loc = np.where(mod_fibers==fiber)[0]
-            fibermap['FIBERSTATUS'][loc] |= maskbits.fibermask.BADFIBER
+        ## Mask bad fibers
+        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BROKENFIBERS"]))] |= maskbits.fibermask.BROKENFIBER
+        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BADCOLUMNFIBERS"]))] |= maskbits.fibermask.BADCOLUMN
+        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"]))] |= maskbits.fibermask.LOWTRANSMISSION
+        # Also, for backward compatibility
+        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BROKENFIBERS"])%500)] |= maskbits.fibermask.BROKENFIBER
+        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BADCOLUMNFIBERS"])%500)] |= maskbits.fibermask.BADCOLUMN
+        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"])%500)] |= maskbits.fibermask.LOWTRANSMISSION
 
         # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
         camname = camera.upper()[0]
@@ -214,10 +219,12 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
             #elif camname == 'Z':
             badamp_bit = maskbits.fibermask.BADAMPZ
 
-        fibers_to_exclude = cfinder.fibers_to_exclude()
-        for fiber in fibers_to_exclude:
-            loc = np.where(mod_fibers==fiber)[0]
-            fibermap['FIBERSTATUS'][loc] |= badamp_bit
+        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BADAMPFIBERS"]))] |= badamp_bit
+        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["EXCLUDEFIBERS"]))] |= badamp_bit # for backward compatibiliyu
+        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BADAMPFIBERS"])%500)] |= badamp_bit
+        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["EXCLUDEFIBERS"])%500)] |= badamp_bit # for backward compatibiliyu
+        if cfinder.haskey("EXCLUDEFIBERS") :
+            log.warning("please use BADAMPFIBERS instead of EXCLUDEFIBERS")
 
     img.fibermap = fibermap
 

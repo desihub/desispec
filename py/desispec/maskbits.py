@@ -61,6 +61,7 @@ fibermask:
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
     - [POORPOSITION,   10, "Fiber >30 microns from target location"]
     - [BADCOLUMN,      11, "Bad CCD column affecting this fiber"]
+    - [LOWTRANSMISSION, 12, "Low fiber transmission. Cannot use for sky."]
     - [LOWEFFTIME,     15, "Effective time for this fiber is too low"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]
