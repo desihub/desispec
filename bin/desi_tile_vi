@@ -12,6 +12,7 @@ This script is used to do a visual validation of the tiles based on the automate
 import os,sys
 import argparse
 import glob
+from getpass import getuser
 import numpy as np
 import multiprocessing
 from astropy.table import Table
@@ -34,11 +35,11 @@ def parse(options=None):
                         help = 'Comma, or colon separated list of nights to process. ex: 12,14 or 12:23')
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
-    parser.add_argument('-i','--infile', type = str, default = None, required=False,
-                        help = 'Specific input tile file, default is proddir/tiles.csv')
+    parser.add_argument('-i','--infile', type = str, default = 'tiles-specstatus.ecsv', required=False,
+                        help = 'Specific input tile file, default is tiles-specstatus.ecsv')
     parser.add_argument('-o','--outfile', type = str, default = None, required=False,
                         help = 'Output tile file, default is same as input')
-    parser.add_argument('-u','--user', type = str, default = None, required=True,
+    parser.add_argument('-u','--user', type = str, default = getuser(), required=False,
                         help = 'your name or initials')
     parser.add_argument('--viewer', type = str, default = "eog", required=False,
                         help = 'image viewer (default is eog)')
@@ -115,8 +116,6 @@ def main():
     log.info('prod    = {}'.format(args.prod))
     log.info('qa dir  = {}'.format(args.qa_dir))
 
-    if args.infile is None :
-        args.infile = os.path.join(args.prod,"tiles.csv")
     if args.outfile is None :
         args.outfile = args.infile
 
