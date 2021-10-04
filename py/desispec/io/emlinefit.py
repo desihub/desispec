@@ -9,6 +9,7 @@ IO routines for desi_emlinefit_afterburner.
 import os
 import sys
 from astropy.io import fits
+import fitsio
 import numpy as np
 from scipy.optimize import curve_fit
 from desitarget.geomask import match_to
@@ -20,6 +21,68 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
 allowed_emnames = ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
+
+def get_targetids(redrockfn, bitnames, log=get_logger()):
+    """
+    Returns the TARGETIDs passing the bitnames for the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET mask.
+
+    Args:
+        redrockfn: full path to a redrock/zbest file
+        bitnames: comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
+        log (optional, defaults to get_logger()): Logger object
+
+    Returns:
+        targetids: list of TARGETIDs passing the *DESI_TARGET mask (np.array)
+
+    Notes:
+        If several bitnames are provided, selects the union of those.
+        Use the FIBERMAP extension.
+        Do not use desitarget.targets.main_cmx_or_sv, as we only read TARGETID and the mask column,
+            so it is faster; but we use same philosophy.
+    """
+    # AR get the *DESI_TARGET colum
+    dtkeys = [
+        key for key in fits.open(redrockfn)["FIBERMAP"].columns.names
+            if key in ["CMX_TARGET", "SV1_DESI_TARGET", "SV2_DESI_TARGET", "SV3_DESI_TARGET"]
+    ]
+    # AR if no match, then assume it is a main catalog
+    if len(dtkeys) == 0:
+        dtkey = "DESI_TARGET"
+        from desitarget.targetmask import desi_mask as mask
+    elif len(dtkeys) == 1:
+        dtkey = dtkeys[0]
+        if dtkey == "CMX_TARGET":
+            from desitarget.cmx.cmx_targetmask import cmx_mask as mask
+        if dtkey == "SV1_DESI_TARGET":
+            from desitarget.sv1.sv1_targetmask import desi_mask as mask
+        if dtkey == "SV2_DESI_TARGET":
+            from desitarget.sv2.sv2_targetmask import desi_mask as mask
+        if dtkey == "SV3_DESI_TARGET":
+            from desitarget.sv3.sv3_targetmask import desi_mask as mask
+    else:
+        log.info(
+            "found {}>1 matching keys: {}; 0 or 1 key expected; exiting".format(
+                len(dtkeys), dtkeys
+            )
+        )
+        sys.exit(1)
+    allowed_bitnames = mask.names()
+    # AR read + select the targetids
+    d = fitsio.read(redrockfn, columns=["TARGETID", dtkey], ext="FIBERMAP")
+    sel = np.zeros(len(d), dtype=bool)
+    for bitname in bitnames.split(","):
+        if bitname not in allowed_bitnames:
+            log.info(
+                "{} not in allowed bitnames for {} ({}; exiting)".format(
+                    bitname, dtkey, allowed_bitnames
+                )
+            )
+            sys.exit(1)
+        sel |= (d[dtkey] & mask[bitname]) > 0
+    targetids = d["TARGETID"][sel]
+    log.info("selecting {} targets with {} in {}".format(sel.sum(), bitnames, dtkey))
+    return targetids
+
 
 def get_rf_em_waves(emname):
     """

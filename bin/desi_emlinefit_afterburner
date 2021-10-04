@@ -10,6 +10,7 @@ from desiutil.log import get_logger
 from argparse import ArgumentParser
 from desispec.io.emlinefit import (
     allowed_emnames,
+    get_targetids,
     get_rf_em_waves,
     get_emlines,
 )
@@ -34,6 +35,13 @@ def get_parse(log=get_logger()):
         type=str,
         default=None,
         required=True,
+    )
+    parser.add_argument(
+        "--bitnames",
+        help="comma-separated list of target bits to fit from the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET mask; if 'ALL', fits all fibers (default=ELG)",
+        type=str,
+        default="ELG",
+        required=False
     )
     parser.add_argument(
         "--outfn",
@@ -111,10 +119,17 @@ def main():
     log.info("{:.1f}s\tstart\tTIMESTAMP={}".format(time() - start, Time.now().isot))
     # AR read arguments
     args = get_parse(log=log)
+    # AR select TARGETIDs
+    if args.bitnames == "ALL":
+        targetids = None
+        log.info("selecting all fibers, as args.bitnames=='ALL'")
+    else:
+        targetids = get_targetids(args.redrockfn, args.bitnames, log=log)
     # AR fit the emission lines
     emdict, rr_dtype, fm_dtype = get_emlines(
         args.redrockfn,
         args.coaddfn,
+        targetids=targetids,
         emnames=args.emnames.split(","),
         rf_fit_hw=args.rf_fit_hw,
         min_rf_fit_hw=args.min_rf_fit_hw,
