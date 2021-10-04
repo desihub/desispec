@@ -176,6 +176,7 @@ def emlines_gaussfit(
         Adapted/simplified from elgredshiftflag from J. Comparat (used for eBOSS/ELG):
             https://svn.sdss.org/repo/eboss/elgredshiftflag/
         Returns np.nan in mydict (and NDOF=-99) if not enough pixels to fit or if fit fails.
+        Default settings designed for ELGs (e.g. max_sigma); need to re-assess if run on other targets.
         For "OII", let the doublet line ratio free during the fit.
         For "OIII", fits the 4960 and 5007 lines with a fixed line ratio.
         For the Balmer lines, SHARE is not fitted and set to np.nan.

@@ -21,7 +21,7 @@ def get_parse(log=get_logger()):
     default_rr_keys = "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"
     default_fm_keys = "TARGET_RA,TARGET_DEC,OBJTYPE"
     #
-    parser = ArgumentParser()
+    parser = ArgumentParser(description="Simple emission line fitter; primarily designed for ELGs.")
     parser.add_argument(
         "--redrockfn",
         help="full path to a redrock/zbest file (default=None)",
