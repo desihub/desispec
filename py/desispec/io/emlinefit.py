@@ -308,7 +308,7 @@ def emlines_gaussfit(
                     if emname == "OIII":
                         models = myfunc(waves[keep_line], popt[0], popt[1])
                         mydict["SHARE"] = sh
-                        mydict["SHARE_IVAR"] = 0.
+                        mydict["SHARE_IVAR"] = np.inf
                     if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
                         models = myfunc(waves[keep_line], popt[0], popt[1])
                     mydict["NDOF"]    = keep_line.sum() - len(p0)
