@@ -68,7 +68,6 @@ def emlines_gaussfit(
     max_flux=1e9,
     min_share=1e-1,
     max_share=1,
-    balmerfit="em",
     log=get_logger(),
 ):
     """
@@ -93,7 +92,6 @@ def emlines_gaussfit(
         max_flux (optional, defaults to 1e9): maximum allowed value for the flux in e-17 * erg/cm2/s/A (float)
         min_share (optional, defaults to 1e-1): minimum allowed value for the share (float)
         max_share (optional, defaults to 1): maximum allowed value for the share (float)
-        balmerfit (optional, defaults to "em"): how to fit Balmer lines? "em": emission line only; "em+abs": emission+absorption lines (string)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
@@ -122,9 +120,6 @@ def emlines_gaussfit(
     # AR allowed arguments
     if emname not in allowed_emnames:
         log.error("{} not in {}; exiting".format(emname, allowed_emnames))
-        sys.exit(1)
-    if balmerfit not in ["em", "em+abs"]:
-        log.error("{} not in ['em', 'em+abs']".format(balmerfit))
         sys.exit(1)
     # AR Line models
     gauss_nocont = lambda ws, sigma, F0, w0 : F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
@@ -213,16 +208,11 @@ def emlines_gaussfit(
             p0 = np.array([p0_sigma, p0_flux])
             bounds = ((min_sigma, min_flux), (max_sigma, max_flux))
         # AR Balmer lines
-        # AR fitting an absorption + emisison line
+        # AR fitting emission line only (no absorption)
         if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
-            if balmerfit == "em":
-                myfunc = lambda ws, sigma, F0 : mydict["CONT"] + gauss_nocont(ws, sigma, F0, obs_em_waves[0])
-                p0 = np.array([p0_sigma, p0_flux])
-                bounds = ((min_sigma, min_flux), (max_sigma, max_flux))
-            if balmerfit == "em+abs":
-                myfunc = lambda ws, sigma, F0, abs_sigma, abs_F0 : mydict["CONT"] + gauss_nocont(ws, sigma, F0, obs_em_waves[0]) - gauss_nocont(ws, abs_sigma, abs_F0, obs_em_waves[0])
-                p0 = np.array([p0_sigma, p0_flux, p0_sigma, p0_flux])
-                bounds = ((min_sigma, min_flux, min_sigma, min_flux), (max_sigma, max_flux, max_sigma, max_flux))
+            myfunc = lambda ws, sigma, F0 : mydict["CONT"] + gauss_nocont(ws, sigma, F0, obs_em_waves[0])
+            p0 = np.array([p0_sigma, p0_flux])
+            bounds = ((min_sigma, min_flux), (max_sigma, max_flux))
         # AR flux at observed wavelength(s)
         obs_em_fluxes = np.array([fluxes[np.searchsorted(waves, obs_em_wave)] for obs_em_wave in obs_em_waves])
         # AR is the flux above continuum for at least one line?
@@ -257,10 +247,7 @@ def emlines_gaussfit(
                         mydict["SHARE"] = sh
                         mydict["SHARE_IVAR"] = 0.
                     if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
-                        if balmerfit == "em":
-                            models = myfunc(waves[keep_line], popt[0], popt[1])
-                        if balmerfit == "em+abs":
-                            models = myfunc(waves[keep_line], popt[0], popt[1], popt[2], popt[3])
+                        models = myfunc(waves[keep_line], popt[0], popt[1])
                     mydict["NDOF"]    = keep_line.sum() - len(p0)
                     mydict["CHI2"]    = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
                     mydict["CHI2"]   /= mydict["NDOF"] # AR we define CHI2 as the reduced chi2, as in fastspecfit
@@ -284,7 +271,6 @@ def get_emlines(
     min_rf_fit_hw=20,
     rf_cont_w=200,
     rv=3.1,
-    balmerfit="em",
     outpdf=None,
     rr_keys="TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2",
     fm_keys="TARGET_RA,TARGET_DEC,OBJTYPE",
@@ -305,7 +291,6 @@ fitting.
         min_rf_fit_hw (optional, defaults to 20): minimum requested *rest-frame* width (in A) on each side of the line to consider the fitting (float)
         rf_cont_w (optional, defaults to 200): *rest-frame* wavelength extent (in A) to fit the continuum (float)
         rv (optional, defaults to 3.1): value of R_V (float)
-        balmerfit (optional, defaults to "em"): how to fit Balmer lines? "em": emission line only; "em+abs": emission+absorption lines (string)
         outpdf (optional, defaults to None): PDF filename for plotting the OII doublet (data + fit) (string)
         rr_keys (optional, defaults to "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"): comma-separated list of columns from REDSHIFTS to propagate (string)
         fm_keys (optional, defaults to "TARGET_RA,TARGET_DEC,OBJTYPE"): comma-separated list of columns from FIBERMAP to propagate (string)
@@ -466,7 +451,6 @@ fitting.
                 rf_fit_hw=rf_fit_hw,
                 min_rf_fit_hw=min_rf_fit_hw,
                 rf_cont_w=rf_cont_w,
-                balmerfit=balmerfit,
                 log=log,
             )
             for key in emkeys:

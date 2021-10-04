@@ -73,12 +73,6 @@ def get_parse(log=get_logger()):
         default=3.1,
     )
     parser.add_argument(
-        "--balmerfit",
-        help="how to fit Balmer lines? 'em': emission line only; 'em+abs': emission+absorption lines (default=em)",
-        type=str,
-        default="em",
-    )
-    parser.add_argument(
         "--outpdf",
         help="PDF filename for plotting the fitted lines (data + fit) (default=None)",
         type=str,
@@ -126,7 +120,6 @@ def main():
         min_rf_fit_hw=args.min_rf_fit_hw,
         rf_cont_w=args.rf_cont_w,
         rv=args.rv,
-        balmerfit=args.balmerfit,
         outpdf=args.outpdf,
         rr_keys=args.rr_keys,
         fm_keys=args.fm_keys,
@@ -168,7 +161,6 @@ def main():
     fd["EMLINEFIT"].write_key("MINRFHW", args.min_rf_fit_hw)
     fd["EMLINEFIT"].write_key("RFCONTW", args.rf_cont_w)
     fd["EMLINEFIT"].write_key("RV", args.rv)
-    fd["EMLINEFIT"].write_key("BALMFIT", args.balmerfit)
     fd["EMLINEFIT"].write_key("EMNAMES", args.emnames)
     for i_emname, emname in enumerate(args.emnames.split(",")):
         fd["EMLINEFIT"].write_key("RFWAVE{:02d}".format(i_emname), ",".join(get_rf_em_waves(emname).astype(str)))
