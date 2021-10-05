@@ -14,10 +14,11 @@ import argparse
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Average fiber flats")
+    parser = argparse.ArgumentParser(description="Average fiber flats for a camera")
     parser.add_argument('-i','--infile', type = str, default = None, required=True, nargs="*")
     parser.add_argument('-o','--outfile', type = str, default = None, required=True)
-    parser.add_argument('--program', type = str, default = None, required=False, help="only input with this program")
+    parser.add_argument('--program', type = str, default = None, required=False,
+            help="only use inputs with this PROGRAM header keyword")
     args = None
     if options is None:
         args = parser.parse_args()
