@@ -57,6 +57,9 @@ def parse(options=None):
                         help = 'use this number of stars ranked by highest throughput to normalize transmission (for DESI commissioning)')
     parser.add_argument('--seeing-fwhm', type = float, default = 1.1, required=False,
                         help = 'seeing FWHM in arcsec, used for fiberloss correction')
+    parser.add_argument('--nsig-flux-scale', type = float, default = 3, required=False,
+                       help = 'n sigma cutoff of the flux scale among standard stars')
+
     parser.set_defaults(nostdcheck=False)
     args = None
     if options is None:
@@ -112,7 +115,18 @@ def main(args) :
         model_fibers = model_fibers[good_models]
         model_metadata = model_metadata[good_models]
 
-
+        if args.delta_color_cut > 0 :
+            log.warning("will ignore color cut because a preselected list of stars was given")
+            args.delta_color_cut = 0
+        if args.min_color is not None :
+            log.warning("will ignore min color because a preselected list of stars was given")
+            args.min_color = None
+        if args.chi2cut_nsig > 0 :
+            log.warning("will ignore chi2 cut because a preselected list of stars was given")
+            args.chi2cut_nsig = 0
+        if args.nsig_flux_scale > 0 and args.nsig_flux_scale < 10 :
+            log.warning("set nsig_flux_scale to 10 because a preselected list of stars was given")
+            args.nsig_flux_scale = 10.
     ok=np.ones(len(model_metadata),dtype=bool)
 
     if args.chi2cut > 0 :
@@ -144,6 +158,7 @@ def main(args) :
             # This should't happen
             log.error('The color {} was not computed in the models'.format(color))
             sys.exit(16)
+
 
     if args.delta_color_cut > 0 :
         # check dust extinction values for those stars
@@ -217,7 +232,7 @@ def main(args) :
         log.warning('All standard-star spectra are masked!')
         return
 
-    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput, exposure_seeing_fwhm = args.seeing_fwhm, stdcheck=stdcheck)
+    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput, exposure_seeing_fwhm = args.seeing_fwhm, stdcheck=stdcheck, nsig_flux_scale= args.nsig_flux_scale)
 
     # QA
     if (args.qafile is not None):
