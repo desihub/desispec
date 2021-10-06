@@ -1,0 +1,166 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script selects calibration stars for a given exposure
+"""
+
+
+import os,sys
+import argparse
+import glob
+import numpy as np
+import multiprocessing
+from astropy.table import Table
+import fitsio
+
+from desiutil.log import get_logger
+from desispec.io import read_stdstar_models,read_frame,read_fiberflat,read_sky
+from desispec.fiberflat import apply_fiberflat
+from desispec.sky import subtract_sky
+
+
+def main() :
+
+    log  = get_logger()
+
+
+    parser = argparse.ArgumentParser(description="Select calibration stars")
+
+    parser.add_argument('--models', type=str, required=True, nargs="*",
+                        help = 'Input list of std stars model files')
+    parser.add_argument('--frames',type=str, required=True, nargs="*",
+                        help = 'Input list of r-camera frame files from a given exposure (one per spectrograph)')
+    parser.add_argument('--fiberflats', type = str, required=True, nargs="*",
+                        help = 'path of DESI r-camera fiberflat fits files (one per spectrograph)')
+    parser.add_argument('--skys', type = str, required=True, nargs="*",
+                        help = 'path of DESI r-camera sky fits files (one per spectrograph)')
+    parser.add_argument('-o','--outfile', type=str, default=None, required=True,
+                        help = 'Output table with list of calibration stars')
+
+    args = parser.parse_args()
+
+    log.info("reading inputs")
+    frames=dict()
+    fiberflats=dict()
+    skys=dict()
+    stars=dict()
+
+    # wavelength range used to measure rapidely the mean rband flux
+    wmin = 6000
+    wmax = 7300
+
+    for filename in args.frames :
+        frame = read_frame(filename)
+        if frame.spectrograph is not None :
+            spectro = frame.spectrograph
+        else :
+            spectro = frame.meta["SPECGRPH"]
+        frames[spectro] = read_frame(filename)
+
+    for filename in args.fiberflats :
+        fiberflat  = read_fiberflat(filename)
+        spectro = fiberflat.header["SPECGRPH"]
+        fiberflats[spectro] = fiberflat
+
+    for filename in args.skys :
+        sky  = read_sky(filename)
+        spectro = sky.header["SPECGRPH"]
+        skys[spectro] = sky
+
+    for filename in args.models :
+        flux, wave, fibers, metadata = read_stdstar_models(filename)
+        head    = fitsio.read_header(filename,"FIBERMAP")
+        spectro = head["SPECGRPH"]
+
+        ii=(wave>=wmin)&(wave<=wmax)
+        table=Table(metadata)
+        table["FIBER"] = fibers
+        table["MODELRFLUX"] = np.sum(flux[:,ii],axis=1)
+        stars[spectro] = table
+
+    log.debug("check spectrographs")
+    valid_spectrographs = []
+    for spectro in frames.keys() :
+        if spectro not in fiberflats.keys() :
+            log.warning("missing fiberflat for spectro {}".format(spectro))
+            continue
+        if spectro not in skys.keys() :
+            log.warning("missing sky for spectro {}".format(spectro))
+            continue
+        if spectro not in stars.keys() :
+            log.warning("missing stars for spectro {}".format(spectro))
+            continue
+        valid_spectrographs.append(spectro)
+
+    log.info("valid spectrographs = {}".format(valid_spectrographs))
+
+    log.info("processing")
+    calib_stars_fibers     = []
+    calib_stars_fluxratios = []
+
+    for spectro in valid_spectrographs :
+        fibers  = stars[spectro]["FIBER"]
+        frame   = frames[spectro]
+        apply_fiberflat(frame, fiberflats[spectro])
+        subtract_sky(frame, skys[spectro])
+
+        f2i = {f:i for i,f in enumerate(frame.fibermap["FIBER"])}
+        indices = np.array([f2i[f] for f in fibers])
+        log.debug("fiber indices = {}".format(indices))
+
+        jj = np.where((frame.wave>=wmin)&(frame.wave<=wmax))[0]
+
+        if jj.size==0 :
+            message="wavelength mismatch: frame.wave=[{},{}] and analysis range = [{},{}]".format(frame.wave[0],frame.wave[-1],wmin,wmax)
+            log.error(message)
+            raise RuntimeError(message)
+
+        rivar = np.sum(frame.ivar[indices][:,jj]*(frame.mask[indices][:,jj]==0),axis=1)
+        rflux = np.sum(frame.ivar[indices][:,jj]*frame.flux[indices][:,jj]*(frame.mask[indices][:,jj]==0),axis=1)
+        rflux[rivar>0] /= rivar[rivar>0]
+        ratio = rflux/stars[spectro]["MODELRFLUX"]
+        calib_stars_fibers.append(fibers)
+        calib_stars_fluxratios.append(ratio)
+
+        log.info("{}:{}".format(spectro,ratio))
+
+    calib_stars_fibers     = np.hstack(calib_stars_fibers).astype(int)
+    calib_stars_fluxratios = np.hstack(calib_stars_fluxratios).astype(float)
+    ok=(calib_stars_fluxratios>0)
+    if np.sum(ok)==0 :
+        message = "no valid star"
+        log.error(message)
+        raise RuntimeError(message)
+    calib_stars_fibers = calib_stars_fibers[ok]
+    calib_stars_fluxratios = calib_stars_fluxratios[ok]
+    medval = np.median(calib_stars_fluxratios)
+    if not medval>0 :
+        message = "median ratio (meas/model) = {} is not valid".format(medval)
+        log.error(message)
+        raise RuntimeError(message)
+    calib_stars_fluxratios /= medval
+    rms = 1.48*np.median(np.abs(calib_stars_fluxratios-1))
+    log.info("rms of star r-band calib = {:.3f}".format(rms))
+    good = np.abs(calib_stars_fluxratios-1)<3*rms
+    bad  = ~good
+    if np.sum(bad) :
+        log.info("Discarding {} stars with r-band calib delta = {}".format(np.sum(bad),list(calib_stars_fluxratios[bad])))
+
+    t=Table()
+    t["FIBER"]=calib_stars_fibers
+    t["RCALIBFRAC"]=calib_stars_fluxratios
+    t["VALID"]=good.astype(int)
+    t.write(args.outfile,overwrite=True)
+    log.info("wrote {}".format(args.outfile))
+
+
+    import matplotlib.pyplot as plt
+    plt.plot(calib_stars_fluxratios,"o")
+    plt.show()
+
+
+main()
