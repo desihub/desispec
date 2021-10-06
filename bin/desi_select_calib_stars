@@ -102,7 +102,7 @@ def main() :
 
     log.info("processing")
     calib_stars = {}
-    for k in ["FIBER","RCALIBFRAC","EBV","MODEL_G-R","DATA_G-R"] :
+    for k in ["FIBER","RCALIBFRAC","EBV","MODEL_COLOR","DATA_COLOR"] :
         calib_stars[k] = []
 
     for spectro in valid_spectrographs :
@@ -130,8 +130,16 @@ def main() :
         calib_stars["RCALIBFRAC"].append(ratio)
         ebv = frame.fibermap[indices]["EBV"]
         calib_stars["EBV"].append(frame.fibermap[indices]["EBV"])
-        calib_stars["MODEL_G-R"].append(stars[spectro]["MODEL_G-R"])
-        calib_stars["DATA_G-R"].append(stars[spectro]["DATA_G-R"])
+        if "MODEL_G-R" in stars[spectro].dtype.names :
+            calib_stars["MODEL_COLOR"].append(stars[spectro]["MODEL_G-R"])
+            calib_stars["DATA_COLOR"].append(stars[spectro]["DATA_G-R"])
+        elif 'MODEL_GAIA-BP-RP' in stars[spectro].dtype.names :
+            calib_stars["MODEL_COLOR"].append(stars[spectro]["MODEL_GAIA-BP-RP"])
+            calib_stars["DATA_COLOR"].append(stars[spectro]["DATA_GAIA-BP-RP"])
+        else :
+            message="Can't find either G-R or BP-RP color in the model file."
+            log.error(message)
+            raise RuntimeError(message)
 
     table=Table()
     for k in calib_stars.keys() :
@@ -158,9 +166,9 @@ def main() :
 
     if args.delta_color_cut > 0 :
         # check dust extinction values for those stars
-        star_gr_reddening_relative_error = 0.2 * calib_stars["EBV"]
-        log.info("Consider a g-r reddening sys. error in the range {:4.3f} {:4.3f}".format(np.min(star_gr_reddening_relative_error),np.max(star_gr_reddening_relative_error)))
-        good &= (np.abs(calib_stars["MODEL_G-R"]-calib_stars["DATA_G-R"])<args.delta_color_cut+star_gr_reddening_relative_error)
+        reddening_relative_error = 0.2 * calib_stars["EBV"]
+        log.info("Consider a reddening sys. error in the range {:4.3f} {:4.3f}".format(np.min(reddening_relative_error),np.max(reddening_relative_error)))
+        good &= (np.abs(calib_stars["MODEL_COLOR"]-calib_stars["DATA_COLOR"])<args.delta_color_cut+reddening_relative_error)
 
     bad  = ~good
     if np.sum(bad) :
