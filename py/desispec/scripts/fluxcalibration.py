@@ -20,7 +20,7 @@ import os
 import os.path
 import numpy as np
 import sys
-
+from astropy.table import Table
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Compute the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.")
@@ -33,6 +33,8 @@ def parse(options=None):
                         help = 'path of DESI sky fits file')
     parser.add_argument('--models', type = str, default = None, required=True,
                         help = 'path of spectro-photometric stellar spectra fits file')
+    parser.add_argument('--selected-calibration-stars', type = str, default = None, required=False,
+                        help = 'path to table with list of pre-selected calibration stars')
     parser.add_argument('--chi2cut', type = float, default = 0., required=False,
                         help = 'apply a reduced chi2 cut for the selection of stars')
     parser.add_argument('--chi2cut-nsig', type = float, default = 0., required=False,
@@ -100,6 +102,16 @@ def main(args) :
 
     # read models
     model_flux, model_wave, model_fibers, model_metadata=read_stdstar_models(args.models)
+
+    if args.selected_calibration_stars is not None :
+        table=Table.read(args.selected_calibration_stars)
+        good=table["VALID"]==1
+        good_models = np.in1d( model_fibers , table["FIBER"][good] )
+        log.info("Selected {} good stars, fibers = {}, from {}".format(np.sum(good_models),model_fibers[good_models],args.selected_calibration_stars))
+        model_flux   = model_flux[good_models]
+        model_fibers = model_fibers[good_models]
+        model_metadata = model_metadata[good_models]
+
 
     ok=np.ones(len(model_metadata),dtype=bool)
 
