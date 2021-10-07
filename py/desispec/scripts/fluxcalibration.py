@@ -124,9 +124,9 @@ def main(args) :
         if args.chi2cut_nsig > 0 :
             log.warning("will ignore chi2 cut because a preselected list of stars was given")
             args.chi2cut_nsig = 0
-        if args.nsig_flux_scale > 0 and args.nsig_flux_scale < 10 :
-            log.warning("set nsig_flux_scale to 10 because a preselected list of stars was given")
-            args.nsig_flux_scale = 10.
+        if args.nsig_flux_scale > 0 :
+            log.warning("set nsig_flux_scale because a preselected list of stars was given")
+            args.nsig_flux_scale = 0.
     ok=np.ones(len(model_metadata),dtype=bool)
 
     if args.chi2cut > 0 :
