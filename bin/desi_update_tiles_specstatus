@@ -5,7 +5,9 @@ Update surveyops/ops/tile-specstatus.ecsv with spectro pipeline tiles.csv
 """
 
 import os
+import sys
 import argparse
+import subprocess
 import numpy as np
 from astropy.table import Table, vstack
 
@@ -88,18 +90,43 @@ def update_specstatus(specstatus, tiles):
 
     return specstatus
 
+def is_svn_current(dirname):
+    """
+    Return True/False for if svn checkout dirname is up-to-date with server
+
+    Raises ValueError if unable to determine (e.g. dirname isn't svn checkout)
+    """
+    cmd = f"svn diff -r BASE:HEAD {dirname}"
+    args = cmd.split()
+    try:
+        results = subprocess.run(args, check=True, stdout=subprocess.PIPE).stdout
+        #- no stdout = no diffs = up-to-date
+        return len(results) == 0
+    except CalledProcessError:
+        log = get_logger()
+        msg = f'FAILED {cmd}'
+        log.error(msg)
+        raise ValueError(msg)
+
 #-------------------------------------------------------------------------
 
 p = argparse.ArgumentParser()
-p.add_argument('--specstatus', type=str, required=True,
+p.add_argument('-s', '--specstatus', type=str, required=False,
         help='Input tiles-specstatus.ecsv file')
-p.add_argument('--tiles', type=str, required=False,
+p.add_argument('-t', '--tiles', type=str, required=False,
         help='Input tiles.csv, default from $DESI_SPECTRO_REDUX/$SPECPROD/tiles.csv')
 p.add_argument('-o', '--outfile', type=str, required=False,
         help='output file; default overrides --specstatus in-place')
+p.add_argument('--dry-run', action='store_true',
+        help="Determine updates but don't write any files")
+p.add_argument('--force', action='store_true',
+        help="run even if input specstatus is svn out-of-date")
 
 args = p.parse_args()
 log = get_logger()
+
+if args.specstatus is None:
+    args.specstatus = 'tiles-specstatus.ecsv'
 
 if args.tiles is None:
     args.tiles = os.path.join(specprod_root(), 'tiles.csv')
@@ -107,17 +134,43 @@ if args.tiles is None:
 if args.outfile is None:
     args.outfile = args.specstatus
 
-log.info(f'Input specstatus {args.specstatus}')
-log.info(f'Updating with tiles {args.tiles}')
+if not os.path.exists(args.specstatus):
+    log.critical(f'Missing {args.specstatus}')
+    sys.exit(1)
 
-# TODO: check if we need to svn update
+if not os.path.exists(args.tiles):
+    log.critical(f'Missing {args.tiles}')
+    sys.exit(1)
+
+log.info(f'Input specstatus {args.specstatus}')
+log.info(f'Updating with tiles from {args.tiles}')
+
+svndir = os.path.dirname(os.path.abspath(args.specstatus))
+try:
+    if is_svn_current(svndir):
+        log.info(f'svn dir {svndir} is up-to-date')
+    elif args.force:
+        log.warning(f'svn dir {svndir} NOT up-to-date, but --force to proceeding anyway')
+    else:
+        log.critical(f'svn dir {svndir} NOT up-to-date, svn update first or use --force')
+        sys.exit(1)
+
+except ValueError:
+    if args.force:
+        log.error(f'Unable to determine if {svndir} is up-to-date, but --force so proceeding anyway')
+    else:
+        log.critical(f'Unable to determine if {svndir} is up-to-date; use --force to proceed anyway')
+        sys.exit(1)
 
 tiles = Table.read(args.tiles)
 specstatus = Table.read(args.specstatus)
 
 specstatus = update_specstatus(specstatus, tiles)
 
-tmpfile = get_tempfilename(args.outfile)
-specstatus.write(tmpfile, overwrite=True)
-os.rename(tmpfile, args.outfile)
-log.info(f'Wrote {args.outfile}')
+if not args.dry_run:
+    tmpfile = get_tempfilename(args.outfile)
+    specstatus.write(tmpfile, overwrite=True)
+    os.rename(tmpfile, args.outfile)
+    log.info(f'Wrote {args.outfile}')
+else:
+    log.info('Dry run; no files were changed')
