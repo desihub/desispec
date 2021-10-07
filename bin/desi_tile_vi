@@ -68,7 +68,7 @@ def input2(message):
 blank_responses = {'', '(no entry)'}
 viewer=None
 
-def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
+def yesnohelp(message,_pass=True,_help=True):
     '''Wrapper for user input which cleans up human-entered values and returns
     a string of exactly 'yes', 'no', or 'help'. Also can give user option to
     exit the program.
@@ -76,9 +76,7 @@ def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
     Boolean args allow you to turn off options for the user.
     '''
     suffix_parts = ['y','n']
-    if _save: suffix_parts.append('save')
-    if _exit: suffix_parts.append('exit')
-    if _pass: suffix_parts.append('pass')
+    if _pass: suffix_parts.append('unsure')
     if _help: suffix_parts.append('help')
     suffix = '/'.join(suffix_parts)
     answer =  input2(f'{message} ({suffix})')
@@ -86,19 +84,47 @@ def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
         return 'help'
     if answer.lower() in {'n', 'no', 'false'}:
         return 'no'
-    if _pass and answer.lower() in {'p','pass'}:
+    if _pass and answer.lower() in {'u','unsure'}:
         return 'pass'
-    if _save and answer.lower() in {'s','save'}:
-        return 'save'
     if answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
-    if _exit and answer.lower() in {'exit'}:
-        res=yesnohelp("Are you sure you want to exit without saving?",_pass=False,_save=False,_exit=False,_help=False)
-        if res=="yes" :
-            print('Exiting at user request.')
-            if viewer is not None: viewer.kill()
-            sys.exit(0)
     return yesnohelp(message)
+
+
+def print_summary(new, orig):
+    """Print a summary of the status of tile VI.
+
+    Arguments are the new and original tile tables."""
+    import datetime
+    twoweeksago = datetime.date.today() + datetime.timedelta(days=-14)
+    twoweeksagoint = (twoweeksago.year*10000 +
+                      twoweeksago.month*100 +
+                      twoweeksago.day)
+    newtiles = (new['QA'] != 'none') & (orig['QA'] == 'none')
+    oldtiles = ~newtiles & (new['LASTNIGHT'] >= twoweeksagoint)
+    veryoldtiles = ~newtiles & ~oldtiles
+    print('Tile status')
+    rows = []
+    classes = {'new': newtiles, 'old': oldtiles, 'very old': veryoldtiles}
+    programs = {'dark': new['FAFLAVOR'] == 'maindark',
+                'bright': new['FAFLAVOR'] == 'mainbright',
+                'other': ((new['SURVEY'] == 'main') &
+                          (~np.isin(new['FAPRGRM'], ['dark', 'bright'])))}
+    for class0 in classes:
+        for program0 in programs:
+            m = classes[class0] & programs[program0]
+            rows.append((
+                class0 + ' ' + program0,
+                np.sum((new['QA'] == 'good') & m),
+                np.sum((new['QA'] == 'unsure') & m),
+                np.sum((new['QA'] == 'bad') & m),
+            ))
+
+    print('%20s %8s %8s %8s' % ('type', 'good', 'unsure', 'bad'))
+    for row in rows:
+        print('%20s %8d %8d %8d' % row)
+
+
 
 def main():
     global viewer
@@ -133,6 +159,7 @@ def main():
         print("Add or change --prod or --infile ... ?")
         sys.exit(12)
     tiles_table = Table.read(args.infile)
+    tiles_table_orig = tiles_table.copy()
 
     if not "QA" in tiles_table.dtype.names :
         tiles_table["QA"]=np.array(np.repeat("none",len(tiles_table)),dtype='<U20')
@@ -208,12 +235,7 @@ def main():
             if res=="help" :
                 print("y: yes, this tile is valid.")
                 print("n: no, it's bad and we should discard one or several exposures or fix the processing.")
-                print("pass: skip this one, because unsure.")
-                print("exit: exit without saving anything in this session.")
-                print("save: save output file {}".format(args.outfile))
-            elif res=="save" :
-                tiles_table.write(args.outfile,overwrite=True)
-                print("wrote",args.outfile)
+                print("unsure: skip this one, because unsure.")
             elif res=="yes" :
                 tiles_table["ZDONE"][index]="true"
                 tiles_table["QA"][index]="good"
@@ -223,6 +245,7 @@ def main():
                     if software_answer is False :
                         tiles_table["OVERRIDE"][index]=1
                         print("Your have overridden the automated validation.")
+                tiles_table.write(args.outfile,overwrite=True)
                 break
             elif res=="no" :
                 tiles_table["QA"][index]="bad"
@@ -241,10 +264,7 @@ def main():
 
         viewer.kill()
         viewer=None
-    res=yesnohelp("all done, save result in {}?".format(args.outfile),_save=False,_exit=False,_pass=False)
-    if res == "yes" or res == "save" :
-        tiles_table.write(args.outfile,overwrite=True)
-        print("wrote",args.outfile)
+    print_summary(tiles_table, tiles_table_orig)
 
 
 if __name__ == '__main__':
