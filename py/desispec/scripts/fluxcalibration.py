@@ -232,7 +232,11 @@ def main(args) :
         log.warning('All standard-star spectra are masked!')
         return
 
-    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500, highest_throughput_nstars = args.highest_throughput, exposure_seeing_fwhm = args.seeing_fwhm, stdcheck=stdcheck, nsig_flux_scale= args.nsig_flux_scale)
+    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux,
+            model_fibers%500,
+            highest_throughput_nstars=args.highest_throughput,
+            exposure_seeing_fwhm=args.seeing_fwhm,
+            stdcheck=stdcheck, nsig_flux_scale= args.nsig_flux_scale)
 
     # QA
     if (args.qafile is not None):

@@ -868,7 +868,10 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1, stdcheck=True,nsig_flux_scale=3) :
+def compute_flux_calibration(frame, input_model_wave, input_model_flux,
+        input_model_fibers, nsig_clipping=10., deg=2, debug=False,
+        highest_throughput_nstars=0, exposure_seeing_fwhm=1.1, stdcheck=True,
+        nsig_flux_scale=3) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).

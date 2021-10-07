@@ -6,29 +6,29 @@
 
 """
 This script selects calibration stars for a given exposure
+by comparing the ratio of spectro to photometric r-band flux
+and using an RMS across all petals.
 """
 
 
 import os,sys
 import argparse
-import glob
 import numpy as np
-import multiprocessing
 from astropy.table import Table
 import fitsio
 
 from desiutil.log import get_logger
 from desispec.io import read_stdstar_models,read_frame,read_fiberflat,read_sky
+from desispec.io.util import get_tempfilename
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
-
 
 def main() :
 
     log  = get_logger()
 
 
-    parser = argparse.ArgumentParser(description="Select calibration stars")
+    parser = argparse.ArgumentParser(description="Select calibration stars from spectro/photo flux across all petals")
 
     parser.add_argument('--models', type=str, required=True, nargs="*",
                         help = 'Input list of std stars model files')
@@ -179,7 +179,10 @@ def main() :
         log.info("Discarding {} stars with r-band calib delta = {}".format(np.sum(bad),list(calib_stars["RCALIBFRAC"][bad])))
 
     calib_stars["VALID"]=good.astype(int)
-    calib_stars.write(args.outfile,overwrite=True)
+    tmpfile = get_tempfilename(args.outfile)
+    calib_stars.write(tmpfile, overwrite=True)
+    os.path.rename(tmpfile, args.outfile)
     log.info("wrote {}".format(args.outfile))
 
-main()
+if __name__ == '__main__':
+    main()
