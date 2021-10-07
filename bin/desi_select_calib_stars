@@ -181,7 +181,7 @@ def main() :
     calib_stars["VALID"]=good.astype(int)
     tmpfile = get_tempfilename(args.outfile)
     calib_stars.write(tmpfile, overwrite=True)
-    os.path.rename(tmpfile, args.outfile)
+    os.rename(tmpfile, args.outfile)
     log.info("wrote {}".format(args.outfile))
 
 if __name__ == '__main__':
