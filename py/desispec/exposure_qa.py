@@ -345,7 +345,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 # calib value of central fibers, central wavelength
                 calib=fitsio.read(calib_filename,0)
                 nwave=calib.shape[1]
-                cal=np.median(calib[230:270,nwave//2-200:nwave//2+200])
+                # mean of half of the wavelength array to avoid dichroic regions
+                cal=np.mean(calib[:,nwave//4:nwave-nwave//4],axis=1)
+                # median over fibers because some fibers have large positioning offsets
+                cal=np.median(cal)
                 petalqa_table[band.upper()+"THRUFRAC"][petal]=cal
             else :
                 log.warning("missing {}".format(calib_filename))
