@@ -50,8 +50,8 @@ def collect_argparser():
 
     parser.add_argument("--target_selection", type=str, required=False, default="qso_targets",
                         help="on which sample the QN is performed: " +
-                             "qso_targets (QSO targets)" +
-                             " / all_targets (All targets in the coadd file)")
+                             "qso_targets (QSO targets) -- qso (works also)" +
+                             " / all_targets (All targets in the coadd file) -- all (works also)")
     parser.add_argument("--save_target", type=str, required=False, default="restricted",
                         help="which objects will be saved in the output files:" +
                              "restricted (objects which are identify as QSO by QN and where we have a new run of RR)" +

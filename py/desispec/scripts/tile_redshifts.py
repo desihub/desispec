@@ -486,7 +486,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
     elif [ -f $redrock ]; then
         echo Running QSO MgII afterburner, see $qsomgiilog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_mgii_afterburner --coadd $coadd --redrock $redrock --output $qsomgii --target_selection qso --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_mgii_afterburner --coadd $coadd --redrock $redrock --output $qsomgii --target_selection all --save_target all"
         echo RUNNING $cmd &> $qsomgiilog
         $cmd &>> $qsomgiilog &
         sleep 0.5
@@ -499,7 +499,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $qsoqn) already exists, skipping QSO QuasarNet afterburner
     elif [ -f $redrock ]; then
         echo Running QSO QuasarNet afterburner, see $qsoqnlog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_qn_afterburner --coadd $coadd --redrock $redrock --output $qsoqn --target_selection qso --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_qn_afterburner --coadd $coadd --redrock $redrock --output $qsoqn --target_selection all --save_target all"
         echo RUNNING $cmd &> $qsoqnlog
         $cmd &>> $qsoqnlog &
         sleep 0.5
@@ -605,7 +605,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
                                    that returned a batcherr.
     """
     log = get_logger()
-    
+
     # - If --tileid, --night, and --expid are all given, create exptable
     if ((tileid is not None) and (night is not None) and
             (len(night) == 1) and (expid is not None)):
@@ -614,19 +614,19 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         exptable['EXPID'] = expid
         exptable['NIGHT'] = night[0]
         exptable['TILEID'] = tileid
-    
+
         if explist is not None:
             log.warning('Ignoring --explist, using --tileid --night --expid')
-    
+
     # - otherwise load exposure tables for those nights
     elif explist is None:
         if night is not None:
             log.info(f'Loading production exposure tables for nights {night}')
         else:
             log.info(f'Loading production exposure tables for all nights')
-    
+
         exptable = _read_minimal_exptables(night)
-    
+
     else:
         log.info(f'Loading exposure list from {explist}')
         if explist.endswith('.fits'):
@@ -637,11 +637,11 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
             exptable = Table.read(explist, format='ascii.ecsv')
         else:
             exptable = Table.read(explist, format='ascii')
-    
+
         if night is not None:
             keep = np.in1d(exptable['NIGHT'], night)
             exptable = exptable[keep]
-    
+
     # - Filter exposure tables by exposure IDs or by tileid
     # - Note: If exptable was created from --expid --night --tileid these should
     # - have no effect, but are left in for code flow simplicity
@@ -650,27 +650,27 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         exptable = exptable[keep]
         #expids = np.array(exptable['EXPID'])
         tileids = np.unique(np.array(exptable['TILEID']))
-    
+
         # - if provided, tileid should be redundant with the tiles in those exps
         if tileid is not None:
             if not np.all(exptable['TILEID'] == tileid):
                 log.critical(f'Exposure TILEIDs={tileids} != --tileid={tileid}')
                 sys.exit(1)
-    
+
     elif tileid is not None:
         keep = (exptable['TILEID'] == tileid)
         exptable = exptable[keep]
         #expids = np.array(exptable['EXPID'])
         tileids = np.array([tileid, ])
-    
+
     else:
         tileids = np.unique(np.array(exptable['TILEID']))
-    
+
     # - anything left?
     if len(exptable) == 0:
         log.critical(f'No exposures left after filtering by tileid/night/expid')
         sys.exit(1)
-    
+
     # - If cumulative, find all prior exposures that also observed these tiles
     # - NOTE: depending upon options, this might re-read all the exptables again
     # - NOTE: this may not scale well several years into the survey
