@@ -533,6 +533,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         fx.write('echo Starting at $(date)\n')
 
+        fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
+        
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             fx.write('\n# Do steps at full MPI parallelism\n')
             srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'

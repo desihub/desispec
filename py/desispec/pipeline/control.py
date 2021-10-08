@@ -631,7 +631,7 @@ def gen_scripts(tasks_by_type, nersc=None, nersc_queue="regular",
         scripts = scriptgen.batch_nersc(tasks_by_type,
             outscript, outlog, jobname, nersc, nersc_queue,
             nersc_maxtime, nersc_maxnodes, nodeprocs=ppn,
-            openmp=False, multiproc=False, db=db,
+            openmp=True, multiproc=False, db=db,
             shifterimg=nersc_shifter, debug=debug)
 
     return scripts
