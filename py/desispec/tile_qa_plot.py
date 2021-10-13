@@ -912,7 +912,7 @@ def make_tile_qa_plot(
     ax = plt.subplot(gs[0:2, 3])
     xlim, ylim = (-100, 5100), (0, 7)
     sels = [fiberqa["QAFIBERSTATUS"] == 0, fiberqa["QAFIBERSTATUS"] > 0]
-    labels = ["QAFIBERSTATUS=0", "QAFIBERSTATUS>0"]
+    labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0"]
     cs = ["r", "b"]
     for sel, label, c in zip(sels, labels, cs):
         ax.scatter(fiberqa["FIBER"][sel], fiberqa["Z"][sel], s=0.1, c=c, alpha=1.0, label="{} ({} fibers)".format(label, sel.sum()))
@@ -921,7 +921,7 @@ def make_tile_qa_plot(
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.grid(True)
-    ax.legend(loc=2, markerscale=10, fontsize=7)
+    ax.legend(loc=2, markerscale=10, fontsize=10)
 
     show_efftime = True # else show TSNR
 
