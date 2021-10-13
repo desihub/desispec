@@ -1123,8 +1123,7 @@ def make_tile_qa_plot(
     for txt in [
         ["TILEID", "{:06d}".format(hdr["TILEID"])],
         ["thruNIGHT", "{}".format(hdr["LASTNITE"])],
-        ["SURVEY", hdr["SURVEY"]],
-        ["PROGRAM", hdr["FAPRGRM"]],
+        ["SURVEY-PROGRAM", "{}-{}".format(hdr["SURVEY"], hdr["FAPRGRM"])],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
         ["", ""],
