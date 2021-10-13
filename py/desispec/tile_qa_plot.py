@@ -1084,6 +1084,18 @@ def make_tile_qa_plot(
     cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="bottom", pad=0, extend="max")
     cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", color="k", ha="center", va="center", transform=cbar.ax.transAxes)
 
+    # AR display petal ids
+    for ang, p in zip(np.linspace(2 * np.pi, 0, 11), [3, 2, 1, 0, 9, 8, 7, 6, 5, 4]):
+        anglab = ang + 0.1 * np.pi
+        ax.text(
+            450 * np.cos(anglab),
+            450 * np.sin(anglab),
+            "{:.0f}".format(p),
+            color="k",
+            va="center",
+            ha="center",
+        )
+
     # AR sky map
     ax = plt.subplot(gs[1, 1], projection="mollweide")
     plot_mw_skymap(
