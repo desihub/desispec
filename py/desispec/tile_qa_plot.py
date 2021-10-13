@@ -691,9 +691,11 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
     sel = pixwd["FRACAREA"] > 0
     if (survey == "main") & (program in ["bright", "dark"]):
         dens_med = np.median(pixwd["ALL"][sel])
-        clim = (0.75, 1.25)
+        clim = (0.5, 1.5)
+        if program == "dark":
+            clim = (0.75, 1.25)
         c = pixwd["ALL"] / dens_med
-        clabel = "All {} targets / ({:.0f}/deg2)".format(program, dens_med)
+        clabel = "{} targets".format(program, dens_med)
     else:
         clim = (0, 0.1)
         c = pixwd["EBV"]
