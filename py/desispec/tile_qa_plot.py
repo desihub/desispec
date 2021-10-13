@@ -878,6 +878,17 @@ def make_tile_qa_plot(
         nqso_rr  = -1
         ### nqso_qnp = -1
 
+    # AR Z vs. FIBER plot
+    ax = plt.subplot(gs[0, 3])
+    xlim, ylim = (-100, 5100), (0, 7)
+    ax.scatter(fiberqa["FIBER"], fiberqa["Z"], s=0.1, c="r", alpha=1.0, label="All {} fibers".format(len(fiberqa)))
+    ax.set_xlabel("FIBER")
+    ax.set_ylabel("Z")
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.grid(True)
+    ax.legend(loc=2)
+
     show_efftime = True # else show TSNR
 
     if show_efftime :
