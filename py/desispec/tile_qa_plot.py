@@ -955,19 +955,19 @@ def make_tile_qa_plot(
         ax.set_ylim(-505, 505)
         ax.grid(True)
         ax.set_aspect("equal")
-        ax.legend(loc=2)
+        ax.legend(loc=3, ncol=2)
         # cbar = plt.colorbar(sc, extend="both")
         p =  ax.get_position().get_points().flatten()
         cax = fig.add_axes([
             p[0] + 0.05 * (p[2] - p[0]),
-            p[1] + 0.01 * (p[3]-p[1]),
+            p[1] + 0.94 * (p[3]-p[1]),
             0.9 * (p[2] - p[0]),
             0.05 * (p[3]-p[1])
         ])
-        cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="top", pad=0, extend="both")
+        cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="bottom", pad=0, extend="both")
         #cbar.mappable.set_clim(clim)
         # cbar.set_label("EFFTIME (sec)")
-        cbar.ax.text(0.5, 0.5, "EFFTIME (sec)", ha="center", va="center", transform=cbar.ax.transAxes)
+        cbar.ax.text(0.5, 0.5, "EFFTIME (sec)", color="k", ha="center", va="center", transform=cbar.ax.transAxes)
 
         # AR ratio of the median TSNR2 w.r.t ref
         #sel = np.isfinite(ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())])
@@ -1077,12 +1077,12 @@ def make_tile_qa_plot(
     p =  ax.get_position().get_points().flatten()
     cax = fig.add_axes([
         p[0] + 0.05 * (p[2] - p[0]),
-        p[1] + 0.01 * (p[3]-p[1]),
+        p[1] + 0.94 * (p[3]-p[1]),
         0.9 * (p[2] - p[0]),
         0.05 * (p[3]-p[1])
     ])
-    cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="top", pad=0, extend="both")
-    cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", ha="center", va="center", transform=cbar.ax.transAxes)
+    cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="bottom", pad=0, extend="max")
+    cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", color="k", ha="center", va="center", transform=cbar.ax.transAxes)
 
     # AR sky map
     ax = plt.subplot(gs[1, 1], projection="mollweide")
