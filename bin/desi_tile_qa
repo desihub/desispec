@@ -104,8 +104,27 @@ def main():
     else:
         tileids = None
 
-    # AR FIXME path to tsnr-exposures.fits or e.g. exposures-everest.fits
-    tsnrexpfits = glob.glob(os.path.join(args.prod, "*exposures*fits"))[0]
+    # AR path to:
+    # - tsnr-exposures.fits (daily)
+    # - or exposures-{}.fits (everest)
+    # - or tsnr-{prod}.fits (cascades, denali)
+    tsnrexpfits = os.path.join(args.prod, "tsnr-exposures.fits")
+    if os.path.isfile(tsnrexpfits):
+        log.info("tsnrexpfits = {}".format(tsnrexpfits))
+    else:
+        log.info("no {} ".format(tsnrexpfits))
+        tsnrexpfits = os.path.join(args.prod, "exposures-{}.fits".format(os.path.basename(args.prod)))
+        if os.path.isfile(tsnrexpfits):
+            log.info("tsnrexpfits = {}".format(tsnrexpfits))
+        else:
+            log.info("no {} ".format(tsnrexpfits))
+            tsnrexpfits = os.path.join(args.prod, "tsnr-{}.fits".format(os.path.basename(args.prod)))
+            if os.path.isfile(tsnrexpfits):
+                log.info("tsnrexpfits = {}".format(tsnrexpfits))
+            else:
+                log.info("no {} ".format(tsnrexpfits))
+                log.error("did not find a tsnrexpfits file; exiting")
+                sys.exit(1)
 
     dirnames = sorted(glob.glob('{}/exposures/????????'.format(args.prod)))
     nights=[]
