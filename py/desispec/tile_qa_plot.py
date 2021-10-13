@@ -893,8 +893,12 @@ def make_tile_qa_plot(
         ax.legend(ncol=2)
         ax.set_xlabel("Z")
         ax.set_ylabel("Per tile fractional count")
-        ax.set_xlim(0, 5)
-        ax.set_ylim(0, 0.2)
+        if hdr["FAPRGRM"].lower() == "bright":
+            ax.set_xlim(0, 1.5)
+            ax.set_ylim(0, 0.4)
+        else:
+            ax.set_xlim(0, 5)
+            ax.set_ylim(0, 0.2)
         ax.grid(True)
         # AR n(z) : ratio
         ratio_nz = n_valid / nref_valid
