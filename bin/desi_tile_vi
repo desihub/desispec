@@ -255,11 +255,13 @@ def main():
                     if software_answer is True :
                         tiles_table["OVERRIDE"][index]=1
                         print("Your have overridden the automated validation.")
+                tiles_table.write(args.outfile,overwrite=True)
                 break
             elif res=="pass" :
                 tiles_table["QA"][index]="unsure"
                 tiles_table["USER"][index]=args.user
                 tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
+                tiles_table.write(args.outfile,overwrite=True)
                 break
 
         viewer.kill()
