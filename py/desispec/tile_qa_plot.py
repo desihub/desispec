@@ -1055,11 +1055,10 @@ def make_tile_qa_plot(
     vmin = 0.
     vmax = 0.03
 
-    sel = (fiberqa["EFFTIME_SPEC"]>0)
     sc = ax.scatter(
-        x[sel],
-        y[sel],
-        c=c[sel],
+        x,
+        y,
+        c=c,
         cmap=matplotlib.cm.viridis,
         vmin=vmin,
         vmax=vmax,
