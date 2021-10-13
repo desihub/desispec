@@ -939,7 +939,7 @@ def make_tile_qa_plot(
 
         sel = ((fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) > 0)&(efftime>0)
         ax.scatter(x[sel],y[sel],
-                   edgecolor="k", facecolors="none", s=5, alpha=0.5,
+                   edgecolor="r", facecolors="none", s=5, alpha=0.5,
                    label="LOWEFFTIME")
         # plotting fibers discarded because of EBV=0
         sel = (fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) == 0
@@ -955,7 +955,7 @@ def make_tile_qa_plot(
         ax.set_ylim(-505, 505)
         ax.grid(True)
         ax.set_aspect("equal")
-        ax.legend(loc=3, ncol=2)
+        ax.legend(loc=3, ncol=2, markerscale=5)
         # cbar = plt.colorbar(sc, extend="both")
         p =  ax.get_position().get_points().flatten()
         cax = fig.add_axes([
