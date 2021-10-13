@@ -105,7 +105,7 @@ def main():
         tileids = None
 
     # AR FIXME path to tsnr-exposures.fits or e.g. exposures-everest.fits
-    tsnrfits = glob.glob(os.path.join(args.prod, "*exposures*fits"))[0]
+    tsnrexpfits = glob.glob(os.path.join(args.prod, "*exposures*fits"))[0]
 
     dirnames = sorted(glob.glob('{}/exposures/????????'.format(args.prod)))
     nights=[]
