@@ -67,7 +67,7 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,tsnrexpfits,outfile=None) :
     if figfile is not None :
         log.info("wrote QA plot {}".format(figfile))
     else :
-        loq.warning("failed to compute QA plot for {}".format(outfile))
+        log.warning("failed to compute QA plot for {}".format(outfile))
 
     if "EXTNAME" in fiberqa_table.meta :
         fiberqa_table.meta.pop("EXTNAME")
