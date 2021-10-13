@@ -68,7 +68,7 @@ def input2(message):
 blank_responses = {'', '(no entry)'}
 viewer=None
 
-def yesnohelp(message,_pass=True,_help=True):
+def yesnohelp(message,_pass=True, _skip=True, _help=True):
     '''Wrapper for user input which cleans up human-entered values and returns
     a string of exactly 'yes', 'no', or 'help'. Also can give user option to
     exit the program.
@@ -78,16 +78,19 @@ def yesnohelp(message,_pass=True,_help=True):
     suffix_parts = ['y','n']
     if _pass: suffix_parts.append('unsure')
     if _help: suffix_parts.append('help')
+    if _skip: suffix_parts.append('skip')
     suffix = '/'.join(suffix_parts)
     answer =  input2(f'{message} ({suffix})')
     if _help and answer.lower() in {'h', 'help', 'doc', 'man'}:
         return 'help'
     if answer.lower() in {'n', 'no', 'false'}:
         return 'no'
-    if _pass and answer.lower() in {'u','unsure'}:
+    if _pass and answer.lower() in {'u', 'unsure'}:
         return 'pass'
     if answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
+    if _skip and answer.lower() in {'s', 'skip'}:
+        return 'skip'
     return yesnohelp(message)
 
 
@@ -235,7 +238,8 @@ def main():
             if res=="help" :
                 print("y: yes, this tile is valid.")
                 print("n: no, it's bad and we should discard one or several exposures or fix the processing.")
-                print("unsure: skip this one, because unsure.")
+                print("skip: skip this one; just show the image and move on.")
+                print("unsure: mark this one as unsure.")
             elif res=="yes" :
                 tiles_table["ZDONE"][index]="true"
                 tiles_table["QA"][index]="good"
@@ -262,6 +266,8 @@ def main():
                 tiles_table["USER"][index]=args.user
                 tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
                 tiles_table.write(args.outfile,overwrite=True)
+                break
+            elif res=="skip" :
                 break
 
         viewer.kill()
