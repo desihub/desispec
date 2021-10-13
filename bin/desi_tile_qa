@@ -52,7 +52,7 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
+def func(night,tileid,specprod_dir,exposure_qa_dir,tsnrexpfits,outfile=None) :
     """
     Wrapper function to compute_tile_qa for multiprocessing
     """
@@ -63,7 +63,7 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
 
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
-    figfile = make_tile_qa_plot(outfile)
+    figfile = make_tile_qa_plot(outfile, tsnrexpfits)
     if figfile is not None :
         log.info("wrote QA plot {}".format(figfile))
     else :
@@ -104,6 +104,8 @@ def main():
     else:
         tileids = None
 
+    # AR FIXME path to tsnr-exposures.fits or e.g. exposures-everest.fits
+    tsnrfits = glob.glob(os.path.join(args.prod, "*exposures*fits"))[0]
 
     dirnames = sorted(glob.glob('{}/exposures/????????'.format(args.prod)))
     nights=[]
@@ -152,7 +154,7 @@ def main():
                         entry[k]=r['value']
                     summary_rows.append(entry)
                     continue
-            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename})
+            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'tsnrexpfits':tsnrexpfits,'outfile':filename})
 
         if args.nproc == 1 :
             for func_arg in func_args :

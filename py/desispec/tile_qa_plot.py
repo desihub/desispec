@@ -756,6 +756,7 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
 
 def make_tile_qa_plot(
     tileqafits,
+    tsnrexpfits,
     pngoutfile=None,
     dchi2_min=None,
     tsnr2_key=None,
@@ -767,6 +768,7 @@ def make_tile_qa_plot(
 
     Args:
         tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
+        tsnrexpfits: path to the per-exposures tsnr fits file (e.g. tsnr-exposures.fits, exposures-everest.fits)
 
     Options:
         pngoutfile: output filename; default to tileqafits .fits -> .png
@@ -804,10 +806,32 @@ def make_tile_qa_plot(
 
     # AR start plotting
     fig = plt.figure(figsize=(20, 15))
-    gs = gridspec.GridSpec(3, 4, wspace=0.25, hspace=0.2)
+    gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2)
+
+    # AR exposures from that TILEID
+    exps = Table.read(tsnrexpfits, hdu="EXPOSURES")
+    exps = exps[np.in1d(exps["TILEID"], hdr["TILEID"])]
+    xs = (0, 0.3, 0.6)
+    y, dy = 0.95, -0.10
+    fs = 10
+    ax = plt.subplot(gs[0, 1])
+    ax.axis("off")
+    txts = ["EXPID", "NIGHT", "EFFTIME"]
+    for x, txt in zip(xs, txts):
+        ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
+    y += 2 * dy
+    for i in range(len(exps)):
+        txts = [
+            "{:08d}".format(exps["EXPID"][i]),
+            "{}".format(exps["NIGHT"][i]),
+            "{:.0f}s".format(exps["EFFTIME_SPEC"][i]),
+        ]
+        for x, txt in zip(xs, txts):
+            ax.text(x, y, txt, fontsize=fs, transform=ax.transAxes)
+        y += dy
 
     # AR cutout
-    ax = plt.subplot(gs[1, 1])
+    ax = plt.subplot(gs[2:4, 1])
     plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4)
 
     # AR n(z)
@@ -834,7 +858,7 @@ def make_tile_qa_plot(
         ### nqso_qnp = 0
 
         # AR plot
-        ax = plt.subplot(gs[0, 2])
+        ax = plt.subplot(gs[0:2, 2])
         for tracer, col in zip(tracers, cols):
             # AR considered tile
             bins, zhists = get_zhists(hdr["TILEID"], tracer, dchi2_min, fiberqa)
@@ -879,7 +903,7 @@ def make_tile_qa_plot(
         ### nqso_qnp = -1
 
     # AR Z vs. FIBER plot
-    ax = plt.subplot(gs[0, 3])
+    ax = plt.subplot(gs[0:2, 3])
     xlim, ylim = (-100, 5100), (0, 7)
     ax.scatter(fiberqa["FIBER"], fiberqa["Z"], s=0.1, c="r", alpha=1.0, label="All {} fibers".format(len(fiberqa)))
     ax.set_xlabel("FIBER")
@@ -893,7 +917,7 @@ def make_tile_qa_plot(
 
     if show_efftime :
 
-        ax = plt.subplot(gs[1, 2])
+        ax = plt.subplot(gs[2:4, 2])
         x = fiberqa["MEAN_FIBER_X"]
         y = fiberqa["MEAN_FIBER_Y"]
         fibers = fiberqa["FIBER"]
@@ -958,7 +982,7 @@ def make_tile_qa_plot(
         ref = Table.read(os.path.join(refdir, "qa-reference-tsnr2.ecsv"))
 
         # AR TSNR2
-        ax = plt.subplot(gs[1, 2])
+        ax = plt.subplot(gs[2:4, 2])
         if hdr["FAPRGRM"].lower() in ["bright", "dark"]:
             clim = (0.5, 1.5)
             # AR TSNR2: ratio (discarding ebv=0 for now, as the TSNR2 is then biased)
@@ -1023,7 +1047,7 @@ def make_tile_qa_plot(
         )
 
     # AR positioners accuracy
-    ax = plt.subplot(gs[1, 3])
+    ax = plt.subplot(gs[2:4, 3])
     x = fiberqa["MEAN_FIBER_X"]
     y = fiberqa["MEAN_FIBER_Y"]
     fibers = fiberqa["FIBER"]
@@ -1061,7 +1085,7 @@ def make_tile_qa_plot(
     cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", ha="center", va="center", transform=cbar.ax.transAxes)
 
     # AR sky map
-    ax = plt.subplot(gs[0, 1], projection="mollweide")
+    ax = plt.subplot(gs[1, 1], projection="mollweide")
     plot_mw_skymap(
         fig,
         ax,
@@ -1075,7 +1099,7 @@ def make_tile_qa_plot(
     for k in ["RMSDIST","EFFTIME"] :
         if k not in hdr : hdr[k]=0
     # AR overall infos
-    ax = plt.subplot(gs[0, 0])
+    ax = plt.subplot(gs[0:2, 0])
     ax.axis("off")
     x0, x1, y, dy, fs = 0.45, 0.55, 0.95, -0.08, 10
 
@@ -1146,7 +1170,7 @@ def make_tile_qa_plot(
 
 
     # AR per petal diagnoses
-    ax = plt.subplot(gs[1, 0])
+    ax = plt.subplot(gs[2:4, 0])
     print_petal_infos(ax, petalqa,fiberqa)
     try :
         #  AR saving plot
