@@ -896,7 +896,7 @@ def make_tile_qa_plot(
             x[sel],
             y[sel],
             c=efftime[sel],
-            cmap=matplotlib.cm.coolwarm_r,
+            cmap=matplotlib.cm.viridis_r,
             vmin=vmin,
             vmax=vmax,
             s=5,
@@ -921,9 +921,18 @@ def make_tile_qa_plot(
         ax.grid(True)
         ax.set_aspect("equal")
         ax.legend(loc=2)
-        cbar = plt.colorbar(sc, extend="both")
+        # cbar = plt.colorbar(sc, extend="both")
+        p =  ax.get_position().get_points().flatten()
+        cax = fig.add_axes([
+            p[0] + 0.05 * (p[2] - p[0]),
+            p[1] + 0.01 * (p[3]-p[1]),
+            0.9 * (p[2] - p[0]),
+            0.05 * (p[3]-p[1])
+        ])
+        cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="top", pad=0, extend="both")
         #cbar.mappable.set_clim(clim)
-        cbar.set_label("EFFTIME (sec)")
+        # cbar.set_label("EFFTIME (sec)")
+        cbar.ax.text(0.5, 0.5, "EFFTIME (sec)", ha="center", va="center", transform=cbar.ax.transAxes)
 
         # AR ratio of the median TSNR2 w.r.t ref
         #sel = np.isfinite(ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())])
