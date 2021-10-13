@@ -804,7 +804,7 @@ def make_tile_qa_plot(
 
     # AR start plotting
     fig = plt.figure(figsize=(20, 15))
-    gs = gridspec.GridSpec(3, 3, wspace=0.25, hspace=0.2)
+    gs = gridspec.GridSpec(3, 4, wspace=0.25, hspace=0.2)
 
     # AR cutout
     ax = plt.subplot(gs[1, 1])
@@ -1010,6 +1010,44 @@ def make_tile_qa_plot(
             va="center",
             ha="center",
         )
+
+    # AR positioners accuracy
+    ax = plt.subplot(gs[1, 3])
+    x = fiberqa["MEAN_FIBER_X"]
+    y = fiberqa["MEAN_FIBER_Y"]
+    fibers = fiberqa["FIBER"]
+    c = np.sqrt(fiberqa["MEAN_DELTA_X"] ** 2 + fiberqa["MEAN_DELTA_Y"] ** 2)
+    vmin = 0.
+    vmax = 0.03
+
+    sel = (fiberqa["EFFTIME_SPEC"]>0)
+    sc = ax.scatter(
+        x[sel],
+        y[sel],
+        c=c[sel],
+        cmap=matplotlib.cm.viridis,
+        vmin=vmin,
+        vmax=vmax,
+        s=5,
+    )
+
+    ax.set_xlabel("FIBER_X [mm]")
+    ax.set_ylabel("FIBER_Y [mm]")
+    # AR 2*505 mm matches the 4 deg width of the cutout
+    ax.set_xlim(-505, 505)
+    ax.set_ylim(-505, 505)
+    ax.grid(True)
+    ax.set_aspect("equal")
+    # cbar = plt.colorbar(sc, extend="both")
+    p =  ax.get_position().get_points().flatten()
+    cax = fig.add_axes([
+        p[0] + 0.05 * (p[2] - p[0]),
+        p[1] + 0.01 * (p[3]-p[1]),
+        0.9 * (p[2] - p[0]),
+        0.05 * (p[3]-p[1])
+    ])
+    cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="top", pad=0, extend="both")
+    cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", ha="center", va="center", transform=cbar.ax.transAxes)
 
     # AR sky map
     ax = plt.subplot(gs[0, 1], projection="mollweide")
