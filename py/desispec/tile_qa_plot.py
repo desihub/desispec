@@ -1091,6 +1091,7 @@ def make_tile_qa_plot(
         0.05 * (p[3]-p[1])
     ])
     cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="bottom", pad=0, extend="max")
+    cbar.set_ticks([0, 0.01, 0.02, 0.03])
     cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", color="k", ha="center", va="center", transform=cbar.ax.transAxes)
 
     # AR display petal ids
