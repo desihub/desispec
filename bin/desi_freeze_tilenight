@@ -16,6 +16,39 @@ from astropy.table import Table
 from desiutil.log import get_logger
 from desispec.io import specprod_root, findfile
 
+def freezedir(path, dryrun=False):
+    """
+    Remove write permission from path unless dryrun
+
+    Args:
+        path (str): path to directory to remove
+
+    Options:
+        dryrun: if True, print info but don't actually remove write access
+
+    Returns non-zero error code upon failure (not an exception)
+    """
+    log = get_logger()
+    err = 0
+    if not os.path.isdir(path):
+        log.error(f'Not a directory; skipping {path}')
+        err = 1
+    elif not os.access(path, os.W_OK):
+        log.info(f'{path} already frozen')
+    else:
+        if dryrun:
+            log.info(f'Dry run: freeze {path}')
+        else:
+            log.info(f'Freezing {path}')
+            cmd = f'chmod -R a-w {path}'
+            err = subprocess.call(cmd.split())
+            if err != 0:
+                log.error(f'Freezing {path} failed')
+
+    return err
+
+#-------------------------------------------------------------------------
+
 parser = argparse.ArgumentParser(
         description='Remove write permissions from exposures and '
                     'cumulative redshift directories for a tile/night, '
@@ -48,57 +81,34 @@ if args.specstatus is not None:
     log.info(f'Reading tiles from {args.specstatus}')
     tiles = Table.read(args.specstatus)
     keep = (tiles['SURVEY'] == 'main') & (tiles['ZDONE'] == 'true')
+    if args.night is not None:
+        log.info(f'Filtering to just LASTNIGHT={args.night}')
+        keep &= tiles['LASTNIGHT'] == args.night
+
     tiles = tiles[keep]
 else:
     tiles = Table(names=('TILEID', 'LASTNIGHT'), dtype=(int, int))
     tiles.add_row( (args.tileid, args.night) )
 
+ntiles = len(tiles)
+log.info(f'{ntiles} tiles to freeze')
+
 #- find and read exposures table for that specprod
 specprod = os.path.basename(reduxdir)
 for expfile in [
     f'{reduxdir}/tsnr-exposures.fits',
-    f'{reduxdir}/exposuers-{specprod}.fits',
+    f'{reduxdir}/exposures-{specprod}.fits',
     ]:
     if os.path.exists(expfile):
         log.info(f'Reading exposures from {expfile}')
+        #- HDU name changed mid-2021, so read HDU 1 for backwards compatibility
+        #- with other productions (though this may only be used with daily)
         exposures = Table.read(expfile, 1)
         break
 else:
     #- for-loop else only runs if loop finishes without break
     log.error(f'Unable to find an exposures files in {reduxdir}; not freezing exposures')
     exposures = None
-
-def freezedir(path, dryrun=False):
-    """
-    Remove write permission from path unless dryrun
-
-    Args:
-        path (str): path to directory to remove
-
-    Options:
-        dryrun: if True, print info but don't actually remove write access
-
-    Returns non-zero error code upon failure (not an exception)
-    """
-    log = get_logger()
-    err = 0
-    if not os.path.isdir(path):
-        log.error(f'Not a directory; skipping {path}')
-        err = 1
-    elif not os.access(path, os.W_OK):
-        log.info(f'{path} already frozen')
-    else:
-        if dryrun:
-            log.info(f'Dry run: freeze {path}')
-        else:
-            log.info(f'Freezing {path}')
-            cmd = f'chmod -R a-w {path}'
-            err = subprocess.call(cmd.split())
-            if err != 0:
-                log.error(f'Freezing {path} failed')
-
-    return err
-            
 
 for tileid, night in tiles['TILEID', 'LASTNIGHT']:
     tiledir = f'{reduxdir}/tiles/cumulative/{tileid}/{night}'
@@ -107,11 +117,9 @@ for tileid, night in tiles['TILEID', 'LASTNIGHT']:
     if exposures is not None:
         ii = (exposures['TILEID'] == tileid)
         for expnight, expid in exposures['NIGHT', 'EXPID'][ii]:
-            tmpfile = findfile('frame', expnight, expid, 'b0', specprod_dir=reduxdir)
-            expdir = os.path.dirname(tmpfile)
-            freezedir(expdir, args.dry_run)
-
-
-
-
+            for prefix in ['preproc', 'frame']:
+                tmpfile = findfile(prefix, expnight, expid, 'b0',
+                                   specprod_dir=reduxdir)
+                path = os.path.dirname(tmpfile)
+                freezedir(path, args.dry_run)
 
