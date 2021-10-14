@@ -1,0 +1,117 @@
+#!/usr/bin/env python
+
+"""
+Utility script to remove write access (i.e. freeze)
+tiles/cumulative/TILEID/NIGHT directories for which spectro operations have
+signed off as done and ready to release overlapping tiles.  If directory
+already has write permission removed, it is skipped.
+"""
+
+import os, sys, glob
+import argparse
+import subprocess
+
+from astropy.table import Table
+
+from desiutil.log import get_logger
+from desispec.io import specprod_root, findfile
+
+parser = argparse.ArgumentParser(
+        description='Remove write permissions from exposures and '
+                    'cumulative redshift directories for a tile/night, '
+                    'e.g. after accepting that tile as done')
+parser.add_argument('-t', '--tileid', type=int,
+        help='TILEID to freeze')
+parser.add_argument('-n', '--night', type=int,
+        help='NIGHT to freeze')
+parser.add_argument('-p', '--prod', type=int,
+        help = 'Path to input reduction, e.g. '
+               '/global/cfs/cdirs/desi/spectro/redux/daily, '
+               'or simply prod version, like daily. '
+               'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+parser.add_argument('--specstatus', type=str,
+        help='tiles-specstatus.ecsv file to use; freeze any tiles with ZDONE=true')
+parser.add_argument('--dry-run', action='store_true',
+        help='print what directories to freeze, without freezing them')
+
+args = parser.parse_args()
+log = get_logger()
+
+if args.prod is None:
+    reduxdir = specprod_root()
+elif args.prod.count("/") == 0:
+    reduxdir = specprod_root(args.prod)
+else:
+    reduxdir = args.prod
+
+if args.specstatus is not None:
+    log.info(f'Reading tiles from {args.specstatus}')
+    tiles = Table.read(args.specstatus)
+    keep = (tiles['SURVEY'] == 'main') & (tiles['ZDONE'] == 'true')
+    tiles = tiles[keep]
+else:
+    tiles = Table(names=('TILEID', 'LASTNIGHT'), dtype=(int, int))
+    tiles.add_row( (args.tileid, args.night) )
+
+#- find and read exposures table for that specprod
+specprod = os.path.basename(reduxdir)
+for expfile in [
+    f'{reduxdir}/tsnr-exposures.fits',
+    f'{reduxdir}/exposuers-{specprod}.fits',
+    ]:
+    if os.path.exists(expfile):
+        log.info(f'Reading exposures from {expfile}')
+        exposures = Table.read(expfile, 1)
+        break
+else:
+    #- for-loop else only runs if loop finishes without break
+    log.error(f'Unable to find an exposures files in {reduxdir}; not freezing exposures')
+    exposures = None
+
+def freezedir(path, dryrun=False):
+    """
+    Remove write permission from path unless dryrun
+
+    Args:
+        path (str): path to directory to remove
+
+    Options:
+        dryrun: if True, print info but don't actually remove write access
+
+    Returns non-zero error code upon failure (not an exception)
+    """
+    log = get_logger()
+    err = 0
+    if not os.path.isdir(path):
+        log.error(f'Not a directory; skipping {path}')
+        err = 1
+    elif not os.access(path, os.W_OK):
+        log.info(f'{path} already frozen')
+    else:
+        if dryrun:
+            log.info(f'Dry run: freeze {path}')
+        else:
+            log.info(f'Freezing {path}')
+            cmd = f'chmod -R a-w {path}'
+            err = subprocess.call(cmd.split())
+            if err != 0:
+                log.error(f'Freezing {path} failed')
+
+    return err
+            
+
+for tileid, night in tiles['TILEID', 'LASTNIGHT']:
+    tiledir = f'{reduxdir}/tiles/cumulative/{tileid}/{night}'
+    freezedir(tiledir, args.dry_run)
+
+    if exposures is not None:
+        ii = (exposures['TILEID'] == tileid)
+        for expnight, expid in exposures['NIGHT', 'EXPID'][ii]:
+            tmpfile = findfile('frame', expnight, expid, 'b0', specprod_dir=reduxdir)
+            expdir = os.path.dirname(tmpfile)
+            freezedir(expdir, args.dry_run)
+
+
+
+
+
