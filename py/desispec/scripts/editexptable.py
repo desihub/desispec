@@ -1,10 +1,10 @@
 
 from desispec.workflow.exptable import get_exposure_table_name,get_exposure_table_path, \
                                        get_exposure_flags, get_exposure_table_column_defs, \
-                                       keyval_change_reporting, deconstruct_keyval_reporting, validate_badamps
+                                       keyval_change_reporting, deconstruct_keyval_reporting
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.utils import pathjoin
-from desispec.io.util import parse_badamps
+from desispec.io.util import parse_cameras, decode_camword, create_camword, parse_badamps, validate_badamps
 
 import os
 import numpy as np
@@ -77,13 +77,15 @@ def columns_not_to_report():
     """
     Returns list of columns that shouldn't have reporting information saved because they are user-defined values.
     """
-    return ['COMMENTS','HEADERERR','BADCANWORD','BADAMPS','LASTSTEP','EXPFLAG']
+    return ['COMMENTS', 'HEADERERR', 'BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'EXPFLAG']
 
 def columns_not_to_edit():
     """
     Defines columns that shouldn't be edited.
     """
-    return ['EXPID','CAMWORD']
+    ## Occasionally unchanging things like NIGHT or TILEID have been missing in the headers, so we won't restrict
+    ## that even though it typically shouldn't be edited if the data is there
+    return ['EXPID', 'CAMWORD', 'OBSTYPE']
 
 def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
     """
@@ -124,7 +126,8 @@ def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
         tablerow[comment_col] = np.append(tablerow[comment_col], reporting)
     return tablerow
 
-def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=False, overwrite_value=False, joinsymb=','):
+def change_exposure_table_rows(exptable, exp_str, colname, value, include_comment='', append_string=False,
+                               overwrite_value=False, joinsymb=','):
     """
     Changes the column named colname to value of value for rows of exposure table in exptable that correspond to the
     exposures defined in exp_str.
@@ -139,11 +142,14 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=
                       All ranges are assumed to be inclusive.
         colname, str. The column name in the exptable where you want to change values.
         value, any scalar type. The value you want to change the column value of each exp_str exposure row to.
-        append_string, bool. True if you want to append your input value to the end of an existing string. Used
-                             for BADAMPS. Default is False.
-        overwrite_value, bool. True if you want to overwrite a non-default value, if it exists. Default is False.
-        joinsymb, str. The symbol used to separate string elements that are being appended. CANNOT BE ',' or '|'.
-                       Default is ';'.
+        include_comment, str. A user specified comment to be added to the COMMENTS column after setting colname to
+                              value for the given exp_str exposures.
+        append_string, bool. True if you want to append your input value to the end of an existing string.
+        overwrite_value, bool. Default is False. Must be set to True if you want to overwrite a non-default value.
+                               If current value is a default value for that column for that row,
+                               this doesn't need to be set.
+        joinsymb, str. The symbol used to separate string elements that are being appended. Shouldn't be '|'.
+                       Default is ','.
 
     Returns:
         exptable, astropy.table.Table. The exposure table given in the input, with edits made to the column colname
@@ -156,13 +162,12 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=
     if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
     if append_string and overwrite_value:
-        raise ValueError("Cannot append_str and overwrite_value.")
+        raise ValueError("Cannot append_string and overwrite_value.")
     if colname not in exptable.colnames:
         raise ValueError(f"Colname {colname} not in exposure table")
 
     ## Parse the exposure numbers
     exposure_list = parse_int_list(exp_str, allints=exptable['EXPID'].data, only_unique=True)
-    print(f"Changing column: {colname} values to {value} for exposures: {exposure_list}.")
 
     ## Match exposures to row numbers
     row_numbers = []
@@ -174,12 +179,20 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=
 
     ## Match data type and convert where necessary
     if colname == 'EXPFLAG':
+        ## Make sure the exposure flag is a valid one
         expflags = get_exposure_flags()
         value = value.lower().replace(' ','_')
         if value not in expflags:
             raise ValueError(f"Couldn't understand exposure flag: {value}")
     elif colname == 'BADAMPS':
+        ## Make sure we can decode the badamp value (or easily correct it so we can decode it)
         value = validate_badamps(value, joinsymb=joinsymb)
+    elif colname == 'BADCAMWORD':
+        ## Make sure we can understand the cameras given
+        value = parse_cameras(value)
+        ## If appending camwords, let's convert to camera list only once to save computation
+        if append_value:
+            cam_vals = decode_camword(value)
 
     ## Inform user on whether reporting will be done
     if colname in columns_not_to_report():
@@ -191,15 +204,32 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=
     cur_dtype = coldtypes[colnames==colname][0]
     cur_default = coldeflts[colnames==colname][0]
 
+    if include_comment != '' and 'COMMENTS' not in colnames:
+        print("Given a comment to append to the exposure tables, but COMMENTS isn't in column names. "+
+              "Not including comment")
+
     ## Assign new value
     isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
     isarr = (cur_dtype in [list, np.array, np.ndarray])
 
-    if not overwrite_value and isarr:
-        print(f"Overwrite_value not set, so appending {value} to array.")
+    if isstr and append_string:
+        raise ValueError(f"Told to append_string but {colname} isn't a string: {cur_dtype}")
+    elif overwrite_value:
+        print(f"Overwriting values in column: {colname} to '{value}' for exposures: {exposure_list}.")
+    elif append_string:
+        print(f"Appending '{value}' to existing entries in column: {colname} for exposures: {exposure_list}.")
+    elif isarr:
+        print(f"Appending {value} to arrays in column: {colname} for exposures: {exposure_list}.")
+    else:
+        print(f"Changing default values in column: {colname} to '{value}' for exposures: {exposure_list}.")
+
 
     for rownum in row_numbers:
-        if isstr and append_string and exptable[colname][rownum] != '':
+        if colname == 'BADCAMWORD' and exptable[colname][rownum] != cur_default and append_string:
+            curcams = decode_camword(exptable[colname][rownum])
+            combinedcams = list(set(curcams.extend(cam_vals)))
+            exptable[colname][rownum] = create_camword(combinedcams)
+        elif isstr and append_string and exptable[colname][rownum] != cur_default:
             exptable[colname][rownum] += f'{joinsymb}{value}'
         elif isarr:
             if overwrite_value and len(exptable[colname][rownum])>0:
@@ -213,13 +243,16 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, append_string=
                 exptable[colname][rownum] = value
             else:
                 exp = exptable[rownum]['EXPID']
-                raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype} without overwrite_value enabled. Skipping.")
+                raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype}"+
+                                  " without overwrite_value enabled. Exiting.")
+        if include_comment != '' and 'COMMENTS' in colnames:
+            exptable['COMMENTS'][rownum] = np.append(exptable['COMMENTS'][rownum], include_comment)
 
     return exptable
 
-def edit_exposure_table(exp_str, colname, value, night=None, tablepath=None,
+def edit_exposure_table(exp_str, colname, value, night=None, include_comment='', tablepath=None,
                         append_string=False, overwrite_value=False, use_spec_prod=True,
-                        read_user_version=False, write_user_version=False, overwrite_file=True):#, joinsymb='|'):
+                        read_user_version=False, write_user_version=False, overwrite_file=True, joinsymb=','):
     """
     Edits the exposure table on disk to change the column named colname to value of value for rows of exposure table
     that correspond to the exposures defined in exp_str. The table on disk can be defined using night given directly
@@ -235,11 +268,14 @@ def edit_exposure_table(exp_str, colname, value, night=None, tablepath=None,
         colname, str. The column name in the exptable where you want to change values.
         value, any scalar type. The value you want to change the column value of each exp_str exposure row to.
         night, str or int. The night the exposures were acquired on. This uniquely defines the exposure table.
+        include_comment, str. A user specified comment to be added to the COMMENTS column after setting colname to
+                              value for the given exp_str exposures.
         tablepath, str. A relative or absolute path to the exposure table file, if named differently from the default
                         in desispec.workflow.exptable.
-        append_string, bool. True if you want to append your input value to the end of an existing string. Used
-                             for BADAMPS. Default is False.
-        overwrite_value, bool. True if you want to overwrite a non-default value, if it exists. Default is False.
+        append_string, bool. True if you want to append your input value to the end of an existing string.
+        overwrite_value, bool. Default is False. Must be set to True if you want to overwrite a non-default value.
+                               If current value is a default value for that column for that row,
+                               this doesn't need to be set.
         use_spec_prod, bool. True if you want to read in the exposure table defined by night from the currently
                              defined SPECPROD as opposed to the exposure table repository location. Default is True.
         read_user_version, bool. True if you want to read in an exposure table saved including the current user's
@@ -249,6 +285,8 @@ def edit_exposure_table(exp_str, colname, value, night=None, tablepath=None,
                                  USER name. Meant for test editing of a file without overwriting the true exposure table.
                                  Default is False.
         overwrite_file, bool. True if you want to overwrite the file on disk. Default is True.
+        joinsymb, str. The symbol used to separate string elements that are being appended. Shouldn't be '|'.
+                       Default is ','.
     """
     ## Don't edit fixed columns
     colname = colname.upper()
@@ -257,7 +295,7 @@ def edit_exposure_table(exp_str, colname, value, night=None, tablepath=None,
     if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
     if append_string and overwrite_value:
-        raise ValueError("Cannot append_str and overwrite_value.")
+        raise ValueError("Cannot append_string and overwrite_value.")
 
     ## Get the file locations
     if tablepath is not None:
@@ -284,7 +322,8 @@ def edit_exposure_table(exp_str, colname, value, night=None, tablepath=None,
         return
 
     ## Do the modification
-    outtable = change_exposure_table_rows(exptable, exp_str, colname, value, append_string, overwrite_value)#, joinsymb)
+    outtable = change_exposure_table_rows(exptable, exp_str, colname, value, include_comment,
+                                          append_string, overwrite_value, joinsymb)
 
     ## Write out the table
     if write_user_version:

@@ -37,7 +37,7 @@ import glob
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
-from desispec.io.util import create_camword
+from desispec.io.util import create_camword, validate_badamps
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -53,7 +53,7 @@ import desiutil.iers
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
-from desispec.workflow.exptable import validate_badamps
+
 stop_imports = time.time()
 
 #########################################
