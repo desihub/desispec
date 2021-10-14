@@ -911,13 +911,17 @@ def make_tile_qa_plot(
     # AR Z vs. FIBER plot
     ax = plt.subplot(gs[0:2, 3])
     xlim, ylim = (-100, 5100), (0, 7)
-    ax.scatter(fiberqa["FIBER"], fiberqa["Z"], s=0.1, c="r", alpha=1.0, label="All {} fibers".format(len(fiberqa)))
+    sels = [fiberqa["QAFIBERSTATUS"] == 0, fiberqa["QAFIBERSTATUS"] > 0]
+    labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0"]
+    cs = ["r", "b"]
+    for sel, label, c in zip(sels, labels, cs):
+        ax.scatter(fiberqa["FIBER"][sel], fiberqa["Z"][sel], s=0.1, c=c, alpha=1.0, label="{} ({} fibers)".format(label, sel.sum()))
     ax.set_xlabel("FIBER")
     ax.set_ylabel("Z")
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.grid(True)
-    ax.legend(loc=2)
+    ax.legend(loc=2, markerscale=10, fontsize=10)
 
     show_efftime = True # else show TSNR
 
@@ -1087,6 +1091,7 @@ def make_tile_qa_plot(
         0.05 * (p[3]-p[1])
     ])
     cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="bottom", pad=0, extend="max")
+    cbar.set_ticks([0, 0.01, 0.02, 0.03])
     cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", color="k", ha="center", va="center", transform=cbar.ax.transAxes)
 
     # AR display petal ids
