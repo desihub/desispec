@@ -1242,7 +1242,8 @@ def make_tile_qa_plot(
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
         ["", ""],
-        ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
+        ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(exps["EFFTIME_SPEC"].sum(), hdr["GOALTIME"], exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"])],
+        ["qa_efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
         ### ["nqso(RR) , nqso(QNP)", "{} , {}".format(nqso_rr,nqso_qnp)],
         ["nqso(RR)", "{}".format(nqso_rr)],
@@ -1252,8 +1253,12 @@ def make_tile_qa_plot(
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
-        if (txt[0] == "efftime / goaltime") & (
-            hdr["EFFTIME"] / hdr["GOALTIME"] < hdr["MINTFRAC"]
+        if (
+            (txt[0] == "efftime / goaltime") &
+            (exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"] < hdr["MINTFRAC"])
+        ) | (
+                (txt[0] == "qa_efftime / goaltime") &
+                (hdr["EFFTIME"] / hdr["GOALTIME"] < hdr["MINTFRAC"])
         ):
             fontweight, col = "bold", "r"
         if (txt[0] == "n(z) / n_ref(z)") & (ratio_nz < 0.8):
