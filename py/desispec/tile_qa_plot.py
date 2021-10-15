@@ -9,9 +9,12 @@ import sys
 import subprocess
 from pkg_resources import resource_filename
 import yaml
+from glob import glob
 import tempfile
 from desitarget.targetmask import desi_mask, bgs_mask
 from desispec.maskbits import fibermask
+from desispec.io import read_fibermap
+from desispec.tsnr import tsnr2_to_efftime
 from astropy.table import Table
 from astropy.io import fits
 import fitsio
@@ -21,6 +24,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import matplotlib
 import matplotlib.image as mpimg
+
 
 # AR tile radius in degrees
 tile_radius_deg = 1.628
@@ -756,9 +760,99 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
     )
 
 
+def get_expids_efftimes(tileqafits, prod):
+    """
+    Get the EFFTIME and EFFTIMEQA for the EXPIDs from the coadd.
+
+    Args:
+        tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
+        prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
+
+    Returns:
+        structured array with the following keys:
+            EXPID, NIGHT, EFFTIME_SPEC, QA_EFFTIME_SPEC
+
+    Notes:
+        As this is run *before* desi_tsnr_afterburner, we compute here the
+            EFFTIME_SPEC values.
+        If no GOALTYPE in tileqafits header, we default to dark.
+        TBD: we purposely do not use TSNR2 keys from qa-params.yaml,
+            as those do not handle the TSNR2_ELG->TSNR2_LRG change from
+            2021 shutdown.
+            We use:
+            - dark before 20210901: TSNR2_ELG
+            - dark after 20210901: TSNR2_LRG
+            - bright: TSNR2_BGS
+            - backup: TSNR2_BGS
+            Method assessed against all Main exposures until 20211013 in daily tsnr-exposures.fits.
+    """
+    # AR GOALTYPE (defaulting to dark) + TSNR2 key
+    goaltype = "dark"
+    h = fits.open(tileqafits)
+    hdr = fits.getheader(tileqafits, "FIBERQA")
+    if "GOALTYPE" in [cards[0] for cards in hdr.cards]:
+        goaltype = hdr["GOALTYPE"].lower()
+    if goaltype in ["bright", "backup"]:
+        tsnr2_key = "TSNR2_BGS"
+    else:
+        if hdr["LASTNITE"] < 20210921:
+            tsnr2_key = "TSNR2_ELG"
+        else:
+            tsnr2_key = "TSNR2_LRG"
+
+    # AR get list of exposures used for the tile
+    tmpstr = os.path.join(
+        os.path.dirname(tileqafits),
+        "spectra-*-{}-thru{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
+    )
+    spectra_fns = sorted(glob(tmpstr))
+    if len(spectra_fns) > 0:
+        fmap = read_fibermap(spectra_fns[0])
+        expids, ii = np.unique(fmap["EXPID"], return_index=True)
+        nights = fmap["NIGHT"][ii]
+    else:
+        expids, nights = [], []
+    nexp = len(expids)
+
+    # AR looping on EXPIDS
+    d = Table()
+    d["EXPID"] = expids
+    d["NIGHT"] = nights
+    d["EFFTIME_SPEC"], d["QA_EFFTIME_SPEC"] = np.zeros(nexp), np.zeros(nexp)
+    for i in range(nexp):
+        # AR EFFTIME_SPEC, with looping on petals and cameras
+        tsnr2_petals = np.zeros(10)
+        for petal in range(10):
+            for camera in ["b", "r", "z"]:
+                tsnr2_key_cam = "{}_{}".format(tsnr2_key, camera.upper())
+                fn = os.path.join(
+                    prod,
+                    "exposures",
+                    "{}".format(nights[i]),
+                    "{:08d}".format(expids[i]),
+                    "cframe-{}{}-{:08d}.fits".format(camera, petal, expids[i]),
+                )
+                if os.path.isfile(fn):
+                    vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
+                    tsnr2_petals[petal] += np.median(vals[vals > 0])
+        d["EFFTIME_SPEC"][i] = tsnr2_to_efftime(tsnr2_petals[tsnr2_petals > 0].mean(), tsnr2_key.split("_")[-1])
+        # QA_EFFTIME_SPEC, reading exposure-qa*fits
+        fn = os.path.join(
+                            prod,
+                            "exposures",
+                            "{}".format(nights[i]),
+                            "{:08d}".format(expids[i]),
+                            "exposure-qa-{:08d}.fits".format(expids[i]),
+        )
+        if os.path.isfile(fn):
+            d["QA_EFFTIME_SPEC"][i] = fits.getheader(fn, "FIBERQA")["EFFTIME"]
+
+    return d
+
+
 def make_tile_qa_plot(
     tileqafits,
-    tsnrexpfits,
+    prod,
     pngoutfile=None,
     dchi2_min=None,
     tsnr2_key=None,
@@ -770,7 +864,7 @@ def make_tile_qa_plot(
 
     Args:
         tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
-        tsnrexpfits: path to the per-exposures tsnr fits file (e.g. tsnr-exposures.fits, exposures-everest.fits)
+        prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
 
     Options:
         pngoutfile: output filename; default to tileqafits .fits -> .png
@@ -811,14 +905,13 @@ def make_tile_qa_plot(
     gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2)
 
     # AR exposures from that TILEID
-    exps = Table.read(tsnrexpfits, hdu="EXPOSURES")
-    exps = exps[np.in1d(exps["TILEID"], hdr["TILEID"])]
-    xs = (0, 0.3, 0.6)
+    exps = get_expids_efftimes(tileqafits, prod)
+    xs = (-0.2, 0.1, 0.4, 0.7)
     y, dy = 0.95, -0.10
     fs = 10
     ax = plt.subplot(gs[0, 1])
     ax.axis("off")
-    txts = ["EXPID", "NIGHT", "EFFTIME"]
+    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME"]
     for x, txt in zip(xs, txts):
         ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
     y += 2 * dy
@@ -827,6 +920,7 @@ def make_tile_qa_plot(
             "{:08d}".format(exps["EXPID"][i]),
             "{}".format(exps["NIGHT"][i]),
             "{:.0f}s".format(exps["EFFTIME_SPEC"][i]),
+            "{:.0f}s".format(exps["QA_EFFTIME_SPEC"][i]),
         ]
         for x, txt in zip(xs, txts):
             ax.text(x, y, txt, fontsize=fs, transform=ax.transAxes)

@@ -52,7 +52,7 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def func(night,tileid,specprod_dir,exposure_qa_dir,tsnrexpfits,outfile=None) :
+def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
     """
     Wrapper function to compute_tile_qa for multiprocessing
     """
@@ -63,7 +63,7 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,tsnrexpfits,outfile=None) :
 
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
-    figfile = make_tile_qa_plot(outfile, tsnrexpfits)
+    figfile = make_tile_qa_plot(outfile, specprod_dir)
     if figfile is not None :
         log.info("wrote QA plot {}".format(figfile))
     else :
@@ -103,28 +103,6 @@ def main():
         tileids = parse_int_args(args.tileids)
     else:
         tileids = None
-
-    # AR path to:
-    # - tsnr-exposures.fits (daily)
-    # - or exposures-{}.fits (everest)
-    # - or tsnr-{prod}.fits (cascades, denali)
-    tsnrexpfits = os.path.join(args.prod, "tsnr-exposures.fits")
-    if os.path.isfile(tsnrexpfits):
-        log.info("tsnrexpfits = {}".format(tsnrexpfits))
-    else:
-        log.info("no {} ".format(tsnrexpfits))
-        tsnrexpfits = os.path.join(args.prod, "exposures-{}.fits".format(os.path.basename(args.prod)))
-        if os.path.isfile(tsnrexpfits):
-            log.info("tsnrexpfits = {}".format(tsnrexpfits))
-        else:
-            log.info("no {} ".format(tsnrexpfits))
-            tsnrexpfits = os.path.join(args.prod, "tsnr-{}.fits".format(os.path.basename(args.prod)))
-            if os.path.isfile(tsnrexpfits):
-                log.info("tsnrexpfits = {}".format(tsnrexpfits))
-            else:
-                log.info("no {} ".format(tsnrexpfits))
-                log.error("did not find a tsnrexpfits file; exiting")
-                sys.exit(1)
 
     dirnames = sorted(glob.glob('{}/exposures/????????'.format(args.prod)))
     nights=[]
