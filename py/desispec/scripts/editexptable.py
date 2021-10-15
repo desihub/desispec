@@ -246,7 +246,11 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
                 raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype}"+
                                   " without overwrite_value enabled. Exiting.")
         if include_comment != '' and 'COMMENTS' in colnames:
-            exptable['COMMENTS'][rownum] = np.append(exptable['COMMENTS'][rownum], include_comment)
+            comment_default = coldeflts[colnames=='COMMENTS'][0]
+            if exptable['COMMENTS'][rownum] == comment_default:
+                exptable['COMMENTS'][rownum] = np.array([str(include_comment)])
+            else:
+                exptable['COMMENTS'][rownum] = np.append(exptable['COMMENTS'][rownum], include_comment)
 
     return exptable
 
