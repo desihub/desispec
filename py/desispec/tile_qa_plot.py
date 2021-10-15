@@ -773,6 +773,8 @@ def get_expids_efftimes(tileqafits, prod):
             EXPID, NIGHT, EFFTIME_SPEC, QA_EFFTIME_SPEC
 
     Notes:
+        We work from the spectra-*fits files; if not present in the same folder
+            as tileqafits, we look into the expected path using prod.
         As this is run *before* desi_tsnr_afterburner, we compute here the
             EFFTIME_SPEC values.
         If no GOALTYPE in tileqafits header, we default to dark.
@@ -801,15 +803,28 @@ def get_expids_efftimes(tileqafits, prod):
             tsnr2_key = "TSNR2_LRG"
 
     # AR get list of exposures used for the tile
+    # AR first try spectra*fits files in the same folder as tileqafits
     tmpstr = os.path.join(
         os.path.dirname(tileqafits),
         "spectra-*-{}-thru{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
     )
     spectra_fns = sorted(glob(tmpstr))
+    # AR then try based on prod
+    if len(spectra_fns) == 0:
+        tmpstr = os.path.join(
+            prod,
+            "tiles",
+            "cumulative",
+            "{}".format(hdr["TILEID"]),
+            "{}".format(hdr["LASTNITE"]),
+            "spectra-*-{}-thru{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
+        )
+        spectra_fns = sorted(glob(tmpstr))
     if len(spectra_fns) > 0:
         fmap = read_fibermap(spectra_fns[0])
         expids, ii = np.unique(fmap["EXPID"], return_index=True)
         nights = fmap["NIGHT"][ii]
+    # AR then try based on prod
     else:
         expids, nights = [], []
     nexp = len(expids)
