@@ -470,9 +470,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     #- arc fits require more memory per core than Cori KNL has, so decrease ncores as needed
     if jobdesc.lower() == 'arc':
         while (batch_config['memory'] / (ncores/nodes)) < 2.0:
-            print("NCORES = ",ncores)
             ncores = (ncores - 1) // 2 + 1
-            print("NCORES = ",ncores)
             threads_per_core *= 2
 
     runtime_hh = int(runtime // 60)
