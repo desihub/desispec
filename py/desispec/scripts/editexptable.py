@@ -212,7 +212,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
     isarr = (cur_dtype in [list, np.array, np.ndarray])
 
-    if isstr and append_string:
+    if append_string and not isstr:
         raise ValueError(f"Told to append_string but {colname} isn't a string: {cur_dtype}")
     elif overwrite_value:
         print(f"Overwriting values in column: {colname} to '{value}' for exposures: {exposure_list}.")
