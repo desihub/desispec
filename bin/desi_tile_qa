@@ -151,7 +151,7 @@ def main():
                         entry[k]=r['value']
                     summary_rows.append(entry)
                     continue
-            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'tsnrexpfits':tsnrexpfits,'outfile':filename})
+            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename})
 
         if args.nproc == 1 :
             for func_arg in func_args :
