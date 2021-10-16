@@ -161,10 +161,12 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     colname = colname.upper()
     if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
-    if append_string and overwrite_value:
-        raise ValueError("Cannot append_string and overwrite_value.")
     if colname not in exptable.colnames:
         raise ValueError(f"Colname {colname} not in exposure table")
+    if append_string and colname in ['LASTSTEP', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTYPE']:
+        raise ValueError("Cannot append_string to LASTSTEP")
+    if append_string and overwrite_value:
+        raise ValueError("Cannot append_string and overwrite_value.")
 
     ## Parse the exposure numbers
     exposure_list = parse_int_list(exp_str, allints=exptable['EXPID'].data, only_unique=True)
@@ -222,7 +224,6 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
         print(f"Appending {value} to arrays in column: {colname} for exposures: {exposure_list}.")
     else:
         print(f"Changing default values in column: {colname} to '{value}' for exposures: {exposure_list}.")
-
 
     for rownum in row_numbers:
         if colname == 'BADCAMWORD' and exptable[colname][rownum] != cur_default and append_string:
@@ -296,6 +297,8 @@ def edit_exposure_table(exp_str, colname, value, night=None, include_comment='',
         raise ValueError("Must specify night or the path to the table.")
     if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
+    if append_string and colname in ['LASTSTEP', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTYPE']:
+        raise ValueError("Cannot append_string to LASTSTEP")
     if append_string and overwrite_value:
         raise ValueError("Cannot append_string and overwrite_value.")
 
