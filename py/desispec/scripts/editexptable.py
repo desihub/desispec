@@ -164,7 +164,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     if colname not in exptable.colnames:
         raise ValueError(f"Colname {colname} not in exposure table")
     if append_string and colname in ['LASTSTEP', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTYPE']:
-        raise ValueError("Cannot append_string to LASTSTEP")
+        raise ValueError(f"Cannot append_string to {colname}")
     if append_string and overwrite_value:
         raise ValueError("Cannot append_string and overwrite_value.")
 
@@ -298,7 +298,7 @@ def edit_exposure_table(exp_str, colname, value, night=None, include_comment='',
     if colname in columns_not_to_edit():
         raise ValueError(f"Not allowed to edit colname={colname}.")
     if append_string and colname in ['LASTSTEP', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTYPE']:
-        raise ValueError("Cannot append_string to LASTSTEP")
+        raise ValueError(f"Cannot append_string to {colname}")
     if append_string and overwrite_value:
         raise ValueError("Cannot append_string and overwrite_value.")
 
