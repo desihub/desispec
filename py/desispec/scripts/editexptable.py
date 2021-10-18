@@ -193,8 +193,8 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
         ## Make sure we can understand the cameras given
         value = parse_cameras(value)
         ## If appending camwords, let's convert to camera list only once to save computation
-        if append_value:
-            cam_vals = decode_camword(value)
+        if append_string:
+            value_as_camlist = decode_camword(value)
 
     ## Inform user on whether reporting will be done
     if colname in columns_not_to_report():
@@ -228,20 +228,20 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     for rownum in row_numbers:
         if colname == 'BADCAMWORD' and exptable[colname][rownum] != cur_default and append_string:
             curcams = decode_camword(exptable[colname][rownum])
-            if len(set(curcams).difference(set(cam_vals))) == 0:
-                print((f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}" +
-                       " but all bad cameras are already present. Skipping and not commenting."))
+            if len(set(curcams).difference(set(value_as_camlist))) == 0:
+                print(f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}" +
+                       " but all bad cameras are already present. Skipping and not commenting.")
                 continue
             else:
-                combinedcams = list(set(curcams.extend(cam_vals)))
+                combinedcams = list(set(curcams.extend(value_as_camlist)))
                 exptable[colname][rownum] = create_camword(combinedcams)
         elif isstr and append_string and exptable[colname][rownum] != cur_default:
             curlist = exptable[colname][rownum].split(joinsymb)
             vallist = value.split(joinsymb)
             newvals = list(set(vallist).difference(set(curlist)))
             if len(newvals) == 0:
-                print((f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}"+
-                        " but all badamps are already present. Skipping and not commenting."))
+                print(f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}"+
+                        " but all badamps are already present. Skipping and not commenting.")
                 continue
             else:
                 fulllist = curlist.copy()
