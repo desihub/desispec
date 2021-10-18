@@ -87,7 +87,7 @@ def columns_not_to_edit():
     ## that even though it typically shouldn't be edited if the data is there
     return ['EXPID', 'CAMWORD', 'OBSTYPE']
 
-def validate_value(colname, value):
+def validate_value(colname, value, joinsymb):
     """
     Checks that the value provided matches the syntax of the colname given. If the syntax is incorrect
     an error is raised.
@@ -123,6 +123,13 @@ def validate_value(colname, value):
         value = value.lower()
         if value not in options:
             raise ValueError(f"Couldn't understand laststep: {value}. Available options are: {options}.")
+    elif joinsymb in value:
+        print(f"WARNING: For colname {colname} you provided a value '{value}' that contains the default"+
+              f" joinsymbol={joinsymb}. This is allowed, but use at your own caution. Continuing...")
+    elif '|' in value:
+        print(f"WARNING: For colname {colname} you provided a value '{value}' that contains the default"+
+              " indicator of an array string in the exposure tables (the 'pipe' i.e. '|'."+
+              " This is allowed, but use at your own caution. Continuing...")
     else:
         ## Otherwise we don't have a strict syntax, so pass it
         pass
@@ -222,7 +229,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
 
     ## Make sure the value will work
     ## (returns as is if fine, corrects syntax if it can, or raises an error if it can't)
-    value = validate_value(colname, value)
+    value = validate_value(colname, value, joinsymb)
 
     ## If appending camwords, let's convert to camera list only once to save computation
     if colname == 'BADCAMWORD' and append_string:
