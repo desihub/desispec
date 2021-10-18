@@ -275,7 +275,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
                 curcams.extend(value_as_camlist)
                 combinedcams = list(set(curcams))
                 exptable[colname][rownum] = create_camword(combinedcams)
-        elif isstr and append_string and exptable[colname][rownum] != cur_default:
+        elif colname == 'BADAMPS' and append_string and exptable[colname][rownum] != cur_default:
             curamps = exptable[colname][rownum].split(joinsymb)
             value_as_amplist = value.split(joinsymb)
             newvals = list(set(value_as_amplist).difference(set(curamps)))
@@ -286,6 +286,8 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
             else:
                 curamps.extend(newvals)
                 exptable[colname][rownum] = joinsymb.join(curamps)
+        elif isstr and append_string and exptable[colname][rownum] != cur_default:
+            exptable[colname][rownum] += f'{joinsymb}{value}'
         elif isarr:
             if overwrite_value and len(exptable[colname][rownum])>0:
                 exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
