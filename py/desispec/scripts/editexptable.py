@@ -1,6 +1,6 @@
 
 from desispec.workflow.exptable import get_exposure_table_name,get_exposure_table_path, \
-                                       get_exposure_flags, get_exposure_table_column_defs, \
+                                       get_exposure_flags, get_last_step_options, get_exposure_table_column_defs, \
                                        keyval_change_reporting, deconstruct_keyval_reporting
 from desispec.workflow.tableio import load_table, write_table
 from desispec.workflow.utils import pathjoin
@@ -86,6 +86,47 @@ def columns_not_to_edit():
     ## Occasionally unchanging things like NIGHT or TILEID have been missing in the headers, so we won't restrict
     ## that even though it typically shouldn't be edited if the data is there
     return ['EXPID', 'CAMWORD', 'OBSTYPE']
+
+def validate_value(colname, value):
+    """
+    Checks that the value provided matches the syntax of the colname given. If the syntax is incorrect
+    an error is raised.
+
+    Warning: may change the value of "value" and returns it.
+
+    Args:
+        colname, str. The name of the column that is being edited.
+        value, any scalar type. The value that the column's current value should be changed to.
+
+    Returns:
+        value, any scalar type. The value that the column's current value should be changed to. This is verified to
+                                have the proper syntax for the colname given.
+
+    """
+    ## Match data type and convert where necessary
+    if colname == 'EXPFLAG':
+        ## Make sure the exposure flag is a valid one
+        expflags = get_exposure_flags()
+        value = value.lower().replace(' ','_')
+        if value not in expflags:
+            raise ValueError(f"Couldn't understand exposure flag: {value}. Available options are: {expflags}.")
+    elif colname == 'BADAMPS':
+        ## Make sure we can decode the badamp value (or easily correct it so we can decode it)
+        ## This raises an error if it can't be converted to a viable list
+        value = validate_badamps(value, joinsymb=joinsymb)
+    elif colname == 'BADCAMWORD':
+        ## Make sure we can understand the cameras given
+        ## This raises an error if it cant be parsed
+        value = parse_cameras(value)
+    elif colname == 'LASTSTEP':
+        options = get_last_step_options()
+        value = value.lower()
+        if value not in options:
+            raise ValueError(f"Couldn't understand laststep: {value}. Available options are: {options}.")
+    else:
+        ## Otherwise we don't have a strict syntax, so pass it
+        pass
+    return value
 
 def document_in_comments(tablerow,colname,value,comment_col='HEADERERR'):
     """
@@ -179,22 +220,13 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
             row_numbers.append(rownum[0])
     row_numbers = np.asarray(row_numbers)
 
-    ## Match data type and convert where necessary
-    if colname == 'EXPFLAG':
-        ## Make sure the exposure flag is a valid one
-        expflags = get_exposure_flags()
-        value = value.lower().replace(' ','_')
-        if value not in expflags:
-            raise ValueError(f"Couldn't understand exposure flag: {value}")
-    elif colname == 'BADAMPS':
-        ## Make sure we can decode the badamp value (or easily correct it so we can decode it)
-        value = validate_badamps(value, joinsymb=joinsymb)
-    elif colname == 'BADCAMWORD':
-        ## Make sure we can understand the cameras given
-        value = parse_cameras(value)
-        ## If appending camwords, let's convert to camera list only once to save computation
-        if append_string:
-            value_as_camlist = decode_camword(value)
+    ## Make sure the value will work
+    ## (returns as is if fine, corrects syntax if it can, or raises an error if it can't)
+    value = validate_value(colname, value)
+
+    ## If appending camwords, let's convert to camera list only once to save computation
+    if colname == 'BADCAMWORD' and append_string:
+        value_as_camlist = decode_camword(value)
 
     ## Inform user on whether reporting will be done
     if colname in columns_not_to_report():
