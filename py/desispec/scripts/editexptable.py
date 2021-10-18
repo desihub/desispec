@@ -109,7 +109,7 @@ def validate_value(colname, value, joinsymb):
         expflags = get_exposure_flags()
         value = value.lower().replace(' ','_')
         if value not in expflags:
-            raise ValueError(f"Couldn't understand exposure flag: {value}. Available options are: {expflags}.")
+            raise ValueError(f"Couldn't understand exposure flag: '{value}'. Available options are: {expflags}.")
     elif colname == 'BADAMPS':
         ## Make sure we can decode the badamp value (or easily correct it so we can decode it)
         ## This raises an error if it can't be converted to a viable list
@@ -122,10 +122,10 @@ def validate_value(colname, value, joinsymb):
         options = get_last_step_options()
         value = value.lower()
         if value not in options:
-            raise ValueError(f"Couldn't understand laststep: {value}. Available options are: {options}.")
+            raise ValueError(f"Couldn't understand laststep: '{value}'. Available options are: {options}.")
     elif joinsymb in value:
         print(f"WARNING: For colname {colname} you provided a value '{value}' that contains the default"+
-              f" joinsymbol={joinsymb}. This is allowed, but use at your own caution. Continuing...")
+              f" joinsymbol='{joinsymb}'. This is allowed, but use at your own caution. Continuing...")
     elif '|' in value:
         print(f"WARNING: For colname {colname} you provided a value '{value}' that contains the default"+
               " indicator of an array string in the exposure tables (the 'pipe' i.e. '|'."+
@@ -268,7 +268,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
         if colname == 'BADCAMWORD' and exptable[colname][rownum] != cur_default and append_string:
             curcams = decode_camword(exptable[colname][rownum])
             if len(set(value_as_camlist).difference(set(curcams))) == 0:
-                print(f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}" +
+                print(f"For exposure: {exp}. Asked to append '{value}' to '{exptable[colname][rownum]}'" +
                        " but all bad cameras are already present. Skipping and not commenting.")
                 continue
             else:
@@ -280,7 +280,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
             value_as_amplist = value.split(joinsymb)
             newvals = list(set(value_as_amplist).difference(set(curamps)))
             if len(newvals) == 0:
-                print(f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}"+
+                print(f"For exposure: {exp}. Asked to append '{value}' to '{exptable[colname][rownum]}'"+
                         " but all badamps are already present. Skipping and not commenting.")
                 continue
             else:
