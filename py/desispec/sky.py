@@ -535,12 +535,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                     line += " dlsf mean={:4.3f} rms={:4.3f} A".format(np.mean(interpolated_sky_dlsf[i]),np.std(interpolated_sky_dlsf[i]))
                 print(line)
 
-        # now median filtering across fibers to mitigate the bias induced by the target fluxes
-        # (the systematic effect to correct is preserved because it is localized in the CCD and correlated between neighboring fibers)
-        nfibers_for_filter=10 # this number is a bit arbitrary/empirical.
-        interpolated_sky_scale = scipy.ndimage.filters.median_filter(interpolated_sky_scale,(nfibers_for_filter,1))
-        cskyflux = interpolated_sky_scale*cskyflux
-
+        # we ignore the interpolated_sky_scale which is too sensitive
+        # to CCD defects or cosmic rays
 
         if pcacorr is None :
             if only_use_skyfibers_for_adjustments :
