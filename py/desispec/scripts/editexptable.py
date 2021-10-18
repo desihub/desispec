@@ -228,10 +228,23 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     for rownum in row_numbers:
         if colname == 'BADCAMWORD' and exptable[colname][rownum] != cur_default and append_string:
             curcams = decode_camword(exptable[colname][rownum])
-            combinedcams = list(set(curcams.extend(cam_vals)))
-            exptable[colname][rownum] = create_camword(combinedcams)
+            if len(set(curcams).difference(set(cam_vals))) == 0:
+                print((f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}" +
+                       " but all bad cameras are already present. Skipping."))
+            else:
+                combinedcams = list(set(curcams.extend(cam_vals)))
+                exptable[colname][rownum] = create_camword(combinedcams)
         elif isstr and append_string and exptable[colname][rownum] != cur_default:
-            exptable[colname][rownum] += f'{joinsymb}{value}'
+            curlist = exptable[colname][rownum].split(joinsymb)
+            vallist = value.split(joinsymb)
+            newvals = list(set(vallist).difference(set(curlist)))
+            if len(newvals) == 0:
+                print((f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}"+
+                        " but all badamps are already present. Skipping."))
+            else:
+                fulllist = curlist.copy()
+                fulllist.extend(newvals)
+                exptable[colname][rownum] = joinsymb.join(fulllist)
         elif isarr:
             if overwrite_value and len(exptable[colname][rownum])>0:
                 exptable[rownum] = document_in_comments(exptable[rownum],colname,value)
