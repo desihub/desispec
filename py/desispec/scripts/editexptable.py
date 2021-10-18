@@ -230,7 +230,8 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
             curcams = decode_camword(exptable[colname][rownum])
             if len(set(curcams).difference(set(cam_vals))) == 0:
                 print((f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}" +
-                       " but all bad cameras are already present. Skipping."))
+                       " but all bad cameras are already present. Skipping and not commenting."))
+                continue
             else:
                 combinedcams = list(set(curcams.extend(cam_vals)))
                 exptable[colname][rownum] = create_camword(combinedcams)
@@ -240,7 +241,8 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
             newvals = list(set(vallist).difference(set(curlist)))
             if len(newvals) == 0:
                 print((f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}"+
-                        " but all badamps are already present. Skipping."))
+                        " but all badamps are already present. Skipping and not commenting."))
+                continue
             else:
                 fulllist = curlist.copy()
                 fulllist.extend(newvals)
