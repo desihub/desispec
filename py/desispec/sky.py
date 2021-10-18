@@ -465,7 +465,6 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
         # interpolated values across peaks, after selection
         # based on precision and chi2
-        interpolated_sky_scale=np.ones(frame.flux.shape)
         interpolated_sky_dwave=np.zeros(frame.flux.shape)
         interpolated_sky_dlsf=np.zeros(frame.flux.shape)
 
@@ -522,13 +521,11 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             # piece-wise linear interpolate across the whole spectrum between the sky line peaks
             # this interpolation will be used to alter the whole sky spectrum
             if np.sum(ok)>0 :
-                interpolated_sky_scale[i]=np.interp(frame.wave,peak_wave[ok],peak_scale[i,ok])
                 if adjust_wavelength :
                     interpolated_sky_dwave[i]=np.interp(frame.wave,peak_wave[ok],peak_dw[i,ok])
                 if adjust_lsf :
                     interpolated_sky_dlsf[i]=np.interp(frame.wave,peak_wave[ok],peak_dlsf[i,ok])
-
-                line="fiber #{:03d} scale mean={:4.3f} rms={:4.3f}".format(i,np.mean(interpolated_sky_scale[i]),np.std(interpolated_sky_scale[i]))
+                line=""
                 if adjust_wavelength :
                     line += " dlambda mean={:4.3f} rms={:4.3f} A".format(np.mean(interpolated_sky_dwave[i]),np.std(interpolated_sky_dwave[i]))
                 if adjust_lsf :
