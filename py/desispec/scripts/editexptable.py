@@ -228,7 +228,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     for rownum in row_numbers:
         if colname == 'BADCAMWORD' and exptable[colname][rownum] != cur_default and append_string:
             curcams = decode_camword(exptable[colname][rownum])
-            if len(set(curcams).difference(set(value_as_camlist))) == 0:
+            if len(set(value_as_camlist).difference(set(curcams))) == 0:
                 print(f"For exposure: {exp}. Asked to append {value} to {exptable[colname][rownum]}" +
                        " but all bad cameras are already present. Skipping and not commenting.")
                 continue
