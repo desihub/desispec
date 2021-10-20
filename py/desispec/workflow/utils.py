@@ -214,3 +214,22 @@ def get_printable_banner(input_str=None):
              '\n' + '#'*nshort1 + f' {input_str} ' + '#'*nshort2 + \
              '\n' + '#'*nhash
     return banner
+
+def sleep_and_report(sleep_duration, message_suffix="", logfunc=print, dry_run=False):
+    """
+    Sleeps for the given number of seconds, printing a message before and afterward
+
+    Args:
+        sleep_duration: int or float. Number of seconds for the process to sleep.
+        message_suffix: str. The message to be printed after "Sleeping XXs (suffix)" prior to sleeping.
+        logfunc: func. Default is print. The function used to serve the message to the user.
+        dry_run: bool. Default is False. Whether to perform the action (dry_run=False) or pretend (True).
+    """
+    message = f"Sleeping {sleep_duration}s {message_suffix}"
+    if dry_run:
+        logfunc(f"Dry run, sleeping 1s instead of: '{message}'")
+        time.sleep(1)
+    else:
+        logfunc(message)
+        time.sleep(sleep_duration)
+        logfunc(f"Resuming...")
