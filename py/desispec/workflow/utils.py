@@ -2,6 +2,7 @@
 
 import os
 import time
+import sys
 import numpy as np
 import glob
 import json
@@ -228,9 +229,11 @@ def sleep_and_report(sleep_duration, message_suffix="", logfunc=print, dry_run=F
     """
     message = f"Sleeping {sleep_duration}s {message_suffix}"
     if dry_run:
-        logfunc(f"Dry run, sleeping 1s instead of: '{message}'")
+        logfunc(f"\n\nDry run, sleeping 1s instead of: '{message}'\n\n")
         time.sleep(1)
     else:
-        logfunc(message)
+        logfunc(f"\n\n{message}")
+        if sleep_duration > 10:
+            sys.stdout.flush()
         time.sleep(sleep_duration)
-        logfunc(f"Resuming...")
+        logfunc(f"Resuming...\n\n")
