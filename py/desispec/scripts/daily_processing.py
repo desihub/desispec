@@ -298,6 +298,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             etable.add_row(erow)
             if unproc:
                 unproc_table.add_row(erow)
+                time.sleep(2 * speed_modifier)
+                write_tables([etable, unproc_table], tablenames=[exp_table_pathname, unproc_table_pathname])
                 continue
 
             curtype,curtile = get_type_and_tile(erow)
@@ -338,8 +340,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sys.stderr.flush()
 
             time.sleep(10*speed_modifier)
-            write_tables([etable, ptable, unproc_table],
-                         tablenames=[exp_table_pathname, proc_table_pathname, unproc_table_pathname])
+            write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
 
         print("\nReached the end of curent iteration of new exposures.")
         print("Waiting {}s before looking for more new data".format(data_cadence_time*speed_modifier))
