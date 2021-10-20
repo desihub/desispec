@@ -231,6 +231,16 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         if mask is not None:
             mask = mask[0:nspec]
 
+    # replace any values masked with 'N...' in fibermap with empty string
+    if fibermap is not None:
+        for name in fibermap.dtype.names:
+            col=fibermap[name]
+            if(col.dtype.type is np.str_
+               and isinstance(col,np.ma.MaskedArray)
+               and col.fill_value[0]=='N'):
+                col.fill_value=''
+                fibermap[name]=col.filled()
+
     # return flux,ivar,wave,resolution_data, hdr
     frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix,
                   scores=scores,scores_comments=scores_comments,
