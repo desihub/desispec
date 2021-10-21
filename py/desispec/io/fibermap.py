@@ -405,6 +405,10 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
             if fa1[col].dtype.kind == 'f':
                 match |= (np.isnan(fa1[col]) & np.isnan(fa2[col]))
 
+            #- negative TARGETID are allowed to mismatch if both are negative
+            if col == 'TARGETID':
+                match |= ((fa1[col]<0) & (fa2[col]<0))
+
             if np.any(~match):
                 badcol.append(col)
 

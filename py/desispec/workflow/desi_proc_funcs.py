@@ -467,10 +467,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
-    #- arc fits require more memory per core than Cori KNL has, so increase nodes as needed
+    #- arc fits require more memory per core than Cori KNL has, so decrease ncores as needed
     if jobdesc.lower() == 'arc':
         while (batch_config['memory'] / (ncores/nodes)) < 2.0:
-            nodes *= 2
+            ncores = (ncores - 1) // 2 + 1
             threads_per_core *= 2
 
     runtime_hh = int(runtime // 60)
@@ -533,6 +533,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         fx.write('echo Starting at $(date)\n')
 
+        fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
+        
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             fx.write('\n# Do steps at full MPI parallelism\n')
             srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
