@@ -24,6 +24,7 @@ from desispec.tile_qa_plot import (
     get_qa_badmsks,
 )
 import matplotlib.pyplot as plt
+from desiutil.log import get_logger
 
 
 def parse(options=None):
@@ -41,10 +42,19 @@ def parse(options=None):
     args = parser.parse_args()
     return args
 
+def get_prog_pass0(tileids, program):
+    """
+    Identifies tileids from PASS=0 for a given program (DARK, BRIGHT).
+    Purposely not cutting on IN_DESI, as this can evolve with time, if a tile gets discarded.
+    """
+    tiles = Table.read(os.path.join(os.getenv("DESI_ROOT"), "survey", "ops", "surveyops", "trunk", "ops", "tiles-main.ecsv")) 
+    sel = (tiles["PASS"] == 0) & (tiles["PROGRAM"] == program.upper())
+    return np.in1d(tileids, tiles["TILEID"][sel])
 
 def main():
 
     args = parse()
+    log = get_logger()
 
     # AR outdir
     if args.outdir is None:
@@ -55,13 +65,16 @@ def main():
     outroot_tsnr2 = os.path.join(args.outdir, "qa-reference-tsnr2")
 
     # AR input files
+    # AR in the analysis below, we restrict to PASS=0, i.e. not overlapping tiles (statement true for everest)
+    # AR i.e. we discard ~4% of the tiles
+    # AR so that we are sure the n(z) are not biased because of re-obs decision (though that should be marginal)
     infns = {
-        "DARK": "{}/survey/catalogs/main/LSS/datcomb_dark_spec_premtlup.fits".format(
-            os.getenv("DESI_ROOT")
-        ),
-        "BRIGHT": "{}/survey/catalogs/main/LSS/datcomb_bright_spec_premtlup.fits".format(
-            os.getenv("DESI_ROOT")
-        ),
+        prog : os.path.join(
+            os.getenv("DESI_ROOT"), "spectro", "redux", "everest", "zcatalog", "ztile-main-{}-cumulative.fits".format(
+                prog.lower(),
+            )
+        )
+        for prog in ["DARK", "BRIGHT"]
     }
 
     # AR config params
@@ -97,19 +110,24 @@ def main():
     for tracer in tracers:
 
         program = config["tile_qa_plot"]["tracers"][tracer]["program"]
-        d = Table.read(infns[program])
+        d = Table.read(infns[program], hdu="ZCATALOG")
+        sel = get_prog_pass0(d["TILEID"], program)
+        log.info("nz {} : cutting on PASS=0, keeping {:.1f}% of the data".format(
+                program, 100 * sel.mean(),
+            )
+        )
+        d = d[sel]
 
         # AR first/last night
-        # AR (not fully correct, as NIGHT here is from the first
-        # AR    500 rows of each redrock file; but ok for our purpose)
-        if d["NIGHT"].min() < nightmin:
-            nightmin = d["NIGHT"].min()
-        if d["NIGHT"].max() > nightmax:
-            nightmax = d["NIGHT"].max()
+        nights = np.unique(Table.read(infns[program], hdu="EXP_FIBERMAP")["NIGHT"])
+        if nights[0] < nightmin:
+            nightmin = nights[0]
+        if nights[-1] > nightmax:
+            nightmax = nights[-1]
 
         # AR making hist for each TILEID
         tileids = np.unique(d["TILEID"])
-        _, zhists = get_zhists(tileids, tracer, dchi2_min, d, fstatus_key="FIBERSTATUS", tileid_key="TILEID")
+        _, zhists = get_zhists(tileids, tracer, dchi2_min, d, fstatus_key="COADD_FIBERSTATUS", tileid_key="TILEID")
 
         # AR compressing stats for all TILEIDs
         sel = nz["TRACER"] == tracer
@@ -150,9 +168,14 @@ def main():
     #
     for program in ["BRIGHT", "DARK"]:
 
-        # AR TSNR2: reading (cutting on FIBERSTATUS)
-        d = Table.read(infns[program])
-        sel = (d["FIBERSTATUS"] & badqa_val) == 0
+        # AR TSNR2: reading (cutting on COADD_FIBERSTATUS and PASS=0)
+        d = Table.read(infns[program], hdu="ZCATALOG")
+        sel = (d["COADD_FIBERSTATUS"] & badqa_val) == 0
+        sel &= get_prog_pass0(d["TILEID"], program)
+        log.info("TSNR2 {} : cutting on COADD_FIBERSTATUS=0 and PASS=0, keeping {:.1f}% of the data".format(
+                program, 100 * sel.mean(),
+            )
+        )
         d = d[sel]
 
         # AR TNR2_LRG: populating
@@ -204,8 +227,8 @@ def main():
 
     # AR TSNR2: writing to ecsv
     hdr = fitsio.FITSHDR()
-    hdr["NIGHTMIN"] = d["NIGHT"].min()
-    hdr["NIGHTMAX"] = d["NIGHT"].max()
+    hdr["NIGHTMIN"] = nightmin
+    hdr["NIGHTMAX"] = nightmax
     tsnr2.meta = dict(hdr)
     tsnr2.write("{}.ecsv".format(outroot_tsnr2), format="ascii.ecsv", overwrite=True)
 
@@ -221,7 +244,7 @@ def main():
             )
             ax.set_title(
                 "PROGRAM={}\nNIGHTMIN={} , NIGHTMAX={}".format(
-                    program, d["NIGHT"].min(), d["NIGHT"].max()
+                    program, nightmin, nightmax,
                 )
             )
             ax.set_xlabel("FIBERASSIGN_X [mm]")
