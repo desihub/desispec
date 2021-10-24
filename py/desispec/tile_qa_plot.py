@@ -1019,16 +1019,19 @@ def make_tile_qa_plot(
 
     # AR Z vs. FIBER plot
     ax = plt.subplot(gs[0:2, 3])
-    xlim, ylim = (-100, 5100), (0, 7)
+    xlim, ylim = (-100, 5100), (-1.1, 1.1)
+    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6])
     sels = [fiberqa["QAFIBERSTATUS"] == 0, fiberqa["QAFIBERSTATUS"] > 0]
     labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0"]
     cs = ["r", "b"]
     for sel, label, c in zip(sels, labels, cs):
-        ax.scatter(fiberqa["FIBER"][sel], fiberqa["Z"][sel], s=0.1, c=c, alpha=1.0, label="{} ({} fibers)".format(label, sel.sum()))
+        ax.scatter(fiberqa["FIBER"][sel], np.log10(0.1 + fiberqa["Z"][sel]), s=0.1, c=c, alpha=1.0, label="{} ({} fibers)".format(label, sel.sum()))
     ax.set_xlabel("FIBER")
     ax.set_ylabel("Z")
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
+    ax.set_yticks(np.log10(0.1 + yticks))
+    ax.set_yticklabels(yticks.astype(str))
     ax.grid(True)
     ax.legend(loc=2, markerscale=10, fontsize=10)
 
