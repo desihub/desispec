@@ -19,10 +19,11 @@ from desispec.calibfinder import CalibFinder
 from desispec.darktrail import correct_dark_trail
 from desispec.scatteredlight import model_scattered_light
 from desispec.io.xytraceset import read_xytraceset
-from desispec.io import read_fiberflat, shorten_filename
+from desispec.io import read_fiberflat, shorten_filename, findfile
 from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
+from desispec.util import header2night
 
 # log = get_logger()
 
@@ -42,7 +43,6 @@ def get_amp_ids(header):
         raise KeyError(message)
 
     return amp_ids
-
 
 def _parse_sec_keyword(value):
     log = get_logger()
@@ -70,9 +70,6 @@ def parse_sec_keyword(value):
 
     return np.s_[ymin-1:ymax, xmin-1:xmax]
 
-def hello() :
-    print("hello")
-
 def _clipped_std_bias(nsigma):
     '''
     Returns the bias on the standard deviation of a sigma-clipped dataset
@@ -91,6 +88,12 @@ def _clipped_std_bias(nsigma):
     return stdbias
 
 def _overscan(pix, nsigma=5, niter=3):
+    """DEPRECATED: See calc_overscan"""
+    log = get_logger()
+    log.warning('_overscan is deprecated; please use calc_overscan')
+    return calc_overscan(pix, nsigma=nsigma, niter=niter)
+
+def calc_overscan(pix, nsigma=5, niter=3):
     """
     Calculates overscan, readnoise from overscan image pixels
 
@@ -131,6 +134,33 @@ def _overscan(pix, nsigma=5, niter=3):
 
     return overscan, readnoise
 
+def subtract_peramp_overscan(image, hdr):
+    """Subtract per-amp overscan using BIASSEC* keywords
+
+    Args:
+        image: 2D image array, modified in-place
+        hdr: FITS header with BIASSEC[ABCD] or BIASSEC[1234] keywords
+
+    Note: currently used in desispec.ccdcalib.compute_bias_file to model
+    bias image, but not preproc itself (which subtracts that bias, and
+    has more complex support for row-by-row, col-overscan, etc.)
+    """
+    amp_ids = get_amp_ids(hdr)
+    n0=image.shape[0]//2
+    n1=image.shape[1]//2
+
+    for a,amp in enumerate(amp_ids) :
+        ii = parse_sec_keyword(hdr['BIASSEC'+amp])
+        overscan_image = image[ii].copy()
+        overscan,rdnoise = calc_overscan(overscan_image)
+        if ii[0].start < n0 and ii[1].start < n1 :
+            image[:n0,:n1] -= overscan
+        elif ii[0].start < n0 and ii[1].start >= n1 :
+            image[:n0,n1:] -= overscan
+        elif ii[0].start >= n0 and ii[1].start < n1 :
+            image[n0:,:n1] -= overscan
+        elif ii[0].start >= n0 and ii[1].start >= n1 :
+            image[n0:,n1:] -= overscan
 
 def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
     """
@@ -306,6 +336,9 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
 
     returns:
        2D numpy array with calibration image
+
+    For the case of keyword='BIAS', check for nightly bias before using
+    default bias in $DESI_SPECTRO_CALIB
     """
     log=get_logger()
 
@@ -321,15 +354,30 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
     filename = None
     if entry is True :
         # we have to find the filename
-        if cfinder is None :
-            log.error("no calibration data was found")
-            raise ValueError("no calibration data was found")
-        if cfinder.haskey(keyword) :
-            filename = cfinder.findfile(keyword)
-            depend.setdep(header, calkey, shorten_filename(filename))
-        else :
-            depend.setdep(header, calkey, 'None')
-            return False # we say in the calibration data we don't need this
+
+        if keyword.upper() == 'BIAS':
+            # try biasnight first
+            night = header2night(header)
+            expid = header['EXPID']
+            camera = header['CAMERA'].lower()
+            biasnight = findfile('biasnight', night, expid, camera)
+            if os.path.exists(biasnight):
+                log.info(f'Using {night} nightly bias for {expid} {camera}')
+                filename = biasnight
+            else:
+                log.warning(f'{night} nightly bias not found; using default bias for {expid} {camera}')
+
+        if filename is None:
+            if cfinder is None :
+                log.error("no calibration data was found")
+                raise ValueError("no calibration data was found")
+            if cfinder.haskey(keyword) :
+                filename = cfinder.findfile(keyword)
+                depend.setdep(header, calkey, shorten_filename(filename))
+            else :
+                depend.setdep(header, calkey, 'None')
+                return False # we say in the calibration data we don't need this
+
     elif isinstance(entry,str) :
         filename = entry
         depend.setdep(header, calkey, shorten_filename(filename))
@@ -447,10 +495,28 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     if ccd_calibration_filename is not False:
         cfinder = CalibFinder([header, primary_header], yaml_file=ccd_calibration_filename)
 
-    #- TODO: Check for required keywords first
+    #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
+    amp_ids = get_amp_ids(header)
+
+    #- Double check that we have the necessary keywords
+    missing_keywords = list()
+    for key in ['CAMERA', 'EXPID']:
+        if key not in header:
+            missing_keywords.append(key)
+
+    for prefix in ['CCDSEC', 'BIASSEC']:
+        for amp in amp_ids :
+            key = prefix+amp
+            if not key in header :
+                log.error('No {} keyword in header'.format(key))
+                missing_keywords.append(key)
+
+    if len(missing_keywords) > 0:
+        raise KeyError("Missing keywords {}".format(' '.join(missing_keywords)))
+
+    camera = header['CAMERA'].lower()
 
     #- Subtract bias image
-    camera = header['CAMERA'].lower()
 
     #- convert rawimage to float64 : this is the output format of read_image
     rawimage = rawimage.astype(np.float64)
@@ -463,24 +529,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     # Set bias image, as desired
     if bias_img is None:
+        #- will try biasnight first, then default bias
         bias = get_calibration_image(cfinder,"BIAS",bias,header)
     else:
         bias = bias_img
-
-    #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
-    amp_ids = get_amp_ids(header)
-    #- Double check that we have the necessary keywords
-    missing_keywords = list()
-    for prefix in ['CCDSEC', 'BIASSEC']:
-        for amp in amp_ids :
-            key = prefix+amp
-            if not key in header :
-                log.error('No {} keyword in header'.format(key))
-                missing_keywords.append(key)
-
-    if len(missing_keywords) > 0:
-        raise KeyError("Missing keywords {}".format(' '.join(missing_keywords)))
-
 
     #- Output arrays
     ny=0
@@ -599,7 +651,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             # Remove overscan_col from overscan_row
             raw_overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
             for row in range(raw_overscan_row.shape[0]):
-                o,r = _overscan(raw_overscan_squared[row])
+                o,r = calc_overscan(raw_overscan_squared[row])
                 overscan_row[row] = raw_overscan_row[row] - o
 
         # Now remove the overscan_col
@@ -613,13 +665,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 if np.isnan(np.sum(overscan_col[j])) :
                     log.warning("NaN values in row %d of overscan of amplifier %s of camera %s"%(j,amp,camera))
                     continue
-                o,r =  _overscan(raw_overscan_col[j])
+                o,r =  calc_overscan(raw_overscan_col[j])
                 #log.info("%d %f %f"%(j,o,r))
                 overscan_col[j]=o
                 rdnoise[j]=r
         else :
             log.info("Subtracting average overscan for amplifier %s of camera %s"%(amp,camera))
-            o,r =  _overscan(raw_overscan_col)
+            o,r =  calc_overscan(raw_overscan_col)
             overscan_col += o
             rdnoise  += r
             if bias is not False :
@@ -628,8 +680,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 # so we only need to add the quadratic difference of the master bias read noise
                 # between the active region and the overscan columns
                 jj = parse_sec_keyword(header['DATASEC'+amp])
-                o,biasnoise_datasec = _overscan(bias[jj])
-                o,biasnoise_ovcol   = _overscan(bias[ov_col])
+                o,biasnoise_datasec = calc_overscan(bias[jj])
+                o,biasnoise_ovcol   = calc_overscan(bias[ov_col])
                 new_rdnoise         = np.sqrt(rdnoise**2+biasnoise_datasec**2-biasnoise_ovcol**2)
                 log.info("Master bias noise for AMP %s = %4.3f ADU, rdnoise %4.3f -> %4.3f ADU"%(amp,biasnoise_datasec,np.mean(rdnoise),np.mean(new_rdnoise)))
                 rdnoise = new_rdnoise
@@ -691,13 +743,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 log.info("Using savgol")
                 collapse_oscan_row = np.zeros(overscan_row.shape[1])
                 for col in range(overscan_row.shape[1]):
-                    o, _ = _overscan(overscan_row[:,col])
+                    o, _ = calc_overscan(overscan_row[:,col])
                     collapse_oscan_row[col] = o
                 oscan_row = _savgol_clipped(collapse_oscan_row, niter=0)
                 oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
                 data -= oimg_row
             else:
-                o,r = _overscan(overscan_row)
+                o,r = calc_overscan(overscan_row)
                 data -= o
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
@@ -781,7 +833,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         new_readnoise = np.zeros(readnoise.shape)
         for amp in amp_ids:
             kk = parse_sec_keyword(header['CCDSEC'+amp])
-            o,darknoise = _overscan(trimmed_dark_in_electrons[kk])
+            o,darknoise = calc_overscan(trimmed_dark_in_electrons[kk])
             new_readnoise[kk] = np.sqrt(readnoise[kk]**2+darknoise**2)
             log.info("Master dark noise for AMP %s = %4.3f elec, rdnoise %4.3f -> %4.3f elec"%(amp,darknoise,np.mean(readnoise[kk]),np.mean(new_readnoise[kk])))
         readnoise = new_readnoise

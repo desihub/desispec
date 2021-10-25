@@ -9,9 +9,13 @@ from scipy.signal import savgol_filter
 
 from desispec import io
 from desispec.preproc import masked_median
-from desispec.preproc import parse_sec_keyword, _overscan
+# from desispec.preproc import parse_sec_keyword, calc_overscan
+from desispec.preproc import parse_sec_keyword, get_amp_ids
+from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm
+from desispec.io.util import get_tempfilename
 from desiutil.log import get_logger
+from desiutil.depend import add_dependencies
 
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                  scale=False, exptime=None):
@@ -188,7 +192,8 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
     log.info(f"done")
 
 
-def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
+def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
+        extraheader=None):
     """
     Compute a bias file from input ZERO rawfiles
 
@@ -199,6 +204,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
 
     Options:
         explistfile: filename with text list of NIGHT EXPID to use
+        extraheader: dict-like key/value header keywords to add
 
     Notes: explistfile is only used if rawfiles=None; it should have
     one NIGHT EXPID entry per line.
@@ -231,7 +237,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
     shape=None
     first_image_header = None
     for filename in rawfiles :
-        log.info("reading %s"%filename)
+        log.info("reading %s %s", filename, camera)
         fitsfile=pyfits.open(filename)
 
         primary_header=fitsfile[0].header
@@ -251,28 +257,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
 
         image=fitsfile[camera].data.astype("float64")
 
-        if cfinder and cfinder.haskey("AMPLIFIERS") :
-            amp_ids=list(cfinder.value("AMPLIFIERS"))
-        else :
-            amp_ids=['A','B','C','D']
-
-        n0=image.shape[0]//2
-        n1=image.shape[1]//2
-
-        for a,amp in enumerate(amp_ids) :
-            ii = parse_sec_keyword(image_header['BIASSEC'+amp])
-            overscan_image = image[ii].copy()
-            overscan,rdnoise = _overscan(overscan_image)
-            log.info("amp {} overscan = {}".format(amp,overscan))
-            if ii[0].start < n0 and ii[1].start < n1 :
-                image[:n0,:n1] -= overscan
-            elif ii[0].start < n0 and ii[1].start >= n1 :
-                image[:n0,n1:] -= overscan
-            elif ii[0].start >= n0 and ii[1].start < n1 :
-                image[n0:,:n1] -= overscan
-            elif ii[0].start >= n0 and ii[1].start >= n1 :
-                image[n0:,n1:] -= overscan
-
+        subtract_peramp_overscan(image, image_header)
 
         if shape is None :
             shape=image.shape
@@ -281,21 +266,26 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
         fitsfile.close()
 
     images=np.array(images)
-    print(images.shape)
+    log.debug('%s images.shape=%s', camera, str(images.shape))
 
     # compute a mask
-    log.info("compute median image ...")
+    log.info(f"compute median {camera} image ...")
     medimage=np.median(images,axis=0) #.reshape(shape)
-    log.info("compute mask ...")
+    log.info(f"compute {camera} mask ...")
     ares=np.abs(images-medimage)
     nsig=4.
     mask=(ares<nsig*1.4826*np.median(ares,axis=0))
     # average (not median)
-    log.info("compute average ...")
+    log.info(f"compute {camera} average ...")
     meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
     meanimage=meanimage.reshape(shape)
 
-    log.info("write result in %s ..."%outfile)
+    # cleanup memory
+    del images
+    del mask
+    del medimage
+
+    log.info(f"write {camera} result to {outfile} ...")
     hdus=pyfits.HDUList([pyfits.PrimaryHDU(meanimage.astype('float32'))])
 
     # copy some keywords
@@ -324,11 +314,110 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None):
 
     hdus[0].header["BUNIT"] = "adu"
     hdus[0].header["EXTNAME"] = "BIAS"
-    for filename in rawfiles :
-        hdus[0].header["COMMENT"] = "Inc. {}".format(os.path.basename(filename))
-    hdus.writeto(outfile,overwrite="True")
+    if extraheader is not None:
+        for key, value in extraheader.items():
+            hdus[0].header[key] = value
 
-    log.info("done")
+    add_dependencies(hdus[0].header)
+
+    for filename in rawfiles :
+        #- keep only NIGHT/EXPID/filename.fits part of path
+        fullpath = os.path.abspath(filename)
+        tmp = fullpath.split(os.path.sep)
+        shortpath = os.path.sep.join(tmp[-3:])
+        hdus[0].header["COMMENT"] = "Inc. {}".format(shortpath)
+
+    #- write via temporary file, then rename
+    tmpfile = get_tempfilename(outfile)
+    hdus.writeto(tmpfile, overwrite="True")
+    os.rename(tmpfile, outfile)
+
+    log.info(f"done with {camera}")
+
+def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
+    """Compare rawfile image to bias images in biasfile1 and biasfile2
+
+    Args:
+        rawfile: desi*.fits.fz raw data file
+        biasfile1: a bias model constructed from OBSTYPE=ZERO exposures
+        biasfile2: a bias model constructed from OBSTYPE=ZERO exposures
+
+    Options:
+        ny (even int): number of patches in y (row) direction
+        nx (even int): number of patches in x (col) direction
+
+    Returns tuple (mdiff1[ny,nx], mdiff2[ny,nx]) median(image-bias) in patches
+
+    The rawfile camera is derived from the biasfile CAMERA header keyword.
+
+    median(raw-bias) is calculated in ny*nx patches using only the DATASEC
+    portion of the images.  Since the DESI CCD bias features tend to vary
+    faster with row than column, default patches are (4k/8 x 4k/40) = 500x100.
+    """
+    #- only import fitsio if needed, not upon package import
+    import fitsio
+
+    log = get_logger()
+    bias1, biashdr1 = fitsio.read(biasfile1, header=True)
+    bias2, biashdr2 = fitsio.read(biasfile2, header=True)
+
+    #- bias cameras must match
+    cam1 = biashdr1['CAMERA'].strip().upper()
+    cam2 = biashdr2['CAMERA'].strip().upper()
+    if cam1 != cam2:
+        msg  = f'{biasfile1} camera {cam1} != {biasfile2} camera {cam2}'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    image, hdr = fitsio.read(rawfile, ext=cam1, header=True)
+
+    #- subtract constant per-amp overscan region
+    image = image.astype(float)
+    subtract_peramp_overscan(image, hdr)
+
+    #- calculate differences per-amp, thus //2
+    ny_groups = ny//2
+    nx_groups = nx//2
+    diff1 = image - bias1
+    diff2 = image - bias2
+
+    median_diff1 = list()
+    median_diff2 = list()
+
+    amp_ids = get_amp_ids(hdr)
+    for amp in amp_ids:
+        ampdiff1 = np.zeros((ny_groups, nx_groups))
+        ampdiff2 = np.zeros((ny_groups, nx_groups))
+        yy, xx = parse_sec_keyword(hdr['DATASEC'+amp])
+        iiy = np.linspace(yy.start, yy.stop, ny_groups+1).astype(int)
+        jjx = np.linspace(xx.start, xx.stop, nx_groups+1).astype(int)
+        for i in range(ny_groups):
+            for j in range(nx_groups):
+                aa = slice(iiy[i], iiy[i+1])
+                bb = slice(jjx[j], jjx[j+1])
+
+                #- median of differences
+                ampdiff1[i,j] = np.median(image[aa,bb] - bias1[aa,bb])
+                ampdiff2[i,j] = np.median(image[aa,bb] - bias2[aa,bb])
+
+                #- Note: diff(medians) is less sensitive
+                ## ampdiff1[i,j] = np.median(image[aa,bb]) - np.median(bias1[aa,bb])
+                ## ampdiff2[i,j] = np.median(image[aa,bb]) - np.median(bias2[aa,bb])
+
+        median_diff1.append(ampdiff1)
+        median_diff2.append(ampdiff2)
+
+    #- put back into 2D array by amp
+    d1 = median_diff1
+    d2 = median_diff2
+    mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
+    mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+
+    assert mdiff1.shape == (ny,nx)
+    assert mdiff2.shape == (ny,nx)
+
+    return mdiff1, mdiff2
+
 
 def fit_const_plus_dark(exp_arr,image_arr):
     """
