@@ -18,6 +18,7 @@ from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from ..frame import Frame
+from .fibermap import read_fibermap
 from .meta import findfile, get_nights, get_exposures
 from .util import fitsheader, native_endian, makepath
 from . import iotime
@@ -190,11 +191,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
 
     if 'FIBERMAP' in fx:
-        fibermap = Table.read(fx, 'FIBERMAP')
-        if 'DESIGN_X' in fibermap.colnames:
-            fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
-        if 'DESIGN_Y' in fibermap.colnames:
-            fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
+        fibermap = read_fibermap(filename)
     else:
         fibermap = None
 
@@ -230,16 +227,6 @@ def read_frame(filename, nspec=None, skip_resolution=False):
             chi2pix = chi2pix[0:nspec]
         if mask is not None:
             mask = mask[0:nspec]
-
-    # replace any values masked with 'N...' in fibermap with empty string
-    if fibermap is not None:
-        for name in fibermap.dtype.names:
-            col=fibermap[name]
-            if(col.dtype.type is np.str_
-               and isinstance(col,np.ma.MaskedArray)
-               and col.fill_value[0]=='N'):
-                col.fill_value=''
-                fibermap[name]=col.filled()
 
     # return flux,ivar,wave,resolution_data, hdr
     frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix,

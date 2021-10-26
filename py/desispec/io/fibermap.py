@@ -10,6 +10,7 @@ import glob
 import warnings
 import time
 from pkg_resources import resource_filename
+import fitsio 
 
 import yaml
 
@@ -23,6 +24,7 @@ from desiutil.depend import add_dependencies
 
 from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
 from desispec.io.meta import rawdata_root, findfile
+from desiutil.io import encode_table
 from . import iotime
 
 from desispec.maskbits import fibermask
@@ -313,12 +315,17 @@ def read_fibermap(filename):
     Args:
         filename : input file name
     """
-    #- Implementation note: wrapping Table.read() with this function allows us
+    #- Implementation note: wrapping fitsio.read() with this function allows us
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
     log = get_logger()
     t0 = time.time()
-    fibermap = Table.read(filename, 'FIBERMAP')
+
+    fibermap, hdr = fitsio.read(filename, ext='FIBERMAP', header=True)
+    fibermap = Table(fibermap)
+    fibermap.meta.update(hdr)
+    fibermap = encode_table(fibermap)
+
     duration = time.time() - t0
 
     #- support old simulated fiberassign files
