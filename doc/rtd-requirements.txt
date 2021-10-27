@@ -1,1 +1,2 @@
 sqlalchemy
+docutils<0.18
