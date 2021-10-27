@@ -389,51 +389,6 @@ def deconstruct_keyval_reporting(entry):
     val1,val2 = values.split("->")
     return key, val1, val2
 
-def validate_badamps(badamps,joinsymb=','):
-    """
-    Checks (and transforms) badamps string for consistency with the for need in an exposure or processing table
-    for use in the Pipeline. Specifically ensure they come in (camera,petal,amplifier) sets,
-    with appropriate checking of those values to make sure they're valid. Returns the input string
-    except removing whitespace and replacing potential character separaters with joinsymb (default ',').
-    Returns None if None is given.
-
-    Args:
-        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (comma
-                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
-        joinsymb, str. The symbol separating entries in the str list given by badamps.
-
-    Returns:
-        newbadamps, str. Input badamps string of {camera}{petal}{amp} entries separated by symbol given with
-                      joinsymb (comma by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
-                      Differs from input in that other symbols used to separate terms are replaaced by joinsymb
-                      and whitespace is removed.
-
-    """
-    if badamps is None:
-        return badamps
-
-    log = get_logger()
-    ## Possible other joining symbols to automatically replace
-    symbs = [';', ':', '|', '.', ',','-','_']
-
-    ## Not necessary, as joinsymb would just be replaced with itself, but this is good better form
-    if joinsymb in symbs:
-        symbs.remove(joinsymb)
-
-    ## Remove whitespace and replace possible joining symbols with the designated one.
-    newbadamps = badamps.replace(' ', '').strip()
-    for symb in symbs:
-        newbadamps = newbadamps.replace(symb, joinsymb)
-
-    ## test that the string can be parsed. Raises exception if it fails to parse
-    throw = parse_badamps(newbadamps, joinsymb=joinsymb)
-
-    ## Inform user of the result
-    if badamps == newbadamps:
-        log.info(f'Badamps given as: {badamps} verified to work')
-    else:
-        log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}') 
-    return newbadamps
 
 def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, coldefaults=None, verbosely=False):
     """

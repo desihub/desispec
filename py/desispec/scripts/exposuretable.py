@@ -6,11 +6,11 @@ import re
 from astropy.table import Table
 from astropy.io import fits
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
-from desispec.io.util import parse_cameras, difference_camwords
+from desispec.io.util import parse_cameras, difference_camwords, validate_badamps
 from desispec.workflow.exptable import summarize_exposure, default_obstypes_for_exptable, \
                                        instantiate_exposure_table, get_exposure_table_column_defs, \
                                        get_exposure_table_path, get_exposure_table_name, \
-                                       night_to_month, validate_badamps
+                                       night_to_month
 from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin, get_printable_banner
 from desispec.workflow.tableio import write_table
 
