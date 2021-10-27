@@ -71,6 +71,9 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
     parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
     parser.add_argument("--mpistdstars", action="store_true", help="Use MPI parallelism in stdstar fitting instead of multiprocessing")
+    parser.add_argument("--extract-size", type=int, default=20, help="Size to use for extract subcomm")
+    parser.add_argument("--gpuspecter", action="store_true", help="Use GPU specter")
+    parser.add_argument("--gpuextract", action="store_true", help="Use GPU extraction")
 
     return parser
 
