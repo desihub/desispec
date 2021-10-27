@@ -338,9 +338,9 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     """Compare rawfile image to bias images in biasfile1 and biasfile2
 
     Args:
-        rawfile: desi*.fits.fz raw data file
-        biasfile1: a bias model constructed from OBSTYPE=ZERO exposures
-        biasfile2: a bias model constructed from OBSTYPE=ZERO exposures
+        rawfile: full filepath to desi*.fits.fz raw data file
+        biasfile1: filepath to bias model made from OBSTYPE=ZERO exposures
+        biasfile2: filepath to bias model made from OBSTYPE=ZERO exposures
 
     Options:
         ny (even int): number of patches in y (row) direction

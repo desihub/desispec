@@ -31,6 +31,10 @@ def find_zeros(night):
         night (int): YEARMMDD night to search
 
     Returns array of expids that are OBSTYPE=ZERO
+
+    Uses production exposure tables to veto known bad ZEROs, but it will also
+    find any ZEROs on disk for that night, regardless of whether they are in
+    the exposures table or not.
     """
 
     #- Find all ZERO exposures on this night
@@ -60,13 +64,14 @@ def find_zeros(night):
         drop = np.isin(expids, exptable['EXPID'][bad])
         ndrop = np.sum(drop)
         drop_expids = expids[drop]
-        log.info(f'Dropping {ndrop} bad ZEROs: {drop_expids}')
+        log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
         expids = expids[~drop]
 
     return expids
 
 
-def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, comm=None):
+def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
+        comm=None):
     """Create nightly biases for cameras on night
 
     Args:
@@ -75,7 +80,8 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, comm=None):
 
     Options:
         outdir (str): write files to this output directory
-        zeros (int): number of OBSTYPE=ZERO exposures to use
+        nzeros (int): number of OBSTYPE=ZERO exposures to use
+        minzeros (int): minimum number of OBSTYPE=ZERO exposures required
         comm: MPI communicator for parallelism
 
     Returns:
@@ -103,25 +109,26 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, comm=None):
     if comm is not None:
         expids = comm.bcast(expids, root=0)
 
-    if len(expids) < nzeros:
-        msg = f'Only {len(expids)} ZEROS on {night}; need at least {nzeros}'
+    if len(expids) < minzeros:
+        msg = f'Only {len(expids)} ZEROS on {night}; need at least {minzeros}'
         if rank == 0:
             log.critical(msg)
         raise RuntimeError(msg)
     
-    if rank == 0:
-        log.info(f'Using {nzeros}/{len(expids)} ZEROs for nightly bias {night}')
     if len(expids) > nzeros:
         nexps = len(expids)
         n = (nexps - nzeros)//2
         expids = expids[n:n+nzeros]
 
+    if rank == 0:
+        log.info(f'Using {len(expids)} ZEROs for nightly bias {night}')
+
     rawfiles = [desispec.io.findfile('raw', night, e) for e in expids]
 
-    #- Create output directory if needed
-    outfile = desispec.io.findfile('biasnight',night=night,camera=cameras[0],
-                                       outdir=outdir)
+    #- Rank 0 create output directory if needed
     if rank == 0:
+        outfile = desispec.io.findfile('biasnight', night=night,
+                                       camera=cameras[0], outdir=outdir)
         os.makedirs(os.path.dirname(outfile), exist_ok=True)
 
     #- wait for directory creation before continuing
@@ -202,6 +209,8 @@ def parse(options=None):
             help='output directory')
     p.add_argument('--nzeros', type=int, default=25,
             help='number of input ZEROS to use (saves memory)')
+    p.add_argument('--minzeros', type=int, default=20,
+            help='minimum number of good ZEROs required')
     p.add_argument('--mpi', action='store_true',
             help='use_mpi')
 
@@ -224,7 +233,6 @@ def main():
     compute_nightly_bias(**args.__dict__, comm=comm)
 
 if __name__ == '__main__':
-    # import IPython; IPython.embed()
     main()
 
 
