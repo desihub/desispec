@@ -8,7 +8,7 @@ These are memory limited, so throttle number of parallel processes, e.g.
 #- Cori Haswell, ~3.5 minutes:
 srun -n 8 -c 8 desi_compute_nightly_bias --mpi -n 20211020
 
-#- Cori KNL, 
+#- Cori KNL, ~13.5 minutes:
 srun -n 8 -c 32 desi_compute_nightly_bias --mpi -n 20211020
 """
 
@@ -21,11 +21,20 @@ import desispec.io
 from desispec.io.util import parse_cameras, decode_camword
 from desispec.ccdcalib import compute_bias_file, compare_bias
 from desispec.calibfinder import CalibFinder
+from desispec.workflow.exptable import get_exposure_table_pathname
+from desispec.workflow.tableio import load_table
 
 def find_zeros(night):
-    """TODO: document"""
+    """Find all OBSTYPE=ZERO exposures on a given night
+
+    Args:
+        night (int): YEARMMDD night to search
+
+    Returns array of expids that are OBSTYPE=ZERO
+    """
 
     #- Find all ZERO exposures on this night
+    log = get_logger()
     nightdir = desispec.io.rawdata_root() + f'/{night}'
     requestfiles = sorted(glob.glob(f'{nightdir}/*/request*.json'))
     expids = list()
@@ -38,13 +47,46 @@ def find_zeros(night):
         else:
             continue
 
-    #- TODO: Remove ZEROs that are flagged as bad
+    expids = np.array(expids)
+
+    #- Remove ZEROs that are flagged as bad, but allow for the possibility
+    #- of ZEROs that aren't in the exposure table for whatever reason
+    log.debug('Checking for pre-identified bad ZEROs')
+    expfile = get_exposure_table_pathname(night)
+    exptable = load_table(expfile, tabletype='exptable')
+    bad = (exptable['OBSTYPE']=='zero') & (exptable['LASTSTEP']!='all')
+
+    if np.any(bad):
+        drop = np.isin(expids, exptable['EXPID'][bad])
+        ndrop = np.sum(drop)
+        drop_expids = expids[drop]
+        log.info(f'Dropping {ndrop} bad ZEROs: {drop_expids}')
+        expids = expids[~drop]
 
     return expids
 
 
 def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, comm=None):
-    """TODO: document"""
+    """Create nightly biases for cameras on night
+
+    Args:
+        night (int): YEARMMDD night to process
+        cameras (str): list of cameras to process
+
+    Options:
+        outdir (str): write files to this output directory
+        zeros (int): number of OBSTYPE=ZERO exposures to use
+        comm: MPI communicator for parallelism
+
+    Returns:
+        nfail (int): number of cameras that failed across all ranks
+
+    Writes biasnight*.fits files in outdir or
+    $DESI_SPECTRO_REDUX/$SPECPROD/calibnight/night/
+
+    Note: compute_bias_file requires ~12 GB memory per camera, so limit
+    the size of the MPI communicator depending upon the memory available.
+    """
 
     log = get_logger()
 
@@ -71,7 +113,6 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, comm=None):
         log.info(f'Using {nzeros}/{len(expids)} ZEROs for nightly bias {night}')
     if len(expids) > nzeros:
         nexps = len(expids)
-        expids = np.asarray(expids)
         n = (nexps - nzeros)//2
         expids = expids[n:n+nzeros]
 
@@ -138,6 +179,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, comm=None):
 
     if comm is not None:
         nfail = np.sum(comm.gather(nfail, root=0))
+        nfail = comm.bcast(nfail, root=0)
 
     if rank == 0 and nfail > 0:
         log.error(f'{nfail}/{len(cameras)} failed')
