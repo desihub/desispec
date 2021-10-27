@@ -309,12 +309,12 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
                 exp = exptable[rownum]['EXPID']
                 err = f"In exposure {exp} for column {colname}: asked to fill non-default " + \
                       f"entry '{exptable[colname][rownum]}' with '{value}'.\n" + \
-                      f"To overwrite, use --overwrite-value.\n"
+                      f"\t\tTo overwrite, use --overwrite-value.\n"
                 if appendable:
-                    err += "To append to the existing, use --append-string.\n"
-                err += f"All existing column entries for requested exposures were: {exptable[colname][row_numbers]}"
-                err += f" for expids: {exptable['EXPID'][row_numbers]}.\n"
-                err += "Exiting."
+                    err += "\t\tTo append to the existing, use --append-string.\n"
+                err += f"\t\tAll existing column entries for requested exposures were:"
+                err += f" {list(exptable[colname][row_numbers])} for expids: {list(exptable['EXPID'][row_numbers])}.\n"
+                err += "\nExiting."
                 raise ValueError (err)
 
         if include_comment != '' and 'COMMENTS' in colnames:
