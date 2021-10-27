@@ -24,7 +24,6 @@ from desiutil.depend import add_dependencies
 
 from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
 from desispec.io.meta import rawdata_root, findfile
-from desiutil.io import encode_table
 from . import iotime
 
 from desispec.maskbits import fibermask
