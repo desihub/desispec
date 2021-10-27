@@ -45,7 +45,7 @@ def main(args=None, comm=None):
     elif isinstance(args, (list, tuple)):
         args = parse(args)
 
-    log = get_logger()
+    log = get_logger(timestamp=True)
 
     start_mpi_connect = time.time()
     if comm is not None:
@@ -415,15 +415,30 @@ def main(args=None, comm=None):
         spectro_nums = sorted(framefiles.keys())
 
         if args.mpistdstars and comm is not None:
-            #- If using MPI parallelism in stdstar fit, divide comm into subcommunicators.
-            #- (spectro_start, spectro_step) determine stride pattern over spectro_nums.
-            #- Split comm by at most len(spectro_nums)
-            num_subcomms = min(size, len(spectro_nums))
-            subcomm_index = rank % num_subcomms
-            if rank == 0:
-                log.info(f"Splitting comm of {size=} into {num_subcomms=} for stdstar fitting")
-            subcomm = comm.Split(color=subcomm_index)
-            spectro_start, spectro_step = subcomm_index, num_subcomms
+            if args.gpuextract:
+                num_subcomms = min(size, len(spectro_nums))
+                fitranks = list(range(min(size, 20)))
+                if rank in fitranks:
+                    fit_incl = comm.group.Incl(fitranks)
+                    fit_group = comm.Create_group(fit_incl)
+                    subcomm_index = rank % num_subcomms
+                    subcomm = fit_group.Split(color=subcomm_index)
+                    if rank == 0:
+                        log.info(f"Splitting comm of {size=} into {num_subcomms=} of {subcomm.size=} for stdstar fitting")
+                    spectro_start, spectro_step = subcomm_index, num_subcomms
+                else:
+                    spectro_start, spectro_step = len(spectro_nums), len(spectro_nums)
+                    subcomm = None
+            else:
+                #- If using MPI parallelism in stdstar fit, divide comm into subcommunicators.
+                #- (spectro_start, spectro_step) determine stride pattern over spectro_nums.
+                #- Split comm by at most len(spectro_nums)
+                num_subcomms = min(size, len(spectro_nums))
+                subcomm_index = rank % num_subcomms
+                if rank == 0:
+                    log.info(f"Splitting comm of {size=} into {num_subcomms=} for stdstar fitting")
+                subcomm = comm.Split(color=subcomm_index)
+                spectro_start, spectro_step = subcomm_index, num_subcomms
         else:
             #- Otherwise, use multiprocessing assuming 1 MPI rank per spectrograph
             spectro_start, spectro_step = rank, size
@@ -476,7 +491,8 @@ def main(args=None, comm=None):
         if num_err>0 and num_err==num_cmd:
             if rank == 0:
                 log.critical('All stdstar commands failed')
-            sys.exit(1)
+            #- Do we really need to exit?
+            # sys.exit(1)
 
         if rank==0 and len(args.expids) > 1:
             for sp in spectro_nums:
