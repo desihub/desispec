@@ -2,6 +2,7 @@
 Utility functions for desispec
 """
 from __future__ import absolute_import, division, print_function
+import argparse
 
 import os
 import sys
@@ -86,10 +87,13 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     if isinstance(cmd, collections.abc.Callable):
         if args is None:
             return cmd()
+        elif isinstance(args, argparse.Namespace):
+            return cmd(args)
         else:
             return cmd(*args)
     else:
         if args is None:
+            raise RuntimeError("Do not use!")
             err = sp.call(cmd, shell=True)
         else:
             raise ValueError("Don't provide args unless cmd is function")

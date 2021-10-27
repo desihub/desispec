@@ -39,9 +39,15 @@ from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.util import runcmd
+import desispec.scripts.preproc
+import desispec.scripts.trace_shifts
 import desispec.scripts.extract
 import desispec.scripts.specex
+import desispec.scripts.fiberflat
+import desispec.scripts.sky
 import desispec.scripts.stdstars
+import desispec.scripts.fluxcalibration
+import desispec.scripts.procexp
 
 from desitarget.targetmask import desi_mask
 
@@ -69,7 +75,7 @@ def main(args=None, comm=None):
     # elif isinstance(args, (list, tuple)):
     #     args = parse(args)
 
-    log = get_logger()
+    log = get_logger(timestamp=True)
 
     start_mpi_connect = time.time()
     if comm is not None:
@@ -240,7 +246,10 @@ def main(args=None, comm=None):
             if not args.obstype in ['ARC'] : # never model variance for arcs
                 if not args.no_model_pixel_variance :
                     cmd += " --model-variance"
-            runcmd(cmd, inputs=[args.input], outputs=[outfile])
+            # runcmd(cmd, inputs=[args.input], outputs=[outfile])
+            cmdargs = cmd.split()[1:]
+            preproc_args = desispec.scripts.preproc.parse(cmdargs)
+            runcmd(desispec.scripts.preproc.main, args=preproc_args, inputs=[args.input], outputs=[outfile])
 
         timer.stop('preproc')
         if comm is not None:
@@ -312,9 +321,14 @@ def main(args=None, comm=None):
                         cmd += " --degyx 2 --degyy 0"
                     if args.obstype in ['SCIENCE', 'SKY']:
                         cmd += ' --sky'
+                    cmdargs = cmd.split()[1:]
+                    cmdargs = desispec.scripts.trace_shifts.parse(cmdargs)
+                    cmd = desispec.scripts.trace_shifts.main
                 else :
-                    cmd = "ln -s {} {}".format(inpsf,outpsf)
-                runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+                    #cmd = "ln -s {} {}".format(inpsf,outpsf)
+                    cmdargs = (inpsf, outpsf)
+                    cmd = os.symlink
+                runcmd(cmd, args=cmdargs, inputs=[preprocfile, inpsf], outputs=[outpsf])
             else :
                 log.info("PSF {} exists".format(outpsf))
 
@@ -658,7 +672,11 @@ def main(args=None, comm=None):
             cmd = "desi_compute_fiberflat"
             cmd += " -i {}".format(framefile)
             cmd += " -o {}".format(fiberflatfile)
-            runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+            # runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+            cmdargs = cmd.split()[1:]
+            fiberflat_args = desispec.scripts.fiberflat.parse(cmdargs)
+            runcmd(desispec.scripts.fiberflat.main, args=fiberflat_args, inputs=[framefile,], outputs=[fiberflatfile,])
+
 
         timer.stop('fiberflat')
         if comm is not None:
@@ -870,7 +888,10 @@ def main(args=None, comm=None):
             if not args.no_sky_wavelength_adjustment : cmd += " --adjust-wavelength"
             if not args.no_sky_lsf_adjustment : cmd += " --adjust-lsf"
 
-            runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
+            # runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
+            cmdargs = cmd.split()[1:]
+            sky_args = desispec.scripts.sky.parse(cmdargs)
+            runcmd(desispec.scripts.sky.main, args=sky_args, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
 
             #- sframe = flatfielded sky-subtracted but not flux calibrated frame
             #- Note: this re-reads and re-does steps previously done for picking
@@ -1002,8 +1023,15 @@ def main(args=None, comm=None):
             cmd += " --delta-color-cut 0.1"
 
             inputs = [framefile, skyfile, fiberflatfile, stdfile]
-            runcmd(cmd, inputs=inputs, outputs=[calibfile,])
-
+            try:
+                #runcmd(cmd, inputs=inputs, outputs=[calibfile,])
+                cmdargs = cmd.split()[1:]
+                fluxcal_args = desispec.scripts.fluxcalibration.parse(cmdargs)
+                runcmd(desispec.scripts.fluxcalibration.main, args=fluxcal_args, inputs=inputs, outputs=[calibfile,])
+            except:
+                #- Catches sys.exit from fluxcalibration.main
+                log.error('fluxcalibration.main failed for {}'.format(os.path.basename(calibfile)))
+                err = True
         timer.stop('fluxcalib')
         if comm is not None:
             comm.barrier()
@@ -1040,7 +1068,10 @@ def main(args=None, comm=None):
                 cmd += " --no-xtalk"
 
             inputs = [framefile, fiberflatfile, skyfile, calibfile]
-            runcmd(cmd, inputs=inputs, outputs=[cframefile,])
+            #runcmd(cmd, inputs=inputs, outputs=[cframefile,])
+            cmdargs = cmd.split()[1:]
+            procexp_args = desispec.scripts.procexp.parse(cmdargs)
+            runcmd(desispec.scripts.procexp.main, args=procexp_args, inputs=inputs, outputs=[cframefile,])
 
         if comm is not None:
             comm.barrier()
