@@ -536,6 +536,16 @@ def main(args=None, comm=None):
                 cmd += ' -o {}'.format(framefile)
                 cmd += ' --psferr 0.1'
 
+                if args.gpuspecter:
+                    cmd += ' --gpu-specter'
+                    cmd += ' --nsubbundles 5'
+                    cmd += ' --mpi'
+
+                if args.gpuextract:
+                    cmd += ' --gpu'
+                    # cmd += ' --regularize 1e-7'
+                    # cmd += ' --nwavestep 30'
+
                 if args.obstype == 'SCIENCE' or args.obstype == 'SKY' :
                     if rank == 0:
                         log.info('Include barycentric correction')
@@ -552,26 +562,75 @@ def main(args=None, comm=None):
             inputs = comm.bcast(inputs, root=0)
             outputs = comm.bcast(outputs, root=0)
 
-            #- split communicator by 20 (number of bundles)
-            extract_size = 20
-            if (rank == 0) and (size%extract_size != 0):
-                log.warning('MPI size={} should be evenly divisible by {}'.format(
-                    size, extract_size))
+            extract_size = args.extract_size
+            assert extract_size <= size
 
-            extract_group = rank // extract_size
-            num_extract_groups = (size + extract_size - 1) // extract_size
-            comm_extract = comm.Split(color=extract_group)
+            if args.gpuextract:
+                if extract_size is None:
+                    import cupy as cp
+                    ngpus = cp.cuda.runtime.getDeviceCount()
+                    if rank == 0:
+                        log.info(f"{rank} found {ngpus} gpus")
+                    extract_ranks_per_gpu = 2
+                    extract_ranks_io = 2
+                    extract_size = extract_ranks_io + ngpus * extract_ranks_per_gpu
+                extract_ranks = list(range(extract_size))
+                if rank in extract_ranks:
+                    extract_incl = comm.group.Incl(extract_ranks)
+                    extract_group = comm.Create_group(extract_incl)
+                    from gpu_specter.mpi import ParallelIOCoordinator
+                    comm_extract = ParallelIOCoordinator(extract_group)
+                extract_start, extract_step = 0, 1
+            elif args.gpuspecter:
+                #- cpu version of gpu_specter
+                if extract_size is None:
+                    extract_size = 16
+                extract_group = rank // extract_size
+                num_extract_groups = (size + extract_size - 1) // extract_size
+                comm_extract = comm.Split(color=extract_group)
+                extract_start, extract_step = extract_group, num_extract_groups
+                extract_ranks = range(size)
+            else:
+                #- specter extractions
+                #- split communicator by 20 (number of bundles)
+                if extract_size is None:
+                    extract_size = 20
+                if (rank == 0) and (size%extract_size != 0):
+                    log.warning('MPI size={} should be evenly divisible by {}'.format(
+                        size, extract_size))
+                from mpi4py import MPI
+                extract_group = rank // extract_size
+                num_extract_groups = (size + extract_size - 1) // extract_size
+                print(f'{rank} {comm.size=} {extract_size=} {extract_group=} {num_extract_groups=}', flush=True)
+                comm_extract = comm.Split(color=extract_group, key=rank)
+                print(f'{comm_extract}', flush=True)
+                if comm_extract == MPI.COMM_NULL:
+                    log.warning(f'{rank} has comm_extract = COMM_NULL')
+                extract_start, extract_step = extract_group, num_extract_groups
+                extract_ranks = range(size)
 
-            for i in range(extract_group, len(args.cameras), num_extract_groups):
-                camera = args.cameras[i]
-                if camera in cmds:
-                    cmdargs = cmds[camera].split()[1:]
-                    extract_args = desispec.scripts.extract.parse(cmdargs)
+            comm.barrier()
+
+            if rank in extract_ranks:
+                # only ranks in extract_ranks to reach here
+                for i in range(extract_start, len(args.cameras), extract_step):
+                    camera = args.cameras[i]
                     if comm_extract.rank == 0:
-                        print('RUNNING: {}'.format(cmds[camera]))
-
-                    desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
-
+                        log.info(f'{rank=}/{size=} {comm_extract.size=} {extract_size=} {extract_start=} {extract_step=}')
+                    if camera in cmds:
+                        cmdargs = cmds[camera].split()[1:]
+                        extract_args = desispec.scripts.extract.parse(cmdargs)
+                        if comm_extract.rank == 0:
+                            log.info('RUNNING: {}'.format(cmds[camera]))
+                        if args.gpuextract:
+                            desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=comm_extract)
+                        elif args.gpuspecter:
+                            desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
+                        else:
+                            desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+            else:
+                # ranks not in extract_ranks pass thru
+                pass
             comm.barrier()
 
         else:
