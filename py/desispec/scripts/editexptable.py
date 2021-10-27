@@ -75,17 +75,23 @@ def parse_int_list(input_string, allints=None, only_unique=True):
 
 def columns_not_to_report():
     """
-    Returns list of columns that shouldn't have reporting information saved because they are user-defined values.
+    Returns list of column names that shouldn't have reporting information saved because they are user-defined values.
     """
     return ['COMMENTS', 'HEADERERR', 'BADCAMWORD', 'BADAMPS', 'LASTSTEP', 'EXPFLAG']
 
 def columns_not_to_edit():
     """
-    Defines columns that shouldn't be edited.
+    Defines column names that shouldn't be edited.
     """
     ## Occasionally unchanging things like NIGHT or TILEID have been missing in the headers, so we won't restrict
     ## that even though it typically shouldn't be edited if the data is there
     return ['EXPID', 'CAMWORD', 'OBSTYPE']
+
+def columns_not_to_append():
+    """
+    Defines column names that shouldn't be edited.
+    """
+    return ['LASTSTEP', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTYPE']
 
 def validate_value(colname, value, joinsymb):
     """
@@ -211,7 +217,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
         raise ValueError(f"Not allowed to edit colname={colname}.")
     if colname not in exptable.colnames:
         raise ValueError(f"Colname {colname} not in exposure table")
-    if append_string and colname in ['LASTSTEP', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTYPE']:
+    if append_string and colname in columns_not_to_append():
         raise ValueError(f"Cannot append_string to {colname}")
     if append_string and overwrite_value:
         raise ValueError("Cannot append_string and overwrite_value.")
@@ -252,6 +258,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     ## Assign new value
     isstr = (cur_dtype in [str, np.str, np.str_] or type(cur_dtype) is str)
     isarr = (cur_dtype in [list, np.array, np.ndarray])
+    appendable = (colname not in columns_not_to_append())
 
     if append_string and not isstr:
         raise ValueError(f"Told to append_string but {colname} isn't a string: {cur_dtype}")
@@ -300,8 +307,16 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
                 exptable[colname][rownum] = value
             else:
                 exp = exptable[rownum]['EXPID']
-                raise ValueError (f"In exposure: {exp}. Asked to overwrite non-empty cell of type {cur_dtype}"+
-                                  " without overwrite_value enabled. Exiting.")
+                err = f"In exposure {exp} for column {colname}: asked to fill non-default " + \
+                      f"entry '{exptable[colname][rownum]}' with '{value}'.\n" + \
+                      f"To overwrite, use --overwrite-value.\n"
+                if appendable:
+                    err += "To append to the existing, use --append-string.\n"
+                err += f"All existing column entries for requested exposures were: {exptable[colname][row_numbers]}"
+                err += f" for expids: {exptable['EXPID'][row_numbers]}.\n"
+                err += "Exiting."
+                raise ValueError (err)
+
         if include_comment != '' and 'COMMENTS' in colnames:
             exptable['COMMENTS'][rownum] = np.append(exptable['COMMENTS'][rownum], include_comment)
             meaningful_comments = (exptable['COMMENTS'][rownum] != '')
