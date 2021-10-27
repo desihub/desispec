@@ -49,7 +49,7 @@ def parse(options=None):
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
     parser.add_argument('--ignore-gpu', action='store_true', help='Ignore GPU, if available')
 
-    log = get_logger()
+    log = get_logger(timestamp=True)
     args = None
     if options is None:
         args = parser.parse_args()
@@ -116,7 +116,7 @@ def main(args, comm=None) :
     and normlize the model flux. Output is written to a file and will be called for calibration.
     """
 
-    log = get_logger()
+    log = get_logger(timestamp=True)
 
     log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
 
@@ -164,118 +164,146 @@ def main(args, comm=None) :
 
     # READ DATA
     ############################################
-    # First loop through and group by exposure and spectrograph
-    frames_by_expid = {}
-    rows = list()
-    for filename in args.frames :
-        log.info("reading %s"%filename)
-        frame=io.read_frame(filename)
-        night = safe_read_key(frame.meta,"NIGHT")
-        expid = safe_read_key(frame.meta,"EXPID")
-        camera = safe_read_key(frame.meta,"CAMERA").strip().lower()
-        rows.append( (night, expid, camera) )
-        spec = camera[1]
-        uniq_key = (expid,spec)
-        if uniq_key in frames_by_expid.keys():
-            frames_by_expid[uniq_key][camera] = frame
-        else:
-            frames_by_expid[uniq_key] = {camera: frame}
-
-    input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID'))
-
     frames={}
-    flats={}
-    skies={}
-
-    spectrograph=None
     starfibers=None
     starindices=None
     fibermap=None
-    # For each unique expid,spec pair, get the logical OR of the FIBERSTATUS for all
-    # cameras and then proceed with extracting the frame information
-    # once we modify the fibermap FIBERSTATUS
-    for (expid,spec),camdict in frames_by_expid.items():
+    gaia_indices=None
+    legacy_indices=None
+    n_legacy_std=None
+    n_gaia_std=None
 
-        fiberstatus = None
-        for frame in camdict.values():
-            if fiberstatus is None:
-                fiberstatus = frame.fibermap['FIBERSTATUS'].data.copy()
-            else:
-                fiberstatus |= frame.fibermap['FIBERSTATUS']
+    # First loop through and group by exposure and spectrograph
+    error = None
+    try:
+        if rank == 0:
+            frames_by_expid = {}
+            rows = list()
+            for filename in args.frames :
+                log.info("reading %s"%filename)
+                frame=io.read_frame(filename)
+                night = safe_read_key(frame.meta,"NIGHT")
+                expid = safe_read_key(frame.meta,"EXPID")
+                camera = safe_read_key(frame.meta,"CAMERA").strip().lower()
+                rows.append( (night, expid, camera) )
+                spec = camera[1]
+                uniq_key = (expid,spec)
+                if uniq_key in frames_by_expid.keys():
+                    frames_by_expid[uniq_key][camera] = frame
+                else:
+                    frames_by_expid[uniq_key] = {camera: frame}
+            input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID'))
 
-        for camera,frame in camdict.items():
-            frame.fibermap['FIBERSTATUS'] |= fiberstatus
-            # Set fibermask flagged spectra to have 0 flux and variance
-            frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
-            frame_fibermap = frame.fibermap
-            if std_targetids is None:
-                frame_starindices = np.where(isStdStar(frame_fibermap))[0]
-            else:
-                frame_starindices = np.nonzero(np.isin(frame_fibermap['TARGETID'], std_targetids))[0]
+            spectrograph=None
+            # For each unique expid,spec pair, get the logical OR of the FIBERSTATUS for all
+            # cameras and then proceed with extracting the frame information
+            # once we modify the fibermap FIBERSTATUS
+            for (expid,spec),camdict in frames_by_expid.items():
 
-            #- Confirm that all fluxes have entries but trust targeting bits
-            #- to get basic magnitude range correct
-            keep_legacy = np.ones(len(frame_starindices), dtype=bool)
+                fiberstatus = None
+                for frame in camdict.values():
+                    if fiberstatus is None:
+                        fiberstatus = frame.fibermap['FIBERSTATUS'].data.copy()
+                    else:
+                        fiberstatus |= frame.fibermap['FIBERSTATUS']
 
-            for colname in ['FLUX_G', 'FLUX_R', 'FLUX_Z']:  #- and W1 and W2?
-                keep_legacy &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
-                keep_legacy &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
-            keep_gaia = np.ones(len(frame_starindices), dtype=bool)
+                for camera,frame in camdict.items():
+                    frame.fibermap['FIBERSTATUS'] |= fiberstatus
+                    # Set fibermask flagged spectra to have 0 flux and variance
+                    frame = get_fiberbitmasked_frame(frame,bitmask='stdstars',ivar_framemask=True)
+                    frame_fibermap = frame.fibermap
+                    if std_targetids is None:
+                        frame_starindices = np.where(isStdStar(frame_fibermap))[0]
+                    else:
+                        frame_starindices = np.nonzero(np.isin(frame_fibermap['TARGETID'], std_targetids))[0]
 
-            for colname in ['G', 'BP', 'RP']:  #- and W1 and W2?
-                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] > 10
-                keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] < 20
-            n_legacy_std = keep_legacy.sum()
-            n_gaia_std = keep_gaia.sum()
-            keep = keep_legacy | keep_gaia
-            # accept both types of standards for the time being
+                    #- Confirm that all fluxes have entries but trust targeting bits
+                    #- to get basic magnitude range correct
+                    keep_legacy = np.ones(len(frame_starindices), dtype=bool)
 
-            # keep the indices for gaia/legacy subsets
-            gaia_indices = keep_gaia[keep]
-            legacy_indices = keep_legacy[keep]
+                    for colname in ['FLUX_G', 'FLUX_R', 'FLUX_Z']:  #- and W1 and W2?
+                        keep_legacy &= frame_fibermap[colname][frame_starindices] > 10**((22.5-30)/2.5)
+                        keep_legacy &= frame_fibermap[colname][frame_starindices] < 10**((22.5-0)/2.5)
+                    keep_gaia = np.ones(len(frame_starindices), dtype=bool)
 
-            frame_starindices = frame_starindices[keep]
+                    for colname in ['G', 'BP', 'RP']:  #- and W1 and W2?
+                        keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] > 10
+                        keep_gaia &= frame_fibermap['GAIA_PHOT_'+colname+'_MEAN_MAG'][frame_starindices] < 20
+                    n_legacy_std = keep_legacy.sum()
+                    n_gaia_std = keep_gaia.sum()
+                    keep = keep_legacy | keep_gaia
+                    # accept both types of standards for the time being
 
-            if spectrograph is None :
-                spectrograph = frame.spectrograph
-                fibermap = frame_fibermap
-                starindices=frame_starindices
-                starfibers=fibermap["FIBER"][starindices]
+                    # keep the indices for gaia/legacy subsets
+                    gaia_indices = keep_gaia[keep]
+                    legacy_indices = keep_legacy[keep]
 
-            elif spectrograph != frame.spectrograph :
-                log.error("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
-                raise ValueError("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
-            elif starindices.size != frame_starindices.size or np.sum(starindices!=frame_starindices)>0 :
-                log.error("incompatible fibermap")
-                raise ValueError("incompatible fibermap")
+                    frame_starindices = frame_starindices[keep]
 
-            if not camera in frames :
-                frames[camera]=[]
+                    if spectrograph is None :
+                        spectrograph = frame.spectrograph
+                        fibermap = frame_fibermap
+                        starindices=frame_starindices
+                        starfibers=fibermap["FIBER"][starindices]
 
-            frames[camera].append(frame)
+                    elif spectrograph != frame.spectrograph :
+                        log.error("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
+                        raise ValueError("incompatible spectrographs {} != {}".format(spectrograph,frame.spectrograph))
+                    elif starindices.size != frame_starindices.size or np.sum(starindices!=frame_starindices)>0 :
+                        log.error("incompatible fibermap")
+                        raise ValueError("incompatible fibermap")
 
-    # possibly cleanup memory
-    del frames_by_expid
+                    if not camera in frames :
+                        frames[camera]=[]
 
-    for filename in args.skymodels :
-        log.info("reading %s"%filename)
-        sky=io.read_sky(filename)
-        camera=safe_read_key(sky.header,"CAMERA").strip().lower()
-        if not camera in skies :
-            skies[camera]=[]
-        skies[camera].append(sky)
+                    frames[camera].append(frame)
+            # possibly cleanup memory
+            del frames_by_expid
+    except Exception as e:
+        log.error(f"{rank=}: {e}")
+        # only ranks with an error catch here
+        error = e
 
-    for filename in args.fiberflats :
-        log.info("reading %s"%filename)
-        flat=io.read_fiberflat(filename)
-        camera=safe_read_key(flat.header,"CAMERA").strip().lower()
+    # check for error
+    if comm is not None:
+        error = comm.bcast(error)
+    # handle error(s) on all ranks
+    if error is not None:
+        msg = f"{rank}: caught error from read"
+        raise RuntimeError(msg) from error
 
-        # NEED TO ADD MORE CHECKS
-        if camera in flats:
-            log.warning("cannot handle several flats of same camera (%s), will use only the first one"%camera)
-            #raise ValueError("cannot handle several flats of same camera (%s)"%camera)
-        else :
-            flats[camera]=flat
+    if comm is not None:
+        starfibers = comm.bcast(starfibers, root=0)
+        starindices = comm.bcast(starindices, root=0)
+        fibermap = comm.bcast(fibermap, root=0)
+
+        gaia_indices = comm.bcast(gaia_indices, root=0)
+        legacy_indices = comm.bcast(legacy_indices, root=0)
+        n_legacy_std = comm.bcast(n_legacy_std, root=0)
+        n_gaia_std = comm.bcast(n_gaia_std, root=0)
+
+    if rank == 0:
+        flats={}
+        skies={}
+        for filename in args.skymodels :
+            log.info("reading %s"%filename)
+            sky=io.read_sky(filename)
+            camera=safe_read_key(sky.header,"CAMERA").strip().lower()
+            if not camera in skies :
+                skies[camera]=[]
+            skies[camera].append(sky)
+
+        for filename in args.fiberflats :
+            log.info("reading %s"%filename)
+            flat=io.read_fiberflat(filename)
+            camera=safe_read_key(flat.header,"CAMERA").strip().lower()
+
+            # NEED TO ADD MORE CHECKS
+            if camera in flats:
+                log.warning("cannot handle several flats of same camera (%s), will use only the first one"%camera)
+                #raise ValueError("cannot handle several flats of same camera (%s)"%camera)
+            else :
+                flats[camera]=flat
 
     # if color is not specified we decide on the fly
     color = args.color
@@ -334,66 +362,85 @@ def main(args, comm=None) :
     ############################################
     # since poping dict, we need to copy keys to iterate over to avoid
     # RuntimeError due to changing dict
-    frame_cams = list(frames.keys())
-    for cam in frame_cams:
+    try:
+        if rank == 0:
+            frame_cams = list(frames.keys())
+            for cam in frame_cams:
 
-        if not cam in skies:
-            log.warning("Missing sky for %s"%cam)
-            frames.pop(cam)
-            continue
-        if not cam in flats:
-            log.warning("Missing flat for %s"%cam)
-            frames.pop(cam)
-            continue
+                if not cam in skies:
+                    log.warning("Missing sky for %s"%cam)
+                    frames.pop(cam)
+                    continue
+                if not cam in flats:
+                    log.warning("Missing flat for %s"%cam)
+                    frames.pop(cam)
+                    continue
 
-        flat=flats[cam]
-        for frame,sky in zip(frames[cam],skies[cam]) :
-            frame.flux = frame.flux[starindices]
-            frame.ivar = frame.ivar[starindices]
-            frame.ivar *= (frame.mask[starindices] == 0)
-            frame.ivar *= (sky.ivar[starindices] != 0)
-            frame.ivar *= (sky.mask[starindices] == 0)
-            frame.ivar *= (flat.ivar[starindices] != 0)
-            frame.ivar *= (flat.mask[starindices] == 0)
-            frame.flux *= ( frame.ivar > 0) # just for clean plots
-            for star in range(frame.flux.shape[0]) :
-                ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
-                if ok.size > 0 :
-                    frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
-            frame.resolution_data = frame.resolution_data[starindices]
+                flat=flats[cam]
+                for frame,sky in zip(frames[cam],skies[cam]) :
+                    frame.flux = frame.flux[starindices]
+                    frame.ivar = frame.ivar[starindices]
+                    frame.ivar *= (frame.mask[starindices] == 0)
+                    frame.ivar *= (sky.ivar[starindices] != 0)
+                    frame.ivar *= (sky.mask[starindices] == 0)
+                    frame.ivar *= (flat.ivar[starindices] != 0)
+                    frame.ivar *= (flat.mask[starindices] == 0)
+                    frame.flux *= ( frame.ivar > 0) # just for clean plots
+                    for star in range(frame.flux.shape[0]) :
+                        ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
+                        if ok.size > 0 :
+                            frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
+                    frame.resolution_data = frame.resolution_data[starindices]
 
-        nframes=len(frames[cam])
-        if nframes>1 :
-            # optimal weights for the coaddition = ivar*throughput, not directly ivar,
-            # we estimate the relative throughput with median fluxes at this stage
-            medflux=np.zeros(nframes)
-            for i,frame in enumerate(frames[cam]) :
-                if np.sum(frame.ivar>0) == 0 :
-                    log.error("ivar=0 for all std star spectra in frame {}-{:08d}".format(cam,frame.meta["EXPID"]))
-                else :
-                    medflux[i] = np.median(frame.flux[frame.ivar>0])
-            log.debug("medflux = {}".format(medflux))
-            medflux *= (medflux>0)
-            if np.sum(medflux>0)==0 :
-               log.error("mean median flux = 0, for all stars in fibers {}".format(list(frames[cam][0].fibermap["FIBER"][starindices])))
-               sys.exit(12)
-            mmedflux = np.mean(medflux[medflux>0])
-            weights=medflux/mmedflux
-            log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
+                nframes=len(frames[cam])
+                if nframes>1 :
+                    # optimal weights for the coaddition = ivar*throughput, not directly ivar,
+                    # we estimate the relative throughput with median fluxes at this stage
+                    medflux=np.zeros(nframes)
+                    for i,frame in enumerate(frames[cam]) :
+                        if np.sum(frame.ivar>0) == 0 :
+                            log.error("ivar=0 for all std star spectra in frame {}-{:08d}".format(cam,frame.meta["EXPID"]))
+                        else :
+                            medflux[i] = np.median(frame.flux[frame.ivar>0])
+                    log.debug("medflux = {}".format(medflux))
+                    medflux *= (medflux>0)
+                    if np.sum(medflux>0)==0 :
+                        msg = "mean median flux = 0, for all stars in fibers {}".format(list(frames[cam][0].fibermap["FIBER"][starindices]))
+                        log.error(msg)
+                        # sys.exit(12)
+                        raise ValueError(msg)
+                    mmedflux = np.mean(medflux[medflux>0])
+                    weights=medflux/mmedflux
+                    log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
 
-            sw=np.zeros(frames[cam][0].flux.shape)
-            swf=np.zeros(frames[cam][0].flux.shape)
-            swr=np.zeros(frames[cam][0].resolution_data.shape)
+                    sw=np.zeros(frames[cam][0].flux.shape)
+                    swf=np.zeros(frames[cam][0].flux.shape)
+                    swr=np.zeros(frames[cam][0].resolution_data.shape)
 
-            for i,frame in enumerate(frames[cam]) :
-                sw  += weights[i]*frame.ivar
-                swf += weights[i]*frame.ivar*frame.flux
-                swr += weights[i]*frame.ivar[:,None,:]*frame.resolution_data
-            coadded_frame = frames[cam][0]
-            coadded_frame.ivar = sw
-            coadded_frame.flux = swf/(sw+(sw==0))
-            coadded_frame.resolution_data = swr/((sw+(sw==0))[:,None,:])
-            frames[cam] = [ coadded_frame ]
+                    for i,frame in enumerate(frames[cam]) :
+                        sw  += weights[i]*frame.ivar
+                        swf += weights[i]*frame.ivar*frame.flux
+                        swr += weights[i]*frame.ivar[:,None,:]*frame.resolution_data
+                    coadded_frame = frames[cam][0]
+                    coadded_frame.ivar = sw
+                    coadded_frame.flux = swf/(sw+(sw==0))
+                    coadded_frame.resolution_data = swr/((sw+(sw==0))[:,None,:])
+                    frames[cam] = [ coadded_frame ]
+    except Exception as e:
+        log.error(f"{rank=}: {e}")
+        # only ranks with an error catch here
+        error = e
+
+    # check for error
+    if comm is not None:
+        error = comm.bcast(error)
+    # handle error(s) on all ranks
+    if error is not None:
+        msg = f"{rank}: caught error during divide/subtract/trim"
+        raise RuntimeError(msg) from error
+
+    if comm is not None:
+        frames = comm.bcast(frames, root=0)
 
 
     # CHECK S/N
@@ -458,8 +505,19 @@ def main(args, comm=None) :
 
     # READ MODELS
     ############################################
-    log.info("reading star models in %s"%args.starmodels)
-    stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
+    # log.info("reading star models in %s"%args.starmodels)
+    # stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
+    stdwave,stdflux,templateid,teff,logg,feh = [None]*6
+    if rank == 0:
+        log.info("reading star models in %s"%args.starmodels)
+        stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
+    if comm is not None:
+        stdwave = comm.bcast(stdwave, root=0)
+        stdflux = comm.bcast(stdflux, root=0)
+        templateid = comm.bcast(templateid, root=0)
+        teff = comm.bcast(teff, root=0)
+        logg = comm.bcast(logg, root=0)
+        feh = comm.bcast(feh, root=0)
 
     # COMPUTE MAGS OF MODELS FOR EACH STD STAR MAG
     ############################################
@@ -571,115 +629,132 @@ def main(args, comm=None) :
         # The color 1 in head_comm contains all ranks that are have rank 0 in local_comm
         head_comm = comm.Split(rank < nstars, rank)
 
-    for star in range(rank % nstars, nstars, size):
+    error = None
+    try:
+        for star in range(rank % nstars, nstars, size):
 
-        log.info("rank %d: finding best model for observed star #%d"%(rank, star))
+            log.info("rank %d: finding best model for observed star #%d"%(rank, star))
 
-        # np.array of wave,flux,ivar,resol
-        wave = {}
-        flux = {}
-        ivar = {}
-        resolution_data = {}
-        for camera in frames :
-            for i,frame in enumerate(frames[camera]) :
-                identifier="%s-%d"%(camera,i)
-                wave[identifier]=frame.wave
-                flux[identifier]=frame.flux[star]
-                ivar[identifier]=frame.ivar[star]
-                resolution_data[identifier]=frame.resolution_data[star]
+            # np.array of wave,flux,ivar,resol
+            wave = {}
+            flux = {}
+            ivar = {}
+            resolution_data = {}
+            for camera in frames :
+                for i,frame in enumerate(frames[camera]) :
+                    identifier="%s-%d"%(camera,i)
+                    wave[identifier]=frame.wave
+                    flux[identifier]=frame.flux[star]
+                    ivar[identifier]=frame.ivar[star]
+                    resolution_data[identifier]=frame.resolution_data[star]
 
-        # preselect models based on magnitudes
-        photsys=fibermap['PHOTSYS'][star]
+            # preselect models based on magnitudes
+            photsys=fibermap['PHOTSYS'][star]
 
-        if gaia_std:
-            model_colors = model_mags[color_band1] - model_mags[color_band2]
-        else:
-            model_colors = model_mags[color_band1 + photsys] - model_mags[color_band2 + photsys]
-
-        color_diff = model_colors - star_unextincted_colors[color][star]
-        selection = np.abs(color_diff) < args.delta_color
-        if np.sum(selection) == 0 :
-            log.warning("no model in the selected color range for this star")
-            continue
-
-
-        # smallest cube in parameter space including this selection (needed for interpolation)
-        new_selection = (teff>=np.min(teff[selection]))&(teff<=np.max(teff[selection]))
-        new_selection &= (logg>=np.min(logg[selection]))&(logg<=np.max(logg[selection]))
-        new_selection &= (feh>=np.min(feh[selection]))&(feh<=np.max(feh[selection]))
-        selection = np.where(new_selection)[0]
-
-        log.info("star#%d fiber #%d, %s = %f, number of pre-selected models = %d/%d"%(
-            star, starfibers[star], color, star_unextincted_colors[color][star],
-            selection.size, stdflux.shape[0]))
-
-        # Match unextincted standard stars to data
-        match_templates_result = match_templates(
-            wave, flux, ivar, resolution_data,
-            stdwave, stdflux[selection],
-            teff[selection], logg[selection], feh[selection],
-            ncpu=ncpu, z_max=args.z_max, z_res=args.z_res,
-            template_error=args.template_error, comm=local_comm
-            )
-
-        # Only local rank 0 can perform the remaining work
-        if local_comm is not None and local_comm.Get_rank() != 0:
-            continue
-
-        coefficients, redshift[star], chi2dof[star] = match_templates_result
-        linear_coefficients[star,selection] = coefficients
-        log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
-            starfibers[star],
-            np.inner(teff,linear_coefficients[star]),
-            np.inner(logg,linear_coefficients[star]),
-            np.inner(feh,linear_coefficients[star]),
-            redshift[star],
-            chi2dof[star])
-            )
-
-        # Apply redshift to original spectrum at full resolution
-        model=np.zeros(stdwave.size)
-        redshifted_stdwave = stdwave*(1+redshift[star])
-        for i,c in enumerate(linear_coefficients[star]) :
-            if c != 0 :
-                model += c*np.interp(stdwave,redshifted_stdwave,stdflux[i])
-
-        # Apply dust extinction to the model
-        log.info("Applying MW dust extinction to star {} with EBV = {}".format(star,ebv[star]))
-        model *= dust_transmission(stdwave, ebv[star])
-
-        # Compute final color of dust-extincted model
-        photsys=fibermap['PHOTSYS'][star]
-
-        if not gaia_std:
-            model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ + photsys) for _ in [color_band1, color_band2]]
-        else:
-            model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ ) for _ in [color_band1, color_band2]]
-
-        if color_band1 == ref_mag_name:
-            model_magr = model_mag1
-        elif color_band2 == ref_mag_name:
-            model_magr = model_mag2
-        else:
-            # if the reference magnitude is not among colours
-            # I'm fetching it separately. This will happen when
-            # colour is BP-RP and ref magnitude is G
             if gaia_std:
-                model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name)
+                model_colors = model_mags[color_band1] - model_mags[color_band2]
             else:
-                model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name + photsys)
-        fitted_model_colors[star] = model_mag1 - model_mag2
+                model_colors = model_mags[color_band1 + photsys] - model_mags[color_band2 + photsys]
 
-        #- TODO: move this back into normalize_templates, at the cost of
-        #- recalculating a model magnitude?
+            color_diff = model_colors - star_unextincted_colors[color][star]
+            selection = np.abs(color_diff) < args.delta_color
+            if np.sum(selection) == 0 :
+                log.warning("no model in the selected color range for this star")
+                continue
 
-        cur_refmag = star_mags[ref_mag_name][star]
 
-        # Normalize the best model using reported magnitude
-        scalefac=10**((model_magr - cur_refmag)/2.5)
+            # smallest cube in parameter space including this selection (needed for interpolation)
+            new_selection = (teff>=np.min(teff[selection]))&(teff<=np.max(teff[selection]))
+            new_selection &= (logg>=np.min(logg[selection]))&(logg<=np.max(logg[selection]))
+            new_selection &= (feh>=np.min(feh[selection]))&(feh<=np.max(feh[selection]))
+            selection = np.where(new_selection)[0]
 
-        log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
-        normflux[star] = model*scalefac
+            log.info("star#%d fiber #%d, %s = %f, number of pre-selected models = %d/%d"%(
+                star, starfibers[star], color, star_unextincted_colors[color][star],
+                selection.size, stdflux.shape[0]))
+
+            # Match unextincted standard stars to data
+            match_templates_result = match_templates(
+                wave, flux, ivar, resolution_data,
+                stdwave, stdflux[selection],
+                teff[selection], logg[selection], feh[selection],
+                ncpu=ncpu, z_max=args.z_max, z_res=args.z_res,
+                template_error=args.template_error, comm=local_comm
+                )
+
+            # Only local rank 0 can perform the remaining work
+            if local_comm is not None and local_comm.Get_rank() != 0:
+                continue
+
+            coefficients, redshift[star], chi2dof[star] = match_templates_result
+            linear_coefficients[star,selection] = coefficients
+            log.info('Star Fiber: {}; TEFF: {:.3f}; LOGG: {:.3f}; FEH: {:.3f}; Redshift: {:g}; Chisq/dof: {:.3f}'.format(
+                starfibers[star],
+                np.inner(teff,linear_coefficients[star]),
+                np.inner(logg,linear_coefficients[star]),
+                np.inner(feh,linear_coefficients[star]),
+                redshift[star],
+                chi2dof[star])
+                )
+
+            # Apply redshift to original spectrum at full resolution
+            model=np.zeros(stdwave.size)
+            redshifted_stdwave = stdwave*(1+redshift[star])
+            for i,c in enumerate(linear_coefficients[star]) :
+                if c != 0 :
+                    model += c*np.interp(stdwave,redshifted_stdwave,stdflux[i])
+
+            # Apply dust extinction to the model
+            log.info("Applying MW dust extinction to star {} with EBV = {}".format(star,ebv[star]))
+            model *= dust_transmission(stdwave, ebv[star])
+
+            # Compute final color of dust-extincted model
+            photsys=fibermap['PHOTSYS'][star]
+
+            if not gaia_std:
+                model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ + photsys) for _ in [color_band1, color_band2]]
+            else:
+                model_mag1, model_mag2 = [get_magnitude(stdwave, model, model_filters, _ ) for _ in [color_band1, color_band2]]
+
+            if color_band1 == ref_mag_name:
+                model_magr = model_mag1
+            elif color_band2 == ref_mag_name:
+                model_magr = model_mag2
+            else:
+                # if the reference magnitude is not among colours
+                # I'm fetching it separately. This will happen when
+                # colour is BP-RP and ref magnitude is G
+                if gaia_std:
+                    model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name)
+                else:
+                    model_magr = get_magnitude(stdwave, model, model_filters, ref_mag_name + photsys)
+            fitted_model_colors[star] = model_mag1 - model_mag2
+
+            #- TODO: move this back into normalize_templates, at the cost of
+            #- recalculating a model magnitude?
+
+            cur_refmag = star_mags[ref_mag_name][star]
+
+            # Normalize the best model using reported magnitude
+            scalefac=10**((model_magr - cur_refmag)/2.5)
+
+            log.info('scaling {} mag {:.3f} to {:.3f} using scale {}'.format(ref_mag_name, model_magr, cur_refmag, scalefac))
+            normflux[star] = model*scalefac
+    except Exception as e:
+        log.error(f"{rank=}: {e}")
+        # only ranks with an error catch here
+        error = e
+
+    # check for error
+    if comm is not None:
+        errors = comm.allgather(error)
+    else:
+        errors = [error, ]
+    # handle error(s) on all ranks
+    for error in errors:
+        if error is not None:
+            msg = f"{rank}: caught error before gather!"
+            raise RuntimeError(msg) from error
 
     if head_comm is not None and rank < nstars: # head_comm color is 1
         linear_coefficients = head_comm.reduce(linear_coefficients, op=MPI.SUM, root=0)
