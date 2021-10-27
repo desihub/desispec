@@ -312,9 +312,10 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
                       f"\t\tTo overwrite, use --overwrite-value.\n"
                 if appendable:
                     err += "\t\tTo append to the existing, use --append-string.\n"
-                err += f"\t\tAll existing column entries for requested exposures were:"
-                err += f" {list(exptable[colname][row_numbers])} for expids: {list(exptable['EXPID'][row_numbers])}.\n"
-                err += "\nExiting."
+                err += f"\t\tAll existing column entries for requested exposures were:\n"
+                for exp,val in zip(list(exptable['EXPID'][row_numbers]), list(exptable[colname][row_numbers])):
+                    err += f"\t\t\t{exp}: {val}\n"
+                err += "\n\t\tExiting."
                 raise ValueError (err)
 
         if include_comment != '' and 'COMMENTS' in colnames:
