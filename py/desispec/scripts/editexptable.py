@@ -271,6 +271,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
     else:
         print(f"Changing default values in column: {colname} to '{value}' for exposures: {exposure_list}.")
 
+    orig_exptable = exptable.copy()[row_numbers]
     for rownum in row_numbers:
         if colname == 'BADCAMWORD' and exptable[colname][rownum] != cur_default and append_string:
             curcams = decode_camword(exptable[colname][rownum])
@@ -312,8 +313,8 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
                       f"\t\tTo overwrite, use --overwrite-value.\n"
                 if appendable:
                     err += "\t\tTo append to the existing, use --append-string.\n"
-                err += f"\t\tAll column entries in memory for requested exposures when error occurred were:\n"
-                for exp,val in zip(list(exptable['EXPID'][row_numbers]), list(exptable[colname][row_numbers])):
+                err += f"\t\tOriginal column entries for requested exposures were:\n"
+                for exp,val in zip(list(orig_exptable['EXPID']), list(orig_exptable[colname])):
                     err += f"\t\t\t{exp}: {val}\n"
                 err += "\n\t\tExiting."
                 raise ValueError (err)
