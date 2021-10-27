@@ -232,7 +232,7 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
                 rawfiles.append(filename)
 
-    log.info("read images ...")
+    log.info("read %s images ...", camera)
     images=[]
     shape=None
     first_image_header = None
