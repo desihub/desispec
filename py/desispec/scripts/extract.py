@@ -183,7 +183,7 @@ def gpu_specter_check_input_options(args):
         except ImportError:
             return False, 'cannot import cupy'
         if not (is_numba_cuda_available and is_cupy_available):
-            return False, 'gpu is not available'
+            return False, f'gpu is not available ({is_numba_cuda_available=}, {is_cupy_available=})'
 
     if args.decorrelate_fibers:
         msg = "--decorrelate-fibers not implemented with --gpu-specter"
@@ -208,6 +208,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         log.critical(message)
         raise ValueError(message)
 
+    import gpu_specter
     import gpu_specter.io
     import gpu_specter.core
     import gpu_specter.mpi
@@ -315,9 +316,9 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         img.meta['WAVEMIN'] = (wmin, 'First wavelength [Angstroms]')
         img.meta['WAVEMAX'] = (wmax, 'Last wavelength [Angstroms]')
         img.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
-        img.meta['SPECTER'] = ('dev', 'https://github.com/desihub/gpu_specter')
-        img.meta['IN_PSF']  = (_trim(args.psf), 'Input spectral PSF')
-        img.meta['IN_IMG']  = (_trim(args.input), 'Input image')
+        img.meta['SPECTER'] = (gpu_specter.__version__, 'https://github.com/desihub/gpu_specter')
+        img.meta['IN_PSF']  = (io.shorten_filename(args.psf), 'Input spectral PSF')
+        img.meta['IN_IMG']  = io.shorten_filename(args.input)
         depend.add_dependencies(img.meta)
 
         #- Check if input PSF was itself a traceshifted version of another PSF
@@ -350,6 +351,10 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         nonlocal corrected_wavelength
         if coordinator.work_comm is not None:
             corrected_wavelength = coordinator.work_comm.bcast(corrected_wavelength, root=0)
+
+        import gpu_specter.extract.gpu
+        expid_cam_str = '-'.join(os.path.splitext(os.path.basename(args.input))[0].split('-')[1:][::-1])
+        gpu_specter.extract.gpu.debug_filename = 'nan-' + expid_cam_str
 
         result = gpu_specter.core.extract_frame(
             image, psf, args.bundlesize,       # input data
@@ -391,11 +396,20 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         fibermap = result['fibermap']
         wave = result['wave']
 
+        if np.any(np.isnan(flux)):
+            log.warn(f"Found nan in flux: count={np.sum(np.isnan(flux))}")
+            flux[np.isnan(flux)] = 0
+            ivar[np.isnan(flux)] = 0
+        if np.any(np.isnan(ivar)):
+            raise ValueError(f"Found nan in ivar: count={np.sum(np.isnan(ivar))}")
+            # ivar[np.isnan(ivar)] = 0
+
         #- Compute the output mask
         mask = np.zeros(flux.shape, dtype=np.uint32)
         mask[pixmask_fraction > 0.5] |= specmask.SOMEBADPIX
         mask[pixmask_fraction == 1.0] |= specmask.ALLBADPIX
         mask[chi2pix > 100.0] |= specmask.BAD2DFIT
+        mask[ivar == 0] |= specmask.BAD2DFIT
 
         #- TODO: compare with cpu-specter
         if fibermap is not None:
