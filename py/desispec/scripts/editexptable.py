@@ -316,7 +316,7 @@ def change_exposure_table_rows(exptable, exp_str, colname, value, include_commen
                 err += f"\t\tOriginal column entries for requested exposures were:\n"
                 for exp,val in zip(list(orig_exptable['EXPID']), list(orig_exptable[colname])):
                     err += f"\t\t\t{exp}: {val}\n"
-                err += "\n\t\tExiting."
+                err += "\n\t\tNo entries updated. Exiting."
                 raise ValueError (err)
 
         if include_comment != '' and 'COMMENTS' in colnames:
