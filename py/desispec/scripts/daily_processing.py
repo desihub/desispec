@@ -220,7 +220,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Get relevant data from the tables
     all_exps = set(etable['EXPID'])
-    arcs,flats,sciences, arcjob,flatjob, \
+    arcs,flats,sciences, darkjob, arcjob,flatjob, \
     curtype,lasttype, curtile,lasttile, internal_id = parse_previous_tables(etable, ptable, night)
 
     ## While running on the proper night and during night hours,
@@ -277,18 +277,26 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             erow['BADAMPS'] = badamps
             unproc = False
             if exp in exps_to_ignore:
-                print("\n{} given as exposure id to ignore. Not processing.".format(exp))
+                print(f"\n{exp} given as exposure id to ignore. Not processing.")
                 erow['LASTSTEP'] = 'ignore'
                 # erow['EXPFLAG'] = np.append(erow['EXPFLAG'], )
                 unproc = True
             elif erow['LASTSTEP'] == 'ignore':
-                print("\n{} identified by the pipeline as something to ignore. Not processing.".format(exp))
+                print(f"\n{exp} identified by the pipeline as something to ignore. Not processing.")
                 unproc = True
             elif erow['OBSTYPE'] not in procobstypes:
-                print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
+                print(f"\n{erow['OBSTYPE']} not in obstypes to process: {procobstypes}. Not processing.")
                 unproc = True
             elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
                 print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
+                unproc = True
+            elif str(erow['OBSTYPE']).lower() == 'dark' and \
+                 float(erow['EXPTIME']) < 299.0 and float(erow['EXPTIME']) > 301.0:
+                print("\nDark exposure with EXPTIME not consistent with 300s. Not processing.")
+                unproc = True
+            elif str(erow['OBSTYPE']).lower() == 'dark' and darkjob is not None:
+                print("\nDark exposure found, but already proocessed dark with" +
+                      f" expID {darkjob['EXPID']}. Skipping this one.")
                 unproc = True
 
             print(f"\nFound: {erow}")
@@ -301,7 +309,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             curtype,curtile = get_type_and_tile(erow)
 
-            if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
+            if lasttype is not None and lasttype != 'dark' \
+               and ((curtype != lasttype) or (curtile != lasttile)):
                 ptable, arcjob, flatjob, \
                 sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                                       lasttype, internal_id, dry_run=dry_run_level,
@@ -314,7 +323,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             prow['INTID'] = internal_id
             internal_id += 1
             prow['JOBDESC'] = prow['OBSTYPE']
-            prow = define_and_assign_dependency(prow, arcjob, flatjob)
+            prow = define_and_assign_dependency(prow, darkjob, arcjob, flatjob)
             print(f"\nProcessing: {prow}\n")
             prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                      strictly_successful=False, check_for_outputs=check_for_outputs,
@@ -329,6 +338,10 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
                 sciences.append(prow)
 
+            ## If processed a dark, assign that to the dark job
+            if curtype == 'dark':
+                darkjob = prow.copy()
+
             lasttile = curtile
             lasttype = curtype
 
@@ -339,7 +352,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
             write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
 
-        print("\nReached the end of curent iteration of new exposures.")
+        print("\nReached the end of current iteration of new exposures.")
         sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
                          dry_run=(dry_run and (override_night is not None) and (not continue_looping_debug)))
 

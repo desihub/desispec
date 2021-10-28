@@ -536,7 +536,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     if not os.path.exists(datpath):
         if 'OBSTYPE' not in req_dict:
             logtype = log.error
-        elif req_dict['OBSTYPE'].lower() in ['science','arc','flat']:
+        elif req_dict['OBSTYPE'].lower() in ['science','arc','flat', 'dark']:
             logtype = log.error
         else:
             logtype = log.info
