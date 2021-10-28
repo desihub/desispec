@@ -7,7 +7,7 @@ import re
 from astropy.table import Table
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_table
-from desispec.workflow.utils import pathjoin
+from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.timing import what_night_is_it, nersc_start_time, nersc_end_time
 from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, \
@@ -219,15 +219,11 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         lasttile = curtile
         lasttype = curtype
 
-        if not dry_run:
-            time.sleep(1)
+        sleep_and_report(1, message_suffix=f"to slow down the queue submission rate", dry_run=dry_run)
 
         tableng = len(ptable)
         if tableng > 0 and ii % 10 == 0:
             write_table(ptable, tablename=proc_table_pathname)
-            if not dry_run:
-                print("\n", "Sleeping 2s to slow down the queue submission rate")
-                time.sleep(2)
 
         ## Flush the outputs
         sys.stdout.flush()

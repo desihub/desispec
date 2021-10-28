@@ -11,16 +11,18 @@ import glob
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_tables, write_table
-from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, get_printable_banner
+from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, \
+                                    get_printable_banner, sleep_and_report
 from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
-from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, validate_badamps, \
-                                       get_exposure_table_path, get_exposure_table_name, summarize_exposure
+from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, \
+    get_exposure_table_path, get_exposure_table_name, summarize_exposure
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, get_processing_table_name, erow_to_prow
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
-from desispec.io.util import difference_camwords, parse_badamps
+from desispec.io.util import difference_camwords, parse_badamps, validate_badamps
+
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
@@ -176,11 +178,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         exps_to_ignore = np.sort(np.array(exps_to_ignore).astype(int))
         print(f"\nReceived exposures to ignore: {exps_to_ignore}")
         exps_to_ignore = set(exps_to_ignore)
-        
-    ## Adjust wait times if simulating things
-    speed_modifier = 1
-    if dry_run:
-        speed_modifier = 0.1
 
     ## Get context specific variable values
     nersc_start = nersc_start_time(night=true_night)
@@ -298,6 +295,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             etable.add_row(erow)
             if unproc:
                 unproc_table.add_row(erow)
+                sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
+                write_tables([etable, unproc_table], tablenames=[exp_table_pathname, unproc_table_pathname])
                 continue
 
             curtype,curtile = get_type_and_tile(erow)
@@ -337,13 +336,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sys.stdout.flush()
             sys.stderr.flush()
 
-            time.sleep(10*speed_modifier)
-            write_tables([etable, ptable, unproc_table],
-                         tablenames=[exp_table_pathname, proc_table_pathname, unproc_table_pathname])
+            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
+            write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
 
         print("\nReached the end of curent iteration of new exposures.")
-        print("Waiting {}s before looking for more new data".format(data_cadence_time*speed_modifier))
-        time.sleep(data_cadence_time*speed_modifier)
+        sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
+                         dry_run=(dry_run and (override_night is not None) and (not continue_looping_debug)))
 
         if len(ptable) > 0:
             ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
@@ -352,7 +350,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
             write_table(ptable, tablename=proc_table_pathname)
-            time.sleep(30*speed_modifier)
+            sleep_and_report(10, message_suffix=f"after updating queue information", dry_run=dry_run)
 
     ## Flush the outputs
     sys.stdout.flush()
@@ -389,7 +387,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     #                                                       ptab_name=proc_table_pathname, dry_run=dry_run_level)
     #     write_table(ptable, tablename=proc_table_pathname)
     #     if any_jobs_not_complete(ptable['STATUS']):
-    #         time.sleep(queue_cadence_time*speed_modifier)
+    #         sleep_and_report(queue_cadence_time, message_suffix=f"after resubmitting job to queue",
+    #                          dry_run=(dry_run and (override_night is not None) and not (continue_looping_debug)))
     #
     #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
     #     write_table(ptable, tablename=proc_table_pathname)
