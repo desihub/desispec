@@ -10,6 +10,7 @@ import glob
 import warnings
 import time
 from pkg_resources import resource_filename
+import fitsio 
 
 import yaml
 
@@ -42,7 +43,7 @@ target_columns = [
     # ('TARGET_RA_IVAR', 'f8', '1/degree**2', 'Inverse variance of TARGET_RA'),
     # ('TARGET_DEC_IVAR', 'f8','1/degree**2', 'Inverse variance of TARGET_DEC'),
     ('BRICKID',     'i8', '', 'Imaging Surveys brick ID'),
-    ('BRICKNAME',   'S8', '', 'Imaging Surveys brick name'),
+    ('BRICKNAME',  (str, 8), '', 'Imaging Surveys brick name'),
     ('BRICK_OBJID', 'i8', '', 'Imaging Surveys OBJID on that brick'),
     ('MORPHTYPE', (str, 4), '', 'Imaging Surveys morphological type'),
     ('PRIORITY',    'i4', '', 'Assignment priority; larger=higher priority'),
@@ -52,7 +53,7 @@ target_columns = [
     ('PMRA',        'f4', 'marcsec/year', 'PM in +RA dir (already incl cos(dec))'),
     ('PMDEC',       'f4', 'marcsec/year', 'Proper motion in +dec direction'),
     ('PARALLAX',    'f4', 'marcsec', 'Parallax'),
-    ('REF_CAT',     'S2', '', 'astrometry reference catalog'),
+    ('REF_CAT',     (str, 2), '', 'astrometry reference catalog'),
     ('REF_EPOCH',   'f4', '', 'proper motion reference epoch'),
     # ('PMRA_IVAR',   'f4', 'year**2/marcsec**2', 'Inverse variance of PMRA'),
     # ('PMDEC_IVAR',  'f4', 'year**2/marcsec**2', 'Inverse variance of PMDEC'),
@@ -313,12 +314,16 @@ def read_fibermap(filename):
     Args:
         filename : input file name
     """
-    #- Implementation note: wrapping Table.read() with this function allows us
+    #- Implementation note: wrapping fitsio.read() with this function allows us
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
     log = get_logger()
     t0 = time.time()
-    fibermap = Table.read(filename, 'FIBERMAP')
+
+    fibermap, hdr = fitsio.read(filename, ext='FIBERMAP', header=True)
+    fibermap = Table(fibermap)
+    fibermap.meta.update(hdr)
+
     duration = time.time() - t0
 
     #- support old simulated fiberassign files
