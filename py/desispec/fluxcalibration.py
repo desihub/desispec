@@ -868,7 +868,10 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1, stdcheck=True) :
+def compute_flux_calibration(frame, input_model_wave, input_model_flux,
+        input_model_fibers, nsig_clipping=10., deg=2, debug=False,
+        highest_throughput_nstars=0, exposure_seeing_fwhm=1.1, stdcheck=True,
+        nsig_flux_scale=3) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
@@ -883,6 +886,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
       stdcheck: check if the model stars are actually standards according
                 to the fibermap and only rely on those
+      nsig_flux_scale: n sigma cutoff on the flux scale among standard stars
 
     Returns:
          desispec.FluxCalib object
@@ -1244,10 +1248,13 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             medscale = np.median(scale[badfiber==0])
             rmscorr = 1.4*np.median(np.abs(scale[badfiber==0]-medscale))
             log.info("iter {} mean median rms scale = {:4.3f} {:4.3f} {:4.3f}".format(iteration,mscale,medscale,rmscorr))
-            bad=(np.abs(scale-medscale)>3*rmscorr)
+            if nsig_flux_scale>0 :
+                bad=(np.abs(scale-medscale)> nsig_flux_scale*rmscorr)
+            else :
+                bad=np.repeat(False,scale.size)
             if np.sum(bad)>0 :
                 good=~bad
-                log.info("iter {} use {} stars, discarding 3 sigma outlier stars with medcorr = {}".format(iteration,np.sum(good),scale[bad]))
+                log.info("iter {} use {} stars, discarding {} sigma outlier stars with medcorr = {}".format(iteration,np.sum(good),nsig_flux_scale,scale[bad]))
                 mscale=1./np.mean(1./scale[good][badfiber[good]==0])
                 newly_bad = bad&(badfiber==0)&(np.abs(scale-1)>0.05)
                 if np.sum(newly_bad)>0 :

@@ -37,7 +37,7 @@ import glob
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
-from desispec.io.util import create_camword
+from desispec.io.util import create_camword, validate_badamps
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -53,7 +53,7 @@ import desiutil.iers
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
-from desispec.workflow.exptable import validate_badamps
+
 stop_imports = time.time()
 
 #########################################
@@ -316,6 +316,8 @@ def main(args=None, comm=None):
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --badcol-table {}".format(badcolumnsfile)
                     runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
+                else:
+                    log.info(f'{badcolumnsfile} already exists; skipping desi_inspect_dark')
 
             if comm is not None :
                 comm.barrier()
@@ -874,12 +876,37 @@ def main(args=None, comm=None):
     # -------------------------------------------------------------------------
     # - Flux calibration
 
+    def list2str(xx) :
+        s=""
+        for x in xx :
+            s+=" "+str(x)
+        return s
+
     if args.obstype in ['SCIENCE'] and \
                 (not args.noskysub) and \
                 (not args.nofluxcalib):
         timer.start('fluxcalib')
 
         night, expid = args.night, args.expid #- shorter
+
+        if rank == 0 :
+            r_cameras = []
+            for camera in args.cameras :
+                if camera[0] == 'r' :
+                    r_cameras.append(camera)
+            if len(r_cameras)>0 :
+                outfile    = findfile('calibstars',night, expid)
+                frames     = list2str([findfile('frame', night, expid, camera) for camera in r_cameras])
+                fiberflats = list2str([input_fiberflat[camera] for camera in r_cameras])
+                skys       = list2str([findfile('sky', night, expid, camera) for camera in r_cameras])
+                models     = list2str([findfile('stdstars', night, expid,spectrograph=int(camera[1])) for camera in r_cameras])
+                cmd = f"desi_select_calib_stars --frames {frames} --fiberflats {fiberflats} --skys {skys} --models {models} -o {outfile}"
+                cmd += " --delta-color-cut 0.1"
+                runcmd(cmd,inputs=[],outputs=[outfile,])
+
+        if comm is not None:
+            comm.barrier()
+
         #- Compute flux calibration vectors per camera
         for camera in args.cameras[rank::size]:
             framefile = findfile('frame', night, expid, camera)
@@ -887,6 +914,7 @@ def main(args=None, comm=None):
             spectrograph = int(camera[1])
             stdfile = findfile('stdstars', night, expid,spectrograph=spectrograph)
             calibfile = findfile('fluxcalib', night, expid, camera)
+            calibstars = findfile('calibstars',night, expid)
 
             fiberflatfile = input_fiberflat[camera]
 
@@ -896,9 +924,9 @@ def main(args=None, comm=None):
             cmd += " --fiberflat {}".format(fiberflatfile)
             cmd += " --models {}".format(stdfile)
             cmd += " --outfile {}".format(calibfile)
-            cmd += " --delta-color-cut 0.1"
+            cmd += " --selected-calibration-stars {}".format(calibstars)
 
-            inputs = [framefile, skyfile, fiberflatfile, stdfile]
+            inputs = [framefile, skyfile, fiberflatfile, stdfile, calibstars]
             runcmd(cmd, inputs=inputs, outputs=[calibfile,])
 
         timer.stop('fluxcalib')

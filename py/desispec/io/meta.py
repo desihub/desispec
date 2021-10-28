@@ -86,6 +86,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         skycorr = '{specprod_dir}/exposures/{night}/{expid:08d}/skycorr-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
+        calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
         #  qa
         exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
@@ -97,6 +98,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
+        biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
         badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
         badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
         #

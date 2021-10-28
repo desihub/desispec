@@ -63,11 +63,11 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
 
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
-    figfile = make_tile_qa_plot(outfile)
+    figfile = make_tile_qa_plot(outfile, specprod_dir)
     if figfile is not None :
         log.info("wrote QA plot {}".format(figfile))
     else :
-        loq.warning("failed to compute QA plot for {}".format(outfile))
+        log.warning("failed to compute QA plot for {}".format(outfile))
 
     if "EXTNAME" in fiberqa_table.meta :
         fiberqa_table.meta.pop("EXTNAME")
@@ -103,7 +103,6 @@ def main():
         tileids = parse_int_args(args.tileids)
     else:
         tileids = None
-
 
     dirnames = sorted(glob.glob('{}/exposures/????????'.format(args.prod)))
     nights=[]

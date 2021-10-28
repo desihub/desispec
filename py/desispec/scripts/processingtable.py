@@ -6,10 +6,10 @@ import numpy as np
 import re
 from astropy.table import Table, vstack
 from astropy.io import fits
-from desispec.io.util import parse_cameras, difference_camwords
+from desispec.io.util import parse_cameras, difference_camwords, validate_badamps
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name, \
-                                        night_to_month, validate_badamps
+                                        night_to_month
 
 from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin, get_printable_banner
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, exptable_to_proctable, \
