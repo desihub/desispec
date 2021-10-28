@@ -316,6 +316,8 @@ def main(args=None, comm=None):
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --badcol-table {}".format(badcolumnsfile)
                     runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
+                else:
+                    log.info(f'{badcolumnsfile} already exists; skipping desi_inspect_dark')
 
             if comm is not None :
                 comm.barrier()

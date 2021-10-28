@@ -83,9 +83,19 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     prow['STATUS'] = 'UNKNOWN'
     log = get_logger()
 
-    job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstars', 'poststdstar': 'cframe',
-                       'arc': 'psf', 'flat': 'fiberflat', 'psfnight': 'psfnight', 'nightlyflat': 'fiberflatnight',
-                       'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'redrock_tile'}
+    job_to_file_map = {
+            'prestdstar': 'sframe',
+            'stdstarfit': 'stdstars',
+            'poststdstar': 'cframe',
+            'dark': 'badcolumns',
+            'arc': 'psf',
+            'flat': 'fiberflat',
+            'psfnight': 'psfnight',
+            'nightlyflat': 'fiberflatnight',
+            'spectra': 'spectra_tile',
+            'coadds': 'coadds_tile',
+            'redshift': 'redrock_tile',
+            }
 
     night = prow['NIGHT']
     if prow['JOBDESC'] in ['cumulative','pernight-v0','pernight','perexp']:
