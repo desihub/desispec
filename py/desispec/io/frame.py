@@ -14,7 +14,6 @@ from astropy.table import Table
 import warnings
 
 from desiutil.depend import add_dependencies
-from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from ..frame import Frame
@@ -85,11 +84,11 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         qrimg.header["NDIAG"] =frame.ndiag
         hdus.append(qrimg)
     if fibermap is not None:
-        fibermap = encode_table(fibermap)  #- unicode -> bytes
+        fibermap = Table(fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.fibermap is not None:
-        fibermap = encode_table(frame.fibermap)  #- unicode -> bytes
+        fibermap = Table(frame.fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.spectrograph is not None:
@@ -101,7 +100,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         hdus.append( fits.ImageHDU(frame.chi2pix.astype('f4'), name='CHI2PIX' ) )
 
     if frame.scores is not None :
-        scores_tbl = encode_table(frame.scores)  #- unicode -> bytes
+        scores_tbl = Table(frame.scores)
         scores_tbl.meta['EXTNAME'] = 'SCORES'
         hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
         if frame.scores_comments is not None : # add comments in header

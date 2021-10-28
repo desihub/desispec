@@ -157,15 +157,14 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray.
     """
     from astropy.table import Table
-    from desiutil.io import encode_table
 
     log = get_logger()
 
     #- Convert data as needed
     if isinstance(data, (np.recarray, np.ndarray, Table)):
-        outdata = encode_table(data, encoding='ascii')
+        outdata = Table(data)
     else:
-        outdata = encode_table(_dict2ndarray(data), encoding='ascii')
+        outdata = Table(_dict2ndarray(data))
 
     # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
     hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
