@@ -174,9 +174,10 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     ## To be eventually replaced by more sophisticated cal selection
     ## Get one dark first
     isdark = (etable['OBSTYPE'] == 'dark')
-    wheredark = np.where(isdark)[0]
-    etable = vstack([etable[wheredark[0]], etable[~isdark]])
-    unproc_table = vstack([unproc_table, etable[wheredark[1:]]])
+    if np.sum(isdark)>0:
+        wheredark = np.where(isdark)[0]
+        etable = vstack([etable[wheredark[0]], etable[~isdark]])
+        unproc_table = vstack([unproc_table, etable[wheredark[1:]]])
     ## Then get rest of the cals above scis
     issci = (etable['OBSTYPE'] == 'science')
     etable = vstack([etable[~issci], etable[issci]])
