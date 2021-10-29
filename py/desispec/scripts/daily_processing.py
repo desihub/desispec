@@ -290,8 +290,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
                 print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
                 unproc = True
-            elif str(erow['OBSTYPE']).lower() == 'dark' and \
-                 float(erow['EXPTIME']) < 299.0 and float(erow['EXPTIME']) > 301.0:
+            elif str(erow['OBSTYPE']).lower() == 'dark' and np.abs(float(erow['EXPTIME'])-300.) > 1:
                 print("\nDark exposure with EXPTIME not consistent with 300s. Not processing.")
                 unproc = True
             elif str(erow['OBSTYPE']).lower() == 'dark' and darkjob is not None:
@@ -309,8 +308,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             curtype,curtile = get_type_and_tile(erow)
 
-            if lasttype is not None and lasttype != 'dark' \
-               and ((curtype != lasttype) or (curtile != lasttile)):
+            if lasttype is not None  and ((curtype != lasttype) or (curtile != lasttile)):
                 ptable, arcjob, flatjob, \
                 sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                                       lasttype, internal_id, dry_run=dry_run_level,
