@@ -4,7 +4,7 @@ import os
 import sys
 import time
 import re
-from astropy.table import Table
+from astropy.table import Table, vstack
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_table
 from desispec.workflow.utils import pathjoin, sleep_and_report
@@ -159,16 +159,36 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             good_exptimes.append(False)
         elif erow['OBSTYPE'] == 'arc' and erow['EXPTIME'] > 8.:
             good_exptimes.append(False)
+        elif erow['OBSTYPE'] == 'dark' and np.abs(float(erow['EXPTIME'])-300.) > 1:
+            good_exptimes.append(False)
         else:
             good_exptimes.append(True)
+
     good_exptimes = np.array(good_exptimes)
     good = (good_exps & good_types & good_exptimes)
     unproc_table = etable[~good]
     etable = etable[good]
 
+
+    ## Simple table organization to ensure cals processed first
+    ## To be eventually replaced by more sophisticated cal selection
+    ## Get one dark first
+    isdark = (etable['OBSTYPE'] == 'dark')
+    if np.sum(isdark)>0:
+        wheredark = np.where(isdark)[0]
+        unproc_table = vstack([unproc_table, etable[wheredark[1:]]])
+        unproc_table.sort('EXPID')
+        etable = vstack([etable[wheredark[0]], etable[~isdark]])
+
+    ## Then get rest of the cals above scis
+    issci = (etable['OBSTYPE'] == 'science')
+    etable = vstack([etable[~issci], etable[issci]])
+
+    ## Done determining what not to process, so write out unproc file
     write_table(unproc_table, tablename=unproc_table_pathname)
+
     ## Get relevant data from the tables
-    arcs, flats, sciences, arcjob, flatjob, \
+    arcs, flats, sciences, darkjob, arcjob, flatjob, \
     curtype, lasttype, curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
     # if len(ptable) > 0:
     #     ptable_expids = np.unique(np.concatenate(ptable['EXPID']))
@@ -187,6 +207,11 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         curtype, curtile = get_type_and_tile(erow)
 
+        if erow['OBSTYPE'] == 'dark' and darkjob is not None:
+            print("\nWARNING: Dark exposure found, but already proocessed dark with" +
+                  f" expID {darkjob['EXPID']}. This shouldn't happen. Skipping this one.")
+            continue
+
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
             ptable, arcjob, flatjob, \
             sciences, internal_id    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
@@ -200,13 +225,19 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         prow['INTID'] = internal_id
         internal_id += 1
         prow['JOBDESC'] = prow['OBSTYPE']
-        prow = define_and_assign_dependency(prow, arcjob, flatjob)
+        prow = define_and_assign_dependency(prow, darkjob, arcjob, flatjob)
         print(f"\nProcessing: {prow}\n")
         prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue, reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
                                  system_name=system_name)
+
+        ## If processed a dark, assign that to the dark job
+        if curtype == 'dark':
+            prow['CALIBRATOR'] = 1
+            darkjob = prow.copy()
+
+        ## Add the processing row to the processing table
         ptable.add_row(prow)
-        # ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
