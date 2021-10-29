@@ -1,4 +1,5 @@
-import os,sys
+import os, sys, glob, json
+import traceback
 import datetime
 import subprocess
 
@@ -13,7 +14,10 @@ from desispec.preproc import masked_median
 from desispec.preproc import parse_sec_keyword, get_amp_ids
 from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm
-from desispec.io.util import get_tempfilename
+from desispec.io.util import get_tempfilename, parse_cameras, decode_camword
+from desispec.workflow.exptable import get_exposure_table_pathname
+from desispec.workflow.tableio import load_table
+
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
 
@@ -333,6 +337,177 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
     os.rename(tmpfile, outfile)
 
     log.info(f"done with {camera}")
+
+def _find_zeros(night):
+    """Find all OBSTYPE=ZERO exposures on a given night
+
+    Args:
+        night (int): YEARMMDD night to search
+
+    Returns array of expids that are OBSTYPE=ZERO
+
+    Uses production exposure tables to veto known bad ZEROs, but it will also
+    find any ZEROs on disk for that night, regardless of whether they are in
+    the exposures table or not.
+    """
+
+    #- Find all ZERO exposures on this night
+    log = get_logger()
+    nightdir = io.rawdata_root() + f'/{night}'
+    requestfiles = sorted(glob.glob(f'{nightdir}/*/request*.json'))
+    expids = list()
+    for filename in requestfiles:
+        with open(filename) as fx:
+            r = json.load(fx)
+
+        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO'):
+            expids.append(int(os.path.basename(os.path.dirname(filename))))
+        else:
+            continue
+
+    expids = np.array(expids)
+
+    #- Remove ZEROs that are flagged as bad, but allow for the possibility
+    #- of ZEROs that aren't in the exposure table for whatever reason
+    log.debug('Checking for pre-identified bad ZEROs')
+    expfile = get_exposure_table_pathname(night)
+    exptable = load_table(expfile, tabletype='exptable')
+    bad = (exptable['OBSTYPE']=='zero') & (exptable['LASTSTEP']!='all')
+
+    if np.any(bad):
+        drop = np.isin(expids, exptable['EXPID'][bad])
+        ndrop = np.sum(drop)
+        drop_expids = expids[drop]
+        log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
+        expids = expids[~drop]
+
+    return expids
+
+def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
+        comm=None):
+    """Create nightly biases for cameras on night
+
+    Args:
+        night (int): YEARMMDD night to process
+        cameras (str): list of cameras to process
+
+    Options:
+        outdir (str): write files to this output directory
+        nzeros (int): number of OBSTYPE=ZERO exposures to use
+        minzeros (int): minimum number of OBSTYPE=ZERO exposures required
+        comm: MPI communicator for parallelism
+
+    Returns:
+        nfail (int): number of cameras that failed across all ranks
+
+    Writes biasnight*.fits files in outdir or
+    $DESI_SPECTRO_REDUX/$SPECPROD/calibnight/night/
+
+    Note: compute_bias_file requires ~12 GB memory per camera, so limit
+    the size of the MPI communicator depending upon the memory available.
+    """
+    #- only import fitsio if needed, not upon package import
+    import fitsio
+
+    log = get_logger()
+
+    if comm is not None:
+        rank, size = comm.rank, comm.size
+    else:
+        rank, size = 0, 1
+
+    #- Find all zeros for the night
+    expids = None
+    if rank == 0:
+        expids = _find_zeros(night)
+
+    if comm is not None:
+        expids = comm.bcast(expids, root=0)
+
+    if len(expids) < minzeros:
+        msg = f'Only {len(expids)} ZEROS on {night}; need at least {minzeros}'
+        if rank == 0:
+            log.critical(msg)
+        raise RuntimeError(msg)
+
+    if len(expids) > nzeros:
+        nexps = len(expids)
+        n = (nexps - nzeros)//2
+        expids = expids[n:n+nzeros]
+
+    if rank == 0:
+        log.info(f'Using {len(expids)} ZEROs for nightly bias {night}')
+
+    rawfiles = [io.findfile('raw', night, e) for e in expids]
+
+    #- Rank 0 create output directory if needed
+    if rank == 0:
+        outfile = io.findfile('biasnight', night=night,
+                              camera=cameras[0], outdir=outdir)
+        os.makedirs(os.path.dirname(outfile), exist_ok=True)
+
+    #- wait for directory creation before continuing
+    if comm is not None:
+        comm.barrier()
+
+    nfail = 0
+    for camera in cameras[rank::size]:
+        outfile = io.findfile('biasnight', night=night, camera=camera,
+                              outdir=outdir)
+
+        #- write to preliminary file until validated as better than default bias
+        head, tail = os.path.split(outfile)
+        tail = tail.replace('biasnight-', 'biasnighttest-')
+        testbias = os.path.join(head, tail)
+
+        if os.path.exists(outfile):
+            log.info(f'{outfile} already exists; skipping')
+        elif os.path.exists(testbias):
+            log.info(f'{testbias} already exists; skipping')
+        else:
+            log.info(f'Rank {rank} computing nightly bias for {night} {camera}')
+            try:
+                compute_bias_file(rawfiles, testbias, camera,
+                                  extraheader=dict(NIGHT=night))
+            except Exception as ex:
+                log.error(f'Rank {rank} camera {camera} raised {type(ex)} exception {ex}')
+                for line in traceback.format_exception(*sys.exc_info()):
+                    log.error('  '+line.strip())
+
+        #- Validate that the new nightlybias is better than default
+        if os.path.exists(testbias):
+            rawtestfile = rawfiles[-1]
+            with fitsio.FITS(rawtestfile) as fx:
+                rawhdr = fx['SPEC'].read_header()
+                camhdr = fx[camera].read_header()
+
+            cf = CalibFinder([rawhdr, camhdr])
+            defaultbias = cf.findfile('BIAS')
+
+            log.info(f'Comparing {night} {camera} nightly bias to {defaultbias} using {os.path.basename(rawtestfile)}')
+            mdiff1, mdiff2 = compare_bias(rawtestfile, testbias, defaultbias)
+            maxabs1 = np.max(np.abs(mdiff1))
+            std1 = np.std(mdiff1)
+            maxabs2 = np.max(np.abs(mdiff2))
+            std2 = np.std(mdiff2)
+            log.info(f'Nightly bias {camera}: maxabsdiff {maxabs1:.2f}, stddev {std1:.2f}')
+            log.info(f'Default bias {camera}: maxabsdiff {maxabs2:.2f}, stddev {std2:.2f}')
+
+            if maxabs1 < maxabs2:
+                log.info(f'Selecting nightly bias for {night} {camera}')
+                os.rename(testbias, outfile)
+            else:
+                log.warning(f'Nightly bias worse than default; leaving {testbias} for inspection')
+
+    if comm is not None:
+        nfail = np.sum(comm.gather(nfail, root=0))
+        nfail = comm.bcast(nfail, root=0)
+
+    if rank == 0 and nfail > 0:
+        log.error(f'{nfail}/{len(cameras)} failed')
+
+    return nfail
+
 
 def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     """Compare rawfile image to bias images in biasfile1 and biasfile2

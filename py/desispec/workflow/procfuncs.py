@@ -249,8 +249,10 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
-    specs = str(prow['PROCCAMWORD'])
-    cmd += ' --cameras={} -n {} -e {}'.format(specs, prow['NIGHT'], prow['EXPID'][0])
+    elif prow['OBSTYPE'].lower() == 'dark':
+        cmd += ' --nightlybias'
+    pcamw = str(prow['PROCCAMWORD'])
+    cmd += ' --cameras={} -n {} -e {}'.format(pcamw, prow['NIGHT'], prow['EXPID'][0])
     if prow['BADAMPS'] != '':
         cmd += ' --badamps={}'.format(prow['BADAMPS'])
     return cmd
@@ -453,7 +455,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 #############################################
 ##########   Row Manipulations   ############
 #############################################
-def define_and_assign_dependency(prow, arcjob, flatjob):
+def define_and_assign_dependency(prow, darkjob, arcjob, flatjob):
     """
     Given input processing row and possible arcjob (processing row for psfnight) and flatjob (processing row for
     nightlyflat), this defines the JOBDESC keyword and assigns the dependency appropriate for the job type of prow.
@@ -461,6 +463,9 @@ def define_and_assign_dependency(prow, arcjob, flatjob):
     Args:
         prow, Table.Row or dict. Must include keyword accessible definitions for 'OBSTYPE'. A row must have column names for
                                  'JOBDESC', 'INT_DEP_IDS', and 'LATEST_DEP_ID'.
+        darkjob, Table.Row, dict, or NoneType. Row corresponding to the processed 300s dark for the night from proctable.
+                                              This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
+                                              If None, it assumes the dependency doesn't exist and no dependency is assigned.
         arcjob, Table.Row, dict, or NoneType. Processing row corresponding to psfnight for the night of the data in prow.
                                               This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
                                               If None, it assumes the dependency doesn't exist and no dependency is assigned.
@@ -478,13 +483,20 @@ def define_and_assign_dependency(prow, arcjob, flatjob):
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
     if prow['OBSTYPE'] in ['science', 'twiflat']:
-        if flatjob is None:
+        if flatjob is not None:
+            dependency = flatjob
+        elif arcjob is not None:
             dependency = arcjob
         else:
-            dependency = flatjob
+            dependency = darkjob
         prow['JOBDESC'] = 'prestdstar'
     elif prow['OBSTYPE'] == 'flat':
-        dependency = arcjob
+        if arcjob is not None:
+            dependency = arcjob
+        else:
+            dependency = darkjob
+    elif prow['OBSTYPE'] == 'arc':
+        dependency = darkjob
     else:
         dependency = None
 
@@ -586,6 +598,7 @@ def parse_previous_tables(etable, ptable, night):
                                     all the flats, if multiple sets existed)
         sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile)
+        darkjob, dict or None, the dark proctable row if it exists. Otherwise None.
         arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
         flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
         curtype, None, the obstype of the current job being run. Always None as first new job will define this.
@@ -598,7 +611,7 @@ def parse_previous_tables(etable, ptable, night):
     """
     log = get_logger()
     arcs, flats, sciences = [], [], []
-    arcjob, flatjob = None, None
+    darkjob, arcjob, flatjob = None, None, None
     curtype,lasttype = None,None
     curtile,lasttile = None,None
 
@@ -607,6 +620,10 @@ def parse_previous_tables(etable, ptable, night):
         internal_id = int(prow['INTID'])+1
         lasttype,lasttile = get_type_and_tile(ptable[-1])
         jobtypes = ptable['JOBDESC']
+
+        if 'dark' in jobtypes:
+            darkjob = table_row_to_dict(ptable[jobtypes=='dark'][0])
+            log.info("Located dark job in exposure table: {}".format(darkjob))
 
         if 'psfnight' in jobtypes:
             arcjob = table_row_to_dict(ptable[jobtypes=='psfnight'][0])
@@ -647,7 +664,7 @@ def parse_previous_tables(etable, ptable, night):
         internal_id = night_to_starting_iid(night)
 
     return arcs,flats,sciences, \
-           arcjob, flatjob, \
+           darkjob, arcjob, flatjob, \
            curtype, lasttype, \
            curtile, lasttile,\
            internal_id

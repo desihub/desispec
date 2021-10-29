@@ -37,13 +37,14 @@ import glob
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
-from desispec.io.util import create_camword, validate_badamps
+from desispec.io.util import create_camword, parse_cameras, validate_badamps
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.util import runcmd
 import desispec.scripts.extract
 import desispec.scripts.specex
+import desispec.scripts.nightly_bias
 
 from desitarget.targetmask import desi_mask
 
@@ -143,8 +144,9 @@ def main(args=None, comm=None):
                 jobdesc = 'prestdstar'
             #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):
             #    jobdesc = 'science'
-        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,\
-                                                jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
+        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,
+                                                jobdesc=jobdesc, queue=args.queue,
+                                                nightlybias=args.nightlybias, runtime=args.runtime,
                                                 batch_opts=args.batch_opts, timingfile=args.timingfile,
                                                 system_name=args.system_name)
         err = 0
@@ -175,6 +177,26 @@ def main(args=None, comm=None):
     #- Wait for rank 0 to make directories before proceeding
     if comm is not None:
         comm.barrier()
+
+    #-------------------------------------------------------------------------
+    #- Create nightly bias from N>>1 ZEROs, but only for B-cameras
+    if args.nightlybias:
+        timer.start('nightlybias')
+
+        bcamword = None
+        if rank == 0:
+            bcameras = [cam for cam in args.cameras if cam.lower().startswith('b')]
+            bcamword = parse_cameras(bcameras)
+
+        if comm is not None:
+            bcamword = comm.bcast(bcamword, root=0)
+
+        cmd = f"desi_compute_nightly_bias -n {args.night} -c {bcamword}"
+        if rank == 0:
+            log.info(f'RUNNING {cmd}')
+
+        desispec.scripts.nightly_bias.main(cmd.split()[1:], comm=comm)
+        timer.stop('nightlybias')
 
     #-------------------------------------------------------------------------
     #- Preproc
@@ -249,13 +271,11 @@ def main(args=None, comm=None):
         if comm is not None:
             comm.barrier()
 
-
-
     #-------------------------------------------------------------------------
     #- Get input PSFs
     timer.start('findpsf')
     input_psf = dict()
-    if rank == 0:
+    if rank == 0 and args.obstype not in ['DARK',]:
         for camera in args.cameras :
             if args.psf is not None :
                 input_psf[camera] = args.psf
@@ -323,6 +343,8 @@ def main(args=None, comm=None):
                 comm.barrier()
 
             timer.stop('inspect_dark')
+        elif rank == 0:
+            log.warning(f'Not running desi_inspect_dark for DARK with exptime={exptime:.1f}')
 
     #-------------------------------------------------------------------------
     #- Traceshift
