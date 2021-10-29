@@ -114,6 +114,7 @@ def _get_columns():
             columns[survey].insert(columns[survey].index('DESI_TARGET'), "{0}_{1}_TARGET".format(survey.upper(), t.upper()))
         columns[survey].remove('SCND_TARGET')
     columns['cmx'] = columns['main'].copy()
+    columns['cmx'].insert(columns['cmx'].index('DESI_TARGET'), "CMX_TARGET")
     return columns
 
 
