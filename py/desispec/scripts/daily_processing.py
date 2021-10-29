@@ -326,6 +326,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
                                      strictly_successful=False, check_for_outputs=check_for_outputs,
                                      resubmit_partial_complete=resubmit_partial_complete)
+
+            ## If processed a dark, assign that to the dark job
+            if curtype == 'dark':
+                prow['CALIBRATOR'] = 1
+                darkjob = prow.copy()
+
+            ## Add the processing row to the processing table
             ptable.add_row(prow)
 
             ## Note: Assumption here on number of flats
@@ -335,10 +342,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                 arcs.append(prow)
             elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
                 sciences.append(prow)
-
-            ## If processed a dark, assign that to the dark job
-            if curtype == 'dark':
-                darkjob = prow.copy()
 
             lasttile = curtile
             lasttype = curtype

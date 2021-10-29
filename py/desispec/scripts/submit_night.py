@@ -229,8 +229,14 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue, reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
                                  system_name=system_name)
+
+        ## If processed a dark, assign that to the dark job
+        if curtype == 'dark':
+            prow['CALIBRATOR'] = 1
+            darkjob = prow.copy()
+
+        ## Add the processing row to the processing table
         ptable.add_row(prow)
-        # ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
@@ -239,10 +245,6 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             arcs.append(prow)
         elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
             sciences.append(prow)
-
-        ## If processed a dark, assign that to the dark job
-        if curtype == 'dark':
-            darkjob = prow.copy()
 
         lasttile = curtile
         lasttype = curtype
