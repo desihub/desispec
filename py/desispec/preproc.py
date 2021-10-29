@@ -672,10 +672,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # median filter to futher reduce the noise
         med_overscan_col = median_filter(overscan_col,7)
         # range of variation of overscan
-        overscan_step = np.max(med_overscan_col)-np.min(med_overscan_col)
+        margin=50
+        overscan_step = np.max(med_overscan_col[margin:-margin])-np.min(med_overscan_col[margin:-margin])
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info("Overscan max-min per row (OSTEP) for amplifier %s of camera %s = %.2f ADU"%(amp,camera,overscan_step))
-        if overscan_step <  1 :
+        if overscan_step <  2 : # tuned to trig on the worst few
             log.info("Subtracting average overscan for amplifier %s of camera %s"%(amp,camera))
             o,r =  calc_overscan(raw_overscan_col)
             # replace by single value
