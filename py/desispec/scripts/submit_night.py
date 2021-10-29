@@ -177,6 +177,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     if np.sum(isdark)>0:
         wheredark = np.where(isdark)[0]
         unproc_table = vstack([unproc_table, etable[wheredark[1:]]])
+        unproc_table.sort('EXPID')
         etable = vstack([etable[wheredark[0]], etable[~isdark]])
 
     ## Then get rest of the cals above scis
