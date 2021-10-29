@@ -9,6 +9,7 @@ import scipy.interpolate
 from pkg_resources import resource_exists, resource_filename
 
 from scipy import signal
+from scipy.ndimage.filters import median_filter
 
 from desispec.image import Image
 from desispec import cosmics
@@ -654,44 +655,58 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 o,r = calc_overscan(raw_overscan_squared[row])
                 overscan_row[row] = raw_overscan_row[row] - o
 
+        kk = parse_sec_keyword(header['CCDSEC'+amp])
+
         # Now remove the overscan_col
         nrows=raw_overscan_col.shape[0]
         log.info("nrows in overscan=%d"%nrows)
         overscan_col = np.zeros(nrows)
         rdnoise  = np.zeros(nrows)
-        if (cfinder and cfinder.haskey('OVERSCAN'+amp) and cfinder.value("OVERSCAN"+amp).upper()=="PER_ROW") or overscan_per_row:
-            log.info("Subtracting overscan per row for amplifier %s of camera %s"%(amp,camera))
-            for j in range(nrows) :
-                if np.isnan(np.sum(overscan_col[j])) :
-                    log.warning("NaN values in row %d of overscan of amplifier %s of camera %s"%(j,amp,camera))
-                    continue
-                o,r =  calc_overscan(raw_overscan_col[j])
-                #log.info("%d %f %f"%(j,o,r))
-                overscan_col[j]=o
-                rdnoise[j]=r
-        else :
+        for j in range(nrows) :
+            if np.isnan(np.sum(overscan_col[j])) :
+                log.warning("NaN values in row %d of overscan of amplifier %s of camera %s"%(j,amp,camera))
+                continue
+            o,r =  calc_overscan(raw_overscan_col[j])
+            overscan_col[j]=o
+            rdnoise[j]=r
+        # median filter to futher reduce the noise
+        med_overscan_col = median_filter(overscan_col,7)
+        # range of variation of overscan
+        overscan_step = np.max(med_overscan_col)-np.min(med_overscan_col)
+        header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
+        log.info("Overscan max-min per row (OSTEP) for amplifier %s of camera %s = %.2f ADU"%(amp,camera,overscan_step))
+        if overscan_step <  1 :
             log.info("Subtracting average overscan for amplifier %s of camera %s"%(amp,camera))
             o,r =  calc_overscan(raw_overscan_col)
-            overscan_col += o
-            rdnoise  += r
-            if bias is not False :
-                # the master bias noise is already in the raw data
-                # (because we already subtracted the bias)
-                # so we only need to add the quadratic difference of the master bias read noise
-                # between the active region and the overscan columns
-                jj = parse_sec_keyword(header['DATASEC'+amp])
-                o,biasnoise_datasec = calc_overscan(bias[jj])
-                o,biasnoise_ovcol   = calc_overscan(bias[ov_col])
-                new_rdnoise         = np.sqrt(rdnoise**2+biasnoise_datasec**2-biasnoise_ovcol**2)
-                log.info("Master bias noise for AMP %s = %4.3f ADU, rdnoise %4.3f -> %4.3f ADU"%(amp,biasnoise_datasec,np.mean(rdnoise),np.mean(new_rdnoise)))
-                rdnoise = new_rdnoise
+            # replace by single value
+            overscan_col = np.repeat(o,nrows)
+            rdnoise  = np.repeat(r,nrows)
+            header['OMETH'+amp]=("AVERAGE","use average overscan")
+        else :
+            header['OMETH'+amp]=("PER_ROW","use average overscan per row")
+            log.info("Subtracting overscan per row for amplifier %s of camera %s"%(amp,camera))
+
+            if overscan_step > 15 :
+                mask[kk] |= ccdmask.BADREADNOISE
+                log.warning("OSTEP={} is large for amplifier {}, set ccdmask.BADREADNOISE bit mask".format(overscan_step,amp))
+
+        if bias is not False :
+            # the master bias noise is already in the raw data
+            # (because we already subtracted the bias)
+            # so we only need to add the quadratic difference of the master bias read noise
+            # between the active region and the overscan columns
+            jj = parse_sec_keyword(header['DATASEC'+amp])
+            o,biasnoise_datasec = calc_overscan(bias[jj])
+            o,biasnoise_ovcol   = calc_overscan(bias[ov_col])
+            new_rdnoise         = np.sqrt(rdnoise**2+biasnoise_datasec**2-biasnoise_ovcol**2)
+            log.info("Master bias noise for AMP %s = %4.3f ADU, rdnoise %4.3f -> %4.3f ADU"%(amp,biasnoise_datasec,np.mean(rdnoise),np.mean(new_rdnoise)))
+            rdnoise = new_rdnoise
 
         rdnoise *= gain
         median_rdnoise  = np.median(rdnoise)
         median_overscan = np.median(overscan_col)
         log.info("Median rdnoise and overscan= %f %f"%(median_rdnoise,median_overscan))
 
-        kk = parse_sec_keyword(header['CCDSEC'+amp])
         for j in range(nrows) :
             readnoise[kk][j] = rdnoise[j]
 
