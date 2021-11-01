@@ -687,7 +687,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             header['OMETH'+amp]=("PER_ROW","use average overscan per row")
             log.info("Subtracting overscan per row for amplifier %s of camera %s"%(amp,camera))
 
-            if overscan_step > 15 :
+            # The threshold of 5 ADUs discards 20% of the r8-A data
+            # from Oct 2021. But it is necessary to discard some
+            # exposures with OSTEPA>=8 ADU where bias variation
+            # residuals were the cause of some bad redshifts.
+            if overscan_step > 5. :
                 mask[kk] |= ccdmask.BADREADNOISE
                 log.warning("OSTEP={} is large for amplifier {}, set ccdmask.BADREADNOISE bit mask".format(overscan_step,amp))
 
