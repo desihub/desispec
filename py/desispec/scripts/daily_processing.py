@@ -303,7 +303,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if unproc:
                 unproc_table.add_row(erow)
                 sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
-                write_tables([etable, unproc_table], tablenames=[exp_table_pathname, unproc_table_pathname])
+                if dry_run_level < 3:
+                    write_tables([etable, unproc_table], tablenames=[exp_table_pathname, unproc_table_pathname])
                 continue
 
             curtype,curtile = get_type_and_tile(erow)
@@ -351,7 +352,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sys.stderr.flush()
 
             sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
-            write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
+            if dry_run_level < 3:
+                write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
 
         print("\nReached the end of current iteration of new exposures.")
         sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
@@ -363,7 +365,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             #                                                   ptab_name=proc_table_pathname, dry_run=dry_run_level)
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
-            write_table(ptable, tablename=proc_table_pathname)
+            if dry_run_level < 3:
+                write_table(ptable, tablename=proc_table_pathname)
             sleep_and_report(10, message_suffix=f"after updating queue information", dry_run=dry_run)
 
     ## Flush the outputs
@@ -380,7 +383,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## All jobs now submitted, update information from job queue and save
     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run_level)
-    write_table(ptable, tablename=proc_table_pathname)
+    if dry_run_level < 3:
+        write_table(ptable, tablename=proc_table_pathname)
 
     print(f"Completed submission of exposures for night {night}.")
 
@@ -399,13 +403,15 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
     #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
     #                                                       ptab_name=proc_table_pathname, dry_run=dry_run_level)
-    #     write_table(ptable, tablename=proc_table_pathname)
+    #     if dry_run_level < 3:
+    #          write_table(ptable, tablename=proc_table_pathname)
     #     if any_jobs_not_complete(ptable['STATUS']):
     #         sleep_and_report(queue_cadence_time, message_suffix=f"after resubmitting job to queue",
     #                          dry_run=(dry_run and (override_night is not None) and not (continue_looping_debug)))
     #
     #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
-    #     write_table(ptable, tablename=proc_table_pathname)
+    #     if dry_run_level < 3:
+    #          write_table(ptable, tablename=proc_table_pathname)
     #     ## Flush the outputs
     #     sys.stdout.flush()
     #     sys.stderr.flush()

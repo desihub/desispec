@@ -197,7 +197,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     etable = vstack([etable[~issci], etable[issci]])
 
     ## Done determining what not to process, so write out unproc file
-    write_table(unproc_table, tablename=unproc_table_pathname)
+    if dry_run_level < 3:
+        write_table(unproc_table, tablename=unproc_table_pathname)
 
     ## Get relevant data from the tables
     arcs, flats, sciences, darkjob, arcjob, flatjob, \
@@ -205,7 +206,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     if len(ptable) > 0:
         ptable = update_from_queue(ptable, start_time=nersc_start,
                                    end_time=nersc_end, dry_run=0)
-        if not dry_run:
+        if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
         if any_jobs_not_complete(ptable['STATUS']) and not ignore_proc_table_failures:
             print("ERROR: Some jobs have an incomplete job status. This script will "+
@@ -277,7 +278,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         sleep_and_report(1, message_suffix=f"to slow down the queue submission rate", dry_run=dry_run)
 
         tableng = len(ptable)
-        if tableng > 0 and ii % 10 == 0:
+        if tableng > 0 and ii % 10 == 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
 
         ## Flush the outputs
@@ -295,6 +296,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                               z_submit_types=z_submit_types, system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
-        write_table(ptable, tablename=proc_table_pathname)
+        if dry_run_level < 3:
+            write_table(ptable, tablename=proc_table_pathname)
 
     print(f"Completed submission of exposures for night {night}.", '\n\n\n')
