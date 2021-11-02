@@ -53,6 +53,10 @@ def parse_args():  # options=None):
     parser.add_argument("--append-to-proc-table", action="store_true",
                         help="Give this flag if you want to submit jobs even if proc table exists."+
                         " Note this will skip existing exposures present in proc table.")
+    parser.add_argument("--ignore-proc-table-failures", action="store_true",
+                        help="Give this flag if you want to submit jobs even if "+
+                        " there are incomplete jobs in the existing proc table."+
+                        " Only to be used after vetting proc table failures.")
     parser.add_argument("--dont-check-job-outputs", action="store_true",
                         help="If all files for a pending job exist and this is False, then the script will not be "+
                              "submitted. If some files exist and this is True, only the "+

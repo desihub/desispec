@@ -19,7 +19,8 @@ from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime', reservation=None, system_name=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
-                 dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True, append_to_proc_table=False,
+                 dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True,
+                 append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None):
     """
@@ -50,6 +51,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                       otherwise prints an error and returns.
         append_to_proc_table: bool. True if you want to submit jobs even if a processing table already exists.
                                          Otherwise jobs will be appended to it. Default is False
+        ignore_proc_table_failures: bool. True if you want to submit other jobs even the loaded
+                                        processing table has incomplete jobs in it. Use with caution. Default is False.
         dont_check_job_outputs, bool. Default is False. If False, the code checks for the existence of the expected final
                                  data products for the script being submitted. If all files exist and this is False,
                                  then the script will not be submitted. If some files exist and this is False, only the
@@ -202,8 +205,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     if len(ptable) > 0:
         ptable = update_from_queue(ptable, start_time=nersc_start,
                                    end_time=nersc_end, dry_run=0)
-        write_table(ptable, tablename=proc_table_pathname)
-        if any_jobs_not_complete(ptable['STATUS']):
+        if not dry_run:
+            write_table(ptable, tablename=proc_table_pathname)
+        if any_jobs_not_complete(ptable['STATUS']) and not ignore_proc_table_failures:
             print("ERROR: Some jobs have an incomplete job status. This script will "+
                   "not fix them. You should remedy those first. Exiting")
             return
