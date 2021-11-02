@@ -16,7 +16,7 @@ from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
                                               get_desi_proc_batch_file_path
-from desispec.workflow.utils import pathjoin
+from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
@@ -765,25 +765,25 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         else:
             log.error(f"number of qdeps should be 1 or more: Rown {rown}, ideps {ideps}")
 
-    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation, dry_run=dry_run)
+    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
+                                           strictly_successful=True, dry_run=dry_run)
     submits += 1
 
     if not dry_run:
-        time.sleep(2)
+        sleep_and_report(1, message_suffix=f"after submitting job to queue")
         if submits % 10 == 0:
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
-            time.sleep(60)
+            sleep_and_report(2, message_suffix=f"after writing to disk")
         if submits % 100 == 0:
-            time.sleep(540)
             proc_table = update_from_queue(proc_table)
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
-
+            sleep_and_report(10, message_suffix=f"after updating queue and writing to disk")
     return proc_table, submits
 
 
