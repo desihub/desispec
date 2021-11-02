@@ -17,7 +17,7 @@ from desispec.workflow.utils import verify_variable_with_environment, pathjoin, 
 from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
 from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, \
     get_exposure_table_path, get_exposure_table_name, summarize_exposure
-from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, get_processing_table_name, erow_to_prow
+from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_pathname, erow_to_prow
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
@@ -30,40 +30,44 @@ def parse_args():  # options=None):
     """
     parser = argparse.ArgumentParser(description="Submit a one past night of data for processing with the DESI data pipeline.")
 
-    parser.add_argument("-n","--night", type=str, required=True, help="The night you want processed.")
-    parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
-                        help="The basic data obstypes to submit for processing. " +
-                             "E.g. science, dark, twilight, flat, arc, zero.")
-    parser.add_argument("--z-submit-types", type=str, default='perexp,pernight', required=False,
-                        help="The group types of redshifts that should be submitted with each exposure. If not "+
-                             "specified, default  is 'perexp,pernight'. If "+
-                             "'false' or 'None' then no redshifts are submitted")
-    parser.add_argument("--dry-run-level", type=int, default=0, required=False,
-                        help="If nonzero, this is a simulated run. If level=1 the scripts will be written but not submitted. "+
-                             "If level=2, the scripts will not be written or submitted. Logging will remain the same "+
-                             "for testing as though scripts are being submitted. Default is 0 (false).")
-    parser.add_argument("--tiles", type=str, required=False,
-                        help="Comma separated list of TILEIDs to include; use -99 to include arcs/flats")
+    parser.add_argument("-n","--night", type=str, default=None, help="The night you want processed.")
+    parser.add_argument("--proc-table-pathname", type=str, required=False, default=None,
+                        help="Directory name where the output processing table should be saved.")
+    parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
+                        help="File format and extension for the exp and proc tables.")
+    parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
+                        help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
+                        "dry-run-level is defined as nonzero.")
+
+    # parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
+    #                     help="The basic data obstypes to submit for processing. " +
+    #                          "E.g. science, dark, twilight, flat, arc, zero.")
+    # parser.add_argument("--z-submit-types", type=str, default='perexp,pernight', required=False,
+    #                     help="The group types of redshifts that should be submitted with each exposure. If not "+
+    #                          "specified, default  is 'perexp,pernight'. If "+
+    #                          "'false' or 'None' then no redshifts are submitted")
+    # parser.add_argument("--dry-run-level", type=int, default=0, required=False,
+    #                     help="If nonzero, this is a simulated run. If level=1 the scripts will be written but not submitted. "+
+    #                          "If level=2, the scripts will not be written or submitted. Logging will remain the same "+
+    #                          "for testing as though scripts are being submitted. Default is 0 (false).")
+    # parser.add_argument("--tiles", type=str, required=False,
+    #                     help="Comma separated list of TILEIDs to include; use -99 to include arcs/flats")
+
     # File and dir defs
     #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
     #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
     #                         "Overwrites the environment variable SPECPROD")
     # parser.add_argument("-q", "--queue", type=str, required=False, default='realtime',
     #                     help="The queue to submit jobs to. Default is realtime.")
-    parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
-                        help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
+
     # parser.add_argument("--system-name", type=str, required=False, default=None,
     #                     help="Batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu, ...")
     # parser.add_argument("--exp-table-path", type=str, required=False, default=None,
     #                     help="Directory name where the output exposure table should be saved.")
-    parser.add_argument("--proc-table-path", type=str, required=False, default=None,
-                        help="Directory name where the output processing table should be saved.")
-    parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
-                        help="File format and extension for the exp and proc tables.")
+
     # Code Flags
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
-                        "dry-run-level is defined as nonzero.")
     # parser.add_argument("--no-redshifts", action="store_true",
     #                     help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
     # parser.add_argument("--error-if-not-available", action="store_true",
@@ -72,13 +76,13 @@ def parse_args():  # options=None):
     # parser.add_argument("--append-to-proc-table", action="store_true",
     #                     help="Give this flag if you want to submit jobs even if proc table exists."+
     #                     " Note this will skip existing exposures present in proc table.")
-    parser.add_argument("--dont-check-job-outputs", action="store_true",
-                        help="If all files for a pending job exist and this is False, then the script will not be "+
-                             "submitted. If some files exist and this is True, only the "+
-                             "subset of the cameras without the final data products will be generated and submitted.")
-    parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
-                        help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
-                             "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
+    # parser.add_argument("--dont-check-job-outputs", action="store_true",
+    #                     help="If all files for a pending job exist and this is False, then the script will not be "+
+    #                          "submitted. If some files exist and this is True, only the "+
+    #                          "subset of the cameras without the final data products will be generated and submitted.")
+    # parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
+    #                     help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
+    #                          "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     args = parser.parse_args()
 
     # convert args.tiles str to list of int
@@ -90,6 +94,13 @@ def parse_args():  # options=None):
 if __name__ == '__main__':
     args = parse_args()
     ptable_pathname = args.proc_table_pathname
+    if ptable_pathname is None:
+        if args.night is None:
+            ValueError("Either night or proc-table-path must be specified")
+        ## Determine where the processing table will be written
+        ptable_pathname = get_processing_table_pathname(prodmod=args.night,
+                                             extension=args.tab_filetype)
+
     if not os.path.exists(ptable_pathname):
         ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
 
