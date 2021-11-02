@@ -14,12 +14,13 @@ from desispec.workflow.proctable import default_exptypes_for_proctable, get_proc
                                         get_processing_table_name, erow_to_prow, table_row_to_dict
 from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile, \
                                         define_and_assign_dependency, create_and_submit, checkfor_and_submit_joint_job
-from desispec.workflow.queue import update_from_queue
+from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime', reservation=None, system_name=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
-                 dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True, overwrite_existing_tables=False,
+                 dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True,
+                 append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
                  tiles=None):
     """
@@ -48,8 +49,10 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         tab_filetype: str. The file extension (without the '.') of the exposure and processing tables.
         error_if_not_available: bool. Default is True. Raise as error if the required exposure table doesn't exist,
                                       otherwise prints an error and returns.
-        overwrite_existing_tables: bool. True if you want to submit jobs even if a processing table already exists.
+        append_to_proc_table: bool. True if you want to submit jobs even if a processing table already exists.
                                          Otherwise jobs will be appended to it. Default is False
+        ignore_proc_table_failures: bool. True if you want to submit other jobs even the loaded
+                                        processing table has incomplete jobs in it. Use with caution. Default is False.
         dont_check_job_outputs, bool. Default is False. If False, the code checks for the existence of the expected final
                                  data products for the script being submitted. If all files exist and this is False,
                                  then the script will not be submitted. If some files exist and this is False, only the
@@ -121,11 +124,25 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     elif dry_run_level > 0:
         dry_run = True
 
+    ## Get context specific variable values
+    true_night = what_night_is_it()
+    nersc_start = nersc_start_time(night=true_night)
+    nersc_end = nersc_end_time(night=true_night)
+
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
-    if not overwrite_existing_tables and os.path.exists(proc_table_pathname):
-        print(f"ERROR: Processing table: {proc_table_pathname} already exists and not "+
-              "given flag overwrite_existing. Exiting this night.")
-        return
+    if os.path.exists(proc_table_pathname):
+        if not append_to_proc_table:
+            print(f"ERROR: Processing table: {proc_table_pathname} already exists and not "+
+                  "given flag --append-to-proc-table. Exiting this night.")
+            return
+        else:
+            if int(str(true_night)[6:])<8:
+                if int(str(true_night)[4:6])==1:
+                    nersc_start = nersc_start_time(night=true_night-10000+1100+18)
+                else:
+                    nersc_start = nersc_start_time(night=true_night-100+18)
+            else:
+                nersc_start = nersc_start_time(night=true_night-7)
 
     ## Determine where the unprocessed data table will be written
     unproc_table_pathname = pathjoin(proc_table_path, name.replace('processing', 'unprocessed'))
@@ -145,11 +162,6 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         if ptable is not None:
             keep = np.isin(ptable['TILEID'], tiles)
             ptable = ptable[keep]
-
-    ## Get context specific variable values
-    true_night = what_night_is_it()
-    nersc_start = nersc_start_time(night=true_night)
-    nersc_end = nersc_end_time(night=true_night)
 
     good_exps = np.array([col.lower() != 'ignore' for col in etable['LASTSTEP']]).astype(bool)
     good_types = np.array([val in proc_obstypes for val in etable['OBSTYPE']]).astype(bool)
@@ -185,20 +197,32 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     etable = vstack([etable[~issci], etable[issci]])
 
     ## Done determining what not to process, so write out unproc file
-    write_table(unproc_table, tablename=unproc_table_pathname)
+    if dry_run_level < 3:
+        write_table(unproc_table, tablename=unproc_table_pathname)
 
     ## Get relevant data from the tables
     arcs, flats, sciences, darkjob, arcjob, flatjob, \
     curtype, lasttype, curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
-    # if len(ptable) > 0:
-    #     ptable_expids = np.unique(np.concatenate(ptable['EXPID']))
-    # else:
-    #     ptable_expids = np.array([], dtype=int)
+    if len(ptable) > 0:
+        ptable = update_from_queue(ptable, start_time=nersc_start,
+                                   end_time=nersc_end, dry_run=0)
+        if dry_run_level < 3:
+            write_table(ptable, tablename=proc_table_pathname)
+        if any_jobs_not_complete(ptable['STATUS']) and not ignore_proc_table_failures:
+            print("ERROR: Some jobs have an incomplete job status. This script will "+
+                  "not fix them. You should remedy those first. Exiting")
+            return
+        ptable_expids = np.unique(np.concatenate(ptable['EXPID']))
+        if len(set(etable['EXPID']).difference(set(ptable_expids))) == 0:
+            print("ERROR: All EXPID's already present in processing table. Exiting")
+            return
+    else:
+        ptable_expids = np.array([], dtype=int)
 
     ## Loop over new exposures and process them as relevant to that type
     for ii, erow in enumerate(etable):
-        # if erow['EXPID'] in ptable_expids:
-        #     continue
+        if erow['EXPID'] in ptable_expids:
+            continue
         erow = table_row_to_dict(erow)
         exp = int(erow['EXPID'])
         print(f'\n\n##################### {exp} #########################')
@@ -216,7 +240,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             ptable, arcjob, flatjob, \
             sciences, internal_id    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                                      lasttype, internal_id, dry_run=dry_run_level,
-                                                                     queue=queue, reservation=reservation, strictly_successful=False,
+                                                                     queue=queue, reservation=reservation, strictly_successful=True,
                                                                      check_for_outputs=check_for_outputs,
                                                                      resubmit_partial_complete=resubmit_partial_complete,
                                                                      z_submit_types=z_submit_types, system_name=system_name)
@@ -238,6 +262,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         ## Add the processing row to the processing table
         ptable.add_row(prow)
+        #ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
@@ -253,7 +278,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         sleep_and_report(1, message_suffix=f"to slow down the queue submission rate", dry_run=dry_run)
 
         tableng = len(ptable)
-        if tableng > 0 and ii % 10 == 0:
+        if tableng > 0 and ii % 10 == 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
 
         ## Flush the outputs
@@ -265,12 +290,13 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         ptable, arcjob, flatjob, \
         sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                               lasttype, internal_id, dry_run=dry_run_level,
-                                                              queue=queue, reservation=reservation, strictly_successful=False,
+                                                              queue=queue, reservation=reservation, strictly_successful=True,
                                                               check_for_outputs=check_for_outputs,
                                                               resubmit_partial_complete=resubmit_partial_complete,
                                                               z_submit_types=z_submit_types, system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
-        write_table(ptable, tablename=proc_table_pathname)
+        if dry_run_level < 3:
+            write_table(ptable, tablename=proc_table_pathname)
 
     print(f"Completed submission of exposures for night {night}.", '\n\n\n')
