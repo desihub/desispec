@@ -106,10 +106,13 @@ if __name__ == '__main__':
 
     ## Get context specific variable values
     true_night = what_night_is_it()
-    if int(str(true_night[4:6])) == 1:
-        nersc_start = nersc_start_time(night=true_night - 10000 + 1100)
+    if int(str(true_night)[6:]) < 8:
+        if int(str(true_night)[4:6]) == 1:
+            nersc_start = nersc_start_time(night=true_night - 10000 + 1100 + 18)
+        else:
+            nersc_start = nersc_start_time(night=true_night - 100 + 18)
     else:
-        nersc_start = nersc_start_time(night=true_night - 100)
+        nersc_start = nersc_start_time(night=true_night - 7)
     nersc_end = nersc_end_time(night=true_night)
 
     ## Combine the table names and types for easier passing to io functions
