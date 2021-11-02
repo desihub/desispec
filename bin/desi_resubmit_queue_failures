@@ -120,6 +120,7 @@ if __name__ == '__main__':
 
     ## Load in the files defined above
     ptable = load_table(tablename=ptable_pathname, tabletype=table_type)
+    print(f"Identified ptable with {len(ptable)} entries.")
     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=0,
                                                       start_time=nersc_start,
                                                       end_time=nersc_end,

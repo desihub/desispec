@@ -706,6 +706,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     """
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
+    print(f"Resubmitting jobs with current states in the following: {resubmission_states}")
     proc_table = update_from_queue(proc_table, start_time=start_time, end_time=end_time)
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
@@ -746,6 +747,8 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         This modifies the inputs of both proc_table and submits and returns them.
     """
     log = get_logger()
+    log.info(f"Identified row {rown['INTID']} as needing resubmission.")
+    log.info(f"{rown['INTID']}: Expid(s): {rown['EXPIDS']}  Job: {rown['JOBDESC']}")
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
