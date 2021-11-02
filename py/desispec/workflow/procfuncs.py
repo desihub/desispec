@@ -88,7 +88,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
             'stdstarfit': 'stdstars',
             'poststdstar': 'cframe',
             'dark': 'badcolumns',
-            'arc': 'psf',
+            'arc': 'fitpsf',
             'flat': 'fiberflat',
             'psfnight': 'psfnight',
             'nightlyflat': 'fiberflatnight',
