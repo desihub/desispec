@@ -242,9 +242,11 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
 
         for amp in amp_ids :
             kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
-            if np.all(img.mask[kk] & maskbits.ccdmask.BADREADNOISE > 0) :
-                # np.all because there are always pixels with low QE that have
-                # increased readnoise after pixel flatfield
+            ntot = img.mask[kk].size
+            nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
+            if nbad / ntot > 0.5 :
+                # not just nbad>0 b/c/ there are always pixels with low QE
+                # that have increased readnoise after pixel flatfield
                 log.info("Setting BADREADNOISE bit for fibers of amp {}".format(amp))
                 badfibers = (xfiber>=kk[1].start-3)&(xfiber<kk[1].stop+3)
                 fibermap["FIBERSTATUS"][badfibers] |= ( maskbits.fibermask.BADREADNOISE | badamp_bit )
