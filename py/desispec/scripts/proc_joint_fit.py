@@ -182,12 +182,16 @@ def main(args=None, comm=None):
                 if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
                     psfs = list()
                     for expid in args.expids:
-                        tmp = findfile('psf', args.night, expid, camera)
-                        psfs.append( replace_prefix(tmp, 'psf', 'fit-psf') )
+                        psffile = findfile('fitpsf', args.night, expid, camera)
+                        if os.path.exists(psffile):
+                            psfs.append( psffile )
+                        else:
+                            log.warning(f'Missing {psffile}')
 
-                    log.info("Number of PSF for night={} camera={} = {}".format(args.night, camera, len(psfs)))
-                    if len(psfs) > 4:  # lets do it!
-                        log.info("Computing psfnight ...")
+                    log.info("Number of PSF for night={} camera={} = {}/{}".format(
+                            args.night, camera, len(psfs), len(args.expids)))
+                    if len(psfs) >= 3:  # lets do it!
+                        log.info(f"Computing {camera} psfnight ...")
                         dirname = os.path.dirname(psfnightfile)
                         if not os.path.isdir(dirname):
                             os.makedirs(dirname)
@@ -208,7 +212,7 @@ def main(args=None, comm=None):
                             log.error(f'Failed to create {psfnightfile}')
                             num_err += 1
                     else:
-                        log.info("Fewer than 4 psfs were provided, can't compute psfnight. Exiting ...")
+                        log.info(f"Fewer than 3 {camera} psfs were provided, can't compute psfnight. Exiting ...")
                         num_cmd += 1
                         num_err += 1
 
