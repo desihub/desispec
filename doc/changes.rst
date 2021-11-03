@@ -28,6 +28,14 @@ desispec Change Log
 * daily pipeline runner cache exposures after every new exp (PR `#1455`_).
 * Hartmann doors analysis script (PR `#1457`_).
 * New desi_compute_nightly_bias script (PR `#1460`_).
+* Incorporate nightly bias and bad column identification into daily pipeline
+  (PR `#1463`_).
+* Add OSTEP metric for variation of overscan per row (PR `#1464`_).
+* Add nightly bias and bad column flagging to pipeline
+  (PR `#1465`_, `#1467`_)
+* Fix check_for_outputs bug and teach findfile about fit-psf (PR `#1469`_).
+* Set fibermap.FIBERSTATUS BADREADNOISE and BADAMP[BRZ] (PR `#1472`_).
+* don't use PSFs with bad amps (PR `#1473`_).
 
 .. _`#1403`: https://github.com/desihub/desispec/pull/1403
 .. _`#1406`: https://github.com/desihub/desispec/pull/1406
@@ -58,6 +66,14 @@ desispec Change Log
 .. _`#1457`: https://github.com/desihub/desispec/pull/1457
 .. _`#1458`: https://github.com/desihub/desispec/pull/1458
 .. _`#1460`: https://github.com/desihub/desispec/pull/1460
+.. _`#1463`: https://github.com/desihub/desispec/pull/1463
+.. _`#1464`: https://github.com/desihub/desispec/pull/1464
+.. _`#1465`: https://github.com/desihub/desispec/pull/1465
+.. _`#1467`: https://github.com/desihub/desispec/pull/1467
+.. _`#1469`: https://github.com/desihub/desispec/pull/1469
+.. _`#1472`: https://github.com/desihub/desispec/pull/1472
+.. _`#1473`: https://github.com/desihub/desispec/pull/1473
+
 
 0.46.1 (2021-09-03)
 -------------------
