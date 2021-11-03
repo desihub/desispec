@@ -104,6 +104,8 @@ try:
     specmask = BitMask('specmask', _bitdefs)
     ccdmask = BitMask('ccdmask', _bitdefs)
     fibermask = BitMask('fibermask', _bitdefs)
+    extractmaskval = ccdmask.mask("BAD|HOT|DEAD|SATURATED|COSMIC|PIXFLATZERO|PIXFLATLOW|HIGHVAR")
+
 except TypeError:
     #
     # This is needed to allow documentation to build even if desiutil is not
