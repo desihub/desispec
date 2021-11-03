@@ -469,7 +469,15 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         interpolated_sky_dlsf=np.zeros(frame.flux.shape)
 
         # loop on fibers and then on sky spectrum peaks
-        for i in range(frame.nspec) :
+        if only_use_skyfibers_for_adjustments :
+            fibers_in_fit = skyfibers
+        else :
+            fibers_in_fit = np.arange(frame.nspec)
+
+        for i in fibers_in_fit :
+            if np.sum(frame.ivar[i])==0. :
+                # skip fiber with 0 signal
+                continue
             for j,peak in enumerate(peaks) :
                 b=peak-dpix
                 e=peak+dpix+1
@@ -493,7 +501,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 try :
                     AAi=np.linalg.inv(AA)
                 except np.linalg.LinAlgError as e :
-                    log.warning(str(e))
+                    log.warning("fiber {} peak {} {}".format(i,peak,str(e)))
                     continue
                 # save best fit parameter and errors
                 X=AAi.dot(BB)
