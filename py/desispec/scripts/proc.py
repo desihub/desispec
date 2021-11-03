@@ -45,6 +45,7 @@ from desispec.util import runcmd
 import desispec.scripts.extract
 import desispec.scripts.specex
 import desispec.scripts.nightly_bias
+from desispec.maskbits import ccdmask
 
 from desitarget.targetmask import desi_mask
 
@@ -472,6 +473,23 @@ def main(args=None, comm=None):
         # loop on all cameras and interpolate bad fibers
         for camera in args.cameras[rank::size]:
             t0 = time.time()
+
+            psfname = findfile('psf', args.night, args.expid, camera)
+            inpsf = replace_prefix(psfname,"psf","fit-psf")
+
+            #- check if a noisy amp might have corrupted this PSF;
+            #- if so, rename to *.badreadnoise
+            #- currently the data is flagged per amp, but do more generic
+            #- test for 5% of pixels
+            log.info(f'Rank {rank} checking for noisy input CCD amps')
+            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            mask = fitsio.read(preprocfile, 'MASK')
+            noisyfrac = np.sum((mask & ccdmask.BADREADNOISE) != 0) / mask.size
+            if noisyfrac > 0.05:
+                log.error(f"{100*noisyfrac:.0f}% of {camera} input pixels have bad readnoise; don't use this PSF")
+                os.rename(inpsf, inpsf+'.badreadnoise')
+                continue
+
             log.info(f'Rank {rank} interpolating {camera} PSF over bad fibers')
 
             # fibers to ignore for the PSF fit
@@ -482,9 +500,7 @@ def main(args=None, comm=None):
                 for fiber in fibers_to_ignore[1:] :
                     fibers_to_ignore_str+=",{}".format(fiber)
 
-                tmpname = findfile('psf', args.night, args.expid, camera)
-                inpsf = replace_prefix(tmpname,"psf","fit-psf")
-                outpsf = replace_prefix(tmpname,"psf","fit-psf-fixed-listed")
+                outpsf = replace_prefix(psfname,"psf","fit-psf-fixed-listed")
                 if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
                     cmd = 'desi_interpolate_fiber_psf'
                     cmd += ' --infile {}'.format(inpsf)
