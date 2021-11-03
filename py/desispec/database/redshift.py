@@ -7,10 +7,10 @@ desispec.database.redshift
 Code for loading spectroscopic pipeline results (specifically redshifts)
 into a database.
 """
-from __future__ import absolute_import, division, print_function
 import os
 import re
 import glob
+import sys
 
 import numpy as np
 from astropy.io import fits
@@ -24,16 +24,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
+from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, REAL
 
-from desiutil.log import log, DEBUG, INFO
+from desiutil.log import get_logger, DEBUG, INFO
 
-from ..io.meta import specprod_root
-from .util import convert_dateobs, parse_pgpass
+from ..io.meta import specprod_root, faflavor2program
+from .util import convert_dateobs, parse_pgpass, cameraid
 
 Base = declarative_base()
 engine = None
 dbSession = scoped_session(sessionmaker())
 schemaname = None
+log = None
 
 
 class SchemaMixin(object):
@@ -99,42 +101,28 @@ class Target(SchemaMixin, Base):
 
     release = Column(Integer, nullable=False)
     brickid = Column(Integer, nullable=False)
-    brickname = Column(String, nullable=False)
+    brickname = Column(String(8), nullable=False)
     brick_objid = Column(Integer, nullable=False)
-    morphtype = Column(String, nullable=False)
+    morphtype = Column(String(4), nullable=False)
     ra = Column(Float, nullable=False)
-    dec = Column(Float, nullable=False)
     ra_ivar = Column(Float, nullable=False)
+    dec = Column(Float, nullable=False)
     dec_ivar = Column(Float, nullable=False)
     dchisq_psf = Column(Float, nullable=False)
     dchisq_rex = Column(Float, nullable=False)
     dchisq_dev = Column(Float, nullable=False)
     dchisq_exp = Column(Float, nullable=False)
-    dchisq_comp = Column(Float, nullable=False)
+    dchisq_ser = Column(Float, nullable=False)
+    ebv = Column(Float, nullable=False)
     flux_g = Column(Float, nullable=False)
     flux_r = Column(Float, nullable=False)
     flux_z = Column(Float, nullable=False)
-    flux_w1 = Column(Float, nullable=False)
-    flux_w2 = Column(Float, nullable=False)
-    flux_w3 = Column(Float, nullable=False)
-    flux_w4 = Column(Float, nullable=False)
     flux_ivar_g = Column(Float, nullable=False)
     flux_ivar_r = Column(Float, nullable=False)
     flux_ivar_z = Column(Float, nullable=False)
-    flux_ivar_w1 = Column(Float, nullable=False)
-    flux_ivar_w2 = Column(Float, nullable=False)
-    flux_ivar_w3 = Column(Float, nullable=False)
-    flux_ivar_w4 = Column(Float, nullable=False)
     mw_transmission_g = Column(Float, nullable=False)
     mw_transmission_r = Column(Float, nullable=False)
     mw_transmission_z = Column(Float, nullable=False)
-    mw_transmission_w1 = Column(Float, nullable=False)
-    mw_transmission_w2 = Column(Float, nullable=False)
-    mw_transmission_w3 = Column(Float, nullable=False)
-    mw_transmission_w4 = Column(Float, nullable=False)
-    nobs_g = Column(Integer, nullable=False)
-    nobs_r = Column(Integer, nullable=False)
-    nobs_z = Column(Integer, nullable=False)
     fracflux_g = Column(Float, nullable=False)
     fracflux_r = Column(Float, nullable=False)
     fracflux_z = Column(Float, nullable=False)
@@ -144,39 +132,50 @@ class Target(SchemaMixin, Base):
     fracin_g = Column(Float, nullable=False)
     fracin_r = Column(Float, nullable=False)
     fracin_z = Column(Float, nullable=False)
-    allmask_g = Column(Float, nullable=False)
-    allmask_r = Column(Float, nullable=False)
-    allmask_z = Column(Float, nullable=False)
-    wisemask_w1 = Column(Integer, nullable=False)
-    wisemask_w2 = Column(Integer, nullable=False)
+    nobs_g = Column(Integer, nullable=False)
+    nobs_r = Column(Integer, nullable=False)
+    nobs_z = Column(Integer, nullable=False)
     psfdepth_g = Column(Float, nullable=False)
     psfdepth_r = Column(Float, nullable=False)
     psfdepth_z = Column(Float, nullable=False)
     galdepth_g = Column(Float, nullable=False)
     galdepth_r = Column(Float, nullable=False)
     galdepth_z = Column(Float, nullable=False)
-    fracdev = Column(Float, nullable=False)
-    fracdev_ivar = Column(Float, nullable=False)
-    shapedev_r = Column(Float, nullable=False)
-    shapedev_r_ivar = Column(Float, nullable=False)
-    shapedev_e1 = Column(Float, nullable=False)
-    shapedev_e1_ivar = Column(Float, nullable=False)
-    shapedev_e2 = Column(Float, nullable=False)
-    shapedev_e2_ivar = Column(Float, nullable=False)
-    shapeexp_r = Column(Float, nullable=False)
-    shapeexp_r_ivar = Column(Float, nullable=False)
-    shapeexp_e1 = Column(Float, nullable=False)
-    shapeexp_e1_ivar = Column(Float, nullable=False)
-    shapeexp_e2 = Column(Float, nullable=False)
-    shapeexp_e2_ivar = Column(Float, nullable=False)
+    flux_w1 = Column(Float, nullable=False)
+    flux_w2 = Column(Float, nullable=False)
+    flux_w3 = Column(Float, nullable=False)
+    flux_w4 = Column(Float, nullable=False)
+    flux_ivar_w1 = Column(Float, nullable=False)
+    flux_ivar_w2 = Column(Float, nullable=False)
+    flux_ivar_w3 = Column(Float, nullable=False)
+    flux_ivar_w4 = Column(Float, nullable=False)
+    mw_transmission_w1 = Column(Float, nullable=False)
+    mw_transmission_w2 = Column(Float, nullable=False)
+    mw_transmission_w3 = Column(Float, nullable=False)
+    mw_transmission_w4 = Column(Float, nullable=False)
+    allmask_g = Column(Float, nullable=False)
+    allmask_r = Column(Float, nullable=False)
+    allmask_z = Column(Float, nullable=False)
     fiberflux_g = Column(Float, nullable=False)
     fiberflux_r = Column(Float, nullable=False)
     fiberflux_z = Column(Float, nullable=False)
     fibertotflux_g = Column(Float, nullable=False)
     fibertotflux_r = Column(Float, nullable=False)
     fibertotflux_z = Column(Float, nullable=False)
-    ref_cat = Column(String, nullable=False)
+    ref_epoch = Column(Float, nullable=False)
+    wisemask_w1 = Column(Integer, nullable=False)
+    wisemask_w2 = Column(Integer, nullable=False)
+    maskbits = Column(Integer, nullable=False)
+    shape_r = Column(Float, nullable=False)
+    shape_e1 = Column(Float, nullable=False)
+    shape_e2 = Column(Float, nullable=False)
+    shape_r_ivar = Column(Float, nullable=False)
+    shape_e1_ivar = Column(Float, nullable=False)
+    shape_e2_ivar = Column(Float, nullable=False)
+    sersic = Column(Float, nullable=False)
+    sersic_ivar = Column(Float, nullable=False)
     ref_id = Column(BigInteger, nullable=False)
+    ref_cat = Column(String(2), nullable=False)
     gaia_phot_g_mean_mag = Column(Float, nullable=False)
     gaia_phot_g_mean_flux_over_error = Column(Float, nullable=False)
     gaia_phot_bp_mean_mag = Column(Float, nullable=False)
@@ -184,19 +183,17 @@ class Target(SchemaMixin, Base):
     gaia_phot_rp_mean_mag = Column(Float, nullable=False)
     gaia_phot_rp_mean_flux_over_error = Column(Float, nullable=False)
     gaia_phot_bp_rp_excess_factor = Column(Float, nullable=False)
-    gaia_astrometric_sigma5d_max = Column(Float, nullable=False)
-    gaia_astrometric_params_solved = Column(BigInteger, nullable=False)
     gaia_astrometric_excess_noise = Column(Float, nullable=False)
     gaia_duplicated_source = Column(Boolean, nullable=False)
+    gaia_astrometric_sigma5d_max = Column(Float, nullable=False)
+    gaia_astrometric_params_solved = Column(BigInteger, nullable=False)
     parallax = Column(Float, nullable=False)
     parallax_ivar = Column(Float, nullable=False)
     pmra = Column(Float, nullable=False)
     pmra_ivar = Column(Float, nullable=False)
     pmdec = Column(Float, nullable=False)
     pmdec_ivar = Column(Float, nullable=False)
-    maskbits = Column(Integer, nullable=False)
-    ebv = Column(Float, nullable=False)
-    photsys = Column(String, nullable=False)
+    photsys = Column(String(1), nullable=False)
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
@@ -205,37 +202,120 @@ class Target(SchemaMixin, Base):
     obsconditions = Column(BigInteger, nullable=False)
     priority_init = Column(BigInteger, nullable=False)
     numobs_init = Column(BigInteger, nullable=False)
+    scnd_target = Column(BigInteger, nullable=False)
     hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
         return "<Target(targetid={0.targetid})>".format(self)
 
 
-class ObsList(SchemaMixin, Base):
-    """Representation of the obslist table.
+class Exposure(SchemaMixin, Base):
+    """Representation of the EXPOSURES HDU in the exposures file.
     """
 
+    night = Column(Integer, nullable=False, index=True)
     expid = Column(Integer, primary_key=True, autoincrement=False)
-    tileid = Column(Integer, nullable=False)
-    passnum = Column(Integer, nullable=False)
-    ra = Column(Float, nullable=True)   #- Calib exposures don't have RA, dec
-    dec = Column(Float, nullable=True)
-    ebmv = Column(Float, nullable=True)
-    night = Column(String, nullable=False)
-    mjd = Column(Float, nullable=False)
-    exptime = Column(Float, nullable=False)
-    seeing = Column(Float, nullable=True)
-    transparency = Column(Float, nullable=True)
-    airmass = Column(Float, nullable=True)
-    moonfrac = Column(Float, nullable=True)
-    moonalt = Column(Float, nullable=True)
-    moonsep = Column(Float, nullable=True)
-    program = Column(String, nullable=False)
-    flavor = Column(String, nullable=False)
-    # dateobs = Column(DateTime(timezone=True), nullable=False)
+    tileid = Column(Integer, nullable=False, index=True)
+    tilera = Column(DOUBLE_PRECISION, nullable=False)   #- Calib exposures don't have RA, dec
+    tiledec = Column(DOUBLE_PRECISION, nullable=False)
+    mjd = Column(DOUBLE_PRECISION, nullable=False)
+    survey = Column(String(7), nullable=False)
+    faprgrm = Column(String(15), nullable=False)
+    program = Column(String(6), nullable=False)  # will be filled via desispec.io.meta.faflavor2program()
+    faflavor = Column(String(18), nullable=False)
+    exptime = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_spec = Column(DOUBLE_PRECISION, nullable=False)
+    goaltime = Column(DOUBLE_PRECISION, nullable=False)
+    goaltype = Column(String(6), nullable=False)
+    mintfrac = Column(DOUBLE_PRECISION, nullable=False)
+    airmass = Column(REAL, nullable=False)
+    ebv = Column(REAL, nullable=False)
+    seeing_etc = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_etc = Column(REAL, nullable=False)
+    tsnr2_elg = Column(REAL, nullable=False)
+    tsnr2_qso = Column(REAL, nullable=False)
+    tsnr2_lrg = Column(REAL, nullable=False)
+    tsnr2_lya = Column(DOUBLE_PRECISION, nullable=False)
+    tsnr2_bgs = Column(REAL, nullable=False)
+    tsnr2_gpbdark = Column(REAL, nullable=False)
+    tsnr2_gpbbright = Column(REAL, nullable=False)
+    tsnr2_gpbbackup = Column(REAL, nullable=False)
+    lrg_efftime_dark = Column(REAL, nullable=False)
+    elg_efftime_dark = Column(REAL, nullable=False)
+    bgs_efftime_bright = Column(REAL, nullable=False)
+    lya_efftime_dark = Column(DOUBLE_PRECISION, nullable=False)
+    gpb_efftime_dark = Column(REAL, nullable=False)
+    gpb_efftime_bright = Column(REAL, nullable=False)
+    gpb_efftime_backup = Column(REAL, nullable=False)
+    transparency_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    seeing_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    fiber_fracflux_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    fiber_fracflux_elg_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    fiber_fracflux_bgs_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    fiberfac_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    fiberfac_elg_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    fiberfac_bgs_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    airmass_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    sky_mag_ab_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    sky_mag_g_spec = Column(DOUBLE_PRECISION, nullable=False)
+    sky_mag_r_spec = Column(DOUBLE_PRECISION, nullable=False)
+    sky_mag_z_spec = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_dark_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_bright_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_backup_gfa = Column(DOUBLE_PRECISION, nullable=False)
 
     def __repr__(self):
-        return "<ObsList(expid={0.expid:d})>".format(self)
+        return "Exposure(night={0.night:d}, expid={0.expid:d}, tileid={0.tileid:d})".format(self)
+
+
+class Frame(SchemaMixin, Base):
+    """Representation of the FRAMES HDU in the exposures file.
+    """
+
+    frameid = Column(Integer, primary_key=True, autoincrement=False)  # Arbitrary integer composed from expid + cameraid
+    # frameid = Column(BigInteger, primary_key=True, autoincrement=True)
+    night = Column(Integer, nullable=False, index=True)
+    expid = Column(Integer, ForeignKey('exposure.expid'), nullable=False)
+    tileid = Column(Integer, nullable=False, index=True)
+    #  4 TILERA               D
+    #  5 TILEDEC              D
+    #  6 MJD                  D
+    mjd = Column(DOUBLE_PRECISION, nullable=False)
+    #  7 EXPTIME              E
+    exptime = Column(REAL, nullable=False)
+    #  8 AIRMASS              E
+    #  9 EBV                  E
+    ebv = Column(REAL, nullable=False)
+    # 10 SEEING_ETC           D
+    # 11 EFFTIME_ETC          E
+    # 12 CAMERA               2A
+    camera = Column(String(2), nullable=False)
+    # 13 TSNR2_GPBDARK        E
+    # 14 TSNR2_ELG            E
+    # 15 TSNR2_GPBBRIGHT      E
+    # 16 TSNR2_LYA            D
+    # 17 TSNR2_BGS            E
+    # 18 TSNR2_GPBBACKUP      E
+    # 19 TSNR2_QSO            E
+    # 20 TSNR2_LRG            E
+    tsnr2_gpbdark = Column(REAL, nullable=False)
+    tsnr2_elg = Column(REAL, nullable=False)
+    tsnr2_gpbbright = Column(REAL, nullable=False)
+    tsnr2_lya = Column(DOUBLE_PRECISION, nullable=False)
+    tsnr2_bgs = Column(REAL, nullable=False)
+    tsnr2_gpbbackup = Column(REAL, nullable=False)
+    tsnr2_qso = Column(REAL, nullable=False)
+    tsnr2_lrg = Column(REAL, nullable=False)
+    # 21 SURVEY               7A
+    # 22 GOALTYPE             6A
+    # 23 FAPRGRM              15A
+    # 24 FAFLAVOR             18A
+    # 25 MINTFRAC             D
+    # 26 GOALTIME             D
+
+    def __repr__(self):
+        return "Frame(expid={0.expid:d}, camera='{0.camera}')".format(self)
 
 
 class ZCat(SchemaMixin, Base):
@@ -338,21 +418,47 @@ class FiberAssign(SchemaMixin, Base):
         return "<FiberAssign(tileid={0.tileid:d}, fiber={0.fiber:d})>".format(self)
 
 
-def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
-              rowfilter=None, q3c=False, chunksize=50000, maxrows=0):
-    """Load a data file into the database, assuming that column names map
+def _frameid(data):
+    """Update the ``frameid`` column.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`astropy.table.Table`
+        Updated data table.
+    """
+    frameid = 100*data['EXPID'] + np.array([cameraid(c) for c in data['CAMERA']], dtype=data['EXPID'].dtype)
+    data.add_column(frameid, name='FRAMEID', index=0)
+    return data
+
+
+def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, convert=None,
+              index=None, rowfilter=None, q3c=None,
+              chunksize=50000, maxrows=0):
+    """Load data file into the database, assuming that column names map
     to database column names with no surprises.
 
     Parameters
     ----------
-    filepath : :class:`str`
-        Full path to the data file.
+    filepaths : :class:`str` or :class:`list`
+        Full path to the data file or set of data files.
     tcls : :class:`sqlalchemy.ext.declarative.api.DeclarativeMeta`
         The table to load, represented by its class.
     hdu : :class:`int` or :class:`str`, optional
         Read a data table from this HDU (default 1).
+    preload : callable, optional
+        A function that takes a :class:`~astropy.table.Table` as an argument.
+        Use this for more complicated manipulation of the data before loading,
+        for example a function that depends on multiple columns. The return
+        value should be the updated Table.
     expand : :class:`dict`, optional
         If set, map FITS column names to one or more alternative column names.
+    insert : :class:`dict`, optional
+        If set, insert one or more columns, before an existing column.
     convert : :class:`dict`, optional
         If set, convert the data for a named (database) column using the
         supplied function.
@@ -361,106 +467,136 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
     rowfilter : callable, optional
         If set, apply this filter to the rows to be loaded.  The function
         should return :class:`bool`, with ``True`` meaning a good row.
-    q3c : :class:`bool`, optional
-        If set, create q3c index on the table.
+    q3c : :class:`str`, optional
+        If set, create q3c index on the table, using the RA column
+        named `q3c`.
     chunksize : :class:`int`, optional
         If set, load database `chunksize` rows at a time (default 50000).
     maxrows : :class:`int`, optional
         If set, stop loading after `maxrows` are loaded.  Alteratively,
         set `maxrows` to zero (0) to load all rows.
+
+    Returns
+    -------
+    :class:`int`
+        The grand total of rows loaded.
     """
     tn = tcls.__tablename__
-    if filepath.endswith( ('.fits', '.fits.gz') ):
-        with fits.open(filepath) as hdulist:
-            data = hdulist[hdu].data
-    elif filepath.endswith('.ecsv'):
-        data = Table.read(filepath, format='ascii.ecsv')
-    else:
-        log.error("Unrecognized data file, %s!", filepath)
-        return
-    if maxrows == 0:
-        maxrows = len(data)
-    log.info("Read data from %s HDU %s", filepath, hdu)
-    try:
-        colnames = data.names
-    except AttributeError:
-        colnames = data.colnames
-    for col in colnames:
-        if data[col].dtype.kind == 'f':
-            bad = np.isnan(data[col][0:maxrows])
-            if np.any(bad):
-                nbad = bad.sum()
-                log.warning("%d rows of bad data detected in column " +
-                            "%s of %s.", nbad, col, filepath)
-                #
-                # Temporary workaround for bad flux values, see
-                # https://github.com/desihub/desitarget/issues/397
-                #
-                if col in ('FLUX_R', 'FIBERFLUX_R', 'FIBERTOTFLUX_R'):
-                    data[col][0:maxrows][bad] = -9999.0
-    log.info("Integrity check complete on %s.", tn)
-    if rowfilter is None:
-        good_rows = np.ones((maxrows,), dtype=bool)
-    else:
-        good_rows = rowfilter(data[0:maxrows])
-    data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
-    data_names = [col.lower() for col in colnames]
-    finalrows = len(data_list[0])
-    log.info("Initial column conversion complete on %s.", tn)
-    if expand is not None:
-        for col in expand:
-            i = data_names.index(col.lower())
-            if isinstance(expand[col], str):
-                #
-                # Just rename a column.
-                #
-                log.debug("Renaming column %s (at index %d) to %s.", data_names[i], i, expand[col])
-                data_names[i] = expand[col]
+    if isinstance(filepaths, str):
+        filepaths = [filepaths]
+    log.info("Identified %d files for ingestion.", len(filepaths))
+    loaded_rows = 0
+    for filepath in filepaths:
+        if filepath.endswith('.fits'):
+            data = Table.read(filepath, hdu=hdu, format='fits')
+            log.info("Read %d rows of data from %s HDU %s.", len(data), filepath, hdu)
+        elif filepath.endswith('.ecsv'):
+            data = Table.read(filepath, format='ascii.ecsv')
+            log.info("Read %d rows of data from %s.", len(data), filepath)
+        else:
+            log.error("Unrecognized data file, %s!", filepath)
+            return
+        if maxrows == 0:
+            mr = len(data)
+        else:
+            mr = maxrows
+        if preload is not None:
+            data = preload(data)
+            log.info("Preload function complete on %s.", tn)
+        try:
+            colnames = data.names
+        except AttributeError:
+            colnames = data.colnames
+        for col in colnames:
+            if data[col].dtype.kind == 'f':
+                bad = np.isnan(data[col][0:mr])
+                if np.any(bad):
+                    if bad.ndim == 1:
+                        log.warning("%d rows of bad data detected in column " +
+                                    "%s of %s.", bad.sum(), col, filepath)
+                    elif bad.ndim == 2:
+                        nbadrows = len(bad.sum(1).nonzero()[0])
+                        nbaditems = bad.sum(1).sum()
+                        log.warning("%d rows (%d items) of bad data detected in column " +
+                                    "%s of %s.", nbadrows, nbaditems, col, filepath)
+                    else:
+                        log.warning("Bad data detected in high-dimensional column %s of %s.", col, filepath)
+                    #
+                    # TODO: is this replacement appropriate for all columns?
+                    #
+                    data[col][0:mr][bad] = -9999.0
+        log.info("Integrity check complete on %s.", tn)
+        if rowfilter is None:
+            good_rows = np.ones((mr,), dtype=np.bool)
+        else:
+            good_rows = rowfilter(data[0:mr])
+        data_list = [data[col][0:mr][good_rows].tolist() for col in colnames]
+        data_names = [col.lower() for col in colnames]
+        finalrows = len(data_list[0])
+        log.info("Initial column conversion complete on %s.", tn)
+        if expand is not None:
+            for col in expand:
+                i = data_names.index(col.lower())
+                if isinstance(expand[col], str):
+                    #
+                    # Just rename a column.
+                    #
+                    log.debug("Renaming column %s (at index %d) to %s.", data_names[i], i, expand[col])
+                    data_names[i] = expand[col]
+                else:
+                    #
+                    # Assume this is an expansion of an array-valued column
+                    # into individual columns.
+                    #
+                    del data_names[i]
+                    del data_list[i]
+                    for j, n in enumerate(expand[col]):
+                        log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
+                        data_names.insert(i + j, n)
+                        data_list.insert(i + j, data[col][:, j].tolist())
+                    log.debug(data_names)
+            log.info("Column expansion complete on %s.", tn)
+        del data
+        if insert is not None:
+            for col in insert:
+                i = data_names.index(col)
+                for item in insert[col]:
+                    data_names.insert(i, item)
+                    data_list.insert(i, data_list[i].copy())  # Dummy values
+            log.info("Column insertion complete on %s.", tn)
+        if convert is not None:
+            for col in convert:
+                i = data_names.index(col)
+                data_list[i] = [convert[col](x) for x in data_list[i]]
+            log.info("Column conversion complete on %s.", tn)
+        if index is not None:
+            data_list.insert(0, list(range(1, finalrows+1)))
+            data_names.insert(0, index)
+            log.info("Added index column '%s'.", index)
+        data_rows = list(zip(*data_list))
+        del data_list
+        log.info("Converted columns into rows on %s.", tn)
+        for k in range(finalrows//chunksize + 1):
+            data_chunk = [dict(zip(data_names, row))
+                          for row in data_rows[k*chunksize:(k+1)*chunksize]]
+            if len(data_chunk) > 0:
+                loaded_rows += len(data_chunk)
+                engine.execute(tcls.__table__.insert(), data_chunk)
+                log.info("Inserted %d rows in %s.",
+                         min((k+1)*chunksize, finalrows), tn)
             else:
-                #
-                # Assume this is an expansion of an array-valued column
-                # into individual columns.
-                #
-                del data_names[i]
-                del data_list[i]
-                for j, n in enumerate(expand[col]):
-                    log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
-                    data_names.insert(i + j, n)
-                    data_list.insert(i + j, data[col][:, j].tolist())
-                log.debug(data_names)
-    log.info("Column expansion complete on %s.", tn)
-    del data
-    if convert is not None:
-        for col in convert:
-            i = data_names.index(col)
-            data_list[i] = [convert[col](x) for x in data_list[i]]
-    log.info("Column conversion complete on %s.", tn)
-    if index is not None:
-        data_list.insert(0, list(range(1, finalrows+1)))
-        data_names.insert(0, index)
-        log.info("Added index column '%s'.", index)
-    data_rows = list(zip(*data_list))
-    del data_list
-    log.info("Converted columns into rows on %s.", tn)
-    for k in range(finalrows//chunksize + 1):
-        data_chunk = [dict(zip(data_names, row))
-                      for row in data_rows[k*chunksize:(k+1)*chunksize]]
-        if len(data_chunk) > 0:
-            engine.execute(tcls.__table__.insert(), data_chunk)
-            log.info("Inserted %d rows in %s.",
-                     min((k+1)*chunksize, finalrows), tn)
-    # for k in range(finalrows//chunksize + 1):
-    #     data_insert = [dict([(col, data_list[i].pop(0))
-    #                          for i, col in enumerate(data_names)])
-    #                    for j in range(chunksize)]
-    #     session.bulk_insert_mappings(tcls, data_insert)
-    #     log.info("Inserted %d rows in %s..",
-    #              min((k+1)*chunksize, finalrows), tn)
-    # session.commit()
-    # dbSession.commit()
-    if q3c:
-        q3c_index(tn)
-    return
+                log.error("Detected empty data chunk in %s!", tn)
+        # for k in range(finalrows//chunksize + 1):
+        #     data_insert = [dict([(col, data_list[i].pop(0))
+        #                          for i, col in enumerate(data_names)])
+        #                    for j in range(chunksize)]
+        #     session.bulk_insert_mappings(tcls, data_insert)
+        #     log.info("Inserted %d rows in %s..",
+        #              min((k+1)*chunksize, finalrows), tn)
+        dbSession.commit()
+    if q3c is not None:
+        q3c_index(tn, ra=q3c)
+    return loaded_rows
 
 
 def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
@@ -796,9 +932,9 @@ def setup_db(options=None, **kwargs):
     if schema:
         schemaname = schema
         # event.listen(Base.metadata, 'before_create', CreateSchema(schemaname))
-        if overwrite:
-            event.listen(Base.metadata, 'before_create',
-                         DDL('DROP SCHEMA IF EXISTS {0} CASCADE'.format(schemaname)))
+        # if overwrite:
+        #     event.listen(Base.metadata, 'before_create',
+        #                  DDL('DROP SCHEMA IF EXISTS {0} CASCADE'.format(schemaname)))
         event.listen(Base.metadata, 'before_create',
                      DDL('CREATE SCHEMA IF NOT EXISTS {0}'.format(schemaname)))
     #
@@ -830,6 +966,8 @@ def setup_db(options=None, **kwargs):
     log.info("Begin creating tables.")
     for tab in Base.metadata.tables.values():
         tab.schema = schemaname
+    if overwrite:
+        Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     log.info("Finished creating tables.")
     return postgresql
@@ -855,10 +993,10 @@ def get_options(*args):
                           prog=os.path.basename(argv[0]))
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='redshift.db', metavar='FILE',
-                      help="Store data in FILE.")
+                      help="Store data in FILE (default %(default)s).")
     prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
-                      metavar='HOSTNAME',
-                      help='If specified, connect to a PostgreSQL database on HOSTNAME.')
+                      metavar='HOSTNAME', default='nerscdb03.nersc.gov',
+                      help='If specified, connect to a PostgreSQL database on HOSTNAME (default %(default)s).')
     prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
                       type=int, default=0, metavar='M',
                       help="Load up to M rows in the tables (default is all rows).")
@@ -872,7 +1010,7 @@ def get_options(*args):
                       help='Set the schema name in the PostgreSQL database.')
     prsr.add_argument('-U', '--username', action='store', dest='username',
                       metavar='USERNAME', default='desidev_admin',
-                      help="If specified, connect to a PostgreSQL database with USERNAME.")
+                      help="If specified, connect to a PostgreSQL database with USERNAME (default %(default)s).")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
     prsr.add_argument('-z', '--redrock', action='store_true', dest='redrock',
@@ -893,7 +1031,7 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    # from pkg_resources import resource_filename
+    global log
     #
     # command-line arguments
     #
@@ -912,44 +1050,50 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepath': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
-               'tcls': Truth,
-               'hdu': 'TRUTH',
-               'expand': None,
-               'convert': None,
-               'index': None,
-               'q3c': False,
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows},
-              {'filepath': os.path.join(options.datapath, 'targets', 'targets-dark.fits'),
-               'tcls': Target,
-               'hdu': 'TARGETS',
-               'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_comp',)},
-               'convert': None,
-               'index': None,
-               'q3c': postgresql,
-               'chunksize': options.chunksize,
-               'maxrows': options.maxrows},
-              {'filepath': os.path.join(options.datapath, 'survey', 'exposures.fits'),
-               'tcls': ObsList,
+    loader = [{'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+               'tcls': Exposure,
                'hdu': 'EXPOSURES',
-               'expand': {'PASS': 'passnum'},
-               # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
-               'convert': None,
-               'index': None,
-               'q3c': postgresql,
+               'insert': {'faprgrm': ('program',)},
+               'convert': {'program': faflavor2program},
+               'q3c': 'tilera',
                'chunksize': options.chunksize,
-               'maxrows': options.maxrows},
-              {'filepath': os.path.join(options.datapath, 'spectro', 'redux', 'mini', 'zcatalog-mini.fits'),
-               'tcls': ZCat,
-               'hdu': 'ZCATALOG',
-               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
-                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
-               'convert': None,
-               'rowfilter': lambda x: ((x['TARGETID'] != 0) & (x['TARGETID'] != -1)),
-               'q3c': postgresql,
+               'maxrows': options.maxrows
+               },
+              {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+               'tcls': Frame,
+               'hdu': 'FRAMES',
+               'preload': _frameid,
                'chunksize': options.chunksize,
-               'maxrows': options.maxrows}]
+               'maxrows': options.maxrows
+               },]
+    # loader = [{'filepaths': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
+    #            'tcls': Truth,
+    #            'hdu': 'TRUTH',
+    #            'expand': None,
+    #            'convert': None,
+    #            'index': None,
+    #            'q3c': False,
+    #            'chunksize': options.chunksize,
+    #            'maxrows': options.maxrows},
+    #           {'filepaths': glob.glob(os.path.join(os.environ['DESI_TARGET'], 'catalogs', 'dr9', '1.1.1', 'targets', 'main', 'resolve', 'dark', 'targets-dark-hp-*.fits')),
+    #            'tcls': Target,
+    #            'hdu': 'TARGETS',
+    #            'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
+    #            'convert': None,
+    #            'index': None,
+    #            'q3c': postgresql,
+    #            'chunksize': options.chunksize,
+    #            'maxrows': options.maxrows},
+    #           {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', 'mini', 'zcatalog-mini.fits'),
+    #            'tcls': ZCat,
+    #            'hdu': 'ZCATALOG',
+    #            'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+    #                                 'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+    #            'convert': None,
+    #            'rowfilter': lambda x: ((x['TARGETID'] != 0) & (x['TARGETID'] != -1)),
+    #            'q3c': postgresql,
+    #            'chunksize': options.chunksize,
+    #            'maxrows': options.maxrows}]
     #
     # Load the tables that correspond to a single file.
     #
@@ -960,29 +1104,29 @@ def main():
         #
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            if options.redrock and tn == 'zcat':
-                log.info("Loading %s from redrock files in %s.", tn, options.datapath)
-                load_redrock(datapath=options.datapath, q3c=postgresql)
-            else:
-                log.info("Loading %s from %s.", tn, l['filepath'])
-                load_file(**l)
+            log.info("Loading %s from %s.", tn, str(l['filepaths']))
+            load_file(**l)
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())
     #
     # Update truth table.
     #
-    for h in ('BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'WD'):
-        update_truth(os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
-                     'TRUTH_' + h)
+    # for h in ('BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'WD'):
+    #     update_truth(os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
+    #                  'TRUTH_' + h)
     #
     # Load fiber assignment files.
     #
-    q = dbSession.query(FiberAssign).first()
-    if q is None:
-        log.info("Loading FiberAssign from %s.", options.datapath)
-        load_fiberassign(options.datapath, q3c=postgresql)
-        log.info("Finished loading FiberAssign.")
-    else:
-        log.info("FiberAssign table already loaded.")
+    # q = dbSession.query(FiberAssign).first()
+    # if q is None:
+    #     log.info("Loading FiberAssign from %s.", options.datapath)
+    #     load_fiberassign(options.datapath, q3c=postgresql)
+    #     log.info("Finished loading FiberAssign.")
+    # else:
+    #     log.info("FiberAssign table already loaded.")
     return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
