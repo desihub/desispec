@@ -4,6 +4,7 @@ import os
 import numpy as np
 from astropy.table import Table
 import subprocess
+from desiutil.log import get_logger
 import time
 
 
@@ -64,8 +65,10 @@ def get_termination_states():
 
 
 
-def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
-                             columns='jobid,state,submit,eligible,start,end,jobname', dry_run=0):
+def queue_info_from_time_window(start_time=None, end_time=None, user=None, \
+                             columns='jobid,jobname,partition,submit,eligible,'+
+                                     'start,end,elapsed,state,exitcode',
+                             dry_run=0):
     """
     Queries the NERSC Slurm database using sacct with appropriate flags to get information within a specified time
     window of all jobs submitted or executed during that time.
@@ -79,8 +82,8 @@ def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
                    if exists, otherwise 'desi'.
         columns, str. Comma seperated string of valid sacct column names, in lower case. To be useful for the workflow,
                       it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
-                      in the default list are: ther format columns: jobid,state,submit,eligible,start,end,elapsed,
-                      suspended,exitcode,derivedexitcode,reason,priority,jobname.
+                      in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
+                      Other options include: suspended,derivedexitcode,reason,priority,jobname.
         dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
                        table that doesn't query the Slurm scheduler.
 
@@ -90,17 +93,22 @@ def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
     """
     # global queue_info_table
     if dry_run:
-        string = 'JobID,State,Submit,Start,End,ExitCode,DerivedExitCode,Reason' + '\n'
-        string += '30010130,COMPLETED,2020-04-25T13:24:54,2020-04-25T23:58:30,2020-04-26T00:05:41,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010136,COMPLETED,2020-04-25T13:25:10,2020-04-26T00:05:45,2020-04-26T00:13:55,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010141,COMPLETED,2020-04-25T13:25:29,2020-04-26T00:13:55,2020-04-26T00:21:34,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010146,COMPLETED,2020-04-25T13:25:38,2020-04-26T00:21:37,2020-04-26T00:28:56,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010149,COMPLETED,2020-04-25T13:25:44,2020-04-26T00:28:59,2020-04-26T00:36:04,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010152,COMPLETED,2020-04-25T13:25:53,2020-04-26T00:36:05,2020-04-26T00:43:05,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010153,COMPLETED,2020-04-25T13:25:59,2020-04-26T00:43:07,2020-04-26T00:50:21,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010154,COMPLETED,2020-04-25T13:26:08,2020-04-26T00:50:26,2020-04-26T00:57:57,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010157,COMPLETED,2020-04-25T13:26:16,2020-04-26T00:57:58,2020-04-26T01:05:15,0:0,0:0,QOSGrpMemLimit' + '\n'
-        string += '30010161,COMPLETED,2020-04-25T13:26:26,2020-04-26T01:05:33,2020-04-26T01:12:53,0:0,0:0,QOSGrpMemLimit'
+        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode\n'
+        string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
+                  +'18:48:32,COMPLETED,0:0' + '\n'
+        string += '49482395,arc-20211102-00107063-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:16,2021-11-02T18:36:33,2021-11-02T18:48:34,2021-11-02T'\
+                  +'18:57:02,COMPLETED,0:0' + '\n'
+        string += '49482397,arc-20211102-00107064-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:19,2021-11-02T18:36:33,2021-11-02T18:57:05,2021-11-02T'\
+                  +'19:06:17,COMPLETED,0:0' + '\n'
+        string += '49482398,arc-20211102-00107065-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:24,2021-11-02T18:36:33,2021-11-02T19:06:18,2021-11-02T'\
+                  +'19:13:59,COMPLETED,0:0' + '\n'
+        string += '49482399,arc-20211102-00107066-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:27,2021-11-02T18:36:33,2021-11-02T19:14:00,2021-11-02T'\
+                  +'19:24:49,COMPLETED,0:0'
         cmd_as_list = ['echo', string]
     else:
         if user is None:
@@ -118,16 +126,71 @@ def refresh_queue_info_table(start_time=None, end_time=None, user=None, \
                        '-u', user, \
                        f'--format={columns}']
 
-    queue_info_table = Table.read(subprocess.check_output(cmd_as_list, stderr=subprocess.STDOUT, text=True),
-                                  format='ascii.csv')
+    table_as_string = subprocess.check_output(cmd_as_list, text=True,
+                                              stderr=subprocess.STDOUT)
+    queue_info_table = Table.read(table_as_string, format='ascii.csv')
+
     for col in queue_info_table.colnames:
         queue_info_table.rename_column(col, col.upper())
     return queue_info_table
 
 
+def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
+                         'eligible,start,end,elapsed,state,exitcode',
+                         dry_run=0):
+    """
+    Queries the NERSC Slurm database using sacct with appropriate flags to get information within a specified time
+    window of all jobs submitted or executed during that time.
 
+    Args:
+        jobids, list or array of ints. Slurm QID's at NERSC that you want to
+                      return information about.
+        columns, str. Comma seperated string of valid sacct column names, in lower case. To be useful for the workflow,
+                      it should have MUST have columns "JOBID" and "STATE". Other columns available that aren't included
+                      in the default list are: jobid,jobname,partition,submit,eligible,start,end,elapsed,state,exitcode.
+                      Other options include: suspended,derivedexitcode,reason,priority,jobname.
+        dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
+                       table that doesn't query the Slurm scheduler.
 
-def update_from_queue(ptable, qtable=None, start_time=None, end_time=None, user=None, dry_run=0):
+    Returns:
+        queue_info_table, Table. Table with the columns defined by the input variable 'columns' and information relating
+                                 to all jobs submitted by the specified user in the specified time frame.
+    """
+    ## Turn the queue id's into a list
+    ## this should work with str or int type also, though not officially supported
+    qid_str = ','.join(np.atleast_1d(qids).astype(str)).replace(' ','')
+
+    if dry_run:
+        string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode\n'
+        string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
+                  +'18:48:32,COMPLETED,0:0' + '\n'
+        string += '49482395,arc-20211102-00107063-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:16,2021-11-02T18:36:33,2021-11-02T18:48:34,2021-11-02T'\
+                  +'18:57:02,COMPLETED,0:0' + '\n'
+        string += '49482397,arc-20211102-00107064-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:19,2021-11-02T18:36:33,2021-11-02T18:57:05,2021-11-02T'\
+                  +'19:06:17,COMPLETED,0:0' + '\n'
+        string += '49482398,arc-20211102-00107065-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:24,2021-11-02T18:36:33,2021-11-02T19:06:18,2021-11-02T'\
+                  +'19:13:59,COMPLETED,0:0' + '\n'
+        string += '49482399,arc-20211102-00107066-a0123456789,realtime,2021-11-02'\
+                  +'T18:31:27,2021-11-02T18:36:33,2021-11-02T19:14:00,2021-11-02T'\
+                  +'19:24:49,COMPLETED,0:0'
+        cmd_as_list = ['echo', string]
+    else:
+        cmd_as_list = ['sacct', '-X', '--parsable2', '--delimiter=,',
+                       f'--format={columns}', '-j', qid_str]
+
+    table_as_string = subprocess.check_output(cmd_as_list, text=True,
+                                              stderr=subprocess.STDOUT)
+    queue_info_table = Table.read(table_as_string, format='ascii.csv')
+
+    for col in queue_info_table.colnames:
+        queue_info_table.rename_column(col, col.upper())
+    return queue_info_table
+
+def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     """
     Given an input prcessing table (ptable) and query table from the Slurm queue (qtable) it cross matches the
     Slurm job ID's and updates the 'state' in the table using the current state in the Slurm scheduler system.
@@ -137,14 +200,10 @@ def update_from_queue(ptable, qtable=None, start_time=None, end_time=None, user=
                        have at least columnns 'LATEST_QID' and 'STATUS'.
         qtable, Table. Table with the columns defined by the input variable 'columns' and information relating
                                  to all jobs submitted by the specified user in the specified time frame.
-
+        ignore_scriptnames, bool. Default is False. Set to true if you do not
+                        want to check whether the scriptname matches the jobname
+                        return by the slurm scheduler.
         The following are only used if qtable is not provided:
-            start_time, str. String of the form YYYY-mm-ddTHH:MM:SS. Based on the given night and the earliest hour you
-                             want to see queue information about.
-            end_time, str. String of the form YYYY-mm-ddTHH:MM:SS. Based on the given night and the latest hour you
-                             want to see queue information about.
-            user, str. The username at NERSC that you want job information about. The default is an the environment name if
-                       if exists, otherwise 'desi'.
             dry_run, int. Whether this is a simulated run or real run. If nonzero, it is a simulation and it returns a default
                            table that doesn't query the Slurm scheduler.
 
@@ -153,14 +212,23 @@ def update_from_queue(ptable, qtable=None, start_time=None, end_time=None, user=
                        updated based on the 'STATE' in the qtable (as matched by "LATEST_QID" in the ptable
                        and "JOBID" in the qtable).
     """
+    log = get_logger()
     if qtable is None:
-        qtable = refresh_queue_info_table(start_time=start_time, end_time=end_time, user=user, dry_run=dry_run)
+        qtable = queue_info_from_qids(np.array(ptable['LATEST_QID']), dry_run=dry_run)
 
+    check_scriptname = (    'JOBNAME' in qtable.colnames
+                        and 'SCRIPTNAME' in ptable.colnames
+                        and not ignore_scriptnames)
     for row in qtable:
         match = (int(row['JOBID']) == ptable['LATEST_QID'])
         # 'jobid,state,submit,eligible,start,end,jobname'
         if np.any(match):
             ind = np.where(match)[0][0]
+            if check_scriptname and ptable['SCRIPTNAME'][ind] not in row['JOBNAME']:
+                log.warning(f"For job with expids:{ptable['EXPID'][ind]}"
+                            + f" the scriptname is {ptable['SCRIPTNAME'][ind]}"
+                            + f" but the jobname in the queue was "
+                            + f"{row['JOBNAME']}.")
             ptable['STATUS'][ind] = row['STATE']
 
     return ptable

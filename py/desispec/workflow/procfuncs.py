@@ -670,7 +670,7 @@ def parse_previous_tables(etable, ptable, night):
            internal_id
 
 
-def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None, start_time=None, end_time=None,
+def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
                                    ptab_name=None, dry_run=0,reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
@@ -684,12 +684,6 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
         resubmission_states, list or array of strings, each element should be a capitalized string corresponding to a
                                                        possible Slurm scheduler state, where you wish for jobs with that
                                                        outcome to be resubmitted
-        start_time, str, datetime string in the format understood by NERSC Slurm scheduler. This should defined the earliest
-                       date and time that you expected to have a job run in the queue. Used to narrow the window of jobs
-                       to request information on.
-        end_time, str, datetime string in the format understood by NERSC Slurm scheduler. This should defined the latest
-                       date and time that you expected to have a job run in the queue. Used to narrow the window of jobs
-                       to request information on.
         ptab_name, str, the full pathname where the processing table should be saved.
         dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
                       dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
@@ -707,12 +701,14 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     print(f"Resubmitting jobs with current states in the following: {resubmission_states}")
-    proc_table = update_from_queue(proc_table, start_time=start_time, end_time=end_time)
+    proc_table = update_from_queue(proc_table, dry_run=dry_run)
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
-            proc_table, submits = recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name,
-                                                          resubmission_states, reservation, dry_run)
+            proc_table, submits = recursive_submit_failed(rown, proc_table, submits,
+                                                          id_to_row_map, ptab_name,
+                                                          resubmission_states,
+                                                          reservation, dry_run)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -758,8 +754,11 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
             if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
-                proc_table, submits = recursive_submit_failed(id_to_row_map[idep], proc_table, submits,
-                                                              id_to_row_map, reservation=reservation, dry_run=dry_run)
+                proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
+                                                              proc_table, submits,
+                                                              id_to_row_map,
+                                                              reservation=reservation,
+                                                              dry_run=dry_run)
             qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
 
         qdeps = np.atleast_1d(qdeps)

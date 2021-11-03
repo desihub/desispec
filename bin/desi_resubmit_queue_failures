@@ -45,55 +45,11 @@ def parse_args():  # options=None):
                         help="The SLURM queue states that should be resubmitted. " +
                              "E.g. UNSUBMITTED, BOOT_FAIL, DEADLINE, NODE_FAIL, " +
                              "OUT_OF_MEMORY, PREEMPTED, TIMEOUT.")
-    # parser.add_argument("--proc-obstypes", type=str, default=None, required=False,
-    #                     help="The basic data obstypes to submit for processing. " +
-    #                          "E.g. science, dark, twilight, flat, arc, zero.")
-    # parser.add_argument("--z-submit-types", type=str, default='perexp,pernight', required=False,
-    #                     help="The group types of redshifts that should be submitted with each exposure. If not "+
-    #                          "specified, default  is 'perexp,pernight'. If "+
-    #                          "'false' or 'None' then no redshifts are submitted")
-    # parser.add_argument("--dry-run-level", type=int, default=0, required=False,
-    #                     help="If nonzero, this is a simulated run. If level=1 the scripts will be written but not submitted. "+
-    #                          "If level=2, the scripts will not be written or submitted. Logging will remain the same "+
-    #                          "for testing as though scripts are being submitted. Default is 0 (false).")
-    # parser.add_argument("--tiles", type=str, required=False,
-    #                     help="Comma separated list of TILEIDs to include; use -99 to include arcs/flats")
 
-    # File and dir defs
-    #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
-    #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
-    #                         "Overwrites the environment variable SPECPROD")
-    # parser.add_argument("-q", "--queue", type=str, required=False, default='realtime',
-    #                     help="The queue to submit jobs to. Default is realtime.")
-
-    # parser.add_argument("--system-name", type=str, required=False, default=None,
-    #                     help="Batch system name, e.g. cori-haswell, cori-knl, perlmutter-gpu, ...")
-    # parser.add_argument("--exp-table-path", type=str, required=False, default=None,
-    #                     help="Directory name where the output exposure table should be saved.")
-
-    # Code Flags
-    # parser.add_argument("--no-redshifts", action="store_true",
-    #                     help="Whether to submit redshifts or not. If set, redshifts are not submitted.")
-    # parser.add_argument("--error-if-not-available", action="store_true",
-    #                     help="Raise an error instead of reporting and moving on if an exposure "+\
-    #                          "table doesn't exist.")
-    # parser.add_argument("--append-to-proc-table", action="store_true",
-    #                     help="Give this flag if you want to submit jobs even if proc table exists."+
-    #                     " Note this will skip existing exposures present in proc table.")
-    # parser.add_argument("--dont-check-job-outputs", action="store_true",
-    #                     help="If all files for a pending job exist and this is False, then the script will not be "+
-    #                          "submitted. If some files exist and this is True, only the "+
-    #                          "subset of the cameras without the final data products will be generated and submitted.")
-    # parser.add_argument("--dont-resubmit-partial-jobs", action="store_true",
-    #                     help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
-    #                          "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     args = parser.parse_args()
 
-    # convert args.tiles str to list of int
-    # if args.tiles is not None:
-    #     args.tiles = [int(tileid) for tileid in args.tiles.split(',')]
     if args.resub_states is not None:
-        args.resub_states = [str(state).strip().upper() for state in args.resub_states.split(',')]
+        args.resub_states = [state.strip().upper() for state in args.resub_states.split(',')]
     return args
 
 if __name__ == '__main__':
@@ -109,17 +65,6 @@ if __name__ == '__main__':
     if not os.path.exists(ptable_pathname):
         ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
 
-    ## Get context specific variable values
-    true_night = what_night_is_it()
-    if int(str(true_night)[6:]) < 8:
-        if int(str(true_night)[4:6]) == 1:
-            nersc_start = nersc_start_time(night=true_night - 10000 + 1100 + 18)
-        else:
-            nersc_start = nersc_start_time(night=true_night - 100 + 18)
-    else:
-        nersc_start = nersc_start_time(night=true_night - 7)
-    nersc_end = nersc_end_time(night=true_night)
-
     ## Combine the table names and types for easier passing to io functions
     table_type = 'proctable'
 
@@ -128,7 +73,6 @@ if __name__ == '__main__':
     print(f"Identified ptable with {len(ptable)} entries.")
     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=0,
                                    resubmission_states=args.resub_states,
-                                   start_time=nersc_start, end_time=nersc_end,
                                    ptab_name=ptable_pathname, dry_run=args.dry_run,
                                    reservation=args.reservation)
 

@@ -382,7 +382,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                                           z_submit_types=z_submit_types)
 
     ## All jobs now submitted, update information from job queue and save
-    ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run_level)
+    ptable = update_from_queue(ptable, dry_run=dry_run_level)
     if dry_run_level < 3:
         write_table(ptable, tablename=proc_table_pathname)
 

@@ -125,9 +125,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         dry_run = True
 
     ## Get context specific variable values
-    true_night = what_night_is_it()
-    nersc_start = nersc_start_time(night=true_night)
-    nersc_end = nersc_end_time(night=true_night)
+    # true_night = what_night_is_it()
+    # nersc_start = nersc_start_time(night=true_night)
+    # nersc_end = nersc_end_time(night=true_night)
 
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
     if os.path.exists(proc_table_pathname):
@@ -135,14 +135,14 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             print(f"ERROR: Processing table: {proc_table_pathname} already exists and not "+
                   "given flag --append-to-proc-table. Exiting this night.")
             return
-        else:
-            if int(str(true_night)[6:])<8:
-                if int(str(true_night)[4:6])==1:
-                    nersc_start = nersc_start_time(night=true_night-10000+1100+18)
-                else:
-                    nersc_start = nersc_start_time(night=true_night-100+18)
-            else:
-                nersc_start = nersc_start_time(night=true_night-7)
+        # else:
+        #     if int(str(true_night)[6:])<8:
+        #         if int(str(true_night)[4:6])==1:
+        #             nersc_start = nersc_start_time(night=true_night-10000+1100+18)
+        #         else:
+        #             nersc_start = nersc_start_time(night=true_night-100+18)
+        #     else:
+        #         nersc_start = nersc_start_time(night=true_night-7)
 
     ## Determine where the unprocessed data table will be written
     unproc_table_pathname = pathjoin(proc_table_path, name.replace('processing', 'unprocessed'))
@@ -204,8 +204,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     arcs, flats, sciences, darkjob, arcjob, flatjob, \
     curtype, lasttype, curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
     if len(ptable) > 0:
-        ptable = update_from_queue(ptable, start_time=nersc_start,
-                                   end_time=nersc_end, dry_run=0)
+        ptable = update_from_queue(ptable, dry_run=0)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
         if any_jobs_not_complete(ptable['STATUS']) and not ignore_proc_table_failures:
@@ -295,7 +294,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                               resubmit_partial_complete=resubmit_partial_complete,
                                                               z_submit_types=z_submit_types, system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
-        ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
+        ptable = update_from_queue(ptable, dry_run=dry_run_level)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
 
