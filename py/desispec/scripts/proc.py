@@ -477,15 +477,15 @@ def main(args=None, comm=None):
             psfname = findfile('psf', args.night, args.expid, camera)
             inpsf = replace_prefix(psfname,"psf","fit-psf")
 
-            #- check if a noisy amp might have corrupted this PSF;
+            #- Check if a noisy amp might have corrupted this PSF;
             #- if so, rename to *.badreadnoise
-            #- currently the data is flagged per amp, but do more generic
-            #- test for 5% of pixels
+            #- Currently the data is flagged per amp (25% of pixels), but do
+            #- more generic test for 12.5% of pixels (half of one amp)
             log.info(f'Rank {rank} checking for noisy input CCD amps')
             preprocfile = findfile('preproc', args.night, args.expid, camera)
             mask = fitsio.read(preprocfile, 'MASK')
             noisyfrac = np.sum((mask & ccdmask.BADREADNOISE) != 0) / mask.size
-            if noisyfrac > 0.05:
+            if noisyfrac > 0.25*0.5:
                 log.error(f"{100*noisyfrac:.0f}% of {camera} input pixels have bad readnoise; don't use this PSF")
                 os.rename(inpsf, inpsf+'.badreadnoise')
                 continue
