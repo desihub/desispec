@@ -217,7 +217,7 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
         log.info("qtable not provided, querying Slurm using ptable's LATEST_QID set")
         qids = np.array(ptable['LATEST_QID'])
         ## Avoid null valued QID's (set to -99)
-        qids = qids[qids > -99]
+        qids = qids[qids > 0]
         qtable = queue_info_from_qids(qids, dry_run=dry_run)
 
     log.info(f"Slurm returned information on {len(qtable)} jobs out of "
