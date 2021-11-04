@@ -225,6 +225,8 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     check_scriptname = (    'JOBNAME' in qtable.colnames
                         and 'SCRIPTNAME' in ptable.colnames
                         and not ignore_scriptnames)
+    if check_scriptname:
+        log.info("Will be verifying that the file names are consistent")
     for row in qtable:
         match = (int(row['JOBID']) == ptable['LATEST_QID'])
         # 'jobid,state,submit,eligible,start,end,jobname'
