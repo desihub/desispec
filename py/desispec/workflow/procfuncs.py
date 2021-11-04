@@ -701,7 +701,7 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     print(f"Resubmitting jobs with current states in the following: {resubmission_states}")
-    proc_table = update_from_queue(proc_table, dry_run=dry_run)
+    proc_table = update_from_queue(proc_table, dry_run=False)
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
