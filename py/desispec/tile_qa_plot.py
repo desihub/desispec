@@ -1037,7 +1037,7 @@ def make_tile_qa_plot(
         nontgt
     ]
     labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0", "non-TGT"]
-    cs = ["r", "b", "y"]
+    cs = ["b", "r", "y"]
     zorders = [1, 1, 0]
     for sel, label, c, zorder in zip(sels, labels, cs, zorders):
         ax.scatter(fiberqa["FIBER"][sel], np.log10(0.1 + fiberqa["Z"][sel]), s=0.1, c=c, alpha=1.0, zorder=zorder, label="{} ({} fibers)".format(label, sel.sum()))
