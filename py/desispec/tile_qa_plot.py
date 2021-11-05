@@ -1026,6 +1026,10 @@ def make_tile_qa_plot(
     cs = ["r", "b"]
     for sel, label, c in zip(sels, labels, cs):
         ax.scatter(fiberqa["FIBER"][sel], np.log10(0.1 + fiberqa["Z"][sel]), s=0.1, c=c, alpha=1.0, label="{} ({} fibers)".format(label, sel.sum()))
+    for petal in range(10):
+        if petal % 2 == 0:
+            ax.axvspan(petal * 500, (petal + 1) * 500, color="k", alpha=0.05, zorder=0)
+        ax.text(petal * 500 + 250, -1.09, str(petal), color="k", fontsize=10, ha="center")
     ax.set_xlabel("FIBER")
     ax.set_ylabel("Z")
     ax.set_xlim(xlim)
