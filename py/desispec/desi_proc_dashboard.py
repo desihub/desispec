@@ -373,13 +373,29 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
     nightly_table_str += '<button class="collapsible">' + heading + \
                          '</button><div class="content" style="display:inline-block;min-height:0%;">\n'
     # table header
-    nightly_table_str += "<table id='c' class='nightTable'><tbody>\n" + \
-                         "\t<tr><th>Expid</th><th>OBSTYPE</th><th>LASTSTEP</th>" + \
-                         "<th>EXPTIME</th><th>PROCCAMWORD</th><th>TILEID</th>" + \
-                         "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>" + \
-                         "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>COMMENTS</th>" + \
-                         "<th>status</th></tr>\n"
-
+    nightly_table_str += ("<table id='c' class='nightTable'><tbody>\n"
+                          + "\t<tr>"
+                          + "<th>EXPID</th>"
+                          + "<th>OBSTYPE</th>"
+                          + "<th>FA SURV</th>"
+                          + "<th>FA PROG</th>"
+                          + "<th>LAST STEP</th>"
+                          + "<th>EXP TIME</th>"
+                          + "<th>PROC CAMWORD</th>"
+                          + "<th>TILE ID</th>"
+                          + "<th>PSF File</th>"
+                          + "<th>frame file</th>"
+                          + "<th>FFlat file</th>"
+                          + "<th>sframe file</th>"
+                          + "<th>sky file</th>"
+                          + "<th>std star</th>"
+                          + "<th>cframe file</th>"
+                          + "<th>slurm file</th>"
+                          + "<th>log file</th>"
+                          + "<th>COMMENTS</th>"
+                          + "<th>status</th>"
+                          + "</tr>\n"
+                          )
     # Add body
     nightly_table_str += main_body
 
@@ -500,14 +516,21 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     expid_processing = set(expid_processing)
 
     logfiletemplate = os.path.join(logpath,'{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
-    fileglob = os.path.join(specproddir, 'exposures', str(night), '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.fits')
+    fileglob_template = os.path.join(specproddir, 'exposures', str(night),
+                                     '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
     def count_num_files(ftype, expid):
         zfild_expid = str(expid).zfill(8)
         if ftype == 'stdstars':
             cam = ''
         else:
             cam = '[brz]'
-        return len( glob.glob( fileglob.format(ftype=ftype, zexpid=zfild_expid, cam=cam) ) )
+        if ftype == 'arc':
+            ext = 'fits*'
+        else:
+            ext = 'fits'
+        fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
+                                            cam=cam, ext=ext)
+        return len(glob.glob(fileglob))
 
     output = dict()
     d_exp.sort('EXPID',reverse=True)
@@ -556,6 +579,15 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             comments.pop(bad_ind)
         comments = ', '.join(comments)
 
+        if 'FA_SURV' in row.colnames:
+            fasurv = row['FA_SURV']
+        else:
+            fasurv = 'unknown'
+        if 'FAPRGRM' in row.colnames:
+            faprog = row['FAPRGRM']
+        else:
+            faprog = 'unknown'
+
         if obstype in expected_by_type.keys():
             expected = expected_by_type[obstype].copy()
             terminal_step = terminal_steps[obstype]
@@ -583,7 +615,10 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         ncams = len(cameras)
 
         nfiles = dict()
-        nfiles['psf'] = count_num_files(ftype='psf', expid=expid) + count_num_files(ftype='fit-psf', expid=expid)
+        if obstype == 'arc':
+            nfiles['psf'] = count_num_files(ftype='fit-psf', expid=expid)
+        else:
+            nfiles['psf'] = count_num_files(ftype='psf', expid=expid)
         nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
         nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
         nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
@@ -651,6 +686,8 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         output[str(expid)] = [ row_color,
                                str(expid),
                                obstype,
+                               fasurv,
+                               faprog,
                                laststep,
                                str(exptime),
                                proccamword,
@@ -660,7 +697,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                                _str_frac( nfiles['ff'],     ncams * expected['ff'] ),
                                _str_frac( nfiles['sframe'], ncams * expected['sframe'] ),
                                _str_frac( nfiles['sky'],    ncams * expected['sframe'] ),
-                               _str_frac( nfiles['std'],   nspecs * expected['std'] ),
+                               _str_frac( nfiles['std'],    nspecs * expected['std'] ),
                                _str_frac( nfiles['cframe'], ncams * expected['cframe'] ),
                                slurm_hlink,
                                log_hlink,
