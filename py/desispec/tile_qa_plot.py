@@ -1021,11 +1021,26 @@ def make_tile_qa_plot(
     ax = plt.subplot(gs[0:2, 3])
     xlim, ylim = (-100, 5100), (-1.1, 1.1)
     yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6])
-    sels = [fiberqa["QAFIBERSTATUS"] == 0, fiberqa["QAFIBERSTATUS"] > 0]
-    labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0"]
-    cs = ["r", "b"]
-    for sel, label, c in zip(sels, labels, cs):
-        ax.scatter(fiberqa["FIBER"][sel], np.log10(0.1 + fiberqa["Z"][sel]), s=0.1, c=c, alpha=1.0, label="{} ({} fibers)".format(label, sel.sum()))
+    # AR identifying non-assigned/sky/broken fibers
+    # AR    (equivalent of OBJTYPE!="TGT" in fiberassign-TILEID.fits.gz)
+    # AR    undirect way, as not all columns are here...
+    # AR the DESI_TARGET column for sky should be present + correctly set
+    # AR for all surveys (with same bits); SUPP_SKY will have SKY set too
+    nontgt = np.zeros(len(fiberqa), dtype=bool)
+    for msk in ["SKY", "BAD_SKY"]:
+        nontgt |= (fiberqa["DESI_TARGET"] & desi_mask[msk]) > 0
+    for msk in ["UNASSIGNED", "STUCKPOSITIONER", "BROKENFIBER"]:
+        nontgt |= (fiberqa["QAFIBERSTATUS"] & fibermask[msk]) > 0
+    sels = [
+        (~nontgt) & (fiberqa["QAFIBERSTATUS"] == 0),
+        (~nontgt) & (fiberqa["QAFIBERSTATUS"] > 0),
+        nontgt
+    ]
+    labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0", "non-TGT"]
+    cs = ["r", "b", "y"]
+    zorders = [1, 1, 0]
+    for sel, label, c, zorder in zip(sels, labels, cs, zorders):
+        ax.scatter(fiberqa["FIBER"][sel], np.log10(0.1 + fiberqa["Z"][sel]), s=0.1, c=c, alpha=1.0, zorder=zorder, label="{} ({} fibers)".format(label, sel.sum()))
     for petal in range(10):
         if petal % 2 == 0:
             ax.axvspan(petal * 500, (petal + 1) * 500, color="k", alpha=0.05, zorder=0)
