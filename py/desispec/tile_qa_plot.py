@@ -1052,7 +1052,7 @@ def make_tile_qa_plot(
     ax.set_yticks(np.log10(0.1 + yticks))
     ax.set_yticklabels(yticks.astype(str))
     ax.grid(True)
-    ax.legend(loc=2, markerscale=10, fontsize=10)
+    ax.legend(loc=2, markerscale=10, fontsize=7)
 
     show_efftime = True # else show TSNR
 
