@@ -26,23 +26,14 @@ from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
 
-# log = get_logger()
-
 def get_amp_ids(header):
     '''
-    Return list of amp names ['A','B','C','D'] or ['1','2','3','4']
-    based upon header keywords
+    Return list of amp names based upon header keywords
     '''
-    if 'CCDSECA' in header:
-        amp_ids = ['A', 'B', 'C', 'D']
-    elif 'CCDSEC1' in header:
-        amp_ids = ['1', '2', '3', '4']
-    else:
-        log = get_logger()
-        message = "No CCDSECA or CCDSEC1; Can't derive amp names from header"
-        log.fatal(message)
-        raise KeyError(message)
-
+    amp_ids = []
+    for a in ['A', 'B', 'C', 'D', '1', '2', '3', '4'] :
+        if 'BIASSEC'+a in header :
+            amp_ids.append(a)
     return amp_ids
 
 def _parse_sec_keyword(value):
