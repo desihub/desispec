@@ -533,8 +533,12 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             cam = ''
         else:
             cam = '[brz]'
-        if ftype == 'arc':
+        if ftype == 'fit-psf':
             ext = 'fits*'
+        elif ftype == 'badcolumns':
+            ext = 'csv'
+        elif ftype == 'biasnight':
+            ext = 'fits.gz'
         else:
             ext = 'fits'
         fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
@@ -591,11 +595,11 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         if 'FA_SURV' in row.colnames:
             fasurv = row['FA_SURV']
         else:
-            fasurv = 'unknown'
+            fasurv = 'unkwn'
         if 'FAPRGRM' in row.colnames:
             faprog = row['FAPRGRM']
         else:
-            faprog = 'unknown'
+            faprog = 'unkwn'
 
         if obstype in expected_by_type.keys():
             expected = expected_by_type[obstype].copy()
