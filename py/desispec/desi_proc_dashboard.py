@@ -671,34 +671,32 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
-            if obstype.lower() == 'science':
-                if nfiles['sframe'] < ncams:
-                    lognames = glob.glob(logfiletemplate.format(pre='prestdstar',
-                                                                night=night, zexpid=zfild_expid,
-                                                                specs='*', jobid='', ext='log'))
-                    file_head = 'prestdstar'
-                else:
-                    lognames_std = glob.glob(logfiletemplate.format(pre='stdstarfit',
-                                               night=night, zexpid=zfild_expid,
-                                               specs='*', jobid='', ext='log'))
+            file_head = obstype.lower()
+            lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night,
+                                       zexpid=zfild_expid, specs='*', jobid='', ext='log'))
+            ## If no unified science script, identify which log to point to
+            if obstype.lower() == 'science' and len(lognames)==0:
+                ## First chronologically is the prestdstar
+                lognames = glob.glob(logfiletemplate.format(pre='prestdstar',
+                                                            night=night, zexpid=zfild_expid,
+                                                            specs='*', jobid='', ext='log'))
+                file_head = 'prestdstar'
+                lognames_std = glob.glob(logfiletemplate.format(pre='stdstarfit',
+                                           night=night, zexpid=zfild_expid,
+                                           specs='*', jobid='', ext='log'))
+                ## If stdstar logs exist and we have all files for prestdstar
+                ## link to stdstar
+                if nfiles['sframe'] == ncams and len(lognames_std)>0:
+                    lognames = lognames_std
+                    file_head = 'stdstarfit'
                     lognames_post = glob.glob(logfiletemplate.format(pre='poststdstar',
                                                night=night, zexpid=zfild_expid,
                                                specs='*', jobid='', ext='log'))
-                    if nfiles['std'] < nspecs and len(lognames_std)>0:
-                        lognames = lognames_std
-                        file_head = 'stdstarfit'
-                    elif nfiles['cframe'] < ncams and len(lognames_post)>0:
+                    ## If poststdstar logs exist and we have all files for stdstar
+                    ## link to poststdstar
+                    if nfiles['std'] == nspecs and len(lognames_post)>0:
                         lognames = lognames_post
                         file_head = 'poststdstar'
-                    else:
-                        lognames = glob.glob(logfiletemplate.format(pre='prestdstar',
-                                                   night=night, zexpid=zfild_expid,
-                                                   specs='*', jobid='', ext='log'))
-                        file_head = 'prestdstar'
-            else:
-                file_head = obstype.lower()
-                lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
-                                           specs='*', jobid='', ext='log'))
 
             newest_jobid = '00000000'
             spectrographs = ''
