@@ -156,11 +156,16 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
         queue_info_table, Table. Table with the columns defined by the input variable 'columns' and information relating
                                  to all jobs submitted by the specified user in the specified time frame.
     """
+    log = get_logger()
     ## Turn the queue id's into a list
     ## this should work with str or int type also, though not officially supported
     qid_str = ','.join(np.atleast_1d(qids).astype(str)).replace(' ','')
 
+    cmd_as_list = ['sacct', '-X', '--parsable2', '--delimiter=,',
+                   f'--format={columns}', '-j', qid_str]
     if dry_run:
+        log.info("Dry run, would have otherwise queried Slurm with the"
+                 +f" following: {' '.join(cmd_as_list)}")
         string = 'JobID,JobName,Partition,Submit,Eligible,Start,End,State,ExitCode\n'
         string += '49482394,arc-20211102-00107062-a0123456789,realtime,2021-11-02'\
                   +'T18:31:14,2021-11-02T18:36:33,2021-11-02T18:36:33,2021-11-02T'\
@@ -179,8 +184,7 @@ def queue_info_from_qids(qids, columns='jobid,jobname,partition,submit,'+
                   +'19:24:49,COMPLETED,0:0'
         cmd_as_list = ['echo', string]
     else:
-        cmd_as_list = ['sacct', '-X', '--parsable2', '--delimiter=,',
-                       f'--format={columns}', '-j', qid_str]
+        log.info(f"Querying Slurm with the following: {' '.join(cmd_as_list)}")
 
     table_as_string = subprocess.check_output(cmd_as_list, text=True,
                                               stderr=subprocess.STDOUT)
@@ -222,14 +226,15 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
 
     log.info(f"Slurm returned information on {len(qtable)} jobs out of "
              +f"{len(ptable)} jobs in the ptable. Updating those now.")
+
     check_scriptname = (    'JOBNAME' in qtable.colnames
                         and 'SCRIPTNAME' in ptable.colnames
                         and not ignore_scriptnames)
     if check_scriptname:
         log.info("Will be verifying that the file names are consistent")
+
     for row in qtable:
         match = (int(row['JOBID']) == ptable['LATEST_QID'])
-        # 'jobid,state,submit,eligible,start,end,jobname'
         if np.any(match):
             ind = np.where(match)[0][0]
             if check_scriptname and ptable['SCRIPTNAME'][ind] not in row['JOBNAME']:
