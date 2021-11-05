@@ -365,9 +365,14 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
         
     # Night dropdown table
     htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
-    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Incomplete: {ninter}/{n_notnull}{htmltab}"
-    heading += f"Failed: {nbad}/{n_notnull}"
-    heading += f"{htmltab}Unprocessed: {noprocess}{htmltab}NoTabEntry: {norecord}{htmltab}Other: {nnull}"
+    heading = (f"Night {night}{htmltab}"
+                + f"Complete: {ngood}/{n_notnull}{htmltab}"
+                + f"Incomplete: {ninter}/{n_notnull}{htmltab}"
+                + f"Failed: {nbad}/{n_notnull}{htmltab}"
+                + f"Unprocessed: {noprocess}{htmltab}"
+                + f"NoTabEntry: {norecord}{htmltab}"
+                + f"Other: {nnull}"
+               )
 
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">' + heading + \
@@ -378,7 +383,7 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
                           + "<th>EXPID</th>"
                           + "<th>OBSTYPE</th>"
                           + "<th>FA SURV</th>"
-                          + "<th>FA PROG</th>"
+                          + "<th>FA PRGRM</th>"
                           + "<th>LAST STEP</th>"
                           + "<th>EXP TIME</th>"
                           + "<th>PROC CAMWORD</th>"
@@ -453,7 +458,9 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
 
-    exptab_colnames = ['EXPID', 'CAMWORD', 'BADCAMWORD', 'BADAMPS', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
+    exptab_colnames = ['EXPID', 'FA_SURV', 'FAPRGRM', 'CAMWORD', 'BADCAMWORD',
+                       'BADAMPS', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS',
+                       'LASTSTEP']
     exptab_dtypes = [int, 'S20', 'S20', 'S40', float, 'S10', int, np.ndarray, 'S10']
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
@@ -479,7 +486,9 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             zfild_expid = str(expid).zfill(8)
             filename = rawdatatemplate.format(zexpid=zfild_expid)
             h1 = fits.getheader(filename, 1)
-            header_info = {keyword: 'unknown' for keyword in ['SPCGRPHS', 'EXPTIME', 'OBSTYPE', 'TILEID']}
+            header_info = {keyword: 'unknown' for keyword in ['SPCGRPHS', 'EXPTIME',
+                                                              'FA_SURV', 'FAPRGRM'
+                                                              'OBSTYPE', 'TILEID']}
             for keyword in header_info.keys():
                 if keyword in h1.keys():
                     header_info[keyword] = h1[keyword]
