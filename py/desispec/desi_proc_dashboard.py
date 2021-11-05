@@ -600,7 +600,11 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             faprog = row['FAPRGRM']
         else:
             faprog = 'unkwn'
-
+        if obstype not in ['science', 'twilight']:
+            if fasurv == 'unkwn':
+                fasurv = '----'
+            if faprog == 'unkwn':
+                faprog = '----'
 
         if obstype in expected_by_type.keys():
             expected = expected_by_type[obstype].copy()
@@ -667,19 +671,21 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
-            file_head = obstype.lower()
-            lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
-                                                        specs='*', jobid='', ext='log'))
             if obstype.lower() == 'science':
-                lognames_post = glob.glob(logfiletemplate.format(pre='poststdstar',night=night, zexpid=zfild_expid,
-                                                                 specs='*',  jobid='', ext='log'))
-                if len(lognames_post)>0:
-                    lognames = lognames_post
+                if nfiles['sframe'] < ncams:
+                    file_head = 'prestdstar'
+                elif nfiles['std'] < nspecs:
+                    file_head = 'stdstarfit'
+                elif nfiles['cframe'] < ncams:
                     file_head = 'poststdstar'
                 else:
-                    lognames = glob.glob(logfiletemplate.format(pre='prestdstar',night=night, zexpid=zfild_expid,
-                                                                specs='*', jobid='',ext='log'))
-                    file_head = 'prestdstar'
+                    print("ERROR: Science row is said to be incomplete but all cframes present.")
+            else:
+                file_head = obstype.lower()
+
+            lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
+                                       specs='*', jobid='', ext='log'))
+
             newest_jobid = '00000000'
             spectrographs = ''
 
