@@ -381,13 +381,13 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
     nightly_table_str += ("<table id='c' class='nightTable'><tbody>\n"
                           + "\t<tr>"
                           + "<th>EXPID</th>"
+                          + "<th>TILE ID</th>"
                           + "<th>OBSTYPE</th>"
                           + "<th>FA SURV</th>"
                           + "<th>FA PRGRM</th>"
                           + "<th>LAST STEP</th>"
                           + "<th>EXP TIME</th>"
                           + "<th>PROC CAMWORD</th>"
-                          + "<th>TILE ID</th>"
                           + "<th>PSF File</th>"
                           + "<th>frame file</th>"
                           + "<th>FFlat file</th>"
@@ -592,14 +592,15 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             comments.pop(bad_ind)
         comments = ', '.join(comments)
 
-        if 'FA_SURV' in row.colnames:
+        if 'FA_SURV' in row.colnames and row['FA_SURV'] != 'unknown':
             fasurv = row['FA_SURV']
         else:
             fasurv = 'unkwn'
-        if 'FAPRGRM' in row.colnames:
+        if 'FAPRGRM' in row.colnames and row['FAPRGRM'] != 'unknown':
             faprog = row['FAPRGRM']
         else:
             faprog = 'unkwn'
+
 
         if obstype in expected_by_type.keys():
             expected = expected_by_type[obstype].copy()
@@ -698,13 +699,13 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         output[str(expid)] = [ row_color,
                                str(expid),
+                               tileid_str,
                                obstype,
                                fasurv,
                                faprog,
                                laststep,
                                str(exptime),
                                proccamword,
-                               tileid_str,
                                _str_frac( nfiles['psf'],    ncams * expected['psf'] ),
                                _str_frac( nfiles['frame'],  ncams * expected['frame'] ),
                                _str_frac( nfiles['ff'],     ncams * expected['ff'] ),
