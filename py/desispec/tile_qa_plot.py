@@ -24,6 +24,9 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import matplotlib
 import matplotlib.image as mpimg
+from desiutil.dust import ebv as dust_ebv
+from astropy import units
+from astropy.coordinates import SkyCoord
 
 
 # AR tile radius in degrees
@@ -298,9 +301,9 @@ def deg2pix(dras, ddecs, width_deg, width_pix):
     return dxs, dys
 
 
-def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
+def plot_cutout(ax, tileid, tilera, tiledec, width_deg, petal_c="w", ebv_c="orange"):
     """
-    Plots a ls-dr9 cutout, with overlaying the petals.
+    Plots a ls-dr9 cutout, with overlaying the petals and the EBV contours.
 
     Args:
         ax: pyplot object
@@ -308,7 +311,8 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
         tilera: tile center R.A. (float)
         tiledec: tile center Dec. (float)
         width_deg: width of the cutout in degrees (np.array of floats)
-        c (optional, defaults to "w"): color used to display targets (string)
+        petal_c (optional, defaults to "w"): color used to display petals (string)
+        ebv_c (optional, default to "y"): color used to display the EBV contours (string)
 
     Notes:
         Different than fiberassign.fba_launch_io.plot_cutout().
@@ -337,7 +341,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
             width_pix,
         )
         ax.plot(
-            dxs, dys, c=c, lw=0.25, alpha=1.0, zorder=1,
+            dxs, dys, c=petal_c, lw=0.25, alpha=1.0, zorder=1,
         )
         anglab = ang + 0.1 * np.pi
         dxs, dys = deg2pix(
@@ -347,7 +351,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
             width_pix,
         )
         ax.text(
-            dxs, dys, "{:.0f}".format(p), color=c, va="center", ha="center",
+            dxs, dys, "{:.0f}".format(p), color=petal_c, va="center", ha="center",
         )
 
     # AR display outer edge
@@ -359,7 +363,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
         width_pix,
     )
     ax.plot(
-        dxs, dys, c=c, lw=0.25, alpha=1.0, zorder=1,
+        dxs, dys, c=petal_c, lw=0.25, alpha=1.0, zorder=1,
     )
 
     # AR
@@ -367,6 +371,37 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
     ax.set_xlim(-0.5, width_pix + 0.5)
     ax.set_ylim(-0.5, width_pix + 0.5)
     ax.axis("off")
+
+    # AR EBV contours
+    # AR the cutout is centered on tile R.A., Dec.
+    # AR    with width_deg
+    # AR first make a regular grid in (R.A, Dec.)
+    # AR note: would be nicer to start from a (dra, ddec) grid,
+    # AR    and use cs.spherical_offsets_by, but this exists
+    # AR    in astropy/4.3.1, and current version is astropy/4.0.1..
+    npts = 100
+    ramin = tilera - width_deg / 2. / np.cos(np.radians(tiledec))
+    ramax = tilera + width_deg / 2. / np.cos(np.radians(tiledec))
+    decmin = tiledec - width_deg / 2.
+    decmax = tiledec + width_deg / 2.
+    xs = np.linspace(ramin, ramax, npts)
+    ys = np.linspace(decmin, decmax, npts)
+    grid_ras, grid_decs = np.meshgrid(xs, ys)
+    # AR get EBV
+    grid_ebvs = dust_ebv(grid_ras, grid_decs)
+    # AR get projected distance (in degree) to tile center
+    cs = SkyCoord(grid_ras * units.degree, grid_decs * units.degree, frame="icrs")
+    tile_cs = SkyCoord(tilera * units.degree, tiledec * units.degree, frame="icrs")
+    dras, ddecs = cs.spherical_offsets_to(tile_cs)
+    dras, ddecs = dras.to(units.degree).value, ddecs.to(units.degree).value
+    # AR not exactly sure why this is needed for ddecs, but it works..
+    dras, ddecs = -dras, -ddecs
+    # AR convert to cutout pixel coordinates
+    dxs, dys = deg2pix(dras, ddecs, width_deg, width_pix)
+    # AR plot contours
+    cnt = ax.contour(dxs, dys, grid_ebvs, levels=3, colors=ebv_c, linewidths=0.5, zorder=1)
+    ax.clabel(cnt, inline=1, fontsize=10)
+    ax.text(0.5, -0.05, "Contours = EBV map", ha="center", fontsize=10, transform=ax.transAxes)
 
 
 def get_petalqa_props(key):
