@@ -508,21 +508,18 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     try:
         d_processing = load_table(file_processing, tabletype='proctable')
     except:
-        print('WARNING: Error reading proctable. All exposures will be marked as unprocessed.')
         d_processing = None
+        print('WARNING: Error reading proctable. Only exposures in preproc'
+              + ' directory will be marked as processing.')
 
-    expid_processing = []
-    # proccamwords_by_expid = dict()
+    preproc_glob = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                                os.environ['SPECPROD'],
+                                'preproc', str(night), '[0-9]*[0-9]')
+    expid_processing = set([int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
+
     if d_processing is not None:
-        for row in d_processing:
-            expid_list = row['EXPID']
-            expid_processing += expid_list.tolist()
-            # if 'PROCCAMWORD' in d_processing.colnames and len(expid_list) == 1:
-            #     expid = int(expid_list[0])
-            #     if expid not in proccamwords_by_expid.keys():
-            #         proccamwords_by_expid[expid] = row['PROCCAMWORD']
-
-    expid_processing = set(expid_processing)
+        new_proc_expids = set(np.concatenate(d_processing['EXPID']).astype(int))
+        expid_processing.update(new_proc_expids)
 
     logfiletemplate = os.path.join(logpath,'{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
     fileglob_template = os.path.join(specproddir, 'exposures', str(night),
