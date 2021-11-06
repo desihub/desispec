@@ -330,10 +330,10 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
 
     ngood,ninter,nbad,nnull,nover,n_notnull,noprocess,norecord = 0,0,0,0,0,0,0,0
     main_body = ""
-    for expid,row_info in night_info.items():
+    for expid in reversed(night_info.keys()):
         if int(expid) in skipd_expids:
             continue
-
+        row_info = night_info[expid]
         table_row = _table_row(row_info[1:],idlabel=row_info[0])
 
         if not show_null and 'NULL' in table_row:
@@ -546,7 +546,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         return len(glob.glob(fileglob))
 
     output = dict()
-    d_exp.sort('EXPID',reverse=True)
+    d_exp.sort('EXPID')
     lasttile, first_exp_of_tile = None, None
     for row in d_exp:
         expid = int(row['EXPID'])
