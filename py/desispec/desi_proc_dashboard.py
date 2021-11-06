@@ -517,7 +517,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                                 'preproc', str(night), '[0-9]*[0-9]')
     expid_processing = set([int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
 
-    if d_processing is not None:
+    if d_processing is not None and len(d_processing)>0:
         new_proc_expids = set(np.concatenate(d_processing['EXPID']).astype(int))
         expid_processing.update(new_proc_expids)
 
