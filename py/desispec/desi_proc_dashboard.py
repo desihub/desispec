@@ -381,7 +381,7 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
     nightly_table_str += ("<table id='c' class='nightTable'><tbody>\n"
                           + "\t<tr>"
                           + "<th>EXPID</th>"
-                          + "<th>TILE ID</th>"
+                          + "<th>TILEID</th>"
                           + "<th>OBSTYPE</th>"
                           + "<th>FA SURV</th>"
                           + "<th>FA PRGRM</th>"
