@@ -547,6 +547,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
     output = dict()
     d_exp.sort('EXPID',reverse=True)
+    lasttile, first_exp_of_tile = None, None
     for row in d_exp:
         expid = int(row['EXPID'])
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
@@ -556,11 +557,13 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         zfild_expid = str(expid).zfill(8)
         obstype = str(row['OBSTYPE']).lower().strip()
-
         tileid = str(row['TILEID'])
         if obstype == 'science':
             tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/' + \
                          tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
+            if lasttile != tileid:
+                first_exp_of_tile = zfild_expid
+                lasttile = tileid
         elif obstype == 'zero': # or obstype == 'other':
             continue
         else:
@@ -682,7 +685,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                                                             specs='*', jobid='', ext='log'))
                 file_head = 'prestdstar'
                 lognames_std = glob.glob(logfiletemplate.format(pre='stdstarfit',
-                                           night=night, zexpid=zfild_expid,
+                                           night=night, zexpid=first_exp_of_tile,
                                            specs='*', jobid='', ext='log'))
                 ## If stdstar logs exist and we have all files for prestdstar
                 ## link to stdstar
