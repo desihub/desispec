@@ -1041,7 +1041,7 @@ def make_tile_qa_plot(
             ax.set_xlim(0, 1.5)
             ax.set_ylim(0, 0.4)
         else:
-            ax.set_xlim(0, 5)
+            ax.set_xlim(0, 6)
             ax.set_ylim(0, 0.2)
         ax.grid(True)
         # AR n(z) : ratio
