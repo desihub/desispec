@@ -10,7 +10,10 @@ from os import listdir
 import json
 
 # import desispec.io.util
-from desispec.workflow.exptable import get_exposure_table_pathname, default_obstypes_for_exptable
+from desispec.workflow.exptable import get_exposure_table_pathname, \
+                                       default_obstypes_for_exptable, \
+                                       get_exposure_table_column_types, \
+                                       get_exposure_table_column_defaults
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
@@ -461,9 +464,19 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     exptab_colnames = ['EXPID', 'FA_SURV', 'FAPRGRM', 'CAMWORD', 'BADCAMWORD',
                        'BADAMPS', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS',
                        'LASTSTEP']
-    exptab_dtypes = [int, 'S20', 'S20', 'S40', float, 'S10', int, np.ndarray, 'S10']
+
+    edefs = get_exposure_table_column_defaults(asdict=True)
+    for col in exptab_colnames:
+        if col not in edefs.keys():
+            ValueError(f"requested dashboard exposure table column {col} not"+
+                       f" in the exposure table columns: {edefs.keys()}.")
+
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
+        for col in exptab_colnames:
+            if col not in d_exp.colnames:
+                d_exp[col] = edefs[col]
+
         if 'LASTSTEP' in d_exp.colnames:
             d_exp = d_exp[exptab_colnames]
         else:
@@ -471,6 +484,8 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             d_exp['LASTSTEP'] = 'all'
     except:
         print(f'WARNING: Error reading exptable for {night}. Changing check_on_disk to True and scanning files on disk.')
+        etypes = get_exposure_table_column_types(asdict=True)
+        exptab_dtypes = [etypes[col] for col in exptab_colnames]
         d_exp = Table(names=exptab_colnames,dtype=exptab_dtypes)
         check_on_disk = True
 
@@ -505,17 +520,17 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                 d_exp.add_row(header_info)
                 unaccounted_for_expids.append(expid)
 
+    preproc_glob = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                                os.environ['SPECPROD'],
+                                'preproc', str(night), '[0-9]*[0-9]')
+    expid_processing = set([int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
+
     try:
         d_processing = load_table(file_processing, tabletype='proctable')
     except:
         d_processing = None
         print('WARNING: Error reading proctable. Only exposures in preproc'
               + ' directory will be marked as processing.')
-
-    preproc_glob = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                                os.environ['SPECPROD'],
-                                'preproc', str(night), '[0-9]*[0-9]')
-    expid_processing = set([int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
 
     if d_processing is not None and len(d_processing)>0:
         new_proc_expids = set(np.concatenate(d_processing['EXPID']).astype(int))
