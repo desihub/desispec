@@ -571,8 +571,10 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         obstype = str(row['OBSTYPE']).lower().strip()
         tileid = str(row['TILEID'])
         if obstype == 'science':
-            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/' + \
-                         tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
+            zfild_tid = tileid.zfill(6)
+            linkloc = f"https://data.desi.lbl.gov/desi/target/fiberassign/tiles/" \
+                      + f"trunk/{zfild_tid[0:3]}/fiberassign-{zfild_tid}.png"
+            tileid_str = _hyperlink(linkloc, tileid)
             if lasttile != tileid:
                 first_exp_of_tile = zfild_expid
                 lasttile = tileid
