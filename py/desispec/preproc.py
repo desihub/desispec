@@ -34,6 +34,8 @@ def get_amp_ids(header):
     for a in ['A', 'B', 'C', 'D', '1', '2', '3', '4'] :
         if 'BIASSEC'+a in header :
             amp_ids.append(a)
+    if len(amp_ids)==0 :
+        raise KeyError("No keyword BIASSECX with X in A,B,C,D,1,2,3,4 in header")
     return amp_ids
 
 def _parse_sec_keyword(value):
