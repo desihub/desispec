@@ -31,6 +31,8 @@ parser.add_argument('--nights', type=int, nargs="*",
                     help='YEARMMDD nights to use for ZEROs and DARKs')
 parser.add_argument('--first-expid', type=int, required=False,
                     help='First EXPID to include')
+parser.add_argument('--last-expid', type=int, required=False,
+                    help='Last EXPID to include')
 parser.add_argument('--darkfile', type=str, required=True,
                     help='output dark model file')
 parser.add_argument('--biasfile', type=str, required=True,
@@ -130,6 +132,13 @@ else:
 #- filter expids if requested
 if args.first_expid is not None:
     keep = speclog['EXPID'] >= args.first_expid
+    speclog = speclog[keep]
+    if len(speclog) == 0:
+        log.critical('No exposures! exiting...')
+        sys.exit(1)
+
+if args.last_expid is not None:
+    keep = speclog['EXPID'] <= args.last_expid
     speclog = speclog[keep]
     if len(speclog) == 0:
         log.critical('No exposures! exiting...')
