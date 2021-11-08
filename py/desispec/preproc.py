@@ -138,21 +138,18 @@ def subtract_peramp_overscan(image, hdr):
     has more complex support for row-by-row, col-overscan, etc.)
     """
     amp_ids = get_amp_ids(hdr)
-    n0=image.shape[0]//2
-    n1=image.shape[1]//2
-
     for a,amp in enumerate(amp_ids) :
-        ii = parse_sec_keyword(hdr['BIASSEC'+amp])
+        ii=parse_sec_keyword(hdr['BIASSEC'+amp])
+        s0,s1=ii[0],ii[1]
+        for k in ["DATASEC","PRESEC","ORSEC","PRRSEC"] :
+            if k+amp in hdr :
+                t0,t1=parse_sec_keyword(hdr[k+amp])
+                s0 = slice(min(s0.start,t0.start),max(s0.stop,t0.stop))
+                s1 = slice(min(s1.start,t1.start),max(s1.stop,t1.stop))
         overscan_image = image[ii].copy()
         overscan,rdnoise = calc_overscan(overscan_image)
-        if ii[0].start < n0 and ii[1].start < n1 :
-            image[:n0,:n1] -= overscan
-        elif ii[0].start < n0 and ii[1].start >= n1 :
-            image[:n0,n1:] -= overscan
-        elif ii[0].start >= n0 and ii[1].start < n1 :
-            image[n0:,:n1] -= overscan
-        elif ii[0].start >= n0 and ii[1].start >= n1 :
-            image[n0:,n1:] -= overscan
+        image[s0,s1] -= overscan
+
 
 def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
     """
