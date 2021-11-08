@@ -724,10 +724,16 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                     newest_jobid = jobid
                     spectrographs = log.split('-')[-2]
             if newest_jobid != '00000000' and len(spectrographs)!=0:
-                logname = logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
-                                                 specs=spectrographs,  jobid='-'+newest_jobid, ext='log')
-                slurmname = logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
-                                                   specs=spectrographs, jobid='', ext='slurm')
+                if file_head == 'stdstarfit':
+                    zexp = first_exp_of_tile
+                else:
+                    zexp = zfild_expid
+                logname = logfiletemplate.format(pre=file_head, night=night,
+                                                 zexpid=zexp, specs=spectrographs,
+                                                 jobid='-'+newest_jobid, ext='log')
+                slurmname = logfiletemplate.format(pre=file_head, night=night,
+                                                   zexpid=zexp, specs=spectrographs,
+                                                   jobid='', ext='slurm')
 
                 slurm_hlink = _hyperlink( os.path.relpath(slurmname, webpage), 'Slurm')
                 log_hlink   = _hyperlink( os.path.relpath(logname, webpage),   'Log'  )
