@@ -7,7 +7,7 @@ desispec Change Log
 
 * tsnr_afterburner support for old HDU names (PR `#1403`_).
 * Tiles tables and QA cleanup (PRs `#1406`_, `#1407`_, `#1409`_, `#1410`_,
-  `#1430`_, `#1442`_, `#1445`_, `#1449`_, `#1458`_).
+  `#1430`_, `#1442`_, `#1445`_, `#1449`_, `#1458`_, `#1475`_).
 * Support averaging PSFs with different wavelength ranges (PR `#1411`_).
 * QSO afterburner add blank file when no targets to write (PR `#1412`_).
 * Update airmass dependence for exposure quality cuts (PR `#1413`_).
@@ -35,7 +35,10 @@ desispec Change Log
   (PR `#1465`_, `#1467`_)
 * Fix check_for_outputs bug and teach findfile about fit-psf (PR `#1469`_).
 * Set fibermap.FIBERSTATUS BADREADNOISE and BADAMP[BRZ] (PR `#1472`_).
-* don't use PSFs with bad amps (PR `#1473`_).
+* Don't use PSFs with bad amps (PR `#1473`_).
+* Support 2-amp readout (PR `#1476`_).
+* Use only offset traceshifts when amplifier is masked (PR `#1477`_).
+* desi_archive_tilenight to archive nights after tile QA approval (PR `#1478`_).
 
 .. _`#1403`: https://github.com/desihub/desispec/pull/1403
 .. _`#1406`: https://github.com/desihub/desispec/pull/1406
@@ -73,7 +76,10 @@ desispec Change Log
 .. _`#1469`: https://github.com/desihub/desispec/pull/1469
 .. _`#1472`: https://github.com/desihub/desispec/pull/1472
 .. _`#1473`: https://github.com/desihub/desispec/pull/1473
-
+.. _`#1475`: https://github.com/desihub/desispec/pull/1475
+.. _`#1476`: https://github.com/desihub/desispec/pull/1476
+.. _`#1477`: https://github.com/desihub/desispec/pull/1477
+.. _`#1478`: https://github.com/desihub/desispec/pull/1478
 
 0.46.1 (2021-09-03)
 -------------------
