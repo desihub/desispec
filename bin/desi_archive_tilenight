@@ -48,7 +48,10 @@ def archivetile(tiledir, archivedir, dryrun=False):
         os.symlink(src, dst)
 
         #- Remove write access
-        freezedir(archivedir, dryrun=dryrun)
+        err = freezedir(archivedir, dryrun=dryrun)
+        if err != 0:
+            log.error(f'problem removing write access from {archivedir}')
+
 
 def freezedir(path, dryrun=False):
     """
@@ -115,9 +118,10 @@ else:
 
 if args.specstatus is None:
     args.specstatus = os.path.expandvars('$DESI_ROOT/survey/ops/surveyops/trunk/ops/tiles-specstatus.ecsv')
-    if not os.path.exists(args.specstatus):
-        log.critical(f'Missing {args.specstatus}')
-        sys.exit(1)
+
+if not os.path.exists(args.specstatus):
+    log.critical(f'Missing {args.specstatus}')
+    sys.exit(1)
 
 log.info(f'Reading tiles from {args.specstatus}')
 tiles = Table.read(args.specstatus)
@@ -167,5 +171,7 @@ for tileid, lastnight, archivedate in tiles['TILEID','LASTNIGHT','ARCHIVEDATE']:
                 tmpfile = findfile(prefix, expnight, expid, 'b0',
                                    specprod_dir=reduxdir)
                 path = os.path.dirname(tmpfile)
-                freezedir(path, args.dry_run)
+                err = freezedir(path, args.dry_run)
+                if err != 0:
+                    log.error(f'problem removing write access from {path}')
 
