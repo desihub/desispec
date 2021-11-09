@@ -101,7 +101,7 @@ parser.add_argument('--specstatus', type=str,
 parser.add_argument('--dry-run', action='store_true',
         help='print what directories to archive, without archiving them')
 parser.add_argument('--only-tiles', action='store_true',
-        help='archive only tiles/cumulative dirs; not exposures, preproc')
+        help="archive only tiles dirs; don't freeze exposures, preproc")
 
 args = parser.parse_args()
 log = get_logger()
