@@ -322,7 +322,7 @@ def read_fibermap(filename):
 
     fibermap, hdr = fitsio.read(filename, ext='FIBERMAP', header=True)
     fibermap = Table(fibermap)
-    fibermap.meta.update(hdr)
+    addkeys(fibermap.meta, hdr)
 
     duration = time.time() - t0
 
