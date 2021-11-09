@@ -105,11 +105,10 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 mask=False, dark=False, pixflat=False)
 
         # propagate gains to first_image_header
-        if 'GAINA' in img.meta and 'GAINA' not in first_image_header:
-            first_image_header['GAINA'] = img.meta['GAINA']
-            first_image_header['GAINB'] = img.meta['GAINB']
-            first_image_header['GAINC'] = img.meta['GAINC']
-            first_image_header['GAIND'] = img.meta['GAIND']
+        for a in get_amp_ids(img.meta) :
+            k="GAIN"+a
+            if k in img.meta and k not in first_image_header:
+                first_image_header[k] = img.meta[k]
 
         if shape is None :
             shape=img.pix.shape
