@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.47.0 (unreleased)
+0.47.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.47.0 (2021-11-11)
 -------------------
 
 * tsnr_afterburner support for old HDU names (PR `#1403`_).
