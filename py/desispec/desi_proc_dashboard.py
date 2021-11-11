@@ -10,7 +10,10 @@ from os import listdir
 import json
 
 # import desispec.io.util
-from desispec.workflow.exptable import get_exposure_table_pathname, default_obstypes_for_exptable
+from desispec.workflow.exptable import get_exposure_table_pathname, \
+                                       default_obstypes_for_exptable, \
+                                       get_exposure_table_column_types, \
+                                       get_exposure_table_column_defaults
 from desispec.workflow.proctable import get_processing_table_pathname
 from desispec.workflow.tableio import load_table
 from desispec.io.meta import specprod_root, rawdata_root
@@ -330,10 +333,10 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
 
     ngood,ninter,nbad,nnull,nover,n_notnull,noprocess,norecord = 0,0,0,0,0,0,0,0
     main_body = ""
-    for expid,row_info in night_info.items():
+    for expid in reversed(night_info.keys()):
         if int(expid) in skipd_expids:
             continue
-
+        row_info = night_info[expid]
         table_row = _table_row(row_info[1:],idlabel=row_info[0])
 
         if not show_null and 'NULL' in table_row:
@@ -365,21 +368,42 @@ def nightly_table(night,output_dir,skipd_expids=set(),show_null=True,check_on_di
         
     # Night dropdown table
     htmltab = r'&nbsp;&nbsp;&nbsp;&nbsp;'
-    heading = f"Night {night}{htmltab}Complete: {ngood}/{n_notnull}{htmltab}Incomplete: {ninter}/{n_notnull}{htmltab}"
-    heading += f"Failed: {nbad}/{n_notnull}"
-    heading += f"{htmltab}Unprocessed: {noprocess}{htmltab}NoTabEntry: {norecord}{htmltab}Other: {nnull}"
+    heading = (f"Night {night}{htmltab}"
+                + f"Complete: {ngood}/{n_notnull}{htmltab}"
+                + f"Incomplete: {ninter}/{n_notnull}{htmltab}"
+                + f"Failed: {nbad}/{n_notnull}{htmltab}"
+                + f"Unprocessed: {noprocess}{htmltab}"
+                + f"NoTabEntry: {norecord}{htmltab}"
+                + f"Other: {nnull}"
+               )
 
     nightly_table_str= '<!--Begin {}-->\n'.format(night)
     nightly_table_str += '<button class="collapsible">' + heading + \
                          '</button><div class="content" style="display:inline-block;min-height:0%;">\n'
     # table header
-    nightly_table_str += "<table id='c' class='nightTable'><tbody>\n" + \
-                         "\t<tr><th>Expid</th><th>OBSTYPE</th><th>LASTSTEP</th>" + \
-                         "<th>EXPTIME</th><th>PROCCAMWORD</th><th>TILEID</th>" + \
-                         "<th>PSF File</th><th>frame file</th><th>FFlat file</th><th>sframe file</th><th>sky file</th>" + \
-                         "<th>std star</th><th>cframe file</th><th>slurm file</th><th>log file</th><th>COMMENTS</th>" + \
-                         "<th>status</th></tr>\n"
-
+    nightly_table_str += ("<table id='c' class='nightTable'><tbody>\n"
+                          + "\t<tr>"
+                          + "<th>EXPID</th>"
+                          + "<th>TILEID</th>"
+                          + "<th>OBSTYPE</th>"
+                          + "<th>FA SURV</th>"
+                          + "<th>FA PRGRM</th>"
+                          + "<th>LAST STEP</th>"
+                          + "<th>EXP TIME</th>"
+                          + "<th>PROC CAMWORD</th>"
+                          + "<th>PSF File</th>"
+                          + "<th>frame file</th>"
+                          + "<th>FFlat file</th>"
+                          + "<th>sframe file</th>"
+                          + "<th>sky file</th>"
+                          + "<th>std star</th>"
+                          + "<th>cframe file</th>"
+                          + "<th>slurm file</th>"
+                          + "<th>log file</th>"
+                          + "<th>COMMENTS</th>"
+                          + "<th>status</th>"
+                          + "</tr>\n"
+                          )
     # Add body
     nightly_table_str += main_body
 
@@ -437,10 +461,22 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     webpage = os.environ['DESI_DASHBOARD']
     logpath = os.path.join(specproddir, 'run', 'scripts', 'night', night)
 
-    exptab_colnames = ['EXPID', 'CAMWORD', 'BADCAMWORD', 'BADAMPS', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS', 'LASTSTEP']
-    exptab_dtypes = [int, 'S20', 'S20', 'S40', float, 'S10', int, np.ndarray, 'S10']
+    exptab_colnames = ['EXPID', 'FA_SURV', 'FAPRGRM', 'CAMWORD', 'BADCAMWORD',
+                       'BADAMPS', 'EXPTIME', 'OBSTYPE', 'TILEID', 'COMMENTS',
+                       'LASTSTEP']
+
+    edefs = get_exposure_table_column_defaults(asdict=True)
+    for col in exptab_colnames:
+        if col not in edefs.keys():
+            ValueError(f"requested dashboard exposure table column {col} not"+
+                       f" in the exposure table columns: {edefs.keys()}.")
+
     try: # Try reading tables first. Switch to counting files if failed.
         d_exp = load_table(file_exptable, tabletype='exptable')
+        for col in exptab_colnames:
+            if col not in d_exp.colnames:
+                d_exp[col] = edefs[col]
+
         if 'LASTSTEP' in d_exp.colnames:
             d_exp = d_exp[exptab_colnames]
         else:
@@ -448,6 +484,8 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             d_exp['LASTSTEP'] = 'all'
     except:
         print(f'WARNING: Error reading exptable for {night}. Changing check_on_disk to True and scanning files on disk.')
+        etypes = get_exposure_table_column_types(asdict=True)
+        exptab_dtypes = [etypes[col] for col in exptab_colnames]
         d_exp = Table(names=exptab_colnames,dtype=exptab_dtypes)
         check_on_disk = True
 
@@ -463,7 +501,9 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             zfild_expid = str(expid).zfill(8)
             filename = rawdatatemplate.format(zexpid=zfild_expid)
             h1 = fits.getheader(filename, 1)
-            header_info = {keyword: 'unknown' for keyword in ['SPCGRPHS', 'EXPTIME', 'OBSTYPE', 'TILEID']}
+            header_info = {keyword: 'unknown' for keyword in ['SPCGRPHS', 'EXPTIME',
+                                                              'FA_SURV', 'FAPRGRM'
+                                                              'OBSTYPE', 'TILEID']}
             for keyword in header_info.keys():
                 if keyword in h1.keys():
                     header_info[keyword] = h1[keyword]
@@ -480,37 +520,46 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                 d_exp.add_row(header_info)
                 unaccounted_for_expids.append(expid)
 
+    preproc_glob = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                                os.environ['SPECPROD'],
+                                'preproc', str(night), '[0-9]*[0-9]')
+    expid_processing = set([int(os.path.basename(fil)) for fil in glob.glob(preproc_glob)])
+
     try:
         d_processing = load_table(file_processing, tabletype='proctable')
     except:
-        print('WARNING: Error reading proctable. All exposures will be marked as unprocessed.')
         d_processing = None
+        print('WARNING: Error reading proctable. Only exposures in preproc'
+              + ' directory will be marked as processing.')
 
-    expid_processing = []
-    # proccamwords_by_expid = dict()
-    if d_processing is not None:
-        for row in d_processing:
-            expid_list = row['EXPID']
-            expid_processing += expid_list.tolist()
-            # if 'PROCCAMWORD' in d_processing.colnames and len(expid_list) == 1:
-            #     expid = int(expid_list[0])
-            #     if expid not in proccamwords_by_expid.keys():
-            #         proccamwords_by_expid[expid] = row['PROCCAMWORD']
-
-    expid_processing = set(expid_processing)
+    if d_processing is not None and len(d_processing)>0:
+        new_proc_expids = set(np.concatenate(d_processing['EXPID']).astype(int))
+        expid_processing.update(new_proc_expids)
 
     logfiletemplate = os.path.join(logpath,'{pre}-{night}-{zexpid}-{specs}{jobid}.{ext}')
-    fileglob = os.path.join(specproddir, 'exposures', str(night), '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.fits')
+    fileglob_template = os.path.join(specproddir, 'exposures', str(night),
+                                     '{zexpid}', '{ftype}-{cam}[0-9]-{zexpid}.{ext}')
     def count_num_files(ftype, expid):
         zfild_expid = str(expid).zfill(8)
         if ftype == 'stdstars':
             cam = ''
         else:
             cam = '[brz]'
-        return len( glob.glob( fileglob.format(ftype=ftype, zexpid=zfild_expid, cam=cam) ) )
+        if ftype == 'fit-psf':
+            ext = 'fits*'
+        elif ftype == 'badcolumns':
+            ext = 'csv'
+        elif ftype == 'biasnight':
+            ext = 'fits.gz'
+        else:
+            ext = 'fits'
+        fileglob = fileglob_template.format(ftype=ftype, zexpid=zfild_expid,
+                                            cam=cam, ext=ext)
+        return len(glob.glob(fileglob))
 
     output = dict()
-    d_exp.sort('EXPID',reverse=True)
+    d_exp.sort('EXPID')
+    lasttile, first_exp_of_tile = None, None
     for row in d_exp:
         expid = int(row['EXPID'])
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
@@ -520,11 +569,15 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
 
         zfild_expid = str(expid).zfill(8)
         obstype = str(row['OBSTYPE']).lower().strip()
-
         tileid = str(row['TILEID'])
         if obstype == 'science':
-            tileid_str = '<a href="'+'https://data.desi.lbl.gov/desi/target/fiberassign/tiles/trunk/' + \
-                         tileid.zfill(6)[0:3]+'/fiberassign-'+tileid.zfill(6)+'.png'+'">'+tileid+'</a>'
+            zfild_tid = tileid.zfill(6)
+            linkloc = f"https://data.desi.lbl.gov/desi/target/fiberassign/tiles/" \
+                      + f"trunk/{zfild_tid[0:3]}/fiberassign-{zfild_tid}.png"
+            tileid_str = _hyperlink(linkloc, tileid)
+            if lasttile != tileid:
+                first_exp_of_tile = zfild_expid
+                lasttile = tileid
         elif obstype == 'zero': # or obstype == 'other':
             continue
         else:
@@ -556,6 +609,20 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             comments.pop(bad_ind)
         comments = ', '.join(comments)
 
+        if 'FA_SURV' in row.colnames and row['FA_SURV'] != 'unknown':
+            fasurv = row['FA_SURV']
+        else:
+            fasurv = 'unkwn'
+        if 'FAPRGRM' in row.colnames and row['FAPRGRM'] != 'unknown':
+            faprog = row['FAPRGRM']
+        else:
+            faprog = 'unkwn'
+        if obstype not in ['science', 'twilight']:
+            if fasurv == 'unkwn':
+                fasurv = '----'
+            if faprog == 'unkwn':
+                faprog = '----'
+
         if obstype in expected_by_type.keys():
             expected = expected_by_type[obstype].copy()
             terminal_step = terminal_steps[obstype]
@@ -583,7 +650,10 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         ncams = len(cameras)
 
         nfiles = dict()
-        nfiles['psf'] = count_num_files(ftype='psf', expid=expid) + count_num_files(ftype='fit-psf', expid=expid)
+        if obstype == 'arc':
+            nfiles['psf'] = count_num_files(ftype='fit-psf', expid=expid)
+        else:
+            nfiles['psf'] = count_num_files(ftype='psf', expid=expid)
         nfiles['frame'] = count_num_files(ftype='frame', expid=expid)
         nfiles['ff'] = count_num_files(ftype='fiberflat', expid=expid)
         nfiles['sky'] = count_num_files(ftype='sky', expid=expid)
@@ -619,18 +689,32 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
         slurm_hlink, log_hlink = '----', '----'
         if row_color not in ['GOOD','NULL'] and obstype.lower() in ['arc','flat','science']:
             file_head = obstype.lower()
-            lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
-                                                        specs='*', jobid='', ext='log'))
-            if obstype.lower() == 'science':
-                lognames_post = glob.glob(logfiletemplate.format(pre='poststdstar',night=night, zexpid=zfild_expid,
-                                                                 specs='*',  jobid='', ext='log'))
-                if len(lognames_post)>0:
-                    lognames = lognames_post
-                    file_head = 'poststdstar'
-                else:
-                    lognames = glob.glob(logfiletemplate.format(pre='prestdstar',night=night, zexpid=zfild_expid,
-                                                                specs='*', jobid='',ext='log'))
-                    file_head = 'prestdstar'
+            lognames = glob.glob(logfiletemplate.format(pre=file_head, night=night,
+                                       zexpid=zfild_expid, specs='*', jobid='', ext='log'))
+            ## If no unified science script, identify which log to point to
+            if obstype.lower() == 'science' and len(lognames)==0:
+                ## First chronologically is the prestdstar
+                lognames = glob.glob(logfiletemplate.format(pre='prestdstar',
+                                                            night=night, zexpid=zfild_expid,
+                                                            specs='*', jobid='', ext='log'))
+                file_head = 'prestdstar'
+                lognames_std = glob.glob(logfiletemplate.format(pre='stdstarfit',
+                                           night=night, zexpid=first_exp_of_tile,
+                                           specs='*', jobid='', ext='log'))
+                ## If stdstar logs exist and we have all files for prestdstar
+                ## link to stdstar
+                if nfiles['sframe'] == ncams and len(lognames_std)>0:
+                    lognames = lognames_std
+                    file_head = 'stdstarfit'
+                    lognames_post = glob.glob(logfiletemplate.format(pre='poststdstar',
+                                               night=night, zexpid=zfild_expid,
+                                               specs='*', jobid='', ext='log'))
+                    ## If poststdstar logs exist and we have all files for stdstar
+                    ## link to poststdstar
+                    if nfiles['std'] == nspecs and len(lognames_post)>0:
+                        lognames = lognames_post
+                        file_head = 'poststdstar'
+
             newest_jobid = '00000000'
             spectrographs = ''
 
@@ -640,27 +724,35 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
                     newest_jobid = jobid
                     spectrographs = log.split('-')[-2]
             if newest_jobid != '00000000' and len(spectrographs)!=0:
-                logname = logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
-                                                 specs=spectrographs,  jobid='-'+newest_jobid, ext='log')
-                slurmname = logfiletemplate.format(pre=file_head, night=night, zexpid=zfild_expid,
-                                                   specs=spectrographs, jobid='', ext='slurm')
+                if file_head == 'stdstarfit':
+                    zexp = first_exp_of_tile
+                else:
+                    zexp = zfild_expid
+                logname = logfiletemplate.format(pre=file_head, night=night,
+                                                 zexpid=zexp, specs=spectrographs,
+                                                 jobid='-'+newest_jobid, ext='log')
+                slurmname = logfiletemplate.format(pre=file_head, night=night,
+                                                   zexpid=zexp, specs=spectrographs,
+                                                   jobid='', ext='slurm')
 
                 slurm_hlink = _hyperlink( os.path.relpath(slurmname, webpage), 'Slurm')
                 log_hlink   = _hyperlink( os.path.relpath(logname, webpage),   'Log'  )
 
         output[str(expid)] = [ row_color,
                                str(expid),
+                               tileid_str,
                                obstype,
+                               fasurv,
+                               faprog,
                                laststep,
                                str(exptime),
                                proccamword,
-                               tileid_str,
                                _str_frac( nfiles['psf'],    ncams * expected['psf'] ),
                                _str_frac( nfiles['frame'],  ncams * expected['frame'] ),
                                _str_frac( nfiles['ff'],     ncams * expected['ff'] ),
                                _str_frac( nfiles['sframe'], ncams * expected['sframe'] ),
                                _str_frac( nfiles['sky'],    ncams * expected['sframe'] ),
-                               _str_frac( nfiles['std'],   nspecs * expected['std'] ),
+                               _str_frac( nfiles['std'],    nspecs * expected['std'] ),
                                _str_frac( nfiles['cframe'], ncams * expected['cframe'] ),
                                slurm_hlink,
                                log_hlink,
