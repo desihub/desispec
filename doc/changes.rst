@@ -25,6 +25,8 @@ desispec Change Log
 * Arc jobs restricted to <= 10 nodes even on KNL (PR `#1450`_).
 * Sky model bug fix to avoid fake z~4.3 QSO (PR `#1452`_).
 * desi_edit_exposure_table useability improvements (PR `#1453`_).
+* switch io.read_fibermap to use fitsio to avoid astropy masked columns
+  (PR `#1454`_, `#1479`_)
 * daily pipeline runner cache exposures after every new exp (PR `#1455`_).
 * Hartmann doors analysis script (PR `#1457`_).
 * New desi_compute_nightly_bias script (PR `#1460`_).
@@ -39,6 +41,8 @@ desispec Change Log
 * Support 2-amp readout (PR `#1476`_).
 * Use only offset traceshifts when amplifier is masked (PR `#1477`_).
 * desi_archive_tilenight to archive nights after tile QA approval (PR `#1478`_).
+* processing dashboard useability updates (PR `#1480`_).
+* use desitarget.skybricks to check stuck sky locations (PR `#1481`_).
 
 .. _`#1403`: https://github.com/desihub/desispec/pull/1403
 .. _`#1406`: https://github.com/desihub/desispec/pull/1406
@@ -65,6 +69,7 @@ desispec Change Log
 .. _`#1450`: https://github.com/desihub/desispec/pull/1450
 .. _`#1452`: https://github.com/desihub/desispec/pull/1452
 .. _`#1453`: https://github.com/desihub/desispec/pull/1453
+.. _`#1454`: https://github.com/desihub/desispec/pull/1454
 .. _`#1455`: https://github.com/desihub/desispec/pull/1455
 .. _`#1457`: https://github.com/desihub/desispec/pull/1457
 .. _`#1458`: https://github.com/desihub/desispec/pull/1458
@@ -80,6 +85,9 @@ desispec Change Log
 .. _`#1476`: https://github.com/desihub/desispec/pull/1476
 .. _`#1477`: https://github.com/desihub/desispec/pull/1477
 .. _`#1478`: https://github.com/desihub/desispec/pull/1478
+.. _`#1479`: https://github.com/desihub/desispec/pull/1479
+.. _`#1480`: https://github.com/desihub/desispec/pull/1480
+.. _`#1481`: https://github.com/desihub/desispec/pull/1481
 
 0.46.1 (2021-09-03)
 -------------------
