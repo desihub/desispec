@@ -19,8 +19,10 @@ from astropy.table import Table, Column, join
 from astropy.io import fits
 
 from desitarget.targetmask import desi_mask
+from desitarget.skybricks import Skybricks
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
+from desimodel.focalplane import get_tile_radius_deg
 
 from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
 from desispec.io.meta import rawdata_root, findfile
@@ -690,12 +692,30 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         if numbad > 0:
             log.warning(f'Flagging {numbad} BAD positions with offset > {bad_offset_um} microns')
 
+        #- SKY assignments on stuck positioners will get special treatment
+        stucksky = (fibermap['TARGETID']<0) & (fibermap['OBJTYPE']=='SKY')
+
         #- Set fiber status bits
         missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
         missing |= ~fibermap['_GOODMATCH']
         fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
         fibermap['FIBERSTATUS'][poorpos] |= fibermask.POORPOSITION
-        fibermap['FIBERSTATUS'][badpos] |= fibermask.BADPOSITION
+        fibermap['FIBERSTATUS'][badpos & ~stucksky] |= fibermask.BADPOSITION
+
+        #- for SKY on stuck positioners, recheck if they are on a blank sky
+        #- (e.g. they might be "off" target but still ok for sky)
+        log.info('Checking if SKY on stuck positioners are still on SKY locations')
+        tilera = fa.meta['TILERA']
+        tiledec = fa.meta['TILEDEC']
+        tileradius = get_tile_radius_deg()
+        skybricks = Skybricks()
+        ok = skybricks.lookup_tile(tilera, tiledec, tileradius,
+                fibermap['FIBER_RA'][stucksky], fibermap['FIBER_DEC'][stucksky])
+        num_stucksky = len(ok)
+        num_ok = np.sum(ok)
+        log.info(f'Keeping {num_ok}/{num_stucksky} SKY on stuck positioners')
+
+        fibermap['FIBERSTATUS'][stucksky][~ok] |= fibermask.BADPOSITION
 
         fibermap.remove_column('_GOODMATCH')
 
@@ -816,6 +836,10 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             n = np.sum(ii)
             log.warning(f'Setting {n} {col} NaN to 0.0')
             fibermap[col][ii] = 0.0
+
+            #- if position was unknown, set FIBERSTATUS as BADPOSITION
+            if col.startswith('FIBER') or col.startswith('DELTA'):
+                fibermap['FIBERSTATUS'][ii] |= fibermask.BADPOSITION
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table
