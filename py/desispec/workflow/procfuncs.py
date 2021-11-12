@@ -743,8 +743,9 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         This modifies the inputs of both proc_table and submits and returns them.
     """
     log = get_logger()
-    log.info(f"Identified row {rown['INTID']} as needing resubmission.")
-    log.info(f"{rown['INTID']}: Expid(s): {rown['EXPIDS']}  Job: {rown['JOBDESC']}")
+    row = proc_table[rown]
+    log.info(f"Identified row {row['INTID']} as needing resubmission.")
+    log.info(f"{row['INTID']}: Expid(s): {row['EXPIDS']}  Job: {row['JOBDESC']}")
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
@@ -774,6 +775,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     if not dry_run:
         sleep_and_report(1, message_suffix=f"after submitting job to queue")
         if submits % 10 == 0:
+
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:

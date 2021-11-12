@@ -227,7 +227,7 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
     log.info(f"Slurm returned information on {len(qtable)} jobs out of "
              +f"{len(ptable)} jobs in the ptable. Updating those now.")
 
-    check_scriptname = (    'JOBNAME' in qtable.colnames
+    check_scriptname = ('JOBNAME' in qtable.colnames
                         and 'SCRIPTNAME' in ptable.colnames
                         and not ignore_scriptnames)
     if check_scriptname:
