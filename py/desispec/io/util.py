@@ -726,16 +726,16 @@ def addkeys(hdr1, hdr2, skipkeys=None):
     #- standard keywords that should be skipped
     stdkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
                 'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
-                'XTENSION', 'TFIELDS']
+                'XTENSION', 'TFIELDS', 'SIMPLE']
 
-    for key, value in hdr2.items():
+    for key in hdr2.keys():
         if key not in stdkeys and \
                ((skipkeys is None) or (key not in skipkeys)) \
                and not key.startswith('TTYPE') \
                and not key.startswith('TFORM') \
                and not key.startswith('TUNIT') \
                and key not in hdr1:
-            log.debug(f'Adding {key}')
-            hdr1[key] = value
+            log.debug('Adding %s', key)
+            hdr1[key] = hdr2[key]
         else:
-            log.debug(f'Skipping {key}')
+            log.debug('Skipping %s', key)

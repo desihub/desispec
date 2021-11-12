@@ -88,7 +88,7 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
             'stdstarfit': 'stdstars',
             'poststdstar': 'cframe',
             'dark': 'badcolumns',
-            'arc': 'psf',
+            'arc': 'fitpsf',
             'flat': 'fiberflat',
             'psfnight': 'psfnight',
             'nightlyflat': 'fiberflatnight',
@@ -1093,7 +1093,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         if tilejob is not None:
             sciences = []
 
-    elif lasttype == 'flat' and flatjob is None and len(flats)>11:
+    elif lasttype == 'flat' and flatjob is None and len(flats)==12:
         ## Note here we have an assumption about the number of expected flats being greater than 11
         ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
                                                       reservation=reservation, strictly_successful=strictly_successful,
@@ -1102,7 +1102,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
                                                       system_name=system_name
                                                       )
 
-    elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
+    elif lasttype == 'arc' and arcjob is None and len(arcs)==5:
         ## Note here we have an assumption about the number of expected arcs being greater than 4
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
                                                     reservation=reservation, strictly_successful=strictly_successful,

@@ -305,7 +305,8 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
-        ncores, runtime = ncameras, 10
+        # ncores, runtime = ncameras, 10
+        ncores, runtime = 8, 10  # only use 8 cores to give more memory per core for nightlybias
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':

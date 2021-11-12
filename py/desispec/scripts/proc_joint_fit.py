@@ -13,7 +13,7 @@ from astropy.io import fits
 import glob
 import desiutil.timer
 import desispec.io
-from desispec.io import findfile
+from desispec.io import findfile, replace_prefix
 from desispec.io.util import create_camword
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
@@ -180,10 +180,18 @@ def main(args=None, comm=None):
             for camera in args.cameras:
                 psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
                 if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
-                    psfs = [findfile('psf', args.night, expid, camera).replace("psf", "fit-psf") for expid in args.expids]
-                    log.info("Number of PSF for night={} camera={} = {}".format(args.night, camera, len(psfs)))
-                    if len(psfs) > 4:  # lets do it!
-                        log.info("Computing psfnight ...")
+                    psfs = list()
+                    for expid in args.expids:
+                        psffile = findfile('fitpsf', args.night, expid, camera)
+                        if os.path.exists(psffile):
+                            psfs.append( psffile )
+                        else:
+                            log.warning(f'Missing {psffile}')
+
+                    log.info("Number of PSF for night={} camera={} = {}/{}".format(
+                            args.night, camera, len(psfs), len(args.expids)))
+                    if len(psfs) >= 3:  # lets do it!
+                        log.info(f"Computing {camera} psfnight ...")
                         dirname = os.path.dirname(psfnightfile)
                         if not os.path.isdir(dirname):
                             os.makedirs(dirname)
@@ -204,7 +212,7 @@ def main(args=None, comm=None):
                             log.error(f'Failed to create {psfnightfile}')
                             num_err += 1
                     else:
-                        log.info("Fewer than 4 psfs were provided, can't compute psfnight. Exiting ...")
+                        log.info(f"Fewer than 3 {camera} psfs were provided, can't compute psfnight. Exiting ...")
                         num_cmd += 1
                         num_err += 1
 
