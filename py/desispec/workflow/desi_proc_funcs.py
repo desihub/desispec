@@ -554,7 +554,12 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
         else:
             if jobdesc.lower() in ['science','prestdstar']:
                 fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd} --nofluxcalib'
+                altcmd = cmd
+                if '--nostdstarfit' not in altcmd:
+                    altcmd += ' --nostdstarfit'
+                if '--nofluxcalib' not in altcmd:
+                    altcmd += ' --nofluxcalib'
+                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {altcmd}'
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
             if jobdesc.lower() in ['science', 'stdstarfit', 'poststdstar']:
@@ -569,14 +574,30 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
                 threads_per_task = max(int(tot_threads / ntasks), 1)
                 fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
                 fx.write('# This should quickly skip over the steps already done\n')
+                if '--noprestdstarfit' not in cmd:
+                    cmd += ' --noprestdstarfit'
                 srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} {cmd} '
-                fx.write('if [ $? -eq 0 ]; then\n')
-                fx.write('  echo Running {}\n'.format(srun))
-                fx.write('  {}\n'.format(srun))
-                fx.write('else\n')
-                fx.write('  echo FAILED: done at $(date)\n')
-                fx.write('  exit 1\n')
-                fx.write('fi\n')
+
+                ## If a full 'science' jobdesc then we already did an srun,
+                ## so check that exited properly before continuing
+                ## else directly run the job (note we always check after
+                ## before exiting)
+                if jobdesc.lower() == 'science':
+                    fx.write('if [ $? -eq 0 ]; then\n')
+                    fx.write('  echo Running {}\n'.format(srun))
+                    fx.write('  {}\n'.format(srun))
+                    fx.write('else\n')
+                    fx.write('  echo FAILED: done at $(date)\n')
+                    fx.write('  exit 1\n')
+                    fx.write('fi\n')
+                elif jobdesc.lower() == 'poststdstar':
+                    if '--nostdstarfit' not in srun:
+                        srun += ' --nostdstarfit'
+                    fx.write('echo Running {}\n'.format(srun))
+                    fx.write('{}\n'.format(srun))
+                else:
+                    fx.write('echo Running {}\n'.format(srun))
+                    fx.write('{}\n'.format(srun))
 
         fx.write('\nif [ $? -eq 0 ]; then\n')
         fx.write('  echo SUCCESS: done at $(date)\n')
