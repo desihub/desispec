@@ -10,7 +10,7 @@ import glob
 import warnings
 import time
 from pkg_resources import resource_filename
-import fitsio 
+import fitsio
 
 import yaml
 
@@ -19,16 +19,10 @@ from astropy.table import Table, Column, join
 from astropy.io import fits
 
 from desitarget.targetmask import desi_mask
-<<<<<<< HEAD
-# from desitarget.targets import main_cmx_or_sv
-from desiutil.log import get_logger
-from desiutil.depend import add_dependencies, mergedep
-=======
 from desitarget.skybricks import Skybricks
 from desiutil.log import get_logger
-from desiutil.depend import add_dependencies
+from desiutil.depend import add_dependencies, mergedep
 from desimodel.focalplane import get_tile_radius_deg
->>>>>>> master
 
 from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
 from desispec.io.meta import rawdata_root, findfile
