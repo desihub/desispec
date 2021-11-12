@@ -745,7 +745,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     log = get_logger()
     row = proc_table[rown]
     log.info(f"Identified row {row['INTID']} as needing resubmission.")
-    log.info(f"{row['INTID']}: Expid(s): {row['EXPIDS']}  Job: {row['JOBDESC']}")
+    log.info(f"{row['INTID']}: Expid(s): {row['EXPID']}  Job: {row['JOBDESC']}")
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
