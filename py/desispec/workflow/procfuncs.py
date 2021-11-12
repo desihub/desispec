@@ -698,10 +698,17 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
     """
+    log = get_logger()
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
-    print(f"Resubmitting jobs with current states in the following: {resubmission_states}")
+    log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
     proc_table = update_from_queue(proc_table, dry_run=False)
+    log.info("Updated processing table queue information:")
+    cols = ['INTID','EXPID','OBSTYPE','JOBDESC','TILEID','LATEST_QID','STATUS']
+    print(np.array(cols))
+    for row in proc_table:
+        print(np.array(row[cols]))
+    print("\n")
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
@@ -775,7 +782,6 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     if not dry_run:
         sleep_and_report(1, message_suffix=f"after submitting job to queue")
         if submits % 10 == 0:
-
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:

@@ -33,7 +33,7 @@ def get_resubmission_states():
     Returns:
         list. A list of strings outlining the job states that should be resubmitted.
     """
-    return ['UNSUBMITTED', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT']
+    return ['UNSUBMITTED', 'BOOT_FAIL', 'DEADLINE', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED', 'TIMEOUT', 'CANCELLED']
 
 
 def get_termination_states():
