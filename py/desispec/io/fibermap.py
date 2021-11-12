@@ -953,9 +953,9 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #
     fibermap_header.rename_keyword('EPOCH', 'EQUINOX')
 
-            #- if position was unknown, set FIBERSTATUS as BADPOSITION
-            if col.startswith('FIBER') or col.startswith('DELTA'):
-                fibermap['FIBERSTATUS'][ii] |= fibermask.BADPOSITION
+    #- if position was unknown, set FIBERSTATUS as BADPOSITION
+    if col.startswith('FIBER') or col.startswith('DELTA'):
+        fibermap['FIBERSTATUS'][ii] |= fibermask.BADPOSITION
 
     #- Some code incorrectly relies upon the fibermap being sorted by
     #- fiber number, so accomodate that before returning the table
