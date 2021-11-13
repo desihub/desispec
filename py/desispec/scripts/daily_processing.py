@@ -13,7 +13,7 @@ import glob
 from desispec.workflow.tableio import load_tables, write_tables, write_table
 from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, \
                                     get_printable_banner, sleep_and_report
-from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
+from desispec.workflow.timing import during_operating_hours, what_night_is_it
 from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, \
     get_exposure_table_path, get_exposure_table_name, summarize_exposure
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, get_processing_table_name, erow_to_prow
@@ -180,8 +180,6 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         exps_to_ignore = set(exps_to_ignore)
 
     ## Get context specific variable values
-    nersc_start = nersc_start_time(night=true_night)
-    nersc_end = nersc_end_time(night=true_night)
     colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
 
     ## Define where to find the data
@@ -360,8 +358,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                          dry_run=(dry_run and (override_night is not None) and (not continue_looping_debug)))
 
         if len(ptable) > 0:
-            ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
-            # ptable, nsubmits = update_and_recurvsively_submit(ptable,start_time=nersc_start,end_time=nersc_end,
+            ptable = update_from_queue(ptable, dry_run=dry_run_level)
+            # ptable, nsubmits = update_and_recurvsively_submit(ptable,
             #                                                   ptab_name=proc_table_pathname, dry_run=dry_run_level)
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
@@ -401,7 +399,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     # ii,nsubmits = 0, 0
     # while ii < 4 and any_jobs_not_complete(ptable['STATUS']):
     #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
-    #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
+    #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits,
     #                                                       ptab_name=proc_table_pathname, dry_run=dry_run_level)
     #     if dry_run_level < 3:
     #          write_table(ptable, tablename=proc_table_pathname)
@@ -409,7 +407,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     #         sleep_and_report(queue_cadence_time, message_suffix=f"after resubmitting job to queue",
     #                          dry_run=(dry_run and (override_night is not None) and not (continue_looping_debug)))
     #
-    #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
+    #     ptable = update_from_queue(ptable, dry_run=dry_run_level)
     #     if dry_run_level < 3:
     #          write_table(ptable, tablename=proc_table_pathname)
     #     ## Flush the outputs

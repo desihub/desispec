@@ -8,7 +8,7 @@ from astropy.table import Table, vstack
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_table
 from desispec.workflow.utils import pathjoin, sleep_and_report
-from desispec.workflow.timing import what_night_is_it, nersc_start_time, nersc_end_time
+from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name
 from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, \
                                         get_processing_table_name, erow_to_prow, table_row_to_dict
@@ -124,25 +124,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     elif dry_run_level > 0:
         dry_run = True
 
-    ## Get context specific variable values
-    # true_night = what_night_is_it()
-    # nersc_start = nersc_start_time(night=true_night)
-    # nersc_end = nersc_end_time(night=true_night)
-
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
     if os.path.exists(proc_table_pathname):
         if not append_to_proc_table:
             print(f"ERROR: Processing table: {proc_table_pathname} already exists and not "+
                   "given flag --append-to-proc-table. Exiting this night.")
             return
-        # else:
-        #     if int(str(true_night)[6:])<8:
-        #         if int(str(true_night)[4:6])==1:
-        #             nersc_start = nersc_start_time(night=true_night-10000+1100+18)
-        #         else:
-        #             nersc_start = nersc_start_time(night=true_night-100+18)
-        #     else:
-        #         nersc_start = nersc_start_time(night=true_night-7)
 
     ## Determine where the unprocessed data table will be written
     unproc_table_pathname = pathjoin(proc_table_path, name.replace('processing', 'unprocessed'))
