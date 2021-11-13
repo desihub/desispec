@@ -242,7 +242,8 @@ def update_from_queue(ptable, qtable=None, dry_run=0, ignore_scriptnames=False):
                             + f" the scriptname is {ptable['SCRIPTNAME'][ind]}"
                             + f" but the jobname in the queue was "
                             + f"{row['JOBNAME']}.")
-            ptable['STATUS'][ind] = row['STATE']
+            state = str(row['STATE']).split(' ')[0]
+            ptable['STATUS'][ind] = state
 
     return ptable
 
