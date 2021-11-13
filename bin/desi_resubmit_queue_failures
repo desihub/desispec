@@ -78,3 +78,6 @@ if __name__ == '__main__':
 
     if not args.dry_run:
         write_table(ptable, tablename=ptable_pathname)
+
+    print("Completed all necessary queue resubmissions from processing "
+          + f"table: {ptable_pathname}")
