@@ -133,7 +133,7 @@ def _set_fibermap_columns():
     fibermap_columns['cmx'] = fibermap_columns['main'].copy()
     fibermap_columns['cmx'].insert(fibermap_columns['cmx'].index('DESI_TARGET'), "CMX_TARGET")
     fibermap_columns['cmx'].remove('SCND_TARGET')
-    fibermap_comments['cmx'] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['cmx'])
+    fibermap_comments['cmx'] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['cmx']])
     return fibermap_columns
 
 
@@ -157,12 +157,12 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
 
     assert 0 <= nspec <= 5000, "nspec {} should be within 0-5000".format(nspec)
     try:
-        fc = fibermap_columns[survey]
+        columns = fibermap_columns[survey]
     except KeyError:
-        _set_fibermap_columns()
+        columns = _set_fibermap_columns()[survey]
 
     fibermap = Table()
-    for (name, dtype, unit, comment) in fibermap_columns[survey]:
+    for (name, dtype, unit, comment) in columns:
         c = Column(name=name, dtype=dtype, unit=unit, length=nspec)
         fibermap.add_column(c)
 
@@ -192,7 +192,7 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
 
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
-    assert set(fibermap.keys()) == set([x[0] for x in fibermap_columns[survey]])
+    assert set(fibermap.keys()) == set([x[0] for x in columns])
 
     return fibermap
 
