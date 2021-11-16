@@ -181,7 +181,7 @@ def main(args, comm=None) :
         else:
             frames_by_expid[uniq_key] = {camera: frame}
 
-    input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID'))
+    input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'CAMERA'))
 
     frames={}
     flats={}
