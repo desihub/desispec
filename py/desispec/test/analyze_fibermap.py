@@ -133,12 +133,13 @@ def main():
                     break
             if 'CMX_TARGET' in fibermap.colnames:
                 survey = 'cmx'
-            if fibermap.colnames == analyze_columns[survey]:
+            analyze_columns_colnames = [x[0] for x in analyze_columns[survey]]
+            if fibermap.colnames == analyze_columns_colnames:
                 log.debug("Column names match %s standard for %s.", survey, outfile)
             else:
                 for i in range(len(fibermap.colnames)):
                     if fibermap.colnames[i] != analyze_columns[survey][i]:
-                        log.error('FIBERMAP table column mismatch at index %d ("%s" != "%s")!', i, fibermap.colnames[i], analyze_columns[survey][i])
+                        log.error('FIBERMAP table column mismatch at index %d ("%s" != "%s")!', i, fibermap.colnames[i], analyze_columns_colnames[i])
                         break
     return 0
 
