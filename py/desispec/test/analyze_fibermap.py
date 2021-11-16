@@ -25,98 +25,10 @@ from argparse import ArgumentParser
 import numpy as np
 from astropy.table import Table
 from astropy.io import fits
-from desispec.io.fibermap import assemble_fibermap
+from desispec.io.fibermap import assemble_fibermap, _set_fibermap_columns
 from desispec.io.meta import faflavor2program
 from desiutil.log import get_logger, DEBUG
 # from desiutil.iers import freeze_iers
-
-
-columns = {'main': ['TARGETID',
-                    'PETAL_LOC',
-                    'DEVICE_LOC',
-                    'LOCATION',
-                    'FIBER',
-                    'FIBERSTATUS',
-                    'TARGET_RA',
-                    'TARGET_DEC',
-                    'PMRA',
-                    'PMDEC',
-                    'REF_EPOCH',
-                    'LAMBDA_REF',
-                    'FA_TARGET',
-                    'FA_TYPE',
-                    'OBJTYPE',
-                    'FIBERASSIGN_X',
-                    'FIBERASSIGN_Y',
-                    'PRIORITY',
-                    'SUBPRIORITY',
-                    'OBSCONDITIONS',
-                    'RELEASE',
-                    'BRICKID',
-                    'BRICK_OBJID',
-                    'MORPHTYPE',
-                    'FLUX_G',
-                    'FLUX_R',
-                    'FLUX_Z',
-                    'FLUX_IVAR_G',
-                    'FLUX_IVAR_R',
-                    'FLUX_IVAR_Z',
-                    'MASKBITS',
-                    'REF_ID',
-                    'REF_CAT',
-                    'GAIA_PHOT_G_MEAN_MAG',
-                    'GAIA_PHOT_BP_MEAN_MAG',
-                    'GAIA_PHOT_RP_MEAN_MAG',
-                    'PARALLAX',
-                    'BRICKNAME',
-                    'EBV',
-                    'FLUX_W1',
-                    'FLUX_W2',
-                    'FLUX_IVAR_W1',
-                    'FLUX_IVAR_W2',
-                    'FIBERFLUX_G',
-                    'FIBERFLUX_R',
-                    'FIBERFLUX_Z',
-                    'FIBERTOTFLUX_G',
-                    'FIBERTOTFLUX_R',
-                    'FIBERTOTFLUX_Z',
-                    'SERSIC',
-                    'SHAPE_R',
-                    'SHAPE_E1',
-                    'SHAPE_E2',
-                    'PHOTSYS',
-                    'PRIORITY_INIT',
-                    'NUMOBS_INIT',
-                    'DESI_TARGET',
-                    'BGS_TARGET',
-                    'MWS_TARGET',
-                    'SCND_TARGET',
-                    'PLATE_RA',
-                    'PLATE_DEC',
-                    'NUM_ITER',
-                    'FIBER_X',
-                    'FIBER_Y',
-                    'DELTA_X',
-                    'DELTA_Y',
-                    'FIBER_RA',
-                    'FIBER_DEC',
-                    'EXPTIME']}
-
-
-def _get_columns():
-    """Prepare survey-specific list of columns.
-    """
-    global columns
-    for sv in (1, 2, 3):
-        survey = f'sv{sv:d}'
-        columns[survey] = columns['main'].copy()
-        for t in ('desi', 'bgs', 'mws', 'scnd'):
-            columns[survey].insert(columns[survey].index('DESI_TARGET'), "{0}_{1}_TARGET".format(survey.upper(), t.upper()))
-        columns[survey].remove('SCND_TARGET')
-    columns['cmx'] = columns['main'].copy()
-    columns['cmx'].insert(columns['cmx'].index('DESI_TARGET'), "CMX_TARGET")
-    columns['cmx'].remove('SCND_TARGET')
-    return columns
 
 
 def main():
@@ -152,7 +64,7 @@ def main():
     log.debug('DESISPEC=%s', os.environ['DESISPEC'])
     log.debug('SPECPROD=%s', os.environ['SPECPROD'])
     preproc = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'preproc')
-    analyze_columns = _get_columns()
+    analyze_columns = _set_fibermap_columns()
     #
     # Load exposures catalog.
     #
