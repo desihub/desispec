@@ -126,18 +126,20 @@ def _set_fibermap_columns():
     for sv in (1, 2, 3):
         survey = f'sv{sv:d}'
         fibermap_columns[survey] = fibermap_columns['main'].copy()
-        index_columns = [x[0] for x in fibermap_columns[survey]]
         for t in ('DESI', 'BGS', 'MWS', 'SCND'):
+            index_columns = [x[0] for x in fibermap_columns[survey]]
             i = index_columns.index('{0}_TARGET'.format(t))
             row = ("{0}_{1}_TARGET".format(survey.upper(), t), 'i8', '',
                    fibermap_columns[survey][i][3])
             fibermap_columns[survey].insert(index_columns.index('DESI_TARGET'), row)
+        index_columns = [x[0] for x in fibermap_columns[survey]]
         del fibermap_columns[survey][index_columns.index('SCND_TARGET')]
         fibermap_comments[survey] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns[survey]])
     fibermap_columns['cmx'] = fibermap_columns['main'].copy()
     index_columns = [x[0] for x in fibermap_columns['cmx']]
     row = ('CMX_TARGET', 'i8', '', 'Targeting bits for instrument commissioning')
     fibermap_columns['cmx'].insert(index_columns.index('DESI_TARGET'), row)
+    index_columns = [x[0] for x in fibermap_columns['cmx']]
     del fibermap_columns['cmx'][index_columns.index('SCND_TARGET')]
     fibermap_comments['cmx'] = dict([(tmp[0], tmp[3]) for tmp in fibermap_columns['cmx']])
     return fibermap_columns
