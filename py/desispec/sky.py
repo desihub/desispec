@@ -205,6 +205,11 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         log.warning("{} sky fibers discarded (because ivar=0 or bad FIBERSTATUS), only {} left.".format(np.sum(bad),np.sum(good)))
         skyfibers = skyfibers[good]
 
+    if np.sum(good)==0 :
+        message = "no valid sky fibers"
+        log.error(message)
+        raise RuntimeError(message)
+
     nfibers=len(skyfibers)
 
     current_ivar = current_ivar[skyfibers]
