@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+import numpy as np
+import os
+import sys
+import time
+from astropy.table import Table
+import glob
+
+## Import some helper functions, you can see their definitions by uncomenting the bash shell command
+from desispec.workflow.tableio import load_table, write_tables, write_table
+from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, \
+                                    get_printable_banner, sleep_and_report
+from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
+from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, \
+    get_exposure_table_path, get_exposure_table_name, summarize_exposure
+from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_pathname, erow_to_prow
+from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
+                                        science_joint_fit, define_and_assign_dependency, create_and_submit, \
+                                        update_and_recurvsively_submit, checkfor_and_submit_joint_job
+from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
+from desispec.io.util import difference_camwords, parse_badamps, validate_badamps
+
+def parse_args():  # options=None):
+    """
+    Creates an arguments parser for the desi run production
+    """
+    parser = argparse.ArgumentParser(description="Submit a one past night of data for processing with the DESI data pipeline.")
+
+    parser.add_argument("-n","--night", type=str, default=None,
+                        required=False, help="The night you want processed.")
+    parser.add_argument("--proc-table-pathname", type=str, required=False, default=None,
+                        help="Directory name where the output processing table should be saved.")
+    parser.add_argument("--tab-filetype", type=str, required=False, default='csv',
+                        help="File format and extension for the exp and proc tables.")
+    parser.add_argument("-r", "--reservation", type=str, required=False, default=None,
+                        help="The reservation to submit jobs to. If None, it is not submitted to a reservation.")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Perform a dry run where no jobs are actually created or submitted. Overwritten if "+
+                        "dry-run-level is defined as nonzero.")
+    parser.add_argument("--resub-states", type=str, default=None, required=False,
+                        help="The SLURM queue states that should be resubmitted. " +
+                             "E.g. UNSUBMITTED, BOOT_FAIL, DEADLINE, NODE_FAIL, " +
+                             "OUT_OF_MEMORY, PREEMPTED, TIMEOUT.")
+
+    args = parser.parse_args()
+
+    if args.resub_states is not None:
+        args.resub_states = [state.strip().upper() for state in args.resub_states.split(',')]
+    return args
+
+if __name__ == '__main__':
+    args = parse_args()
+    ptable_pathname = args.proc_table_pathname
+    if ptable_pathname is None:
+        if args.night is None:
+            ValueError("Either night or proc-table-path must be specified")
+        ## Determine where the processing table will be written
+        ptable_pathname = get_processing_table_pathname(prodmod=args.night,
+                                             extension=args.tab_filetype)
+
+    if not os.path.exists(ptable_pathname):
+        ValueError(f"Processing table: {ptable_pathname} doesn't exist.")
+
+    ## Combine the table names and types for easier passing to io functions
+    table_type = 'proctable'
+
+    ## Load in the files defined above
+    ptable = load_table(tablename=ptable_pathname, tabletype=table_type)
+    print(f"Identified ptable with {len(ptable)} entries.")
+    ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=0,
+                                   resubmission_states=args.resub_states,
+                                   ptab_name=ptable_pathname, dry_run=args.dry_run,
+                                   reservation=args.reservation)
+
+    if not args.dry_run:
+        write_table(ptable, tablename=ptable_pathname)
+
+    print("Completed all necessary queue resubmissions from processing "
+          + f"table: {ptable_pathname}")

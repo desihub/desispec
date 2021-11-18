@@ -16,7 +16,7 @@ from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
                                               get_desi_proc_batch_file_path
-from desispec.workflow.utils import pathjoin
+from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
@@ -670,7 +670,7 @@ def parse_previous_tables(etable, ptable, night):
            internal_id
 
 
-def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None, start_time=None, end_time=None,
+def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
                                    ptab_name=None, dry_run=0,reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
@@ -684,12 +684,6 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
         resubmission_states, list or array of strings, each element should be a capitalized string corresponding to a
                                                        possible Slurm scheduler state, where you wish for jobs with that
                                                        outcome to be resubmitted
-        start_time, str, datetime string in the format understood by NERSC Slurm scheduler. This should defined the earliest
-                       date and time that you expected to have a job run in the queue. Used to narrow the window of jobs
-                       to request information on.
-        end_time, str, datetime string in the format understood by NERSC Slurm scheduler. This should defined the latest
-                       date and time that you expected to have a job run in the queue. Used to narrow the window of jobs
-                       to request information on.
         ptab_name, str, the full pathname where the processing table should be saved.
         dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
                       dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
@@ -704,14 +698,24 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
     """
+    log = get_logger()
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
-    proc_table = update_from_queue(proc_table, start_time=start_time, end_time=end_time)
+    log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
+    proc_table = update_from_queue(proc_table, dry_run=False)
+    log.info("Updated processing table queue information:")
+    cols = ['INTID','EXPID','OBSTYPE','JOBDESC','TILEID','LATEST_QID','STATUS']
+    print(np.array(cols))
+    for row in proc_table:
+        print(np.array(row[cols]))
+    print("\n")
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
-            proc_table, submits = recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name,
-                                                          resubmission_states, reservation, dry_run)
+            proc_table, submits = recursive_submit_failed(rown, proc_table, submits,
+                                                          id_to_row_map, ptab_name,
+                                                          resubmission_states,
+                                                          reservation, dry_run)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -746,6 +750,9 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         This modifies the inputs of both proc_table and submits and returns them.
     """
     log = get_logger()
+    row = proc_table[rown]
+    log.info(f"Identified row {row['INTID']} as needing resubmission.")
+    log.info(f"{row['INTID']}: Expid(s): {row['EXPID']}  Job: {row['JOBDESC']}")
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
@@ -755,8 +762,11 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
             if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
-                proc_table, submits = recursive_submit_failed(id_to_row_map[idep], proc_table, submits,
-                                                              id_to_row_map, reservation=reservation, dry_run=dry_run)
+                proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
+                                                              proc_table, submits,
+                                                              id_to_row_map,
+                                                              reservation=reservation,
+                                                              dry_run=dry_run)
             qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
 
         qdeps = np.atleast_1d(qdeps)
@@ -765,25 +775,25 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         else:
             log.error(f"number of qdeps should be 1 or more: Rown {rown}, ideps {ideps}")
 
-    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation, dry_run=dry_run)
+    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
+                                           strictly_successful=True, dry_run=dry_run)
     submits += 1
 
     if not dry_run:
-        time.sleep(2)
+        sleep_and_report(1, message_suffix=f"after submitting job to queue")
         if submits % 10 == 0:
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
-            time.sleep(60)
+            sleep_and_report(2, message_suffix=f"after writing to disk")
         if submits % 100 == 0:
-            time.sleep(540)
             proc_table = update_from_queue(proc_table)
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
-
+            sleep_and_report(10, message_suffix=f"after updating queue and writing to disk")
     return proc_table, submits
 
 

@@ -1,20 +1,57 @@
 #!/usr/bin/env python
 
 """
-Utility script to remove write access (i.e. freeze)
-tiles/cumulative/TILEID/NIGHT directories for which spectro operations have
-signed off as done and ready to release overlapping tiles.  If directory
-already has write permission removed, it is skipped.
+Utility script to remove archive tiles for the merged target list (MTL).
 """
 
 import os, sys, glob
 import argparse
 import subprocess
+import shutil
 
 from astropy.table import Table
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root, findfile
+
+def archivetile(tiledir, archivedir, dryrun=False):
+    """
+    Archive tiledir to archivedir, leaving symlink behind
+
+    Args:
+        tiledir: full path to tiles/cumulative/TILEID/LASTNIGHT
+        archivedir: full path to tiles/archive/TILEID/ARCHIVEDATE
+
+    Options:
+        dryrun: if True, print messages but don't move directories.
+    """
+    log = get_logger()
+    if os.path.isdir(archivedir):
+        log.info(f'{archivedir} already exists')
+        return
+
+    if not os.path.isdir(tiledir):
+        log.error(f'{tiledir} missing ... skipping')
+        return
+
+    if dryrun:
+        log.info(f'Dry run: archive {tiledir} -> {archivedir}')
+    else:
+        #- Move tiledir -> archivedir
+        outdir = os.path.dirname(archivedir)
+        os.makedirs(outdir, exist_ok=True)
+        shutil.move(tiledir, archivedir)
+
+        #- Create relative link from original tiledir -> new archivedir
+        src = os.path.relpath(archivedir, os.path.dirname(tiledir))
+        dst = tiledir
+        os.symlink(src, dst)
+
+        #- Remove write access
+        err = freezedir(archivedir, dryrun=dryrun)
+        if err != 0:
+            log.error(f'problem removing write access from {archivedir}')
+
 
 def freezedir(path, dryrun=False):
     """
@@ -54,18 +91,20 @@ parser = argparse.ArgumentParser(
                     'cumulative redshift directories for a tile/night, '
                     'e.g. after accepting that tile as done')
 parser.add_argument('-t', '--tileid', type=int,
-        help='TILEID to freeze')
+        help='archive only this TILEID')
 parser.add_argument('-n', '--night', type=int,
-        help='NIGHT to freeze')
+        help='archive only tiles observed on this LASTNIGHT')
 parser.add_argument('-p', '--prod', type=int,
         help = 'Path to input reduction, e.g. '
                '/global/cfs/cdirs/desi/spectro/redux/daily, '
                'or simply prod version, like daily. '
                'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
 parser.add_argument('--specstatus', type=str,
-        help='tiles-specstatus.ecsv file to use; freeze any tiles with ZDONE=true')
+        help='tiles-specstatus.ecsv file to use; archive any tiles with ZDONE=true and ARCHIVEDATE>0')
 parser.add_argument('--dry-run', action='store_true',
-        help='print what directories to freeze, without freezing them')
+        help='print what directories to archive, without archiving them')
+parser.add_argument('--only-tiles', action='store_true',
+        help="archive only tiles dirs; don't freeze exposures, preproc")
 
 args = parser.parse_args()
 log = get_logger()
@@ -77,21 +116,28 @@ elif args.prod.count("/") == 0:
 else:
     reduxdir = args.prod
 
-if args.specstatus is not None:
-    log.info(f'Reading tiles from {args.specstatus}')
-    tiles = Table.read(args.specstatus)
-    keep = (tiles['SURVEY'] == 'main') & (tiles['ZDONE'] == 'true')
-    if args.night is not None:
-        log.info(f'Filtering to just LASTNIGHT={args.night}')
-        keep &= tiles['LASTNIGHT'] == args.night
+if args.specstatus is None:
+    args.specstatus = os.path.expandvars('$DESI_ROOT/survey/ops/surveyops/trunk/ops/tiles-specstatus.ecsv')
 
-    tiles = tiles[keep]
-else:
-    tiles = Table(names=('TILEID', 'LASTNIGHT'), dtype=(int, int))
-    tiles.add_row( (args.tileid, args.night) )
+if not os.path.exists(args.specstatus):
+    log.critical(f'Missing {args.specstatus}')
+    sys.exit(1)
+
+log.info(f'Reading tiles from {args.specstatus}')
+tiles = Table.read(args.specstatus)
+keep = (tiles['SURVEY'] == 'main') | (tiles['SURVEY'] == 'sv3')
+keep &= (tiles['ZDONE'] == 'true') & (tiles['ARCHIVEDATE'] > 0)
+if args.night is not None:
+    log.info(f'Filtering to just LASTNIGHT={args.night}')
+    keep &= tiles['LASTNIGHT'] == args.night
+if args.tileid is not None:
+    log.info(f'Filtering to just TILEID={args.tileid}')
+    keep &= tiles['TILEID'] == args.tileid
+
+tiles = tiles[keep]
 
 ntiles = len(tiles)
-log.info(f'{ntiles} tiles to freeze')
+log.info(f'{ntiles} tiles to archive')
 
 #- find and read exposures table for that specprod
 specprod = os.path.basename(reduxdir)
@@ -110,16 +156,22 @@ else:
     log.error(f'Unable to find an exposures files in {reduxdir}; not freezing exposures')
     exposures = None
 
-for tileid, night in tiles['TILEID', 'LASTNIGHT']:
-    tiledir = f'{reduxdir}/tiles/cumulative/{tileid}/{night}'
-    freezedir(tiledir, args.dry_run)
+for tileid, lastnight, archivedate in tiles['TILEID','LASTNIGHT','ARCHIVEDATE']:
 
-    if exposures is not None:
+    #- Archive tile
+    tiledir = f'{reduxdir}/tiles/cumulative/{tileid}/{lastnight}'
+    archivedir = f'{reduxdir}/tiles/archive/{tileid}/{archivedate}'
+    archivetile(tiledir, archivedir, args.dry_run)
+
+    #- Remove write access from any input preproc and exposures
+    if (exposures is not None) and (not args.only_tiles):
         ii = (exposures['TILEID'] == tileid)
         for expnight, expid in exposures['NIGHT', 'EXPID'][ii]:
             for prefix in ['preproc', 'frame']:
                 tmpfile = findfile(prefix, expnight, expid, 'b0',
                                    specprod_dir=reduxdir)
                 path = os.path.dirname(tmpfile)
-                freezedir(path, args.dry_run)
+                err = freezedir(path, args.dry_run)
+                if err != 0:
+                    log.error(f'problem removing write access from {path}')
 
