@@ -26,23 +26,16 @@ from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
 
-# log = get_logger()
-
 def get_amp_ids(header):
     '''
-    Return list of amp names ['A','B','C','D'] or ['1','2','3','4']
-    based upon header keywords
+    Return list of amp names based upon header keywords
     '''
-    if 'CCDSECA' in header:
-        amp_ids = ['A', 'B', 'C', 'D']
-    elif 'CCDSEC1' in header:
-        amp_ids = ['1', '2', '3', '4']
-    else:
-        log = get_logger()
-        message = "No CCDSECA or CCDSEC1; Can't derive amp names from header"
-        log.fatal(message)
-        raise KeyError(message)
-
+    amp_ids = []
+    for a in ['A', 'B', 'C', 'D', '1', '2', '3', '4'] :
+        if 'BIASSEC'+a in header :
+            amp_ids.append(a)
+    if len(amp_ids)==0 :
+        raise KeyError("No keyword BIASSECX with X in A,B,C,D,1,2,3,4 in header")
     return amp_ids
 
 def _parse_sec_keyword(value):
@@ -147,21 +140,18 @@ def subtract_peramp_overscan(image, hdr):
     has more complex support for row-by-row, col-overscan, etc.)
     """
     amp_ids = get_amp_ids(hdr)
-    n0=image.shape[0]//2
-    n1=image.shape[1]//2
-
     for a,amp in enumerate(amp_ids) :
-        ii = parse_sec_keyword(hdr['BIASSEC'+amp])
+        ii=parse_sec_keyword(hdr['BIASSEC'+amp])
+        s0,s1=ii[0],ii[1]
+        for k in ["DATASEC","PRESEC","ORSEC","PRRSEC"] :
+            if k+amp in hdr :
+                t0,t1=parse_sec_keyword(hdr[k+amp])
+                s0 = slice(min(s0.start,t0.start),max(s0.stop,t0.stop))
+                s1 = slice(min(s1.start,t1.start),max(s1.stop,t1.stop))
         overscan_image = image[ii].copy()
         overscan,rdnoise = calc_overscan(overscan_image)
-        if ii[0].start < n0 and ii[1].start < n1 :
-            image[:n0,:n1] -= overscan
-        elif ii[0].start < n0 and ii[1].start >= n1 :
-            image[:n0,n1:] -= overscan
-        elif ii[0].start >= n0 and ii[1].start < n1 :
-            image[n0:,:n1] -= overscan
-        elif ii[0].start >= n0 and ii[1].start >= n1 :
-            image[n0:,n1:] -= overscan
+        image[s0,s1] -= overscan
+
 
 def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
     """
@@ -899,8 +889,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     ivar = np.zeros(var.shape)
     ivar[var>0] = 1.0 / var[var>0]
 
-    #- Ridiculously high readnoise is bad
-    mask[readnoise>100] |= ccdmask.BADREADNOISE
+    #- High readnoise is bad
+    mask[readnoise>10] |= ccdmask.BADREADNOISE
 
     if bkgsub :
         bkg = _background(image,header)
