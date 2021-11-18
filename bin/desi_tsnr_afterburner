@@ -26,7 +26,7 @@ from   pkg_resources import resource_filename
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat
 from   pathlib import Path
-from   desispec.io.meta import findfile, specprod_root
+from   desispec.io.meta import findfile, specprod_root, faflavor2program
 from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
@@ -144,6 +144,13 @@ def update_targ_info(entry, targ_in):
             entry["GOALTYPE"]="dark"
         elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
             entry["GOALTYPE"]="bright"
+
+    if entry['FAPRGRM'].startswith('dith'):
+        if entry['SURVEY'] == 'unknown':
+            entry['SURVEY'] = 'cmx'
+
+    if entry['GOALTYPE'] == 'unknown':
+        entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])  #- likely 'other'
 
     return entry
 
@@ -389,6 +396,16 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
             ucam=np.unique(cam_summary["CAMERA"])
 
             for i in np.where(missing)[0] :
+
+                #- If the exposure was supposed to be processed but is unexpectedly
+                #- missing from prod, log error but don't add it to table because
+                #- we are in an ambiguous/error state of processing
+                if prod_table["LASTSTEP"][i] == 'all':
+                    tileid = prod_table['TILEID'][i]
+                    expid = prod_table['EXPID'][i]
+                    log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
+                    continue
+
                 entry={}
                 entry["EXPID"]=prod_table["EXPID"][i]
                 entry["NIGHT"]=night
@@ -500,6 +517,7 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
                 preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
 
         exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
+
     if preexisting_tsnr2_frame_table is not None :
         log.debug("Update to preexisting")
         cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
@@ -797,11 +815,6 @@ def main():
         log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
         sys.exit(1)
 
-    log.info('outfile = {}'.format(args.outfile))
-    if args.details_dir is not None : log.info('details-dir = {}'.format(args.details_dir))
-
-    log.info('prod = {}'.format(args.prod))
-
     if args.multinode & use_mpi():
         from mpi4py import  MPI
         from desispec.parallel import default_nproc
@@ -834,6 +847,13 @@ def main():
 
         multinode = False
 
+    if rank == 0:
+        log.info('outfile = {}'.format(args.outfile))
+        if args.details_dir is not None :
+            log.info('details-dir = {}'.format(args.details_dir))
+
+        log.info('prod = {}'.format(args.prod))
+
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
         cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
@@ -859,9 +879,11 @@ def main():
     else :
         nights = parse_int_args(args.nights)
 
-    log.info('cameras = {}'.format(cameras))
-    log.info("nights = {}".format(nights))
-    if expids is not None : log.info('expids = {}'.format(expids))
+    if rank == 0:
+        log.info('cameras = {}'.format(cameras))
+        log.info("nights = {}".format(nights))
+        if expids is not None :
+            log.info('expids = {}'.format(expids))
 
     preexisting_tsnr2_expid_table = None
     preexisting_tsnr2_frame_table = None
