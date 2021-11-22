@@ -61,7 +61,7 @@ for filename in args.infile :
     print(filename)
 
     if args.fibers is not None :
-        fibers = parse_fibers(args.fibers)
+        fibers = np.sort(parse_fibers(args.fibers))
     else :
         fibers = None
 
@@ -75,11 +75,11 @@ for filename in args.infile :
 
     if args.std_stars :
         selection = isStdStar(frame.fibermap)
-        fibers = frame.fibermap["FIBER"][selection]
+        fibers = np.sort(frame.fibermap["FIBER"][selection])
         print("showing std stars fibers: {}".format(fibers))
     if args.sky_fibers :
         selection = frame.fibermap["OBJTYPE"]=="SKY"
-        fibers = frame.fibermap["FIBER"][selection]
+        fibers = np.sort(frame.fibermap["FIBER"][selection])
         print("showing std stars fibers: {}".format(fibers))
 
 
@@ -102,7 +102,7 @@ for filename in args.infile :
 
 
     if frame.fibermap is not None :
-        fibers_in_frame = frame.fibermap["FIBER"]
+        fibers_in_frame = np.sort(frame.fibermap["FIBER"])
     else :
         fibers_in_frame = np.arange(frame.flux.shape[0])
 
@@ -116,7 +116,13 @@ for filename in args.infile :
         if np.sum(selection)==0 :
             print("empty selection")
             print("fibers are in the range [{},{}] (included)".format(np.min(fibers_in_frame),np.max(fibers_in_frame)))
-            sys.exit(12)
+            print("for convenience, I add X*500 to the fiber numbers")
+            fibers = fibers%500+500*(fibers_in_frame[0]//500)
+            print("will show fibers =",list(fibers))
+            selection = np.in1d(fibers_in_frame,fibers)
+            if np.sum(selection)==0 :
+                print("still empty selection!")
+                sys.exit(12)
 
         frame = frame[selection]
         if len(fibers) > np.sum(selection) :
