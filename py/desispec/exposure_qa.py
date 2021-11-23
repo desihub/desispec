@@ -264,7 +264,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 for i in range(ngood) :
                     mflux=resample_flux(wave,modelwave,modelflux[i])
                     dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers_indices[i]],cframe.ivar[goodfibers_indices[i]])
-                    scale[i] = np.sum(dflux*mflux)/np.sum(mflux**2)
+                    scale[i] = np.sum(ivar*dflux*mflux)/np.sum(ivar*mflux**2)
                 log.debug("scale={}".format(scale))
                 calib_rms=np.sqrt(np.mean((scale-1)**2))*np.sqrt(ngood/(ngood-1.))
                 petalqa_table["STARRMS"][petal]=calib_rms
