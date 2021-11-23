@@ -5,7 +5,10 @@ desispec Change Log
 0.47.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Support for very early fiberassign files in
+  :func:`~desispec.io.fibermap.assemble_fibermap` (PR `#1492`_).
+
+.. _`#1492`: https://github.com/desihub/desispec/pull/1492
 
 0.47.0 (2021-11-11)
 -------------------
