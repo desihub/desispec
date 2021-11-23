@@ -56,11 +56,11 @@ def parse(options=None):
                         help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  ' +
                                'or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. ' +
                                'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
-    parser.add_argument('--cameras', type = str, default = None, required=False,
+    parser.add_argument('-c', '--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
-    parser.add_argument('--expids', type = str, default = None, required=False,
+    parser.add_argument('-e', '--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to process')
-    parser.add_argument('--nights', type = str, default = None, required=False,
+    parser.add_argument('-n', '--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--recompute', action='store_true',
                         help = 'Recompute TSNR values')
@@ -68,7 +68,7 @@ def parse(options=None):
                         help = 'Only compute the alpha for tsnr.')
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
-    parser.add_argument('--tile-completeness', type = str, default = None, required=False,
+    parser.add_argument('-t', '--tile-completeness', type = str, default = None, required=False,
                         help = 'Output tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
                         help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits ' +
