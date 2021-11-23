@@ -34,6 +34,7 @@ desispec Change Log
   (PR `#1454`_, `#1479`_)
 * daily pipeline runner cache exposures after every new exp (PR `#1455`_).
 * Hartmann doors analysis script (PR `#1457`_).
+* Ensure consistent output from :func:`~desispec.io.fibermap.assemble_fibermap` (PR `#1458`_).
 * New desi_compute_nightly_bias script (PR `#1460`_).
 * Incorporate nightly bias and bad column identification into daily pipeline
   (PR `#1463`_).
@@ -78,6 +79,7 @@ desispec Change Log
 .. _`#1455`: https://github.com/desihub/desispec/pull/1455
 .. _`#1457`: https://github.com/desihub/desispec/pull/1457
 .. _`#1458`: https://github.com/desihub/desispec/pull/1458
+.. _`#1459`: https://github.com/desihub/desispec/pull/1459
 .. _`#1460`: https://github.com/desihub/desispec/pull/1460
 .. _`#1463`: https://github.com/desihub/desispec/pull/1463
 .. _`#1464`: https://github.com/desihub/desispec/pull/1464
