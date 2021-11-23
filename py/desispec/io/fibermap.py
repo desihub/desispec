@@ -890,13 +890,14 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                             name='FLUX_IVAR_W2')
 
     #
-    # Some very early (c. February 2020) files did not have SERSIC.
+    # Some very early (c. February 2020) files did not have SERSIC, SHAPE_R.
     #
-    if 'SERSIC' not in fibermap.columns:
-        log.info('Adding SERSIC column.')
-        fibermap.add_column(np.zeros(len(fibermap), dtype=np.float32),
-                            index=fibermap.index_column('MASKBITS') + 1,
-                            name='SERSIC')
+    for j, column in enumerate(('SERSIC', 'SHAPE_R')):
+        if column not in fibermap.columns:
+            log.info('Adding %s column.', column)
+            fibermap.add_column(-1.0*np.ones(len(fibermap), dtype=np.float32),
+                                index=fibermap.index_column('MASKBITS') + j + 1,
+                                name=column)
 
     #
     # Some SV1-era file have various columns out of order.
