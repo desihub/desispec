@@ -149,8 +149,8 @@ def update_targ_info(entry, targ_in):
         if entry['SURVEY'] == 'unknown':
             entry['SURVEY'] = 'cmx'
 
-    if entry['GOALTYPE'] == 'unknown':
-        entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])  #- likely 'other'
+    if entry['GOALTYPE'] in ('unknown', 'other'):
+        entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
 
     return entry
 
@@ -450,6 +450,7 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
                         vals.append(entry[k])
                     else :
                         vals.append(0.)
+
                 log.warning("Adding missing exposure {}".format(vals))
                 exp_summary.add_row(vals)
 
