@@ -81,6 +81,8 @@ def parse(options=None):
                         help = 'recompute sky mags')
     parser.add_argument('--multinode', action='store_true',
                         help = 'Paralleize TSNR recomputation across multiple nodes using mpi4py. Requires args.update to be False.')
+    parser.add_argument('--add-badexp', action='store_true',
+                        help = "Include entries for known bad exposures that weren't processed")
 
     args = None
     if options is None:
@@ -282,7 +284,7 @@ def update_table(table1,table2,keys) :
     else :
         return table2
 
-def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_missing=True) :
+def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_badexp=True) :
     """ Compute summary tables.
 
     Args:
@@ -291,6 +293,9 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
+
+    Options:
+      add_badexp (bool): add known bad exposures that weren't processed
 
     Returns tsnr2_expid_table , tsnr2_frame_table
     """
@@ -381,7 +386,7 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
     exp_summary = Table(rows=rows, names=colnames)
     exp_summary.meta['EXTNAME'] = 'EXPOSURES'
 
-    if add_missing:
+    if add_badexp:
       # check the production exposure table
       for night in np.unique(exp_summary["NIGHT"]) :
         prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
@@ -863,10 +868,8 @@ def main():
 
     if args.expids is not None:
         expids = [np.int(x) for x in args.expids.split(',')]
-        add_missing = False
     else:
         expids = None
-        add_missing = True
 
     if args.nights is None:
         dirnames = sorted(glob.glob('{}/exposures/*'.format(args.prod)))
@@ -952,7 +955,7 @@ def main():
             tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,
                                                                          preexisting_tsnr2_expid_table,
                                                                          preexisting_tsnr2_frame_table,args.prod,
-                                                                         add_missing=add_missing)
+                                                                         add_badexp=args.add_badexp)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(rows),tmpfilename))
 
@@ -1034,7 +1037,7 @@ def main():
         # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,
         #                                                               preexisting_tsnr2_expid_table,
         #                                                               preexisting_tsnr2_frame_table,args.prod,
-        #                                                               add_missing=add_missing)
+        #                                                               add_badexp=add_badexp)
 
         if args.skymags is not None :
             skymags_table = Table.read(args.skymags)
