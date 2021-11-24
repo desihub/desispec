@@ -46,6 +46,8 @@ def parse(options=None):
                         help = 'image viewer (default is eog)')
     parser.add_argument('--new', action = 'store_true', required=False,
                         help = 'only inspect new tiles')
+    parser.add_argument('--qastatus', type=str, default=None, required=False,
+                        help = 'only tiles with this QA status (e.g. "unsure")')
     parser.add_argument('--survey', type = str, default = None, required=False,
                         help = 'look only at tiles from this survey')
 
@@ -181,6 +183,8 @@ def main():
         selection &= (tiles_table["QA"]=="none")
     if args.survey is not None :
         selection &= (tiles_table["SURVEY"]==args.survey)
+    if args.qastatus is not None:
+        selection &= (tiles_table["QA"]==args.qastatus)
 
     log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
 
