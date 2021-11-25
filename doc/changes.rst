@@ -2,13 +2,33 @@
 desispec Change Log
 ===================
 
-0.47.1 (unreleased)
+0.47.2 (unreleased)
 -------------------
 
+* No changes yet
+
+0.47.1 (2021-11-24)
+-------------------
+
+* New desi_resubmit_queue_failures script (PR `#1482`_).
+* fix CAMERA column name in stdstars INPUT_FRAMES HDU (PR `#1484`_).
+* raise exception when no valid sky fibers (PR `#1486`_, `#1488`_).
+* Update qso_catalog_maker to include all targets (PR `#1487`_).
+* Fix TSNR2 calculation and exposure QA for 2-amp readout (PR `#1489`_).
+* Exclude masked pixels in stdstar RMS QA (PR `#1490`_).
 * Support for very early fiberassign files in
   :func:`~desispec.io.fibermap.assemble_fibermap` (PR `#1492`_).
+* desi_tile_vi --qastatus option (PR `#1493`_).
 
+.. _`#1482`: https://github.com/desihub/desispec/pull/1482
+.. _`#1484`: https://github.com/desihub/desispec/pull/1484
+.. _`#1486`: https://github.com/desihub/desispec/pull/1486
+.. _`#1487`: https://github.com/desihub/desispec/pull/1487
+.. _`#1488`: https://github.com/desihub/desispec/pull/1488
+.. _`#1489`: https://github.com/desihub/desispec/pull/1489
+.. _`#1490`: https://github.com/desihub/desispec/pull/1490
 .. _`#1492`: https://github.com/desihub/desispec/pull/1492
+.. _`#1493`: https://github.com/desihub/desispec/pull/1493
 
 0.47.0 (2021-11-11)
 -------------------
