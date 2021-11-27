@@ -982,7 +982,7 @@ def make_tile_qa_plot(
 
     # AR n(z)
     # AR n(z): plotting only if main survey
-    if hdr["SURVEY"] == "main":
+    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].lower() != "backup" :
 
         # AR n(z): reference
         ref = Table.read(os.path.join(refdir, "qa-reference-nz.ecsv"))
