@@ -795,8 +795,13 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
         if 'DEPNAM00' in guideheader:
             mergedep(guideheader, fibermap_header, conflict='dst')
+
+        #- We want the spectrograph EXPTIME, not the guider EXPTIME.
+        #- aborted 20211127/111105 is missing guider 'EXPTIME' so check first
+        if 'EXPTIME' in guideheader:
+            guideheader.remove('EXPTIME')
+
         fibermap_header.extend(guideheader, strip=True, unique=True)
-        fibermap_header.remove('EXPTIME')
 
 
     fibermap_header['EXTNAME'] = 'FIBERMAP'
