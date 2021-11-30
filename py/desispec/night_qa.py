@@ -543,23 +543,6 @@ def write_html_today(html):
     )
 
 
-# AR html per-night observing conditions, sframe-sky
-def write_html_night(html, outdir, case, tsnr):
-    """
-    Write in an html object the per-night observing conditions section.
-
-    Args:
-        html: html file object
-        outdir: output folder name (equivalent to $DESI_ROOT/survey/observations/main/) (string)
-        case: "obsconds" or "sframesky" (string)
-        tsnr: tsnr table (structued array)
-    """
-    #
-    html.write(
-        "\t<p>First click on the MONTH to access the list of the nights for that month; then click on the NIGHT to access the animated mp4 for that night.</a></p>\n"
-    )
-
-
 def write_html_collapse_script(html, classname):
     """
     Write the required lines to have the collapsing sections working.
