@@ -35,10 +35,12 @@ def parse(options=None):
                         help = "night to process. ex: 20211128")
     parser.add_argument("-o", "--outdir", type = str, default = None, required = False,
                         help = "Path to ouput folder, default is the input prod directory. Files written in {prod}/nightqa/{night}; several files will be created there")
-    parser.add_argument("--recompute", action = "store_true",
-                        help = "recompute (i.e. overwrite args.outfile if already existing")
     parser.add_argument("--css", type = str, default = None, required = False,
                         help = "html formatting css file; default to pkg_resources.resource_filename('desispec', 'data/qa/nightqa.css')")
+    parser.add_argument("--recompute", action = "store_true",
+                        help = "recompute (i.e. overwrite args.outfile if already existing")
+    parser.add_argument("--html_only", action = "store_true",
+                        help = "only regenerate the nightqa-{NIGHT}.html page")
 
     args = None
     if options is None:
@@ -62,10 +64,8 @@ def main():
         args.outdir = os.path.join(args.prod, "nightqa", "{}".format(args.night))
     if args.css is None:
         args.css = resource_filename("desispec", "data/qa/nightqa.css")
-    log.info("prod    = {}".format(args.prod))
-    log.info("night   = {}".format(args.night))
-    log.info("outdir  = {}".format(args.outdir))
-    log.info("css     = {}".format(args.css))
+    for kwargs in args._get_kwargs():
+        log.info(kwargs)
 
     # AR is ffmpeg installed
     if os.system("which ffmpeg") != 0:
@@ -92,21 +92,22 @@ def main():
     expids, tileids = get_survey_night_expids(args.night, "main")
     dark_expid = get_dark_night_expid(args.night)
 
-    # AR dark 
-    create_dark_mp4(outfns["dark"], args.night, args.prod, dark_expid)
+    if not args.html_only:
+        # AR dark
+        create_dark_mp4(outfns["dark"], args.night, args.prod, dark_expid)
 
-    # AR badcolumn
-    create_badcol_mp4(outfns["badcol"], args.night, args.prod)
+        # AR badcolumn
+        create_badcol_mp4(outfns["badcol"], args.night, args.prod)
 
-    # AR CTE detector
-    # AR TBD
-    # create_ctedet_mp4( args_here )
+        # AR CTE detector
+        # AR TBD
+        # create_ctedet_mp4( args_here )
 
-    # AR sframesky
-    create_sframesky_mp4(outfns["sframesky"], args.night, args.prod, expids)
+        # AR sframesky
+        create_sframesky_mp4(outfns["sframesky"], args.night, args.prod, expids)
 
-    # AR tileqa
-    create_tileqa_mp4(outfns["tileqa"], args.night, args.prod, expids, tileids)
+        # AR tileqa
+        create_tileqa_mp4(outfns["tileqa"], args.night, args.prod, expids, tileids)
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
