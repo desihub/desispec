@@ -669,22 +669,32 @@ def main(args=None, comm=None):
     #- Fiberflat
 
     if args.obstype in ['FLAT', 'TESTFLAT'] :
-        timer.start('fiberflat')
-        if rank == 0:
-            log.info('Starting fiberflats at {}'.format(time.asctime()))
+        exptime = None
+        if rank == 0 :
+            rawfilename=findfile('raw', args.night, args.expid)
+            head=fitsio.read_header(rawfilename,1)
+            exptime=head["EXPTIME"]
+        if comm is not None :
+            exptime = comm.bcast(exptime, root=0)
 
-        for i in range(rank, len(args.cameras), size):
-            camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera)
-            fiberflatfile = findfile('fiberflat', args.night, args.expid, camera)
-            cmd = "desi_compute_fiberflat"
-            cmd += " -i {}".format(framefile)
-            cmd += " -o {}".format(fiberflatfile)
-            runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+        if exptime > 10:
+            timer.start('fiberflat')
+            if rank == 0:
+                log.info('Flat exposure time was greater than 10 seconds')
+                log.info('Starting fiberflats at {}'.format(time.asctime()))
 
-        timer.stop('fiberflat')
-        if comm is not None:
-            comm.barrier()
+            for i in range(rank, len(args.cameras), size):
+                camera = args.cameras[i]
+                framefile = findfile('frame', args.night, args.expid, camera)
+                fiberflatfile = findfile('fiberflat', args.night, args.expid, camera)
+                cmd = "desi_compute_fiberflat"
+                cmd += " -i {}".format(framefile)
+                cmd += " -o {}".format(fiberflatfile)
+                runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+
+            timer.stop('fiberflat')
+            if comm is not None:
+                comm.barrier()
 
     #-------------------------------------------------------------------------
     #- Get input fiberflat
