@@ -48,8 +48,11 @@ def parse(options=None):
                         help = 'only inspect new tiles (equivalent to --qastatus none)')
     parser.add_argument('--qastatus', type=str, default=None, required=False,
                         help = 'only inspect tiles with this QA status (e.g. "unsure")')
-    parser.add_argument('--survey', type = str, default = None, required=False,
+    parser.add_argument('--survey', type = str, default = 'main', required=False,
                         help = 'look only at tiles from this survey')
+    parser.add_argument('--program', type=str, nargs='+', required=False,
+                        default=['dark', 'bright'],
+                        help='look only at tiles from these programs')
 
     args = None
     if options is None:
@@ -187,6 +190,9 @@ def main():
         selection &= (tiles_table["QA"]=="none")
     if args.survey is not None :
         selection &= (tiles_table["SURVEY"]==args.survey)
+    if args.program is not None:
+        selection &= np.isin([x.lower() for x in tiles_table['FAPRGRM']],
+                             [x.lower() for x in args.program])
     if args.qastatus is not None:
         selection &= (tiles_table["QA"]==args.qastatus)
 
