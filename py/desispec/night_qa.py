@@ -587,6 +587,9 @@ def write_nightqa_html(outfns, prod, night, css):
     html.write("\t<p>Please click on each tab from top to bottom, and follow instructions.</p>\n")
 
     # AR night log
+    nighthtml = "https://data.desi.lbl.gov/desi/survey/ops/nightlogs/{}/NightSummary{}.html".format(
+        night, night,
+    )
     html.write(
         "<button type='button' class='collapsible'>\n\t<strong>{} night summary</strong>\n</button>\n".format(
             night,
@@ -594,13 +597,12 @@ def write_nightqa_html(outfns, prod, night, css):
     )
     html.write("<div class='content'>\n")
     html.write("\t<br>\n")
-    html.write("\t<p>Read the nightlog for {}.</p>\n".format(night))
-    html.write(
-        "\t<p>Either from here (accessible from within the NOIRLab firewall): {}.</p>\n".format(
-            "http://desi-www.kpno.noao.edu:8090/nightlogs/{}/NightSummary{}.html".format(night, night),
-        )
-    )
-    html.write("\t<p>Or subscribe to the desi-nightlog mailing list!\n")
+    html.write("\t<p>Read the nightlog for {}: {}, displayed below.</p>\n".format(night, nighthtml))
+    html.write("\t<p>And consider subscribing to the desi-nightlog mailing list!\n")
+    html.write("\t</br>\n")
+    html.write("\t<br>\n")
+    html.write("\t<iframe src='{}' width=100% height=100%></iframe>\n".format(nighthtml))
+    html.write("\t<p>And consider subscribing to the desi-nightlog mailing list!\n")
     html.write("\t</br>\n")
     html.write("</div>\n")
     html.write("\n")
