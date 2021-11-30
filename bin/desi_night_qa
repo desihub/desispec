@@ -13,6 +13,7 @@ import os,sys
 import argparse
 from desiutil.log import get_logger
 from desispec.io import specprod_root
+from pkg_resources import resource_filename
 from desispec.night_qa import (
     get_nightqa_outfns,
     get_survey_night_expids,
@@ -37,7 +38,7 @@ def parse(options=None):
     parser.add_argument("--recompute", action = "store_true",
                         help = "recompute (i.e. overwrite args.outfile if already existing")
     parser.add_argument("--css", type = str, default = None, required = False,
-                        help = "html formatting css file; default to {prod}/nightqa/nightqa.css")
+                        help = "html formatting css file; default to pkg_resources.resource_filename('desispec', 'data/qa/nightqa.css')")
 
     args = None
     if options is None:
@@ -60,7 +61,7 @@ def main():
     if args.outdir is None :
         args.outdir = os.path.join(args.prod, "nightqa", "{}".format(args.night))
     if args.css is None:
-        args.css = os.path.join(args.prod, "nightqa", "nightqa.css")
+        args.css = resource_filename("desispec", "data/qa/nightqa.css")
     log.info("prod    = {}".format(args.prod))
     log.info("night   = {}".format(args.night))
     log.info("outdir  = {}".format(args.outdir))
@@ -103,7 +104,9 @@ def main():
     create_tileqa_mp4(outfns["tileqa"], args.night, args.prod, expids, tileids)
 
     # AR create index.html
-    write_nightqa_html(outfns, args.prod, args.night, args.css)
+    # AR we first copy the args.css file to args.outdir
+    os.system("cp {} {}".format(args.css, args.outdir))
+    write_nightqa_html(outfns, args.prod, args.night, os.path.basename(args.css))
 
 if __name__ == "__main__":
     main()
