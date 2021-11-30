@@ -5,7 +5,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This script generates the $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/index.html page, and related products, once all tile-qa*fits are done.
+This script generates the $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products, once all tile-qa*fits are done.
 """
 
 
@@ -27,7 +27,7 @@ from desispec.night_qa import (
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
-                description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/index.html page, and related products")
+                description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products")
     parser.add_argument("-p", "--prod", type = str, default = None, required = False,
                         help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-n","--night", type = int, default = None, required = True,
