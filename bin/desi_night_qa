@@ -69,7 +69,7 @@ def main():
     # AR existing output folder?
     if not os.path.isdir(args.outdir):
         log.info("creating {}".format(args.outdir))
-        os.mkdir(args.outdir)
+        os.makedirs(args.outdir, exist_ok=True)
     # AR files that will be created
     outfns = get_nightqa_outfns(args.outdir, args.night)
     # AR existing output files?
