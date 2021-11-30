@@ -335,7 +335,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             ptable.add_row(prow)
 
             ## Note: Assumption here on number of flats
-            if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
+            if curtype == 'flat' and flatjob is None \
+                    and int(erow['SEQTOT']) < 5 and float(erow['EXPTIME']) > 100.:
                 flats.append(prow)
             elif curtype == 'arc' and arcjob is None:
                 arcs.append(prow)

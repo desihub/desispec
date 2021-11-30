@@ -251,7 +251,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         #ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
-        if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
+        if curtype == 'flat' and flatjob is None \
+                and int(erow['SEQTOT']) < 5 and float(erow['EXPTIME']) > 100.:
             flats.append(prow)
         elif curtype == 'arc' and arcjob is None:
             arcs.append(prow)
