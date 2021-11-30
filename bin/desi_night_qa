@@ -67,6 +67,11 @@ def main():
     log.info("outdir  = {}".format(args.outdir))
     log.info("css     = {}".format(args.css))
 
+    # AR is ffmpeg installed
+    if os.system("which ffmpeg") != 0:
+        log.error("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'; exiting")
+        sys.exit(1)
+
     # AR existing output folder?
     if not os.path.isdir(args.outdir):
         log.info("creating {}".format(args.outdir))
