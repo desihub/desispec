@@ -89,7 +89,7 @@ def get_survey_night_expids(
     return np.array(expids), np.array(tileids)
 
 
-def get_dark_night_expid(night, datadir = os.getenv("DESI_SPECTRO_DATA")):
+def get_dark_night_expid(night, datadir = None):
     """
     Returns the EXPID of the 300s DARK exposure for a given night.
 
@@ -103,6 +103,9 @@ def get_dark_night_expid(night, datadir = os.getenv("DESI_SPECTRO_DATA")):
     Notes:
         If nothing found, returns None.
     """
+    if datadir is None:
+        datadir = os.getenv("DESI_SPECTRO_DATA")
+    #
     fns = sorted(
         glob(
             os.path.join(
