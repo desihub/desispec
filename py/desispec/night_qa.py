@@ -46,10 +46,12 @@ def get_nightqa_outfns(outdir, night):
 def get_survey_night_expids(
     night,
     survey,
-    datadir = os.getenv("DESI_SPECTRO_DATA")):
+    datadir = None):
     """
     TBD
     """
+    if datadir is None:
+        datadir = os.getenv("DESI_SPECTRO_DATA")
     fns = sorted(
         glob(
             os.path.join(
