@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script generates the $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/index.html page, and related products, once all tile-qa*fits are done.
+"""
+
+
+import os,sys
+import argparse
+from desiutil.log import get_logger
+from desispec.io import specprod_root
+from desispec.night_qa import (
+    get_nightqa_outfns,
+    get_survey_night_expids,
+    get_dark_night_expid,
+    create_dark_mp4,
+    create_badcol_mp4,
+    create_ctedet_mp4,
+    create_sframesky_mp4,
+    create_tileqa_mp4,
+    write_nightqa_html,
+)
+
+def parse(options=None):
+    parser = argparse.ArgumentParser(
+                description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/index.html page, and related products")
+    parser.add_argument("-p", "--prod", type = str, default = None, required = False,
+                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
+    parser.add_argument("-n","--night", type = int, default = None, required = True,
+                        help = "night to process. ex: 20211128")
+    parser.add_argument("-o", "--outdir", type = str, default = None, required = False,
+                        help = "Path to ouput folder, default is the input prod directory. Files written in {prod}/nightqa/{night}; several files will be created there")
+    parser.add_argument("--recompute", action = "store_true",
+                        help = "recompute (i.e. overwrite args.outfile if already existing")
+    parser.add_argument("--css", type = str, default = None, required = False,
+                        help = "html formatting css file; default to {prod}/nightqa/nightqa.css")
+
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main():
+
+    log = get_logger()
+
+    # AR arguments: reading/defaulting
+    args = parse()
+    if args.prod is None:
+        args.prod = specprod_root()
+    elif args.prod.find("/")<0 :
+        args.prod = specprod_root(args.prod)
+    if args.outdir is None :
+        args.outdir = os.path.join(args.prod, "nightqa", "{}".format(args.night))
+    if args.css is None:
+        args.css = os.path.join(args.prod, "nightqa", "nightqa.css")
+    log.info("prod    = {}".format(args.prod))
+    log.info("night   = {}".format(args.night))
+    log.info("outdir  = {}".format(args.outdir))
+    log.info("css     = {}".format(args.css))
+
+    # AR existing output folder?
+    if not os.path.isdir(args.outdir):
+        log.info("creating {}".format(args.outdir))
+        os.mkdir(args.outdir)
+    # AR files that will be created
+    outfns = get_nightqa_outfns(args.outdir, args.night)
+    # AR existing output files?
+    for fn in [outfns[key] for key in outfns]:
+        log.info("will create {}".format(fn))
+        if os.path.isfile(fn):
+            if args.recompute:
+                log.warning("\texisting {} will be overwritten".format(fn))
+            else:
+                log.error("\t{} already exists, and args.recompute = False; exiting".format(fn))
+                sys.exit(1)
+
+    # AR expids, tileids
+    expids, tileids = get_survey_night_expids(args.night, "main")
+    dark_expid = get_dark_night_expid(args.night)
+
+    # AR dark 
+    create_dark_mp4(outfns["dark"], args.night, args.prod, dark_expid)
+
+    # AR badcolumn
+    create_badcol_mp4(outfns["badcol"], args.night, args.prod)
+
+    # AR CTE detector
+    # AR TBD
+    # create_ctedet_mp4( args_here )
+
+    # AR sframesky
+    create_sframesky_mp4(outfns["sframesky"], args.night, args.prod, expids)
+
+    # AR tileqa
+    create_tileqa_mp4(outfns["tileqa"], args.night, args.prod, expids, tileids)
+
+    # AR create index.html
+    write_nightqa_html(outfns, args.prod, args.night, args.css)
+
+if __name__ == "__main__":
+    main()
