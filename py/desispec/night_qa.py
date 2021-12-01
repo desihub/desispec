@@ -35,7 +35,7 @@ def get_nightqa_outfns(outdir, night):
     return {
         "html" : os.path.join(outdir, "nightqa-{}.html".format(night)),
         "dark" : os.path.join(outdir, "dark-{}.mp4".format(night)),
-        "badcol" : os.path.join(outdir, "badcol-{}.mp4".format(night)),
+        "badcol" : os.path.join(outdir, "badcol-{}.png".format(night)),
         "ctedet" : os.path.join(outdir, "ctedet-{}.mp4".format(night)),
         "sframesky" : os.path.join(outdir, "sframesky-{}.mp4".format(night)),
         "tileqa" : os.path.join(outdir, "tileqa-{}.mp4".format(night)),
@@ -256,58 +256,44 @@ def create_dark_mp4(outmp4, night, prod, dark_expid, binning=4, tmpdir=tempfile.
     os.rmdir(tmpdir)
 
 
-def create_badcol_mp4(outmp4, night, prod, tmpdir=tempfile.mkdtemp()):
+def create_badcol_png(outpng, night, prod, tmpdir=tempfile.mkdtemp()):
     """
-    For a given night, create an animated mp4 with the histogram of the bad columns.
+    For a given night, create a png file with displaying the number of bad columns per {camera}{petal}.
 
     Args:
-        outmp4: output mp4 file (string)
+        outpng: output png file (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         tmpdir (optional, defaults to a temporary directory): temporary directory where individual images are created
     """
     cameras = ["b", "r", "z"]
+    colors = ["b", "r", "k"]
     petals = np.arange(10, dtype=int)
-    bins = np.linspace(0, 4100, 206)
-    outpngs = []
-    for petal in petals:
-        outpng = os.path.join(tmpdir, "dark-{}-{}.png".format(night, petal))
-        outpngs.append(outpng)
-        fig = plt.figure(figsize=(20, 5))
-        gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
-        for ic, camera in enumerate(cameras):
-            ax = plt.subplot(gs[ic])
+    # AR reading
+    badcols = {camera : np.nan + np.zeros(len(petals)) for camera in cameras}
+    for camera in cameras:
+        for petal in petals:
             fn = os.path.join(
                     prod,
                     "calibnight",
                     "{}".format(night),
                     "badcolumns-{}{}-{}.csv".format(camera, petal, night),
             )
-            ax.set_title("{}{}".format(camera, petal))
             if os.path.isfile(fn):
                 log.info("reading {}".format(fn))
-                d = Table.read(fn)
-                _ = ax.hist(d["COLUMN"], bins=bins, histtype="stepfilled", color="r", alpha=0.8, label="{} bad columns".format(len(d)))
-                ax.legend(loc=2)
-                ax.set_xlabel("COLUMN")
-                ax.set_xlim(bins[0], bins[-1])
-                ax.set_ylabel("Count")
-                ax.set_ylim(0, 5)
-                ax.grid()
-            else:
-                log.warning("missing {}".format(fn))
-        plt.savefig(outpng, bbox_inches="tight")
-        plt.close()
-    # AR converting to mp4
-    if len(outpngs) == 0:
-        log.info("no badcolumns-??-{}.fits files; no {} created".format(night, os.path.basename(outmp4)))
-    else:
-        duration = len(outpngs) # 1 image(s) per second
-        create_mp4(outpngs, outmp4, duration=duration)
-    # AR cleaning
-    for outpng in outpngs:
-        os.remove(outpng)
-    os.rmdir(tmpdir)
+                badcols[camera][petal] = len(Table.read(fn))
+    # AR plotting
+    fig, ax = plt.subplots()
+    for camera, color in zip(cameras, colors):
+        ax.plot(petals, badcols[camera], "-o", color=color, label="{}-camera".format(camera))
+        ax.legend(loc=2)
+        ax.set_xlabel("PETAL_LOC")
+        ax.set_xlim(petals[0] - 1, petals[-1] + 1)
+        ax.set_ylabel("N(badcolumn)")
+        ax.set_ylim(0, 50)
+        ax.grid()
+    plt.savefig(outpng, bbox_inches="tight")
+    plt.close()
 
 
 def create_ctedet_mp4(outmp4, night, prod, tmpdir=tempfile.mkdtemp()):
@@ -694,12 +680,15 @@ def write_nightqa_html(outfns, night, prod, css):
     )
     html.write("<div class='content'>\n")
     html.write("\t<br>\n")
-    html.write("\t<p>This movie displays the histograms of the bad columns.</p>\n")
+    html.write("\t<p>This plot displays the histograms of the bad columns.</p>\n")
     html.write("\t<p>Watch it and report unsual features (easy to say!)</p>\n")
     html.write("\t<tr>\n")
-    html.write("\t<video width=90% height=auto controls autoplay loop>\n") 
-    html.write("\t\t<source src='{}' type='video/mp4'>\n".format(path_full2web(outfns["badcol"])))
-    html.write("\t</video>\n")
+    html.write("\t<br>\n")
+    outpng = path_full2web(outfns["badcol"])
+    txt = "<a href='{}'><img SRC='{}' width=35% height=auto></a>".format(
+        outpng, outpng
+    )
+    html.write("\t{}\n".format(txt))
     html.write("\t</br>\n")
     html.write("</div>\n")
     html.write("\n")

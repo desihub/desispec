@@ -19,7 +19,7 @@ from desispec.night_qa import (
     get_survey_night_expids,
     get_dark_night_expid,
     create_dark_mp4,
-    create_badcol_mp4,
+    create_badcol_png,
     create_ctedet_mp4,
     create_sframesky_mp4,
     create_tileqa_mp4,
@@ -97,7 +97,7 @@ def main():
         create_dark_mp4(outfns["dark"], args.night, args.prod, dark_expid)
 
         # AR badcolumn
-        create_badcol_mp4(outfns["badcol"], args.night, args.prod)
+        create_badcol_png(outfns["badcol"], args.night, args.prod)
 
         # AR CTE detector
         # AR TBD
