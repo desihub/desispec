@@ -16,7 +16,7 @@ from desispec.workflow.queue import get_resubmission_states, update_from_queue
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_pathname, create_desi_proc_batch_script, \
                                               get_desi_proc_batch_file_path
-from desispec.workflow.utils import pathjoin
+from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
@@ -83,9 +83,19 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
     prow['STATUS'] = 'UNKNOWN'
     log = get_logger()
 
-    job_to_file_map = {'prestdstar': 'sframe', 'stdstarfit': 'stdstars', 'poststdstar': 'cframe',
-                       'arc': 'psf', 'flat': 'fiberflat', 'psfnight': 'psfnight', 'nightlyflat': 'fiberflatnight',
-                       'spectra': 'spectra_tile', 'coadds': 'coadds_tile', 'redshift': 'redrock_tile'}
+    job_to_file_map = {
+            'prestdstar': 'sframe',
+            'stdstarfit': 'stdstars',
+            'poststdstar': 'cframe',
+            'dark': 'badcolumns',
+            'arc': 'fitpsf',
+            'flat': 'fiberflat',
+            'psfnight': 'psfnight',
+            'nightlyflat': 'fiberflatnight',
+            'spectra': 'spectra_tile',
+            'coadds': 'coadds_tile',
+            'redshift': 'redrock_tile',
+            }
 
     night = prow['NIGHT']
     if prow['JOBDESC'] in ['cumulative','pernight-v0','pernight','perexp']:
@@ -239,8 +249,10 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
-    specs = str(prow['PROCCAMWORD'])
-    cmd += ' --cameras={} -n {} -e {}'.format(specs, prow['NIGHT'], prow['EXPID'][0])
+    elif prow['OBSTYPE'].lower() == 'dark':
+        cmd += ' --nightlybias'
+    pcamw = str(prow['PROCCAMWORD'])
+    cmd += ' --cameras={} -n {} -e {}'.format(pcamw, prow['NIGHT'], prow['EXPID'][0])
     if prow['BADAMPS'] != '':
         cmd += ' --badamps={}'.format(prow['BADAMPS'])
     return cmd
@@ -443,7 +455,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 #############################################
 ##########   Row Manipulations   ############
 #############################################
-def define_and_assign_dependency(prow, arcjob, flatjob):
+def define_and_assign_dependency(prow, darkjob, arcjob, flatjob):
     """
     Given input processing row and possible arcjob (processing row for psfnight) and flatjob (processing row for
     nightlyflat), this defines the JOBDESC keyword and assigns the dependency appropriate for the job type of prow.
@@ -451,6 +463,9 @@ def define_and_assign_dependency(prow, arcjob, flatjob):
     Args:
         prow, Table.Row or dict. Must include keyword accessible definitions for 'OBSTYPE'. A row must have column names for
                                  'JOBDESC', 'INT_DEP_IDS', and 'LATEST_DEP_ID'.
+        darkjob, Table.Row, dict, or NoneType. Row corresponding to the processed 300s dark for the night from proctable.
+                                              This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
+                                              If None, it assumes the dependency doesn't exist and no dependency is assigned.
         arcjob, Table.Row, dict, or NoneType. Processing row corresponding to psfnight for the night of the data in prow.
                                               This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
                                               If None, it assumes the dependency doesn't exist and no dependency is assigned.
@@ -468,13 +483,20 @@ def define_and_assign_dependency(prow, arcjob, flatjob):
         not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
     """
     if prow['OBSTYPE'] in ['science', 'twiflat']:
-        if flatjob is None:
+        if flatjob is not None:
+            dependency = flatjob
+        elif arcjob is not None:
             dependency = arcjob
         else:
-            dependency = flatjob
+            dependency = darkjob
         prow['JOBDESC'] = 'prestdstar'
     elif prow['OBSTYPE'] == 'flat':
-        dependency = arcjob
+        if arcjob is not None:
+            dependency = arcjob
+        else:
+            dependency = darkjob
+    elif prow['OBSTYPE'] == 'arc':
+        dependency = darkjob
     else:
         dependency = None
 
@@ -576,6 +598,7 @@ def parse_previous_tables(etable, ptable, night):
                                     all the flats, if multiple sets existed)
         sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile)
+        darkjob, dict or None, the dark proctable row if it exists. Otherwise None.
         arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
         flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
         curtype, None, the obstype of the current job being run. Always None as first new job will define this.
@@ -588,7 +611,7 @@ def parse_previous_tables(etable, ptable, night):
     """
     log = get_logger()
     arcs, flats, sciences = [], [], []
-    arcjob, flatjob = None, None
+    darkjob, arcjob, flatjob = None, None, None
     curtype,lasttype = None,None
     curtile,lasttile = None,None
 
@@ -597,6 +620,10 @@ def parse_previous_tables(etable, ptable, night):
         internal_id = int(prow['INTID'])+1
         lasttype,lasttile = get_type_and_tile(ptable[-1])
         jobtypes = ptable['JOBDESC']
+
+        if 'dark' in jobtypes:
+            darkjob = table_row_to_dict(ptable[jobtypes=='dark'][0])
+            log.info("Located dark job in exposure table: {}".format(darkjob))
 
         if 'psfnight' in jobtypes:
             arcjob = table_row_to_dict(ptable[jobtypes=='psfnight'][0])
@@ -637,13 +664,13 @@ def parse_previous_tables(etable, ptable, night):
         internal_id = night_to_starting_iid(night)
 
     return arcs,flats,sciences, \
-           arcjob, flatjob, \
+           darkjob, arcjob, flatjob, \
            curtype, lasttype, \
            curtile, lasttile,\
            internal_id
 
 
-def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None, start_time=None, end_time=None,
+def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=None,
                                    ptab_name=None, dry_run=0,reservation=None):
     """
     Given an processing table, this loops over job rows and resubmits failed jobs (as defined by resubmission_states).
@@ -657,12 +684,6 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
         resubmission_states, list or array of strings, each element should be a capitalized string corresponding to a
                                                        possible Slurm scheduler state, where you wish for jobs with that
                                                        outcome to be resubmitted
-        start_time, str, datetime string in the format understood by NERSC Slurm scheduler. This should defined the earliest
-                       date and time that you expected to have a job run in the queue. Used to narrow the window of jobs
-                       to request information on.
-        end_time, str, datetime string in the format understood by NERSC Slurm scheduler. This should defined the latest
-                       date and time that you expected to have a job run in the queue. Used to narrow the window of jobs
-                       to request information on.
         ptab_name, str, the full pathname where the processing table should be saved.
         dry_run, int, If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. If
                       dry_run=2, the scripts will not be writter or submitted. Logging will remain the same
@@ -677,14 +698,24 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     Note:
         This modifies the inputs of both proc_table and submits and returns them.
     """
+    log = get_logger()
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
-    proc_table = update_from_queue(proc_table, start_time=start_time, end_time=end_time)
+    log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
+    proc_table = update_from_queue(proc_table, dry_run=False)
+    log.info("Updated processing table queue information:")
+    cols = ['INTID','EXPID','OBSTYPE','JOBDESC','TILEID','LATEST_QID','STATUS']
+    print(np.array(cols))
+    for row in proc_table:
+        print(np.array(row[cols]))
+    print("\n")
     id_to_row_map = {row['INTID']: rown for rown, row in enumerate(proc_table)}
     for rown in range(len(proc_table)):
         if proc_table['STATUS'][rown] in resubmission_states:
-            proc_table, submits = recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name,
-                                                          resubmission_states, reservation, dry_run)
+            proc_table, submits = recursive_submit_failed(rown, proc_table, submits,
+                                                          id_to_row_map, ptab_name,
+                                                          resubmission_states,
+                                                          reservation, dry_run)
     return proc_table, submits
 
 def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=None,
@@ -719,6 +750,9 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         This modifies the inputs of both proc_table and submits and returns them.
     """
     log = get_logger()
+    row = proc_table[rown]
+    log.info(f"Identified row {row['INTID']} as needing resubmission.")
+    log.info(f"{row['INTID']}: Expid(s): {row['EXPID']}  Job: {row['JOBDESC']}")
     if resubmission_states is None:
         resubmission_states = get_resubmission_states()
     ideps = proc_table['INT_DEP_IDS'][rown]
@@ -728,8 +762,11 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
             if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
-                proc_table, submits = recursive_submit_failed(id_to_row_map[idep], proc_table, submits,
-                                                              id_to_row_map, reservation=reservation, dry_run=dry_run)
+                proc_table, submits = recursive_submit_failed(id_to_row_map[idep],
+                                                              proc_table, submits,
+                                                              id_to_row_map,
+                                                              reservation=reservation,
+                                                              dry_run=dry_run)
             qdeps.append(proc_table['LATEST_QID'][id_to_row_map[idep]])
 
         qdeps = np.atleast_1d(qdeps)
@@ -738,25 +775,25 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         else:
             log.error(f"number of qdeps should be 1 or more: Rown {rown}, ideps {ideps}")
 
-    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation, dry_run=dry_run)
+    proc_table[rown] = submit_batch_script(proc_table[rown], reservation=reservation,
+                                           strictly_successful=True, dry_run=dry_run)
     submits += 1
 
     if not dry_run:
-        time.sleep(2)
+        sleep_and_report(1, message_suffix=f"after submitting job to queue")
         if submits % 10 == 0:
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
-            time.sleep(60)
+            sleep_and_report(2, message_suffix=f"after writing to disk")
         if submits % 100 == 0:
-            time.sleep(540)
             proc_table = update_from_queue(proc_table)
             if ptab_name is None:
                 write_table(proc_table, tabletype='processing', overwrite=True)
             else:
                 write_table(proc_table, tablename=ptab_name, overwrite=True)
-
+            sleep_and_report(10, message_suffix=f"after updating queue and writing to disk")
     return proc_table, submits
 
 
@@ -1066,7 +1103,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         if tilejob is not None:
             sciences = []
 
-    elif lasttype == 'flat' and flatjob is None and len(flats)>11:
+    elif lasttype == 'flat' and flatjob is None and len(flats)==12:
         ## Note here we have an assumption about the number of expected flats being greater than 11
         ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
                                                       reservation=reservation, strictly_successful=strictly_successful,
@@ -1075,7 +1112,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
                                                       system_name=system_name
                                                       )
 
-    elif lasttype == 'arc' and arcjob is None and len(arcs) > 4:
+    elif lasttype == 'arc' and arcjob is None and len(arcs)==5:
         ## Note here we have an assumption about the number of expected arcs being greater than 4
         ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
                                                     reservation=reservation, strictly_successful=strictly_successful,

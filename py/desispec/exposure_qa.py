@@ -18,7 +18,7 @@ from desispec.io import findfile,specprod_root,read_fibermap,read_xytraceset,rea
 from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
-
+from desispec.preproc import get_amp_ids,parse_sec_keyword
 _qa_params = None
 def get_qa_params() :
     """
@@ -154,30 +154,30 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 frame_header = head
 
             readnoise_is_bad = False
-            for amp in ["A","B","C","D"] :
+
+            amp_ids = get_amp_ids(head)
+
+            for amp in amp_ids :
                 rdnoise=head['OBSRDN'+amp]
                 worst_rdnoise = max(worst_rdnoise,rdnoise)
                 worst_rdnoise_per_petal = max(worst_rdnoise_per_petal,rdnoise)
                 if rdnoise > max_rdnoise :
                     log.warning("readnoise is bad in camera {} amplifier {} : {}".format(camera,amp,rdnoise))
                     readnoise_is_bad = True
+
             petalqa_table["WORSTREADNOISE"][petal]=worst_rdnoise_per_petal
 
             if readnoise_is_bad :
-
-                rdnoise_left  = max(head['OBSRDNA'],head['OBSRDNC'])
-                rdnoise_right = max(head['OBSRDNB'],head['OBSRDND'])
-
                 log.warning("readnoise is bad in at least one amplifier, flag affected fibers")
                 psf_filename=findfile('psf',night,expid,camera,specprod_dir=specprod_dir)
                 tset = read_xytraceset(psf_filename)
-                twave=np.linspace(tset.wavemin,tset.wavemax,20)
-                xtrans=float(head['CCDSIZE'].split(',')[0])/2.
-                xfiber=tset.x_vs_wave(fiber=np.arange(tset.nspec),wavelength=twave)[:,0]
-                if rdnoise_left>max_rdnoise :
-                    fiberqa_table['QAFIBERSTATUS'][entries[xfiber<xtrans]] |= bad_rdnoise_mask
-                elif rdnoise_right>max_rdnoise :
-                    fiberqa_table['QAFIBERSTATUS'][entries[xfiber>=xtrans]] |= bad_rdnoise_mask
+                fibers = fiberqa_table['FIBER'][entries]%500 # in case the ordering has changed
+                x = tset.x_vs_wave(fiber=fibers,wavelength=(tset.wavemin+tset.wavemax)/2.)
+                for amp in amp_ids :
+                    if head['OBSRDN'+amp] > max_rdnoise :
+                        sec = parse_sec_keyword(head['CCDSEC'+amp])
+                        ii  = (x>=sec[1].start)&(x<sec[1].stop)
+                        fiberqa_table['QAFIBERSTATUS'][entries[ii]] |= bad_rdnoise_mask
 
         # masks
         ################
@@ -264,7 +264,7 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 for i in range(ngood) :
                     mflux=resample_flux(wave,modelwave,modelflux[i])
                     dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers_indices[i]],cframe.ivar[goodfibers_indices[i]])
-                    scale[i] = np.sum(dflux*mflux)/np.sum(mflux**2)
+                    scale[i] = np.sum(ivar*dflux*mflux)/np.sum(ivar*mflux**2)
                 log.debug("scale={}".format(scale))
                 calib_rms=np.sqrt(np.mean((scale-1)**2))*np.sqrt(ngood/(ngood-1.))
                 petalqa_table["STARRMS"][petal]=calib_rms

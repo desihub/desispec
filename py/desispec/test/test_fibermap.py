@@ -16,7 +16,7 @@ else:
 
 class TestFibermap(unittest.TestCase):
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC") 
+    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_assemble_fibermap(self):
         """Test creation of fibermaps from raw inputs"""
         for night, expid in [
@@ -24,7 +24,7 @@ class TestFibermap(unittest.TestCase):
             (20200315, 55611),  #- new SPEC header
             ]:
             print(f'Creating fibermap for {night}/{expid}')
-            fm = assemble_fibermap(night, expid)
+            fm = assemble_fibermap(night, expid)['FIBERMAP'].data
 
             #- unmatched positioners aren't in coords files and have
             #- FIBER_X/Y == 0, but most should be non-zero
@@ -44,9 +44,9 @@ class TestFibermap(unittest.TestCase):
                 'TARGETID', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC',
                 'PLATE_RA', 'PLATE_DEC',
                 ):
-                self.assertIn(col, fm.colnames)
+                self.assertIn(col, fm.columns.names)
 
-    @unittest.skipUnless(standard_nersc_environment, "not at NERSC") 
+    @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_missing_input_files(self):
         """Test creation of fibermaps with missing input files"""
         #- missing coordinates file for this exposure
@@ -58,8 +58,8 @@ class TestFibermap(unittest.TestCase):
         fm = assemble_fibermap(night, expid, force=True)
 
         #- ...albeit with FIBER_X/Y == 0
-        assert np.all(fm['FIBER_X'] == 0.0)
-        assert np.all(fm['FIBER_Y'] == 0.0)
+        assert np.all(fm['FIBERMAP'].data['FIBER_X'] == 0.0)
+        assert np.all(fm['FIBERMAP'].data['FIBER_Y'] == 0.0)
 
     @unittest.skipUnless(standard_nersc_environment, "not at NERSC")
     def test_missing_input_columns(self):
@@ -67,8 +67,8 @@ class TestFibermap(unittest.TestCase):
         #- second exposure of split, missing fiber location information
         #- in coordinates file, but info is present in previous exposure
         #- that was same tile and first in sequence
-        fm1 = assemble_fibermap(20210406, 83714)
-        fm2 = assemble_fibermap(20210406, 83714)
+        fm1 = assemble_fibermap(20210406, 83714)['FIBERMAP'].data
+        fm2 = assemble_fibermap(20210406, 83715)['FIBERMAP'].data
 
         def nanequal(a, b):
             """Compare two arrays treating NaN==NaN"""

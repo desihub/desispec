@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+
+"""
+Compute nightly bias
+
+These are memory limited, so throttle number of parallel processes, e.g.
+
+#- Cori Haswell, ~3.5 minutes:
+srun -n 8 -c 8 desi_compute_nightly_bias --mpi -n 20211020
+
+#- Cori KNL, ~13.5 minutes:
+srun -n 8 -c 32 desi_compute_nightly_bias --mpi -n 20211020
+"""
+
+from desispec.script.nightly_bias import main
+main()
+

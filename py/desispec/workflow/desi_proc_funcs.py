@@ -92,6 +92,7 @@ def add_desi_proc_singular_terms(parser):
                         help="Do not do any science reductions prior to stdstar fitting")
     parser.add_argument("--nostdstarfit", action="store_true", help="Do not fit standard stars")
     parser.add_argument("--nofluxcalib", action="store_true", help="Do not flux calibrate")
+    parser.add_argument("--nightlybias", action="store_true", help="Create nightly bias model from ZEROs")
     return parser
 
 def add_desi_proc_joint_fit_terms(parser):
@@ -304,7 +305,8 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
-        ncores, runtime = ncameras, 5
+        # ncores, runtime = ncameras, 10
+        ncores, runtime = 8, 10  # only use 8 cores to give more memory per core for nightlybias
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
@@ -404,7 +406,7 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
     return os.path.join(path, name)
 
 
-def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
+def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybias=False, runtime=None, batch_opts=None,\
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -420,6 +422,9 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                       Options include:
                      'prestdstar', 'poststdstar', 'stdstarfit', 'arc', 'flat', 'psfnight', 'nightlyflat'
         queue: str. Queue to be used.
+
+    Options:
+        nightlybias: bool. Generate nightly bias from N>>1 ZEROs
         runtime: str. Timeout wall clock time.
         batch_opts: str. Other options to give to the slurm batch scheduler (written into the script).
         timingfile: str. Specify the name of the timing file.
@@ -467,10 +472,16 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
-    #- arc fits require more memory per core than Cori KNL has, so increase nodes as needed
+    #- nightlybias jobs are memory limited, so throttle number of ranks
+    if nightlybias:
+        ncores = min(ncores, 8)
+        tot_threads = batch_config['threads_per_core'] * batch_config['cores_per_node']
+        threads_per_core = tot_threads // 8
+
+    #- arc fits require more memory per core than Cori KNL has, so decrease ncores as needed
     if jobdesc.lower() == 'arc':
         while (batch_config['memory'] / (ncores/nodes)) < 2.0:
-            nodes *= 2
+            ncores = (ncores - 1) // 2 + 1
             threads_per_core *= 2
 
     runtime_hh = int(runtime // 60)
@@ -488,11 +499,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
         fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
-
-        # - If we are asking for more than half the node, ask for all of it
-        # - to avoid memory problems with other people's jobs
-        if ncores > 16:
-            fx.write('#SBATCH --exclusive\n')
+        fx.write('#SBATCH --exclusive\n')
 
         fx.write('\n')
 
@@ -506,7 +513,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         else:
             inparams = list(cmdline)
         for parameter in ['--queue', '-q', '--batch-opts']:
-            ## If a parameter is in the list, remove it and it's argument
+            ## If a parameter is in the list, remove it and its argument
             ## Elif it is a '--' command, it might be --option=value, which won't be split.
             ##      check for that and remove the whole "--option=value"
             if parameter in inparams:
@@ -533,8 +540,14 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         fx.write('echo Starting at $(date)\n')
 
+        fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
+        
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
-            fx.write('\n# Do steps at full MPI parallelism\n')
+            if nightlybias:
+                fx.write('\n# Ranks throttled due to high memory --nightlybias\n')
+            else:
+                fx.write('\n# Do steps at full MPI parallelism\n')
+
             srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
             fx.write('echo Running {}\n'.format(srun))
             fx.write('{}\n'.format(srun))

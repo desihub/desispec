@@ -26,7 +26,7 @@ from   pkg_resources import resource_filename
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat
 from   pathlib import Path
-from   desispec.io.meta import findfile, specprod_root
+from   desispec.io.meta import findfile, specprod_root, faflavor2program
 from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
@@ -56,11 +56,11 @@ def parse(options=None):
                         help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  ' +
                                'or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. ' +
                                'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
-    parser.add_argument('--cameras', type = str, default = None, required=False,
+    parser.add_argument('-c', '--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
-    parser.add_argument('--expids', type = str, default = None, required=False,
+    parser.add_argument('-e', '--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to process')
-    parser.add_argument('--nights', type = str, default = None, required=False,
+    parser.add_argument('-n', '--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--recompute', action='store_true',
                         help = 'Recompute TSNR values')
@@ -68,7 +68,7 @@ def parse(options=None):
                         help = 'Only compute the alpha for tsnr.')
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
-    parser.add_argument('--tile-completeness', type = str, default = None, required=False,
+    parser.add_argument('-t', '--tile-completeness', type = str, default = None, required=False,
                         help = 'Output tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
                         help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits ' +
@@ -81,6 +81,8 @@ def parse(options=None):
                         help = 'recompute sky mags')
     parser.add_argument('--multinode', action='store_true',
                         help = 'Paralleize TSNR recomputation across multiple nodes using mpi4py. Requires args.update to be False.')
+    parser.add_argument('--add-badexp', action='store_true',
+                        help = "Include entries for known bad exposures that weren't processed")
 
     args = None
     if options is None:
@@ -144,6 +146,13 @@ def update_targ_info(entry, targ_in):
             entry["GOALTYPE"]="dark"
         elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
             entry["GOALTYPE"]="bright"
+
+    if entry['FAPRGRM'].startswith('dith'):
+        if entry['SURVEY'] == 'unknown':
+            entry['SURVEY'] = 'cmx'
+
+    if entry['GOALTYPE'] in ('unknown', 'other'):
+        entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
 
     return entry
 
@@ -275,7 +284,7 @@ def update_table(table1,table2,keys) :
     else :
         return table2
 
-def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_missing=True) :
+def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_badexp=True) :
     """ Compute summary tables.
 
     Args:
@@ -284,6 +293,9 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
+
+    Options:
+      add_badexp (bool): add known bad exposures that weren't processed
 
     Returns tsnr2_expid_table , tsnr2_frame_table
     """
@@ -374,7 +386,7 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
     exp_summary = Table(rows=rows, names=colnames)
     exp_summary.meta['EXTNAME'] = 'EXPOSURES'
 
-    if add_missing:
+    if add_badexp:
       # check the production exposure table
       for night in np.unique(exp_summary["NIGHT"]) :
         prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
@@ -389,6 +401,16 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
             ucam=np.unique(cam_summary["CAMERA"])
 
             for i in np.where(missing)[0] :
+
+                #- If the exposure was supposed to be processed but is unexpectedly
+                #- missing from prod, log error but don't add it to table because
+                #- we are in an ambiguous/error state of processing
+                if prod_table["LASTSTEP"][i] == 'all':
+                    tileid = prod_table['TILEID'][i]
+                    expid = prod_table['EXPID'][i]
+                    log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
+                    continue
+
                 entry={}
                 entry["EXPID"]=prod_table["EXPID"][i]
                 entry["NIGHT"]=night
@@ -433,6 +455,7 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
                         vals.append(entry[k])
                     else :
                         vals.append(0.)
+
                 log.warning("Adding missing exposure {}".format(vals))
                 exp_summary.add_row(vals)
 
@@ -500,6 +523,7 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
                 preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
 
         exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
+
     if preexisting_tsnr2_frame_table is not None :
         log.debug("Update to preexisting")
         cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
@@ -797,11 +821,6 @@ def main():
         log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
         sys.exit(1)
 
-    log.info('outfile = {}'.format(args.outfile))
-    if args.details_dir is not None : log.info('details-dir = {}'.format(args.details_dir))
-
-    log.info('prod = {}'.format(args.prod))
-
     if args.multinode & use_mpi():
         from mpi4py import  MPI
         from desispec.parallel import default_nproc
@@ -834,6 +853,13 @@ def main():
 
         multinode = False
 
+    if rank == 0:
+        log.info('outfile = {}'.format(args.outfile))
+        if args.details_dir is not None :
+            log.info('details-dir = {}'.format(args.details_dir))
+
+        log.info('prod = {}'.format(args.prod))
+
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
         cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
@@ -842,10 +868,8 @@ def main():
 
     if args.expids is not None:
         expids = [np.int(x) for x in args.expids.split(',')]
-        add_missing = False
     else:
         expids = None
-        add_missing = True
 
     if args.nights is None:
         dirnames = sorted(glob.glob('{}/exposures/*'.format(args.prod)))
@@ -859,9 +883,11 @@ def main():
     else :
         nights = parse_int_args(args.nights)
 
-    log.info('cameras = {}'.format(cameras))
-    log.info("nights = {}".format(nights))
-    if expids is not None : log.info('expids = {}'.format(expids))
+    if rank == 0:
+        log.info('cameras = {}'.format(cameras))
+        log.info("nights = {}".format(nights))
+        if expids is not None :
+            log.info('expids = {}'.format(expids))
 
     preexisting_tsnr2_expid_table = None
     preexisting_tsnr2_frame_table = None
@@ -929,7 +955,7 @@ def main():
             tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,
                                                                          preexisting_tsnr2_expid_table,
                                                                          preexisting_tsnr2_frame_table,args.prod,
-                                                                         add_missing=add_missing)
+                                                                         add_badexp=args.add_badexp)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(rows),tmpfilename))
 
@@ -1011,7 +1037,7 @@ def main():
         # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,
         #                                                               preexisting_tsnr2_expid_table,
         #                                                               preexisting_tsnr2_frame_table,args.prod,
-        #                                                               add_missing=add_missing)
+        #                                                               add_badexp=add_badexp)
 
         if args.skymags is not None :
             skymags_table = Table.read(args.skymags)

@@ -48,9 +48,9 @@ def collect_argparser():
 def extract_info_from_fibermap(fibermap, exp_fibermap, dataframe, sel):
     """
     Extract information from the fibermap. We save: TARGETID, RA, DEC, DESI_TARGET, MASKBIT,
-    r, g, z, W1, W2, TILE, LAST_NIGHT, PETAL, FIBER
+    r, g, z, W1, W2, TILEID, LAST_NIGHT, PETAL, FIBER, LOCATION, ZWARN, COADD_FIBERSTATUS
     Args:
-        fibermap:  fitsio hdu 'COADD_FIBERMAP' from redrock file
+        fibermap:  fitsio hdu 'FIBERMAP' from redrock file
         exp_fibermap: fitsio hdu 'EXP_FIBERMAP' from redrock file
         dataframe: dataframe to fill with useful information extracted from the fibermap
         sel: mask to select which objects from the fibermap have to be saved. Order given by the redrock file
@@ -95,6 +95,8 @@ def extract_info_from_fibermap(fibermap, exp_fibermap, dataframe, sel):
 
     DESI_TARGET = main_cmx_or_sv(fibermap)[0][0]
     dataframe[DESI_TARGET] = fibermap[DESI_TARGET][sel]
+
+    dataframe['COADD_FIBERSTATUS'] = fibermap['COADD_FIBERSTATUS'][sel]
     dataframe['MASKBITS'] = fibermap["MASKBITS"][sel]
 
     g, r, z, W1, W2 = compute_grzW1W2(fibermap, sel)
@@ -104,13 +106,21 @@ def extract_info_from_fibermap(fibermap, exp_fibermap, dataframe, sel):
     dataframe['W1_MAG'] = W1
     dataframe['W2_MAG'] = W2
 
-    dataframe['TILE'] = fibermap['TILEID'][sel]
+    # with pixels there is no tile id in the fibermap for the moment ...
+    if 'TILEID' in fibermap.dtype.names:
+        dataframe['TILEID'] = fibermap['TILEID'][sel]
+
     last_night = np.zeros(sel.sum(), dtype=int)
     for i, targetid in enumerate(fibermap['TARGETID'][sel]):
         last_night[i] = np.max(exp_fibermap['NIGHT'][exp_fibermap['TARGETID'] == targetid])
     dataframe['LAST_NIGHT'] = last_night
-    dataframe['PETAL'] = fibermap['PETAL_LOC'][sel]
-    dataframe['FIBER'] = fibermap['FIBER'][sel]
+
+    if 'PETAL_LOC' in fibermap.dtype.names:
+        dataframe['PETAL_LOC'] = fibermap['PETAL_LOC'][sel]
+    if 'FIBER' in fibermap.dtype.names:
+        dataframe['FIBER'] = fibermap['FIBER'][sel]
+    if 'LOCATION' in fibermap.dtype.names:
+        dataframe['LOCATION'] = fibermap['LOCATION'][sel]
 
     return dataframe
 
@@ -135,6 +145,9 @@ def select_qso_with_RR(zbest, fibermap, exp_fibermap, qn_cat):
     sel = (zbest['SPECTYPE'] == 'QSO')
     sel[is_in_qn_cat] &= ~qn_cat['IS_QSO_QN_NEW_RR']
 
+    # mask to select z_QN in qn_cat
+    sel_in_qn_cat = (qn_cat['SPECTYPE'] == 'QSO') & ~qn_cat['IS_QSO_QN_NEW_RR']
+
     QSO_cat = pd.DataFrame()
     #to avoid error with np.where in extract_info_from_fibermap
     if sel.sum() != 0:
@@ -143,8 +156,18 @@ def select_qso_with_RR(zbest, fibermap, exp_fibermap, qn_cat):
         QSO_cat.insert(3, 'Z', zbest['Z'][sel])
         QSO_cat.insert(4, 'ZERR', zbest['ZERR'][sel])
         QSO_cat.insert(5, 'SELECTION_METHOD', "sel:RR - z:RR")
-        QSO_cat.insert(6, 'Z_QN', np.NaN)
-        QSO_cat.insert(7, 'Z_RR_ini', np.NaN)
+        QSO_cat.insert(6, 'Z_RR_INI', np.NaN)
+        QSO_cat.insert(7, 'ZWARN', zbest['ZWARN'][sel])
+
+        # add qn info
+        i = 8
+        sel_in_qn_tmp = np.isin(zbest['TARGETID'][sel], qn_cat['TARGETID'][sel_in_qn_cat])
+        for name in ['Z_QN', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha',
+                             'Z_LYA', 'Z_CIV', 'Z_CIII', 'Z_MgII', 'Z_Hbeta', 'Z_Halpha']:
+            qn_tmp = np.NaN * np.zeros(sel.sum())
+            qn_tmp[sel_in_qn_tmp] = qn_cat[name][sel_in_qn_cat]
+            QSO_cat.insert(i, name, qn_tmp)
+            i += 1
 
     return QSO_cat
 
@@ -177,13 +200,19 @@ def select_qso_with_RR_new_run_RR(zbest, fibermap, exp_fibermap, qn_cat):
         QSO_cat.insert(3, 'Z', qn_cat['Z_NEW'][sel_in_qn_cat])
         QSO_cat.insert(4, 'ZERR', qn_cat['ZERR_NEW'][sel_in_qn_cat])
         QSO_cat.insert(5, 'SELECTION_METHOD', "sel:RR - z:QN/RR")
-        QSO_cat.insert(6, 'Z_QN', qn_cat['Z_QN'][sel_in_qn_cat])
-        QSO_cat.insert(7, 'Z_RR_ini', zbest['Z'][sel])
+        QSO_cat.insert(6, 'Z_RR_INI', zbest['Z'][sel])
+        QSO_cat.insert(7, 'ZWARN', zbest['ZWARN'][sel])
+
+        i = 8
+        for name in ['Z_QN', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha',
+                             'Z_LYA', 'Z_CIV', 'Z_CIII', 'Z_MgII', 'Z_Hbeta', 'Z_Halpha']:
+            QSO_cat.insert(i, name, qn_cat[name][sel_in_qn_cat])
+            i += 1
 
     return QSO_cat
 
 
-def select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat):
+def select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat, qn_cat):
     """
     Apply the selection based on the MgII fitter, keeping the redshift estimated by Redrock
     Args:
@@ -194,7 +223,7 @@ def select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat):
     Returns:
         QSO_cat (pandas dataframe): Dataframe containing all the information
     """
-    # find which objects from zbest are in the qn_cat
+    # find which objects from zbest are in the mgii_cat
     is_in_mgii_cat = np.isin(zbest['TARGETID'], mgii_cat['TARGETID'])
 
     # sel objects with SPECTYPE != QSO and selected by the MgII
@@ -203,6 +232,11 @@ def select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat):
 
     sel_in_mgii_cat = (mgii_cat['SPECTYPE'] != 'QSO') & mgii_cat['IS_QSO_MGII']
 
+    # find which objects from qn_cat are in the mgii_cat
+    is_in_mgii_cat = np.isin(qn_cat['TARGETID'], mgii_cat['TARGETID'])
+    sel_in_qn_cat = (qn_cat['SPECTYPE'] != 'QSO')
+    sel_in_qn_cat[is_in_mgii_cat] &= mgii_cat['IS_QSO_MGII']
+
     QSO_cat = pd.DataFrame()
     #to avoid error with np.where in extract_info_from_fibermap
     if sel.sum() != 0:
@@ -210,8 +244,22 @@ def select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat):
         QSO_cat.insert(3, 'Z', mgii_cat['Z_RR'][sel_in_mgii_cat])
         QSO_cat.insert(4, 'ZERR', mgii_cat['ZERR'][sel_in_mgii_cat])
         QSO_cat.insert(5, 'SELECTION_METHOD', "sel:MgII - z:RR")
-        QSO_cat.insert(6, 'Z_QN', np.NaN)
-        QSO_cat.insert(7, 'Z_RR_ini', np.NaN)
+        QSO_cat.insert(6, 'Z_RR_INI', np.NaN)
+        QSO_cat.insert(7, 'ZWARN', zbest['ZWARN'][sel])
+
+        # add qn info
+        i = 8
+        sel_in_qn_tmp = np.isin(zbest['TARGETID'][sel], qn_cat['TARGETID'][sel_in_qn_cat])
+        for name in ['Z_QN', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha',
+                             'Z_LYA', 'Z_CIV', 'Z_CIII', 'Z_MgII', 'Z_Hbeta', 'Z_Halpha']:
+            qn_tmp = np.NaN * np.zeros(sel.sum())
+            qn_tmp[sel_in_qn_tmp] = qn_cat[name][sel_in_qn_cat]
+            QSO_cat.insert(i, name, qn_tmp)
+            i += 1
+
+        for name in ['DELTA_CHI2', 'A', 'SIGMA', 'B', 'VAR_A', 'VAR_SIGMA', 'VAR_B']:
+            QSO_cat.insert(i, name+'_MGII', mgii_cat[name][sel_in_mgii_cat])
+            i += 1
 
     return QSO_cat
 
@@ -248,8 +296,14 @@ def select_qso_with_QN_new_run_RR(zbest, fibermap, exp_fibermap, qn_cat, targeti
         QSO_cat.insert(3, 'Z', qn_cat['Z_NEW'][sel_in_qn_cat])
         QSO_cat.insert(4, 'ZERR', qn_cat['ZERR_NEW'][sel_in_qn_cat])
         QSO_cat.insert(5, 'SELECTION_METHOD', "sel:QN - z:QN/RR")
-        QSO_cat.insert(6, 'Z_QN', qn_cat['Z_QN'][sel_in_qn_cat])
-        QSO_cat.insert(7, 'Z_RR_ini', zbest['Z'][sel])
+        QSO_cat.insert(6, 'Z_RR_INI', zbest['Z'][sel])
+        QSO_cat.insert(7, 'ZWARN', zbest['ZWARN'][sel])
+
+        i = 8
+        for name in ['Z_QN', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha',
+                             'Z_LYA', 'Z_CIV', 'Z_CIII', 'Z_MgII', 'Z_Hbeta', 'Z_Halpha']:
+            QSO_cat.insert(i, name, qn_cat[name][sel_in_qn_cat])
+            i += 1
 
     return QSO_cat
 
@@ -303,7 +357,7 @@ if __name__ == "__main__":
         # Apply the selection following the flowchart
         QSO_from_RR = select_qso_with_RR(zbest, fibermap, exp_fibermap, qn_cat)
         QSO_from_RR_with_QN = select_qso_with_RR_new_run_RR(zbest, fibermap, exp_fibermap, qn_cat)
-        QSO_from_MgII = select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat)
+        QSO_from_MgII = select_qso_with_MgII(zbest, fibermap, exp_fibermap, mgii_cat, qn_cat)
         if QSO_from_MgII.size != 0:
             targetid_already_selected_with_mgII = QSO_from_MgII['TARGETID']
         else:

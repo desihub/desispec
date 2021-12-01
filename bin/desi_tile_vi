@@ -18,6 +18,7 @@ import multiprocessing
 from astropy.table import Table
 import fitsio
 import subprocess
+import datetime
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root, findfile
@@ -44,7 +45,9 @@ def parse(options=None):
     parser.add_argument('--viewer', type = str, default = "eog", required=False,
                         help = 'image viewer (default is eog)')
     parser.add_argument('--new', action = 'store_true', required=False,
-                        help = 'only inspect new tiles')
+                        help = 'only inspect new tiles (equivalent to --qastatus none)')
+    parser.add_argument('--qastatus', type=str, default=None, required=False,
+                        help = 'only inspect tiles with this QA status (e.g. "unsure")')
     parser.add_argument('--survey', type = str, default = None, required=False,
                         help = 'look only at tiles from this survey')
 
@@ -68,7 +71,7 @@ def input2(message):
 blank_responses = {'', '(no entry)'}
 viewer=None
 
-def yesnohelp(message,_pass=True,_help=True):
+def yesnohelp(message,_pass=True, _skip=True, _help=True):
     '''Wrapper for user input which cleans up human-entered values and returns
     a string of exactly 'yes', 'no', or 'help'. Also can give user option to
     exit the program.
@@ -78,16 +81,19 @@ def yesnohelp(message,_pass=True,_help=True):
     suffix_parts = ['y','n']
     if _pass: suffix_parts.append('unsure')
     if _help: suffix_parts.append('help')
+    if _skip: suffix_parts.append('skip')
     suffix = '/'.join(suffix_parts)
     answer =  input2(f'{message} ({suffix})')
     if _help and answer.lower() in {'h', 'help', 'doc', 'man'}:
         return 'help'
     if answer.lower() in {'n', 'no', 'false'}:
         return 'no'
-    if _pass and answer.lower() in {'u','unsure'}:
+    if _pass and answer.lower() in {'u', 'unsure'}:
         return 'pass'
     if answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
+    if _skip and answer.lower() in {'s', 'skip'}:
+        return 'skip'
     return yesnohelp(message)
 
 
@@ -133,6 +139,12 @@ def main():
 
     args=parse()
 
+    if args.new and args.qastatus is not None:
+        log.error('Specify --new or --qastatus QA but not both')
+        sys.exit(1)
+
+    archivedate = datetime.datetime.now().strftime('%Y%m%d')
+
     if args.prod is None:
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
@@ -141,6 +153,7 @@ def main():
         args.qa_dir = args.prod
     log.info('prod    = {}'.format(args.prod))
     log.info('qa dir  = {}'.format(args.qa_dir))
+    log.info('archivedate = {}'.format(archivedate))
 
     if args.outfile is None :
         args.outfile = args.infile
@@ -174,6 +187,8 @@ def main():
         selection &= (tiles_table["QA"]=="none")
     if args.survey is not None :
         selection &= (tiles_table["SURVEY"]==args.survey)
+    if args.qastatus is not None:
+        selection &= (tiles_table["QA"]==args.qastatus)
 
     log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
 
@@ -235,12 +250,14 @@ def main():
             if res=="help" :
                 print("y: yes, this tile is valid.")
                 print("n: no, it's bad and we should discard one or several exposures or fix the processing.")
-                print("unsure: skip this one, because unsure.")
+                print("skip: skip this one; just show the image and move on.")
+                print("unsure: mark this one as unsure.")
             elif res=="yes" :
                 tiles_table["ZDONE"][index]="true"
                 tiles_table["QA"][index]="good"
                 tiles_table["USER"][index]=args.user
                 tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
+                tiles_table["ARCHIVEDATE"][index] = archivedate
                 if software_answer is not None :
                     if software_answer is False :
                         tiles_table["OVERRIDE"][index]=1
@@ -255,11 +272,15 @@ def main():
                     if software_answer is True :
                         tiles_table["OVERRIDE"][index]=1
                         print("Your have overridden the automated validation.")
+                tiles_table.write(args.outfile,overwrite=True)
                 break
             elif res=="pass" :
                 tiles_table["QA"][index]="unsure"
                 tiles_table["USER"][index]=args.user
                 tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
+                tiles_table.write(args.outfile,overwrite=True)
+                break
+            elif res=="skip" :
                 break
 
         viewer.kill()

@@ -9,9 +9,12 @@ import sys
 import subprocess
 from pkg_resources import resource_filename
 import yaml
+from glob import glob
 import tempfile
 from desitarget.targetmask import desi_mask, bgs_mask
 from desispec.maskbits import fibermask
+from desispec.io import read_fibermap
+from desispec.tsnr import tsnr2_to_efftime
 from astropy.table import Table
 from astropy.io import fits
 import fitsio
@@ -21,6 +24,10 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import matplotlib
 import matplotlib.image as mpimg
+from desiutil.dust import ebv as dust_ebv
+from astropy import units
+from astropy.coordinates import SkyCoord
+
 
 # AR tile radius in degrees
 tile_radius_deg = 1.628
@@ -294,9 +301,9 @@ def deg2pix(dras, ddecs, width_deg, width_pix):
     return dxs, dys
 
 
-def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
+def plot_cutout(ax, tileid, tilera, tiledec, width_deg, petal_c="w", ebv_c="orange"):
     """
-    Plots a ls-dr9 cutout, with overlaying the petals.
+    Plots a ls-dr9 cutout, with overlaying the petals and the EBV contours.
 
     Args:
         ax: pyplot object
@@ -304,7 +311,8 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
         tilera: tile center R.A. (float)
         tiledec: tile center Dec. (float)
         width_deg: width of the cutout in degrees (np.array of floats)
-        c (optional, defaults to "w"): color used to display targets (string)
+        petal_c (optional, defaults to "w"): color used to display petals (string)
+        ebv_c (optional, default to "y"): color used to display the EBV contours (string)
 
     Notes:
         Different than fiberassign.fba_launch_io.plot_cutout().
@@ -333,7 +341,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
             width_pix,
         )
         ax.plot(
-            dxs, dys, c=c, lw=0.25, alpha=1.0, zorder=1,
+            dxs, dys, c=petal_c, lw=0.25, alpha=1.0, zorder=1,
         )
         anglab = ang + 0.1 * np.pi
         dxs, dys = deg2pix(
@@ -343,7 +351,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
             width_pix,
         )
         ax.text(
-            dxs, dys, "{:.0f}".format(p), color=c, va="center", ha="center",
+            dxs, dys, "{:.0f}".format(p), color=petal_c, va="center", ha="center",
         )
 
     # AR display outer edge
@@ -355,7 +363,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
         width_pix,
     )
     ax.plot(
-        dxs, dys, c=c, lw=0.25, alpha=1.0, zorder=1,
+        dxs, dys, c=petal_c, lw=0.25, alpha=1.0, zorder=1,
     )
 
     # AR
@@ -363,6 +371,37 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, c="w"):
     ax.set_xlim(-0.5, width_pix + 0.5)
     ax.set_ylim(-0.5, width_pix + 0.5)
     ax.axis("off")
+
+    # AR EBV contours
+    # AR the cutout is centered on tile R.A., Dec.
+    # AR    with width_deg
+    # AR first make a regular grid in (R.A, Dec.)
+    # AR note: would be nicer to start from a (dra, ddec) grid,
+    # AR    and use cs.spherical_offsets_by, but this exists
+    # AR    in astropy/4.3.1, and current version is astropy/4.0.1..
+    npts = 100
+    ramin = tilera - width_deg / 2. / np.cos(np.radians(tiledec))
+    ramax = tilera + width_deg / 2. / np.cos(np.radians(tiledec))
+    decmin = tiledec - width_deg / 2.
+    decmax = tiledec + width_deg / 2.
+    xs = np.linspace(ramin, ramax, npts)
+    ys = np.linspace(decmin, decmax, npts)
+    grid_ras, grid_decs = np.meshgrid(xs, ys)
+    # AR get EBV
+    grid_ebvs = dust_ebv(grid_ras, grid_decs)
+    # AR get projected distance (in degree) to tile center
+    cs = SkyCoord(grid_ras * units.degree, grid_decs * units.degree, frame="icrs")
+    tile_cs = SkyCoord(tilera * units.degree, tiledec * units.degree, frame="icrs")
+    dras, ddecs = cs.spherical_offsets_to(tile_cs)
+    dras, ddecs = dras.to(units.degree).value, ddecs.to(units.degree).value
+    # AR not exactly sure why this is needed for ddecs, but it works..
+    dras, ddecs = -dras, -ddecs
+    # AR convert to cutout pixel coordinates
+    dxs, dys = deg2pix(dras, ddecs, width_deg, width_pix)
+    # AR plot contours
+    cnt = ax.contour(dxs, dys, grid_ebvs, levels=3, colors=ebv_c, linewidths=0.5, zorder=1)
+    ax.clabel(cnt, inline=1, fontsize=10)
+    ax.text(0.5, -0.05, "Contours = EBV map", ha="center", fontsize=10, transform=ax.transAxes)
 
 
 def get_petalqa_props(key):
@@ -691,9 +730,11 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
     sel = pixwd["FRACAREA"] > 0
     if (survey == "main") & (program in ["bright", "dark"]):
         dens_med = np.median(pixwd["ALL"][sel])
-        clim = (0.75, 1.25)
+        clim = (0.5, 1.5)
+        if program == "dark":
+            clim = (0.75, 1.25)
         c = pixwd["ALL"] / dens_med
-        clabel = "All {} targets / ({:.0f}/deg2)".format(program, dens_med)
+        clabel = "{} targets".format(program, dens_med)
     else:
         clim = (0, 0.1)
         c = pixwd["EBV"]
@@ -754,8 +795,114 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
     )
 
 
+def get_expids_efftimes(tileqafits, prod):
+    """
+    Get the EFFTIME and EFFTIMEQA for the EXPIDs from the coadd.
+
+    Args:
+        tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
+        prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
+
+    Returns:
+        structured array with the following keys:
+            EXPID, NIGHT, EFFTIME_SPEC, QA_EFFTIME_SPEC
+
+    Notes:
+        We work from the spectra-*fits files; if not present in the same folder
+            as tileqafits, we look into the expected path using prod.
+        As this is run *before* desi_tsnr_afterburner, we compute here the
+            EFFTIME_SPEC values.
+        If no GOALTYPE in tileqafits header, we default to dark.
+        TBD: we purposely do not use TSNR2 keys from qa-params.yaml,
+            as those do not handle the TSNR2_ELG->TSNR2_LRG change from
+            2021 shutdown.
+            We use:
+            - dark before 20210901: TSNR2_ELG
+            - dark after 20210901: TSNR2_LRG
+            - bright: TSNR2_BGS
+            - backup: TSNR2_BGS
+            Method assessed against all Main exposures until 20211013 in daily tsnr-exposures.fits.
+    """
+    # AR GOALTYPE (defaulting to dark) + TSNR2 key
+    goaltype = "dark"
+    h = fits.open(tileqafits)
+    hdr = fits.getheader(tileqafits, "FIBERQA")
+    if "GOALTYPE" in [cards[0] for cards in hdr.cards]:
+        goaltype = hdr["GOALTYPE"].lower()
+    if goaltype in ["bright", "backup"]:
+        tsnr2_key = "TSNR2_BGS"
+    else:
+        if hdr["LASTNITE"] < 20210921:
+            tsnr2_key = "TSNR2_ELG"
+        else:
+            tsnr2_key = "TSNR2_LRG"
+
+    # AR get list of exposures used for the tile
+    # AR first try spectra*fits files in the same folder as tileqafits
+    tmpstr = os.path.join(
+        os.path.dirname(tileqafits),
+        "spectra-*-{}-thru{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
+    )
+    spectra_fns = sorted(glob(tmpstr))
+    # AR then try based on prod
+    if len(spectra_fns) == 0:
+        tmpstr = os.path.join(
+            prod,
+            "tiles",
+            "cumulative",
+            "{}".format(hdr["TILEID"]),
+            "{}".format(hdr["LASTNITE"]),
+            "spectra-*-{}-thru{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
+        )
+        spectra_fns = sorted(glob(tmpstr))
+    if len(spectra_fns) > 0:
+        fmap = read_fibermap(spectra_fns[0])
+        expids, ii = np.unique(fmap["EXPID"], return_index=True)
+        nights = fmap["NIGHT"][ii]
+    # AR then try based on prod
+    else:
+        expids, nights = [], []
+    nexp = len(expids)
+
+    # AR looping on EXPIDS
+    d = Table()
+    d["EXPID"] = expids
+    d["NIGHT"] = nights
+    d["EFFTIME_SPEC"], d["QA_EFFTIME_SPEC"] = np.zeros(nexp), np.zeros(nexp)
+    for i in range(nexp):
+        # AR EFFTIME_SPEC, with looping on petals and cameras
+        tsnr2_petals = np.zeros(10)
+        for petal in range(10):
+            for camera in ["b", "r", "z"]:
+                tsnr2_key_cam = "{}_{}".format(tsnr2_key, camera.upper())
+                fn = os.path.join(
+                    prod,
+                    "exposures",
+                    "{}".format(nights[i]),
+                    "{:08d}".format(expids[i]),
+                    "cframe-{}{}-{:08d}.fits".format(camera, petal, expids[i]),
+                )
+                if os.path.isfile(fn):
+                    vals = fitsio.read(fn, ext="SCORES", columns=[tsnr2_key_cam])[tsnr2_key_cam]
+                    tsnr2_petals[petal] += np.median(vals[vals > 0])
+        d["EFFTIME_SPEC"][i] = tsnr2_to_efftime(tsnr2_petals[tsnr2_petals > 0].mean(), tsnr2_key.split("_")[-1])
+        # QA_EFFTIME_SPEC, reading exposure-qa*fits
+        fn = os.path.join(
+                            prod,
+                            "exposures",
+                            "{}".format(nights[i]),
+                            "{:08d}".format(expids[i]),
+                            "exposure-qa-{:08d}.fits".format(expids[i]),
+        )
+        if os.path.isfile(fn):
+            d["QA_EFFTIME_SPEC"][i] = fits.getheader(fn, "FIBERQA")["EFFTIME"]
+
+    return d
+
+
 def make_tile_qa_plot(
     tileqafits,
+    prod,
     pngoutfile=None,
     dchi2_min=None,
     tsnr2_key=None,
@@ -767,6 +914,7 @@ def make_tile_qa_plot(
 
     Args:
         tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
+        prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
 
     Options:
         pngoutfile: output filename; default to tileqafits .fits -> .png
@@ -804,15 +952,37 @@ def make_tile_qa_plot(
 
     # AR start plotting
     fig = plt.figure(figsize=(20, 15))
-    gs = gridspec.GridSpec(3, 3, wspace=0.25, hspace=0.2)
+    gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2)
+
+    # AR exposures from that TILEID
+    exps = get_expids_efftimes(tileqafits, prod)
+    xs = (-0.2, 0.1, 0.4, 0.7)
+    y, dy = 0.95, -0.10
+    fs = 10
+    ax = plt.subplot(gs[0, 1])
+    ax.axis("off")
+    txts = ["EXPID", "NIGHT", "EFFTIME", "QA_EFFTIME"]
+    for x, txt in zip(xs, txts):
+        ax.text(x, y, txt, fontsize=fs, fontweight="bold", transform=ax.transAxes)
+    y += 2 * dy
+    for i in range(len(exps)):
+        txts = [
+            "{:08d}".format(exps["EXPID"][i]),
+            "{}".format(exps["NIGHT"][i]),
+            "{:.0f}s".format(exps["EFFTIME_SPEC"][i]),
+            "{:.0f}s".format(exps["QA_EFFTIME_SPEC"][i]),
+        ]
+        for x, txt in zip(xs, txts):
+            ax.text(x, y, txt, fontsize=fs, transform=ax.transAxes)
+        y += dy
 
     # AR cutout
-    ax = plt.subplot(gs[1, 1])
+    ax = plt.subplot(gs[2:4, 1])
     plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4)
 
     # AR n(z)
     # AR n(z): plotting only if main survey
-    if hdr["SURVEY"] == "main":
+    if hdr["SURVEY"] == "main" and hdr["FAPRGRM"].lower() != "backup" :
 
         # AR n(z): reference
         ref = Table.read(os.path.join(refdir, "qa-reference-nz.ecsv"))
@@ -834,7 +1004,7 @@ def make_tile_qa_plot(
         ### nqso_qnp = 0
 
         # AR plot
-        ax = plt.subplot(gs[0, 2])
+        ax = plt.subplot(gs[0:2, 2])
         for tracer, col in zip(tracers, cols):
             # AR considered tile
             bins, zhists = get_zhists(hdr["TILEID"], tracer, dchi2_min, fiberqa)
@@ -867,8 +1037,12 @@ def make_tile_qa_plot(
         ax.legend(ncol=2)
         ax.set_xlabel("Z")
         ax.set_ylabel("Per tile fractional count")
-        ax.set_xlim(0, 5)
-        ax.set_ylim(0, 0.2)
+        if hdr["FAPRGRM"].lower() == "bright":
+            ax.set_xlim(0, 1.5)
+            ax.set_ylim(0, 0.4)
+        else:
+            ax.set_xlim(0, 6)
+            ax.set_ylim(0, 0.2)
         ax.grid(True)
         # AR n(z) : ratio
         ratio_nz = n_valid / nref_valid
@@ -878,11 +1052,48 @@ def make_tile_qa_plot(
         nqso_rr  = -1
         ### nqso_qnp = -1
 
+    # AR Z vs. FIBER plot
+    ax = plt.subplot(gs[0:2, 3])
+    xlim, ylim = (-100, 5100), (-1.1, 1.1)
+    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6])
+    # AR identifying non-assigned/sky/broken fibers
+    # AR    (equivalent of OBJTYPE!="TGT" in fiberassign-TILEID.fits.gz)
+    # AR    undirect way, as not all columns are here...
+    # AR the DESI_TARGET column for sky should be present + correctly set
+    # AR for all surveys (with same bits); SUPP_SKY will have SKY set too
+    nontgt = np.zeros(len(fiberqa), dtype=bool)
+    for msk in ["SKY", "BAD_SKY"]:
+        nontgt |= (fiberqa["DESI_TARGET"] & desi_mask[msk]) > 0
+    for msk in ["UNASSIGNED", "STUCKPOSITIONER", "BROKENFIBER"]:
+        nontgt |= (fiberqa["QAFIBERSTATUS"] & fibermask[msk]) > 0
+    sels = [
+        (~nontgt) & (fiberqa["QAFIBERSTATUS"] == 0),
+        (~nontgt) & (fiberqa["QAFIBERSTATUS"] > 0),
+        nontgt
+    ]
+    labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0", "non-TGT"]
+    cs = ["b", "r", "y"]
+    zorders = [1, 1, 0]
+    for sel, label, c, zorder in zip(sels, labels, cs, zorders):
+        ax.scatter(fiberqa["FIBER"][sel], np.log10(0.1 + fiberqa["Z"][sel]), s=0.1, c=c, alpha=1.0, zorder=zorder, label="{} ({} fibers)".format(label, sel.sum()))
+    for petal in range(10):
+        if petal % 2 == 0:
+            ax.axvspan(petal * 500, (petal + 1) * 500, color="k", alpha=0.05, zorder=0)
+        ax.text(petal * 500 + 250, -1.09, str(petal), color="k", fontsize=10, ha="center")
+    ax.set_xlabel("FIBER")
+    ax.set_ylabel("Z")
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_yticks(np.log10(0.1 + yticks))
+    ax.set_yticklabels(yticks.astype(str))
+    ax.grid(True)
+    ax.legend(loc=2, markerscale=10, fontsize=7)
+
     show_efftime = True # else show TSNR
 
     if show_efftime :
 
-        ax = plt.subplot(gs[1, 2])
+        ax = plt.subplot(gs[2:4, 2])
         x = fiberqa["MEAN_FIBER_X"]
         y = fiberqa["MEAN_FIBER_Y"]
         fibers = fiberqa["FIBER"]
@@ -896,7 +1107,7 @@ def make_tile_qa_plot(
             x[sel],
             y[sel],
             c=efftime[sel],
-            cmap=matplotlib.cm.coolwarm_r,
+            cmap=matplotlib.cm.viridis_r,
             vmin=vmin,
             vmax=vmax,
             s=5,
@@ -904,7 +1115,7 @@ def make_tile_qa_plot(
 
         sel = ((fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) > 0)&(efftime>0)
         ax.scatter(x[sel],y[sel],
-                   edgecolor="k", facecolors="none", s=5, alpha=0.5,
+                   edgecolor="r", facecolors="none", s=5, alpha=0.5,
                    label="LOWEFFTIME")
         # plotting fibers discarded because of EBV=0
         sel = (fiberqa["QAFIBERSTATUS"] & fibermask.mask("LOWEFFTIME")) == 0
@@ -920,10 +1131,19 @@ def make_tile_qa_plot(
         ax.set_ylim(-505, 505)
         ax.grid(True)
         ax.set_aspect("equal")
-        ax.legend(loc=2)
-        cbar = plt.colorbar(sc, extend="both")
+        ax.legend(loc=3, ncol=2, markerscale=5)
+        # cbar = plt.colorbar(sc, extend="both")
+        p =  ax.get_position().get_points().flatten()
+        cax = fig.add_axes([
+            p[0] + 0.05 * (p[2] - p[0]),
+            p[1] + 0.94 * (p[3]-p[1]),
+            0.9 * (p[2] - p[0]),
+            0.05 * (p[3]-p[1])
+        ])
+        cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="bottom", pad=0, extend="both")
         #cbar.mappable.set_clim(clim)
-        cbar.set_label("EFFTIME (sec)")
+        # cbar.set_label("EFFTIME (sec)")
+        cbar.ax.text(0.5, 0.5, "EFFTIME (sec)", color="k", ha="center", va="center", transform=cbar.ax.transAxes)
 
         # AR ratio of the median TSNR2 w.r.t ref
         #sel = np.isfinite(ref["{}_{}".format(tsnr2_key, hdr["FAPRGRM"].upper())])
@@ -938,7 +1158,7 @@ def make_tile_qa_plot(
         ref = Table.read(os.path.join(refdir, "qa-reference-tsnr2.ecsv"))
 
         # AR TSNR2
-        ax = plt.subplot(gs[1, 2])
+        ax = plt.subplot(gs[2:4, 2])
         if hdr["FAPRGRM"].lower() in ["bright", "dark"]:
             clim = (0.5, 1.5)
             # AR TSNR2: ratio (discarding ebv=0 for now, as the TSNR2 is then biased)
@@ -1002,8 +1222,58 @@ def make_tile_qa_plot(
             ha="center",
         )
 
+    # AR positioners accuracy
+    ax = plt.subplot(gs[2:4, 3])
+    x = fiberqa["MEAN_FIBER_X"]
+    y = fiberqa["MEAN_FIBER_Y"]
+    fibers = fiberqa["FIBER"]
+    c = np.sqrt(fiberqa["MEAN_DELTA_X"] ** 2 + fiberqa["MEAN_DELTA_Y"] ** 2)
+    vmin = 0.
+    vmax = 0.03
+
+    sc = ax.scatter(
+        x,
+        y,
+        c=c,
+        cmap=matplotlib.cm.viridis,
+        vmin=vmin,
+        vmax=vmax,
+        s=5,
+    )
+
+    ax.set_xlabel("FIBER_X [mm]")
+    ax.set_ylabel("FIBER_Y [mm]")
+    # AR 2*505 mm matches the 4 deg width of the cutout
+    ax.set_xlim(-505, 505)
+    ax.set_ylim(-505, 505)
+    ax.grid(True)
+    ax.set_aspect("equal")
+    # cbar = plt.colorbar(sc, extend="both")
+    p =  ax.get_position().get_points().flatten()
+    cax = fig.add_axes([
+        p[0] + 0.05 * (p[2] - p[0]),
+        p[1] + 0.94 * (p[3]-p[1]),
+        0.9 * (p[2] - p[0]),
+        0.05 * (p[3]-p[1])
+    ])
+    cbar = plt.colorbar(sc, cax=cax, orientation="horizontal", ticklocation="bottom", pad=0, extend="max")
+    cbar.set_ticks([0, 0.01, 0.02, 0.03])
+    cbar.ax.text(0.5, 0.5, "DELTA_XY (mm)", color="k", ha="center", va="center", transform=cbar.ax.transAxes)
+
+    # AR display petal ids
+    for ang, p in zip(np.linspace(2 * np.pi, 0, 11), [3, 2, 1, 0, 9, 8, 7, 6, 5, 4]):
+        anglab = ang + 0.1 * np.pi
+        ax.text(
+            450 * np.cos(anglab),
+            450 * np.sin(anglab),
+            "{:.0f}".format(p),
+            color="k",
+            va="center",
+            ha="center",
+        )
+
     # AR sky map
-    ax = plt.subplot(gs[0, 1], projection="mollweide")
+    ax = plt.subplot(gs[1, 1], projection="mollweide")
     plot_mw_skymap(
         fig,
         ax,
@@ -1017,7 +1287,7 @@ def make_tile_qa_plot(
     for k in ["RMSDIST","EFFTIME"] :
         if k not in hdr : hdr[k]=0
     # AR overall infos
-    ax = plt.subplot(gs[0, 0])
+    ax = plt.subplot(gs[0:2, 0])
     ax.axis("off")
     x0, x1, y, dy, fs = 0.45, 0.55, 0.95, -0.08, 10
 
@@ -1039,14 +1309,13 @@ def make_tile_qa_plot(
         y += dy
 
     for txt in [
-        ["TILEID", "{:06d}".format(hdr["TILEID"])],
-        ["thruNIGHT", "{}".format(hdr["LASTNITE"])],
-        ["SURVEY", hdr["SURVEY"]],
-        ["PROGRAM", hdr["FAPRGRM"]],
+        ["TILEID-thruNIGHT", "{:06d}-{}".format(hdr["TILEID"], hdr["LASTNITE"])],
+        ["SURVEY-PROGRAM", "{}-{}".format(hdr["SURVEY"], hdr["FAPRGRM"])],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],
         ["", ""],
-        ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
+        ["efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(exps["EFFTIME_SPEC"].sum(), hdr["GOALTIME"], exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"])],
+        ["qa_efftime / goaltime", "{:.0f}/{:.0f}={:.2f}".format(hdr["EFFTIME"], hdr["GOALTIME"], hdr["EFFTIME"] / hdr["GOALTIME"])],
         ["n(z) / n_ref(z)", "{:.2f}".format(ratio_nz)],
         ### ["nqso(RR) , nqso(QNP)", "{} , {}".format(nqso_rr,nqso_qnp)],
         ["nqso(RR)", "{}".format(nqso_rr)],
@@ -1056,8 +1325,12 @@ def make_tile_qa_plot(
         ["Fiber pos. RMS(2D)", "{:.3f} mm".format(hdr["RMSDIST"])],
     ]:
         fontweight, col = "normal", "k"
-        if (txt[0] == "efftime / goaltime") & (
-            hdr["EFFTIME"] / hdr["GOALTIME"] < hdr["MINTFRAC"]
+        if (
+            (txt[0] == "efftime / goaltime") &
+            (exps["EFFTIME_SPEC"].sum() / hdr["GOALTIME"] < hdr["MINTFRAC"])
+        ) | (
+                (txt[0] == "qa_efftime / goaltime") &
+                (hdr["EFFTIME"] / hdr["GOALTIME"] < hdr["MINTFRAC"])
         ):
             fontweight, col = "bold", "r"
         if (txt[0] == "n(z) / n_ref(z)") & (ratio_nz < 0.8):
@@ -1088,7 +1361,7 @@ def make_tile_qa_plot(
 
 
     # AR per petal diagnoses
-    ax = plt.subplot(gs[1, 0])
+    ax = plt.subplot(gs[2:4, 0])
     print_petal_infos(ax, petalqa,fiberqa)
     try :
         #  AR saving plot

@@ -48,7 +48,7 @@ fibermap = assemble_fibermap(args.night, args.expid, badamps=args.badamps,
         allow_svn_override=(not args.no_svn_override) )
 
 tmpfile = args.outfile+'.tmp'
-fibermap.write(tmpfile, overwrite=args.overwrite, format='fits')
+fibermap.writeto(tmpfile, output_verify='fix+warn', overwrite=args.overwrite, checksum=True)
 os.rename(tmpfile, args.outfile)
 log.info(f'Wrote {args.outfile}')
 

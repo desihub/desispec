@@ -2,10 +2,122 @@
 desispec Change Log
 ===================
 
-0.46.2 (unreleased)
+0.47.2 (unreleased)
 -------------------
 
-* No changes yet.
+* No changes yet
+
+0.47.1 (2021-11-24)
+-------------------
+
+* New desi_resubmit_queue_failures script (PR `#1482`_).
+* fix CAMERA column name in stdstars INPUT_FRAMES HDU (PR `#1484`_).
+* raise exception when no valid sky fibers (PR `#1486`_, `#1488`_).
+* Update qso_catalog_maker to include all targets (PR `#1487`_).
+* Fix TSNR2 calculation and exposure QA for 2-amp readout (PR `#1489`_).
+* Exclude masked pixels in stdstar RMS QA (PR `#1490`_).
+* Support for very early fiberassign files in
+  :func:`~desispec.io.fibermap.assemble_fibermap` (PR `#1492`_).
+* desi_tile_vi --qastatus option (PR `#1493`_).
+
+.. _`#1482`: https://github.com/desihub/desispec/pull/1482
+.. _`#1484`: https://github.com/desihub/desispec/pull/1484
+.. _`#1486`: https://github.com/desihub/desispec/pull/1486
+.. _`#1487`: https://github.com/desihub/desispec/pull/1487
+.. _`#1488`: https://github.com/desihub/desispec/pull/1488
+.. _`#1489`: https://github.com/desihub/desispec/pull/1489
+.. _`#1490`: https://github.com/desihub/desispec/pull/1490
+.. _`#1492`: https://github.com/desihub/desispec/pull/1492
+.. _`#1493`: https://github.com/desihub/desispec/pull/1493
+
+0.47.0 (2021-11-11)
+-------------------
+
+* tsnr_afterburner support for old HDU names (PR `#1403`_).
+* Tiles tables and QA cleanup (PRs `#1406`_, `#1407`_, `#1409`_, `#1410`_,
+  `#1430`_, `#1442`_, `#1445`_, `#1449`_, `#1458`_, `#1475`_).
+* Support averaging PSFs with different wavelength ranges (PR `#1411`_).
+* QSO afterburner add blank file when no targets to write (PR `#1412`_).
+* Update airmass dependence for exposure quality cuts (PR `#1413`_).
+* Only use good sky fibers for sky model (PR `#1414`_).
+* Switch EFFTIME_SPEC to be based upon LRG instead of ELG (PR `#1417`_).
+* specex job scheduler for improved performance (PR `#1418`_).
+* Add desi_update_tiles_specstatus script (PR `#1421`_).
+* Parallelize fiberflatnight and cleanup tempfiles (PR `#1427`_).
+* Cleanup bad fiber tracking BROKENFIBERS, BADCOLUMNFIBERS,
+  LOWTRANSMISSIONFIBERS (PR `#1429`_).
+* Select calibration stars per exposure across petals (PR `#1434`_).
+* QSO afterburner run on all targets, not just QSO (PR `#1435`_).
+* Set OMP_NUM_THREADS in batch script (`#1437`_).
+* Allow fiberassign svn to have different negative TARGETID (PR `#1444`_).
+* Arc jobs restricted to <= 10 nodes even on KNL (PR `#1450`_).
+* Sky model bug fix to avoid fake z~4.3 QSO (PR `#1452`_).
+* desi_edit_exposure_table useability improvements (PR `#1453`_).
+* switch io.read_fibermap to use fitsio to avoid astropy masked columns
+  (PR `#1454`_, `#1479`_)
+* daily pipeline runner cache exposures after every new exp (PR `#1455`_).
+* Hartmann doors analysis script (PR `#1457`_).
+* Ensure consistent output from :func:`~desispec.io.fibermap.assemble_fibermap` (PR `#1458`_).
+* New desi_compute_nightly_bias script (PR `#1460`_).
+* Incorporate nightly bias and bad column identification into daily pipeline
+  (PR `#1463`_).
+* Add OSTEP metric for variation of overscan per row (PR `#1464`_).
+* Add nightly bias and bad column flagging to pipeline
+  (PR `#1465`_, `#1467`_)
+* Fix check_for_outputs bug and teach findfile about fit-psf (PR `#1469`_).
+* Set fibermap.FIBERSTATUS BADREADNOISE and BADAMP[BRZ] (PR `#1472`_).
+* Don't use PSFs with bad amps (PR `#1473`_).
+* Support 2-amp readout (PR `#1476`_).
+* Use only offset traceshifts when amplifier is masked (PR `#1477`_).
+* desi_archive_tilenight to archive nights after tile QA approval (PR `#1478`_).
+* processing dashboard useability updates (PR `#1480`_).
+* use desitarget.skybricks to check stuck sky locations (PR `#1481`_).
+
+.. _`#1403`: https://github.com/desihub/desispec/pull/1403
+.. _`#1406`: https://github.com/desihub/desispec/pull/1406
+.. _`#1407`: https://github.com/desihub/desispec/pull/1407
+.. _`#1409`: https://github.com/desihub/desispec/pull/1409
+.. _`#1410`: https://github.com/desihub/desispec/pull/1410
+.. _`#1411`: https://github.com/desihub/desispec/pull/1411
+.. _`#1412`: https://github.com/desihub/desispec/pull/1412
+.. _`#1413`: https://github.com/desihub/desispec/pull/1413
+.. _`#1414`: https://github.com/desihub/desispec/pull/1414
+.. _`#1417`: https://github.com/desihub/desispec/pull/1417
+.. _`#1418`: https://github.com/desihub/desispec/pull/1418
+.. _`#1421`: https://github.com/desihub/desispec/pull/1421
+.. _`#1427`: https://github.com/desihub/desispec/pull/1427
+.. _`#1429`: https://github.com/desihub/desispec/pull/1429
+.. _`#1430`: https://github.com/desihub/desispec/pull/1430
+.. _`#1434`: https://github.com/desihub/desispec/pull/1434
+.. _`#1435`: https://github.com/desihub/desispec/pull/1435
+.. _`#1437`: https://github.com/desihub/desispec/pull/1437
+.. _`#1442`: https://github.com/desihub/desispec/pull/1442
+.. _`#1444`: https://github.com/desihub/desispec/pull/1444
+.. _`#1445`: https://github.com/desihub/desispec/pull/1445
+.. _`#1449`: https://github.com/desihub/desispec/pull/1449
+.. _`#1450`: https://github.com/desihub/desispec/pull/1450
+.. _`#1452`: https://github.com/desihub/desispec/pull/1452
+.. _`#1453`: https://github.com/desihub/desispec/pull/1453
+.. _`#1454`: https://github.com/desihub/desispec/pull/1454
+.. _`#1455`: https://github.com/desihub/desispec/pull/1455
+.. _`#1457`: https://github.com/desihub/desispec/pull/1457
+.. _`#1458`: https://github.com/desihub/desispec/pull/1458
+.. _`#1459`: https://github.com/desihub/desispec/pull/1459
+.. _`#1460`: https://github.com/desihub/desispec/pull/1460
+.. _`#1463`: https://github.com/desihub/desispec/pull/1463
+.. _`#1464`: https://github.com/desihub/desispec/pull/1464
+.. _`#1465`: https://github.com/desihub/desispec/pull/1465
+.. _`#1467`: https://github.com/desihub/desispec/pull/1467
+.. _`#1469`: https://github.com/desihub/desispec/pull/1469
+.. _`#1472`: https://github.com/desihub/desispec/pull/1472
+.. _`#1473`: https://github.com/desihub/desispec/pull/1473
+.. _`#1475`: https://github.com/desihub/desispec/pull/1475
+.. _`#1476`: https://github.com/desihub/desispec/pull/1476
+.. _`#1477`: https://github.com/desihub/desispec/pull/1477
+.. _`#1478`: https://github.com/desihub/desispec/pull/1478
+.. _`#1479`: https://github.com/desihub/desispec/pull/1479
+.. _`#1480`: https://github.com/desihub/desispec/pull/1480
+.. _`#1481`: https://github.com/desihub/desispec/pull/1481
 
 0.46.1 (2021-09-03)
 -------------------

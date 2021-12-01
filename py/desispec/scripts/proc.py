@@ -37,13 +37,15 @@ import glob
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
-from desispec.io.util import create_camword
+from desispec.io.util import create_camword, parse_cameras, validate_badamps
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.util import runcmd
 import desispec.scripts.extract
 import desispec.scripts.specex
+import desispec.scripts.nightly_bias
+from desispec.maskbits import ccdmask
 
 from desitarget.targetmask import desi_mask
 
@@ -53,7 +55,7 @@ import desiutil.iers
 from desispec.workflow.desi_proc_funcs import assign_mpi, get_desi_proc_parser, update_args_with_headers, \
     find_most_recent
 from desispec.workflow.desi_proc_funcs import determine_resources, create_desi_proc_batch_script
-from desispec.workflow.exptable import validate_badamps
+
 stop_imports = time.time()
 
 #########################################
@@ -143,8 +145,9 @@ def main(args=None, comm=None):
                 jobdesc = 'prestdstar'
             #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):
             #    jobdesc = 'science'
-        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,\
-                                                jobdesc=jobdesc, queue=args.queue, runtime=args.runtime,\
+        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,
+                                                jobdesc=jobdesc, queue=args.queue,
+                                                nightlybias=args.nightlybias, runtime=args.runtime,
                                                 batch_opts=args.batch_opts, timingfile=args.timingfile,
                                                 system_name=args.system_name)
         err = 0
@@ -175,6 +178,26 @@ def main(args=None, comm=None):
     #- Wait for rank 0 to make directories before proceeding
     if comm is not None:
         comm.barrier()
+
+    #-------------------------------------------------------------------------
+    #- Create nightly bias from N>>1 ZEROs, but only for B-cameras
+    if args.nightlybias:
+        timer.start('nightlybias')
+
+        bcamword = None
+        if rank == 0:
+            bcameras = [cam for cam in args.cameras if cam.lower().startswith('b')]
+            bcamword = parse_cameras(bcameras)
+
+        if comm is not None:
+            bcamword = comm.bcast(bcamword, root=0)
+
+        cmd = f"desi_compute_nightly_bias -n {args.night} -c {bcamword}"
+        if rank == 0:
+            log.info(f'RUNNING {cmd}')
+
+        desispec.scripts.nightly_bias.main(cmd.split()[1:], comm=comm)
+        timer.stop('nightlybias')
 
     #-------------------------------------------------------------------------
     #- Preproc
@@ -249,13 +272,11 @@ def main(args=None, comm=None):
         if comm is not None:
             comm.barrier()
 
-
-
     #-------------------------------------------------------------------------
     #- Get input PSFs
     timer.start('findpsf')
     input_psf = dict()
-    if rank == 0:
+    if rank == 0 and args.obstype not in ['DARK',]:
         for camera in args.cameras :
             if args.psf is not None :
                 input_psf[camera] = args.psf
@@ -316,11 +337,15 @@ def main(args=None, comm=None):
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --badcol-table {}".format(badcolumnsfile)
                     runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
+                else:
+                    log.info(f'{badcolumnsfile} already exists; skipping desi_inspect_dark')
 
             if comm is not None :
                 comm.barrier()
 
             timer.stop('inspect_dark')
+        elif rank == 0:
+            log.warning(f'Not running desi_inspect_dark for DARK with exptime={exptime:.1f}')
 
     #-------------------------------------------------------------------------
     #- Traceshift
@@ -448,6 +473,23 @@ def main(args=None, comm=None):
         # loop on all cameras and interpolate bad fibers
         for camera in args.cameras[rank::size]:
             t0 = time.time()
+
+            psfname = findfile('psf', args.night, args.expid, camera)
+            inpsf = replace_prefix(psfname,"psf","fit-psf")
+
+            #- Check if a noisy amp might have corrupted this PSF;
+            #- if so, rename to *.badreadnoise
+            #- Currently the data is flagged per amp (25% of pixels), but do
+            #- more generic test for 12.5% of pixels (half of one amp)
+            log.info(f'Rank {rank} checking for noisy input CCD amps')
+            preprocfile = findfile('preproc', args.night, args.expid, camera)
+            mask = fitsio.read(preprocfile, 'MASK')
+            noisyfrac = np.sum((mask & ccdmask.BADREADNOISE) != 0) / mask.size
+            if noisyfrac > 0.25*0.5:
+                log.error(f"{100*noisyfrac:.0f}% of {camera} input pixels have bad readnoise; don't use this PSF")
+                os.rename(inpsf, inpsf+'.badreadnoise')
+                continue
+
             log.info(f'Rank {rank} interpolating {camera} PSF over bad fibers')
 
             # fibers to ignore for the PSF fit
@@ -458,9 +500,7 @@ def main(args=None, comm=None):
                 for fiber in fibers_to_ignore[1:] :
                     fibers_to_ignore_str+=",{}".format(fiber)
 
-                tmpname = findfile('psf', args.night, args.expid, camera)
-                inpsf = replace_prefix(tmpname,"psf","fit-psf")
-                outpsf = replace_prefix(tmpname,"psf","fit-psf-fixed-listed")
+                outpsf = replace_prefix(psfname,"psf","fit-psf-fixed-listed")
                 if os.path.isfile(inpsf) and not os.path.isfile(outpsf):
                     cmd = 'desi_interpolate_fiber_psf'
                     cmd += ' --infile {}'.format(inpsf)
@@ -629,22 +669,32 @@ def main(args=None, comm=None):
     #- Fiberflat
 
     if args.obstype in ['FLAT', 'TESTFLAT'] :
-        timer.start('fiberflat')
-        if rank == 0:
-            log.info('Starting fiberflats at {}'.format(time.asctime()))
+        exptime = None
+        if rank == 0 :
+            rawfilename=findfile('raw', args.night, args.expid)
+            head=fitsio.read_header(rawfilename,1)
+            exptime=head["EXPTIME"]
+        if comm is not None :
+            exptime = comm.bcast(exptime, root=0)
 
-        for i in range(rank, len(args.cameras), size):
-            camera = args.cameras[i]
-            framefile = findfile('frame', args.night, args.expid, camera)
-            fiberflatfile = findfile('fiberflat', args.night, args.expid, camera)
-            cmd = "desi_compute_fiberflat"
-            cmd += " -i {}".format(framefile)
-            cmd += " -o {}".format(fiberflatfile)
-            runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+        if exptime > 10:
+            timer.start('fiberflat')
+            if rank == 0:
+                log.info('Flat exposure time was greater than 10 seconds')
+                log.info('Starting fiberflats at {}'.format(time.asctime()))
 
-        timer.stop('fiberflat')
-        if comm is not None:
-            comm.barrier()
+            for i in range(rank, len(args.cameras), size):
+                camera = args.cameras[i]
+                framefile = findfile('frame', args.night, args.expid, camera)
+                fiberflatfile = findfile('fiberflat', args.night, args.expid, camera)
+                cmd = "desi_compute_fiberflat"
+                cmd += " -i {}".format(framefile)
+                cmd += " -o {}".format(fiberflatfile)
+                runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+
+            timer.stop('fiberflat')
+            if comm is not None:
+                comm.barrier()
 
     #-------------------------------------------------------------------------
     #- Get input fiberflat

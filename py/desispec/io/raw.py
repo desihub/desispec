@@ -192,6 +192,17 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         ii = (fibermap['PETAL_LOC'] == petal_loc)
         fibermap = fibermap[ii]
 
+    cfinder = None
+
+    camname = camera.upper()[0]
+    if camname == 'B':
+        badamp_bit = maskbits.fibermask.BADAMPB
+    elif camname == 'R':
+        badamp_bit = maskbits.fibermask.BADAMPR
+    else:
+        badamp_bit = maskbits.fibermask.BADAMPZ
+
+
     if 'FIBER' in fibermap.dtype.names : # not the case in early teststand data
 
         ## Mask fibers
@@ -210,21 +221,35 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
         fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"])%500)] |= maskbits.fibermask.LOWTRANSMISSION
 
         # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
-        camname = camera.upper()[0]
-        if camname == 'B':
-            badamp_bit = maskbits.fibermask.BADAMPB
-        elif camname == 'R':
-            badamp_bit = maskbits.fibermask.BADAMPR
-        else:
-            #elif camname == 'Z':
-            badamp_bit = maskbits.fibermask.BADAMPZ
-
         fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BADAMPFIBERS"]))] |= badamp_bit
         fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["EXCLUDEFIBERS"]))] |= badamp_bit # for backward compatibiliyu
         fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BADAMPFIBERS"])%500)] |= badamp_bit
         fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["EXCLUDEFIBERS"])%500)] |= badamp_bit # for backward compatibiliyu
         if cfinder.haskey("EXCLUDEFIBERS") :
             log.warning("please use BADAMPFIBERS instead of EXCLUDEFIBERS")
+
+    if np.sum(img.mask & maskbits.ccdmask.BADREADNOISE > 0) >= img.mask.size//4 :
+        log.info("Propagate ccdmask.BADREADNOISE to fibermap FIBERSTATUS")
+
+        if cfinder is None :
+            cfinder = CalibFinder([header,primary_header])
+
+        psf_filename = cfinder.findfile("PSF")
+        tset = desispec.io.read_xytraceset(psf_filename)
+        mean_wave =(tset.wavemin+tset.wavemax)/2.
+        xfiber  = tset.x_vs_wave(np.arange(tset.nspec),mean_wave)
+        amp_ids = desispec.preproc.get_amp_ids(header)
+
+        for amp in amp_ids :
+            kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
+            ntot = img.mask[kk].size
+            nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
+            if nbad / ntot > 0.5 :
+                # not just nbad>0 b/c/ there are always pixels with low QE
+                # that have increased readnoise after pixel flatfield
+                log.info("Setting BADREADNOISE bit for fibers of amp {}".format(amp))
+                badfibers = (xfiber>=kk[1].start-3)&(xfiber<kk[1].stop+3)
+                fibermap["FIBERSTATUS"][badfibers] |= ( maskbits.fibermask.BADREADNOISE | badamp_bit )
 
     img.fibermap = fibermap
 
