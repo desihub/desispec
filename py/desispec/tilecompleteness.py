@@ -164,6 +164,11 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][partial]="obsstart"
 
+    # special cases that are in list but have efftime_spec=0.0,
+    # e.g. dither tiles or tiles where all exp so far are bad
+    other = (res['EFFTIME_SPEC'] == 0.0)
+    res['OBSSTATUS'][other] = 'other'
+
     res = reorder_columns(res)
 
     # reorder rows
