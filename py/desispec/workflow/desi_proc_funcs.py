@@ -299,7 +299,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
 
     nspectro = (ncameras - 1) // 3 + 1
     if jobdesc in ('ARC', 'TESTARC'):
-        ncores, runtime = 20 * ncameras + 1, 45 # + 1 for worflow.schedule scheduler proc
+        ncores, runtime = 10 * ncameras + 1, 45 # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
@@ -478,11 +478,17 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
         tot_threads = batch_config['threads_per_core'] * batch_config['cores_per_node']
         threads_per_core = tot_threads // 8
 
-    #- arc fits require more memory per core than Cori KNL has, so decrease ncores as needed
+    #- arc fits require 3.2 GB of memory per bundle, so increase nodes as needed
     if jobdesc.lower() == 'arc':
-        while (batch_config['memory'] / (ncores/nodes)) < 2.0:
-            ncores = (ncores - 1) // 2 + 1
-            threads_per_core *= 2
+        cores_per_node = (ncores-1) // nodes + ((ncores-1) % nodes > 0)
+        mem_per_node = float(batch_config['memory'])
+        mem_per_core = mem_per_node / cores_per_node
+        while mem_per_core < 3.2:
+            nodes += 1
+            cores_per_node = (ncores-1) // nodes + ((ncores-1) % nodes > 0)
+            mem_per_core = mem_per_node / cores_per_node
+        threads_per_node = batch_config['threads_per_core'] * batch_config['cores_per_node']
+        threads_per_core = (threads_per_node * nodes) // ncores
 
     runtime_hh = int(runtime // 60)
     runtime_mm = int(runtime % 60)
