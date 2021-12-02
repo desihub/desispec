@@ -16,8 +16,11 @@ from astropy.io import fits
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 # AR matplotlib
 import matplotlib
+from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+# AR PIL (to create pdf from pngs)
+from PIL import Image
 
 log = get_logger()
 
@@ -34,11 +37,11 @@ def get_nightqa_outfns(outdir, night):
     """
     return {
         "html" : os.path.join(outdir, "nightqa-{}.html".format(night)),
-        "dark" : os.path.join(outdir, "dark-{}.mp4".format(night)),
+        "dark" : os.path.join(outdir, "dark-{}.pdf".format(night)),
         "badcol" : os.path.join(outdir, "badcol-{}.png".format(night)),
-        "ctedet" : os.path.join(outdir, "ctedet-{}.mp4".format(night)),
-        "sframesky" : os.path.join(outdir, "sframesky-{}.mp4".format(night)),
-        "tileqa" : os.path.join(outdir, "tileqa-{}.mp4".format(night)),
+        "ctedet" : os.path.join(outdir, "ctedet-{}.pdf".format(night)),
+        "sframesky" : os.path.join(outdir, "sframesky-{}.pdf".format(night)),
+        "tileqa" : os.path.join(outdir, "tileqa-{}.pdf".format(night)),
     }
 
 
@@ -176,84 +179,71 @@ def create_mp4(fns, outmp4, duration=15):
         os.remove("{}/tmp-{:04d}.png".format(tmpoutdir, i))
 
 
-def create_dark_mp4(outmp4, night, prod, dark_expid, binning=4, tmpdir=tempfile.mkdtemp()):
+def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
     """
-    For a given night, create an animated mp4 with the 300s binned dark.
+    For a given night, create a pdf with the 300s binned dark.
 
     Args:
-        outmp4: output mp4 file (string)
+        outpdf: output pdf file (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         dark_expid: EXPID of the 300s DARK exposure to display (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
-        tmpdir (optional, defaults to a temporary directory): temporary directory where individual images are created
     """
     cameras = ["b", "r", "z"]
     petals = np.arange(10, dtype=int)
     clim = (-5, 5)
-    outpngs = []
-    for petal in petals:
-        outpng = os.path.join(tmpdir, "dark-{}-{}.png".format(night, petal))
-        outpngs.append(outpng)
-        fig = plt.figure(figsize=(20, 10))
-        gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
-        for ic, camera in enumerate(cameras):
-            ax = plt.subplot(gs[ic])
-            fn = os.path.join(
-                    prod,
-                    "preproc",
-                    "{}".format(night),
-                    "{:08d}".format(dark_expid),
-                    "preproc-{}{}-{:08d}.fits".format(camera, petal, dark_expid),
-            )
-            ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
-            if os.path.isfile(fn):
-                log.info("reading {}".format(fn))
-                d = fits.open(fn)["IMAGE"].data
-                # AR trimming
-                shape_orig = d.shape
-                if shape_orig[0] % binning != 0:
-                    d = d[shape_orig[0] % binning:, :]
-                if shape_orig[1] % binning != 0:
-                    d = d[:, shape_orig[1] % binning:]
-                    log.info(
-                        "{} trimmed from ({}, {}) to ({}, {})".format(
-                            fn, shape_orig[0], shape_orig[1], d.shape[0], d.shape[1],
-                        )
-                    )
-                d_reshape = d.reshape(
-                    d.shape[0] // binning,
-                    binning,
-                    d.shape[1] // binning,
-                    binning
+    with PdfPages(outpdf) as pdf:
+        for petal in petals:
+            fig = plt.figure(figsize=(20, 10))
+            gs = gridspec.GridSpec(1, len(cameras), wspace=0.1)
+            for ic, camera in enumerate(cameras):
+                ax = plt.subplot(gs[ic])
+                fn = os.path.join(
+                        prod,
+                        "preproc",
+                        "{}".format(night),
+                        "{:08d}".format(dark_expid),
+                        "preproc-{}{}-{:08d}.fits".format(camera, petal, dark_expid),
                 )
-                d_bin = d_reshape.mean(axis=1).mean(axis=-1)
-                im = ax.imshow(d, cmap=matplotlib.cm.Greys_r, vmin=clim[0], vmax=clim[1])
-                if camera == cameras[-1]:
-                    p =  ax.get_position().get_points().flatten()
-                    cax = fig.add_axes([
-                        p[0] + 1.05 * (p[2] - p[0]),
-                        p[1],
-                        0.05 * (p[2] - p[0]),
-                        1.0 * (p[3]-p[1])
-                    ])
-                    cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
-                    cbar.set_label("Units : ?")
-                    cbar.mappable.set_clim(clim)
-            else:
-                log.warning("missing {}".format(fn))
-        plt.savefig(outpng, bbox_inches="tight")
-        plt.close()
-    # AR converting to mp4
-    if len(outpngs) == 0:
-        log.info("no preproc-??-{:08d}.fits files; no {} created".format(dark_expid, os.path.basename(outmp4)))
-    else:
-        duration = len(outpngs) # 1 image(s) per second
-        create_mp4(outpngs, outmp4, duration=duration)
-    # AR cleaning
-    for outpng in outpngs:
-        os.remove(outpng)
-    os.rmdir(tmpdir)
+                ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
+                if os.path.isfile(fn):
+                    log.info("reading {}".format(fn))
+                    d = fits.open(fn)["IMAGE"].data
+                    # AR trimming
+                    shape_orig = d.shape
+                    if shape_orig[0] % binning != 0:
+                        d = d[shape_orig[0] % binning:, :]
+                    if shape_orig[1] % binning != 0:
+                        d = d[:, shape_orig[1] % binning:]
+                        log.info(
+                            "{} trimmed from ({}, {}) to ({}, {})".format(
+                                fn, shape_orig[0], shape_orig[1], d.shape[0], d.shape[1],
+                            )
+                        )
+                    d_reshape = d.reshape(
+                        d.shape[0] // binning,
+                        binning,
+                        d.shape[1] // binning,
+                        binning
+                    )
+                    d_bin = d_reshape.mean(axis=1).mean(axis=-1)
+                    im = ax.imshow(d, cmap=matplotlib.cm.Greys_r, vmin=clim[0], vmax=clim[1])
+                    if camera == cameras[-1]:
+                        p =  ax.get_position().get_points().flatten()
+                        cax = fig.add_axes([
+                            p[0] + 1.05 * (p[2] - p[0]),
+                            p[1],
+                            0.05 * (p[2] - p[0]),
+                            1.0 * (p[3]-p[1])
+                        ])
+                        cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
+                        cbar.set_label("Units : ?")
+                        cbar.mappable.set_clim(clim)
+                else:
+                    log.warning("missing {}".format(fn))
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close()
 
 
 def create_badcol_png(outpng, night, prod, tmpdir=tempfile.mkdtemp()):
@@ -296,7 +286,7 @@ def create_badcol_png(outpng, night, prod, tmpdir=tempfile.mkdtemp()):
     plt.close()
 
 
-def create_ctedet_mp4(outmp4, night, prod, tmpdir=tempfile.mkdtemp()):
+def create_ctedet_pdf(outpdf, night, prod, tmpdir=tempfile.mkdtemp()):
     """
     TBD
     TBD copy-paste-adapt code from here /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
@@ -304,16 +294,15 @@ def create_ctedet_mp4(outmp4, night, prod, tmpdir=tempfile.mkdtemp()):
     a = 0 # dummy line
 
 
-def create_sframesky_mp4(outmp4, night, prod, expids, tmpdir=tempfile.mkdtemp()):
+def create_sframesky_pdf(outpdf, night, prod, expids):
     """
-    For a given night, create an animated mp4 from per-expid sframe for the sky fibers only.
+    For a given night, create a pdf from per-expid sframe for the sky fibers only.
 
     Args:
-        outmp4: output mp4 file (string)
+        outpdf: output pdf file (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         expids: expids to display (list or np.array)
-        tmpdir (optional, defaults to a temporary directory): temporary directory where individual images are created
     """
     #
     cameras = ["b", "r", "z"]
@@ -323,111 +312,98 @@ def create_sframesky_mp4(outmp4, night, prod, expids, tmpdir=tempfile.mkdtemp())
     # AR sorting the EXPIDs by increasing order
     expids = np.sort(expids)
     #
-    outpngs = []
-    for expid in expids:
-        tileid = None
-        fns = sorted(
-            glob(
-                os.path.join(
-                    nightdir,
-                    "{:08d}".format(expid),
-                    "sframe-??-{:08d}.fits".format(expid),
-                )
-            )
-        )
-        if len(fns) > 0:
-            outpng = os.path.join(tmpdir, "sframesky-{}-{}.png".format(night, expid))
-            outpngs.append(outpng)
-            #
-            mydict = {camera : {} for camera in cameras}
-            for ic, camera in enumerate(cameras):
-                for petal in petals:
-                    fn = os.path.join(
+    with PdfPages(outpdf) as pdf:
+        for expid in expids:
+            tileid = None
+            fns = sorted(
+                glob(
+                    os.path.join(
                         nightdir,
                         "{:08d}".format(expid),
-                        "sframe-{}{}-{:08d}.fits".format(camera, petal, expid),
+                        "sframe-??-{:08d}.fits".format(expid),
                     )
-                    if os.path.isfile(fn):
-                        h = fits.open(fn)
-                        sel = h["FIBERMAP"].data["OBJTYPE"] == "SKY"
-                        h["FLUX"].data = h["FLUX"].data[sel, :]
-                        h["FIBERMAP"].data = h["FIBERMAP"].data[sel]
-                        if "flux" not in mydict[camera]:
-                            mydict[camera]["wave"] = h["WAVELENGTH"].data
-                            nwave = len(mydict[camera]["wave"])
-                            mydict[camera]["petals"] = np.zeros(0, dtype=int)
-                            mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
-                            mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
-                        mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], h["FLUX"].data, axis=0)
-                        mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(h["FLUX"].data.shape[0], dtype=int))
-                        mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0)
-                        if tileid is None:
-                            tileid = h["FIBERMAP"].header["TILEID"]
-                        print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0).sum(), "/", sel.sum())
-                print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
-            #
-            fig = plt.figure(figsize=(20, 10))
-            gs = gridspec.GridSpec(len(cameras), 1, hspace=0.025)
-            clim = (-100, 100)
-            xlim = (0, 3000)
-            for ic, camera in enumerate(cameras):
-                ax = plt.subplot(gs[ic])
-                nsky = 0
-                if "flux" in mydict[camera]:
-                    nsky = mydict[camera]["flux"].shape[0]
-                    im = ax.imshow(mydict[camera]["flux"], cmap=matplotlib.cm.Greys_r, vmin=clim[0], vmax=clim[1], zorder=0)
+                )
+            )
+            if len(fns) > 0:
+                #
+                mydict = {camera : {} for camera in cameras}
+                for ic, camera in enumerate(cameras):
                     for petal in petals:
-                        ii = np.where(mydict[camera]["petals"] == petal)[0]
-                        if len(ii) > 0:
-                            ax.plot([0, mydict[camera]["flux"].shape[1]], [ii.min(), ii.min()], color="r", lw=1, zorder=1)
-                            ax.text(10, ii.mean(), "{}".format(petal), color="r", fontsize=10, va="center")
-                    ax.set_ylim(0, mydict[cameras[0]]["flux"].shape[0])
-                    if ic == 1:
-                        p =  ax.get_position().get_points().flatten()
-                        cax = fig.add_axes([
-                            p[0] + 0.85 * (p[2] - p[0]),
-                            p[1],
-                            0.01 * (p[2] - p[0]),
-                            1.0 * (p[3]-p[1])
-                        ])
-                        cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
-                        cbar.set_label("FLUX [{}]".format(h["FLUX"].header["BUNIT"]))
-                        cbar.mappable.set_clim(clim)
-                ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
-                if ic == 0:
-                    ax.set_title("EXPID={:08d}  NIGHT={}  TILED={}  {} SKY fibers".format(
-                        expid, night, tileid, nsky) 
-                    )
-                ax.set_xlim(xlim)
-                if ic == 2:
-                    ax.set_xlabel("WAVELENGTH direction")
-                ax.set_yticklabels([])
-                ax.set_ylabel("FIBER direction")
-            plt.savefig(outpng, bbox_inches="tight")
-            plt.close()
-    # AR converting to mp4
-    if len(outpngs) == 0:
-        log.info("no processed exposures for {} {}; no {} created".format(survey, night, os.path.basename(outmp4)))
-    else:
-        duration = len(outpngs) # 1 image(s) per second
-        create_mp4(outpngs, outmp4, duration=duration)
-    # AR cleaning
-    for outpng in outpngs:
-        os.remove(outpng)
-    os.rmdir(tmpdir)
+                        fn = os.path.join(
+                            nightdir,
+                            "{:08d}".format(expid),
+                            "sframe-{}{}-{:08d}.fits".format(camera, petal, expid),
+                        )
+                        if os.path.isfile(fn):
+                            h = fits.open(fn)
+                            sel = h["FIBERMAP"].data["OBJTYPE"] == "SKY"
+                            h["FLUX"].data = h["FLUX"].data[sel, :]
+                            h["FIBERMAP"].data = h["FIBERMAP"].data[sel]
+                            if "flux" not in mydict[camera]:
+                                mydict[camera]["wave"] = h["WAVELENGTH"].data
+                                nwave = len(mydict[camera]["wave"])
+                                mydict[camera]["petals"] = np.zeros(0, dtype=int)
+                                mydict[camera]["flux"] = np.zeros(0).reshape((0, nwave))
+                                mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
+                            mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], h["FLUX"].data, axis=0)
+                            mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(h["FLUX"].data.shape[0], dtype=int))
+                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0)
+                            if tileid is None:
+                                tileid = h["FIBERMAP"].header["TILEID"]
+                            print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0).sum(), "/", sel.sum())
+                    print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
+                #
+                fig = plt.figure(figsize=(20, 10))
+                gs = gridspec.GridSpec(len(cameras), 1, hspace=0.025)
+                clim = (-100, 100)
+                xlim = (0, 3000)
+                for ic, camera in enumerate(cameras):
+                    ax = plt.subplot(gs[ic])
+                    nsky = 0
+                    if "flux" in mydict[camera]:
+                        nsky = mydict[camera]["flux"].shape[0]
+                        im = ax.imshow(mydict[camera]["flux"], cmap=matplotlib.cm.Greys_r, vmin=clim[0], vmax=clim[1], zorder=0)
+                        for petal in petals:
+                            ii = np.where(mydict[camera]["petals"] == petal)[0]
+                            if len(ii) > 0:
+                                ax.plot([0, mydict[camera]["flux"].shape[1]], [ii.min(), ii.min()], color="r", lw=1, zorder=1)
+                                ax.text(10, ii.mean(), "{}".format(petal), color="r", fontsize=10, va="center")
+                        ax.set_ylim(0, mydict[cameras[0]]["flux"].shape[0])
+                        if ic == 1:
+                            p =  ax.get_position().get_points().flatten()
+                            cax = fig.add_axes([
+                                p[0] + 0.85 * (p[2] - p[0]),
+                                p[1],
+                                0.01 * (p[2] - p[0]),
+                                1.0 * (p[3]-p[1])
+                            ])
+                            cbar = plt.colorbar(im, cax=cax, orientation="vertical", ticklocation="right", pad=0, extend="both")
+                            cbar.set_label("FLUX [{}]".format(h["FLUX"].header["BUNIT"]))
+                            cbar.mappable.set_clim(clim)
+                    ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
+                    if ic == 0:
+                        ax.set_title("EXPID={:08d}  NIGHT={}  TILED={}  {} SKY fibers".format(
+                            expid, night, tileid, nsky) 
+                        )
+                    ax.set_xlim(xlim)
+                    if ic == 2:
+                        ax.set_xlabel("WAVELENGTH direction")
+                    ax.set_yticklabels([])
+                    ax.set_ylabel("FIBER direction")
+                pdf.savefig(fig, bbox_inches="tight")
+                plt.close()
 
 
-def create_tileqa_mp4(outmp4, night, prod, expids, tileids, tmpdir=tempfile.mkdtemp()):
+def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
     """
-    For a given night, create an animated mp4 from the tile-qa*png files, sorted by increasing EXPID.
+    For a given night, create a pdf from the tile-qa*png files, sorted by increasing EXPID.
 
     Args:
-        outmp4: output mp4 file (string)
+        outpdf: output pdf file (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         expids: expids of the tiles to display (list or np.array)
         tileids: tiles to display (list or np.array)
-        tmpdir (optional, defaults to a temporary directory): temporary directory where individual images are created
     """
     # AR exps, to sort by increasing EXPID for that night
     expids, tileids = np.array(expids), np.array(tileids)
@@ -438,7 +414,7 @@ def create_tileqa_mp4(outmp4, night, prod, expids, tileids, tmpdir=tempfile.mkdt
     ii = expids.argsort()
     expids, tileids = expids[ii], tileids[ii]
     #
-    outpngs = []
+    fns = []
     for tileid in tileids:
         fn = os.path.join(
             prod,
@@ -448,15 +424,18 @@ def create_tileqa_mp4(outmp4, night, prod, expids, tileids, tmpdir=tempfile.mkdt
             "{}".format(night),
             "tile-qa-{}-thru{}.png".format(tileid, night))
         if os.path.isfile(fn):
-            outpngs.append(fn)
+            fns.append(fn)
         else:
             log.warning("no {}".format(fn))
-    # AR converting to mp4
-    if len(outpngs) == 0:
-        print("no tile-qa*png for {}; no {} created".format(night, os.path.basename(outmp4)))
-    else:
-        duration = len(outpngs) # 1 image(s) per second
-        create_mp4(outpngs, outmp4, duration=duration)
+    # AR creating pdf
+    with PdfPages(outpdf) as pdf:
+        for fn in fns:
+            fig, ax = plt.subplots()
+            img = Image.open(fn)
+            ax.imshow(img)
+            ax.axis("off")
+            pdf.savefig(fig, bbox_inches="tight", dpi=300)
+            plt.close()
 
 
 def path_full2web(fn):
@@ -662,12 +641,10 @@ def write_nightqa_html(outfns, night, prod, css):
     )
     html.write("<div class='content'>\n")
     html.write("\t<br>\n")
-    html.write("\t<p>This movie displays the 300s (binned) DARK.</p>\n")
+    html.write("\t<p>This pdf displays the 300s (binned) DARK (one page per spectrograph).</p>\n")
     html.write("\t<p>Watch it and report unsual features (easy to say!)</p>\n")
     html.write("\t<tr>\n")
-    html.write("\t<video width=90% height=auto controls autoplay loop>\n") 
-    html.write("\t\t<source src='{}' type='video/mp4'>\n".format(path_full2web(outfns["dark"])))
-    html.write("\t</video>\n")
+    html.write("\t<iframe src='{}' width=100% height=100%></iframe>\n".format(path_full2web(outfns["dark"])))
     html.write("\t</br>\n")
     html.write("</div>\n")
     html.write("\n")
@@ -716,8 +693,8 @@ def write_nightqa_html(outfns, night, prod, css):
         ["sframesky", "tileqa"],
         ["75%", "90%"],
         [
-            "This movie displays the sframe image for the sky fibers for each Main exposure.\nWatch it and report unsual features (easy to say!)",
-            "This movie displays the tile-qa-TILEID-thru{}.png files for the Main tiles.\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
+            "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
+            "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
         ]
     ):
         html.write(
@@ -730,9 +707,7 @@ def write_nightqa_html(outfns, night, prod, css):
         for text_split in text.split("\n"):
             html.write("\t<p>{}</p>\n".format(text_split))
         html.write("\t<tr>\n")
-        html.write("\t<video width={} height=auto controls autoplay loop>\n".format(width)) 
-        html.write("\t\t<source src='{}' type='video/mp4'>\n".format(path_full2web(outfns[case])))
-        html.write("\t</video>\n")
+        html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(path_full2web(outfns[case]), width))
         html.write("\t</br>\n")
         html.write("</div>\n")
         html.write("\n")

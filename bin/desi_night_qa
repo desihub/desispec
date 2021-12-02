@@ -18,11 +18,11 @@ from desispec.night_qa import (
     get_nightqa_outfns,
     get_survey_night_expids,
     get_dark_night_expid,
-    create_dark_mp4,
+    create_dark_pdf,
     create_badcol_png,
-    create_ctedet_mp4,
-    create_sframesky_mp4,
-    create_tileqa_mp4,
+    create_ctedet_pdf,
+    create_sframesky_pdf,
+    create_tileqa_pdf,
     write_nightqa_html,
 )
 
@@ -68,9 +68,10 @@ def main():
         log.info(kwargs)
 
     # AR is ffmpeg installed
-    if os.system("which ffmpeg") != 0:
-        log.error("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'; exiting")
-        sys.exit(1)
+    # AR disabled for now, as using pdf; keep the lines in case we generate mp4 later
+    # if os.system("which ffmpeg") != 0:
+    #    log.error("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'; exiting")
+    #    sys.exit(1)
 
     # AR existing output folder?
     if not os.path.isdir(args.outdir):
@@ -94,20 +95,20 @@ def main():
 
     if not args.html_only:
         # AR dark
-        create_dark_mp4(outfns["dark"], args.night, args.prod, dark_expid)
+        create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid)
 
         # AR badcolumn
         create_badcol_png(outfns["badcol"], args.night, args.prod)
 
         # AR CTE detector
         # AR TBD
-        # create_ctedet_mp4( args_here )
+        # create_ctedet_pdf( args_here )
 
         # AR sframesky
-        create_sframesky_mp4(outfns["sframesky"], args.night, args.prod, expids)
+        create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids)
 
         # AR tileqa
-        create_tileqa_mp4(outfns["tileqa"], args.night, args.prod, expids, tileids)
+        create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids)
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
