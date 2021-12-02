@@ -209,7 +209,14 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
                 ax.set_title("EXPID={} {}{}".format(dark_expid, camera, petal))
                 if os.path.isfile(fn):
                     log.info("reading {}".format(fn))
-                    d = fits.open(fn)["IMAGE"].data
+                    h = fits.open(fn)
+                    image, ivar, mask = h["IMAGE"].data, h["IVAR"].data, h["MASK"].data
+                    # AR setting to np.nan pixels with ivar = 0 or mask > 0
+                    # AR hence, when binning, any binned pixel with a masked pixel
+                    # AR will appear as np.nan (easy way to go)
+                    d = image.copy()
+                    sel = (ivar == 0) | (mask > 0)
+                    d[sel] = np.nan
                     # AR trimming
                     shape_orig = d.shape
                     if shape_orig[0] % binning != 0:
@@ -228,7 +235,11 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
                         binning
                     )
                     d_bin = d_reshape.mean(axis=1).mean(axis=-1)
-                    im = ax.imshow(d, cmap=matplotlib.cm.Greys_r, vmin=clim[0], vmax=clim[1])
+                    # AR displaying masked pixels (np.nan) in red
+                    d_bin_msk = np.ma.masked_where(d_bin == np.nan, d_bin)
+                    cmap = matplotlib.cm.Greys_r
+                    cmap.set_bad(color="r")
+                    im = ax.imshow(d_bin_msk, cmap=cmap, vmin=clim[0], vmax=clim[1])
                     if camera == cameras[-1]:
                         p =  ax.get_position().get_points().flatten()
                         cax = fig.add_axes([
@@ -641,7 +652,7 @@ def write_nightqa_html(outfns, night, prod, css):
     )
     html.write("<div class='content'>\n")
     html.write("\t<br>\n")
-    html.write("\t<p>This pdf displays the 300s (binned) DARK (one page per spectrograph).</p>\n")
+    html.write("\t<p>This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red).</p>\n")
     html.write("\t<p>Watch it and report unsual features (easy to say!)</p>\n")
     html.write("\t<tr>\n")
     html.write("\t<iframe src='{}' width=100% height=100%></iframe>\n".format(path_full2web(outfns["dark"])))
