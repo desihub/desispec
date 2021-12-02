@@ -161,7 +161,8 @@ def main(args):
 
     if args.output_dir is None:
         if 'DESI_DASHBOARD' not in os.environ.keys():
-            os.environ['DESI_DASHBOARD']=os.environ["HOME"]
+            os.environ['DESI_DASHBOARD']=os.path.join(
+                    os.environ["DESI_SPECTRO_REDUX"], os.environ["SPECPROD"], "dashboard")
         args.output_dir = os.environ["DESI_DASHBOARD"]
     else:
         os.environ['DESI_DASHBOARD'] = args.output_dir
