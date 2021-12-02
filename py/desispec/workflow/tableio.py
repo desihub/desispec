@@ -73,6 +73,9 @@ def split_str(val, joinsymb='|',comma_replacement=';'):
                 return val
         else:
             val = val.strip(joinsymb)
+            if val == '':
+                return np.array([], dtype=object)
+
             split_list = np.array(val.split(joinsymb))
             if '.' in split_list[0] and split_list[0].isnumeric():
                 return split_list.astype(float)
