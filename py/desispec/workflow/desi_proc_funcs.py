@@ -406,7 +406,7 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
     return os.path.join(path, name)
 
 
-def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybias=False, runtime=None, batch_opts=None,\
+def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -424,7 +424,6 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
         queue: str. Queue to be used.
 
     Options:
-        nightlybias: bool. Generate nightly bias from N>>1 ZEROs
         runtime: str. Timeout wall clock time.
         batch_opts: str. Other options to give to the slurm batch scheduler (written into the script).
         timingfile: str. Specify the name of the timing file.
@@ -471,6 +470,14 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
         nexps = len(exp)
     ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
+
+    #- derive from cmdline or sys.argv whether this is a nightlybias job
+    nightlybias = False
+    if cmdline is not None:
+        if '--nightlybias' in cmdline:
+            nightlybias = True
+    elif '--nightlybias' in sys.argv:
+        nightlybias = True
 
     #- nightlybias jobs are memory limited, so throttle number of ranks
     if nightlybias:

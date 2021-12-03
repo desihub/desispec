@@ -147,7 +147,7 @@ def main(args=None, comm=None):
             #    jobdesc = 'science'
         scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,
                                                 jobdesc=jobdesc, queue=args.queue,
-                                                nightlybias=args.nightlybias, runtime=args.runtime,
+                                                runtime=args.runtime,
                                                 batch_opts=args.batch_opts, timingfile=args.timingfile,
                                                 system_name=args.system_name)
         err = 0
