@@ -9,6 +9,7 @@ import textwrap
 from desiutil.log import get_logger
 # AR scientifical
 import numpy as np
+import fitsio
 # AR astropy
 from astropy.table import Table
 from astropy.io import fits
@@ -42,6 +43,7 @@ def get_nightqa_outfns(outdir, night):
         "ctedet" : os.path.join(outdir, "ctedet-{}.pdf".format(night)),
         "sframesky" : os.path.join(outdir, "sframesky-{}.pdf".format(night)),
         "tileqa" : os.path.join(outdir, "tileqa-{}.pdf".format(night)),
+        "skyzfiber" : os.path.join(outdir, "skyzfiber-{}.png".format(night)),
     }
 
 
@@ -615,6 +617,72 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
             plt.close()
 
 
+def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
+    """
+    For a given night, create a Z vs. FIBER plot for all SKY fibers.
+
+    Args:
+        outpdf: output pdf file (string)
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        survey (optional, defaults to "main"): survey from which pick tileids
+        dchi2_threshold (optional, defaults to 9): DELTACHI2 value to split the sample (float)
+
+    Notes:
+        Work from the redrock*fits files.
+    """
+    # AR pick the tileids
+    _, tileids = get_survey_night_expids(night, survey)
+    tileids = np.unique(tileids)
+    # AR gather all infos from the redrock*fits files
+    fibers, zs, dchi2s = [], [], []
+    for tileid in tileids:
+        fns = sorted(
+            glob(
+                os.path.join(
+                    prod,
+                    "tiles",
+                    "cumulative",
+                    "{}".format(tileid),
+                    "{}".format(night),
+                    "redrock-?-{}-thru{}.fits".format(tileid, night),
+                )
+            )
+        )
+        for fn in fns:
+            fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
+            rr = fitsio.read(fn, ext="REDSHIFTS", columns=["Z", "DELTACHI2"])
+            sel = fm["OBJTYPE"] == "SKY"
+            log.info("selecting {} / {} SKY fibers in {}".format(sel.sum(), len(rr), fn))
+            fibers += fm["FIBER"][sel].tolist()
+            zs += rr["Z"][sel].tolist()
+            dchi2s += rr["DELTACHI2"][sel].tolist()
+    fibers, zs, dchi2s = np.array(fibers), np.array(zs), np.array(dchi2s)
+    # AR plot
+    fig, ax = plt.subplots()
+    for sel, selname, color in zip(
+        [
+            dchi2s < dchi2_threshold,
+            dchi2s > dchi2_threshold
+        ],
+        [
+            "OBJTYPE=SKY and DELTACHI2<{}".format(dchi2_threshold),
+            "OBJTYPE=SKY and DELTACHI2 > {}".format(dchi2_threshold),
+        ],
+        ["orange", "b"]
+    ):
+        ax.scatter(fibers[sel], zs[sel], c=color, s=1, alpha=0.1, label="{} ({} fibers)".format(selname, sel.sum()))
+    ax.grid()
+    ax.set_title("NIGHT = {} ({} fibers from {} redrock*fits files)".format(night, len(fibers), len(fns)))
+    ax.set_xlabel("FIBER")
+    ax.set_xlim(-100, 5100)
+    ax.set_label("Z")
+    ax.set_ylim(-0.1, 6.0)
+    ax.legend(loc=2, markerscale=10)
+    plt.savefig(outpng, bbox_inches="tight")
+    plt.close()
+
+
 def path_full2web(fn):
     """
     Convert full path to web path (needs DESI_ROOT to be defined).
@@ -747,7 +815,7 @@ def write_nightqa_html(outfns, night, prod, css):
         night, night,
     )
     html.write(
-        "<button type='button' class='collapsible'>\n\t<strong>{} night summary</strong>\n</button>\n".format(
+        "<button type='button' class='collapsible'>\n\t<strong>{} Night summary</strong>\n</button>\n".format(
             night,
         )
     )
@@ -812,7 +880,7 @@ def write_nightqa_html(outfns, night, prod, css):
 
     # AR DARK
     html.write(
-        "<button type='button' class='collapsible'>\n\t<strong>{} dark</strong>\n</button>\n".format(
+        "<button type='button' class='collapsible'>\n\t<strong>{} DARK</strong>\n</button>\n".format(
             night,
         )
     )
@@ -826,40 +894,27 @@ def write_nightqa_html(outfns, night, prod, css):
     html.write("</div>\n")
     html.write("\n")
 
-    # AR bad columns
-    html.write(
-        "<button type='button' class='collapsible'>\n\t<strong>{} bad columns</strong>\n</button>\n".format(
-            night,
-        )
-    )
-    html.write("<div class='content'>\n")
-    html.write("\t<br>\n")
-    html.write("\t<p>This plot displays the histograms of the bad columns.</p>\n")
-    html.write("\t<p>Watch it and report unsual features (easy to say!)</p>\n")
-    html.write("\t<tr>\n")
-    html.write("\t<br>\n")
-    outpng = path_full2web(outfns["badcol"])
-    txt = "<a href='{}'><img SRC='{}' width=35% height=auto></a>".format(
-        outpng, outpng
-    )
-    html.write("\t{}\n".format(txt))
-    html.write("\t</br>\n")
-    html.write("</div>\n")
-    html.write("\n")
-
-    # AR CTE det, Per-night observing sframesky, tileqa
-    for case, width, text in zip(
-        ["ctedet", "sframesky", "tileqa"],
-        ["100%", "75%", "90%"],
+    # AR various tabs:
+    # AR - badcol
+    # AR - ctedet
+    # AR - sframesky
+    # AR - tileqa
+    # AR - skyzfiber
+    for case, caselab, width, text in zip(
+        ["badcol", "ctedet", "sframesky", "tileqa", "skyzfiber"],
+        ["bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER"],
+        ["35%", "100%", "75%", "90%", "35%"],
         [
+            "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
             "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
+            "This plot displays all the SKY fibers for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
         ]
     ):
         html.write(
             "<button type='button' class='collapsible'>\n\t<strong>{} {}</strong>\n</button>\n".format(
-                night, case,
+                night, caselab,
             )
         )
         html.write("<div class='content'>\n")
@@ -867,7 +922,19 @@ def write_nightqa_html(outfns, night, prod, css):
         for text_split in text.split("\n"):
             html.write("\t<p>{}</p>\n".format(text_split))
         html.write("\t<tr>\n")
-        html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(path_full2web(outfns[case]), width))
+        if os.path.splitext(outfns[case])[-1] == ".png":
+            outpng = path_full2web(outfns[case])
+            html.write(
+                "\t<a href='{}'><img SRC='{}' width={} height=auto></a>\n".format(
+                    outpng, outpng, width,
+                )
+            )
+        elif os.path.splitext(outfns[case])[-1] == ".pdf":
+            outpdf = path_full2web(outfns[case])
+            html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(outpdf, width))
+        else:
+            log.error("Unexpected extension for {}; exiting".format(outfns[case]))
+            sys.exit(1)
         html.write("\t</br>\n")
         html.write("</div>\n")
         html.write("\n")
