@@ -82,14 +82,15 @@ def main():
     # AR files that will be created
     outfns = get_nightqa_outfns(args.outdir, args.night)
     # AR existing output files?
-    for fn in [outfns[key] for key in outfns]:
-        log.info("will create {}".format(fn))
-        if os.path.isfile(fn):
-            if args.recompute:
-                log.warning("\texisting {} will be overwritten".format(fn))
-            else:
-                log.error("\t{} already exists, and args.recompute = False; exiting".format(fn))
-                sys.exit(1)
+    if not args.html_only:
+        for fn in [outfns[key] for key in outfns]:
+            log.info("will create {}".format(fn))
+            if os.path.isfile(fn):
+                if args.recompute:
+                    log.warning("\texisting {} will be overwritten".format(fn))
+                else:
+                    log.error("\t{} already exists, and args.recompute = False; exiting".format(fn))
+                    sys.exit(1)
 
     # AR expids, tileids
     expids, tileids = get_survey_night_expids(args.night, "main")
