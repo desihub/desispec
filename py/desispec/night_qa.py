@@ -138,6 +138,108 @@ def get_dark_night_expid(night, datadir = None):
     return expid
 
 
+def get_ctedet_night_expid(night, prod):
+    """
+    Returns the EXPID of the 1s FLAT exposure for a given night.
+    If not present, takes the science exposure with the lowest sky counts.
+
+    Args:
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+
+    Returns:
+        expid: EXPID (int)
+
+    Notes:
+        If nothing found, returns None.
+        We look for preproc files.
+        As we are looking for a faint signal, we want the image with the less electrons,
+            thus it could be picking a BRIGHT short exposure against a longer DARK exposure.
+    """
+    expids = np.array(
+        [
+            int(os.path.basename(fn))
+            for fn in sorted(
+                glob(
+                    os.path.join(
+                        prod,
+                        "preproc",
+                        "{}".format(night),
+                        "*",
+                    )
+                )
+            )
+        ]
+    )
+    ctedet_expid = None
+    # AR checking preproc-??-{EXPID}.fits
+    for expid in expids:
+        fns = sorted(
+            glob(
+                os.path.join(
+                    prod,
+                    "preproc",
+                    "{}".format(night),
+                    "{:08d}".format(expid),
+                    "preproc-??-{:08d}.fits".format(expid),
+                )
+            )
+        )
+        # AR if some preproc files, just pick the first one
+        if len(fns) > 0:
+            hdr = fits.getheader(fns[0], "IMAGE")
+            if (hdr["OBSTYPE"] == "FLAT") & (hdr["REQTIME"] == 1):
+                ctedet_expid = hdr["EXPID"]
+                break
+    if ctedet_expid is not None:
+        log.info(
+            "found EXPID={} as the 1s FLAT for NIGHT={}".format(
+                expid, night,
+            )
+        )
+    # AR if no 1s FLAT, go for the SCIENCE exposure with the lowest sky counts
+    # AR using the r-band sky
+    else:
+        log.warning(
+            "no EXPID found as the 1s FLAT for NIGHT={}; going for SCIENCE exposures".format(night)
+        )
+        minsky = 1e10
+        # AR checking sky-r?-{EXPID}.fits
+        for expid in expids:
+            fns = sorted(
+                glob(
+                    os.path.join(
+                        prod,
+                        "exposures",
+                        "{}".format(night),
+                        "{:08d}".format(expid),
+                        "sky-r?-{:08d}.fits".format(expid),
+                    )
+                )
+            )
+            # AR if some sky files, just pick the first one
+            if len(fns) > 0:
+                hdr = fits.getheader(fns[0], "SKY")
+                if hdr["OBSTYPE"] == "SCIENCE":
+                    sky = np.median(fits.open(fns[0])["SKY"].data)
+                    log.info("{} r-sky = {:.1f}".format(os.path.basename(fns[0]), sky))
+                    if sky < minsky:
+                        ctedet_expid, minsky = expid, sky
+                        log.info("\t=> pick {}".format(expid))
+        #
+        if ctedet_expid is not None:
+            log.info(
+                "found EXPID={} as the sky image with the lowest counts for NIGHT={}".format(
+                    ctedet_expid, night,
+                )
+            )
+        else:
+            log.warning(
+                "no SCIENCE EXPID with sky-r?-*fits file found for NIGHT={}; returning None".format(night)
+            )
+    return ctedet_expid
+
+
 def create_mp4(fns, outmp4, duration=15):
     """
     Create an animated .mp4 from a set of input files (usually pngs).
@@ -297,12 +399,76 @@ def create_badcol_png(outpng, night, prod, tmpdir=tempfile.mkdtemp()):
     plt.close()
 
 
-def create_ctedet_pdf(outpdf, night, prod, tmpdir=tempfile.mkdtemp()):
+def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xmax=None, ylim=(-5, 10)):
     """
-    TBD
-    TBD copy-paste-adapt code from here /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
+    For a given night, create a pdf with a CTE diagnosis (from preproc files).
+
+    Args:
+        outpdf: output pdf file (string)
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
+        nrow (optional, defaults to 21): number of rows to include in median (int)
+        xmin (optional, defaults to None): minimum column to display (int)
+        xmax (optional, defaults to None): maximum column to display (int)
+        ylim (optional, default to (-5, 10)): ylim for the median plot (duplet)
+
+    Notes:
+        Credits to S. Bailey.
+        Copied-pasted-adapted from /global/homes/s/sjbailey/desi/dev/ccd/plot-amp-cte.py
     """
-    a = 0 # dummy line
+    cameras = ["b", "r", "z"]
+    petals = np.arange(10, dtype=int)
+    clim = (-5, 5)
+    with PdfPages(outpdf) as pdf:
+        for petal in petals:
+            for camera in cameras:
+                petcam_xmin, petcam_xmax = xmin, xmax
+                fig = plt.figure(figsize=(30, 5))
+                gs = gridspec.GridSpec(2, 1, wspace=0.1, height_ratios = [1, 4])
+                ax2d = plt.subplot(gs[0])
+                ax1d = plt.subplot(gs[1])
+                #
+                fn = os.path.join(
+                        prod,
+                        "preproc",
+                        "{}".format(night),
+                        "{:08d}".format(ctedet_expid),
+                        "preproc-{}{}-{:08d}.fits".format(camera, petal, ctedet_expid),
+                )
+                ax1d.set_title(
+                    "{}\nMedian of {} rows above/below CCD amp boundary".format(
+                        fn, nrow,
+                    )
+                )
+                if os.path.isfile(fn):
+                    # AR read
+                    img = fits.open(fn)["IMAGE"].data
+                    ny, nx = img.shape
+                    if petcam_xmin is None:
+                        petcam_xmin = 0
+                    if petcam_xmax is None:
+                        petcam_xmax = nx
+                    above = np.median(img[ny // 2: ny // 2 + nrow, petcam_xmin : petcam_xmax], axis=0)
+                    below = np.median(img[ny // 2 - nrow : ny // 2, petcam_xmin : petcam_xmax], axis=0)
+                    xx = np.arange(petcam_xmin, petcam_xmax)
+                    # AR plot 2d image
+                    extent = [petcam_xmin - 0.5, petcam_xmax - 0.5, ny // 2 - nrow - 0.5, ny // 2 + nrow - 0.5]
+                    vmax = {"b" : 20, "r" : 40, "z" : 60}[camera]
+                    ax2d.imshow(img[ny // 2 - nrow : ny // 2 + nrow, petcam_xmin : petcam_xmax], vmin=-5, vmax=vmax, extent=extent)
+                    ax2d.xaxis.tick_top()
+                    # AR plot 1d median
+                    ax1d.plot(xx, above, alpha=0.5, label="above (AMPC : x < {}; AMPD : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                    ax1d.plot(xx, below, alpha=0.5, label="below (AMPA : x < {}; AMPB : x > {}".format(nx // 2 - 1, nx // 2 -1))
+                    ax1d.legend(loc=2)
+                    # AR amplifier x-boundary
+                    ax1d.axvline(nx // 2 - 1, color="k", ls="--")
+                    ax1d.set_xlabel("CCD column")
+                    ax1d.set_xlim(petcam_xmin, petcam_xmax)
+                    ax1d.set_ylim(ylim)
+                    ax1d.grid()
+                pdf.savefig(fig, bbox_inches="tight")
+                plt.close()
 
 
 def create_sframesky_pdf(outpdf, night, prod, expids):
@@ -681,29 +847,12 @@ def write_nightqa_html(outfns, night, prod, css):
     html.write("</div>\n")
     html.write("\n")
 
-    # AR CTE detector
-    html.write(
-        "<button type='button' class='collapsible'>\n\t<strong>{} cte detector</strong>\n</button>\n".format(
-            night,
-        )
-    )
-    html.write("<div class='content'>\n")
-    html.write("\t<br>\n")
-    html.write("\t<p>TBD : add here plots/video here.</p>\n")
-    html.write("\t<p>TBD : add instructions here</p>\n")
-    html.write("\t<tr>\n")
-    # html.write("\t<video width=90% height=auto controls autoplay loop>\n") 
-    # html.write("\t\t<source src='{}' type='video/mp4'>\n".format(path_full2web(outfns["ctedet"])))
-    # html.write("\t</video>\n")
-    html.write("\t</br>\n")
-    html.write("</div>\n")
-    html.write("\n")
-
-    # AR Per-night observing sframesky, tileqa
+    # AR CTE det, Per-night observing sframesky, tileqa
     for case, width, text in zip(
-        ["sframesky", "tileqa"],
-        ["75%", "90%"],
+        ["ctedet", "sframesky", "tileqa"],
+        ["100%", "75%", "90%"],
         [
+            "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
             "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
         ]

@@ -18,6 +18,7 @@ from desispec.night_qa import (
     get_nightqa_outfns,
     get_survey_night_expids,
     get_dark_night_expid,
+    get_ctedet_night_expid,
     create_dark_pdf,
     create_badcol_png,
     create_ctedet_pdf,
@@ -92,6 +93,7 @@ def main():
     # AR expids, tileids
     expids, tileids = get_survey_night_expids(args.night, "main")
     dark_expid = get_dark_night_expid(args.night)
+    ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
 
     if not args.html_only:
         # AR dark
@@ -101,8 +103,8 @@ def main():
         create_badcol_png(outfns["badcol"], args.night, args.prod)
 
         # AR CTE detector
-        # AR TBD
-        # create_ctedet_pdf( args_here )
+        if ctedet_expid is not None:
+            create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid)
 
         # AR sframesky
         create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids)
