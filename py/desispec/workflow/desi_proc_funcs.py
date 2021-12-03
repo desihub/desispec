@@ -310,7 +310,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
-        ncores, runtime = 20 * nspectro, 5 #ncameras, 5
+        ncores, runtime = 20 * nspectro, 10 #ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
         ncores, runtime = 20 * nspectro, 20 #ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
