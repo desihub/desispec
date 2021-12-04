@@ -361,7 +361,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
             plt.close()
 
 
-def create_badcol_png(outpng, night, prod, tmpdir=tempfile.mkdtemp()):
+def create_badcol_png(outpng, night, prod, n_previous_nights=10):
     """
     For a given night, create a png file with displaying the number of bad columns per {camera}{petal}.
 
@@ -369,34 +369,66 @@ def create_badcol_png(outpng, night, prod, tmpdir=tempfile.mkdtemp()):
         outpng: output png file (string)
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
-        tmpdir (optional, defaults to a temporary directory): temporary directory where individual images are created
+        n_previous_nights (optional, defaults to 10): number of previous nights to plot (int)
     """
     cameras = ["b", "r", "z"]
     colors = ["b", "r", "k"]
     petals = np.arange(10, dtype=int)
-    # AR reading
-    badcols = {camera : np.nan + np.zeros(len(petals)) for camera in cameras}
-    for camera in cameras:
-        for petal in petals:
-            fn = os.path.join(
-                    prod,
-                    "calibnight",
-                    "{}".format(night),
-                    "badcolumns-{}{}-{}.csv".format(camera, petal, night),
+    # AR grabbing the n_previous_nights previous nights
+    nights = np.array(
+        [int(os.path.basename(fn))
+            for fn in sorted(
+                glob(
+                    os.path.join(
+                        prod,
+                        "exposures",
+                        "*"
+                    )
+                )
             )
-            if os.path.isfile(fn):
-                log.info("reading {}".format(fn))
-                badcols[camera][petal] = len(Table.read(fn))
+        ]
+    )
+    nights = nights[nights < night]
+    nights = nights[-n_previous_nights:]
+    all_nights = nights.tolist() + [night]
+    # AR reading
+    badcols = {}
+    for nite in all_nights:
+        badcols[nite] = {
+            camera : np.nan + np.zeros(len(petals)) for camera in cameras
+        }
+        for camera in cameras:
+            for petal in petals:
+                fn = os.path.join(
+                        prod,
+                        "calibnight",
+                        "{}".format(nite),
+                        "badcolumns-{}{}-{}.csv".format(camera, petal, nite),
+                )
+                if os.path.isfile(fn):
+                    log.info("reading {}".format(fn))
+                    badcols[nite][camera][petal] = len(Table.read(fn))
     # AR plotting
     fig, ax = plt.subplots()
-    for camera, color in zip(cameras, colors):
-        ax.plot(petals, badcols[camera], "-o", color=color, label="{}-camera".format(camera))
-        ax.legend(loc=2)
-        ax.set_xlabel("PETAL_LOC")
-        ax.set_xlim(petals[0] - 1, petals[-1] + 1)
-        ax.set_ylabel("N(badcolumn)")
-        ax.set_ylim(0, 50)
-        ax.grid()
+    for nite in all_nights:
+        for camera, color in zip(cameras, colors):
+            if nite == night:
+                marker, alpha, lw, label = "-o", 1.0, 2.0, "{}-camera".format(camera)
+            else:
+                marker, alpha, lw, label = "-", 0.3, 0.8, None
+            ax.plot(petals, badcols[nite][camera], marker, lw=lw, alpha=alpha, color=color, label=label)
+    ax.legend(loc=2)
+    ax.text(
+        0.98, 0.95, "Thin: {} previous nights ({}-{})".format(
+            n_previous_nights, nights.min(), nights.max(),
+        ), color="k", fontsize=10, ha="right", transform=ax.transAxes,
+    )
+    ax.set_title("{}".format(night))
+    ax.set_xlabel("PETAL_LOC")
+    ax.set_xlim(petals[0] - 1, petals[-1] + 1)
+    ax.set_ylabel("N(badcolumn)")
+    ax.set_ylim(0, 50)
+    ax.grid()
     plt.savefig(outpng, bbox_inches="tight")
     plt.close()
 
