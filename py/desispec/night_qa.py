@@ -11,8 +11,12 @@ from desiutil.log import get_logger
 import numpy as np
 import fitsio
 # AR astropy
-from astropy.table import Table
+from astropy.table import Table, vstack
 from astropy.io import fits
+# AR desitarget
+from desitarget.targetmask import desi_mask, bgs_mask
+from desitarget.targetmask import zwarn_mask as desitarget_zwarn_mask
+from desitarget.targets import zcut as lya_zcut
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 # AR matplotlib
@@ -20,6 +24,7 @@ import matplotlib
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from matplotlib.ticker import MultipleLocator
 # AR PIL (to create pdf from pngs)
 from PIL import Image
 
@@ -44,6 +49,7 @@ def get_nightqa_outfns(outdir, night):
         "sframesky" : os.path.join(outdir, "sframesky-{}.pdf".format(night)),
         "tileqa" : os.path.join(outdir, "tileqa-{}.pdf".format(night)),
         "skyzfiber" : os.path.join(outdir, "skyzfiber-{}.png".format(night)),
+        "petalnz" : os.path.join(outdir, "petalnz-{}.pdf".format(night)),
     }
 
 
@@ -715,6 +721,248 @@ def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
     plt.close()
 
 
+def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
+    """
+    For a given night, create a per-petal, per-tracer n(z) pdf file.
+
+    Args:
+        outpdf: output pdf file (string)
+        night: night (int)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        survey (optional, defaults to "main"): survey from which pick tileids
+        dchi2_threshold (optional, defaults to 9): DELTACHI2 value to split the sample (float)
+
+    Notes:
+        Work from the zmtl*fits files, trying to mimick what is done in desitarget.mtl.make_mtl().
+        The LRG, ELG, QSO, BGS_BRIGHT, BGS_FAINT bit are the same for sv1, sv2, sv3, main,
+            so ok to simply use the bit mask values from the main.
+        TBD : we query the FAPRGRM of the tile-qa-*fits header, not sure that properly works for
+            surveys other than main..
+    """
+    petals = np.arange(10, dtype=int)
+    if survey not in ["sv1", "sv2", "sv3", "main"]:
+        log.warning("survey = {} not in sv1, sv2, sv3, main, not plotting".format(survey))
+        return
+    # AR column name
+    if survey == "main":
+        prefix_key = ""
+    else:
+        prefix_key = "{}_".format(survey.upper())
+    # AR pick the tileids
+    _, tileids = get_survey_night_expids(night, survey)
+    tileids = np.unique(tileids)
+    #
+    # AR gather all infos from the zmtl*fits files
+    ds = {"bright" : [], "dark" : []}
+    ntiles = {"bright" : 0, "dark" : 0}
+    for tileid in tileids:
+        # AR bright or dark?
+        fn = os.path.join(
+                    prod,
+                    "tiles",
+                    "cumulative",
+                    "{}".format(tileid),
+                    "{}".format(night),
+                    "tile-qa-{}-thru{}.fits".format(tileid, night),
+        )
+        # AR trying to protect against non-main tiles...
+        if not os.path.isfile(fn):
+            log.warning("no {} file, proceeding to next tile".format(fn))
+            continue
+        hdr = fits.getheader(fn, "FIBERQA")
+        if "FAPRGRM" not in [cards[0] for cards in hdr.cards]:
+            log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
+            continue
+        faprgrm = hdr["FAPRGRM"]
+        if faprgrm not in ["bright", "dark"]:
+            log.warning("FAPRGRM={} not in bright, dark, proceeding to next tile".format(fn))
+            continue
+        # AR reading zmtl files
+        istileid = False
+        for petal in petals:
+            fn = os.path.join(
+                    prod,
+                    "tiles",
+                    "cumulative",
+                    "{}".format(tileid),
+                    "{}".format(night),
+                    "zmtl-{}-{}-thru{}.fits".format(petal, tileid, night),
+                )
+            if not os.path.isfile(fn):
+                log.warning("{} : no file".format(fn))
+            else:
+                istileid = True
+                d = Table(
+                    fitsio.read(
+                        fn,
+                        ext="ZMTL",
+                        columns=[
+                            "TARGETID",
+                            "{}DESI_TARGET".format(prefix_key), "{}BGS_TARGET".format(prefix_key),
+                            "Z", "ZWARN", "SPECTYPE", "DELTACHI2",
+                            "Z_QN", "Z_QN_CONF", "IS_QSO_QN",
+                        ],
+                    )
+                )
+                d["PETAL_LOC"] = petal + np.zeros(len(d), dtype=int)
+                sel = np.zeros(len(d), dtype=bool)
+                if faprgrm == "bright":
+                    for msk in ["BGS_BRIGHT", "BGS_FAINT"]:
+                        sel |= (d["{}BGS_TARGET".format(prefix_key)] & bgs_mask[msk]) > 0
+                if faprgrm == "dark":
+                    for msk in ["LRG", "ELG", "QSO"]:
+                        sel |= (d["{}DESI_TARGET".format(prefix_key)] & desi_mask[msk]) > 0
+                log.info("selecting {} tracer targets from {}".format(sel.sum(), fn))
+                d = d[sel]
+                ds[faprgrm].append(d)
+        if istileid:
+            ntiles[faprgrm] += 1
+    # AR stack
+    for faprgrm in ["bright", "dark"]:
+        ds[faprgrm] = vstack(ds[faprgrm])
+    # AR define subsamples
+    for faprgrm in ["bright", "dark"]:
+        # AR valid fiber
+        valid = np.ones(len(ds[faprgrm]), dtype=bool)
+        nodata = ds[faprgrm]["ZWARN"] & desitarget_zwarn_mask["NODATA"] != 0
+        badqa = ds[faprgrm]["ZWARN"] & desitarget_zwarn_mask.mask("BAD_SPECQA|BAD_PETALQA") != 0
+        ds[faprgrm]["VALID"] = (~nodata) & (~badqa)
+        # AR DELTACHI2 above threshold
+        ds[faprgrm]["ZOK"] = ds[faprgrm]["DELTACHI2"] > dchi2_threshold
+        # AR Lya
+        if faprgrm == "dark":
+            ds[faprgrm]["LYA"] = (
+                (ds[faprgrm]["Z"] >= lya_zcut)
+                |
+                ((ds[faprgrm]["Z_QN"] >= lya_zcut) & (ds[faprgrm]["IS_QSO_QN"] == 1))
+            )
+    # AR small internal plot utility function
+    def get_tracer_props(tracer):
+        if tracer in ["BGS_BRIGHT", "BGS_FAINT"]:
+            faprgrm, mask, dtkey = "bright", bgs_mask, "{}BGS_TARGET".format(prefix_key)
+            xlim, ylim = (-0.2, 1.5), (0, 5.0)
+        else:
+            faprgrm, mask, dtkey = "dark", desi_mask, "{}DESI_TARGET".format(prefix_key)
+            if tracer == "LRG":
+                xlim, ylim = (-0.2, 2), (0, 3.0)
+            elif tracer == "ELG":
+                xlim, ylim = (-0.2, 3), (0, 3.0)
+            else: # AR QSO
+                xlim, ylim = (-0.2, 6), (0, 3.0)
+        return faprgrm, mask, dtkey, xlim, ylim
+    # AR plot
+    tracers = ["BGS_BRIGHT", "BGS_FAINT", "LRG", "ELG", "QSO"]
+    with PdfPages(outpdf) as pdf:
+        # AR three plots:
+        # AR - fraction of VALID fibers, bright+dark together
+        # AR - fraction of ZOK fibers, per tracer
+        # AR - fraction of LYA candidates for QSOs
+        fig = plt.figure(figsize=(40, 5))
+        gs = gridspec.GridSpec(1, 3, wspace=0.5)
+        # AR fraction of ~VALID fibers, bright+dark together
+        ax = plt.subplot(gs[0])
+        ys = np.nan + np.zeros(len(petals))
+        for petal in petals:
+            npet, nvalid = 0, 0
+            for faprgrm in ["bright", "dark"]:
+                npet += (ds[faprgrm]["PETAL_LOC"] == petal).sum()
+                nvalid += ((ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])).sum()
+            ys[petal] = nvalid / npet
+        ax.plot(petals, ys, "-o", color="k")
+        ax.set_title("{} BRIGHT+DARK tiles from {}".format(ntiles["bright"] + ntiles["dark"], night))
+        ax.set_xlabel("PETAL_LOC")
+        ax.set_ylabel("fraction of VALID_fibers")
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.set_ylim(0.5, 1.0)
+        ax.grid()
+        # AR - fraction of ZOK fibers, per tracer
+        ax = plt.subplot(gs[1])
+        for tracer in tracers:
+            faprgrm, mask, dtkey, _, _ = get_tracer_props(tracer)
+            istracer = (ds[faprgrm][dtkey] & mask[tracer]) > 0
+            ys = np.nan + np.zeros(len(petals))
+            for petal in petals:
+                ispetal = (istracer) & (ds[faprgrm]["PETAL_LOC"] == petal)
+                isvalid = (ispetal) & (ds[faprgrm]["VALID"])
+                iszok = (isvalid) & (ds[faprgrm]["ZOK"])
+                ys[petal] = iszok.sum() / isvalid.sum()
+            ax.plot(petals, ys, "-o", label=tracer)
+        ax.set_title("{} BRIGHT+DARK tiles from {}".format(ntiles["bright"] + ntiles["dark"], night))
+        ax.set_xlabel("PETAL_LOC")
+        ax.set_ylabel("fraction of DELTACHI2 >_{}\n(VALID fibers only)".format(dchi2_threshold))
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.set_ylim(0.7, 1.0)
+        ax.grid()
+        ax.legend()
+        # AR - fraction of LYA candidates for QSOs
+        ax = plt.subplot(gs[2])
+        faprgrm = "dark"
+        ys = np.nan + np.zeros(len(petals))
+        for petal in petals:
+            ispetal = (ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])
+            isqso = (ispetal) & ((ds[faprgrm][dtkey] & desi_mask["QSO"]) > 0)
+            islya = (isqso) & (ds[faprgrm]["LYA"])
+            ys[petal] = islya.sum() / isqso.sum()
+        ax.plot(petals, ys, "-o", color="k")
+        ax.set_title("{} DARK tiles from {}".format(ntiles["dark"], night))
+        ax.set_xlabel("PETAL_LOC")
+        ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.set_ylim(0, 1)
+        ax.grid()
+        #
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close()
+        # AR per-petal, per-tracer n(z)
+        for tracer in tracers:
+            faprgrm, mask, dtkey, xlim, ylim = get_tracer_props(tracer)
+            istracer = (ds[faprgrm][dtkey] & mask[tracer]) > 0
+            istracer_zok = (istracer) & (ds[faprgrm]["ZOK"])
+            bins = np.arange(xlim[0], xlim[1] + 0.05, 0.05)
+            #
+            fig = plt.figure(figsize=(40, 5))
+            gs = gridspec.GridSpec(1, 10, wspace=0.3)
+            for petal in petals:
+                ax = plt.subplot(gs[petal])
+                _ = ax.hist(
+                    ds[faprgrm]["Z"][istracer_zok],
+                    bins=bins,
+                    density=True,
+                    histtype="stepfilled",
+                    alpha=0.5,
+                    color="r",
+                    label="{} All petals".format(tracer),
+                )
+                _ = ax.hist(
+                    ds[faprgrm]["Z"][(istracer_zok) & (ds[faprgrm]["PETAL_LOC"] == petal)],
+                    bins=bins,
+                    density=True,
+                    histtype="step",
+                    alpha=1.0,
+                    color="b",
+                    label="{} PETAL_LOC = {}".format(tracer, petal),
+                )
+                ax.set_title("{} {} tiles from {}".format(ntiles[faprgrm], faprgrm.upper(), night))
+                ax.set_xlabel("Z")
+                if petal == 0:
+                    ax.set_ylabel("Normalized counts")
+                else:
+                    ax.set_yticklabels([])
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+                ax.grid()
+                ax.set_axisbelow(True)
+                ax.legend(loc=1)
+                ax.text(
+                    0.97, 0.8,
+                    "DELTACHI2 > {}".format(dchi2_threshold),
+                    fontsize=10, fontweight="bold", color="k",
+                    ha="right", transform=ax.transAxes,
+                )
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close()
+
+
 def path_full2web(fn):
     """
     Convert full path to web path (needs DESI_ROOT to be defined).
@@ -932,16 +1180,18 @@ def write_nightqa_html(outfns, night, prod, css):
     # AR - sframesky
     # AR - tileqa
     # AR - skyzfiber
+    # AR - petalnz
     for case, caselab, width, text in zip(
-        ["badcol", "ctedet", "sframesky", "tileqa", "skyzfiber"],
-        ["bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER"],
-        ["35%", "100%", "75%", "90%", "35%"],
+        ["badcol", "ctedet", "sframesky", "tileqa", "skyzfiber", "petalnz"],
+        ["bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
+        ["35%", "100%", "75%", "90%", "35%", "100%"],
         [
             "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
             "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
             "This plot displays all the SKY fibers for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
+            "This pdf displays the per-tracer, per-petal n(z) for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
         ]
     ):
         html.write(

@@ -25,6 +25,7 @@ from desispec.night_qa import (
     create_sframesky_pdf,
     create_tileqa_pdf,
     create_skyzfiber_png,
+    create_petalnz_pdf,
     write_nightqa_html,
 )
 
@@ -116,6 +117,9 @@ def main():
 
         # AR skyzfiber
         create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, survey="main", dchi2_threshold=9)
+
+        # AR per-petal n(z)
+        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, survey="main", dchi2_threshold=25)
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
