@@ -881,17 +881,16 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         ax.xaxis.set_major_locator(MultipleLocator(1))
         ax.set_ylim(0.5, 1.0)
         ax.grid()
-        # AR - fraction of ZOK fibers, per tracer
+        # AR - fraction of ZOK fibers, per tracer (VALID fibers only)
         ax = plt.subplot(gs[1])
         for tracer in tracers:
             faprgrm, mask, dtkey, _, _ = get_tracer_props(tracer)
-            istracer = (ds[faprgrm][dtkey] & mask[tracer]) > 0
+            istracer = ((ds[faprgrm][dtkey] & mask[tracer]) > 0) & (ds[faprgrm]["VALID"])
             ys = np.nan + np.zeros(len(petals))
             for petal in petals:
                 ispetal = (istracer) & (ds[faprgrm]["PETAL_LOC"] == petal)
-                isvalid = (ispetal) & (ds[faprgrm]["VALID"])
-                iszok = (isvalid) & (ds[faprgrm]["ZOK"])
-                ys[petal] = iszok.sum() / isvalid.sum()
+                iszok = (ispetal) & (ds[faprgrm]["ZOK"])
+                ys[petal] = iszok.sum() / ispetal.sum()
             ax.plot(petals, ys, "-o", label=tracer)
         ax.set_title("{} BRIGHT+DARK tiles from {}".format(ntiles["bright"] + ntiles["dark"], night))
         ax.set_xlabel("PETAL_LOC")
@@ -923,7 +922,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         # AR per-petal, per-tracer n(z)
         for tracer in tracers:
             faprgrm, mask, dtkey, xlim, ylim = get_tracer_props(tracer)
-            istracer = (ds[faprgrm][dtkey] & mask[tracer]) > 0
+            istracer = ((ds[faprgrm][dtkey] & mask[tracer]) > 0) & (ds[faprgrm]["VALID"])
             istracer_zok = (istracer) & (ds[faprgrm]["ZOK"])
             bins = np.arange(xlim[0], xlim[1] + 0.05, 0.05)
             #
