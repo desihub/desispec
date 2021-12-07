@@ -865,6 +865,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         # AR - fraction of LYA candidates for QSOs
         fig = plt.figure(figsize=(40, 5))
         gs = gridspec.GridSpec(1, 3, wspace=0.5)
+        title = "{} BRIGHT and {} DARK tiles from {}".format(ntiles["bright"], ntiles["dark"], night)
         # AR fraction of ~VALID fibers, bright+dark together
         ax = plt.subplot(gs[0])
         ys = np.nan + np.zeros(len(petals))
@@ -875,7 +876,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                 nvalid += ((ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])).sum()
             ys[petal] = nvalid / npet
         ax.plot(petals, ys, "-o", color="k")
-        ax.set_title("{} BRIGHT+DARK tiles from {}".format(ntiles["bright"] + ntiles["dark"], night))
+        ax.set_title(title)
         ax.set_xlabel("PETAL_LOC")
         ax.set_ylabel("fraction of VALID_fibers")
         ax.xaxis.set_major_locator(MultipleLocator(1))
@@ -892,7 +893,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                 iszok = (ispetal) & (ds[faprgrm]["ZOK"])
                 ys[petal] = iszok.sum() / ispetal.sum()
             ax.plot(petals, ys, "-o", label=tracer)
-        ax.set_title("{} BRIGHT+DARK tiles from {}".format(ntiles["bright"] + ntiles["dark"], night))
+        ax.set_title(title)
         ax.set_xlabel("PETAL_LOC")
         ax.set_ylabel("fraction of DELTACHI2 >_{}\n(VALID fibers only)".format(dchi2_threshold))
         ax.xaxis.set_major_locator(MultipleLocator(1))
@@ -910,7 +911,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                 islya = (isqso) & (ds[faprgrm]["LYA"])
                 ys[petal] = islya.sum() / isqso.sum()
             ax.plot(petals, ys, "-o", color="k")
-        ax.set_title("{} DARK tiles from {}".format(ntiles["dark"], night))
+        ax.set_title(title)
         ax.set_xlabel("PETAL_LOC")
         ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
         ax.xaxis.set_major_locator(MultipleLocator(1))
