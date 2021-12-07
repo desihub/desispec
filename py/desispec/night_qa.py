@@ -818,10 +818,17 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         if istileid:
             ntiles[faprgrm] += 1
     # AR stack
-    for faprgrm in ["bright", "dark"]:
-        ds[faprgrm] = vstack(ds[faprgrm])
+    faprgrms, tracers = [], []
+    for faprgrm, faprgrm_tracers in zip(
+        ["bright", "dark"],
+        [["BGS_BRIGHT", "BGS_FAINT"], ["LRG", "ELG", "QSO"]],
+    ):
+        if len(ds[faprgrm]) > 0:
+            ds[faprgrm] = vstack(ds[faprgrm])
+            faprgrms += [faprgrm]
+            tracers += faprgrm_tracers
     # AR define subsamples
-    for faprgrm in ["bright", "dark"]:
+    for faprgrm in faprgrms:
         # AR valid fiber
         valid = np.ones(len(ds[faprgrm]), dtype=bool)
         nodata = ds[faprgrm]["ZWARN"] & desitarget_zwarn_mask["NODATA"] != 0
@@ -851,7 +858,6 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                 xlim, ylim = (-0.2, 6), (0, 3.0)
         return faprgrm, mask, dtkey, xlim, ylim
     # AR plot
-    tracers = ["BGS_BRIGHT", "BGS_FAINT", "LRG", "ELG", "QSO"]
     with PdfPages(outpdf) as pdf:
         # AR three plots:
         # AR - fraction of VALID fibers, bright+dark together
@@ -864,7 +870,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         ys = np.nan + np.zeros(len(petals))
         for petal in petals:
             npet, nvalid = 0, 0
-            for faprgrm in ["bright", "dark"]:
+            for faprgrm in faprgrms:
                 npet += (ds[faprgrm]["PETAL_LOC"] == petal).sum()
                 nvalid += ((ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])).sum()
             ys[petal] = nvalid / npet
@@ -896,14 +902,15 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         ax.legend()
         # AR - fraction of LYA candidates for QSOs
         ax = plt.subplot(gs[2])
-        faprgrm = "dark"
-        ys = np.nan + np.zeros(len(petals))
-        for petal in petals:
-            ispetal = (ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])
-            isqso = (ispetal) & ((ds[faprgrm][dtkey] & desi_mask["QSO"]) > 0)
-            islya = (isqso) & (ds[faprgrm]["LYA"])
-            ys[petal] = islya.sum() / isqso.sum()
-        ax.plot(petals, ys, "-o", color="k")
+        if "dark" in faprgrms:
+            faprgrm = "dark"
+            ys = np.nan + np.zeros(len(petals))
+            for petal in petals:
+                ispetal = (ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])
+                isqso = (ispetal) & ((ds[faprgrm][dtkey] & desi_mask["QSO"]) > 0)
+                islya = (isqso) & (ds[faprgrm]["LYA"])
+                ys[petal] = islya.sum() / isqso.sum()
+            ax.plot(petals, ys, "-o", color="k")
         ax.set_title("{} DARK tiles from {}".format(ntiles["dark"], night))
         ax.set_xlabel("PETAL_LOC")
         ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
