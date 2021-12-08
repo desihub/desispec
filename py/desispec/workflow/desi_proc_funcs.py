@@ -310,9 +310,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
-        ncores, runtime = 20 * nspectro, 10 #ncameras, 5
+        ncores, runtime = ncameras, 10 # 20 * nspectro, 10 #ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
-        ncores, runtime = 20 * nspectro, 20 #ncameras, 5
+        ncores, runtime = ncameras, 20 # 20 * nspectro, 20 #ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
         ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
     else:
@@ -561,13 +561,13 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             else:
                 fx.write('\n# Do steps at full MPI parallelism\n')
 
-            srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
+            srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd}'
             fx.write('echo Running {}\n'.format(srun))
             fx.write('{}\n'.format(srun))
         else:
             if jobdesc.lower() in ['science','prestdstar']:
                 fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd} --nofluxcalib'
+                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd} --nofluxcalib'
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
             if jobdesc.lower() in ['science', 'stdstarfit', 'poststdstar']:
@@ -582,7 +582,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 threads_per_task = max(int(tot_threads / ntasks), 1)
                 fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
                 fx.write('# This should quickly skip over the steps already done\n')
-                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} {cmd} '
+                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} --cpu-bind=cores {cmd} '
                 fx.write('if [ $? -eq 0 ]; then\n')
                 fx.write('  echo Running {}\n'.format(srun))
                 fx.write('  {}\n'.format(srun))
