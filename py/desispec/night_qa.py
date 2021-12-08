@@ -858,6 +858,15 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                 xlim, ylim = (-0.2, 6), (0, 3.0)
         return faprgrm, mask, dtkey, xlim, ylim
     # AR plot
+    #
+    # AR color for each tracer
+    colors = {
+        "BGS_BRIGHT" : "purple",
+        "BGS_FAINT" : "c",
+        "LRG" : "r",
+        "ELG" : "b",
+        "QSO" : "orange",
+    }
     with PdfPages(outpdf) as pdf:
         # AR three plots:
         # AR - fraction of VALID fibers, bright+dark together
@@ -892,7 +901,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                 ispetal = (istracer) & (ds[faprgrm]["PETAL_LOC"] == petal)
                 iszok = (ispetal) & (ds[faprgrm]["ZOK"])
                 ys[petal] = iszok.sum() / ispetal.sum()
-            ax.plot(petals, ys, "-o", label=tracer)
+            ax.plot(petals, ys, "-o", color=colors[tracer], label=tracer)
         ax.set_title(title)
         ax.set_xlabel("PETAL_LOC")
         ax.set_ylabel("fraction of DELTACHI2 >_{}\n(VALID fibers only)".format(dchi2_threshold))
@@ -910,7 +919,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                 isqso = (ispetal) & ((ds[faprgrm][dtkey] & desi_mask["QSO"]) > 0)
                 islya = (isqso) & (ds[faprgrm]["LYA"])
                 ys[petal] = islya.sum() / isqso.sum()
-            ax.plot(petals, ys, "-o", color="k")
+            ax.plot(petals, ys, "-o", color=colors["QSO"])
         ax.set_title(title)
         ax.set_xlabel("PETAL_LOC")
         ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
@@ -937,7 +946,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                     density=True,
                     histtype="stepfilled",
                     alpha=0.5,
-                    color="r",
+                    color=colors[tracer],
                     label="{} All petals".format(tracer),
                 )
                 _ = ax.hist(
@@ -946,7 +955,7 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
                     density=True,
                     histtype="step",
                     alpha=1.0,
-                    color="b",
+                    color="k",
                     label="{} PETAL_LOC = {}".format(tracer, petal),
                 )
                 ax.set_title("{} {} tiles from {}".format(ntiles[faprgrm], faprgrm.upper(), night))
