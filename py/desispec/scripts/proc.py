@@ -2,6 +2,7 @@
 One stop shopping for processing a DESI exposure
 
 Examples at NERSC:
+export SLURM_CPU_BIND=cores
 
 # ARC: 18 min on 2 nodes
 time srun -N 2 -n 60 -C haswell -t 25:00 --qos realtime desi_proc --mpi -n 20191029 -e 22486
