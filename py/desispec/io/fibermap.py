@@ -707,6 +707,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         #- Set fiber status bits
         missing = np.in1d(fibermap['LOCATION'], pm['LOCATION'], invert=True)
         missing |= ~fibermap['_GOODMATCH']
+        missing |= (fibermap['FIBER_X']==0.0) & (fibermap['FIBER_Y']==0.0)
         fibermap['FIBERSTATUS'][missing] |= fibermask.MISSINGPOSITION
         fibermap['FIBERSTATUS'][poorpos] |= fibermask.POORPOSITION
         fibermap['FIBERSTATUS'][badpos & ~stucksky] |= fibermask.BADPOSITION
