@@ -255,17 +255,24 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if erow is None:
                 continue
             elif type(erow) is str:
+                writeout = False
                 if exp in exps_to_ignore:
                     print(f"Located {erow} in exposure {exp}, but the exposure was listed in the expids to ignore. Ignoring this.")
                 elif erow == 'endofarcs' and arcjob is None and 'arc' in procobstypes:
                     print("\nLocated end of arc calibration sequence flag. Processing psfnight.\n")
                     ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run_level, queue=queue)
+                    writeout = True
                 elif erow == 'endofflats' and flatjob is None and 'flat' in procobstypes:
                     print("\nLocated end of long flat calibration sequence flag. Processing nightlyflat.\n")
                     ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run_level, queue=queue)
+                    writeout = True
                 elif 'short' in erow and flatjob is None:
                     print("\nLocated end of short flat calibration flag. Removing flats from list for nightlyflat processing.\n")
                     flats = []
+                if writeout and dry_run_level < 3:
+                    write_tables([ptable], tablenames=[proc_table_pathname])
+                    sleep_and_report(2, message_suffix=f"after joint fit", dry_run=dry_run)
+                del writeout
                 continue
             else:
                 ## Else it's a real row so start processing it
@@ -307,7 +314,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             curtype,curtile = get_type_and_tile(erow)
 
-            if lasttype is not None  and ((curtype != lasttype) or (curtile != lasttile)):
+            if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
+                old_iid = internal_id
                 ptable, arcjob, flatjob, \
                 sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
                                                                       lasttype, internal_id, dry_run=dry_run_level,
@@ -315,6 +323,12 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                                                       check_for_outputs=check_for_outputs,
                                                                       resubmit_partial_complete=resubmit_partial_complete,
                                                                       z_submit_types=z_submit_types)
+                ## if internal_id changed that means we submitted a joint job
+                ## so lets write that out and pause
+                if (internal_id > old_iid) and (dry_run_level < 3):
+                    write_tables([ptable], tablenames=[proc_table_pathname])
+                    sleep_and_report(2, message_suffix=f"after joint fit", dry_run=dry_run)
+                del old_iid
 
             prow = erow_to_prow(erow)
             prow['INTID'] = internal_id
@@ -350,9 +364,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sys.stdout.flush()
             sys.stderr.flush()
 
-            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
             if dry_run_level < 3:
                 write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
+            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
 
         print("\nReached the end of current iteration of new exposures.")
         sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",

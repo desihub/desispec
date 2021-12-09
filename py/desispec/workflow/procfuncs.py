@@ -646,8 +646,9 @@ def parse_previous_tables(etable, ptable, night):
         elif lasttype == 'flat':
             for row in ptable[::-1]:
                 erow = etable[etable['EXPID']==row['EXPID'][0]]
-                if row['OBSTYPE'].lower() == 'flat' and int(erow['SEQTOT'])<5:
-                    flats.append(table_row_to_dict(row))
+                if row['OBSTYPE'].lower() == 'flat' and int(erow['SEQTOT']) < 5:
+                    if float(erow['EXPTIME']) > 100.:
+                        flats.append(table_row_to_dict(row))
                 else:
                     break
             flats = flats[::-1]
