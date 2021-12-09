@@ -364,9 +364,9 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sys.stdout.flush()
             sys.stderr.flush()
 
-            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
             if dry_run_level < 3:
                 write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
+            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
 
         print("\nReached the end of current iteration of new exposures.")
         sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
