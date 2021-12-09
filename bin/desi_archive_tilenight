@@ -8,7 +8,9 @@ import os, sys, glob
 import argparse
 import subprocess
 import shutil
+import datetime
 
+import numpy as np
 from astropy.table import Table
 
 from desiutil.log import get_logger
@@ -87,11 +89,13 @@ def freezedir(path, dryrun=False):
 #-------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(
-        description='Remove write permissions from exposures and '
-                    'cumulative redshift directories for a tile/night, '
-                    'e.g. after accepting that tile as done')
-parser.add_argument('-t', '--tileid', type=int,
-        help='archive only this TILEID')
+    description='Archive tiles to read-only tiles/archive/TILEID/ARCHIVEDATE')
+parser.add_argument('-t', '--tileids', type=str,
+        help='archive only these TILEIDs (comma separated)')
+parser.add_argument('--thru', type=int,
+        help='archive tiles observed this LASTNIGHT or before')
+parser.add_argument('--since', type=int,
+        help='archive tiles observed this LASTNIGHT or after')
 parser.add_argument('-n', '--night', type=int,
         help='archive only tiles observed on this LASTNIGHT')
 parser.add_argument('-p', '--prod', type=int,
@@ -100,7 +104,8 @@ parser.add_argument('-p', '--prod', type=int,
                'or simply prod version, like daily. '
                'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
 parser.add_argument('--specstatus', type=str,
-        help='tiles-specstatus.ecsv file to use; archive any tiles with ZDONE=true and ARCHIVEDATE>0')
+        help='tiles-specstatus.ecsv file to use; archive tiles with '
+        'ZDONE=false and QA=true; update to ZDONE=true and set ARCHIVEDATE')
 parser.add_argument('--dry-run', action='store_true',
         help='print what directories to archive, without archiving them')
 parser.add_argument('--only-tiles', action='store_true',
@@ -117,33 +122,58 @@ else:
     reduxdir = args.prod
 
 if args.specstatus is None:
-    args.specstatus = os.path.expandvars('$DESI_ROOT/survey/ops/surveyops/trunk/ops/tiles-specstatus.ecsv')
+    if os.path.exists('./tiles-specstatus.ecsv'):
+        args.specstatus = os.path.abspath('./tiles-specstatus.ecsv')
+    else:
+        args.specstatus = os.path.expandvars(
+            '$DESI_ROOT/survey/ops/surveyops/trunk/ops/tiles-specstatus.ecsv')
 
 if not os.path.exists(args.specstatus):
     log.critical(f'Missing {args.specstatus}')
     sys.exit(1)
 
 log.info(f'Reading tiles from {args.specstatus}')
+if not args.dry_run and not os.access(args.specstatus, os.W_OK):
+    filename = os.path.basename(tiles.specstatus)
+    log.critical('Need write access to {filename} to update ZDONE and ARCHIVEDATE')
+    sys.exit(1)
+
+log.info(f'Archiving tiles in {reduxdir}')
+os.chdir(reduxdir)
+
 tiles = Table.read(args.specstatus)
+log.info('Archiving tiles with SURVEY=main|sv3, ZDONE=false, QA=good')
 keep = (tiles['SURVEY'] == 'main') | (tiles['SURVEY'] == 'sv3')
-keep &= (tiles['ZDONE'] == 'true') & (tiles['ARCHIVEDATE'] > 0)
+keep &= (tiles['ZDONE'] == 'false') & (tiles['QA'] == 'good')
+if args.thru is not None:
+    log.info(f'Filtering to LASTNIGHT<={args.thru}')
+    keep &= tiles['LASTNIGHT'] <= args.thru
+if args.since is not None:
+    log.info(f'Filtering to LASTNIGHT>={args.since}')
+    keep &= tiles['LASTNIGHT'] >= args.since
 if args.night is not None:
     log.info(f'Filtering to just LASTNIGHT={args.night}')
     keep &= tiles['LASTNIGHT'] == args.night
-if args.tileid is not None:
-    log.info(f'Filtering to just TILEID={args.tileid}')
-    keep &= tiles['TILEID'] == args.tileid
+if args.tileids is not None:
+    tileids = [int(t) for t in args.tileids.split(',')]
+    log.info(f'Filtering to just TILEIDs {tileids}')
+    keep &= np.isin(tiles['TILEID'], tileids)
 
-tiles = tiles[keep]
+archivetiles = tiles[keep]
 
-ntiles = len(tiles)
-log.info(f'{ntiles} tiles to archive')
+archivedate = datetime.datetime.now().strftime('%Y%m%d')
+ntiles = len(archivetiles)
+if ntiles == 0:
+    log.warning('No tiles to archive; exiting')
+    sys.exit(0)
+
+log.info(f'Archiving {ntiles} tiles using ARCHIVEDATE={archivedate}')
 
 #- find and read exposures table for that specprod
 specprod = os.path.basename(reduxdir)
 for expfile in [
-    f'{reduxdir}/tsnr-exposures.fits',
     f'{reduxdir}/exposures-{specprod}.fits',
+    f'{reduxdir}/tsnr-exposures.fits',
     ]:
     if os.path.exists(expfile):
         log.info(f'Reading exposures from {expfile}')
@@ -156,22 +186,32 @@ else:
     log.error(f'Unable to find an exposures files in {reduxdir}; not freezing exposures')
     exposures = None
 
-for tileid, lastnight, archivedate in tiles['TILEID','LASTNIGHT','ARCHIVEDATE']:
+for tileid, lastnight in archivetiles['TILEID','LASTNIGHT']:
+    log.info(f'-- Archiving {tileid} {lastnight}')
 
     #- Archive tile
-    tiledir = f'{reduxdir}/tiles/cumulative/{tileid}/{lastnight}'
-    archivedir = f'{reduxdir}/tiles/archive/{tileid}/{archivedate}'
+    tiledir = f'tiles/cumulative/{tileid}/{lastnight}'
+    archivedir = f'tiles/archive/{tileid}/{archivedate}'
     archivetile(tiledir, archivedir, args.dry_run)
 
     #- Remove write access from any input preproc and exposures
     if (exposures is not None) and (not args.only_tiles):
         ii = (exposures['TILEID'] == tileid)
-        for expnight, expid in exposures['NIGHT', 'EXPID'][ii]:
-            for prefix in ['preproc', 'frame']:
+        for prefix in ['preproc', 'frame']:
+            for expnight, expid in exposures['NIGHT', 'EXPID'][ii]:
                 tmpfile = findfile(prefix, expnight, expid, 'b0',
                                    specprod_dir=reduxdir)
-                path = os.path.dirname(tmpfile)
+                path = os.path.dirname(tmpfile).replace(reduxdir+'/', '')
                 err = freezedir(path, args.dry_run)
                 if err != 0:
                     log.error(f'problem removing write access from {path}')
+
+    i = np.where(tiles['TILEID'] == tileid)[0][0]
+    tiles['ARCHIVEDATE'][i] = archivedate
+    tiles['ZDONE'][i] = 'true'
+
+if not args.dry_run:
+    tiles.write(args.specstatus, overwrite=True)
+    log.info(f'Updated {args.specstatus} with new ZDONE and ARCHIVEDATE')
+    log.info('Remember to svn commit that file now')
 

@@ -146,8 +146,6 @@ def main():
         log.error('Specify --new or --qastatus QA but not both')
         sys.exit(1)
 
-    archivedate = datetime.datetime.now().strftime('%Y%m%d')
-
     if args.prod is None:
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
@@ -156,7 +154,6 @@ def main():
         args.qa_dir = args.prod
     log.info('prod    = {}'.format(args.prod))
     log.info('qa dir  = {}'.format(args.qa_dir))
-    log.info('archivedate = {}'.format(archivedate))
 
     if args.outfile is None :
         args.outfile = args.infile
@@ -185,7 +182,10 @@ def main():
         tiles_table["OVERRIDE"]=np.zeros(len(tiles_table),dtype=int)
 
     log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
-    selection=(tiles_table["ZDONE"]=="false")&(tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))&((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") | (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
+    selection = (tiles_table["ZDONE"]=="false")
+    selection &= (tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))
+    selection &= ((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") |
+                  (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
     if args.new :
         selection &= (tiles_table["QA"]=="none")
     if args.survey is not None :
@@ -259,11 +259,9 @@ def main():
                 print("skip: skip this one; just show the image and move on.")
                 print("unsure: mark this one as unsure.")
             elif res=="yes" :
-                tiles_table["ZDONE"][index]="true"
                 tiles_table["QA"][index]="good"
                 tiles_table["USER"][index]=args.user
                 tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
-                tiles_table["ARCHIVEDATE"][index] = archivedate
                 if software_answer is not None :
                     if software_answer is False :
                         tiles_table["OVERRIDE"][index]=1
