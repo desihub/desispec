@@ -123,8 +123,10 @@ else:
 
 if args.specstatus is None:
     if os.path.exists('./tiles-specstatus.ecsv'):
+        log.info('Using tiles-specstatus.ecsv in current directory')
         args.specstatus = os.path.abspath('./tiles-specstatus.ecsv')
     else:
+        log.info('Using default surveyops/ops/tiles-specstatus.ecsv')
         args.specstatus = os.path.expandvars(
             '$DESI_ROOT/survey/ops/surveyops/trunk/ops/tiles-specstatus.ecsv')
 
