@@ -98,7 +98,7 @@ parser.add_argument('--since', type=int,
         help='archive tiles observed this LASTNIGHT or after')
 parser.add_argument('-n', '--night', type=int,
         help='archive only tiles observed on this LASTNIGHT')
-parser.add_argument('-p', '--prod', type=int,
+parser.add_argument('-p', '--prod', type=str,
         help = 'Path to input reduction, e.g. '
                '/global/cfs/cdirs/desi/spectro/redux/daily, '
                'or simply prod version, like daily. '
