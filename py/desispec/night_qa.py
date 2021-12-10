@@ -676,6 +676,7 @@ def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
     tileids = np.unique(tileids)
     # AR gather all infos from the redrock*fits files
     fibers, zs, dchi2s = [], [], []
+    nfn = 0
     for tileid in tileids:
         fns = sorted(
             glob(
@@ -689,6 +690,7 @@ def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
                 )
             )
         )
+        nfn += len(fns)
         for fn in fns:
             fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
             rr = fitsio.read(fn, ext="REDSHIFTS", columns=["Z", "DELTACHI2"])
@@ -713,7 +715,7 @@ def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
     ):
         ax.scatter(fibers[sel], zs[sel], c=color, s=1, alpha=0.1, label="{} ({} fibers)".format(selname, sel.sum()))
     ax.grid()
-    ax.set_title("NIGHT = {} ({} fibers from {} redrock*fits files)".format(night, len(fibers), len(fns)))
+    ax.set_title("NIGHT = {} ({} fibers from {} redrock*fits files)".format(night, len(fibers), nfn))
     ax.set_xlabel("FIBER")
     ax.set_xlim(-100, 5100)
     ax.set_label("Z")
