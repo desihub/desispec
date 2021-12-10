@@ -366,7 +366,7 @@ for SPECTRO in {spectro_string}; do
         fi
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
-            cmd="srun -N 1 -n 1 -c {threads_per_node} desi_group_spectra --inframes $CFRAMES --outfile $spectra"
+            cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_group_spectra --inframes $CFRAMES --outfile $spectra"
             echo RUNNING $cmd &> $splog
             $cmd &>> $splog &
             sleep 0.5
@@ -391,7 +391,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $coadd) already exists, skipping coadd
     elif [ -f $spectra ]; then
         echo Coadding $(basename $spectra) into $(basename $coadd), see $colog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra {onetileopt} --nproc 16 -i $spectra -o $coadd"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_coadd_spectra {onetileopt} --nproc 16 -i $spectra -o $coadd"
         echo RUNNING $cmd &> $colog
         $cmd &>> $colog &
         sleep 0.5
@@ -486,7 +486,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
     elif [ -f $redrock ]; then
         echo Running QSO MgII afterburner, see $qsomgiilog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_mgii_afterburner --coadd $coadd --redrock $redrock --output $qsomgii --target_selection all --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_qso_mgii_afterburner --coadd $coadd --redrock $redrock --output $qsomgii --target_selection all --save_target all"
         echo RUNNING $cmd &> $qsomgiilog
         $cmd &>> $qsomgiilog &
         sleep 0.5
@@ -499,7 +499,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $qsoqn) already exists, skipping QSO QuasarNet afterburner
     elif [ -f $redrock ]; then
         echo Running QSO QuasarNet afterburner, see $qsoqnlog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_qn_afterburner --coadd $coadd --redrock $redrock --output $qsoqn --target_selection all --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_qso_qn_afterburner --coadd $coadd --redrock $redrock --output $qsoqn --target_selection all --save_target all"
         echo RUNNING $cmd &> $qsoqnlog
         $cmd &>> $qsoqnlog &
         sleep 0.5

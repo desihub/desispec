@@ -310,9 +310,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
-        ncores, runtime = ncameras, 10 # 20 * nspectro, 10 #ncameras, 5
+        ncores, runtime = ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
-        ncores, runtime = ncameras, 20 # 20 * nspectro, 20 #ncameras, 5
+        ncores, runtime = ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
         ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
     else:
@@ -553,7 +553,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         fx.write('echo Starting at $(date)\n')
 
-        fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
+        if jobdesc.lower() == 'arc':
+            fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
+        else:
+            fx.write("export OMP_NUM_THREADS=1\n")
         
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             if nightlybias:
@@ -561,7 +564,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             else:
                 fx.write('\n# Do steps at full MPI parallelism\n')
 
-            srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd}'
+            srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
             fx.write('echo Running {}\n'.format(srun))
             fx.write('{}\n'.format(srun))
         else:
@@ -582,7 +585,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 threads_per_task = max(int(tot_threads / ntasks), 1)
                 fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
                 fx.write('# This should quickly skip over the steps already done\n')
-                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} --cpu-bind=cores {cmd} '
+                #- fluxcalib multiprocessing parallelism needs --cpu-bind=none (or at least not "cores")
+                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} --cpu-bind=none {cmd} '
                 fx.write('if [ $? -eq 0 ]; then\n')
                 fx.write('  echo Running {}\n'.format(srun))
                 fx.write('  {}\n'.format(srun))

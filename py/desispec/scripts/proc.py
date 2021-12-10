@@ -2,7 +2,6 @@
 One stop shopping for processing a DESI exposure
 
 Examples at NERSC:
-export SLURM_CPU_BIND=cores
 
 # ARC: 18 min on 2 nodes
 time srun -N 2 -n 60 -C haswell -t 25:00 --qos realtime desi_proc --mpi -n 20191029 -e 22486
@@ -75,6 +74,7 @@ def main(args=None, comm=None):
     #     args = parse(args)
 
     log = get_logger()
+    start_time = time.time()
 
     start_mpi_connect = time.time()
     if comm is not None:
@@ -1035,8 +1035,6 @@ def main(args=None, comm=None):
 
     if rank == 0:
         stats = desiutil.timer.compute_stats(timers)
-        log.info('Timing summary statistics:\n' + json.dumps(stats, indent=2))
-
         if args.timingfile:
             if os.path.exists(args.timingfile):
                 with open(args.timingfile) as fx:
@@ -1053,6 +1051,17 @@ def main(args=None, comm=None):
             with open(tmpfile, 'w') as fx:
                 json.dump(stats, fx, indent=2)
             os.rename(tmpfile, args.timingfile)
+            log.info(f'Timing stats saved to {args.timingfile}')
+
+        log.info('Timing max duration per step [seconds]:')
+        for stepname, steptiming in stats.items():
+            tmax = steptiming['duration.max']
+            log.info(f'  {stepname:16s} {tmax:.2f}')
 
     if rank == 0:
-        log.info('All done at {}'.format(time.asctime()))
+        duration_seconds = time.time() - start_time
+        mm = int(duration_seconds) // 60
+        ss = int(duration_seconds - mm*60)
+
+        log.info('All done at {}; duration {}m{}s'.format(
+            time.asctime(), mm, ss))
