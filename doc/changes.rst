@@ -2,10 +2,43 @@
 desispec Change Log
 ===================
 
-0.47.2 (unreleased)
+0.48.1 (unreleased)
 -------------------
 
-* No changes yet
+* No changes yet.
+
+0.48.0 (2021-12-10)
+-------------------
+
+* Fix TSNR afterburner "unknown" entries (PR `#1495`_).
+* Tile QA skip n(x) comparison for backup program (PR `#1497`_).
+* assemble_fibermap robust to missing guider EXPTIME (PR `#1498`_).
+* update job dependencies to be afterok instead of afterany (PR `#1502`_).
+* Add desi_night_qa (PR `#1503`_, `#1522`_).
+* desi_tile_vi only show main dark/bright tiles by default (PR `#1505`_).
+* Add support for short QA flats in pipeline (PR `#1507`_, `#1517`_).
+* Revise size of KNL batch jobs for arc fits (PR `#1508`_, `#1521`_).
+* fix proctable entries with 0-length arrays (PR `#1509`_).
+* flag FIBER_X/Y==0 as FIBERSTATUS MISSING (PR `#1514`_).
+* Separate tile QA from tile archiving (PR `#1519`_).
+* Improve pipeline operations on KNL (PR `#1523`_).
+
+.. _`#1495`: https://github.com/desihub/desispec/pull/1495
+.. _`#1497`: https://github.com/desihub/desispec/pull/1497
+.. _`#1498`: https://github.com/desihub/desispec/pull/1498
+.. _`#1502`: https://github.com/desihub/desispec/pull/1502
+.. _`#1503`: https://github.com/desihub/desispec/pull/1503
+.. _`#1505`: https://github.com/desihub/desispec/pull/1505
+.. _`#1507`: https://github.com/desihub/desispec/pull/1507
+.. _`#1508`: https://github.com/desihub/desispec/pull/1508
+.. _`#1509`: https://github.com/desihub/desispec/pull/1509
+.. _`#1514`: https://github.com/desihub/desispec/pull/1514
+.. _`#1517`: https://github.com/desihub/desispec/pull/1517
+.. _`#1519`: https://github.com/desihub/desispec/pull/1519
+.. _`#1521`: https://github.com/desihub/desispec/pull/1521
+.. _`#1522`: https://github.com/desihub/desispec/pull/1522
+.. _`#1523`: https://github.com/desihub/desispec/pull/1523
+
 
 0.47.1 (2021-11-24)
 -------------------
