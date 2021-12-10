@@ -6,11 +6,12 @@ import traceback
 import subprocess
 from copy import deepcopy
 import json
+import glob
 
 import numpy as np
 import fitsio
 from astropy.io import fits
-import glob
+
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix
@@ -176,45 +177,44 @@ def main(args=None, comm=None):
     if args.obstype in ['ARC']:
         timer.start('psfnight')
         num_cmd = num_err = 0
-        if rank == 0:
-            for camera in args.cameras:
-                psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
-                if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
-                    psfs = list()
-                    for expid in args.expids:
-                        psffile = findfile('fitpsf', args.night, expid, camera)
-                        if os.path.exists(psffile):
-                            psfs.append( psffile )
-                        else:
-                            log.warning(f'Missing {psffile}')
-
-                    log.info("Number of PSF for night={} camera={} = {}/{}".format(
-                            args.night, camera, len(psfs), len(args.expids)))
-                    if len(psfs) >= 3:  # lets do it!
-                        log.info(f"Computing {camera} psfnight ...")
-                        dirname = os.path.dirname(psfnightfile)
-                        if not os.path.isdir(dirname):
-                            os.makedirs(dirname)
-                        num_cmd += 1
-
-                        #- generic try/except so that any failure doesn't leave
-                        #- MPI rank 0 hanging while others are waiting for it
-                        try:
-                            desispec.scripts.specex.mean_psf(psfs, psfnightfile)
-                        except:
-                            log.error('specex.meanpsf failed for {}'.format(os.path.basename(psfnightfile)))
-                            exc_type, exc_value, exc_traceback = sys.exc_info()
-                            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                            log.error(''.join(lines))
-                            sys.stdout.flush()
-
-                        if not os.path.exists(psfnightfile):
-                            log.error(f'Failed to create {psfnightfile}')
-                            num_err += 1
+        for camera in args.cameras[rank::size]:
+            psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
+            if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
+                psfs = list()
+                for expid in args.expids:
+                    psffile = findfile('fitpsf', args.night, expid, camera)
+                    if os.path.exists(psffile):
+                        psfs.append( psffile )
                     else:
-                        log.info(f"Fewer than 3 {camera} psfs were provided, can't compute psfnight. Exiting ...")
-                        num_cmd += 1
+                        log.warning(f'Missing {psffile}')
+
+                log.info("Number of PSF for night={} camera={} = {}/{}".format(
+                        args.night, camera, len(psfs), len(args.expids)))
+                if len(psfs) >= 3:  # lets do it!
+                    log.info(f"Rank {rank} computing {camera} psfnight ...")
+                    dirname = os.path.dirname(psfnightfile)
+                    if not os.path.isdir(dirname):
+                        os.makedirs(dirname)
+                    num_cmd += 1
+
+                    #- generic try/except so that any failure doesn't leave
+                    #- MPI rank 0 hanging while others are waiting for it
+                    try:
+                        desispec.scripts.specex.mean_psf(psfs, psfnightfile)
+                    except:
+                        log.error('Rank {} specex.meanpsf failed for {}'.format(rank, os.path.basename(psfnightfile)))
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                        log.error(''.join(lines))
+                        sys.stdout.flush()
+
+                    if not os.path.exists(psfnightfile):
+                        log.error(f'Rank {rank} failed to create {psfnightfile}')
                         num_err += 1
+                else:
+                    log.info(f"Fewer than 3 {camera} psfs were provided, can't compute psfnight. Exiting ...")
+                    num_cmd += 1
+                    num_err += 1
 
         timer.stop('psfnight')
 

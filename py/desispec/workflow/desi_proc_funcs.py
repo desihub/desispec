@@ -310,9 +310,9 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
-        ncores, runtime = 20 * nspectro, 5 #ncameras, 5
+        ncores, runtime = ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
-        ncores, runtime = 20 * nspectro, 20 #ncameras, 5
+        ncores, runtime = ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
         ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
     else:
@@ -410,7 +410,7 @@ def get_desi_proc_batch_file_pathname(night, exp, jobdesc, cameras, reduxdir=Non
     return os.path.join(path, name)
 
 
-def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybias=False, runtime=None, batch_opts=None,\
+def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=None, batch_opts=None,\
                                   timingfile=None, batchdir=None, jobname=None, cmdline=None, system_name=None):
     """
     Generate a SLURM batch script to be submitted to the slurm scheduler to run desi_proc.
@@ -428,7 +428,6 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
         queue: str. Queue to be used.
 
     Options:
-        nightlybias: bool. Generate nightly bias from N>>1 ZEROs
         runtime: str. Timeout wall clock time.
         batch_opts: str. Other options to give to the slurm batch scheduler (written into the script).
         timingfile: str. Specify the name of the timing file.
@@ -475,6 +474,14 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
         nexps = len(exp)
     ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
+
+    #- derive from cmdline or sys.argv whether this is a nightlybias job
+    nightlybias = False
+    if cmdline is not None:
+        if '--nightlybias' in cmdline:
+            nightlybias = True
+    elif '--nightlybias' in sys.argv:
+        nightlybias = True
 
     #- nightlybias jobs are memory limited, so throttle number of ranks
     if nightlybias:
@@ -550,7 +557,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
 
         fx.write('echo Starting at $(date)\n')
 
-        fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
+        if jobdesc.lower() == 'arc':
+            fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
+        else:
+            fx.write("export OMP_NUM_THREADS=1\n")
         
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             if nightlybias:
@@ -564,7 +574,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
         else:
             if jobdesc.lower() in ['science','prestdstar']:
                 fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd} --nofluxcalib'
+                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd} --nofluxcalib'
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
             if jobdesc.lower() in ['science', 'stdstarfit', 'poststdstar']:
@@ -579,7 +589,8 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, nightlybi
                 threads_per_task = max(int(tot_threads / ntasks), 1)
                 fx.write('\n# Use less MPI parallelism for fluxcalib MP parallelism\n')
                 fx.write('# This should quickly skip over the steps already done\n')
-                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} {cmd} '
+                #- fluxcalib multiprocessing parallelism needs --cpu-bind=none (or at least not "cores")
+                srun = f'srun -N {nodes} -n {ntasks} -c {threads_per_task} --cpu-bind=none {cmd} '
                 fx.write('if [ $? -eq 0 ]; then\n')
                 fx.write('  echo Running {}\n'.format(srun))
                 fx.write('  {}\n'.format(srun))

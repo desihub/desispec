@@ -74,6 +74,7 @@ def main(args=None, comm=None):
     #     args = parse(args)
 
     log = get_logger()
+    start_time = time.time()
 
     start_mpi_connect = time.time()
     if comm is not None:
@@ -147,7 +148,7 @@ def main(args=None, comm=None):
             #    jobdesc = 'science'
         scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,
                                                 jobdesc=jobdesc, queue=args.queue,
-                                                nightlybias=args.nightlybias, runtime=args.runtime,
+                                                runtime=args.runtime,
                                                 batch_opts=args.batch_opts, timingfile=args.timingfile,
                                                 system_name=args.system_name)
         err = 0
@@ -1034,8 +1035,6 @@ def main(args=None, comm=None):
 
     if rank == 0:
         stats = desiutil.timer.compute_stats(timers)
-        log.info('Timing summary statistics:\n' + json.dumps(stats, indent=2))
-
         if args.timingfile:
             if os.path.exists(args.timingfile):
                 with open(args.timingfile) as fx:
@@ -1052,6 +1051,17 @@ def main(args=None, comm=None):
             with open(tmpfile, 'w') as fx:
                 json.dump(stats, fx, indent=2)
             os.rename(tmpfile, args.timingfile)
+            log.info(f'Timing stats saved to {args.timingfile}')
+
+        log.info('Timing max duration per step [seconds]:')
+        for stepname, steptiming in stats.items():
+            tmax = steptiming['duration.max']
+            log.info(f'  {stepname:16s} {tmax:.2f}')
 
     if rank == 0:
-        log.info('All done at {}'.format(time.asctime()))
+        duration_seconds = time.time() - start_time
+        mm = int(duration_seconds) // 60
+        ss = int(duration_seconds - mm*60)
+
+        log.info('All done at {}; duration {}m{}s'.format(
+            time.asctime(), mm, ss))

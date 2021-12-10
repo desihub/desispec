@@ -185,7 +185,7 @@ def main(args, comm=None):
 
         com.extend(optarray)
 
-        log.debug("proc {} calling {}".format(rank, " ".join(com)))
+        log.info("proc {} calling {}".format(rank, " ".join(com)))
 
         retval = run_specex(com)
 
@@ -194,6 +194,8 @@ def main(args, comm=None):
             log.error("desi_psf_fit on process {} failed with return "
                 "value {} running {}".format(rank, retval, comstr))
             failcount += 1
+        else:
+            log.info(f"proc {rank} succeeded generating {outbundlefits}")
 
     if comm is not None:
         from mpi4py import MPI
