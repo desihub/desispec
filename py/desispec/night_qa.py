@@ -1085,7 +1085,7 @@ def write_html_collapse_script(html, classname):
 
 
 
-def write_nightqa_html(outfns, night, prod, css):
+def write_nightqa_html(outfns, night, prod, css, survey=None, nexp=None, ntile=None):
     """
     Write the nightqa-{NIGHT}.html page.
 
@@ -1094,6 +1094,9 @@ def write_nightqa_html(outfns, night, prod, css):
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         css: path to the nightqa.css file
+        survey (optional, defaults to None): considered survey (string)
+        nexp (optional, defaults to None): number of considered exposures (int)
+        ntile (optional, defaults to None): number of considered tiles (int)
     """
     # ADM html preamble.
     html = open(outfns["html"], "w")
@@ -1114,6 +1117,7 @@ def write_nightqa_html(outfns, night, prod, css):
     html.write("<body>\n")
     html.write("\n")
     #
+    html.write("\t<p>For {}, {} exposures from {} {} tiles are analyzed.</p>\n".format(night, nexp, ntile, survey))
     html.write("\t<p>Please click on each tab from top to bottom, and follow instructions.</p>\n")
 
     # AR night log

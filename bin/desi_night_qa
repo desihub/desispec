@@ -124,7 +124,9 @@ def main():
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
     os.system("cp {} {}".format(args.css, args.outdir))
-    write_nightqa_html(outfns, args.night, args.prod, os.path.basename(args.css))
+    write_nightqa_html(
+        outfns, args.night, args.prod, os.path.basename(args.css),
+        survey="main", nexp=expids.size, ntile=len(set(tileids)))
 
 if __name__ == "__main__":
     main()
