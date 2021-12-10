@@ -342,7 +342,11 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
             # adjust for workflow.schedule scheduler proc
             ncores = ((ncores - 1) // 20) * 20 + 1 
 
-    runtime *= config['timefactor']
+    #- Allow KNL jobs to be slower than Haswell,
+    #- except for ARC so that we don't have ridiculously long times
+    #- (Normal arc is still ~15 minutes, albeit with a tail)
+    if jobdesc not in ['ARC', 'TESTARC']:
+        runtime *= config['timefactor']
 
     return ncores, nodes, runtime
 
