@@ -625,11 +625,13 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
     # AR exps, to sort by increasing EXPID for that night
     expids, tileids = np.array(expids), np.array(tileids)
     ii = expids.argsort()
-    expids, tileids = expids[ii], tileids[ii]
-    ii = np.array([np.where(tileids == tileid)[0][0] for tileid in np.unique(tileids)])
-    expids, tileids = expids[ii], tileids[ii]
-    ii = expids.argsort()
-    expids, tileids = expids[ii], tileids[ii]
+    # AR protecting against the empty exposure list case
+    if len(expids) > 0:
+        expids, tileids = expids[ii], tileids[ii]
+        ii = np.array([np.where(tileids == tileid)[0][0] for tileid in np.unique(tileids)])
+        expids, tileids = expids[ii], tileids[ii]
+        ii = expids.argsort()
+        expids, tileids = expids[ii], tileids[ii]
     #
     fns = []
     for tileid in tileids:
