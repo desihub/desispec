@@ -625,11 +625,13 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
     # AR exps, to sort by increasing EXPID for that night
     expids, tileids = np.array(expids), np.array(tileids)
     ii = expids.argsort()
-    expids, tileids = expids[ii], tileids[ii]
-    ii = np.array([np.where(tileids == tileid)[0][0] for tileid in np.unique(tileids)])
-    expids, tileids = expids[ii], tileids[ii]
-    ii = expids.argsort()
-    expids, tileids = expids[ii], tileids[ii]
+    # AR protecting against the empty exposure list case
+    if len(expids) > 0:
+        expids, tileids = expids[ii], tileids[ii]
+        ii = np.array([np.where(tileids == tileid)[0][0] for tileid in np.unique(tileids)])
+        expids, tileids = expids[ii], tileids[ii]
+        ii = expids.argsort()
+        expids, tileids = expids[ii], tileids[ii]
     #
     fns = []
     for tileid in tileids:
@@ -674,6 +676,7 @@ def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
     tileids = np.unique(tileids)
     # AR gather all infos from the redrock*fits files
     fibers, zs, dchi2s = [], [], []
+    nfn = 0
     for tileid in tileids:
         fns = sorted(
             glob(
@@ -687,6 +690,7 @@ def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
                 )
             )
         )
+        nfn += len(fns)
         for fn in fns:
             fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
             rr = fitsio.read(fn, ext="REDSHIFTS", columns=["Z", "DELTACHI2"])
@@ -711,7 +715,7 @@ def create_skyzfiber_png(outpng, night, prod, survey="main", dchi2_threshold=9):
     ):
         ax.scatter(fibers[sel], zs[sel], c=color, s=1, alpha=0.1, label="{} ({} fibers)".format(selname, sel.sum()))
     ax.grid()
-    ax.set_title("NIGHT = {} ({} fibers from {} redrock*fits files)".format(night, len(fibers), len(fns)))
+    ax.set_title("NIGHT = {} ({} fibers from {} redrock*fits files)".format(night, len(fibers), nfn))
     ax.set_xlabel("FIBER")
     ax.set_xlim(-100, 5100)
     ax.set_label("Z")
@@ -859,6 +863,10 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         return faprgrm, mask, dtkey, xlim, ylim
     # AR plot
     #
+    # AR plotting only if some tiles
+    doplot = False
+    if ntiles["bright"] + ntiles["dark"] > 0:
+        doplot = True
     # AR color for each tracer
     colors = {
         "BGS_BRIGHT" : "purple",
@@ -875,108 +883,110 @@ def create_petalnz_pdf(outpdf, night, prod, survey="main", dchi2_threshold=25):
         fig = plt.figure(figsize=(40, 5))
         gs = gridspec.GridSpec(1, 3, wspace=0.5)
         title = "{} BRIGHT and {} DARK tiles from {}".format(ntiles["bright"], ntiles["dark"], night)
-        # AR fraction of ~VALID fibers, bright+dark together
-        ax = plt.subplot(gs[0])
-        ys = np.nan + np.zeros(len(petals))
-        for petal in petals:
-            npet, nvalid = 0, 0
-            for faprgrm in faprgrms:
-                npet += (ds[faprgrm]["PETAL_LOC"] == petal).sum()
-                nvalid += ((ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])).sum()
-            ys[petal] = nvalid / npet
-        ax.plot(petals, ys, "-o", color="k")
-        ax.set_title(title)
-        ax.set_xlabel("PETAL_LOC")
-        ax.set_ylabel("fraction of VALID_fibers")
-        ax.xaxis.set_major_locator(MultipleLocator(1))
-        ax.set_ylim(0.5, 1.0)
-        ax.grid()
-        # AR - fraction of ZOK fibers, per tracer (VALID fibers only)
-        ax = plt.subplot(gs[1])
-        for tracer in tracers:
-            faprgrm, mask, dtkey, _, _ = get_tracer_props(tracer)
-            istracer = ((ds[faprgrm][dtkey] & mask[tracer]) > 0) & (ds[faprgrm]["VALID"])
+        if doplot:
+            # AR fraction of ~VALID fibers, bright+dark together
+            ax = plt.subplot(gs[0])
             ys = np.nan + np.zeros(len(petals))
             for petal in petals:
-                ispetal = (istracer) & (ds[faprgrm]["PETAL_LOC"] == petal)
-                iszok = (ispetal) & (ds[faprgrm]["ZOK"])
-                ys[petal] = iszok.sum() / ispetal.sum()
-            ax.plot(petals, ys, "-o", color=colors[tracer], label=tracer)
-        ax.set_title(title)
-        ax.set_xlabel("PETAL_LOC")
-        ax.set_ylabel("fraction of DELTACHI2 >_{}\n(VALID fibers only)".format(dchi2_threshold))
-        ax.xaxis.set_major_locator(MultipleLocator(1))
-        ax.set_ylim(0.7, 1.0)
-        ax.grid()
-        ax.legend()
-        # AR - fraction of LYA candidates for QSOs
-        ax = plt.subplot(gs[2])
-        if "dark" in faprgrms:
-            faprgrm = "dark"
-            ys = np.nan + np.zeros(len(petals))
-            for petal in petals:
-                ispetal = (ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])
-                isqso = (ispetal) & ((ds[faprgrm][dtkey] & desi_mask["QSO"]) > 0)
-                islya = (isqso) & (ds[faprgrm]["LYA"])
-                ys[petal] = islya.sum() / isqso.sum()
-            ax.plot(petals, ys, "-o", color=colors["QSO"])
-        ax.set_title(title)
-        ax.set_xlabel("PETAL_LOC")
-        ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
-        ax.xaxis.set_major_locator(MultipleLocator(1))
-        ax.set_ylim(0, 1)
-        ax.grid()
+                npet, nvalid = 0, 0
+                for faprgrm in faprgrms:
+                    npet += (ds[faprgrm]["PETAL_LOC"] == petal).sum()
+                    nvalid += ((ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])).sum()
+                ys[petal] = nvalid / npet
+            ax.plot(petals, ys, "-o", color="k")
+            ax.set_title(title)
+            ax.set_xlabel("PETAL_LOC")
+            ax.set_ylabel("fraction of VALID_fibers")
+            ax.xaxis.set_major_locator(MultipleLocator(1))
+            ax.set_ylim(0.5, 1.0)
+            ax.grid()
+            # AR - fraction of ZOK fibers, per tracer (VALID fibers only)
+            ax = plt.subplot(gs[1])
+            for tracer in tracers:
+                faprgrm, mask, dtkey, _, _ = get_tracer_props(tracer)
+                istracer = ((ds[faprgrm][dtkey] & mask[tracer]) > 0) & (ds[faprgrm]["VALID"])
+                ys = np.nan + np.zeros(len(petals))
+                for petal in petals:
+                    ispetal = (istracer) & (ds[faprgrm]["PETAL_LOC"] == petal)
+                    iszok = (ispetal) & (ds[faprgrm]["ZOK"])
+                    ys[petal] = iszok.sum() / ispetal.sum()
+                ax.plot(petals, ys, "-o", color=colors[tracer], label=tracer)
+            ax.set_title(title)
+            ax.set_xlabel("PETAL_LOC")
+            ax.set_ylabel("fraction of DELTACHI2 >_{}\n(VALID fibers only)".format(dchi2_threshold))
+            ax.xaxis.set_major_locator(MultipleLocator(1))
+            ax.set_ylim(0.7, 1.0)
+            ax.grid()
+            ax.legend()
+            # AR - fraction of LYA candidates for QSOs
+            ax = plt.subplot(gs[2])
+            if "dark" in faprgrms:
+                faprgrm = "dark"
+                ys = np.nan + np.zeros(len(petals))
+                for petal in petals:
+                    ispetal = (ds[faprgrm]["PETAL_LOC"] == petal) & (ds[faprgrm]["VALID"])
+                    isqso = (ispetal) & ((ds[faprgrm][dtkey] & desi_mask["QSO"]) > 0)
+                    islya = (isqso) & (ds[faprgrm]["LYA"])
+                    ys[petal] = islya.sum() / isqso.sum()
+                ax.plot(petals, ys, "-o", color=colors["QSO"])
+            ax.set_title(title)
+            ax.set_xlabel("PETAL_LOC")
+            ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
+            ax.xaxis.set_major_locator(MultipleLocator(1))
+            ax.set_ylim(0, 1)
+            ax.grid()
         #
         pdf.savefig(fig, bbox_inches="tight")
         plt.close()
         # AR per-petal, per-tracer n(z)
-        for tracer in tracers:
-            faprgrm, mask, dtkey, xlim, ylim = get_tracer_props(tracer)
-            istracer = ((ds[faprgrm][dtkey] & mask[tracer]) > 0) & (ds[faprgrm]["VALID"])
-            istracer_zok = (istracer) & (ds[faprgrm]["ZOK"])
-            bins = np.arange(xlim[0], xlim[1] + 0.05, 0.05)
-            #
-            fig = plt.figure(figsize=(40, 5))
-            gs = gridspec.GridSpec(1, 10, wspace=0.3)
-            for petal in petals:
-                ax = plt.subplot(gs[petal])
-                _ = ax.hist(
-                    ds[faprgrm]["Z"][istracer_zok],
-                    bins=bins,
-                    density=True,
-                    histtype="stepfilled",
-                    alpha=0.5,
-                    color=colors[tracer],
-                    label="{} All petals".format(tracer),
-                )
-                _ = ax.hist(
-                    ds[faprgrm]["Z"][(istracer_zok) & (ds[faprgrm]["PETAL_LOC"] == petal)],
-                    bins=bins,
-                    density=True,
-                    histtype="step",
-                    alpha=1.0,
-                    color="k",
-                    label="{} PETAL_LOC = {}".format(tracer, petal),
-                )
-                ax.set_title("{} {} tiles from {}".format(ntiles[faprgrm], faprgrm.upper(), night))
-                ax.set_xlabel("Z")
-                if petal == 0:
-                    ax.set_ylabel("Normalized counts")
-                else:
-                    ax.set_yticklabels([])
-                ax.set_xlim(xlim)
-                ax.set_ylim(ylim)
-                ax.grid()
-                ax.set_axisbelow(True)
-                ax.legend(loc=1)
-                ax.text(
-                    0.97, 0.8,
-                    "DELTACHI2 > {}".format(dchi2_threshold),
-                    fontsize=10, fontweight="bold", color="k",
-                    ha="right", transform=ax.transAxes,
-                )
-            pdf.savefig(fig, bbox_inches="tight")
-            plt.close()
+        if doplot:
+            for tracer in tracers:
+                faprgrm, mask, dtkey, xlim, ylim = get_tracer_props(tracer)
+                istracer = ((ds[faprgrm][dtkey] & mask[tracer]) > 0) & (ds[faprgrm]["VALID"])
+                istracer_zok = (istracer) & (ds[faprgrm]["ZOK"])
+                bins = np.arange(xlim[0], xlim[1] + 0.05, 0.05)
+                #
+                fig = plt.figure(figsize=(40, 5))
+                gs = gridspec.GridSpec(1, 10, wspace=0.3)
+                for petal in petals:
+                    ax = plt.subplot(gs[petal])
+                    _ = ax.hist(
+                        ds[faprgrm]["Z"][istracer_zok],
+                        bins=bins,
+                        density=True,
+                        histtype="stepfilled",
+                        alpha=0.5,
+                        color=colors[tracer],
+                        label="{} All petals".format(tracer),
+                    )
+                    _ = ax.hist(
+                        ds[faprgrm]["Z"][(istracer_zok) & (ds[faprgrm]["PETAL_LOC"] == petal)],
+                        bins=bins,
+                        density=True,
+                        histtype="step",
+                        alpha=1.0,
+                        color="k",
+                        label="{} PETAL_LOC = {}".format(tracer, petal),
+                    )
+                    ax.set_title("{} {} tiles from {}".format(ntiles[faprgrm], faprgrm.upper(), night))
+                    ax.set_xlabel("Z")
+                    if petal == 0:
+                        ax.set_ylabel("Normalized counts")
+                    else:
+                        ax.set_yticklabels([])
+                    ax.set_xlim(xlim)
+                    ax.set_ylim(ylim)
+                    ax.grid()
+                    ax.set_axisbelow(True)
+                    ax.legend(loc=1)
+                    ax.text(
+                        0.97, 0.8,
+                        "DELTACHI2 > {}".format(dchi2_threshold),
+                        fontsize=10, fontweight="bold", color="k",
+                        ha="right", transform=ax.transAxes,
+                    )
+                pdf.savefig(fig, bbox_inches="tight")
+                plt.close()
 
 
 def path_full2web(fn):
@@ -1075,7 +1085,7 @@ def write_html_collapse_script(html, classname):
 
 
 
-def write_nightqa_html(outfns, night, prod, css):
+def write_nightqa_html(outfns, night, prod, css, survey=None, nexp=None, ntile=None):
     """
     Write the nightqa-{NIGHT}.html page.
 
@@ -1084,6 +1094,9 @@ def write_nightqa_html(outfns, night, prod, css):
         night: night (int)
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         css: path to the nightqa.css file
+        survey (optional, defaults to None): considered survey (string)
+        nexp (optional, defaults to None): number of considered exposures (int)
+        ntile (optional, defaults to None): number of considered tiles (int)
     """
     # ADM html preamble.
     html = open(outfns["html"], "w")
@@ -1104,6 +1117,7 @@ def write_nightqa_html(outfns, night, prod, css):
     html.write("<body>\n")
     html.write("\n")
     #
+    html.write("\t<p>For {}, {} exposures from {} {} tiles are analyzed.</p>\n".format(night, nexp, ntile, survey))
     html.write("\t<p>Please click on each tab from top to bottom, and follow instructions.</p>\n")
 
     # AR night log
