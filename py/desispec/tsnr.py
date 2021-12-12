@@ -295,7 +295,7 @@ class template_ensemble(object):
         self.smooth = smooth
 
         ##
-        smoothing = np.ceil(smooth / self.wdelta).astype(np.int)
+        smoothing = np.ceil(smooth / self.wdelta).astype(int)
 
         log.info('Applying {:.3f} AA smoothing ({:d} pixels)'.format(smooth, smoothing))
         dflux = flux.copy()
@@ -505,7 +505,7 @@ def fb_rdnoise(fibers, frame, tset):
                  units as OBSRDNA, e.g. ang per pix.
     '''
 
-    ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.float)
+    ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(float)
 
     xtrans = ccdsizes[0] / 2.
     ytrans = ccdsizes[1] / 2.
@@ -647,7 +647,7 @@ def gen_mask(frame, skymodel, hw=5.):
     """
     log = get_logger()
 
-    maskfactor = np.ones_like(frame.mask, dtype=np.float)
+    maskfactor = np.ones_like(frame.mask, dtype=float)
     maskfactor[frame.mask > 0] = 0.0
 
     # https://github.com/desihub/desispec/blob/294cfb66428aa8be3797fd046adbd0a2267c4409/py/desispec/sky.py#L1267
@@ -1081,7 +1081,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     if alpha_only:
         return {}, alpha
 
-    maskfactor = np.ones_like(frame.mask, dtype=np.float)
+    maskfactor = np.ones_like(frame.mask, dtype=float)
     maskfactor[frame.mask > 0] = 0.0
     maskfactor *= (frame.ivar > 0.0)
     tsnrs = {}

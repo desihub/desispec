@@ -207,7 +207,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
            and camera in ['b', 'r', 'z']:
             raise ValueError('Specify camera=b0,r1..z9, not camera=b/r/z + spectrograph')
 
-        if camera != '*' and re.match('[brz\*\?][0-9\*\?]', camera) is None:
+        if camera != '*' and re.match(r'[brz\*\?][0-9\*\?]', camera) is None:
             raise ValueError('Camera {} should be b0,r1..z9, or with ?* wildcards'.format(camera))
 
     actual_inputs = {

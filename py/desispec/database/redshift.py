@@ -400,7 +400,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
                     data[col][0:maxrows][bad] = -9999.0
     log.info("Integrity check complete on %s.", tn)
     if rowfilter is None:
-        good_rows = np.ones((maxrows,), dtype=np.bool)
+        good_rows = np.ones((maxrows,), dtype=bool)
     else:
         good_rows = rowfilter(data[0:maxrows])
     data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
@@ -502,7 +502,7 @@ def update_truth(filepath, hdu=2, chunksize=50000, skip=('SLOPES', 'EMLINES')):
                             "%s of %s.", nbad, col, filepath)
     log.info("Integrity check complete on %s.", tn)
     # if rowfilter is None:
-    #     good_rows = np.ones((maxrows,), dtype=np.bool)
+    #     good_rows = np.ones((maxrows,), dtype=bool)
     # else:
     #     good_rows = rowfilter(data[0:maxrows])
     # data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
@@ -663,7 +663,7 @@ def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
     else:
         for f in tile_files:
             # fiberassign-TILEID.fits
-            tileid = int(re.match('fiberassign\-(\d+)\.fits',
+            tileid = int(re.match(r'fiberassign\-(\d+)\.fits',
                          os.path.basename(f))[1])
             latest_tiles[tileid] = (0, f)
     log.info("Identified %d tile files for loading.", len(latest_tiles))

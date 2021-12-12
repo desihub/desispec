@@ -480,7 +480,7 @@ class Spectra(object):
         # Compute which targets / exposures are new
 
         nother = len(other.fibermap)
-        exists = np.zeros(nother, dtype=np.int)
+        exists = np.zeros(nother, dtype=int)
 
         indx_original = []
 
