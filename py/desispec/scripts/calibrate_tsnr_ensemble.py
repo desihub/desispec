@@ -205,7 +205,7 @@ def main(args):
     log.info("tracer = {}".format(tracer))
 
     if args.exclude is not None:
-        args.exclude = [np.int(x) for x in args.exclude.split(',')]
+        args.exclude = [int(x) for x in args.exclude.split(',')]
 
     slope_efftime,slope_tsnr2 = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot, exclude=args.exclude, use_sv1=args.sv1)
 
