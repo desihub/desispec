@@ -21,8 +21,8 @@ def get_parser():
                                                            "the exposure table, e.g. science,arc,flat,dark,zero, ...")
     parser.add_argument("-i", "--path-to-data", type=str, default=None, help="path to the raw input data")
     parser.add_argument("-o","--exp-table-path", type=str, default=None,  help="path to save exposure tables, without monthly subdirectory")
-    parser.add_argument("--orig-filetype", type=str, default=None, help="format type for original exposure tables")
-    parser.add_argument("--out-filetype", type=str, default=None, help="format type for output exposure tables")
+    parser.add_argument("--orig-filetype", type=str, default='csv', help="format type for original exposure tables")
+    parser.add_argument("--out-filetype", type=str, default='csv', help="format type for output exposure tables")
     parser.add_argument("--verbose", action="store_true", help="print verbose output")
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run, printing the changes that would be made and the final output table "+
