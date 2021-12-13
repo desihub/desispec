@@ -674,6 +674,36 @@ class TestIO(unittest.TestCase):
             self.assertTrue(data2.dtype.isnative, dtype+' is not native endian')
             self.assertTrue(np.all(data1 == data2))
 
+    def test_checkzip(self):
+        """Test desispec.io.util.checkzip"""
+        from ..io.util import checkgzip
+
+        #- create test files
+        fitsfile = os.path.join(self.testDir, 'abc.fits')
+        gzfile = os.path.join(self.testDir, 'xyz.fits.gz')
+        fx = open(fitsfile, 'w'); fx.close()
+        fx = open(gzfile, 'w'); fx.close()
+
+        #- non-gzip file exists
+        fn = checkgzip(fitsfile)
+        self.assertEqual(fn, fitsfile)
+
+        #- looking for .gz but finding non-gz
+        fn = checkgzip(fitsfile+'.gz')
+        self.assertEqual(fn, fitsfile)
+
+        #- gzip file exists
+        fn = checkgzip(gzfile)
+        self.assertEqual(fn, gzfile)
+
+        #- looking for non-gzip file but finding gzip file
+        fn = checkgzip(gzfile[0:-3])
+        self.assertEqual(fn, gzfile)
+
+        #- Don't find what isn't there
+        with self.assertRaises(FileNotFoundError):
+            checkgzip(os.path.join(self.testDir, 'nope.fits'))
+
     def test_findfile(self):
         """Test desispec.io.meta.findfile and desispec.io.download.filepath2url.
         """

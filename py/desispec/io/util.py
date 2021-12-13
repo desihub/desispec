@@ -15,6 +15,28 @@ from desiutil.log import get_logger
 
 from ..util import healpix_degrade_fixed
 
+def checkgzip(filename):
+    """
+    Check for existence of filename, with or without .gz extension
+
+    Args:
+        filename (str): filename to check for
+
+    Returns path of existing file without or without .gz,
+    or raises FileNotFoundError if neither exists
+    """
+    if os.path.exists(filename):
+        return filename
+
+    if filename.endswith('.gz'):
+        altfilename = filename[0:-3]
+    else:
+        altfilename = filename + '.gz'
+
+    if os.path.exists(altfilename):
+        return altfilename
+    else:
+        raise FileNotFoundError(f'Neither {filename} nor {altfilename}')
 
 def iterfiles(root, prefix, suffix=None):
     '''
