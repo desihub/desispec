@@ -18,7 +18,7 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                                orig_filetype='csv', out_filetype='csv', cameras='', bad_cameras='', badamps='',
                                verbose=False, no_specprod=False, dry_run=False):
     """
-    Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
+    Generates updated exposure tables for the nights requested. Requires exposure tables to exist on disk.
 
     Args:
         nights: str, int, or comma separated list. The night(s) to generate procesing tables for.
@@ -97,7 +97,7 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
         exptab_path = pathjoin(exp_table_path,month)
         orig_name = get_exposure_table_name(night, extension=orig_filetype)
         orig_pathname = pathjoin(exptab_path, orig_name)
-        temp_filetype = f"temp.{out_filetype}"
+        temp_filetype = f"updatetemp.{out_filetype}"
         temp_pathname = orig_pathname.replace(f".{orig_filetype}", f".{temp_filetype}")
         if not os.path.exists(orig_pathname):
             print(f'Night: {night} original table could not be found {orig_pathname}. Skipping this night.')
@@ -132,6 +132,7 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                 elif len(origloc) == 1:
                     origloc = origloc[0]
                 else:
+                    print(f"New exposure identified: {newtable[newloc]}")
                     continue
                 for col in mutual_colnames:
                     origval = origtable[col][origloc]
@@ -140,8 +141,9 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                             newtable['EFFTIME_ETC'][newloc] > 0. and 'aborted' in origval:
                         origorigval = origval.copy()
                         origval = origval[np.where(origval != 'aborted')]
-                        print(f"Identified outdated aborted exposure flag. Removing that. Original set: " + \
-                              f"{origorigval}, Updated origset: {origval}")
+                        print("Identified outdated aborted exposure flag. "
+                              + "Removing that. Original set: "
+                              + f"{origorigval}, Updated origset: {origval}")
                     elif col == 'COMMENTS' and 'EFFTIME_ETC' in newtable.colnames \
                             and newtable['EFFTIME_ETC'][newloc] > 0. and \
                             'EXPFLAG' in origtable.colnames \
@@ -149,18 +151,21 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                         origorigval = origval.copy()
                         valcheck = np.array([('For EXPTIME:' not in val) for val in origval])
                         origval = origval[valcheck]
-                        print(f"Identified outdated aborted exptime COMMENT. Removing that. Original set: " + \
-                              f"{origorigval}, Updated origset: {origval}")
+                        print(f"Identified outdated aborted exptime COMMENT."
+                              + "Removing that. Original set: "
+                              + f"{origorigval}, Updated origset: {origval}")
                     if np.isscalar(origtable[col][origloc]):
                         if origval != coldefs[col] and newval != origval:
-                            print(f"Difference detected for Night {night}, exp {expid}, " + \
-                                  f"col {col}: orig={origval}, new={newval}. Taking the original value. ")
+                            print(f"Difference detected for Night {night}, exp {expid}, "
+                                  + f"col {col}: orig={origval}, new={newval}. "
+                                  + "Taking the original value. ")
                             newtable[col][newloc] = origval
                     else:
                         if not np.array_equal(origval, coldefs[col]) and \
                            not np.array_equal(newval, origval):
-                            print(f"Difference detected for Night {night}, exp {expid}, " + \
-                                  f"col {col}: orig={origval}, new={newval}. Appending the two arrays.")
+                            print(f"Difference detected for Night {night}, exp {expid}, "
+                                  + f"col {col}: orig={origval}, new={newval}. "
+                                  + "Taking union of the two arrays.")
                             combined_val = newval[newval != '']
                             for val in origval:
                                 if val != '' and val not in newval:
@@ -177,7 +182,8 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                 t1.values_equal(t2).pprint_all()
             else:
                 ftime = time.strftime("%Y%m%d_%Hh%Mm")
-                replaced_pathname = orig_pathname.replace(f".{orig_filetype}", f".replaced-{ftime}.{orig_filetype}")
+                replaced_pathname = orig_pathname.replace(f".{orig_filetype}",
+                                                          f".replaced-{ftime}.{orig_filetype}")
                 print(f"Moving original file from {orig_pathname} to {replaced_pathname}")
                 os.rename(orig_pathname,replaced_pathname)
                 time.sleep(0.1)
