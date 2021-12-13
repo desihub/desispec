@@ -15,7 +15,7 @@ from desispec.scripts.exposuretable import create_exposure_tables
 
 
 def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp_table_path=None, obstypes=None, \
-                               orig_filetype='ecsv', out_filetype='ecsv', cameras='', bad_cameras='', badamps='',
+                               orig_filetype='csv', out_filetype='csv', cameras='', bad_cameras='', badamps='',
                                verbose=False, no_specprod=False, dry_run=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
@@ -142,8 +142,10 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                         origval = origval[np.where(origval != 'aborted')]
                         print(f"Identified outdated aborted exposure flag. Removing that. Original set: " + \
                               f"{origorigval}, Updated origset: {origval}")
-                    elif col == 'COMMENTS' and 'EFFTIME_ETC' in newtable.colnames and newtable['EFFTIME_ETC'][newloc] > 0. and \
-                            'EXPFLAG' in origtable.colnames and 'aborted' in origtable['EXPFLAG'][origloc]:
+                    elif col == 'COMMENTS' and 'EFFTIME_ETC' in newtable.colnames \
+                            and newtable['EFFTIME_ETC'][newloc] > 0. and \
+                            'EXPFLAG' in origtable.colnames \
+                            and 'aborted' in origtable['EXPFLAG'][origloc]:
                         origorigval = origval.copy()
                         valcheck = np.array([('For EXPTIME:' not in val) for val in origval])
                         origval = origval[valcheck]
@@ -181,7 +183,7 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None, exp
                 time.sleep(0.1)
                 out_pathname = orig_pathname.replace(f".{orig_filetype}", f".{out_filetype}")
                 write_table(newtable, out_pathname)
-                print(f"Updated file save to {out_pathname}. Original archived as {replaced_pathname}")
+                print(f"Updated file saved to {out_pathname}. Original archived as {replaced_pathname}")
 
             os.remove(temp_pathname)
             print(f"Removed the temporary file {temp_pathname}")
