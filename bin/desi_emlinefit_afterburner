@@ -112,8 +112,9 @@ def get_parse(log=get_logger()):
     # AR sanity check
     for emname in args.emnames.split(","):
         if emname not in allowed_emnames:
-            log.error("{} not in allowed args.emnames ({}); exiting".format(emname, ",".join(allowed_emnames)))
-            sys.exit(1)
+            msg = "{} not in allowed args.emnames ({})".format(emname, ",".join(allowed_emnames))
+            log.error(msg)
+            raise ValueError(msg)
     #
     for kwargs in args._get_kwargs():
         log.info(kwargs)

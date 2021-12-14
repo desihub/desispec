@@ -116,8 +116,9 @@ def emlines_gaussfit(
     """
     # AR allowed arguments
     if emname not in allowed_emnames:
-        log.error("{} not in {}; exiting".format(emname, allowed_emnames))
-        sys.exit(1)
+        msg = "{} not in {}".format(emname, allowed_emnames)
+        log.error(msg)
+        raise ValueError(msg)
     # AR Line models
     gauss_nocont = lambda ws, sigma, F0, w0 : F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
     # AR vacuum rest-frame wavelength(s)

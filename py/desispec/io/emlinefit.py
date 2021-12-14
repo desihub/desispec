@@ -59,24 +59,22 @@ def get_targetids(redrockfn, bitnames, log=get_logger()):
         if dtkey == "SV3_DESI_TARGET":
             from desitarget.sv3.sv3_targetmask import desi_mask as mask
     else:
-        log.info(
-            "found {}>1 matching keys: {}; 0 or 1 key expected; exiting".format(
-                len(dtkeys), dtkeys
-            )
+        msg = "found {}>1 matching keys: {}; 0 or 1 key expected".format(
+            len(dtkeys), dtkeys
         )
-        sys.exit(1)
+        log.error(msg)
+        raise RuntimeError(msg)
     allowed_bitnames = mask.names()
     # AR read + select the targetids
     d = fitsio.read(redrockfn, columns=["TARGETID", dtkey], ext="FIBERMAP")
     sel = np.zeros(len(d), dtype=bool)
     for bitname in bitnames.split(","):
         if bitname not in allowed_bitnames:
-            log.info(
-                "{} not in allowed bitnames for {} ({}; exiting)".format(
+            msg = "{} not in allowed bitnames for {} ({})".format(
                     bitname, dtkey, allowed_bitnames
-                )
             )
-            sys.exit(1)
+            log.error(msg)
+            raise ValueError(msg)
         sel |= (d[dtkey] & mask[bitname]) > 0
     targetids = d["TARGETID"][sel]
     log.info("selecting {} targets with {} in {}".format(sel.sum(), bitnames, dtkey))
@@ -122,12 +120,14 @@ def read_emlines_inputs(
     # AR sanity checks
     for fn in [redrockfn, coaddfn]:
         if not os.path.isfile(fn):
-            log.error("no {} file; exiting".format(fn))
-            sys.exit(1)
+            msg = "no {} file".format(fn)
+            log.error(msg)
+            raise FileNotFoundError(msg)
     keys = [key for key in rr_keys.split(",") if key in fm_keys.split(",")]
     if len(keys) > 0:
-        log.error("the following columns are both present in rr_keys and fm_keys: {}; exiting".format(",".join(keys)))
-        sys.exit(1)
+        msg = "the following columns are both present in rr_keys and fm_keys: {}".format(",".join(keys))
+        log.error(msg)
+        raise RuntimeError(msg)
     # AR grab TARGETID from the REDSHIFTS/ZBEST extension
     if "TARGETID" in fm_keys.split(","):
         log.info("removing TARGETID from fm_keys")
@@ -145,8 +145,9 @@ def read_emlines_inputs(
     elif "ZBEST" in extnames:
         rr_extname = "ZBEST"
     else:
-        log.error("{} has neither REDSHIFTS or ZBEST extension; exiting".format(redrockfn))
-        sys.exit(1)
+        msg = "{} has neither REDSHIFTS or ZBEST extension".format(redrockfn)
+        log.error(msg)
+        raise RuntimeError(msg)
     # AR rr_keys, fm_keys: restrict to existing ones
     rmv_rr_keys = [key for key in rr_keys.split(",") if key not in h[rr_extname].columns.names]
     if len(rmv_rr_keys) > 0:
@@ -162,8 +163,9 @@ def read_emlines_inputs(
     ii_rr = match_to(rr["TARGETID"], targetids)
     rr = rr[ii_rr]
     if len(rr) != nspec:
-        log.error("{} TARGETIDs are not in {}; exiting".format(nspec - len(rr), redrockfn))
-        sys.exit(1)
+        msg = "{} TARGETIDs are not in {}".format(nspec - len(rr), redrockfn)
+        log.error(msg)
+        raise RuntimeError(msg)
 
     # AR coadd: fibermap cut + sanity check
     # AR coadd: fibermap has 500 rows (even in pre-everest)
@@ -179,8 +181,9 @@ def read_emlines_inputs(
     # AR requested TARGETIDs
     ii_co = match_to(fm_tids, targetids)
     if ii_co.size != nspec:
-        log.error("{} TARGETIDs are not in {}; exiting".format(nspec - ii_co.size, coaddfn))
-        sys.exit(1)
+        msg = "{} TARGETIDs are not in {}".format(nspec - ii_co.size, coaddfn)
+        log.error(msg)
+        raise RuntimeError(msg)
     fm = fm[ii_co]
     if mwext_corr:
         ebvs = dust_ebv(fm["TARGET_RA"], fm["TARGET_DEC"])
