@@ -47,9 +47,9 @@ def get_parse(log=None):
     )
     parser.add_argument(
         "--bitnames",
-        help="comma-separated list of target bits to fit from the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET mask; if 'ALL', fits all fibers (default=ELG)",
+        help="comma-separated list of target bits to fit from the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET mask; if 'ALL', fits all fibers (default=ALL)",
         type=str,
-        default="ELG",
+        default="ALL",
         required=False
     )
     parser.add_argument(
