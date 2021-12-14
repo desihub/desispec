@@ -9,11 +9,18 @@ import numpy as np
 from desiutil.log import get_logger
 from argparse import ArgumentParser
 from desispec.io.emlinefit import (
-    allowed_emnames,
     get_targetids,
+    read_emlines_inputs,
+    write_emlines,
+    plot_emlines,
+)
+from desispec.emlinefit import (
+    allowed_emnames,
     get_rf_em_waves,
     get_emlines,
 )
+
+
 
 def get_parse(log=get_logger()):
     # AR some defaults
@@ -117,70 +124,82 @@ def main():
     start = time()
     log = get_logger()
     log.info("{:.1f}s\tstart\tTIMESTAMP={}".format(time() - start, Time.now().isot))
+
     # AR read arguments
     args = get_parse(log=log)
+
     # AR select TARGETIDs
     if args.bitnames == "ALL":
         targetids = None
         log.info("selecting all fibers, as args.bitnames=='ALL'")
     else:
         targetids = get_targetids(args.redrockfn, args.bitnames, log=log)
-    # AR fit the emission lines
-    emdict, rr_dtype, fm_dtype = get_emlines(
+
+    # AR read columns + spectra
+    rr, fm, waves, fluxes, ivars = read_emlines_inputs(
         args.redrockfn,
         args.coaddfn,
+        mwext_corr=True,
+        rv=args.rv,
         targetids=targetids,
+        rr_keys=args.rr_keys,
+        fm_keys=args.fm_keys,
+        log=log,
+    )
+    log.info("{:.1f}s\tread_done\tTIMESTAMP={}".format(time() - start, Time.now().isot))
+
+    # AR fit the emission lines
+    emdict = get_emlines(
+        rr["Z"],
+        waves,
+        fluxes,
+        ivars,
         emnames=args.emnames.split(","),
         rf_fit_hw=args.rf_fit_hw,
         min_rf_fit_hw=args.min_rf_fit_hw,
         rf_cont_w=args.rf_cont_w,
-        rv=args.rv,
-        outpdf=args.outpdf,
-        rr_keys=args.rr_keys,
-        fm_keys=args.fm_keys,
         log=log,
+    )
+    log.info("{:.1f}s\tfit_done\tTIMESTAMP={}".format(time() - start, Time.now().isot))
+
+    # AR write output fits
+    write_emlines(
+        args.outfn,
+        emdict,
+        rr=rr,
+        fm=fm,
+        redrockfn=args.redrockfn,
+        coaddfn=args.coaddfn,
+        rf_fit_hw=args.rf_fit_hw,
+        min_rf_fit_hw=args.min_rf_fit_hw,
+        rf_cont_w=args.rf_cont_w,
+        rv=args.rv,
+        log=log,
+    )
+    log.info("{:.1f}s\twrite_done\tTIMESTAMP={}".format(time() - start, Time.now().isot))
+
+    # AR plot?
+    if args.outpdf is not None:
+        # AR in read_emlines_inputs(), we force Z and TARGETID to be there
+        objtypes, spectypes, deltachi2s = None, None, None
+        if "OBJTYPE" in fm.dtype.names:
+            objtypes = fm["OBJTYPE"]
+        if "SPECTYPE" in rr.dtype.names:
+            spectypes = rr["SPECTYPE"]
+        if "DELTACHI2" in rr.dtype.names:
+            deltachi2s = rr["DELTACHI2"]
+        plot_emlines(
+            args.outpdf,
+            rr["Z"],
+            emdict,
+            emnames=args.emnames.split(","),
+            targetids=rr["TARGETID"],
+            objtypes=objtypes,
+            spectypes=spectypes,
+            deltachi2s=deltachi2s,
         )
-    # AR data model
-    dtype = rr_dtype + fm_dtype
-    for emname in args.emnames.split(","):
-        for key in list(emdict[emname].keys()):
-            if key not in ["wave", "fitdata", "fitivar", "model"]:
-                if key == "NDOF":
-                    dtype.append(("{}_{}".format(emname, key), ">i4"))
-                else:
-                    dtype.append(("{}_{}".format(emname, key), ">f4"))
-    # AR store in table
-    d = np.zeros(len(emdict["TARGETID"]), dtype=dtype)
-    # AR not using args.rr_keys, args_fm_keys, as keys not present
-    # AR in args.redrockfn would not be propagated
-    for key in [x[0] for x in rr_dtype] + [x[0] for x in fm_dtype]:
-        d[key] = emdict[key]
-    for emname in args.emnames.split(","):
-        for key in list(emdict[emname].keys()):
-            if key not in ["wave", "fitdata", "fitivar", "model"]:
-                d["{}_{}".format(emname, key)] = emdict[emname][key]
-    # AR write to fits
-    if os.path.isfile(args.outfn):
-        log.info("Removing existing {}".format(args.outfn))
-        os.remove(args.outfn)
-    fd = fitsio.FITS(args.outfn, "rw")
-    fd.write(d, extname="EMLINEFIT")
-    fd.close()
-    # AR adding infos in the EMLINEFIT header
-    # AR - (some of the) arguments
-    # AR - rest-frame wavelengths
-    fd = fitsio.FITS(args.outfn, "rw")
-    fd["EMLINEFIT"].write_key("RRFN", args.redrockfn)
-    fd["EMLINEFIT"].write_key("COADDFN", args.coaddfn)
-    fd["EMLINEFIT"].write_key("RFHW", args.rf_fit_hw)
-    fd["EMLINEFIT"].write_key("MINRFHW", args.min_rf_fit_hw)
-    fd["EMLINEFIT"].write_key("RFCONTW", args.rf_cont_w)
-    fd["EMLINEFIT"].write_key("RV", args.rv)
-    fd["EMLINEFIT"].write_key("EMNAMES", args.emnames)
-    for i_emname, emname in enumerate(args.emnames.split(",")):
-        fd["EMLINEFIT"].write_key("RFWAVE{:02d}".format(i_emname), ",".join(get_rf_em_waves(emname).astype(str)))
-    fd.close()
-    #
+        log.info("{:.1f}s\tplot_done\tTIMESTAMP={}".format(time() - start, Time.now().isot))
+
     log.info("{:.1f}s\tdone\tTIMESTAMP={}".format(time() - start, Time.now().isot))
 
 
