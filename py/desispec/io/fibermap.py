@@ -670,7 +670,50 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
             fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
             fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
-        else:
+        elif ( numiter>1
+               and f'DX_{numiter-2}' in pm.colnames
+               and f'FVC_X_{numiter-2}' in pm.colnames
+               and f'FVC_X_{numiter-1}' in pm.colnames
+               and f'CNT_X_{numiter-2}' in pm.colnames
+               and f'CNT_X_{numiter-1}' in pm.colnames
+               and f'REQ_X' in pm.colnames
+               and f'DY_{numiter-2}' in pm.colnames
+               and f'FVC_Y_{numiter-2}' in pm.colnames
+               and f'FVC_Y_{numiter-1}' in pm.colnames
+               and f'CNT_Y_{numiter-2}' in pm.colnames
+               and f'CNT_Y_{numiter-1}' in pm.colnames
+               and f'REQ_Y' in pm.colnames
+               ) :
+
+               log.warning("estimate FP offsets from FVC coordinates because missing info")
+
+               expflags = pm[f'FLAGS_EXP_{numiter-2}']
+               goodmatch = ((expflags & 4) == 4)
+               cntflags = pm[f'FLAGS_CNT_{numiter-2}']
+               spotmatched = ((cntflags & 1) == 1)
+               for coord in ["X","Y"] :
+                   good = goodmatch & spotmatched
+                   key1="FVC"
+                   key2="CNT"
+                   good &= ~np.isnan(pm[f"REQ_{coord}"]+pm[f"{key1}_{coord}_{numiter-2}"]+pm[f"{key2}_{coord}_{numiter-2}"]+pm[f"{key2}_{coord}_{numiter-1}"])
+                   # fit transfo : simple linear fit here (this is a large approximation but we cannot reinvent PM here)
+                   for loop in range(2) :
+                       c=np.polyfit(pm[f"{key1}_{coord}_{numiter-1}"][good],pm[f"REQ_{coord}"][good],1)
+                       pol=np.poly1d(c)
+                       adiff=np.abs(pol(pm[f"{key1}_{coord}_{numiter-1}"])-pm[f"REQ_{coord}"])
+                       rms=1.48*np.median(adiff[good])
+                       good &= adiff<1.
+                   # apply transfo to deltas
+                   # DX_N = REQ_X - FPA_X_N
+                   ddx=pol(pm[f"{key2}_{coord}_{numiter-1}"])-pol(pm[f"{key2}_{coord}_{numiter-2}"])
+                   ddx -= np.median(ddx[good])
+                   pm[f'D{coord}_{numiter-1}'] = pm[f'D{coord}_{numiter-2}'] - ddx
+                   pm[f'FPA_{coord}_{numiter-1}'] = pm[f"REQ_{coord}"] - pm[f'D{coord}_{numiter-1}']
+
+                   fibermap[f'FIBER_{coord}'] = pm[f'FPA_{coord}_{numiter-1}']
+                   fibermap[f'DELTA_{coord}'] = pm[f'D{coord}_{numiter-1}']
+
+        else :
             log.error('No FIBER_X/Y or DELTA_X/Y information from platemaker')
             fibermap['FIBER_X'] = np.zeros(len(pm))
             fibermap['FIBER_Y'] = np.zeros(len(pm))
