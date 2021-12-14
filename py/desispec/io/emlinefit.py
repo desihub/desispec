@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
 
-def get_targetids(redrockfn, bitnames, log=get_logger()):
+def get_targetids(redrockfn, bitnames, log=None):
     """
     Returns the TARGETIDs passing the bitnames for the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET mask.
 
@@ -39,11 +39,16 @@ def get_targetids(redrockfn, bitnames, log=get_logger()):
         Do not use desitarget.targets.main_cmx_or_sv, as we only read TARGETID and the mask column,
             so it is faster; but we use same philosophy.
     """
+    # AR log
+    if log is None:
+        log = get_logger()
+
     # AR get the *DESI_TARGET colum
     dtkeys = [
         key for key in fits.open(redrockfn)["FIBERMAP"].columns.names
             if key in ["CMX_TARGET", "SV1_DESI_TARGET", "SV2_DESI_TARGET", "SV3_DESI_TARGET"]
     ]
+
     # AR if no match, then assume it is a main catalog
     if len(dtkeys) == 0:
         dtkey = "DESI_TARGET"
@@ -65,6 +70,7 @@ def get_targetids(redrockfn, bitnames, log=get_logger()):
         log.error(msg)
         raise RuntimeError(msg)
     allowed_bitnames = mask.names()
+
     # AR read + select the targetids
     d = fitsio.read(redrockfn, columns=["TARGETID", dtkey], ext="FIBERMAP")
     sel = np.zeros(len(d), dtype=bool)
@@ -90,7 +96,7 @@ def read_emlines_inputs(
     targetids=None,
     rr_keys="TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2",
     fm_keys="TARGET_RA,TARGET_DEC,OBJTYPE",
-    log=get_logger(),
+    log=None,
 ):
     """
     Read the columns and spectra information (waves, fluxes, ivars) from the redrock and coadd files,
@@ -117,6 +123,10 @@ def read_emlines_inputs(
         We add TARGETID and Z to rr_keys if TARGETID not present in rr_keys nor in fm_keys.
         If keys in rr_keys or fm_keys are not present in the redrockfn, those will be ignored.
     """
+    # AR log
+    if log is None:
+        log = get_logger()
+
     # AR sanity checks
     for fn in [redrockfn, coaddfn]:
         if not os.path.isfile(fn):
@@ -235,7 +245,7 @@ def write_emlines(
     min_rf_fit_hw=None,
     rf_cont_w=None,
     rv=None,
-    log=get_logger(),
+    log=None,
 ):
     """
     Writes the emission line fitting to a file.
@@ -253,6 +263,10 @@ def write_emlines(
         rv (optional, defaults to None): value of R_V (float)
         log (optional, defaults to get_logger()): Logger object
     """
+    # AR log
+    if log is None:
+        log = get_logger()
+
     # AR fitted emission lines
     emnames = list(emdict.keys())
 

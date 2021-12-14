@@ -65,7 +65,7 @@ def emlines_gaussfit(
     max_flux=1e9,
     min_share=1e-1,
     max_share=1,
-    log=get_logger(),
+    log=None,
 ):
     """
     Fits the [OII] doublet line profile with 2 related Gaussians.
@@ -114,6 +114,9 @@ def emlines_gaussfit(
         For "OIII", fits the 4960 and 5007 lines with a fixed line ratio.
         For the Balmer lines, SHARE is not fitted and set to np.nan.
     """
+    # AR log
+    if log is None:
+        log = get_logger()
     # AR allowed arguments
     if emname not in allowed_emnames:
         msg = "{} not in {}".format(emname, allowed_emnames)
@@ -275,7 +278,7 @@ def get_emlines(
     rf_fit_hw=40,
     min_rf_fit_hw=20,
     rf_cont_w=200,
-    log=get_logger(),
+    log=None,
 ):
     """
     Get Gaussian-fitted emission line fluxes.
@@ -301,9 +304,12 @@ def get_emlines(
             EW, EW_IVAR: rest-frame equivalent width
             waves, fluxes, ivars, models: data used for fitting + fitted model
     """
+    # AR log
+    if log is None:
+        log = get_logger()
+
     # AR number of spectra
     nspec = len(zspecs)
-
 
     # AR assert consistency
     if (

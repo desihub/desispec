@@ -22,7 +22,9 @@ from desispec.emlinefit import (
 
 
 
-def get_parse(log=get_logger()):
+def get_parse(log=None):
+    if log is None:
+        log = get_logger()
     # AR some defaults
     default_emnames = "OII,HDELTA,HGAMMA,HBETA,OIII,HALPHA"
     default_rr_keys = "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"
