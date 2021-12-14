@@ -5,7 +5,7 @@ desispec.sky
 Utility functions to compute a sky model and subtract it.
 """
 
-
+import os
 import numpy as np
 from collections import OrderedDict
 
@@ -22,10 +22,12 @@ import sys
 from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberbitmasked_frame
 import scipy.ndimage
 from desispec.maskbits import specmask
+from desispec.preproc import get_amp_ids,parse_sec_keyword
+from desispec.io import findfile,read_xytraceset
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,\
                 adjust_wavelength=False,adjust_lsf=False,\
-                only_use_skyfibers_for_adjustments=True,pcacorr=None) :
+                only_use_skyfibers_for_adjustments=True,pcacorr=None,bkg_per_amp=True) :
     """Compute a sky model.
 
     Input flux are expected to be flatfielded!
@@ -50,6 +52,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments: interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
+        bkg_per_amp : fit a sky background per amplifier
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -57,13 +60,15 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
                                        model_ivar=model_ivar,add_variance=add_variance,\
                                        adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
-                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr)
+                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,bkg_per_amp=bkg_per_amp)
     else :
 
         if adjust_wavelength :
             raise RuntimeError("combination of wavelength calibration adjustment and angular variations not yet implemented")
         if adjust_lsf :
             raise RuntimeError("combination of lsf calibration adjustment and angular variations not yet implemented")
+        if bkg_per_amp :
+            raise RuntimeError("combination of bkg_per_amp and angular variations not yet implemented")
 
         if chromatic_variation_deg < 0 :
             skymodel = compute_non_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg)
@@ -156,7 +161,7 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
 
 
 def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,\
-                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None) :
+                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None, bkg_per_amp= True) :
 
     """Compute a sky model.
 
@@ -182,6 +187,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments : interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
+        bkg_per_amp : fit a sky background per amplifier
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -629,6 +635,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                                                  pcacorr.dlsf_mean,pcacorr.dlsf_eigenvectors,label="LSF")
                 cskyflux  += correction*dskydlsf
 
+
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
         modified_cskyivar = _model_variance(frame,cskyflux,cskyivar,skyfibers)
@@ -655,6 +662,81 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
 
+    if bkg_per_amp :
+        # fit a local background per amplifier and add it to the sky model
+        # get list of amplifier
+        amplifiers   = get_amp_ids(frame.meta)
+        # need to traceset to match fiber and wavelngth to location of amplifier in CCD
+        psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
+        if os.path.isfile(psf_filename) :
+            log.info("Using PSF {}".format(psf_filename))
+            tset = read_xytraceset(psf_filename)
+            tmp_fibers = np.arange(frame.nspec)
+            # compute x coordinate at central wavelength
+            xmid = tset.x_vs_wave(fiber=tmp_fibers,wavelength=(tset.wavemin+tset.wavemax)/2.)
+            bkg = np.zeros(frame.flux.shape)
+            for a,amp in enumerate(amplifiers) :
+                log.info("Compute bkg for amplifier {}".format(amp))
+                # coordinates of amplifiers in CCD
+                sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
+                ii  = (xmid>=sec[1].start)&(xmid<sec[1].stop)
+                amp_fibers =  tmp_fibers[ii]
+                log.info("amp {} amp_fibers = {}".format(amp,amp_fibers))
+                is_amp_skyfiber = np.in1d(amp_fibers,skyfibers)
+                amp_skyfibers   = amp_fibers[is_amp_skyfiber]
+                y    = tset.y_vs_wave(fiber=amp_fibers,wavelength=frame.wave)
+                in_amp  = (y>=sec[0].start)&(y<sec[0].stop)
+
+                amp_skyfibers_bkg = np.zeros((amp_skyfibers.size,frame.wave.size))
+                for f,fiber in enumerate(amp_skyfibers) :
+                    # median filter of sky residual to avoid effect of residual cosmics
+                    # or bad sky lines
+                    jj=in_amp[fiber-amp_fibers[0]]
+                    res = (modified_cskyivar[fiber,jj]>0)*(frame.flux[fiber,jj]-cskyflux[fiber,jj])
+                    #res = scipy.ndimage.filters.median_filter(res,50)
+                    # fit with low order polynomial
+                    #c   = np.polyfit(y[f,jj]/1000.,res,1)
+                    #res = np.poly1d(c)(y[f,jj]/1000.)
+                    # the background in that sky fiber is the polynomial value
+                    #amp_bkg[fiber,jj] = res
+                    amp_skyfibers_bkg[f,jj] = np.median(res)
+
+                    # extrapolate for median filtering
+                    kk=~in_amp[fiber-amp_fibers[0]]
+                    amp_skyfibers_bkg[f,kk]=np.interp(frame.wave[kk],frame.wave[jj],amp_skyfibers_bkg[f,jj])
+
+                amp_skyfibers_bkg = scipy.ndimage.filters.median_filter(amp_skyfibers_bkg,(10,1))
+
+                # reset out of amp values
+                amp_skyfibers_bkg *= in_amp[amp_skyfibers-amp_fibers[0]]
+
+                #for iw in range(frame.wave.size) :
+                #    jj=(amp_skyfibers_bkg[:,iw]!=0)
+                #    if np.sum(jj)>0 :
+                #        amp_skyfibers_bkg[jj,iw]=scipy.ndimage.filters.median_filter(amp_skyfibers_bkg[jj,iw],3)
+                #amp_skyfibers_bkg = scipy.ndimage.filters.median_filter(amp_skyfibers_bkg,(3,200))
+                amp_bkg = np.zeros(frame.flux.shape)
+                amp_bkg[amp_skyfibers]=amp_skyfibers_bkg
+
+                # now we interpolate across fibers
+                for iw in range(frame.wave.size) :
+                    amp_skyfibers_at_iw  = amp_fibers[amp_bkg[amp_fibers,iw]!=0]
+                    amp_fibers_at_iw     = amp_fibers[in_amp[:,iw]]
+                    #print(in_amp.shape)
+                    if np.sum(amp_skyfibers_at_iw)>0 and np.sum(amp_fibers_at_iw)>0 :
+                        #print("a",bkg[amp_fibers,iw][jj].shape)
+                        #print("b",amp_fibers[jj].shape)
+                        #print("c",amp_fibers[ii].shape)
+                        #print("d",bkg[amp_fibers][ii,iw].shape)
+                        amp_bkg[amp_fibers_at_iw,iw]=np.interp(amp_fibers_at_iw,amp_skyfibers_at_iw,amp_bkg[amp_skyfibers_at_iw,iw])
+                bkg += amp_bkg
+
+            import fitsio
+            fitsio.write("bkg.fits",bkg,clobber=True)
+            print("wrote bkg.fits")
+            sys.exit(12)
+        else :
+            log.warning("No PSF file {}. Cannot fit a background level per amplifier".format(psf_filename))
 
     mask = (modified_cskyivar==0).astype(np.uint32)
 
