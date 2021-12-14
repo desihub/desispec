@@ -16,9 +16,6 @@ from desiutil.dust import ext_odonnell
 from desiutil.dust import ebv as dust_ebv
 from desiutil.log import get_logger
 from desispec.emlinefit import get_rf_em_waves
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.pyplot as plt
-from matplotlib import gridspec
 
 
 def get_targetids(redrock, bitnames, log=None):
@@ -370,6 +367,11 @@ def plot_emlines(
         Each spectra will be one row of plot, each emission line corresponds to a column.
         If rowsort_byz=False, then the spectra will be displayed by order of appearance.
     """
+    # AR plot imports
+    from matplotlib.backends.backend_pdf import PdfPages
+    import matplotlib.pyplot as plt
+    from matplotlib import gridspec
+
     # AR emnames present in emdict
     emnames = [emname for emname in emnames if emname in emdict]
 
