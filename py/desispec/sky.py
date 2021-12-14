@@ -681,7 +681,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
                 ii  = (xmid>=sec[1].start)&(xmid<sec[1].stop)
                 amp_fibers =  tmp_fibers[ii]
-                log.info("amp {} amp_fibers = {}".format(amp,amp_fibers))
+                #log.info("amp {} amp_fibers = {}".format(amp,amp_fibers))
                 is_amp_skyfiber = np.in1d(amp_fibers,skyfibers)
                 amp_skyfibers   = amp_fibers[is_amp_skyfiber]
                 y    = tset.y_vs_wave(fiber=amp_fibers,wavelength=frame.wave)
@@ -689,16 +689,22 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
                 amp_skyfibers_bkg = np.zeros((amp_skyfibers.size,frame.wave.size))
                 for f,fiber in enumerate(amp_skyfibers) :
+
+                    if np.sum(modified_cskyivar[fiber])==0 : continue
+                    scale = np.sum(modified_cskyivar[fiber]*frame.flux[fiber]*cskyflux[fiber])/np.sum(modified_cskyivar[fiber]*cskyflux[fiber]**2)
+
                     # median filter of sky residual to avoid effect of residual cosmics
                     # or bad sky lines
                     jj=in_amp[fiber-amp_fibers[0]]
-                    res = (modified_cskyivar[fiber,jj]>0)*(frame.flux[fiber,jj]-cskyflux[fiber,jj])
-                    #res = scipy.ndimage.filters.median_filter(res,50)
+                    # fit a normalization factor
+
+                    res = (modified_cskyivar[fiber,jj]>0)*(frame.flux[fiber,jj]-scale*cskyflux[fiber,jj])
+                    res = scipy.ndimage.filters.median_filter(res,50)
                     # fit with low order polynomial
-                    #c   = np.polyfit(y[f,jj]/1000.,res,1)
-                    #res = np.poly1d(c)(y[f,jj]/1000.)
+                    c   = np.polyfit(y[f,jj]/1000.,res,1)
+                    res = np.poly1d(c)(y[f,jj]/1000.)
                     # the background in that sky fiber is the polynomial value
-                    #amp_bkg[fiber,jj] = res
+                    amp_skyfibers_bkg[f,jj] = res
                     amp_skyfibers_bkg[f,jj] = np.median(res)
 
                     # extrapolate for median filtering
@@ -706,6 +712,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                     amp_skyfibers_bkg[f,kk]=np.interp(frame.wave[kk],frame.wave[jj],amp_skyfibers_bkg[f,jj])
 
                 amp_skyfibers_bkg = scipy.ndimage.filters.median_filter(amp_skyfibers_bkg,(10,1))
+
+                #amp_skyfibers_bkg = 100*(a+1) # debug
 
                 # reset out of amp values
                 amp_skyfibers_bkg *= in_amp[amp_skyfibers-amp_fibers[0]]
@@ -729,12 +737,21 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                         #print("c",amp_fibers[ii].shape)
                         #print("d",bkg[amp_fibers][ii,iw].shape)
                         amp_bkg[amp_fibers_at_iw,iw]=np.interp(amp_fibers_at_iw,amp_skyfibers_at_iw,amp_bkg[amp_skyfibers_at_iw,iw])
+                # fill possible gaps
+                # happens on edge of CCD because of curved wavelength solution
+                # and limited number of sky fibers
+                has_gap = np.sum((amp_bkg[amp_fibers]==0)&(in_amp),axis=1)>0
+                for fiber in amp_fibers[has_gap] :
+                    ii=(amp_bkg[fiber]==0)&(in_amp[fiber-amp_fibers[0]])
+                    jj=(amp_bkg[fiber]!=0)&(in_amp[fiber-amp_fibers[0]])
+                    amp_bkg[fiber,ii]=np.interp(frame.wave[ii],frame.wave[jj],amp_bkg[fiber,jj])
                 bkg += amp_bkg
 
-            import fitsio
-            fitsio.write("bkg.fits",bkg,clobber=True)
-            print("wrote bkg.fits")
-            sys.exit(12)
+            cskyflux += bkg
+            #import fitsio
+            #fitsio.write("bkg.fits",bkg,clobber=True)
+            #print("wrote bkg.fits")
+            #sys.exit(12)
         else :
             log.warning("No PSF file {}. Cannot fit a background level per amplifier".format(psf_filename))
 
