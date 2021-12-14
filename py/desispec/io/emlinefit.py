@@ -21,12 +21,12 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
 
-def get_targetids(redrockfn, bitnames, log=None):
+def get_targetids(redrock, bitnames, log=None):
     """
     Returns the TARGETIDs passing the bitnames for the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET mask.
 
     Args:
-        redrockfn: full path to a redrock/zbest file
+        redrock: full path to a redrock/zbest file
         bitnames: comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
         log (optional, defaults to get_logger()): Logger object
 
@@ -45,7 +45,7 @@ def get_targetids(redrockfn, bitnames, log=None):
 
     # AR get the *DESI_TARGET colum
     dtkeys = [
-        key for key in fits.open(redrockfn)["FIBERMAP"].columns.names
+        key for key in fits.open(redrock)["FIBERMAP"].columns.names
             if key in ["CMX_TARGET", "SV1_DESI_TARGET", "SV2_DESI_TARGET", "SV3_DESI_TARGET"]
     ]
 
@@ -72,7 +72,7 @@ def get_targetids(redrockfn, bitnames, log=None):
     allowed_bitnames = mask.names()
 
     # AR read + select the targetids
-    d = fitsio.read(redrockfn, columns=["TARGETID", dtkey], ext="FIBERMAP")
+    d = fitsio.read(redrock, columns=["TARGETID", dtkey], ext="FIBERMAP")
     sel = np.zeros(len(d), dtype=bool)
     for bitname in bitnames.split(","):
         if bitname not in allowed_bitnames:
@@ -89,8 +89,8 @@ def get_targetids(redrockfn, bitnames, log=None):
 
 
 def read_emlines_inputs(
-    redrockfn,
-    coaddfn,
+    redrock,
+    coadd,
     mwext_corr=True,
     rv=3.1,
     targetids=None,
@@ -103,8 +103,8 @@ def read_emlines_inputs(
     which will go as input to get_emlines().
 
     Args:
-        redrockfn: full path to a redrock/zbest file
-        coaddfn: full path to a coadd file (everest-format)
+        redrock: full path to a redrock/zbest file
+        coadd: full path to a coadd file (everest-format)
         mwext_corr (optional, defaults to True): correct flux for foreground MW extinction? (boolean)
         rv (optional, defaults to 3.1): value of R_V, used if mwext_corr=True (float)
         targetids (optional, defaults to None): list of TARGETIDs to restrict to (list or numpy array)
@@ -121,14 +121,14 @@ def read_emlines_inputs(
 
     Notes:
         We add TARGETID and Z to rr_keys if TARGETID not present in rr_keys nor in fm_keys.
-        If keys in rr_keys or fm_keys are not present in the redrockfn, those will be ignored.
+        If keys in rr_keys or fm_keys are not present in the redrock, those will be ignored.
     """
     # AR log
     if log is None:
         log = get_logger()
 
     # AR sanity checks
-    for fn in [redrockfn, coaddfn]:
+    for fn in [redrock, coadd]:
         if not os.path.isfile(fn):
             msg = "no {} file".format(fn)
             log.error(msg)
@@ -148,14 +148,14 @@ def read_emlines_inputs(
             rr_keys = "{},{}".format(key, rr_keys)
 
     # AR redrock: extension name + columns
-    h = fits.open(redrockfn)
+    h = fits.open(redrock)
     extnames = [h[i].header["EXTNAME"] for i in range(1, len(h))]
     if "REDSHIFTS" in extnames:
         rr_extname = "REDSHIFTS"
     elif "ZBEST" in extnames:
         rr_extname = "ZBEST"
     else:
-        msg = "{} has neither REDSHIFTS or ZBEST extension".format(redrockfn)
+        msg = "{} has neither REDSHIFTS or ZBEST extension".format(redrock)
         log.error(msg)
         raise RuntimeError(msg)
     # AR rr_keys, fm_keys: restrict to existing ones
@@ -164,7 +164,7 @@ def read_emlines_inputs(
         log.info("{} removed from rr_keys, as not present in {}".format(",".join(rmv_rr_keys), rr_extname))
     rr_keys = ",".join([key for key in rr_keys.split(",") if key not in rmv_rr_keys])
     # AR redrock: reading
-    rr = fitsio.read(redrockfn, ext=rr_extname, columns=rr_keys.split(","))
+    rr = fitsio.read(redrock, ext=rr_extname, columns=rr_keys.split(","))
     # AR redrock: cutting on TARGETID if requested
     if targetids is None:
         targetids = rr["TARGETID"]
@@ -173,25 +173,25 @@ def read_emlines_inputs(
     ii_rr = match_to(rr["TARGETID"], targetids)
     rr = rr[ii_rr]
     if len(rr) != nspec:
-        msg = "{} TARGETIDs are not in {}".format(nspec - len(rr), redrockfn)
+        msg = "{} TARGETIDs are not in {}".format(nspec - len(rr), redrock)
         log.error(msg)
         raise RuntimeError(msg)
 
     # AR coadd: fibermap cut + sanity check
     # AR coadd: fibermap has 500 rows (even in pre-everest)
-    h = fits.open(coaddfn)
+    h = fits.open(coadd)
     # AR coadd: fibermap columns
     rmv_fm_keys = [key for key in fm_keys.split(",") if key not in h["FIBERMAP"].columns.names]
     if len(rmv_fm_keys) > 0:
         log.info("{} removed from fm_keys, as not present in FIBERMAP".format(",".join(rmv_fm_keys)))
     fm_keys = ",".join([key for key in fm_keys.split(",") if key not in rmv_fm_keys])
     # AR coadd: fibermap read (and TARGETID separately)
-    fm = fitsio.read(coaddfn, ext="FIBERMAP", columns=fm_keys.split(","))
-    fm_tids = fitsio.read(coaddfn, ext="FIBERMAP", columns=["TARGETID"])["TARGETID"]
+    fm = fitsio.read(coadd, ext="FIBERMAP", columns=fm_keys.split(","))
+    fm_tids = fitsio.read(coadd, ext="FIBERMAP", columns=["TARGETID"])["TARGETID"]
     # AR requested TARGETIDs
     ii_co = match_to(fm_tids, targetids)
     if ii_co.size != nspec:
-        msg = "{} TARGETIDs are not in {}".format(nspec - ii_co.size, coaddfn)
+        msg = "{} TARGETIDs are not in {}".format(nspec - ii_co.size, coadd)
         log.error(msg)
         raise RuntimeError(msg)
     fm = fm[ii_co]
@@ -235,12 +235,12 @@ def read_emlines_inputs(
 
 
 def write_emlines(
-    outfn,
+    output,
     emdict,
     rr=None,
     fm=None,
-    redrockfn=None,
-    coaddfn=None,
+    redrock=None,
+    coadd=None,
     rf_fit_hw=None,
     min_rf_fit_hw=None,
     rf_cont_w=None,
@@ -251,12 +251,12 @@ def write_emlines(
     Writes the emission line fitting to a file.
 
     Args:
-        outfn: output fits file (string)
+        output: output fits file (string)
         emdict: dictionary output by get_emlines()
         rr (optional, defaults to None): redrock REDSHIFTS/ZBEST extension
         fm (optional, defaults to None): redrock FIBERMAP extension
-        redrockfn (optional, defaults to None): used redrock/zbest file
-        coaddfn (optional, defaults to None): used coadd file (everest-format)
+        redrock (optional, defaults to None): used redrock/zbest file
+        coadd (optional, defaults to None): used coadd file (everest-format)
         rf_fit_hw (optional, defaults to None): *rest-frame* wavelength width (in A) used for fitting on each side of the line (float)
         min_rf_fit_hw (optional, defaults to None): minimum requested *rest-frame* width (in A) on each side of the line to consider the fitting (float)
         rf_cont_w (optional, defaults to None): *rest-frame* wavelength extent (in A) to fit the continuum (float)
@@ -303,10 +303,10 @@ def write_emlines(
 
     # AR header
     hdr = fitsio.FITSHDR()
-    if redrockfn is not None:
-        hdr["RRFN"] = redrockfn
-    if coaddfn is not None:
-        hdr["COADDFN"] = coaddfn
+    if redrock is not None:
+        hdr["RRFN"] = redrock
+    if coadd is not None:
+        hdr["COADDFN"] = coadd
     if rf_fit_hw is not None:
         hdr["RFHW"] = rf_fit_hw
     if min_rf_fit_hw is not None:
@@ -320,10 +320,10 @@ def write_emlines(
         hdr["RFWAVE{:02d}".format(i_emname)] = ",".join(get_rf_em_waves(emname).astype(str))
 
     # AR write to fits
-    if os.path.isfile(outfn):
-        log.info("Removing existing {}".format(outfn))
-        os.remove(outfn)
-    fd = fitsio.FITS(outfn, "rw")
+    if os.path.isfile(output):
+        log.info("Removing existing {}".format(output))
+        os.remove(output)
+    fd = fitsio.FITS(output, "rw")
     fd.write(d, extname="EMLINEFIT", header=hdr)
     fd.close()
 

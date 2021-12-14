@@ -32,14 +32,14 @@ def get_parse(log=None):
     #
     parser = ArgumentParser(description="Simple emission line fitter; primarily designed for ELGs.")
     parser.add_argument(
-        "--redrockfn",
+        "--redrock",
         help="full path to a redrock/zbest file (default=None)",
         type=str,
         default=None,
         required=True,
     )
     parser.add_argument(
-        "--coaddfn",
+        "--coadd",
         help="full path to a coadd file (everest-formatted) (default=None)",
         type=str,
         default=None,
@@ -53,7 +53,7 @@ def get_parse(log=None):
         required=False
     )
     parser.add_argument(
-        "--outfn",
+        "--output",
         help="full path to output fits file (default=None)",
         type=str,
         default=None,
@@ -136,12 +136,12 @@ def main():
         targetids = None
         log.info("selecting all fibers, as args.bitnames=='ALL'")
     else:
-        targetids = get_targetids(args.redrockfn, args.bitnames, log=log)
+        targetids = get_targetids(args.redrock, args.bitnames, log=log)
 
     # AR read columns + spectra
     rr, fm, waves, fluxes, ivars = read_emlines_inputs(
-        args.redrockfn,
-        args.coaddfn,
+        args.redrock,
+        args.coadd,
         mwext_corr=True,
         rv=args.rv,
         targetids=targetids,
@@ -167,12 +167,12 @@ def main():
 
     # AR write output fits
     write_emlines(
-        args.outfn,
+        args.output,
         emdict,
         rr=rr,
         fm=fm,
-        redrockfn=args.redrockfn,
-        coaddfn=args.coaddfn,
+        redrock=args.redrock,
+        coadd=args.coadd,
         rf_fit_hw=args.rf_fit_hw,
         min_rf_fit_hw=args.min_rf_fit_hw,
         rf_cont_w=args.rf_cont_w,
