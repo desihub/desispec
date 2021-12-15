@@ -17,7 +17,6 @@ from desispec.emlinefit import (
 )
 
 
-
 def get_parse(log=None):
     if log is None:
         log = get_logger()

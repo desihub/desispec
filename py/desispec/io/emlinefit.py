@@ -61,7 +61,6 @@ def get_targetids(d, bitnames, log=None):
     return targetids
 
 
-
 def read_emlines_inputs(
     redrock,
     coadd,
@@ -250,7 +249,6 @@ def read_emlines_inputs(
     return rr, fm, waves, fluxes, ivars
 
 
-
 def write_emlines(
     output,
     emdict,
@@ -343,7 +341,6 @@ def write_emlines(
     fd = fitsio.FITS(output, "rw")
     fd.write(d, extname="EMLINEFIT", header=hdr)
     fd.close()
-
 
 
 def plot_emlines(

@@ -13,7 +13,6 @@ from desiutil.log import get_logger
 allowed_emnames = ["OII", "HDELTA", "HGAMMA", "HBETA", "OIII", "HALPHA"]
 
 
-
 def get_rf_em_waves(emname):
     """
     Returns the rest-frame, vacuum, wavelengths.
@@ -40,7 +39,6 @@ def get_rf_em_waves(emname):
     if emname == "HDELTA":
         rf_em_waves = np.array([4102.892])
     return rf_em_waves
-
 
 
 def emlines_gaussfit(
@@ -119,7 +117,7 @@ def emlines_gaussfit(
         log.error(msg)
         raise ValueError(msg)
     # AR Line models
-    gauss_nocont = lambda ws, sigma, F0, w0 : F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
+    gauss_nocont = lambda ws, sigma, F0, w0 :F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
     # AR vacuum rest-frame wavelength(s)
     rf_em_waves = get_rf_em_waves(emname)
     if emname == "OII":
@@ -189,7 +187,7 @@ def emlines_gaussfit(
         # AR fitting a doublet with line ratio in the fitting
         # AR sh = f3729 / (f3727 + f3729)
         if emname == "OII":
-            myfunc = lambda ws, sigma, F0, sh : emdict["CONT"] + gauss_nocont(ws, sigma, (1-sh) * F0, obs_em_waves[0]) + gauss_nocont(ws, sigma, sh * F0, obs_em_waves[1])
+            myfunc = lambda ws, sigma, F0, sh: emdict["CONT"] + gauss_nocont(ws, sigma, (1-sh) * F0, obs_em_waves[0]) + gauss_nocont(ws, sigma, sh * F0, obs_em_waves[1])
             p0 = np.array([p0_sigma, p0_flux, p0_share])
             bounds = ((min_sigma, min_flux, min_share), (max_sigma, max_flux, max_share))
         # AR OIII
@@ -206,7 +204,7 @@ def emlines_gaussfit(
         # AR Balmer lines
         # AR fitting emission line only (no absorption)
         if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
-            myfunc = lambda ws, sigma, F0 : emdict["CONT"] + gauss_nocont(ws, sigma, F0, obs_em_waves[0])
+            myfunc = lambda ws, sigma, F0: emdict["CONT"] + gauss_nocont(ws, sigma, F0, obs_em_waves[0])
             p0 = np.array([p0_sigma, p0_flux])
             bounds = ((min_sigma, min_flux), (max_sigma, max_flux))
         # AR flux at observed wavelength(s)
@@ -218,11 +216,11 @@ def emlines_gaussfit(
                 myfunc,
                 waves[keep_line],
                 fluxes[keep_line],
-                p0 = p0,
-                sigma = 1. / np.sqrt(ivars[keep_line]),
-                maxfev = 10000000,
-                gtol = 1.49012e-8,
-                bounds = bounds,
+                p0=p0,
+                sigma=1. / np.sqrt(ivars[keep_line]),
+                maxfev=10000000,
+                gtol=1.49012e-8,
+                bounds=bounds,
             )
             # AR fit succeeded?
             # AR - pcov.__class__ criterion => dates from JC, not sure how relevant.. keeping it
@@ -262,7 +260,6 @@ def emlines_gaussfit(
     emdict["models"] = models
     #
     return emdict, succeed
-
 
 
 def get_emlines(
