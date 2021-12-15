@@ -117,7 +117,7 @@ def emlines_gaussfit(
         log.error(msg)
         raise ValueError(msg)
     # AR Line models
-    gauss_nocont = lambda ws, sigma, F0, w0 :F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
+    gauss_nocont = lambda ws, sigma, F0, w0: F0 * (np.e ** (- (ws - w0) ** 2. / (2. * sigma ** 2.))) / (sigma * (2. * np.pi) ** 0.5)
     # AR vacuum rest-frame wavelength(s)
     rf_em_waves = get_rf_em_waves(emname)
     if emname == "OII":
@@ -158,11 +158,11 @@ def emlines_gaussfit(
         keep_line |= (waves > obs_em_wave - obs_fit_hw) & (waves < obs_em_wave + obs_fit_hw)
         # AR used for continuum
         if cont_choice == "left":
-            keep_cont |=  (waves > obs_em_wave - obs_cont_w) & (waves < obs_em_wave)
+            keep_cont |= (waves > obs_em_wave - obs_cont_w) & (waves < obs_em_wave)
         if cont_choice == "center":
             keep_cont |= (waves > obs_em_wave - obs_cont_w / 2.) & (waves < obs_em_wave + obs_cont_w / 2.)
         if cont_choice == "right":
-            keep_cont |=  (waves > obs_em_wave) & (waves < obs_em_wave + obs_cont_w)
+            keep_cont |= (waves > obs_em_wave) & (waves < obs_em_wave + obs_cont_w)
         # AR has the line minimal coverage?
         n_cov_lines += int((waves.min() < obs_em_wave - min_obs_fit_hw) & (waves.max() > obs_em_wave + min_obs_fit_hw))
     # AR excluding for the continuum estimation wavelengths used for line(s) fiting
@@ -242,12 +242,12 @@ def emlines_gaussfit(
                         emdict["SHARE_IVAR"] = np.inf
                     if emname in ["HALPHA", "HBETA", "HGAMMA", "HDELTA"]:
                         models = myfunc(waves[keep_line], popt[0], popt[1])
-                    emdict["NDOF"]    = keep_line.sum() - len(p0)
-                    emdict["CHI2"]    = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
-                    emdict["CHI2"]   /= emdict["NDOF"] # AR we define CHI2 as the reduced chi2, as in fastspecfit
-                    emdict["SIGMA"]   = popt[0]
-                    emdict["SIGMA_IVAR"]= diag[0] ** -1
-                    emdict["FLUX"]    = popt[1]
+                    emdict["NDOF"] = keep_line.sum() - len(p0)
+                    emdict["CHI2"] = np.sum(np.abs(models - fluxes[keep_line]) ** 2. / ivars[keep_line] ** 2.)
+                    emdict["CHI2"] /= emdict["NDOF"] # AR we define CHI2 as the reduced chi2, as in fastspecfit
+                    emdict["SIGMA"] = popt[0]
+                    emdict["SIGMA_IVAR"] = diag[0] ** -1
+                    emdict["FLUX"] = popt[1]
                     emdict["FLUX_IVAR"] = diag[1] ** -1
                     # AR rest-frame equivalent width
                     factor = (1 + zspec) / emdict["CONT"]

@@ -239,7 +239,7 @@ def read_emlines_inputs(
             # AR TBD: but as 500 rows at most, ~ok
             tmpexts = ext_odonnell(tmpw, Rv=rv)
             for i in range(nspec):
-                tmp_mw_trans =  10 ** (-0.4 * ebvs[i] * rv * tmpexts)
+                tmp_mw_trans = 10 ** (-0.4 * ebvs[i] * rv * tmpexts)
                 tmpfl[i, :] /= tmp_mw_trans
                 tmpiv[i, :] *= tmp_mw_trans ** 2
         waves = np.append(waves, tmpw)
@@ -402,7 +402,7 @@ def plot_emlines(
     with PdfPages(outpdf) as pdf:
         for ix, i in enumerate(ii):
             if ix % nrow == 0:
-                fig = plt.figure(figsize = (25,15))
+                fig = plt.figure(figsize=(25, 15))
                 gs = gridspec.GridSpec(nrow, len(emnames), wspace=0.1, hspace=0.1)
             for i_emname, emname in enumerate(emnames):
                 ax = plt.subplot(gs[ix % nrow, i_emname])
@@ -410,7 +410,8 @@ def plot_emlines(
                 d = emdict[emname]["fluxes"][i]
                 iv = emdict[emname]["ivars"][i]
                 m = emdict[emname]["models"][i]
-                jj = w.argsort() # AR case of camera overlap
+                # # AR case of camera overlap
+                jj = w.argsort()
                 w, d, iv, m = w[jj], d[jj], iv[jj], m[jj]
                 jj = np.where(w[1:] - w[:-1] > 10)[0]
                 for j in jj:
