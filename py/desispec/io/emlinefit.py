@@ -7,8 +7,6 @@ IO routines for desi_emlinefit_afterburner.
 """
 
 import os
-import sys
-from astropy.io import fits
 from astropy.table import Table
 import fitsio
 import numpy as np

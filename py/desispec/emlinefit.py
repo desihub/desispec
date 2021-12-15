@@ -6,10 +6,6 @@ desispec.io.emlinefit
 Routines for desi_emlinefit_afterburner.
 """
 
-import os
-import sys
-from astropy.io import fits
-import fitsio
 import numpy as np
 from scipy.optimize import curve_fit
 from desiutil.log import get_logger
