@@ -22,7 +22,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                  dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True,
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
-                 tiles=None):
+                 tiles=None, surveys=None):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -61,6 +61,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                           False, jobs with some prior data are pruned using PROCCAMWORD to only process the
                                           remaining cameras not found to exist.
         tiles, array-like, optional. Only submit jobs for these TILEIDs.
+        surveys, array-like, optional. Only submit science jobs for these surveys (lowercase)
 
     Returns:
         None.
@@ -143,11 +144,31 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## filter by TILEID if requested
     if tiles is not None:
+        log.info(f'Filtering by tiles={tileids}')
         if etable is not None:
             keep = np.isin(etable['TILEID'], tiles)
             etable = etable[keep]
         if ptable is not None:
             keep = np.isin(ptable['TILEID'], tiles)
+            ptable = ptable[keep]
+
+    if surveys is not None:
+        log.info(f'Filtering by surveys={surveys}')
+        if etable is not None:
+            if 'SURVEY' not in etable.dtype.names:
+                raise ValueError(f'surveys={surveys} filter requested, but no SURVEY column in {exp_table_pathname}')
+
+            # only apply survey filter to OBSTYPE=science exposures, i.e. auto-keep non-science
+            keep = (etable['OBSTYPE'] != 'science')
+
+            # np.isin doesn't work with bytes vs. str from Tables but direct comparison does, so loop
+            for survey in surveys:
+                keep |= etable['SURVEY'] == survey
+
+            etable = etable[keep]
+        if ptable is not None:
+            # ptable doesn't have "SURVEY", so filter by the TILEIDs we just kept
+            keep = np.isin(ptable['TILEID'], etable['TILEID'])
             ptable = ptable[keep]
 
     good_exps = np.array([col.lower() != 'ignore' for col in etable['LASTSTEP']]).astype(bool)
@@ -206,6 +227,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         ptable_expids = np.array([], dtype=int)
 
     ## Loop over new exposures and process them as relevant to that type
+    tableng = 0
     for ii, erow in enumerate(etable):
         if erow['EXPID'] in ptable_expids:
             continue
