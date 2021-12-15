@@ -131,20 +131,13 @@ def main():
     # AR read arguments
     args = get_parse(log=log)
 
-    # AR select TARGETIDs
-    if args.bitnames == "ALL":
-        targetids = None
-        log.info("selecting all fibers, as args.bitnames=='ALL'")
-    else:
-        targetids = get_targetids(args.redrock, args.bitnames, log=log)
-
     # AR read columns + spectra
     rr, fm, waves, fluxes, ivars = read_emlines_inputs(
         args.redrock,
         args.coadd,
         mwext_corr=True,
         rv=args.rv,
-        targetids=targetids,
+        bitnames=args.bitnames,
         rr_keys=args.rr_keys,
         fm_keys=args.fm_keys,
         log=log,

@@ -9,67 +9,46 @@ IO routines for desi_emlinefit_afterburner.
 import os
 import sys
 from astropy.io import fits
+from astropy.table import Table
 import fitsio
 import numpy as np
 from desitarget.geomask import match_to
+from desitarget.targets import main_cmx_or_sv
 from desiutil.dust import ext_odonnell
 from desiutil.dust import ebv as dust_ebv
 from desiutil.log import get_logger
 from desispec.emlinefit import get_rf_em_waves
 
 
-def get_targetids(redrock, bitnames, log=None):
+def get_targetids(d, bitnames, log=None):
     """
     Returns the TARGETIDs passing the bitnames for the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET mask.
 
     Args:
-        redrock: full path to a redrock/zbest file
+        d: structured array, typically a FIBERMAP catalog,
+            with TARGETID and the CMX_TARGET, SV{1,2,3}_DESI_TARGET, or DESI_TARGET column.
         bitnames: comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
         log (optional, defaults to get_logger()): Logger object
 
     Returns:
-        targetids: list of TARGETIDs passing the *DESI_TARGET mask (np.array)
+        targetids: list of TARGETIDs passing the {CMX,*DESI}_TARGET mask (np.array)
 
     Notes:
         If several bitnames are provided, selects the union of those.
-        Use the FIBERMAP extension.
-        Do not use desitarget.targets.main_cmx_or_sv, as we only read TARGETID and the mask column,
-            so it is faster; but we use same philosophy.
+        Safer if d is already trimmed on unique TARGETIDs (see FIBERMAP format with zbest-*fits files)
     """
     # AR log
     if log is None:
         log = get_logger()
 
-    # AR get the *DESI_TARGET colum
-    dtkeys = [
-        key for key in fits.open(redrock)["FIBERMAP"].columns.names
-            if key in ["CMX_TARGET", "SV1_DESI_TARGET", "SV2_DESI_TARGET", "SV3_DESI_TARGET"]
-    ]
-
-    # AR if no match, then assume it is a main catalog
-    if len(dtkeys) == 0:
-        dtkey = "DESI_TARGET"
-        from desitarget.targetmask import desi_mask as mask
-    elif len(dtkeys) == 1:
-        dtkey = dtkeys[0]
-        if dtkey == "CMX_TARGET":
-            from desitarget.cmx.cmx_targetmask import cmx_mask as mask
-        if dtkey == "SV1_DESI_TARGET":
-            from desitarget.sv1.sv1_targetmask import desi_mask as mask
-        if dtkey == "SV2_DESI_TARGET":
-            from desitarget.sv2.sv2_targetmask import desi_mask as mask
-        if dtkey == "SV3_DESI_TARGET":
-            from desitarget.sv3.sv3_targetmask import desi_mask as mask
-    else:
-        msg = "found {}>1 matching keys: {}; 0 or 1 key expected".format(
-            len(dtkeys), dtkeys
-        )
-        log.error(msg)
-        raise RuntimeError(msg)
+    # AR get the *DESI_TARGET column + mask
+    keys, masks, survey = main_cmx_or_sv(d)
+    dtkey = keys[0]
+    mask = masks[0]
+    log.info("input catalog is identified as survey={}".format(survey))
     allowed_bitnames = mask.names()
 
     # AR read + select the targetids
-    d = fitsio.read(redrock, columns=["TARGETID", dtkey], ext="FIBERMAP")
     sel = np.zeros(len(d), dtype=bool)
     for bitname in bitnames.split(","):
         if bitname not in allowed_bitnames:
@@ -90,6 +69,7 @@ def read_emlines_inputs(
     coadd,
     mwext_corr=True,
     rv=3.1,
+    bitnames="ALL",
     targetids=None,
     rr_keys="TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2",
     fm_keys="TARGET_RA,TARGET_DEC,OBJTYPE",
@@ -104,7 +84,8 @@ def read_emlines_inputs(
         coadd: full path to a coadd file (everest-format)
         mwext_corr (optional, defaults to True): correct flux for foreground MW extinction? (boolean)
         rv (optional, defaults to 3.1): value of R_V, used if mwext_corr=True (float)
-        targetids (optional, defaults to None): list of TARGETIDs to restrict to (list or numpy array)
+        bitnames (optional, defaults to "ALL", meaning fitting all fibers): comma-separated list of target bitnames to fit from the *DESI_TARGET mask (string)
+        targetids (optional, defaults to None): list of TARGETIDs to restrict to (int, list, or numpy array)
         rr_keys (optional, defaults to "TARGETID,Z,ZWARN,SPECTYPE,DELTACHI2"): comma-separated list of columns from REDSHIFTS to propagate (string)
         fm_keys (optional, defaults to "TARGET_RA,TARGET_DEC,OBJTYPE"): comma-separated list of columns from FIBERMAP to propagate (string)
         log (optional, defaults to get_logger()): Logger object
@@ -119,10 +100,20 @@ def read_emlines_inputs(
     Notes:
         We add TARGETID and Z to rr_keys if TARGETID not present in rr_keys nor in fm_keys.
         If keys in rr_keys or fm_keys are not present in the redrock, those will be ignored.
+        If both bitnames and targetids are provided, we take the overlap of the two.
     """
     # AR log
     if log is None:
         log = get_logger()
+
+    # AR targetids to np.array()
+    if targetids is not None:
+        if isinstance(targetids, list):
+            targetids = np.array(targetids)
+            log.info("convert targetids from list to np.array()")
+        if isinstance(targetids, int):
+            targetids = np.array([targetids])
+            log.info("convert targetids from int to np.array()")
 
     # AR sanity checks
     for fn in [redrock, coadd]:
@@ -144,67 +135,98 @@ def read_emlines_inputs(
             log.info("adding {} to rr_keys".format(key))
             rr_keys = "{},{}".format(key, rr_keys)
 
-    # AR redrock: extension name + columns
-    h = fits.open(redrock)
-    extnames = [h[i].header["EXTNAME"] for i in range(1, len(h))]
-    if "REDSHIFTS" in extnames:
-        rr_extname = "REDSHIFTS"
-    elif "ZBEST" in extnames:
-        rr_extname = "ZBEST"
+    # AR redrock: reading the correct extension
+    with fitsio.FITS(redrock) as h:
+        extnames = [h[i].get_extname() for i in range(len(h))]
+        if "REDSHIFTS" in extnames:
+            rr_extname = "REDSHIFTS"
+        elif "ZBEST" in extnames:
+            rr_extname = "ZBEST"
+        else:
+            msg = "{} has neither REDSHIFTS or ZBEST extension".format(redrock)
+            log.error(msg)
+            raise RuntimeError(msg)
+        rr = Table(h[rr_extname].read())
+
+    # AR coadd: reading fibermap + waves/fluxes/ivars
+    # AR    fibermap has 500 rows (even in pre-everest)
+    co = {}
+    with fitsio.FITS(coadd) as h:
+        fm = Table(h["FIBERMAP"].read())
+        # AR available cameras
+        cameras = []
+        extnames = [h[i].get_extname() for i in range(len(h))]
+        for camera in ["B", "R", "Z"]:
+            if "{}_FLUX".format(camera) in extnames:
+                cameras.append(camera)
+        for camera in cameras:
+            for key in [
+                "{}_WAVELENGTH".format(camera),
+                "{}_FLUX".format(camera),
+                "{}_IVAR".format(camera),
+            ]:
+                co[key] = h[key].read()
+
+    # AR selecting targetids
+    if bitnames == "ALL":
+        bit_targetids = rr["TARGETID"]
     else:
-        msg = "{} has neither REDSHIFTS or ZBEST extension".format(redrock)
-        log.error(msg)
-        raise RuntimeError(msg)
-    # AR rr_keys, fm_keys: restrict to existing ones
-    rmv_rr_keys = [key for key in rr_keys.split(",") if key not in h[rr_extname].columns.names]
-    if len(rmv_rr_keys) > 0:
-        log.info("{} removed from rr_keys, as not present in {}".format(",".join(rmv_rr_keys), rr_extname))
-    rr_keys = ",".join([key for key in rr_keys.split(",") if key not in rmv_rr_keys])
-    # AR redrock: reading
-    rr = fitsio.read(redrock, ext=rr_extname, columns=rr_keys.split(","))
-    # AR redrock: cutting on TARGETID if requested
+        bit_targetids = get_targetids(fm, bitnames, log=log)
     if targetids is None:
-        targetids = rr["TARGETID"]
+        targetids = bit_targetids
+    else:
+        targetids = targetids[np.in1d(targetids, bit_targetids)]
     nspec = len(targetids)
     log.info("Dealing with {} spectra".format(nspec))
+
+    # AR targetids: cutting on redrock
     ii_rr = match_to(rr["TARGETID"], targetids)
     rr = rr[ii_rr]
     if len(rr) != nspec:
         msg = "{} TARGETIDs are not in {}".format(nspec - len(rr), redrock)
         log.error(msg)
         raise RuntimeError(msg)
-
-    # AR coadd: fibermap cut + sanity check
-    # AR coadd: fibermap has 500 rows (even in pre-everest)
-    h = fits.open(coadd)
-    # AR coadd: fibermap columns
-    rmv_fm_keys = [key for key in fm_keys.split(",") if key not in h["FIBERMAP"].columns.names]
-    if len(rmv_fm_keys) > 0:
-        log.info("{} removed from fm_keys, as not present in FIBERMAP".format(",".join(rmv_fm_keys)))
-    fm_keys = ",".join([key for key in fm_keys.split(",") if key not in rmv_fm_keys])
-    # AR coadd: fibermap read (and TARGETID separately)
-    fm = fitsio.read(coadd, ext="FIBERMAP", columns=fm_keys.split(","))
-    fm_tids = fitsio.read(coadd, ext="FIBERMAP", columns=["TARGETID"])["TARGETID"]
-    # AR requested TARGETIDs
-    ii_co = match_to(fm_tids, targetids)
+    # AR targetids: cutting on fibermap + fluxes/ivars
+    ii_co = match_to(fm["TARGETID"], targetids)
     if ii_co.size != nspec:
         msg = "{} TARGETIDs are not in {}".format(nspec - ii_co.size, coadd)
         log.error(msg)
         raise RuntimeError(msg)
     fm = fm[ii_co]
+    for camera in cameras:
+        for key in ["{}_FLUX".format(camera), "{}_IVAR".format(camera)]:
+            co[key] = co[key][ii_co, :]
+    # AR targetids: sanity check
+    msg = None
+    if len(rr) != len(fm):
+        msg = "issue when selecting on targetids: len(rr) = {} != len(fm) = {}".format(
+            len(rr), len(fm),
+        )
+    else:
+        tmpn = (rr["TARGETID"] != fm["TARGETID"]).sum()
+        if tmpn > 0:
+            msg = "issue when selecting on targetids: {} mismatches between rr and fm".format(tmpn)
+    if msg is not None:
+        log.error(msg)
+        raise RuntimeError(msg)
+
+    # AR EBV
     if mwext_corr:
         ebvs = dust_ebv(fm["TARGET_RA"], fm["TARGET_DEC"])
 
-    # AR available cameras
-    cameras = []
-    extnames = [h[i].header['extname'] for i in range(1, len(h))]
-    for camera in ["B", "R", "Z"]:
-        if "{}_FLUX".format(camera) in extnames:
-            cameras.append(camera)
-    # AR cutting FLUX and IVAR arrays on TARGETIDs
-    for camera in cameras:
-        h["{}_FLUX".format(camera)].data = h["{}_FLUX".format(camera)].data[ii_co, :]
-        h["{}_IVAR".format(camera)].data = h["{}_IVAR".format(camera)].data[ii_co, :]
+    # AR rr_keys: restrict to existing ones
+    rmv_rr_keys = [key for key in rr_keys.split(",") if key not in rr.dtype.names]
+    if len(rmv_rr_keys) > 0:
+        log.info("{} removed from rr_keys, as not present in {}".format(",".join(rmv_rr_keys), rr_extname))
+    rr_keys = [key for key in rr_keys.split(",") if key not in rmv_rr_keys]
+    rr = rr[rr_keys]
+    # AR fm_keys: restrict to existing ones
+    rmv_fm_keys = [key for key in fm_keys.split(",") if key not in fm.dtype.names]
+    if len(rmv_fm_keys) > 0:
+        log.info("{} removed from fm_keys, as not present in FIBERMAP".format(",".join(rmv_fm_keys)))
+    fm_keys = [key for key in fm_keys.split(",") if key not in rmv_fm_keys]
+    fm = fm[fm_keys]
+
     # AR b : 3600,5800  , r : 5760,7620 , z : 7520,9824
     # AR we keep all data points (i.e. including overlaps)
     # AR note that waves is not ordered, as a consequence
@@ -212,9 +234,9 @@ def read_emlines_inputs(
     fluxes = np.zeros(0).reshape(nspec, 0)
     ivars = np.zeros(0).reshape(nspec, 0)
     for camera in cameras:
-        tmpw = h["{}_WAVELENGTH".format(camera)].data
-        tmpfl = h["{}_FLUX".format(camera)].data
-        tmpiv = h["{}_IVAR".format(camera)].data
+        tmpw = co["{}_WAVELENGTH".format(camera)]
+        tmpfl = co["{}_FLUX".format(camera)]
+        tmpiv = co["{}_IVAR".format(camera)]
         if mwext_corr:
             # AR TBD: use a smarter way with no loop on tids...
             # AR TBD: but as 500 rows at most, ~ok
