@@ -701,7 +701,6 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                        c=np.polyfit(pm[f"{key1}_{coord}_{numiter-1}"][good],pm[f"REQ_{coord}"][good],1)
                        pol=np.poly1d(c)
                        adiff=np.abs(pol(pm[f"{key1}_{coord}_{numiter-1}"])-pm[f"REQ_{coord}"])
-                       rms=1.48*np.median(adiff[good])
                        good &= adiff<1.
                    # apply transfo to deltas
                    # DX_N = REQ_X - FPA_X_N
