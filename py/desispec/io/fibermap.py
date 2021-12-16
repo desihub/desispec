@@ -457,7 +457,12 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     if allow_svn_override and ('DESI_TARGET' in os.environ):
         targdir = os.getenv('DESI_TARGET')
         testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
-        fafile = checkgzip(testfile)
+        try:
+            fafile = checkgzip(testfile)
+        except FileNotFoundError:
+            # no alternate fiberassign file in svn yet, that's ok
+            pass
+
         if rawfafile != fafile:
             log.info(f'Overriding raw fiberassign file {rawfafile} with svn {fafile}')
         else:
