@@ -202,12 +202,12 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None,
                     print(f"Identified outdated aborted exptime COMMENT."
                           + "Removing that. Original set: "
                           + f"{origorigval}, Updated origset: {origval}")
-                if col == 'COMMENTS':
+                if col == 'COMMENTS' and 'PURPOSE:->' in origval:
                     origorigval = origval.copy()
                     valcheck = (np.array(origval) != 'PURPOSE:->')
                     origval = origval[valcheck]
                     print(f"Identified outdated PURPOSE null->null COMMENT."
-                          + "Removing that. Original set: "
+                          + " Removing that. Original set: "
                           + f"{origorigval}, Updated origset: {origval}")
                 ## If columns differ and original isn't a default value,
                 ## then take the original user-defined value
