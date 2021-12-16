@@ -767,6 +767,9 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                 sel=entry['EXPID']==exptable_select['EXPID']
                 badcamwords.append(exptable_select['BADCAMWORD'][sel])
                 laststeps.append(exptable_select['LASTSTEP'][sel])
+            else:
+                badcamwords.append("")
+                laststeps.append("")
 
         speclog.add_column(badcamwords,name='BADCAMWORD')
         speclog.add_column(laststeps,name='LASTSTEP')
