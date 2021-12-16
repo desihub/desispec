@@ -17,7 +17,7 @@ from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm
 from desispec.io.util import get_tempfilename, parse_cameras, decode_camword
 from desispec.workflow.exptable import get_exposure_table_pathname
-from desispec.workflow.tableio import load_table, load_tables
+from desispec.workflow.tableio import load_table, load_tables, write_table
 
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
@@ -754,6 +754,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
         speclogfile = os.path.join(tempdir, 'exposure_table_speclog.csv')
         #TODO: maybe need to add objects that are for some reason not in the exposure_table?
+        tmpfile = speclogfile + '.tmp-' + str(os.getpid())
+        write_table(speclog, tmpfile)
     else:
         log.info(f'Scanning {len(nightlist)} night directories')
         speclog = io.util.get_speclog(nightlist)
@@ -762,8 +764,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
         speclogfile = os.path.join(tempdir, 'speclog.csv')
         
-    tmpfile = speclogfile + '.tmp-' + str(os.getpid())
-    speclog.write(tmpfile, format='ascii.csv')
+        tmpfile = speclogfile + '.tmp-' + str(os.getpid())
+        speclog.write(tmpfile, format='ascii.csv')
     os.rename(tmpfile, speclogfile)
     log.info(f'Wrote speclog to {speclogfile}')
 

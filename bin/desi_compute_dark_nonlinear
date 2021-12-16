@@ -71,6 +71,7 @@ from desispec.ccdcalib import fit_const_plus_dark,fit_dark
 from desispec.ccdcalib import model_y1d
 from desispec.io import findfile
 
+
 log = get_logger()
 
 if args.days is None and args.nights is None:
@@ -159,6 +160,7 @@ if args.last_expid is not None:
 if args.use_exptable:
     #TODO: Is there a better way to parse this? What about checking BADAMPS as well?
     keep = np.array([args.camera not in badcam for badcam in speclog['BADCAMWORD']])
+    keep &= speclog['LASTSTEP']!='ignore'
     speclog = speclog[keep]
     if len(speclog) == 0:
         log.critical('No exposures! exiting...')
