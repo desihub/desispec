@@ -777,12 +777,13 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
     surveys = surveys[ii]
     # AR cutting on sv1, sv2, sv3, main
     sel = np.in1d(surveys, ["sv1", "sv2", "sv3", "main"])
-    log.info(
-        "removing {}/{} tileids corresponding to surveys={}, different than sv1, sv2, sv3, main".format(
-            (~sel).sum(), tileids.size, ",".join(np.unique(surveys[~sel]).astype(str)),
+    if sel.sum() > 0:
+        log.info(
+            "removing {}/{} tileids corresponding to surveys={}, different than sv1, sv2, sv3, main".format(
+                (~sel).sum(), tileids.size, ",".join(np.unique(surveys[~sel]).astype(str)),
+            )
         )
-    )
-    tileids, surveys = tileids[sel], surveys[sel]
+        tileids, surveys = tileids[sel], surveys[sel]
     #
     # AR gather all infos from the zmtl*fits files
     ds = {"bright" : [], "dark" : []}
