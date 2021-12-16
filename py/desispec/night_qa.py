@@ -1278,7 +1278,6 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
         )
         html.write("<div class='content'>\n")
         html.write("\t<br>\n")
-        print(outfns[case], os.path.isfile(outfns[case]))
         if os.path.isfile(outfns[case]):
             for text_split in text.split("\n"):
                 html.write("\t<p>{}</p>\n".format(text_split))
