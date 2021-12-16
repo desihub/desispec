@@ -108,39 +108,39 @@ else:
     daynight = 'NIGHT'
     nights = args.nights
 
-if args.use_exptable:
-    speclog_file = os.path.join(tempdir, 'exposure_table_speclog.csv')
-    if os.path.exists(speclog_file):
-        log.info(f'Reading speclog from {speclog_file}')
-        speclog = Table.read(speclog_file, format='ascii')
-    else:
-        log.critical(f'Exptable mode demanded, but table missing at {speclog_file}! exiting...')
-        sys.exit(1)
+#if args.use_exptable:
+#    speclog_file = os.path.join(tempdir, 'exposure_table_speclog.csv')
+#    if os.path.exists(speclog_file):
+#        log.info(f'Reading speclog from {speclog_file}')
+#        speclog = Table.read(speclog_file, format='ascii')
+#    else:
+#        log.critical(f'Exptable mode demanded, but table missing at {speclog_file}! exiting...')
+#        sys.exit(1)
+#else:
+#- Get table of what exposures were taken on those days
+speclog_file = os.path.join(tempdir, 'speclog.csv')
+if os.path.exists(speclog_file):
+    log.info(f'Reading speclog from {speclog_file}')
+    speclog = Table.read(speclog_file, format='ascii')
 else:
-    #- Get table of what exposures were taken on those days
-    speclog_file = os.path.join(tempdir, 'speclog.csv')
-    if os.path.exists(speclog_file):
-        log.info(f'Reading speclog from {speclog_file}')
-        speclog = Table.read(speclog_file, format='ascii')
-    else:
-        log.info(f'Generating speclog for nights {nights}')
-        speclog = desispec.io.util.get_speclog(nights)
+    log.info(f'Generating speclog for nights {nights}')
+    speclog = desispec.io.util.get_speclog(nights)
 
-        #- Add "DAY" column = rolls over at midnight instead of MST noon
-        if daynight == 'DAY':
-            t = Time(speclog['MJD']-7/24, format='mjd')
-            speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+    #- Add "DAY" column = rolls over at midnight instead of MST noon
+    if daynight == 'DAY':
+        t = Time(speclog['MJD']-7/24, format='mjd')
+        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
 
-        #- Trim to just the requested days/nights
-        keep = np.zeros(len(speclog), dtype=bool)
-        for night in nights:
-            keep |= speclog[daynight] == night
+    #- Trim to just the requested days/nights
+    keep = np.zeros(len(speclog), dtype=bool)
+    for night in nights:
+        keep |= speclog[daynight] == night
 
-        speclog = speclog[keep]
-        tmpfile = speclog_file + '.tmp-' + str(os.getpid())
-        speclog.write(tmpfile, format='ascii.csv')
-        os.rename(tmpfile, speclog_file)
-        log.info(f'Wrote speclog to {speclog_file}')
+    speclog = speclog[keep]
+    tmpfile = speclog_file + '.tmp-' + str(os.getpid())
+    speclog.write(tmpfile, format='ascii.csv')
+    os.rename(tmpfile, speclog_file)
+    log.info(f'Wrote speclog to {speclog_file}')
 
 #- filter expids if requested
 if args.first_expid is not None:

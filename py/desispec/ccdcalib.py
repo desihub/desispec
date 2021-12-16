@@ -741,6 +741,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 
     if use_exptable:
         #grab all exposures from the exposure log in case some have been marked bad
+        #note that some exposures will not be in here, so we'll still need to go through the speclog
         log.info(f'Using exposure tables for {len(nightlist)} night directories')
         expfiles=[]
         for night in nightlist:
@@ -748,24 +749,36 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         exptables = load_tables(expfiles)
         exptable_all=table_vstack(exptables)
         select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
-        speclog=exptable_all[select]
-        speclog['MJD']=speclog['MJD-OBS']
-        t = Time(speclog['MJD']-7/24, format='mjd')
-        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
-        speclogfile = os.path.join(tempdir, 'exposure_table_speclog.csv')
+        exptable_select=exptable_all[select]
+        #speclog['MJD']=speclog['MJD-OBS']
+        #t = Time(speclog['MJD']-7/24, format='mjd')
+        #speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+        #speclogfile = os.path.join(tempdir, 'exposure_table_speclog.csv')
         #TODO: maybe need to add objects that are for some reason not in the exposure_table?
-        write_table(speclog, speclogfile,'exptable')
-    else:
-        log.info(f'Scanning {len(nightlist)} night directories')
-        speclog = io.util.get_speclog(nightlist)
+        #write_table(speclog, speclogfile,'exptable')
+    
+    log.info(f'Scanning {len(nightlist)} night directories')
+    speclog = io.util.get_speclog(nightlist)
+    if use_exptable:
+        badcamwords=[]
+        laststeps=[]
+        for entry in speclog:
+            if entry['EXPID'] in exptable_select['EXPID']:
+                sel=entry['EXPID']==exptable_select['EXPID']
+                badcamwords.append(exptable_select['BADCAMWORD'][sel])
+                laststeps.append(exptable_select['LASTSTEP'][sel])
 
-        t = Time(speclog['MJD']-7/24, format='mjd')
-        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
-        speclogfile = os.path.join(tempdir, 'speclog.csv')
-        
-        tmpfile = speclogfile + '.tmp-' + str(os.getpid())
-        speclog.write(tmpfile, format='ascii.csv')
-        os.rename(tmpfile, speclogfile)
+        speclog.add_column(badcamwords,name='BADCAMWORD')
+        speclog.add_column(laststeps,name='LASTSTEP')
+
+
+    t = Time(speclog['MJD']-7/24, format='mjd')
+    speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+    speclogfile = os.path.join(tempdir, 'speclog.csv')
+    
+    tmpfile = speclogfile + '.tmp-' + str(os.getpid())
+    speclog.write(tmpfile, format='ascii.csv')
+    os.rename(tmpfile, speclogfile)
     log.info(f'Wrote speclog to {speclogfile}')
 
     for camera in cameras:
