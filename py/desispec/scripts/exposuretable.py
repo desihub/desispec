@@ -17,7 +17,7 @@ from desispec.workflow.tableio import write_table
 
 
 def create_exposure_tables(nights=None, night_range=None, path_to_data=None, exp_table_path=None, obstypes=None, \
-                           exp_filetype='csv', cameras='', bad_cameras='', badamps='',
+                           exp_filetype='csv', cameras=None, bad_cameras=None, badamps=None,
                            verbose=False, no_specprod=False, overwrite_files=False):
     """
     Generates processing tables for the nights requested. Requires exposure tables to exist on disk.
