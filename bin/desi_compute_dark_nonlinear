@@ -47,6 +47,9 @@ parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
                     help='Skip N ZEROs per day while flushing charge')
 parser.add_argument('--mindarks', type=int, default=5, required=False,
                     help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
+parser.add_argument('--use_exptable', type=bool, default=False, action='store_true', required=False,
+                    help='Use a shortened exptable in the processing to get BADCAMWORD')
+
 
 args = parser.parse_args()
 
@@ -104,30 +107,39 @@ else:
     daynight = 'NIGHT'
     nights = args.nights
 
-#- Get table of what exposures were taken on those days
-speclog_file = os.path.join(tempdir, 'speclog.csv')
-if os.path.exists(speclog_file):
-    log.info(f'Reading speclog from {speclog_file}')
-    speclog = Table.read(speclog_file, format='ascii')
+if args.use_exptable:
+    speclog_file = os.path.join(tempdir, 'exposure_table_speclog.csv')
+    if os.path.exists(speclog_file):
+        log.info(f'Reading speclog from {speclog_file}')
+        speclog = Table.read(speclog_file, format='ascii')
+    else:
+        log.critical(f'Exptable mode demanded, but table missing at {speclog_file}! exiting...')
+        sys.exit(1)
 else:
-    log.info(f'Generating speclog for nights {nights}')
-    speclog = desispec.io.util.get_speclog(nights)
+    #- Get table of what exposures were taken on those days
+    speclog_file = os.path.join(tempdir, 'speclog.csv')
+    if os.path.exists(speclog_file):
+        log.info(f'Reading speclog from {speclog_file}')
+        speclog = Table.read(speclog_file, format='ascii')
+    else:
+        log.info(f'Generating speclog for nights {nights}')
+        speclog = desispec.io.util.get_speclog(nights)
 
-    #- Add "DAY" column = rolls over at midnight instead of MST noon
-    if daynight == 'DAY':
-        t = Time(speclog['MJD']-7/24, format='mjd')
-        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+        #- Add "DAY" column = rolls over at midnight instead of MST noon
+        if daynight == 'DAY':
+            t = Time(speclog['MJD']-7/24, format='mjd')
+            speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
 
-    #- Trim to just the requested days/nights
-    keep = np.zeros(len(speclog), dtype=bool)
-    for night in nights:
-        keep |= speclog[daynight] == night
+        #- Trim to just the requested days/nights
+        keep = np.zeros(len(speclog), dtype=bool)
+        for night in nights:
+            keep |= speclog[daynight] == night
 
-    speclog = speclog[keep]
-    tmpfile = speclog_file + '.tmp-' + str(os.getpid())
-    speclog.write(tmpfile, format='ascii.csv')
-    os.rename(tmpfile, speclog_file)
-    log.info(f'Wrote speclog to {speclog_file}')
+        speclog = speclog[keep]
+        tmpfile = speclog_file + '.tmp-' + str(os.getpid())
+        speclog.write(tmpfile, format='ascii.csv')
+        os.rename(tmpfile, speclog_file)
+        log.info(f'Wrote speclog to {speclog_file}')
 
 #- filter expids if requested
 if args.first_expid is not None:
@@ -139,6 +151,14 @@ if args.first_expid is not None:
 
 if args.last_expid is not None:
     keep = speclog['EXPID'] <= args.last_expid
+    speclog = speclog[keep]
+    if len(speclog) == 0:
+        log.critical('No exposures! exiting...')
+        sys.exit(1)
+
+if args.use_exptable:
+    #TODO: Is there a better way to parse this? What about checking BADAMPS as well?
+    keep = np.array([args.camera not in badcam for badcam in speclog['BADCAMWORD']])
     speclog = speclog[keep]
     if len(speclog) == 0:
         log.critical('No exposures! exiting...')

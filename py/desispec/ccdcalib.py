@@ -4,6 +4,7 @@ import datetime
 import subprocess
 
 import astropy.io.fits as pyfits
+from astropy.table import Table
 from astropy.time import Time
 import numpy as np
 from scipy.signal import savgol_filter
@@ -16,7 +17,7 @@ from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm
 from desispec.io.util import get_tempfilename, parse_cameras, decode_camword
 from desispec.workflow.exptable import get_exposure_table_pathname
-from desispec.workflow.tableio import load_table
+from desispec.workflow.tableio import load_table, load_tables
 
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
@@ -682,7 +683,7 @@ def model_y1d(image, smooth=0):
 
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-                      first_expid=None,night_for_name=None):
+                      first_expid=None,night_for_name=None, use_exptable=False):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -697,6 +698,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         tempdir (str): tempfile working directory
         nosubmit (bool): generate scripts but don't submit them to batch queue
         first_expid (int): ignore expids prior to this
+        use_exptable (bool): use shortened copy of joined exposure tables instead of spectable
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -736,12 +738,30 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 
     #- Create exposure log so that N>>1 jobs don't step on each other
     nightlist = [int(tmp) for tmp in nights.split()]
-    log.info(f'Scanning {len(nightlist)} night directories')
-    speclog = io.util.get_speclog(nightlist)
 
-    t = Time(speclog['MJD']-7/24, format='mjd')
-    speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
-    speclogfile = os.path.join(tempdir, 'speclog.csv')
+    if use_exptable:
+        #grab all exposures from the exposure log in case some have been marked bad
+        log.info(f'Using exposure tables for {len(nightlist)} night directories')
+        expfiles=[]
+        for night in nightlist:
+            expfiles.append(get_exposure_table_pathname(night))
+        exptables = load_tables(expfiles, tabletype='exptable')
+        exptable_all=Table.vstack(exptables)
+        select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
+        speclog=exptable_all[select]
+        speclog['MJD']=speclog['MJD-OBS']
+        t = Time(speclog['MJD']-7/24, format='mjd')
+        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+        speclogfile = os.path.join(tempdir, 'exposure_table_speclog.csv')
+        #TODO: maybe need to add objects that are for some reason not in the exposure_table?
+    else:
+        log.info(f'Scanning {len(nightlist)} night directories')
+        speclog = io.util.get_speclog(nightlist)
+
+        t = Time(speclog['MJD']-7/24, format='mjd')
+        speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
+        speclogfile = os.path.join(tempdir, 'speclog.csv')
+        
     tmpfile = speclogfile + '.tmp-' + str(os.getpid())
     speclog.write(tmpfile, format='ascii.csv')
     os.rename(tmpfile, speclogfile)
@@ -775,6 +795,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
             cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
         if first_expid is not None:
             cmd += f" \\\n    --first-expid {first_expid}"
+        if use_exptable:
+            cmd += f" \\\n    --use_exptable"
 
         with open(batchfile, 'w') as fx:
             fx.write(f'''#!/bin/bash -l
