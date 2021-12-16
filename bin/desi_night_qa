@@ -112,11 +112,13 @@ def main():
 
     # AR dark
     if "dark" in args.steps.split(","):
-        create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid)
+        if dark_expid is not None:
+            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid)
 
     # AR badcolumn
     if "badcol" in args.steps.split(","):
-        create_badcol_png(outfns["badcol"], args.night, args.prod)
+        if dark_expid is not None:
+            create_badcol_png(outfns["badcol"], args.night, args.prod)
 
     # AR CTE detector
     if "ctedet" in args.steps.split(","):
