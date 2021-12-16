@@ -10,13 +10,14 @@ This script generates the $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGH
 
 
 import os,sys
+import numpy as np
 import argparse
 from desiutil.log import get_logger
 from desispec.io import specprod_root
 from pkg_resources import resource_filename
 from desispec.night_qa import (
     get_nightqa_outfns,
-    get_survey_night_expids,
+    get_surveys_night_expids,
     get_dark_night_expid,
     get_ctedet_night_expid,
     create_dark_pdf,
@@ -94,7 +95,7 @@ def main():
                     sys.exit(1)
 
     # AR expids, tileids
-    expids, tileids = get_survey_night_expids(args.night, "main")
+    expids, tileids, surveys = get_surveys_night_expids(args.night)
     dark_expid = get_dark_night_expid(args.night)
     ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
 
@@ -116,17 +117,19 @@ def main():
         create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids)
 
         # AR skyzfiber
-        create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, survey="main", dchi2_threshold=9)
+        create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, np.unique(tileids), dchi2_threshold=9)
 
         # AR per-petal n(z)
-        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, survey="main", dchi2_threshold=25)
+        unq_tileids, ii = np.unique(tileids, return_index=True)
+        unq_surveys = surveys[ii]
+        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids, unq_surveys, dchi2_threshold=25)
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
     os.system("cp {} {}".format(args.css, args.outdir))
     write_nightqa_html(
         outfns, args.night, args.prod, os.path.basename(args.css),
-        survey="main", nexp=expids.size, ntile=len(set(tileids)))
+        surveys="/".join(np.unique(surveys)), nexp=expids.size, ntile=len(set(tileids)))
 
 if __name__ == "__main__":
     main()
