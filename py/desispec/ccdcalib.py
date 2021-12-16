@@ -765,8 +765,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         for entry in speclog:
             if entry['EXPID'] in exptable_select['EXPID']:
                 sel=entry['EXPID']==exptable_select['EXPID']
-                badcamwords.append(exptable_select['BADCAMWORD'][sel])
-                laststeps.append(exptable_select['LASTSTEP'][sel])
+                badcamwords.append(exptable_select['BADCAMWORD'][sel][0])
+                laststeps.append(exptable_select['LASTSTEP'][sel][0])
             else:
                 badcamwords.append("")
                 laststeps.append("")
