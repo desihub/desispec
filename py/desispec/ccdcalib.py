@@ -765,7 +765,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         
         tmpfile = speclogfile + '.tmp-' + str(os.getpid())
         speclog.write(tmpfile, format='ascii.csv')
-    os.rename(tmpfile, speclogfile)
+        os.rename(tmpfile, speclogfile)
     log.info(f'Wrote speclog to {speclogfile}')
 
     for camera in cameras:
