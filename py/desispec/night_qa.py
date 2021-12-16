@@ -1292,22 +1292,26 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
         )
         html.write("<div class='content'>\n")
         html.write("\t<br>\n")
-        for text_split in text.split("\n"):
-            html.write("\t<p>{}</p>\n".format(text_split))
-        html.write("\t<tr>\n")
-        if os.path.splitext(outfns[case])[-1] == ".png":
-            outpng = path_full2web(outfns[case])
-            html.write(
-                "\t<a href='{}'><img SRC='{}' width={} height=auto></a>\n".format(
-                    outpng, outpng, width,
+        print(outfns[case], os.path.isfile(outfns[case]))
+        if os.path.isfile(outfns[case]):
+            for text_split in text.split("\n"):
+                html.write("\t<p>{}</p>\n".format(text_split))
+            html.write("\t<tr>\n")
+            if os.path.splitext(outfns[case])[-1] == ".png":
+                outpng = path_full2web(outfns[case])
+                html.write(
+                    "\t<a href='{}'><img SRC='{}' width={} height=auto></a>\n".format(
+                        outpng, outpng, width,
+                    )
                 )
-            )
-        elif os.path.splitext(outfns[case])[-1] == ".pdf":
-            outpdf = path_full2web(outfns[case])
-            html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(outpdf, width))
+            elif os.path.splitext(outfns[case])[-1] == ".pdf":
+                outpdf = path_full2web(outfns[case])
+                html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(outpdf, width))
+            else:
+                log.error("Unexpected extension for {}; exiting".format(outfns[case]))
+                sys.exit(1)
         else:
-            log.error("Unexpected extension for {}; exiting".format(outfns[case]))
-            sys.exit(1)
+            html.write("\t<p>No {}.</p>\n".format(path_full2web(outfns[case])))
         html.write("\t</br>\n")
         html.write("</div>\n")
         html.write("\n")
