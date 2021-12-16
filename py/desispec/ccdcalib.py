@@ -4,7 +4,7 @@ import datetime
 import subprocess
 
 import astropy.io.fits as pyfits
-from astropy.table import Table
+from astropy.table import vstack as table_vstack
 from astropy.time import Time
 import numpy as np
 from scipy.signal import savgol_filter
@@ -746,7 +746,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         for night in nightlist:
             expfiles.append(get_exposure_table_pathname(night))
         exptables = load_tables(expfiles)
-        exptable_all=Table.vstack(exptables)
+        exptable_all=table_vstack(exptables)
         select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
         speclog=exptable_all[select]
         speclog['MJD']=speclog['MJD-OBS']
