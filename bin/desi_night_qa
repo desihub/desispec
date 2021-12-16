@@ -76,8 +76,8 @@ def main():
     # AR is ffmpeg installed
     # AR disabled for now, as using pdf; keep the lines in case we generate mp4 later
     # if os.system("which ffmpeg") != 0:
-    #    log.error("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'; exiting")
-    #    sys.exit(1)
+    #    log.error("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'")
+    #    raise RuntimeError("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'")
 
     # AR existing output folder?
     if not os.path.isdir(args.outdir):
@@ -95,8 +95,8 @@ def main():
                     if args.recompute:
                         log.warning("\texisting {} will be overwritten".format(fn))
                     else:
-                        log.error("\t{} already exists, and args.recompute = False; exiting".format(fn))
-                        sys.exit(1)
+                        log.error("\t{} already exists, and args.recompute = False".format(fn))
+                        raise RuntimeError("\t{} already exists, and args.recompute = False".format(fn))
             else:
                 log.info("{} not in args.steps={}\t=> not creating {}".format(key, args.steps, fn))
 

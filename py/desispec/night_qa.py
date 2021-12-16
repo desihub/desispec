@@ -288,8 +288,8 @@ def create_mp4(fns, outmp4, duration=15):
     """
     # AR is ffmpeg installed
     if os.system("which ffmpeg") != 0:
-        log.error("ffmpeg needs to be installed to run create_mp4(); exiting")
-        sys.exit(1)
+        log.error("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'")
+        raise RuntimeError("ffmpeg needs to be installed to run create_mp4()")
     # AR deleting existing video mp4, if any
     if os.path.isfile(outmp4):
         log.info("deleting existing {}".format(outmp4))
@@ -1294,8 +1294,8 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
                 outpdf = path_full2web(outfns[case])
                 html.write("\t<iframe src='{}' width={} height=100%></iframe>\n".format(outpdf, width))
             else:
-                log.error("Unexpected extension for {}; exiting".format(outfns[case]))
-                sys.exit(1)
+                log.error("Unexpected extension for {}".format(outfns[case]))
+                raise RuntimeError("Unexpected extension for {}".format(outfns[case]))
         else:
             html.write("\t<p>No {}.</p>\n".format(path_full2web(outfns[case])))
         html.write("\t</br>\n")
