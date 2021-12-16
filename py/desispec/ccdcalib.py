@@ -698,7 +698,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         tempdir (str): tempfile working directory
         nosubmit (bool): generate scripts but don't submit them to batch queue
         first_expid (int): ignore expids prior to this
-        use_exptable (bool): use shortened copy of joined exposure tables instead of spectable
+        use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -745,7 +745,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         expfiles=[]
         for night in nightlist:
             expfiles.append(get_exposure_table_pathname(night))
-        exptables = load_tables(expfiles, tabletype='exptable')
+        exptables = load_tables(expfiles)
         exptable_all=Table.vstack(exptables)
         select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
         speclog=exptable_all[select]
