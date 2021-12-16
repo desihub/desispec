@@ -19,8 +19,8 @@ from desispec.scripts.exposuretable import create_exposure_tables
 
 def update_exposure_tables(nights=None, night_range=None, path_to_data=None,
                            exp_table_path=None, obstypes=None, orig_filetype='csv',
-                           out_filetype='csv', cameras='', bad_cameras='',
-                           badamps='', verbose=False, no_specprod=False, dry_run=False):
+                           out_filetype='csv',  verbose=False, no_specprod=False,
+                           dry_run=False):
     """
     Generates updated exposure tables for the nights requested. Requires
     exposure tables to exist on disk.
@@ -43,20 +43,6 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None,
                             tables.
         out_filetype: str. The file extension for the outputted exposure tables
                            (without the '.').
-        cameras: str. Explicitly define the cameras for which you want to reduce
-                      the data. Should be a comma separated list. Only numbers
-                      assumes you want to reduce r, b, and z for that camera.
-                      Otherwise specify separately [brz][0-9].
-        bad_cameras: str. Explicitly define the cameras that you don't want to
-                          reduce the data. Should be a comma separated list.
-                          Only numbers assumes you want to reduce r, b, and z
-                          for that camera. Otherwise specify separately
-                          [brz][0-9].
-        badamps: str. Define amplifiers that you know to be bad and should not
-                      be processed. Should be a list separated by comma or
-                      semicolon. Saved list will converted to semicolons.
-                      Each entry should be of the  form
-                      {camera}{spectrograph}{amp}, i.e. [brz][0-9][A-D].
         verbose: boolean. Whether to give verbose output information or not.
                           True prints more information.
         no_specprod: boolean. Create exposure table in repository location
@@ -151,8 +137,8 @@ def update_exposure_tables(nights=None, night_range=None, path_to_data=None,
                                path_to_data=path_to_data,
                                exp_table_path=exp_table_path,
                                obstypes=obstypes_str, exp_filetype=temp_filetype,
-                               cameras=cameras, bad_cameras=bad_cameras,
-                               badamps=badamps, verbose=verbose,
+                               cameras=None, bad_cameras=None,
+                               badamps=None, verbose=verbose,
                                no_specprod=no_specprod, overwrite_files=False)
 
         ## Load the old and new tables to compare
