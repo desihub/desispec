@@ -1170,9 +1170,18 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("\t<p>Please click on each tab from top to bottom, and follow instructions.</p>\n")
 
     # AR night log
-    nighthtml = "https://data.desi.lbl.gov/desi/survey/ops/nightlogs/{}/NightSummary{}.html".format(
-        night, night,
-    )
+    # AR testing different possible names
+    nightdir = os.path.join(os.getenv("DESI_ROOT"), "survey", "ops", "nightlogs", "{}".format(night))
+    nightfn = None
+    for basename in [
+        "NightSummary{}.html".format(night),
+        "nightlog_kpno.html",
+        "nightlog_nersc.html",
+        "nightlog.html",
+    ]:
+        if nightfn is None:
+            if os.path.isfile(os.path.join(nightdir, basename)):
+                nightfn = os.path.join(os.path.join(nightdir, basename))
     html.write(
         "<button type='button' class='collapsible'>\n\t<strong>{} Night summary</strong>\n</button>\n".format(
             night,
@@ -1180,12 +1189,15 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     )
     html.write("<div class='content'>\n")
     html.write("\t<br>\n")
-    html.write("\t<p>Read the nightlog for {}: {}, displayed below.</p>\n".format(night, nighthtml))
-    html.write("\t<p>And consider subscribing to the desi-nightlog mailing list!\n")
-    html.write("\t</br>\n")
-    html.write("\t<br>\n")
-    html.write("\t<iframe src='{}' width=100% height=100%></iframe>\n".format(nighthtml))
-    html.write("\t<p>And consider subscribing to the desi-nightlog mailing list!\n")
+    if nightfn is not None:
+        html.write("\t<p>Read the nightlog for {}: {}, displayed below.</p>\n".format(night, path_full2web(nightfn)))
+        html.write("\t<p>And consider subscribing to the desi-nightlog mailing list!\n")
+        html.write("\t</br>\n")
+        html.write("\t<br>\n")
+        html.write("\t<iframe src='{}' width=100% height=100%></iframe>\n".format(path_full2web(nightfn)))
+        html.write("\t<p>And consider subscribing to the desi-nightlog mailing list!\n")
+    else:
+        html.write("\t<p>No found nightlog for in {}</p>\n".format(path_full2web(nightdir)))
     html.write("\t</br>\n")
     html.write("</div>\n")
     html.write("\n")
