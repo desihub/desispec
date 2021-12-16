@@ -1249,23 +1249,8 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     html.write("</div>\n")
     html.write("\n")
 
-    # AR DARK
-    html.write(
-        "<button type='button' class='collapsible'>\n\t<strong>{} DARK</strong>\n</button>\n".format(
-            night,
-        )
-    )
-    html.write("<div class='content'>\n")
-    html.write("\t<br>\n")
-    html.write("\t<p>This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red).</p>\n")
-    html.write("\t<p>Watch it and report unsual features (easy to say!)</p>\n")
-    html.write("\t<tr>\n")
-    html.write("\t<iframe src='{}' width=100% height=100%></iframe>\n".format(path_full2web(outfns["dark"])))
-    html.write("\t</br>\n")
-    html.write("</div>\n")
-    html.write("\n")
-
     # AR various tabs:
+    # AR - dark
     # AR - badcol
     # AR - ctedet
     # AR - sframesky
@@ -1273,10 +1258,11 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     # AR - skyzfiber
     # AR - petalnz
     for case, caselab, width, text in zip(
-        ["badcol", "ctedet", "sframesky", "tileqa", "skyzfiber", "petalnz"],
-        ["bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
-        ["35%", "100%", "75%", "90%", "35%", "100%"],
+        ["dark", "badcol", "ctedet", "sframesky", "tileqa", "skyzfiber", "petalnz"],
+        ["DARK", "bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
+        ["100%", "35%", "100%", "75%", "90%", "35%", "100%"],
         [
+            "This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red)\nWatch it and report unsual features (easy to say!)",
             "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
             "This pdf displays a small diagnosis to detect CTE anormal behaviour (one petal-camera per page)\nWatch it and report unusual features (typically if the lower enveloppe of the blue or orange curve is systematically lower than the other one).",
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
