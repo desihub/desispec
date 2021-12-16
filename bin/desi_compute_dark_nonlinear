@@ -47,7 +47,7 @@ parser.add_argument('--nskip-zeros', type=int, default=30, required=False,
                     help='Skip N ZEROs per day while flushing charge')
 parser.add_argument('--mindarks', type=int, default=5, required=False,
                     help='Minimum number of DARKs per EXPTIME to use that EXPTIME')
-parser.add_argument('--use_exptable', type=bool, default=False, action='store_true', required=False,
+parser.add_argument('--use_exptable', action='store_true', required=False,
                     help='Use a shortened exptable in the processing to get BADCAMWORD')
 
 
