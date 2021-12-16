@@ -72,7 +72,9 @@ def get_surveys_night_expids(
         surveys: list of the SURVEYs (np.array())
 
     Notes:
-        Based on parsing the OBSTYPE and NTSSURVY keywords from the SPEC extension header of the desi-{EXPID}.fits.fz files.
+        Based on:
+        - parsing the OBSTYPE keywords from the SPEC extension header of the desi-{EXPID}.fits.fz files;
+        - for OBSTYPE="SCIENCE", parsing the fiberassign-TILEID.fits* header
     """
     if datadir is None:
         datadir = os.getenv("DESI_SPECTRO_DATA")
@@ -91,24 +93,18 @@ def get_surveys_night_expids(
         hdr = fits.getheader(fns[i], "SPEC")
         if hdr["OBSTYPE"] == "SCIENCE":
             survey = "unknown"
-            # AR first try the NTSSURVY keyword
-            # AR - discard cases where NTSSURVY="" or "na"...
-            if "NTSSURVY" in [cards[0] for cards in hdr.cards]:
-                if hdr["NTSSURVY"] not in ["", "na"]:
-                    survey = hdr["NTSSURVY"]
-            # AR else look for the fiberassign file
+            # AR look for the fiberassign file
             # AR - used wildcard, because early files (pre-SV1?) were not gzipped
             # AR - first check SURVEY keyword (should work for SV3 and later)
             # AR - if not present, take FA_SURV
+            fafns = glob(os.path.join(os.path.dirname(fns[i]), "fiberassign-??????.fits*"))
+            if len(fafns) > 0:
+                fahdr = fits.getheader(fafns[0], 0)
+                if "SURVEY" in [cards[0] for cards in fahdr.cards]:
+                    survey = fahdr["SURVEY"]
+                else:
+                    survey = fahdr["FA_SURV"]
             if survey == "unknown":
-                fafns = glob(os.path.join(os.path.dirname(fns[i]), "fiberassign-??????.fits*"))
-                if len(fafns) > 0:
-                    fahdr = fits.getheader(fafns[0], 0)
-                    if "SURVEY" in [cards[0] for cards in fahdr.cards]:
-                        survey = fahdr["SURVEY"]
-                    else:
-                        survey = fahdr["FA_SURV"]
-            if survey is None:
                 log.warning("SURVEY could not be identified for {}; setting to 'unknown'".format(fns[i]))
             # AR append
             expids.append(hdr["EXPID"])
