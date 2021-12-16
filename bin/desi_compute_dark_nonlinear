@@ -183,8 +183,8 @@ for exptime in np.unique(speclog['EXPTIME_INT']):
 speclog = speclog[keep]
 
 #- Print some summary stats before continuing
-isZero = speclog['OBSTYPE'] == 'ZERO'
-isDark = speclog['OBSTYPE'] == 'DARK'
+isZero = (speclog['OBSTYPE'] == 'ZERO') | (speclog['OBSTYPE'] == 'zero')
+isDark = (speclog['OBSTYPE'] == 'DARK') | (speclog['OBSTYPE'] == 'dark')
 for night in nights:
     ii = speclog[daynight] == night
     nzeros = np.count_nonzero(ii & isZero)
