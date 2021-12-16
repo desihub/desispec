@@ -43,6 +43,8 @@ def parse(options=None):
                         help = "html formatting css file; default to pkg_resources.resource_filename('desispec', 'data/qa/nightqa.css')")
     parser.add_argument("--recompute", action = "store_true",
                         help = "recompute (i.e. overwrite args.outfile if already existing")
+    parser.add_argument("--steps", type = str, default = "dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html", required = False,
+                        help = "comma-separated list of steps to execute (default=dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html)")
     parser.add_argument("--html_only", action = "store_true",
                         help = "only regenerate the nightqa-{NIGHT}.html page")
 
@@ -85,51 +87,67 @@ def main():
     outfns = get_nightqa_outfns(args.outdir, args.night)
     # AR existing output files?
     if not args.html_only:
-        for fn in [outfns[key] for key in outfns]:
-            log.info("will create {}".format(fn))
-            if os.path.isfile(fn):
-                if args.recompute:
-                    log.warning("\texisting {} will be overwritten".format(fn))
-                else:
-                    log.error("\t{} already exists, and args.recompute = False; exiting".format(fn))
-                    sys.exit(1)
+        for key in outfns:
+            fn = outfns[key]
+            if key in args.steps.split(","):
+                log.info("will create {}".format(fn))
+                if os.path.isfile(fn):
+                    if args.recompute:
+                        log.warning("\texisting {} will be overwritten".format(fn))
+                    else:
+                        log.error("\t{} already exists, and args.recompute = False; exiting".format(fn))
+                        sys.exit(1)
+            else:
+                log.info("{} not in args.steps={}\t=> not creating {}".format(key, args.steps, fn))
 
-    # AR expids, tileids
-    expids, tileids, surveys = get_surveys_night_expids(args.night)
-    dark_expid = get_dark_night_expid(args.night)
-    ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
+    # AR expids, tileids, surveys
+    if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], args.steps.split(",")).sum() > 0:
+        expids, tileids, surveys = get_surveys_night_expids(args.night)
+    # AR dark expid
+    if np.in1d(["dark", "badcol"], args.steps.split(",")).sum() > 0:
+        dark_expid = get_dark_night_expid(args.night)
+    # AR CTE detector expid
+    if "ctedet" in args.steps.split(","):
+        ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
 
-    if not args.html_only:
-        # AR dark
+    # AR dark
+    if "dark" in args.steps.split(","):
         create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid)
 
-        # AR badcolumn
+    # AR badcolumn
+    if "badcol" in args.steps.split(","):
         create_badcol_png(outfns["badcol"], args.night, args.prod)
 
-        # AR CTE detector
+    # AR CTE detector
+    if "ctedet" in args.steps.split(","):
         if ctedet_expid is not None:
             create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid)
 
-        # AR sframesky
+    # AR sframesky
+    if "sframesky" in args.steps.split(","):
         create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids)
 
-        # AR tileqa
+    # AR tileqa
+    if "tileqa" in args.steps.split(","):
         create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids)
 
-        # AR skyzfiber
+    # AR skyzfiber
+    if "skyzfiber" in args.steps.split(","):
         create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, np.unique(tileids), dchi2_threshold=9)
 
-        # AR per-petal n(z)
+    # AR per-petal n(z)
+    if "petalnz" in args.steps.split(","):
         unq_tileids, ii = np.unique(tileids, return_index=True)
         unq_surveys = surveys[ii]
         create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids, unq_surveys, dchi2_threshold=25)
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
-    os.system("cp {} {}".format(args.css, args.outdir))
-    write_nightqa_html(
-        outfns, args.night, args.prod, os.path.basename(args.css),
-        surveys="/".join(np.unique(surveys)), nexp=expids.size, ntile=len(set(tileids)))
+    if "html" in args.steps.split(","):
+        os.system("cp {} {}".format(args.css, args.outdir))
+        write_nightqa_html(
+            outfns, args.night, args.prod, os.path.basename(args.css),
+            surveys="/".join(np.unique(surveys)), nexp=expids.size, ntile=len(set(tileids)))
 
 if __name__ == "__main__":
     main()
