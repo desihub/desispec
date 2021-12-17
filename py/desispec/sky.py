@@ -697,8 +697,10 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                     # or bad sky lines
                     jj=in_amp[fiber-amp_fibers[0]]
                     # fit a normalization factor
-
-                    res = (modified_cskyivar[fiber,jj]>0)*(frame.flux[fiber,jj]-scale*cskyflux[fiber,jj])
+                    medivar=np.median(modified_cskyivar[fiber,jj][modified_cskyivar[fiber,jj]>0])
+                    # set to zero the residuals for which the uncertainty is > 3 times the median uncertainty.
+                    # this automatically mask the brightest sky lines
+                    res = (modified_cskyivar[fiber,jj]>medivar/9.)*(frame.flux[fiber,jj]-scale*cskyflux[fiber,jj])
                     res = scipy.ndimage.filters.median_filter(res,50)
                     # fit with low order polynomial
                     c   = np.polyfit(y[f,jj]/1000.,res,1)
@@ -748,10 +750,10 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 bkg += amp_bkg
 
             cskyflux += bkg
-            #import fitsio
-            #fitsio.write("bkg.fits",bkg,clobber=True)
-            #print("wrote bkg.fits")
-            #sys.exit(12)
+            if 0 :
+                import fitsio
+                fitsio.write("bkg.fits",bkg,clobber=True)
+                print("wrote bkg.fits")
         else :
             log.warning("No PSF file {}. Cannot fit a background level per amplifier".format(psf_filename))
 
