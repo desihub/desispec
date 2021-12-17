@@ -679,7 +679,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
             #- approximate RA/DEC correction; see desispec issue #1538
             pm['FIBER_RA'] = pm['TARGET_RA'] - pm[f'DX_{i}']*1000/(70*3600)/np.cos(pm['TARGET_DEC']*np.pi/180)
-            pm['FIBER_DEC'] = pm['TARGET_DEC'] + pm['DY_{i}']*1000/(70*3600)
+            pm['FIBER_DEC'] = pm['TARGET_DEC'] + pm[f'DY_{i}']*1000/(70*3600)
 
         #- Create fibermap table to merge with fiberassign file
         fibermap = Table()
