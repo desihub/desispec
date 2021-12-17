@@ -664,39 +664,22 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         log.info('%d/%d fibers in coordinates file', len(pm), len(fa))
 
         #- Exposures 114320 onwards (part way through night 20211216)
-        #- have FVC turbulence correction info, but aren't applied to
-        #- FIBER_* columns.  Fix that.
+        #- have FVC turbulence corrections applied to FPA_X/Y_n and DX_n/DY_n
+        #- columns, but this isn't applied to FIBER_RA/DEC yet, so make
+        #- an approximate correction to TARGET_RA/DEC instead.
         #- NOTE: in the future there may also be an end date after which
         #- they are applied, but we don't know if/when that is yet.
         i = numiter-1
         if (expid >= 114320 and
-            f'TURB_X_{i}' in pm.colnames and
-            f'TURB_Y_{i}' in pm.colnames
+            f'TURB_X_{i}' in pm.colnames and f'TURB_Y_{i}' in pm.colnames and
+            f'DX_{i}' in pm.colnames and f'DY_{i}' in pm.colnames and
+            'FIBER_RA' in pm.colnames and 'FIBER_DEC' in pm.colnames
             ):
-            log.info('Correcting FIBER_* values with TURB_*')
-            #- NOTE: TURB_X_n is *subtracted* from X/Y and *added* to DX/DY
-            if 'FIBER_X' in pm.colnames:
-                pm['FIBER_X'] -= pm[f'TURB_X_{i}']
-            if 'FIBER_Y' in pm.colnames:
-                pm['FIBER_Y'] -= pm[f'TURB_Y_{i}']
-            if 'FIBER_DX' in pm.colnames:
-                pm['FIBER_DX'] += pm[f'TURB_X_{i}']
-            if 'FIBER_Y' in pm.colnames:
-                pm['FIBER_DY'] += pm[f'TURB_Y_{i}']
+            log.info('Updating FIBER_RA/DEC values with turbulance corrections')
 
             #- approximate RA/DEC correction; see desispec issue #1538
-            #- OPTION 1: apply FIBER_DX/DY correction to TARGET_RA/TARGET_DEC
-            if 'FIBER_RA' in pm.colnames and 'FIBER_DEC' in pm.colnames:
-                pm['FIBER_RA'] = pm['TARGET_RA'] - pm['FIBER_DX']*1000/(70*3600)/np.cos(pm['TARGET_DEC']*np.pi/180)
-                pm['FIBER_DEC'] = pm['TARGET_DEC'] + pm['FIBER_DY']*1000/(70*3600)
-
-            #- OPTION 2: apply TURB_X/Y correction to FIBER_RA/FIBER_DEC
-            #- from 20211216/114320 the turbulence corrections are larger than the FIBER_DX/DY, so disfavors this
-            # if 'FIBER_RA' in pm.colnames and 'FIBER_DEC' in pm.colnames:
-            #     #- positive TURB_X makes FIBER_X smaller and thus RA larger
-            #     pm['FIBER_RA'] += pm[f'TURB_X_{i}']*1000/(70*3600)/np.cos(pm['TARGET_DEC']*np.pi/180)
-            #     #- positive TURB_Y makes FIBER_Y smaller and thus dec smaller
-            #     pm['FIBER_DEC'] -= pm[f'TURB_Y_{i}']*1000/(70*3600)
+            pm['FIBER_RA'] = pm['TARGET_RA'] - pm[f'DX_{i}']*1000/(70*3600)/np.cos(pm['TARGET_DEC']*np.pi/180)
+            pm['FIBER_DEC'] = pm['TARGET_DEC'] + pm['DY_{i}']*1000/(70*3600)
 
         #- Create fibermap table to merge with fiberassign file
         fibermap = Table()
@@ -705,12 +688,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
         #- Sometimes these columns are missing in the coordinates files, maybe
         #- only when numiter=1, i.e. only a blind move but not corrections?
-        if 'FIBER_X' in pm.colnames:
-            fibermap['FIBER_X'] = pm['FIBER_X']
-            fibermap['FIBER_Y'] = pm['FIBER_Y']
-            fibermap['DELTA_X'] = pm['FIBER_DX']
-            fibermap['DELTA_Y'] = pm['FIBER_DY']
-        elif f'FPA_X_{numiter-1}' in pm.colnames:
+        if f'FPA_X_{numiter-1}' in pm.colnames:
             fibermap['FIBER_X'] = pm[f'FPA_X_{numiter-1}']
             fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
             fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
