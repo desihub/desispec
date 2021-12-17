@@ -111,7 +111,6 @@ def get_surveys_night_expids(
             tileids.append(hdr["TILEID"])
             surveys.append(survey)
     expids, tileids, surveys = np.array(expids), np.array(tileids), np.array(surveys)
-    msg = "for NIGHT={} found"
     per_surv = []
     for survey in np.unique(surveys):
         sel = surveys == survey
