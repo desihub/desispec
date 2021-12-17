@@ -100,7 +100,7 @@ def get_surveys_night_expids(
             fafns = glob(os.path.join(os.path.dirname(fns[i]), "fiberassign-??????.fits*"))
             if len(fafns) > 0:
                 fahdr = fits.getheader(fafns[0], 0)
-                if "SURVEY" in [cards[0] for cards in fahdr.cards]:
+                if "SURVEY" in fahdr:
                     survey = fahdr["SURVEY"]
                 else:
                     survey = fahdr["FA_SURV"]
@@ -803,7 +803,7 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
             log.warning("no {} file, proceeding to next tile".format(fn))
             continue
         hdr = fits.getheader(fn, "FIBERQA")
-        if "FAPRGRM" not in [cards[0] for cards in hdr.cards]:
+        if "FAPRGRM" not in hdr:
             log.warning("no FAPRGRM in {} header, proceeding to next tile".format(fn))
             continue
         faprgrm = hdr["FAPRGRM"].lower()
