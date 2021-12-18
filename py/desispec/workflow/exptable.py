@@ -733,7 +733,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
         tileid = outdict['TILEID']
         if tileid == coldefault_dict['TILEID']:
             log.error("Science exposure didn't specify TILEID in the header!")
-            log.error("Proceeding without a fiberassing file.")
+            log.warning("Proceeding without a fiberassing file.")
             fba_header = {}
             extra_in_fba = False
         else:
