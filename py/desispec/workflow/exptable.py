@@ -730,22 +730,46 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     ## Now for science exposures,
     if obstype == 'science':
         ## fiberassign used to be uncompressed, check the new format first but try old if necessary
-        fbapath = os.path.join(raw_data_dir, night, expstr, f"fiberassign-{outdict['TILEID']:06d}.fits.gz")
-        altfbapath = fbapath.replace('.fits.gz', '.fits')
-        if not os.path.isfile(fbapath) and os.path.isfile(altfbapath):
-            fbapath = altfbapath
-
-        ## Load fiberassign file. If not available return empty dict
-        if os.path.isfile(fbapath):
-            log.info(f"Found fiberassign file: {fbapath}.")
-            fba = fits.open(fbapath)
-            extra_in_fba = ('EXTRA' in fba)
-            fba_header = fba['PRIMARY'].header
-            fba.close()
-        else:
-            log.error(f"Couldn't find fiberassign file: {fbapath}.")
+        tileid = outdict['TILEID']
+        if tileid == coldefault_dict['TILEID']:
+            log.error("Science exposure didn't specify TILEID in the header!")
+            log.error("Proceeding without a fiberassing file.")
             fba_header = {}
             extra_in_fba = False
+        else:
+            fbaraw = os.path.join(raw_data_dir, night, expstr,
+                                   f"fiberassign-{tileid:06d}.fits")
+            if os.path.exists(fbaraw+'.gz'):
+                fbaraw = fbaraw+'.gz'
+
+            targdir = os.getenv('DESI_TARGET')
+            fbasvn = os.path.join(targdir, 'fiberassign', 'tiles', 'trunk',
+                                    f'{tileid // 1000:03d}',
+                                    f'fiberassign-{tileid:06d}.fits')
+
+            fbafinal = fbaraw
+            if os.path.exists(fbasvn):
+                fbafinal = fbasvn
+            elif os.path.exists(fbasvn+'.gz'):
+                fbasvn = fbasvn+'.gz'
+                fbafinal = fbasvn
+
+            if fbafinal == fbasvn:
+                log.info(f'Overriding raw fiberassign file {fbaraw} with svn {fbasvn}')
+            else:
+                log.info(f'{fbasvn}[.gz] not found; sticking with raw data fiberassign file')
+
+            ## Load fiberassign file. If not available return empty dict
+            if os.path.isfile(fbafinal):
+                log.info(f"Found fiberassign file: {fbafinal}.")
+                fba = fits.open(fbafinal)
+                extra_in_fba = ('EXTRA' in fba)
+                fba_header = fba['PRIMARY'].header
+                fba.close()
+            else:
+                log.error(f"Couldn't find fiberassign file: {fbafinal}.")
+                fba_header = {}
+                extra_in_fba = False
 
         ## Add the fiber assign info. Try fiberassign file first, then raw data, then req
         for name in ["SURVEY","FA_SURV","FAPRGRM","GOALTIME","GOALTYPE","EBVFAC"]:
