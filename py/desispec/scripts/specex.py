@@ -51,7 +51,7 @@ def parse(options=None):
     return args
 
 
-def main(args, comm=None):
+def fitpsf(args, bundle):
 
     log = get_logger()
 
@@ -61,17 +61,7 @@ def main(args, comm=None):
     imgfile = args.input_image
     outfile = args.output_psf
 
-    nproc = 1
-    rank = 0
-    if comm is not None:
-        nproc = comm.size
-        rank = comm.rank
-
-    hdr=None
-    if rank == 0 :
-        hdr = fits.getheader(imgfile)
-    if comm is not None:
-        hdr = comm.bcast(hdr, root=0)
+    hdr = fits.getheader(imgfile)
 
     #- Locate line list in $SPECEXDATA or specex/data
     if 'SPECEXDATA' in os.environ:
@@ -117,30 +107,16 @@ def main(args, comm=None):
             bnspec[b] = specmax - bspecmin[b]
         else:
             bnspec[b] = (b+1) * bundlesize - bspecmin[b]
-
-    # Now we assign bundles to processes
-
-
-    mynbundle = int(nbundle / nproc)
-    leftover = nbundle % nproc
-    if rank < leftover:
-        mynbundle += 1
-        myfirstbundle = bundles[0] + rank * mynbundle
-    else:
-        myfirstbundle = bundles[0] + ((mynbundle + 1) * leftover) + \
-            (mynbundle * (rank - leftover))
-
-    if rank == 0:
-        # Print parameters
-        log.info("specex:  using {} processes".format(nproc))
-        log.info("specex:  input image = {}".format(imgfile))
-        log.info("specex:  input PSF = {}".format(inpsffile))
-        log.info("specex:  output = {}".format(outfile))
-        log.info("specex:  bundlesize = {}".format(bundlesize))
-        log.info("specex:  specmin = {}".format(specmin))
-        log.info("specex:  specmax = {}".format(specmax))
-        if args.broken_fibers :
-            log.info("specex:  broken fibers = {}".format(args.broken_fibers))
+    
+    # Print parameters
+    log.info("specex:  input image = {}".format(imgfile))
+    log.info("specex:  input PSF = {}".format(inpsffile))
+    log.info("specex:  output = {}".format(outfile))
+    log.info("specex:  bundlesize = {}".format(bundlesize))
+    log.info("specex:  specmin = {}".format(specmin))
+    log.info("specex:  specmax = {}".format(specmax))
+    if args.broken_fibers :
+        log.info("specex:  broken fibers = {}".format(args.broken_fibers))
 
     # get the root output file
 
@@ -151,91 +127,77 @@ def main(args, comm=None):
     outroot = outmat.group(1)
 
     outdir = os.path.dirname(outroot)
-    if rank == 0:
-        if outdir != "" :
-            if not os.path.isdir(outdir):
-                os.makedirs(outdir)
+    if outdir != "" :
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
 
     cam = hdr["camera"].lower().strip()
     band = cam[0]
 
-    failcount = 0
+    outbundle = "{}_{:02d}".format(outroot, bundle)
+    outbundlefits = "{}.fits".format(outbundle)
+    com = ['desi_psf_fit']
+    com.extend(['-a', imgfile])
+    com.extend(['--in-psf', inpsffile])
+    com.extend(['--out-psf', outbundlefits])
+    com.extend(['--lamp-lines', lamp_lines_file])
+    com.extend(['--first-bundle', "{}".format(bundle)])
+    com.extend(['--last-bundle', "{}".format(bundle)])
+    com.extend(['--first-fiber', "{}".format(bspecmin[bundle])])
+    com.extend(['--last-fiber', "{}".format(bspecmin[bundle]+bnspec[bundle]-1)])
+    if band == "z" :
+        com.extend(['--legendre-deg-wave', "{}".format(3)])
+        com.extend(['--fit-continuum'])
+    else :
+        com.extend(['--legendre-deg-wave', "{}".format(1)])
+    if args.broken_fibers :
+        com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
+    if args.debug :
+        com.extend(['--debug'])
 
-    for b in range(myfirstbundle, myfirstbundle+mynbundle):
-        outbundle = "{}_{:02d}".format(outroot, b)
-        outbundlefits = "{}.fits".format(outbundle)
-        com = ['desi_psf_fit']
-        com.extend(['-a', imgfile])
-        com.extend(['--in-psf', inpsffile])
-        com.extend(['--out-psf', outbundlefits])
-        com.extend(['--lamp-lines', lamp_lines_file])
-        com.extend(['--first-bundle', "{}".format(b)])
-        com.extend(['--last-bundle', "{}".format(b)])
-        com.extend(['--first-fiber', "{}".format(bspecmin[b])])
-        com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
-        if band == "z" :
-            com.extend(['--legendre-deg-wave', "{}".format(3)])
-            com.extend(['--fit-continuum'])
-        else :
-            com.extend(['--legendre-deg-wave', "{}".format(1)])
-        if args.broken_fibers :
-            com.extend(['--broken-fibers', "{}".format(args.broken_fibers)])
-        if args.debug :
-            com.extend(['--debug'])
+    com.extend(optarray)
 
-        com.extend(optarray)
+    log.debug("calling {}".format(com))
+    print("running specex with command:",com)
+    retval = run_specex(com)
 
-        log.info("proc {} calling {}".format(rank, " ".join(com)))
-
-        retval = run_specex(com)
-
-        if retval != 0:
-            comstr = " ".join(com)
-            log.error("desi_psf_fit on process {} failed with return "
-                "value {} running {}".format(rank, retval, comstr))
-            failcount += 1
-        else:
-            log.info(f"proc {rank} succeeded generating {outbundlefits}")
-
-    if comm is not None:
-        from mpi4py import MPI
-        failcount = comm.allreduce(failcount, op=MPI.SUM)
-
-    if failcount > 0:
-        # all processes throw
+    if retval != 0:
+        comstr = " ".join(com)
+        log.error("desi_psf_fit failed with return "
+            "value {} running {}".format(retval, comstr))
         raise RuntimeError("some bundles failed desi_psf_fit")
 
-    if rank == 0:
-        outfits = "{}.fits".format(outroot)
+    return
 
-        inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
+def merge_camera(args):
 
-        if args.disable_merge :
-            log.info("don't merge")
-        else :
-            #- Empirically it appears that files written by one rank sometimes
-            #- aren't fully buffer-flushed and closed before getting here,
-            #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
-            log.info('5 sec pause before merging')
-            sys.stdout.flush()
-            time.sleep(5.)
+    log = get_logger()
 
-            merge_psf(inputs,outfits)
+    specmin = int(args.specmin)
+    nspec = int(args.nspec)
+    bundlesize = int(args.bundlesize)
+    outfile = args.output_psf
 
-            log.info('done merging')
+    # Now we divide our spectra into bundles
+    specmax = specmin + nspec
+    checkbundles = set()
+    checkbundles.update(np.floor_divide(np.arange(specmin, specmax),
+        bundlesize*np.ones(nspec)).astype(int))
+    bundles = sorted(checkbundles)
+    
+    # Now we get outfit and input filenames for merging
+    outpat = re.compile(r'(.*)\.fits')
+    outmat = outpat.match(outfile)
+    if outmat is None:
+        raise RuntimeError("specex output file should have .fits extension")
+    outroot = outmat.group(1)
+    outfits = "{}.fits".format(outroot)
+    inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
 
-            if failcount == 0:
-                # only remove the per-bundle files if the merge was good
-                for f in inputs :
-                    if os.path.isfile(f):
-                        os.remove(f)
+    # Now we merge
+    merge_psf(inputs,outfits)
 
-    if comm is not None:
-        failcount = comm.bcast(failcount, root=0)
-
-    if failcount > 0:
-        # all processes throw
-        raise RuntimeError("merging of per-bundle files failed")
+    log.info('done merging')
 
     return
 
@@ -274,12 +236,12 @@ def run(comm,cmds,cameras):
        
     log = get_logger()
     
-    group_size = 20
+    bundles_per_camera = 20
     # reverse to do b cameras last since they take least time
     cameras = sorted(cameras, reverse=True)
-    def fitbundles(comm,job):
+    def fitbundle(comm,job):
         '''
-        Run PSF fit with specex on all bundles for a single ccd image 
+        Run PSF fit with specex on single bundles for a single ccd image 
 
         Args:
             comm: MPI communicator 
@@ -287,7 +249,7 @@ def run(comm,cmds,cameras):
             
         This is an inline function for use by desispec.workflow.schedule.Schedule, 
         i.e. via the lines
-            sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
+            sc = Schedule(fitbundles,comm=comm,njobs=len(cameras)*nbundles,group_size=group_size)
             sc.run()
         immediately after this inline function definition. 
         
@@ -306,36 +268,93 @@ def run(comm,cmds,cameras):
         '''
       
         rank = comm.Get_rank()
-        camera = cameras[job]
+        camera_index = job // bundles_per_camera
+        bundle = job % bundles_per_camera
+        camera = cameras[camera_index]
         if not camera in cmds:
             log.error(f'FAILED: commands for camera {camera} not found for'+
-                      f' MPI group ranks {rank}-{rank+group_size-1}')
+                      f'bundle {bundle}')
             return        
         if camera in cmds:
             cmdargs = cmds[camera].split()[1:]
             cmdargs = parse(cmdargs)
-            if rank == 0:
-                t0 = time.time()
-                timestamp = time.asctime()
-                log.info(f'MPI ranks {rank}-{rank+group_size-1}'+
-                         f' fitting PSF for {camera} at {timestamp}')
+            t0 = time.time()
+            timestamp = time.asctime()
+            log.info(f'Fitting PSF for'+
+                     f' bundle {bundle} on camera {camera} at {timestamp}')
             try:
-                main(cmdargs, comm=comm)
+                fitpsf(cmdargs, bundle)
             except Exception as e:
-                 if rank == 0:
-                     log.error(f'FAILED: MPI group ranks {rank}-{rank+group_size-1}'+
-                               f' on camera {camera}')
-                     log.error('FAILED: {}'.format(cmds[camera]))
-                     log.error(e)
-            if rank == 0:
-                specex_time = time.time() - t0
-                log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
+                log.error(f'FAILED: Bundle {bundle}'+
+                           f' of camera {camera}')
+                log.error('FAILED: {}'.format(cmds[camera]))
+                log.error(e)
+            specex_time = time.time() - t0
+            log.info(f'specex fit for bundle {bundle} and camera {camera}'+
+                     f' took {specex_time:.1f} seconds')
 
         return
 
-    sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
-    sc.run()
+    def mergepsf(comm,job):
+        '''
+        Run PSF fit with specex on single bundles for a single ccd image 
 
+        Args:
+            comm: MPI communicator 
+            job:  job index corresponding to position in list of cmds entries 
+            
+        This is an inline function for use by desispec.workflow.schedule.Schedule, 
+        i.e. via the lines
+            sc = Schedule(fitbundles,comm=comm,njobs=len(cameras)*nbundles,group_size=group_size)
+            sc.run()
+        immediately after this inline function definition. 
+        
+        This function uses the external variables group_size, cmds, and cameras. In 
+        particular, the list of camera strings (cameras) provides the mapping of the
+        job index (job) to the commands (cmds) that specify the arguments 
+        to the specex.parse method, i.e.
+            camera = cameras[job]
+            ...
+            cmdargs = cmds[camera].split()[1:]
+            cmdargs = parse(cmdargs)
+            ...
+        From the point of view of the Schedule.run method, it is running fitbundles 
+        njobs = len(cameras) times, each time using group_size processes with a new 
+        value of job in the range 0 to len(cameras)-1.  
+        '''
+      
+        if job >= len(cameras): 
+            return
+        camera = cameras[job]
+        if not camera in cmds:
+            log.error(f'FAILED: commands for camera {camera} not found')
+            return        
+        if camera in cmds:
+            cmdargs = cmds[camera].split()[1:]
+            cmdargs = parse(cmdargs)
+            t0 = time.time()
+            timestamp = time.asctime()
+            log.info(f'Merging camera {camera} at {timestamp}')
+            try:
+                merge_camera(cmdargs)
+            except Exception as e:
+                log.error(f'FAILED: Merging of camera {camera}')
+                log.error('FAILED: {}'.format(cmds[camera]))
+                log.error(e)
+            specex_time = time.time() - t0
+            log.info(f'merging of PSF fits for camera {camera}'+
+                     f' took {specex_time:.1f} seconds')
+
+        return
+    
+    group_size = 1
+    njobs=len(cameras)*bundles_per_camera
+    sc = Schedule(fitbundle,comm=comm,njobs=njobs,group_size=group_size)
+    #sc.run()
+
+    sc = Schedule(mergepsf,comm=comm,njobs=njobs,group_size=group_size)
+    sc.run()
+    
     return
 
 def compatible(head1, head2) :
