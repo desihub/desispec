@@ -369,7 +369,6 @@ def main(args=None, comm=None):
                     cmd = "desi_compute_trace_shifts"
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --psf {}".format(inpsf)
-                    cmd += " --outpsf {}".format(outpsf)
                     cmd += " --degxx 2 --degxy 0"
                     if args.obstype in ['FLAT', 'TESTFLAT', 'TWILIGHT'] :
                         cmd += " --continuum"
@@ -377,6 +376,7 @@ def main(args=None, comm=None):
                         cmd += " --degyx 2 --degyy 0"
                     if args.obstype in ['SCIENCE', 'SKY']:
                         cmd += ' --sky'
+                    cmd += " --outpsf {}".format(outpsf)
                 else :
                     cmd = "ln -s {} {}".format(inpsf,outpsf)
                 runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
@@ -408,9 +408,9 @@ def main(args=None, comm=None):
                 cmd = "desi_compute_trace_shifts"
                 cmd += " -i {}".format(preprocfile)
                 cmd += " --psf {}".format(inpsf)
-                cmd += " --outpsf {}".format(outpsf)
                 cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
                 cmd += ' --arc-lamps'
+                cmd += " --outpsf {}".format(outpsf)
                 runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
             else :
                 log.info("PSF {} exists".format(outpsf))
@@ -588,6 +588,20 @@ def main(args=None, comm=None):
                     log.info('Include barycentric correction')
                     cmd += ' --barycentric-correction'
 
+                missing_inputs = False
+                for infile in [preprocfile, psffile]:
+                    if not os.path.exists(infile):
+                        log.error(f'Missing {infile}')
+                        missing_inputs = True
+
+                if missing_inputs:
+                    log.error(f'Camera {camera} missing inputs; skipping extractions')
+                    continue
+
+                if os.path.exists(framefile):
+                    log.info(f'{framefile} already exists; skipping extraction')
+                    continue
+
                 cmds[camera] = cmd
                 inputs[camera] = [preprocfile, psffile]
                 outputs[camera] = [framefile,]
@@ -613,10 +627,15 @@ def main(args=None, comm=None):
                 if camera in cmds:
                     cmdargs = cmds[camera].split()[1:]
                     extract_args = desispec.scripts.extract.parse(cmdargs)
+
                     if comm_extract.rank == 0:
                         print('RUNNING: {}'.format(cmds[camera]))
 
                     desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                    if comm_extract.rank == 0:
+                        for outfile in outputs[camera]:
+                            if not os.path.exists(outfile):
+                                log.error(f'Camera {camera} extraction missing output {outfile}')
 
             comm.barrier()
 
