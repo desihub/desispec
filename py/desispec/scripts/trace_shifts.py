@@ -2,9 +2,8 @@
 desispec.scripts.trace_shifts
 =============================
 """
-from __future__ import absolute_import, division
 
-
+import os, sys
 import argparse
 import numpy as np
 from numpy.linalg.linalg import LinAlgError
@@ -267,8 +266,8 @@ def fit_trace_shifts(image,args) :
         except ( LinAlgError , ValueError ) :
             log.warning("polynomial fit failed with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
             if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
-                log.error("polynomial degrees are already 0. we can fit the offsets")
-                raise RuntimeError("polynomial degrees are already 0. we can fit the offsets")
+                log.error("polynomial degrees are already 0. we can't fit the offsets")
+                raise RuntimeError("polynomial degrees are already 0. we can't fit the offsets")
             merr = 100000. # this will lower the pol. degree.
 
         if merr > args.max_error :
@@ -369,6 +368,10 @@ def main(args) :
     log.info("read image {}".format(args.image))
     if image.mask is not None :
         image.ivar *= (image.mask==0)
+
+    if np.all(image.ivar == 0.0):
+        log.critical(f"Entire {os.path.basename(args.image)} image is masked; can't fit traceshifts")
+        sys.exit(1)
 
     tset = fit_trace_shifts(image=image,args=args)
     tset.meta['IN_PSF'] = shorten_filename(args.psf)
