@@ -299,8 +299,8 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
 
     nspectro = (ncameras - 1) // 3 + 1
     if jobdesc in ('ARC', 'TESTARC'):
-        ncores, runtime = 10 * ncameras + 1, 45 # + 1 for worflow.schedule scheduler proc
-        ncores = max(ncores,21)
+        ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
+        ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
