@@ -5,7 +5,8 @@ import sys
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-import fitsio
+#import fitsio
+from desiutil.log import get_logger
 from desispec.io import read_spectra
 from desispec.interpolation import resample_flux
 from astropy.table import Table
@@ -34,9 +35,13 @@ parser.add_argument('--errors', action='store_true',
                     help = 'show error bars')
 parser.add_argument('--only-valid', action='store_true',
                     help = 'show error bars')
+parser.add_argument('--zrange', type=float, default=None, required=False, nargs=2,
+                    help = 'zmin zmax (if with redredock)')
 
 
 args        = parser.parse_args()
+
+log = get_logger()
 
 if  args.redrock is not None :
     #- Load redrock templates
@@ -53,7 +58,12 @@ spectra = []
 for filename in args.infile :
     spec=read_spectra(filename)
     if args.only_valid :
-        good=(spec.fibermap["FIBERSTATUS"]==0)
+        if "FIBERSTATUS" in spec.fibermap.dtype.names :
+            good=(spec.fibermap["FIBERSTATUS"]==0)
+        elif "COADD_FIBERSTATUS" in spec.fibermap.dtype.names :
+            good=(spec.fibermap["COADD_FIBERSTATUS"]==0)
+        else :
+            log.error("cannot find FIBERSTATUS nor COADD_FIBERSTATUS in fibermap")
         spec=spec[good]
     spectra.append(spec)
 
@@ -74,6 +84,10 @@ if ( targetids is None ) and ( redshifts is not None ) and ( args.spectype is no
 
 if targetids is None :
     targetids=np.unique(spectra[0].fibermap["TARGETID"])
+
+if redshifts is not None and args.zrange is not None :
+    selection = np.in1d(spectra[0].fibermap["TARGETID"],targetids)&(redshifts["Z"]>=args.zrange[0])&(redshifts["Z"]<=args.zrange[1])
+    targetids=np.unique(spectra[0].fibermap["TARGETID"][selection])
 
 
 lines = {
@@ -114,11 +128,17 @@ for tid in targetids :
     fig=plt.figure(figsize=[10,6])
     ax = fig.add_subplot(111)
     print(line)
+    something_to_show = False
     for spec in spectra :
         jj=np.where(spec.fibermap["TARGETID"]==tid)[0]
-        if "FIBER" in spec.fibermap :
+        if np.sum(jj)==0 :
+            log.warning("TARGETID {} not in spectra".format(tid))
+            continue
+        something_to_show = True
+        if "FIBER" in spec.fibermap.dtype.names :
             fiber=spec.fibermap["FIBER"][jj[0]]
         else :
+            log.warning("no FIBER column in spectra file FIBERMAP")
             fiber=-1
         wavescale=1.
         if args.rest_frame :
@@ -144,6 +164,9 @@ for tid in targetids :
 
         print(spec.fibermap[jj])
 
+    if not something_to_show :
+        log.error("no data to show")
+        sys.exit(1)
     if redshifts is not None :
         for band in spectra[0].bands:
             plt.plot(wavescale*spectra[0].wave[band],model_flux[band],"-",alpha=0.6)

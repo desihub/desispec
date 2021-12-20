@@ -25,6 +25,7 @@ from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
+from desispec.ccdbkg import compute_background_between_fiber_blocks
 
 def get_amp_ids(header):
     '''
@@ -391,11 +392,11 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
     return False
 
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
-            bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
+            bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
-            bias_img=None,model_variance=False,no_traceshift=False):
+            bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False):
 
     '''
     preprocess image using metadata in header
@@ -428,7 +429,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             to have any effect.
 
     Optional variance model if model_variance=True
-    Optional background subtraction with median filtering if bkgsub=True
+    Optional background subtraction with median filtering accross the whole CCD if bkgsub_dark=True
+    Optional background subtraction with median filtering between groups of fiber traces if bkgsub_science=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
     Optional disabling of dark trail correction if nodarktrail=True
@@ -892,7 +894,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- High readnoise is bad
     mask[readnoise>10] |= ccdmask.BADREADNOISE
 
-    if bkgsub :
+    if bkgsub_dark :
         bkg = _background(image,header)
         image -= bkg
 
@@ -941,7 +943,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         mimage[out] = image[out]
 
         log.info("use image model to compute variance")
-        if bkgsub :
+        if bkgsub_dark :
             mimage += bkg
         if pixflat is not False :
             # undo pixflat
@@ -968,6 +970,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
             xyset = read_xytraceset(psf_filename)
         img.pix -= model_scattered_light(img,xyset)
+
+    if bkgsub_science :
+        if xyset is None :
+            if psf_filename is None :
+                psf_filename = cfinder.findfile("PSF")
+                depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
+            xyset = read_xytraceset(psf_filename)
+        img.pix -= compute_background_between_fiber_blocks(img,xyset)
 
     #- Extend header with primary header keywords too
     addkeys(img.meta, primary_header)
