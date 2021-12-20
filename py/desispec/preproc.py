@@ -81,20 +81,24 @@ def _clipped_std_bias(nsigma):
     stdbias = np.sqrt(1 - 2*a*np.exp(-a**2/2.) / (np.sqrt(2*np.pi) * erf(a/np.sqrt(2))))
     return stdbias
 
-def compute_overscan_step(overscan_col) :
+def compute_overscan_step(overscan_col, median_size=7, edge_margin=50) :
     """
     Compute the overscan step score 'OSTEP' from an array of
     overscan values averaged per CCD row
 
     Args:
-      overscan_col: 1D numpy.array
+        overscan_col: 1D numpy.array
+
+    Options:
+        median_size (int): window size for median pre-filter of overscan_col
+        edge_margin (int): ignore this number of rows at the CCD edges
 
     Returns:
       OSTEP value (float scalar)
     """
 
     # median filter to futher reduce the noise
-    med_overscan_col = median_filter(overscan_col,7)
+    med_overscan_col = median_filter(overscan_col, median_size)
 
     # use diff. because we want to detect steps, not a continuous variation
     diff_med_overscan_col = np.zeros_like(med_overscan_col)
@@ -102,8 +106,8 @@ def compute_overscan_step(overscan_col) :
 
     # measure the range of variation of overscan while ignoring
     # the edges where we can measure offsets which do not impact the spectroscopy
-    margin=50
-    overscan_step = np.max(diff_med_overscan_col[margin:-margin])-np.min(diff_med_overscan_col[margin:-margin])
+    diff = diff_med_overscan_col[edge_margin:-edge_margin]
+    overscan_step = np.max(diff)-np.min(diff)
     return overscan_step
 
 def _overscan(pix, nsigma=5, niter=3):
