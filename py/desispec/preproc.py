@@ -81,6 +81,31 @@ def _clipped_std_bias(nsigma):
     stdbias = np.sqrt(1 - 2*a*np.exp(-a**2/2.) / (np.sqrt(2*np.pi) * erf(a/np.sqrt(2))))
     return stdbias
 
+def compute_overscan_step(overscan_col) :
+    """
+    Compute the overscan step score 'OSTEP' from an array of
+    overscan values averaged per CCD row
+
+    Args:
+      overscan_col: 1D numpy.array
+
+    Returns:
+      OSTEP value (float scalar)
+    """
+
+    # median filter to futher reduce the noise
+    med_overscan_col = median_filter(overscan_col,7)
+
+    # use diff. because we want to detect steps, not a continuous variation
+    diff_med_overscan_col = np.zeros_like(med_overscan_col)
+    diff_med_overscan_col[:-1] = med_overscan_col[1:]-med_overscan_col[:-1]
+
+    # measure the range of variation of overscan while ignoring
+    # the edges where we can measure offsets which do not impact the spectroscopy
+    margin=50
+    overscan_step = np.max(diff_med_overscan_col[margin:-margin])-np.min(diff_med_overscan_col[margin:-margin])
+    return overscan_step
+
 def _overscan(pix, nsigma=5, niter=3):
     """DEPRECATED: See calc_overscan"""
     log = get_logger()
@@ -659,11 +684,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  calc_overscan(raw_overscan_col[j])
             overscan_col[j]=o
             rdnoise[j]=r
-        # median filter to futher reduce the noise
-        med_overscan_col = median_filter(overscan_col,7)
-        # range of variation of overscan
-        margin=50
-        overscan_step = np.max(med_overscan_col[margin:-margin])-np.min(med_overscan_col[margin:-margin])
+        overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info("Overscan max-min per row (OSTEP) for amplifier %s of camera %s = %.2f ADU"%(amp,camera,overscan_step))
         if overscan_step <  2 : # tuned to trig on the worst few
