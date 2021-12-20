@@ -81,6 +81,35 @@ def _clipped_std_bias(nsigma):
     stdbias = np.sqrt(1 - 2*a*np.exp(-a**2/2.) / (np.sqrt(2*np.pi) * erf(a/np.sqrt(2))))
     return stdbias
 
+def compute_overscan_step(overscan_col, median_size=7, edge_margin=50) :
+    """
+    Compute the overscan step score 'OSTEP' from an array of
+    overscan values averaged per CCD row
+
+    Args:
+        overscan_col: 1D numpy.array
+
+    Options:
+        median_size (int): window size for median pre-filter of overscan_col
+        edge_margin (int): ignore this number of rows at the CCD edges
+
+    Returns:
+      OSTEP value (float scalar)
+    """
+
+    # median filter to futher reduce the noise
+    med_overscan_col = median_filter(overscan_col, median_size)
+
+    # use diff. because we want to detect steps, not a continuous variation
+    diff_med_overscan_col = np.zeros_like(med_overscan_col)
+    diff_med_overscan_col[:-1] = med_overscan_col[1:]-med_overscan_col[:-1]
+
+    # measure the range of variation of overscan while ignoring
+    # the edges where we can measure offsets which do not impact the spectroscopy
+    diff = diff_med_overscan_col[edge_margin:-edge_margin]
+    overscan_step = np.max(diff)-np.min(diff)
+    return overscan_step
+
 def _overscan(pix, nsigma=5, niter=3):
     """DEPRECATED: See calc_overscan"""
     log = get_logger()
@@ -665,11 +694,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  calc_overscan(raw_overscan_col[j])
             overscan_col[j]=o
             rdnoise[j]=r
-        # median filter to futher reduce the noise
-        med_overscan_col = median_filter(overscan_col,7)
-        # range of variation of overscan
-        margin=50
-        overscan_step = np.max(med_overscan_col[margin:-margin])-np.min(med_overscan_col[margin:-margin])
+        overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
         if overscan_step <  2 : # tuned to trig on the worst few
