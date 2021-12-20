@@ -492,7 +492,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
             log.info(f'Nightly bias {camera}: maxabsdiff {maxabs1:.2f}, stddev {std1:.2f}')
             log.info(f'Default bias {camera}: maxabsdiff {maxabs2:.2f}, stddev {std2:.2f}')
 
-            if maxabs1 < maxabs2:
+            if maxabs1 < maxabs2 + 0.5 : # add handicap of 0.5 elec to favor nightly bias that also fixes bad columns
                 log.info(f'Selecting nightly bias for {night} {camera}')
                 os.rename(testbias, outfile)
             else:
