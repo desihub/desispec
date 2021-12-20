@@ -185,15 +185,8 @@ def main(args=None, comm=None):
     if args.nightlybias:
         timer.start('nightlybias')
 
-        bcamword = None
-        if rank == 0:
-            bcameras = [cam for cam in args.cameras if cam.lower().startswith('b')]
-            bcamword = parse_cameras(bcameras)
+        cmd = f"desi_compute_nightly_bias -n {args.night}"
 
-        if comm is not None:
-            bcamword = comm.bcast(bcamword, root=0)
-
-        cmd = f"desi_compute_nightly_bias -n {args.night} -c {bcamword}"
         if rank == 0:
             log.info(f'RUNNING {cmd}')
 
