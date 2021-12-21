@@ -5,7 +5,34 @@ desispec Change Log
 0.48.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix deprecation warnings for latest numpy (PR `#1525`_).
+* Support astropy 5.x masked columns (PR `#1526`_).
+* More robust when fiberassign file is in earlier expid (PR `#1529`_, `#1536`_).
+* Approximate FP coords if missing from coordinates file (PR `#1532`_).
+* desi_run_night --surveys option (PR `#1533`_).
+* night_qa v3 (PR `#1535`_).
+* Update and standardize exposure tables (PR `#1537`_).
+* Fix desi_proc spexec wrapper for single camera (PR `#1540`_).
+* Fix desi_proc MPI logic bug if missing PSF input (PR `#1542`_).
+* Change nightlybias OSTEP to be local instead of global diff (PR `#1543`_).
+* Run nightlybias for all cameras (PR `#1546`_).
+* Tune nightlybias running logic (PR `#1547`_).
+* Add emlinefit afterburner (PR `#1386`_).
+
+.. _`#1386`: https://github.com/desihub/desispec/pull/1386
+.. _`#1525`: https://github.com/desihub/desispec/pull/1525
+.. _`#1526`: https://github.com/desihub/desispec/pull/1526
+.. _`#1529`: https://github.com/desihub/desispec/pull/1529
+.. _`#1532`: https://github.com/desihub/desispec/pull/1532
+.. _`#1533`: https://github.com/desihub/desispec/pull/1533
+.. _`#1535`: https://github.com/desihub/desispec/pull/1535
+.. _`#1536`: https://github.com/desihub/desispec/pull/1536
+.. _`#1537`: https://github.com/desihub/desispec/pull/1537
+.. _`#1540`: https://github.com/desihub/desispec/pull/1540
+.. _`#1542`: https://github.com/desihub/desispec/pull/1542
+.. _`#1543`: https://github.com/desihub/desispec/pull/1543
+.. _`#1546`: https://github.com/desihub/desispec/pull/1546
+.. _`#1547`: https://github.com/desihub/desispec/pull/1547
 
 0.48.0 (2021-12-10)
 -------------------
