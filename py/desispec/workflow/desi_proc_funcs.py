@@ -53,6 +53,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--calibnight", type=int, required=False, default=None,
                         help="use this night to find nightly PSF and fiberflats")
     parser.add_argument("--scattered-light", action='store_true', help="fit and remove scattered light")
+    parser.add_argument("--no-bkgsub", action='store_true', help="disable CCD bkg fit between fiber blocks")
     parser.add_argument("--no-extra-variance", action='store_true',
                         help='disable increase sky model variance based on chi2 on sky lines')
     parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
@@ -347,7 +348,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores = config['cores_per_node'] * nodes
         if jobdesc in ('ARC', 'TESTARC'):
             # adjust for workflow.schedule scheduler proc
-            ncores = ((ncores - 1) // 20) * 20 + 1 
+            ncores = ((ncores - 1) // 20) * 20 + 1
 
     #- Allow KNL jobs to be slower than Haswell,
     #- except for ARC so that we don't have ridiculously long times
@@ -578,7 +579,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
         else:
             fx.write("export OMP_NUM_THREADS=1\n")
-        
+
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             if nightlybias:
                 tmp = cmd.split()
