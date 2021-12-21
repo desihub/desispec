@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.48.1 (unreleased)
+0.48.2 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.48.1 (2021-12-21)
 -------------------
 
 * Fix deprecation warnings for latest numpy (PR `#1525`_).
