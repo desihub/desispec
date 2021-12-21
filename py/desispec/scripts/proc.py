@@ -37,7 +37,8 @@ import glob
 import desiutil.timer
 import desispec.io
 from desispec.io import findfile, replace_prefix, shorten_filename
-from desispec.io.util import create_camword, parse_cameras, validate_badamps
+from desispec.io.util import create_camword, decode_camword, parse_cameras
+from desispec.io.util import validate_badamps
 from desispec.calibfinder import findcalibfile,CalibFinder,badfibers
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -66,6 +67,53 @@ def parse(options=None):
     parser = get_desi_proc_parser()
     args = parser.parse_args(options)
     return args
+
+def _log_timer(timer, timingfile=None, comm=None):
+    """
+    Log timing info, optionally writing to json timingfile
+
+    Args:
+        timer: desiutil.timer.Timer object
+
+    Options:
+        timingfile (str): write json output to this file
+        comm: MPI communicator
+
+    If comm is not None, collect timers across ranks.
+    If timmingfile already exists, read and append timing then re-write.
+    """
+
+    log = get_logger()
+    if comm is not None:
+        timers = comm.gather(timer, root=0)
+    else:
+        timers = [timer,]
+
+    if comm.rank == 0:
+        stats = desiutil.timer.compute_stats(timers)
+        if timingfile:
+            if os.path.exists(timingfile):
+                with open(timingfile) as fx:
+                    previous_stats = json.load(fx)
+
+                #- augment previous_stats with new entries, but don't overwrite old
+                for name in stats:
+                    if name not in previous_stats:
+                        previous_stats[name] = stats[name]
+
+                stats = previous_stats
+
+            tmpfile = timingfile + '.tmp'
+            with open(tmpfile, 'w') as fx:
+                json.dump(stats, fx, indent=2)
+            os.rename(tmpfile, timingfile)
+            log.info(f'Timing stats saved to {timingfile}')
+
+        log.info('Timing max duration per step [seconds]:')
+        for stepname, steptiming in stats.items():
+            tmax = steptiming['duration.max']
+            log.info(f'  {stepname:16s} {tmax:.2f}')
+
 
 def main(args=None, comm=None):
     if args is None:
@@ -111,7 +159,10 @@ def main(args=None, comm=None):
         #- Let rank 0 fetch these, and then broadcast
         args, hdr, camhdr = None, None, None
     else:
-        args, hdr, camhdr = update_args_with_headers(args)
+        if args.nightlybias and (args.expid is None) and (args.input is None):
+            hdr = camhdr = None
+        else:
+            args, hdr, camhdr = update_args_with_headers(args)
 
     ## Make sure badamps is formatted properly
     if comm is not None and rank == 0 and args.badamps is not None:
@@ -124,8 +175,19 @@ def main(args=None, comm=None):
 
     known_obstype = ['SCIENCE', 'ARC', 'FLAT', 'ZERO', 'DARK',
         'TESTARC', 'TESTFLAT', 'PIXFLAT', 'SKY', 'TWILIGHT', 'OTHER']
-    if args.obstype not in known_obstype:
-        raise RuntimeError('obstype {} not in {}'.format(args.obstype, known_obstype))
+    only_nightlybias = args.nightlybias and args.expid is None
+    if args.obstype not in known_obstype and not only_nightlybias:
+        raise ValueError('obstype {} not in {}'.format(args.obstype, known_obstype))
+
+    if args.expid is None and not args.nightlybias:
+        msg = 'Must provide --expid or --nightlybias'
+        if rank == 0:
+            log.critical(msg)
+
+        sys.exit(1)
+
+    if only_nightlybias and args.cameras is None:
+        args.cameras = decode_camword('a0123456789')
 
     timer.stop('preflight')
 
@@ -134,7 +196,14 @@ def main(args=None, comm=None):
 
     if args.batch:
         #exp_str = '{:08d}'.format(args.expid)
-        jobdesc = args.obstype.lower()
+        if args.obstype is not None:
+            jobdesc = args.obstype.lower()
+        elif only_nightlybias:
+            jobdesc = 'nightlybias'
+        else:
+            log.critical('No --obstype, but also not just nightlybias ?!?')
+            sys.exit(1)
+
         if args.obstype == 'SCIENCE':
             # if not doing pre-stdstar fitting or stdstar fitting and if there is
             # no flag stopping flux calibration, set job to poststdstar
@@ -169,17 +238,6 @@ def main(args=None, comm=None):
         log.info('Output root {}'.format(desispec.io.specprod_root()))
         log.info('----------')
 
-    #- Create output directories if needed
-    if rank == 0:
-        preprocdir = os.path.dirname(findfile('preproc', args.night, args.expid, 'b0'))
-        expdir = os.path.dirname(findfile('frame', args.night, args.expid, 'b0'))
-        os.makedirs(preprocdir, exist_ok=True)
-        os.makedirs(expdir, exist_ok=True)
-
-    #- Wait for rank 0 to make directories before proceeding
-    if comm is not None:
-        comm.barrier()
-
     #-------------------------------------------------------------------------
     #- Create nightly bias from N>>1 ZEROs, but only for B-cameras
     if args.nightlybias:
@@ -192,6 +250,32 @@ def main(args=None, comm=None):
 
         desispec.scripts.nightly_bias.main(cmd.split()[1:], comm=comm)
         timer.stop('nightlybias')
+
+    #- this might be just nightly bias, with no single exposure to process
+    if args.expid is None:
+        if rank == 0:
+            duration_seconds = time.time() - start_time
+            mm = int(duration_seconds) // 60
+            ss = int(duration_seconds - mm*60)
+
+            log.info('No expid given; stopping now')
+            log.info('All done at {}; duration {}m{}s'.format(
+                time.asctime(), mm, ss))
+
+        sys.exit()
+
+
+    #-------------------------------------------------------------------------
+    #- Create output directories if needed
+    if rank == 0:
+        preprocdir = os.path.dirname(findfile('preproc', args.night, args.expid, 'b0'))
+        expdir = os.path.dirname(findfile('frame', args.night, args.expid, 'b0'))
+        os.makedirs(preprocdir, exist_ok=True)
+        os.makedirs(expdir, exist_ok=True)
+
+    #- Wait for rank 0 to make directories before proceeding
+    if comm is not None:
+        comm.barrier()
 
     #-------------------------------------------------------------------------
     #- Preproc
@@ -1036,40 +1120,7 @@ def main(args=None, comm=None):
     #-------------------------------------------------------------------------
     #- Wrap up
 
-    # if rank == 0:
-    #     report = timer.report()
-    #     log.info('Rank 0 timing report:\n' + report)
-
-    if comm is not None:
-        timers = comm.gather(timer, root=0)
-    else:
-        timers = [timer,]
-
-    if rank == 0:
-        stats = desiutil.timer.compute_stats(timers)
-        if args.timingfile:
-            if os.path.exists(args.timingfile):
-                with open(args.timingfile) as fx:
-                    previous_stats = json.load(fx)
-
-                #- augment previous_stats with new entries, but don't overwrite old
-                for name in stats:
-                    if name not in previous_stats:
-                        previous_stats[name] = stats[name]
-
-                stats = previous_stats
-
-            tmpfile = args.timingfile + '.tmp'
-            with open(tmpfile, 'w') as fx:
-                json.dump(stats, fx, indent=2)
-            os.rename(tmpfile, args.timingfile)
-            log.info(f'Timing stats saved to {args.timingfile}')
-
-        log.info('Timing max duration per step [seconds]:')
-        for stepname, steptiming in stats.items():
-            tmax = steptiming['duration.max']
-            log.info(f'  {stepname:16s} {tmax:.2f}')
-
+    _log_timer(timer, args.timingfile, comm=comm)
     if rank == 0:
         duration_seconds = time.time() - start_time
         mm = int(duration_seconds) // 60
