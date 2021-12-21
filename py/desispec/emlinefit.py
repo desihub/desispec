@@ -55,7 +55,7 @@ def emlines_gaussfit(
     p0_share=0.58,
     min_sigma=1e-5,
     max_sigma=10.,
-    min_flux=1e-5,
+    min_flux=-1e9,
     max_flux=1e9,
     min_share=1e-1,
     max_share=1,
@@ -210,7 +210,8 @@ def emlines_gaussfit(
         # AR flux at observed wavelength(s)
         obs_em_fluxes = np.array([fluxes[np.searchsorted(waves, obs_em_wave)] for obs_em_wave in obs_em_waves])
         # AR is the flux above continuum for at least one line?
-        if obs_em_fluxes.max() > emdict["CONT"]:
+        # SB don't require positive flux before attempting fit
+        if True or obs_em_fluxes.max() > emdict["CONT"]:
             # AR maxfev and gtol set by JC; seems to work; not touching those...
             popt, pcov = curve_fit(
                 myfunc,
