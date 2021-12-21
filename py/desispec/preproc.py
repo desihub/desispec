@@ -7,6 +7,8 @@ import os
 import numpy as np
 import scipy.interpolate
 from pkg_resources import resource_exists, resource_filename
+import numba
+import time
 
 from scipy import signal
 from scipy.ndimage.filters import median_filter
@@ -25,7 +27,6 @@ from desispec.io.util import addkeys
 from desispec.maskedmedian import masked_median
 from desispec.image_model import compute_image_model
 from desispec.util import header2night
-from desispec.ccdbkg import compute_background_between_fiber_blocks
 
 def get_amp_ids(header):
     '''
@@ -338,6 +339,94 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
 
 
     log.info("done")
+    return bkg
+
+@numba.jit
+def numba_mean(image_flux,image_ivar,x,hw=3) :
+    n0=image_flux.shape[0]
+    flux=np.zeros(n0)
+    ivar=np.zeros(n0)
+    for j in range(n0) :
+        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+            flux[j] += image_ivar[j,i]*image_flux[j,i]
+            ivar[j] += image_ivar[j,i]
+        if ivar[j]>0 :
+            flux[j] = flux[j]/ivar[j]
+    return flux,ivar
+
+
+def compute_background_between_fiber_blocks(image,xyset) :
+    """
+    Args :
+
+     image: desispec.image.Image object
+     xyset: desispec.xytraceset.XYTraceSet object
+
+    Returns :
+
+       model: np.array of same shape as image.pix
+    """
+
+    log = get_logger()
+
+    log.info("estimating a CCD background between the blocks of fiber traces")
+
+    ivar=image.ivar*(image.mask==0)
+    bkg=np.zeros_like(image.pix)
+
+    t0=time.time()
+
+    # proceed per amplifier
+    for amp in get_amp_ids(image.meta) :
+        sec=parse_sec_keyword(image.meta['CCDSEC'+amp])
+        log.info(f"fitting bkg for Amp {amp}, {sec}")
+
+
+        # compute value between blocks of fibers
+        nblock=21
+        xinterblock=[]
+        vinterblock=[]
+        mwidth=400
+
+        image_yy=np.arange(sec[0].start,sec[0].stop)
+
+        for block in range(nblock) :
+
+            # x coordinate of band between fiber blocks
+            if block==0 : image_xb =  xyset.x_vs_y(0,image_yy)-7.5
+            elif block==20 : image_xb =  xyset.x_vs_y(499,image_yy)+7.5
+            else : image_xb = (xyset.x_vs_y(block*25-1,image_yy)+xyset.x_vs_y(block*25,image_yy))/2.
+
+            # boxcar extraction half width (narrow to avoid pollution by tail of fiber traces for bright stars)
+            hw=1
+            # use only values in this amplifier (interpolate for others)
+            inamp = (image_xb-hw>=sec[1].start)&(image_xb+hw<sec[1].stop)
+            if np.all(~inamp) : continue
+
+            log.info(f"amp {amp} interblock {block}")
+
+            # extract
+            vb,vb_ivar = numba_mean(image.pix[sec[0]],ivar[sec[0]],image_xb)
+
+            # keep only in amp values
+            if np.any(~inamp) :
+                vb = np.interp(image_yy,image_yy[inamp],vb[inamp])
+
+            # median filter
+            vb = median_filter(vb,mwidth)
+
+            xinterblock.append(image_xb)
+            vinterblock.append(vb)
+
+        xinterblock=np.array(xinterblock)
+        vinterblock=np.array(vinterblock)
+
+        # interpolate along x
+        xx=np.arange(sec[1].start,sec[1].stop)
+        for k,y in enumerate(image_yy) :
+            bkg[y,sec[1]]=np.interp(xx,xinterblock[:,k],vinterblock[:,k])
+
+    log.info("computing time = {:.3f}".format(time.time()-t0))
     return bkg
 
 def get_calibration_image(cfinder, keyword, entry, header=None):
