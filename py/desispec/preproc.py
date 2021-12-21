@@ -82,6 +82,35 @@ def _clipped_std_bias(nsigma):
     stdbias = np.sqrt(1 - 2*a*np.exp(-a**2/2.) / (np.sqrt(2*np.pi) * erf(a/np.sqrt(2))))
     return stdbias
 
+def compute_overscan_step(overscan_col, median_size=7, edge_margin=50) :
+    """
+    Compute the overscan step score 'OSTEP' from an array of
+    overscan values averaged per CCD row
+
+    Args:
+        overscan_col: 1D numpy.array
+
+    Options:
+        median_size (int): window size for median pre-filter of overscan_col
+        edge_margin (int): ignore this number of rows at the CCD edges
+
+    Returns:
+      OSTEP value (float scalar)
+    """
+
+    # median filter to futher reduce the noise
+    med_overscan_col = median_filter(overscan_col, median_size)
+
+    # use diff. because we want to detect steps, not a continuous variation
+    diff_med_overscan_col = np.zeros_like(med_overscan_col)
+    diff_med_overscan_col[:-1] = med_overscan_col[1:]-med_overscan_col[:-1]
+
+    # measure the range of variation of overscan while ignoring
+    # the edges where we can measure offsets which do not impact the spectroscopy
+    diff = diff_med_overscan_col[edge_margin:-edge_margin]
+    overscan_step = np.max(diff)-np.min(diff)
+    return overscan_step
+
 def _overscan(pix, nsigma=5, niter=3):
     """DEPRECATED: See calc_overscan"""
     log = get_logger()
@@ -491,6 +520,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- Check if this file uses amp names 1,2,3,4 (old) or A,B,C,D (new)
     amp_ids = get_amp_ids(header)
 
+    #- if CAMERA is missing, this will raise an exception in a few lines,
+    #- but allows CAMERA logging in the meantime if it is present
+    try:
+        camera = header['CAMERA'].lower()
+    except KeyError:
+        camera = 'unknown'
+
     #- Double check that we have the necessary keywords
     missing_keywords = list()
     for key in ['CAMERA', 'EXPID']:
@@ -501,13 +537,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         for amp in amp_ids :
             key = prefix+amp
             if not key in header :
-                log.error('No {} keyword in header'.format(key))
+                log.error(f'Camera {camera} No {key} keyword in header')
                 missing_keywords.append(key)
 
     if len(missing_keywords) > 0:
-        raise KeyError("Missing keywords {}".format(' '.join(missing_keywords)))
-
-    camera = header['CAMERA'].lower()
+        raise KeyError("Camera {} missing keywords {}".format(camera, ' '.join(missing_keywords)))
 
     #- Subtract bias image
 
@@ -544,36 +578,37 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         #- Exposure time
         if cfinder and cfinder.haskey("EXPTIMEKEY") :
             exptime_key=cfinder.value("EXPTIMEKEY")
-            log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
+            log.info(f"Camera {camera} Using exposure time keyword {exptime_key} for dark normalization")
         else :
             exptime_key="EXPTIME"
         exptime =  primary_header[exptime_key]
-        log.info("Use exptime = {} sec to compute the dark current".format(exptime))
+        log.info(f"Camera {camera} use exptime = {exptime:.1f} sec to compute the dark current")
 
         dark_filename = cfinder.findfile("DARK")
         depend.setdep(header, 'CCD_CALIB_DARK', shorten_filename(dark_filename))
-        log.info(f'Using DARK model from {dark_filename}')
+        log.info(f'Camera {camera} using DARK model from {dark_filename}')
         # dark is multipled by exptime, or we use the non-linear dark model in the routine
         dark = read_dark(filename=dark_filename,exptime=exptime)
 
         if dark.shape == image.shape :
-            log.info("dark is trimmed")
+            log.info(f"Camera {camera} dark is trimmed")
             trimmed_dark_in_electrons = dark
             dark_is_trimmed   = True
         elif dark.shape == rawimage.shape :
-            log.info("dark is not trimmed")
+            log.info(f"Camera {camera} dark is not trimmed")
             trimmed_dark_in_electrons = np.zeros_like(image)
             dark_is_trimmed = False
         else :
-            message="incompatible dark shape={} when raw shape={} and preproc shape={}".format(dark.shape,rawimage.shape,image.shape)
+            message="Camera {} incompatible dark shape={} when raw shape={} and preproc shape={}".format(
+                    camera, dark.shape, rawimage.shape, image.shape)
             log.error(message)
             raise ValueError(message)
 
         if np.all(dark==0.0):
             if exptime == 0.0:
-                log.info(f'Dark model for exptime=0 is all zeros; not applying')
+                log.info(f'Camera {camera} dark model for exptime=0 is all zeros; not applying')
             else:
-                log.error(f'Dark model for exptime={exptime} unexpectedly all zeros; not applying')
+                log.error(f'Camera {camera} dark model for exptime={exptime} unexpectedly all zeros; not applying')
             dark = False
 
     else:
@@ -581,7 +616,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     if bias is not False : #- it's an array
         if bias.shape == rawimage.shape  :
-            log.info("subtracting bias")
+            log.info(f"Camera {camera} subtracting bias")
             rawimage = rawimage - bias
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
@@ -601,7 +636,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if 'ORSEC'+amp in header.keys():
             ov_row = parse_sec_keyword(header['ORSEC'+amp])
         elif use_overscan_row:
-            log.error('No ORSEC{} keyword; not using overscan_row'.format(amp))
+            log.error(f'Camera {camera} no ORSEC{amp} keyword; not using overscan_row')
             use_overscan_row = False
 
         if nogain :
@@ -613,10 +648,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             else:
                 if cfinder and cfinder.haskey('GAIN'+amp) :
                     gain = float(cfinder.value('GAIN'+amp))
-                    log.info('Using GAIN{}={} from calibration data'.format(amp,gain))
+                    log.info(f'Camera {camera} using GAIN{amp}={gain} from calibration data')
                 else :
                     gain = 1.0
-                    log.warning('Missing keyword GAIN{} in header and nothing in calib data; using {}'.format(amp,gain))
+                    log.error(f'Camera {camera} missing keyword GAIN{amp} in header and nothing in calib data; using {gain}')
 
         #- Record what gain value was actually used
         header['GAIN'+amp] = gain
@@ -627,10 +662,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         else:
             if cfinder and cfinder.haskey('SATURLEV'+amp) :
                 saturlev_adu = float(cfinder.value('SATURLEV'+amp))
-                log.info('Using SATURLEV{}={} from calibration data'.format(amp,saturlev_adu))
+                log.info(f'Camera {camera} using SATURLEV{amp}={saturlev_adu} from calibration data')
             else :
                 saturlev_adu = 2**16-1 # 65535 is the max value in the images
-                log.warning('Missing keyword SATURLEV{} in header and nothing in calib data; using {} ADU'.format(amp,saturlev_adu))
+                log.warning(f'Camera {camera} Missing keyword SATURLEV{amp} in header and nothing in calib data; using {saturlev_adu} ADU')
         header['SATULEV'+amp] = (saturlev_adu,"saturation or non lin. level, in ADU, inc. bias")
 
 
@@ -651,25 +686,21 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         # Now remove the overscan_col
         nrows=raw_overscan_col.shape[0]
-        log.info("nrows in overscan=%d"%nrows)
+        log.info(f"Camera {camera} {nrows} rows in overscan")
         overscan_col = np.zeros(nrows)
         rdnoise  = np.zeros(nrows)
         for j in range(nrows) :
             if np.isnan(np.sum(overscan_col[j])) :
-                log.warning("NaN values in row %d of overscan of amplifier %s of camera %s"%(j,amp,camera))
+                log.warning(f"Camera {camera} amp {amp} NaN values in row {j} of overscan")
                 continue
             o,r =  calc_overscan(raw_overscan_col[j])
             overscan_col[j]=o
             rdnoise[j]=r
-        # median filter to futher reduce the noise
-        med_overscan_col = median_filter(overscan_col,7)
-        # range of variation of overscan
-        margin=50
-        overscan_step = np.max(med_overscan_col[margin:-margin])-np.min(med_overscan_col[margin:-margin])
+        overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
-        log.info("Overscan max-min per row (OSTEP) for amplifier %s of camera %s = %.2f ADU"%(amp,camera,overscan_step))
+        log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
         if overscan_step <  2 : # tuned to trig on the worst few
-            log.info("Subtracting average overscan for amplifier %s of camera %s"%(amp,camera))
+            log.info(f"Camera {camera} amp {amp} subtracting average overscan")
             o,r =  calc_overscan(raw_overscan_col)
             # replace by single value
             overscan_col = np.repeat(o,nrows)
@@ -677,7 +708,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             header['OMETH'+amp]=("AVERAGE","use average overscan")
         else :
             header['OMETH'+amp]=("PER_ROW","use average overscan per row")
-            log.info("Subtracting overscan per row for amplifier %s of camera %s"%(amp,camera))
+            log.info(f"Camera {camera} amp {amp} subtracting overscan per row")
 
             # The threshold of 5 ADUs discards 20% of the r8-A data
             # from Oct 2021. But it is necessary to discard some
@@ -685,7 +716,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             # residuals were the cause of some bad redshifts.
             if overscan_step > 5. :
                 mask[kk] |= ccdmask.BADREADNOISE
-                log.warning("OSTEP={} is large for amplifier {}, set ccdmask.BADREADNOISE bit mask".format(overscan_step,amp))
+                log.warning(f"Camera {camera} amp {amp} OSTEP={overscan_step:.2f} is too large, set ccdmask.BADREADNOISE bit mask")
 
         if bias is not False :
             # the master bias noise is already in the raw data
@@ -696,13 +727,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,biasnoise_datasec = calc_overscan(bias[jj])
             o,biasnoise_ovcol   = calc_overscan(bias[ov_col])
             new_rdnoise         = np.sqrt(rdnoise**2+biasnoise_datasec**2-biasnoise_ovcol**2)
-            log.info("Master bias noise for AMP %s = %4.3f ADU, rdnoise %4.3f -> %4.3f ADU"%(amp,biasnoise_datasec,np.mean(rdnoise),np.mean(new_rdnoise)))
+            log.info("Camera {} amp {} master bias noise {:4.3f} ADU, rdnoise {:4.3f} -> {:4.3f} ADU".format(
+                camera, amp, biasnoise_datasec, np.mean(rdnoise), np.mean(new_rdnoise)))
             rdnoise = new_rdnoise
 
         rdnoise *= gain
         median_rdnoise  = np.median(rdnoise)
         median_overscan = np.median(overscan_col)
-        log.info("Median rdnoise and overscan= %f %f"%(median_rdnoise,median_overscan))
+        log.info(f"Camera {camera} amp {amp} Median rdnoise and overscan= {median_rdnoise:.3f} {median_overscan:.3f}")
 
         for j in range(nrows) :
             readnoise[kk][j] = rdnoise[j]
@@ -721,21 +753,20 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if 'RDNOISE'+amp in header:
             expected_readnoise = header['RDNOISE'+amp]
             if median_rdnoise < 0.5*expected_readnoise:
-                log.error('Amp {} measured readnoise {:.2f} < 0.5 * expected readnoise {:.2f}'.format(
-                    amp, median_rdnoise, expected_readnoise))
+                log.error('Camera {} amp {} measured readnoise {:.2f} < 0.5 * expected readnoise {:.2f}'.format(
+                    camera, amp, median_rdnoise, expected_readnoise))
             elif median_rdnoise < 0.9*expected_readnoise:
-                log.warning('Amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
-                    amp, median_rdnoise, expected_readnoise))
+                log.warning('Camera {} amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
+                    camera, amp, median_rdnoise, expected_readnoise))
             elif median_rdnoise > 2.0*expected_readnoise:
-                log.error('Amp {} measured readnoise {:.2f} > 2 * expected readnoise {:.2f}'.format(
-                    amp, median_rdnoise, expected_readnoise))
+                log.error('Camera {} amp {} measured readnoise {:.2f} > 2 * expected readnoise {:.2f}'.format(
+                    camera, amp, median_rdnoise, expected_readnoise))
             elif median_rdnoise > 1.2*expected_readnoise:
-                log.warning('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
-                    amp, median_rdnoise, expected_readnoise))
-        #else:
-        #    log.warning('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
+                log.warning('Camera {} amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
+                    camera, amp, median_rdnoise, expected_readnoise))
 
-        log.info("Measured readnoise for AMP %s = %f"%(amp,median_rdnoise))
+        log.info("Camera {} amp {} measured readnoise = {:.3f}".format(
+            camera, amp, median_rdnoise))
 
         #- subtract overscan from data region and apply gain
         jj = parse_sec_keyword(header['DATASEC'+amp])
@@ -752,7 +783,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if use_overscan_row:
             # Savgol?
             if use_savgol:
-                log.info("Using savgol")
+                log.info(f"Camera {camera} amp {amp} Using savgol")
                 collapse_oscan_row = np.zeros(overscan_row.shape[1])
                 for col in range(overscan_row.shape[1]):
                     o, _ = calc_overscan(overscan_row[:,col])
@@ -820,7 +851,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 if not cfinder.haskey("CROSSTALK%s%s"%(amp1,amp2))  : continue
                 crosstalk=cfinder.value("CROSSTALK%s%s"%(amp1,amp2))
                 if crosstalk==0. : continue
-                log.info("Correct for crosstalk=%f from AMP %s into %s"%(crosstalk,amp1,amp2))
+                log.info("Camera {} correct for crosstalk={} from AMP {} into {}".format(
+                    camera, crosstalk, amp1, amp2))
                 a12flux=crosstalk*a1flux.copy()
                 #a12mask=a1mask.copy()
                 if fip_axis_0[a1,a2]==-1 :
@@ -839,7 +871,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     #- subtract dark after multiplication by gain
     if dark is not False  :
-        log.info("subtracting dark")
+        log.info(f"Camera {camera} subtracting dark")
         image -= trimmed_dark_in_electrons
         # measure its noise
         new_readnoise = np.zeros(readnoise.shape)
@@ -847,7 +879,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             kk = parse_sec_keyword(header['CCDSEC'+amp])
             o,darknoise = calc_overscan(trimmed_dark_in_electrons[kk])
             new_readnoise[kk] = np.sqrt(readnoise[kk]**2+darknoise**2)
-            log.info("Master dark noise for AMP %s = %4.3f elec, rdnoise %4.3f -> %4.3f elec"%(amp,darknoise,np.mean(readnoise[kk]),np.mean(new_readnoise[kk])))
+            log.info("Camera {} amp {} master dark noise = {:4.3f} elec, rdnoise {:4.3f} -> {:4.3f} elec".format(
+                camera, amp, darknoise, np.mean(readnoise[kk]), np.mean(new_readnoise[kk])))
         readnoise = new_readnoise
 
     #- Correct for dark trails if any
@@ -857,7 +890,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
                 ii    = _parse_sec_keyword(header["CCDSEC"+amp])
-                log.info("Removing dark trails for amplifier %s with width=%3.1f and amplitude=%5.4f"%(amp,width,amplitude))
+                log.info("Camera {} amp {} removing dark trails with width={:3.1f} and amplitude={:5.4f}".format(
+                    camera, amp, width, amplitude))
                 correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
 
     #- Divide by pixflat image
@@ -922,13 +956,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         with_sky_model = True
 
         if with_sky_model :
-            log.debug("Will use a sky model to model the spectra")
+            log.debug(f"Camera {camera} will use a sky model to model the spectra")
             fiberflat_filename = cfinder.findfile("FIBERFLAT")
             depend.setdep(header, 'CCD_CALIB_FIBERFLAT', shorten_filename(fiberflat_filename))
             if fiberflat_filename is not None :
                 fiberflat = read_fiberflat(fiberflat_filename)
 
-        log.info("compute an image model after dark correction and pixel flat")
+        log.info(f"Camera {camera} compute an image model after dark correction and pixel flat")
         nsig = 5.
         mimage = compute_image_model(img, xyset, fiberflat=fiberflat,
                                      with_spectral_smoothing=with_spectral_smoothing,
@@ -942,8 +976,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # out &= (image>mimage) # could request this to be conservative on the variance ... but this could cause other issues
         mimage[out] = image[out]
 
-        log.info("use image model to compute variance")
+        log.info(f"Camera {camera} use image model to compute variance")
         if bkgsub_dark :
+
             mimage += bkg
         if pixflat is not False :
             # undo pixflat
@@ -962,6 +997,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # regenerate img object
         img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
+    if np.all(img.mask>0):
+        log.error(f'Camera {camera} is entirely masked (i.e. unusable)')
 
     if remove_scattered_light :
         if xyset is None :
