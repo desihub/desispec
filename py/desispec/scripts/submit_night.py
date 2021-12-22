@@ -10,12 +10,14 @@ from desispec.workflow.tableio import load_tables, write_table
 from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name
-from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, \
-                                        get_processing_table_name, erow_to_prow, table_row_to_dict
+from desispec.workflow.proctable import default_obstypes_for_proctable, get_processing_table_path, \
+                                        get_processing_table_name, erow_to_prow, table_row_to_dict, \
+                                        default_prow
 from desispec.workflow.procfuncs import parse_previous_tables, get_type_and_tile, \
                                         define_and_assign_dependency, create_and_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
+from desispec.io.util import decode_camword, difference_camwords, create_camword
 
 def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime', reservation=None, system_name=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
@@ -73,7 +75,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     resubmit_partial_complete = (not dont_resubmit_partial_jobs)
 
     if proc_obstypes is None:
-        proc_obstypes = default_exptypes_for_proctable()
+        proc_obstypes = default_obstypes_for_proctable()
 
     ## Determine where the exposure table will be written
     if exp_table_path is None:
@@ -144,7 +146,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## filter by TILEID if requested
     if tiles is not None:
-        log.info(f'Filtering by tiles={tileids}')
+        log.info(f'Filtering by tiles={tiles}')
         if etable is not None:
             keep = np.isin(etable['TILEID'], tiles)
             etable = etable[keep]
@@ -196,8 +198,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     isdark = (etable['OBSTYPE'] == 'dark')
     if np.sum(isdark)>0:
         wheredark = np.where(isdark)[0]
-        unproc_table = vstack([unproc_table, etable[wheredark[1:]]])
-        unproc_table.sort('EXPID')
+        if len(wheredark) > 1:
+            unproc_table = vstack([unproc_table, etable[wheredark[1:]]])
+            unproc_table.sort('EXPID')
         etable = vstack([etable[wheredark[0]], etable[~isdark]])
 
     ## Then get rest of the cals above scis
@@ -209,8 +212,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         write_table(unproc_table, tablename=unproc_table_pathname)
 
     ## Get relevant data from the tables
-    arcs, flats, sciences, darkjob, arcjob, flatjob, \
-    curtype, lasttype, curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
+    arcs, flats, sciences, calibjobs, curtype, lasttype, \
+    curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
     if len(ptable) > 0:
         ptable = update_from_queue(ptable, dry_run=0)
         if dry_run_level < 3:
@@ -227,7 +230,29 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         ptable_expids = np.array([], dtype=int)
 
     ## Loop over new exposures and process them as relevant to that type
-    tableng = 0
+    tableng = len(ptable)
+
+    if tableng == 0 and np.sum(isdark) == 0:
+        prow = default_prow()
+        prow['INTID'] = internal_id
+        internal_id += 1
+        prow['JOBDESC'] = 'nightlybias'
+        prow['NIGHT'] = night
+        prow['CALIBRATOR'] = 1
+        cams = set(decode_camword('a0123456789'))
+        for row in unproc_table:
+            if row['OBSTYPE'] == 'zero' and 'calib' in row['PROGRAM']:
+                proccamword = difference_camwords(row['CAMWORD'], row['BADCAMWORD'])
+                cams = cams.intersection(set(decode_camword(proccamword)))
+        prow['PROCCAMWORD'] = create_camword(list(cams))
+        prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
+                                 reservation=reservation,
+                                 strictly_successful=True,
+                                 check_for_outputs=check_for_outputs,
+                                 resubmit_partial_complete=resubmit_partial_complete,
+                                 system_name=system_name)
+        calibjobs['nightlybias'] = prow.copy()
+
     for ii, erow in enumerate(etable):
         if erow['EXPID'] in ptable_expids:
             continue
@@ -239,25 +264,28 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         curtype, curtile = get_type_and_tile(erow)
 
-        if erow['OBSTYPE'] == 'dark' and darkjob is not None:
-            print("\nWARNING: Dark exposure found, but already proocessed dark with" +
-                  f" expID {darkjob['EXPID']}. This shouldn't happen. Skipping this one.")
-            continue
-
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
-            ptable, arcjob, flatjob, \
-            sciences, internal_id    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                                     lasttype, internal_id, dry_run=dry_run_level,
-                                                                     queue=queue, reservation=reservation, strictly_successful=True,
-                                                                     check_for_outputs=check_for_outputs,
-                                                                     resubmit_partial_complete=resubmit_partial_complete,
-                                                                     z_submit_types=z_submit_types, system_name=system_name)
+            ptable, calibjobs, sciences, internal_id \
+                = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
+                                                calibjobs,
+                                                lasttype, internal_id,
+                                                dry_run=dry_run_level,
+                                                queue=queue,
+                                                reservation=reservation,
+                                                strictly_successful=True,
+                                                check_for_outputs=check_for_outputs,
+                                                resubmit_partial_complete=resubmit_partial_complete,
+                                                z_submit_types=z_submit_types,
+                                                system_name=system_name)
 
         prow = erow_to_prow(erow)
         prow['INTID'] = internal_id
         internal_id += 1
-        prow['JOBDESC'] = prow['OBSTYPE']
-        prow = define_and_assign_dependency(prow, darkjob, arcjob, flatjob)
+        if prow['OBSTYPE'] == 'dark':
+            prow['JOBDESC'] = 'ccdcalib'
+        else:
+            prow['JOBDESC'] = prow['OBSTYPE']
+        prow = define_and_assign_dependency(prow, calibjobs)
         print(f"\nProcessing: {prow}\n")
         prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue, reservation=reservation, strictly_successful=True,
                                  check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
@@ -266,17 +294,17 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         ## If processed a dark, assign that to the dark job
         if curtype == 'dark':
             prow['CALIBRATOR'] = 1
-            darkjob = prow.copy()
+            calibjobs['ccdcalib'] = prow.copy()
 
         ## Add the processing row to the processing table
         ptable.add_row(prow)
         #ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
-        if curtype == 'flat' and flatjob is None \
+        if curtype == 'flat' and calibjobs['nightlyflat'] is None \
                 and int(erow['SEQTOT']) < 5 and float(erow['EXPTIME']) > 100.:
             flats.append(prow)
-        elif curtype == 'arc' and arcjob is None:
+        elif curtype == 'arc' and calibjobs['psfnight'] is None:
             arcs.append(prow)
         elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
             sciences.append(prow)
@@ -296,13 +324,15 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     if tableng > 0:
         ## No more data coming in, so do bottleneck steps if any apply
-        ptable, arcjob, flatjob, \
-        sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                              lasttype, internal_id, dry_run=dry_run_level,
-                                                              queue=queue, reservation=reservation, strictly_successful=True,
-                                                              check_for_outputs=check_for_outputs,
-                                                              resubmit_partial_complete=resubmit_partial_complete,
-                                                              z_submit_types=z_submit_types, system_name=system_name)
+        ptable, calibjobs, sciences, internal_id \
+            = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
+                                            lasttype, internal_id, dry_run=dry_run_level,
+                                            queue=queue, reservation=reservation,
+                                            strictly_successful=True,
+                                            check_for_outputs=check_for_outputs,
+                                            resubmit_partial_complete=resubmit_partial_complete,
+                                            z_submit_types=z_submit_types,
+                                            system_name=system_name)
         ## All jobs now submitted, update information from job queue and save
         ptable = update_from_queue(ptable, dry_run=dry_run_level)
         if dry_run_level < 3:

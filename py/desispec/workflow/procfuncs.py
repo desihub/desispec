@@ -62,7 +62,10 @@ def batch_script_name(prow):
     Returns:
         scriptfile, str. The complete pathname to the script file, as it is defined within the desi_proc ecosystem.
     """
-    pathname = get_desi_proc_batch_file_pathname(night = prow['NIGHT'], exp=prow['EXPID'], \
+    expids = prow['EXPID']
+    if len(expids) == 0:
+        expids = None
+    pathname = get_desi_proc_batch_file_pathname(night = prow['NIGHT'], exp=expids, \
                                              jobdesc=prow['JOBDESC'], cameras=prow['PROCCAMWORD'])
     scriptfile =  pathname + '.slurm'
     return scriptfile
@@ -87,7 +90,8 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
             'prestdstar': 'sframe',
             'stdstarfit': 'stdstars',
             'poststdstar': 'cframe',
-            'dark': 'badcolumns',
+            'nightlybias': 'biasnight',
+            'ccdcalib': 'badcolumns',
             'arc': 'fitpsf',
             'flat': 'fiberflat',
             'psfnight': 'psfnight',
@@ -145,7 +149,10 @@ def check_for_outputs_on_disk(prow, resubmit_partial_complete=True):
         ## Otheriwse camera based
         cameras = decode_camword(prow['PROCCAMWORD'])
         n_desired = len(cameras)
-        expid = prow['EXPID'][0]
+        if len(prow['EXPID']) > 0:
+            expid = prow['EXPID'][0]
+        else:
+            expid = None
         if len(prow['EXPID']) > 1 and prow['JOBDESC'] not in ['psfnight','nightlyflat']:
             log.warning(f"{prow['JOBDESC']} job with exposure(s) {prow['EXPID']}. This job type only makes " +
                      f"sense with a single exposure. Proceeding with {expid}.")
@@ -249,10 +256,12 @@ def desi_proc_command(prow, queue=None):
             cmd += ' --nostdstarfit --nofluxcalib'
         elif prow['JOBDESC'] == 'poststdstar':
             cmd += ' --noprestdstarfit --nostdstarfit'
-    elif prow['OBSTYPE'].lower() == 'dark':
+    elif prow['JOBDESC'] in ['nightlybias', 'ccdcalib']:
         cmd += ' --nightlybias'
     pcamw = str(prow['PROCCAMWORD'])
-    cmd += ' --cameras={} -n {} -e {}'.format(pcamw, prow['NIGHT'], prow['EXPID'][0])
+    cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
+    if len(prow['EXPID']) > 0:
+        cmd += f"-e {prow['EXPID'][0]}"
     if prow['BADAMPS'] != '':
         cmd += ' --badamps={}'.format(prow['BADAMPS'])
     return cmd
@@ -280,11 +289,12 @@ def desi_proc_joint_fit_command(prow, queue=None):
 
     night = prow['NIGHT']
     specs = str(prow['PROCCAMWORD'])
-    expids = prow['EXPID']
-    expid_str = ','.join([str(eid) for eid in expids])
+    expid_str = ','.join([str(eid) for eid in prow['EXPID']])
 
     cmd += f' --obstype {descriptor}'
-    cmd += ' --cameras={} -n {} -e {}'.format(specs, night, expid_str)
+    cmd += f' --cameras={specs} -n {night}'
+    if len(expid_str) > 0:
+        cmd += f'-e {expid_str}'
     return cmd
 
 def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None):
@@ -349,9 +359,14 @@ def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_n
             log.info("Command to be run: {}".format(cmd.split()))
         else:
             log.info("Running: {}".format(cmd.split()))
-            scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=prow['EXPID'], \
-                                                           cameras=prow['PROCCAMWORD'], jobdesc=prow['JOBDESC'], \
-                                                           queue=queue, cmdline=cmd, system_name=system_name)
+            expids = prow['EXPID']
+            if len(expids) == 0:
+                expids = None
+            scriptpathname = create_desi_proc_batch_script(night=prow['NIGHT'], exp=expids,
+                                                           cameras=prow['PROCCAMWORD'],
+                                                           jobdesc=prow['JOBDESC'],
+                                                           queue=queue, cmdline=cmd,
+                                                           system_name=system_name)
 
     log.info("Outfile is: {}".format(scriptpathname))
     prow['SCRIPTNAME'] = os.path.basename(scriptpathname)
@@ -455,48 +470,57 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
 #############################################
 ##########   Row Manipulations   ############
 #############################################
-def define_and_assign_dependency(prow, darkjob, arcjob, flatjob):
+def define_and_assign_dependency(prow, calibjobs):
     """
-    Given input processing row and possible arcjob (processing row for psfnight) and flatjob (processing row for
-    nightlyflat), this defines the JOBDESC keyword and assigns the dependency appropriate for the job type of prow.
+    Given input processing row and possible calibjobs, this defines the
+    JOBDESC keyword and assigns the dependency appropriate for the job type of
+    prow.
 
     Args:
-        prow, Table.Row or dict. Must include keyword accessible definitions for 'OBSTYPE'. A row must have column names for
+        prow, Table.Row or dict. Must include keyword accessible definitions for
+                                 'OBSTYPE'. A row must have column names for
                                  'JOBDESC', 'INT_DEP_IDS', and 'LATEST_DEP_ID'.
-        darkjob, Table.Row, dict, or NoneType. Row corresponding to the processed 300s dark for the night from proctable.
-                                              This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
-                                              If None, it assumes the dependency doesn't exist and no dependency is assigned.
-        arcjob, Table.Row, dict, or NoneType. Processing row corresponding to psfnight for the night of the data in prow.
-                                              This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
-                                              If None, it assumes the dependency doesn't exist and no dependency is assigned.
-        flatjob, Table.Row, dict, or NoneType. Processing row corresponding to nightlyflat for the night of the data in prow.
-                                               This must contain keyword accessible values for 'INTID', and 'LATEST_QID'.
-                                               If None, it assumes the dependency doesn't exist and no dependency is assigned.
+        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+                       and 'nightlyflat'. Each key corresponds to a Table.Row or
+                       None. The table.Row() values are for the corresponding
+                       calibration job. Each value that isn't None must contain
+                       'INTID', and 'LATEST_QID'. If None, it assumes the
+                       dependency doesn't exist and no dependency is assigned.
 
     Returns:
-        prow, Table.Row or dict. The same prow type and keywords as input except with modified values updated values for
+        prow, Table.Row or dict. The same prow type and keywords as input except
+                                 with modified values updated values for
                                  'JOBDESC', 'INT_DEP_IDS'. and 'LATEST_DEP_ID'.
 
     Note:
-        This modifies the input. Though Table.Row objects are generally copied on modification, so the change to the
-        input object in memory may or may not be changed. As of writing, a row from a table given to this function will
-        not change during the execution of this function (but can be overwritten explicitly with the returned row if desired).
+        This modifies the input. Though Table.Row objects are generally copied
+        on modification, so the change to the input object in memory may or may
+        not be changed. As of writing, a row from a table given to this function
+        will not change during the execution of this function (but can be
+        overwritten explicitly with the returned row if desired).
     """
     if prow['OBSTYPE'] in ['science', 'twiflat']:
-        if flatjob is not None:
-            dependency = flatjob
-        elif arcjob is not None:
-            dependency = arcjob
+        if calibjobs['nightlyflat'] is not None:
+            dependency = calibjobs['nightlyflat']
+        elif calibjobs['psfnight'] is not None:
+            dependency = calibjobs['psfnight']
+        elif calibjobs['ccdcalib'] is not None:
+            dependency = calibjobs['ccdcalib']
         else:
-            dependency = darkjob
+            dependency = calibjobs['nightlybias']
         prow['JOBDESC'] = 'prestdstar'
     elif prow['OBSTYPE'] == 'flat':
-        if arcjob is not None:
-            dependency = arcjob
+        if calibjobs['psfnight'] is not None:
+            dependency = calibjobs['psfnight']
+        elif calibjobs['ccdcalib'] is not None:
+            dependency = calibjobs['ccdcalib']
         else:
-            dependency = darkjob
+            dependency = calibjobs['nightlybias']
     elif prow['OBSTYPE'] == 'arc':
-        dependency = darkjob
+        if calibjobs['ccdcalib'] is not None:
+            dependency = calibjobs['ccdcalib']
+        else:
+            dependency = calibjobs['nightlybias']
     else:
         dependency = None
 
@@ -598,9 +622,10 @@ def parse_previous_tables(etable, ptable, night):
                                     all the flats, if multiple sets existed)
         sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile)
-        darkjob, dict or None, the dark proctable row if it exists. Otherwise None.
-        arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
+        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+                       and 'nightlyflat'. Each key corresponds to a Table.Row or
+                       None. The table.Row() values are for the corresponding
+                       calibration job.
         curtype, None, the obstype of the current job being run. Always None as first new job will define this.
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         curtile, None, the tileid of the current job (if science). Otherwise None. Always None as first
@@ -611,7 +636,8 @@ def parse_previous_tables(etable, ptable, night):
     """
     log = get_logger()
     arcs, flats, sciences = [], [], []
-    darkjob, arcjob, flatjob = None, None, None
+    calibjobs = {'nightlybias': None, 'ccdcalib': None, 'psfnight': None,
+                 'nightlyflat': None}
     curtype,lasttype = None,None
     curtile,lasttile = None,None
 
@@ -621,13 +647,17 @@ def parse_previous_tables(etable, ptable, night):
         lasttype,lasttile = get_type_and_tile(ptable[-1])
         jobtypes = ptable['JOBDESC']
 
-        if 'dark' in jobtypes:
-            darkjob = table_row_to_dict(ptable[jobtypes=='dark'][0])
-            log.info("Located dark job in exposure table: {}".format(darkjob))
+        if 'nightlybias' in jobtypes:
+            calibjobs['nightlybias'] = table_row_to_dict(ptable[jobtypes=='nightlybias'][0])
+            log.info("Located nightlybias job in exposure table: {}".format(calibjobs['nightlybias']))
+
+        if 'ccdcalib' in jobtypes:
+            calibjobs['ccdcalib'] = table_row_to_dict(ptable[jobtypes=='ccdcalib'][0])
+            log.info("Located ccdcalib job in exposure table: {}".format(calibjobs['ccdcalib']))
 
         if 'psfnight' in jobtypes:
-            arcjob = table_row_to_dict(ptable[jobtypes=='psfnight'][0])
-            log.info("Located joint fit arc job in exposure table: {}".format(arcjob))
+            calibjobs['psfnight'] = table_row_to_dict(ptable[jobtypes=='psfnight'][0])
+            log.info("Located joint fit psfnight job in exposure table: {}".format(calibjobs['psfnight']))
         elif lasttype == 'arc':
             seqnum = 10
             for row in ptable[::-1]:
@@ -641,8 +671,8 @@ def parse_previous_tables(etable, ptable, night):
             arcs = arcs[::-1]
 
         if 'nightlyflat' in jobtypes:
-            flatjob = table_row_to_dict(ptable[jobtypes=='nightlyflat'][0])
-            log.info("Located joint fit flat job in exposure table: {}".format(flatjob))
+            calibjobs['nightlyflat'] = table_row_to_dict(ptable[jobtypes=='nightlyflat'][0])
+            log.info("Located joint fit nightlyflat job in exposure table: {}".format(calibjobs['nightlyflat']))
         elif lasttype == 'flat':
             for row in ptable[::-1]:
                 erow = etable[etable['EXPID']==row['EXPID'][0]]
@@ -665,7 +695,7 @@ def parse_previous_tables(etable, ptable, night):
         internal_id = night_to_starting_iid(night)
 
     return arcs,flats,sciences, \
-           darkjob, arcjob, flatjob, \
+           calibjobs, \
            curtype, lasttype, \
            curtile, lasttile,\
            internal_id
@@ -853,9 +883,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
     elif descriptor == 'flat':
         descriptor = 'nightlyflat'
     elif descriptor == 'science':
-        if z_submit_types is None:
-            descriptor = 'stdstarfit'
-        elif len(z_submit_types) == 0:
+        if z_submit_types is None or len(z_submit_types) == 0:
             descriptor = 'stdstarfit'
 
     if descriptor not in ['psfnight', 'nightlyflat', 'science','stdstarfit']:
@@ -1004,7 +1032,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow = assign_dependency(joint_prow,dependency=prows)
     return joint_prow
 
-def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
+def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                   lasttype, internal_id, z_submit_types=None, dry_run=0,
                                   queue='realtime', reservation=None, strictly_successful=False,
                                   check_for_outputs=True, resubmit_partial_complete=True,
@@ -1023,8 +1051,10 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
                                     all the flats, if multiple sets existed). May be empty if none identified yet.
         sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile). May be empty if none identified yet.
-        arcjob, dict or None, the psfnight job row if it exists. Otherwise None.
-        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
+        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+                       and 'nightlyflat'. Each key corresponds to a Table.Row or
+                       None. The table.Row() values are for the corresponding
+                       calibration job.
         lasttype, str or None, the obstype of the last individual exposure row to be processed.
         internal_id, int, an internal identifier unique to each job. Increments with each new job. This
                           is the smallest unassigned value.
@@ -1048,8 +1078,10 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         system_name (str): batch system name, e.g. cori-haswell, cori-knl, permutter-gpu
     Returns:
         ptable, Table, Processing table of all exposures that have been processed.
-        arcjob, dictor None, the psfnight job row if it exists. Otherwise None.
-        flatjob, dict or None, the nightlyflat job row if it exists. Otherwise None.
+        calibjobs, dict. Dictionary containing 'nightlybias', 'ccdcalib', 'psfnight'
+                       and 'nightlyflat'. Each key corresponds to a Table.Row or
+                       None. The table.Row() values are for the corresponding
+                       calibration job.
         sciences, list of dicts, list of the most recent individual prestdstar science exposures
                                        (if currently processing that tile). May be empty if none identified yet or
                                        we just submitted them for processing.
@@ -1062,7 +1094,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         if np.all(skysubonly):
             log.error("Identified all exposures in joint fitting request as skysub-only. Not submitting")
             sciences = []
-            return ptable, arcjob, flatjob, sciences, internal_id
+            return ptable, calibjobs, sciences, internal_id
 
         if np.any(skysubonly):
             log.error("Identified skysub-only exposures in joint fitting request")
@@ -1092,7 +1124,7 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
             # log.info("Expid's: {}".format([row['EXPID'] for row in sciences]))
             # log.info("Tileid's: {}".format([row['TILEID'] for row in sciences]))
             sciences = []
-            return ptable, arcjob, flatjob, sciences, internal_id
+            return ptable, calibjobs, sciences, internal_id
 
         ptable, tilejob, internal_id = science_joint_fit(ptable, sciences, internal_id, z_submit_types=z_submit_types,
                                                          dry_run=dry_run, queue=queue, reservation=reservation,
@@ -1104,24 +1136,26 @@ def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob
         if tilejob is not None:
             sciences = []
 
-    elif lasttype == 'flat' and flatjob is None and len(flats)==12:
+    elif lasttype == 'flat' and calibjobs['nightlyflat'] is None and len(flats) == 12:
         ## Note here we have an assumption about the number of expected flats being greater than 11
-        ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
-                                                      reservation=reservation, strictly_successful=strictly_successful,
-                                                      check_for_outputs=check_for_outputs,
-                                                      resubmit_partial_complete=resubmit_partial_complete,
-                                                      system_name=system_name
-                                                      )
+        ptable, calibjobs['nightlyflat'], internal_id \
+            = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run, queue=queue,
+                             reservation=reservation, strictly_successful=strictly_successful,
+                             check_for_outputs=check_for_outputs,
+                             resubmit_partial_complete=resubmit_partial_complete,
+                             system_name=system_name
+                            )
 
-    elif lasttype == 'arc' and arcjob is None and len(arcs)==5:
+    elif lasttype == 'arc' and calibjobs['psfnight'] is None and len(arcs) == 5:
         ## Note here we have an assumption about the number of expected arcs being greater than 4
-        ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
-                                                    reservation=reservation, strictly_successful=strictly_successful,
-                                                    check_for_outputs=check_for_outputs,
-                                                    resubmit_partial_complete=resubmit_partial_complete,
-                                                    system_name=system_name
-                                                    )
-    return ptable, arcjob, flatjob, sciences, internal_id
+        ptable, calibjobs['psfnight'], internal_id \
+            = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run, queue=queue,
+                            reservation=reservation, strictly_successful=strictly_successful,
+                            check_for_outputs=check_for_outputs,
+                            resubmit_partial_complete=resubmit_partial_complete,
+                            system_name=system_name
+                            )
+    return ptable, calibjobs, sciences, internal_id
 
 
 def set_calibrator_flag(prows, ptable):
