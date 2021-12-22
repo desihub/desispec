@@ -408,6 +408,15 @@ def compute_background_between_fiber_blocks(image,xyset) :
             # extract
             vb,vb_ivar = numba_mean(image.pix[sec[0]],ivar[sec[0]],image_xb)
 
+            # mask out region of brightest sky line in blue camera
+            skyline_wave=5578.9
+            if block==0 :  skyline_y =  xyset.y_vs_wave(0,skyline_wave)
+            elif block==20 : skyline_y =  xyset.y_vs_wave(499,skyline_wave)
+            else : skyline_y = (xyset.y_vs_wave(block*25-1,skyline_wave)+xyset.y_vs_wave(block*25,skyline_wave))/2.
+
+            log.info(f"interblock {block} y({skyline_wave})={skyline_y}")
+            inamp &= np.abs(image_yy-skyline_y)>5.
+
             # keep only in amp values
             if np.any(~inamp) :
                 vb = np.interp(image_yy,image_yy[inamp],vb[inamp])
