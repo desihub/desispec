@@ -905,11 +905,12 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
         if ntiles["bright"] + ntiles["dark"] > 0:
             for survey in np.unique(surveys):
                 ntiles_surv = {
-                    "bright" : np.unique(ds["bright"]["TILEID"][ds["bright"]["SURVEY"] == survey]).size,
-                    "dark" : np.unique(ds["dark"]["TILEID"][ds["dark"]["SURVEY"] == survey]).size,
+                    faprgrm : np.unique(
+                        ds[faprgrm]["TILEID"][ds["bright"]["SURVEY"] == survey]
+                    ).size for faprgrm in faprgrms
                 }
                 # AR plotting only if some tiles
-                if ntiles_surv["bright"] + ntiles_surv["dark"] == 0:
+                if np.sum([ntiles_surv[faprgrm] for faprgrm in faprgrms]) == 0:
                     continue
                 # AR three plots:
                 # AR - fraction of VALID fibers, bright+dark together
@@ -917,8 +918,10 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
                 # AR - fraction of LYA candidates for QSOs
                 fig = plt.figure(figsize=(40, 5))
                 gs = gridspec.GridSpec(1, 3, wspace=0.5)
-                title = "SURVEY={} : {} BRIGHT and {} DARK tiles from {}".format(
-                    survey, ntiles_surv["bright"], ntiles_surv["dark"], night
+                title = "SURVEY={} : {} tiles from {}".format(
+                    survey,
+                    " and ".join(["{} {}".format(ntiles_surv[faprgrm], faprgrm.upper()) for faprgrm in faprgrms]),
+                    night,
                 )
                 # AR fraction of ~VALID fibers, bright+dark together
                 ax = plt.subplot(gs[0])
