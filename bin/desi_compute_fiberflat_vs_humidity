@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+import sys,os
+import astropy.io.fits as pyfits
+from astropy.table import Table
+import fitsio
+import numpy as np
+import glob
+
+import matplotlib.pyplot as plt
+
+from desiutil.log import get_logger
+from desispec.io import findfile,read_fiberflat
+
+log=get_logger()
+
+year=2021
+humidity_bins=np.array([0,10,12.5,13.75,15,16.25,17.5,18.75,20,21.25,22.5,23.75,25,27.5,30,35,40,45,50])
+nbins=humidity_bins.size
+# humidity bins have been adjusted based on the distribution of humidity at KPNO.
+# note this is the humidity in the shack which is maintained below 50%
+# all humidity values are in percent
+
+wave=None
+fiberflats_in_bin=None
+bhumids_in_bin=None
+
+for spectro in range(10) :
+    cam=f"b{spectro}"
+
+    humidity_table_filename=f"humidity_table_{cam}.csv"
+    if not os.path.isfile(humidity_table_filename) :
+
+        vals=dict()
+        vals["NIGHT"]=[]
+        vals["HUMIDITY"]=[]
+
+        # loop on nights with fiberflat
+        for flat_filename in sorted(glob.glob(f"/global/cfs/cdirs/desi/spectro/redux/daily/calibnight/{year}*/fiberflatnight-{cam}-*.fits")) :
+            print(flat_filename)
+            head=fitsio.read_header(flat_filename)
+            night=head['NIGHT']
+            month=night//100
+            et_filename=f"/global/cfs/cdirs/desi/spectro/redux/daily/exposure_tables/{month}/exposure_table_{night}.csv"
+            if not os.path.isfile(et_filename) :
+                log.error(f"missing {et_filename}")
+                continue
+            et=Table.read(et_filename)
+            ii=(et['OBSTYPE']=='flat')
+            expids=list(et['EXPID'][ii])
+            #print(night,expids)
+            bhumid_vals=[]
+            for expid in expids :
+                desi_filename=findfile("raw",night=night,expid=expid)
+                #print(desi_filename)
+                spectcons=fitsio.read(desi_filename,"SPECTCONS")
+                ii=(spectcons["unit"]==spectro)
+                if np.sum(ii)==0 :
+                    log.warning(f"no spectro {spectro} in {desi_filename}")
+                    continue
+                bhumid=float(spectcons["BHUMID"][ii])
+                if bhumid<=0 :
+                    log.warning(f"unphysical humidity value = {bhumid}")
+                    continue
+                bhumid_vals.append(bhumid)
+                #print(expid,bhumid)
+            if len(bhumid_vals)==0 :
+                log.error(f"couldn't get humidity info for night {night}")
+                continue
+            bhumid=np.mean(bhumid_vals)
+            vals["NIGHT"].append(night)
+            vals["HUMIDITY"].append(bhumid)
+        t=Table()
+        for k in vals.keys() :
+            t[k]=vals[k]
+        t.write(humidity_table_filename)
+        print("wrote",humidity_table_filename)
+
+    humidity_table = Table.read(humidity_table_filename)
+
+    print("Humidity table:")
+    print(humidity_table)
+    print("")
+
+    wave = None
+    goodfibers= None
+
+    # loop on bins
+    for bin_index in range(nbins-1) :
+
+        extname="HUM{:02d}".format(bin_index)
+        ofilename=f"fiberflat-vs-humidity-{cam}-{extname}.fits"
+        if os.path.isfile(ofilename) :
+            log.info(f"skip existing {ofilename}")
+            continue
+
+        min_humidity=humidity_bins[bin_index]
+        max_humidity=humidity_bins[bin_index+1]
+        fiberflats_in_bin=[]
+        bhumids_in_bin=[]
+
+
+        selection=(humidity_table["HUMIDITY"]>=min_humidity)&(humidity_table["HUMIDITY"]<max_humidity)
+        if np.sum(selection)<2 : continue
+        nights=humidity_table["NIGHT"][selection]
+        log.info("Humidity bin #{} nights={}".format(bin_index,list(nights)))
+
+        # loop on nights with fiberflat
+        for night in nights :
+            flat_filename = f"/global/cfs/cdirs/desi/spectro/redux/daily/calibnight/{night}/fiberflatnight-{cam}-{night}.fits"
+            log.info(f"Humidity bin #{bin_index} night={night} {flat_filename}")
+            flat=read_fiberflat(flat_filename)
+
+            if wave is None :
+                wave=flat.wave
+                # fixed list of good fibers
+                ivar=(flat.ivar)*(flat.mask==0)
+                medflat=np.median(flat.fiberflat,axis=1)
+                mmedflat=np.median(medflat)
+                goodfibers=np.where((np.sum(flat.ivar,axis=1)>0)&(medflat>0.5*mmedflat))[0]
+
+            mflat=np.median(flat.fiberflat[goodfibers],axis=0)
+            flats=[]
+            for fiber in goodfibers :
+                norm=np.sum(flat.ivar[fiber]*mflat**2)
+                if norm<=0 :
+                    continue
+                s=np.median(flat.fiberflat[fiber]/mflat)
+                flats.append(flat.fiberflat[fiber]/s)
+            mflat=np.median(np.array(flats),axis=0)
+            flat.fiberflat /= (mflat+(mflat==0))
+
+            fiberflats_in_bin.append(flat.fiberflat)
+            bhumids_in_bin.append(np.mean(humidity_table["HUMIDITY"][humidity_table["NIGHT"]==night]))
+
+        if len(bhumids_in_bin)<2 : continue
+
+        log.info("now median in bin")
+        hdulist=pyfits.HDUList([pyfits.PrimaryHDU(wave)])
+        hdulist[0].header["EXTNAME"]="WAVELENGTH"
+        hdulist[0].header["CAMERA"]=cam
+
+        tmp=np.array(fiberflats_in_bin)
+        fiberflat_in_bin = np.median(tmp,axis=0)
+        hdulist.append(pyfits.ImageHDU(fiberflat_in_bin,name=extname))
+        hdulist[extname].header["MEDHUM"]=np.median(bhumids_in_bin)
+        hdulist[extname].header["MINHUM"]=np.min(bhumids_in_bin)
+        hdulist[extname].header["MAXHUM"]=np.max(bhumids_in_bin)
+        hdulist.writeto(ofilename,overwrite=True)
+        log.info(f"wrote {ofilename}")
+
+    # merging
+    # loop on bins
+    for bin_index in range(nbins-1) :
+        extname="HUM{:02d}".format(bin_index)
+        filename=f"fiberflat-vs-humidity-{cam}-{extname}.fits"
+        if not os.path.isfile(filename): continue
+        print("adding",filename)
+        h=pyfits.open(filename)
+        if hdulist==None :
+            hdulist=h
+            continue
+        hdulist.append(h[extname])
+
+    ofilename=f"fiberflat-vs-humidity-{cam}.fits"
+    hdulist.writeto(ofilename,overwrite=True)
+    log.info(f"wrote {ofilename}")
