@@ -235,6 +235,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     if tableng == 0 and np.sum(isdark) == 0:
         prow = default_prow()
         prow['INTID'] = internal_id
+        prow['OBSTYPE'] = 'zero'
         internal_id += 1
         prow['JOBDESC'] = 'nightlybias'
         prow['NIGHT'] = night

@@ -320,6 +320,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if lasttype is None and curtype != 'dark':
                 prow = default_prow()
                 prow['INTID'] = internal_id
+                prow['OBSTYPE'] = 'zero'
                 internal_id += 1
                 prow['JOBDESC'] = 'nightlybias'
                 prow['NIGHT'] = night
