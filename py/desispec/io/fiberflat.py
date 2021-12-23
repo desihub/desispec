@@ -10,6 +10,7 @@ from __future__ import absolute_import
 # The line above will help with 2to3 support.
 import os
 import time
+import numpy as np
 from astropy.io import fits
 
 from desiutil.io import encode_table
@@ -116,3 +117,32 @@ def read_fiberflat(filename):
     log.info(iotime.format('read', filename, duration))
 
     return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header, fibermap=fibermap)
+
+def read_fiberflat_vs_humidity(filename):
+    """Read fiberflat vs humidity from filename
+
+    Args:
+        filename (str): path to fiberflat_vs_humidity file
+
+    Returns: fiberflat , humidity , wave
+        fiberflat is 3D [nhumid, nspec, nwave]
+        humidity is 1D [nhumid] (and in percent)
+        wave is 1D [nwave] (and in Angstrom)
+        header (fits header)
+    """
+
+    with fits.open(filename, uint=True, memmap=False) as fx:
+        header = fx[0].header
+        wave  = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+        fiberflat = list()
+        humidity  = list()
+        for index in range(20) :
+             hdu="HUM{:02d}".format(index)
+             if hdu not in fx : continue
+             fiberflat.append(native_endian(fx[hdu].data.astype('f8')))
+             humidity.append(fx[hdu].header["MEDHUM"])
+    humidity  = np.array(humidity)
+    fiberflat = np.array(fiberflat)
+    assert(fiberflat.shape[0] == humidity.size)
+    assert(fiberflat.shape[2] == wave.size)
+    return fiberflat , humidity , wave, header
