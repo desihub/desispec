@@ -856,7 +856,7 @@ def main(args=None, comm=None):
             cmd = "desi_compute_humidity_corrected_fiberflat"
             cmd += " -i {}".format(framefile)
             cmd += " --fiberflat {}".format(input_fiberflatfile)
-            cmd += " --o {}".format(fiberflatfile)
+            cmd += " -o {}".format(fiberflatfile)
             runcmd(cmd, inputs=[framefile, input_fiberflatfile], outputs=[fiberflatfile,])
 
         timer.stop('fiberflat_humidity_correction')
