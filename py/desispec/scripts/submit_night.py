@@ -233,6 +233,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     tableng = len(ptable)
 
     if tableng == 0 and np.sum(isdark) == 0:
+        print("\nNo dark found. Submitting nightlybias before processing exposures.\n")
         prow = default_prow()
         prow['INTID'] = internal_id
         prow['OBSTYPE'] = 'zero'

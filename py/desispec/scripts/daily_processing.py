@@ -318,6 +318,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             curtype,curtile = get_type_and_tile(erow)
 
             if lasttype is None and curtype != 'dark':
+                print("\nNo dark found at the beginning of the night."
+                      + "Submitting nightlybias before processing exposures.\n")
                 prow = default_prow()
                 prow['INTID'] = internal_id
                 prow['OBSTYPE'] = 'zero'
