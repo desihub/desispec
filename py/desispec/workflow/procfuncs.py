@@ -261,7 +261,7 @@ def desi_proc_command(prow, queue=None):
     pcamw = str(prow['PROCCAMWORD'])
     cmd += f" --cameras={pcamw} -n {prow['NIGHT']}"
     if len(prow['EXPID']) > 0:
-        cmd += f"-e {prow['EXPID'][0]}"
+        cmd += f" -e {prow['EXPID'][0]}"
     if prow['BADAMPS'] != '':
         cmd += ' --badamps={}'.format(prow['BADAMPS'])
     return cmd
@@ -294,7 +294,7 @@ def desi_proc_joint_fit_command(prow, queue=None):
     cmd += f' --obstype {descriptor}'
     cmd += f' --cameras={specs} -n {night}'
     if len(expid_str) > 0:
-        cmd += f'-e {expid_str}'
+        cmd += f' -e {expid_str}'
     return cmd
 
 def create_batch_script(prow, queue='realtime', dry_run=0, joint=False, system_name=None):
@@ -457,7 +457,7 @@ def submit_batch_script(prow, dry_run=0, reservation=None, strictly_successful=F
         current_qid = int(current_qid.strip(' \t\n'))
 
     log.info(batch_params)
-    log.info(f'Submitted {jobname} with dependencies {dep_str}  and reservation={reservation}. Returned qid: {current_qid}')
+    log.info(f'Submitted {jobname} with dependencies {dep_str} and reservation={reservation}. Returned qid: {current_qid}')
 
     prow['LATEST_QID'] = current_qid
     prow['ALL_QIDS'] = np.append(prow['ALL_QIDS'],current_qid)

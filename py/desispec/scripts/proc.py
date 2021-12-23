@@ -204,6 +204,9 @@ def main(args=None, comm=None):
             log.critical('No --obstype, but also not just nightlybias ?!?')
             sys.exit(1)
 
+        if args.obstype == 'dark' and args.nightlybias:
+            jobdesc = 'ccdcalib'
+
         if args.obstype == 'SCIENCE':
             # if not doing pre-stdstar fitting or stdstar fitting and if there is
             # no flag stopping flux calibration, set job to poststdstar
@@ -215,11 +218,13 @@ def main(args=None, comm=None):
                 jobdesc = 'prestdstar'
             #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):
             #    jobdesc = 'science'
-        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,
-                                                jobdesc=jobdesc, queue=args.queue,
-                                                runtime=args.runtime,
-                                                batch_opts=args.batch_opts, timingfile=args.timingfile,
-                                                system_name=args.system_name)
+        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid,
+                                                   cameras=args.cameras,
+                                                   jobdesc=jobdesc, queue=args.queue,
+                                                   runtime=args.runtime,
+                                                   batch_opts=args.batch_opts,
+                                                   timingfile=args.timingfile,
+                                                   system_name=args.system_name)
         err = 0
         if not args.nosubmit:
             err = subprocess.call(['sbatch', scriptfile])
