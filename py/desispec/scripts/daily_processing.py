@@ -331,6 +331,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
                                          check_for_outputs=check_for_outputs,
                                          resubmit_partial_complete=resubmit_partial_complete)
                 calibjobs['nightlybias'] = prow.copy()
+                ## Add the processing row to the processing table
+                ptable.add_row(prow)
+                ## Write out the processing table
+                if dry_run_level < 3:
+                    write_tables([ptable], tablenames=[proc_table_pathname])
+                    sleep_and_report(2, message_suffix=f"after nightlybias",
+                                     dry_run=dry_run)
 
             if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
                 old_iid = internal_id

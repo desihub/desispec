@@ -252,6 +252,13 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                  resubmit_partial_complete=resubmit_partial_complete,
                                  system_name=system_name)
         calibjobs['nightlybias'] = prow.copy()
+        ## Add the processing row to the processing table
+        ptable.add_row(prow)
+        ## Write out the processing table
+        if dry_run_level < 3:
+            write_table(ptable, tablename=proc_table_pathname)
+            sleep_and_report(2, message_suffix=f"after nightlybias",
+                             dry_run=dry_run)
 
     for ii, erow in enumerate(etable):
         if erow['EXPID'] in ptable_expids:
@@ -287,8 +294,10 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             prow['JOBDESC'] = prow['OBSTYPE']
         prow = define_and_assign_dependency(prow, calibjobs)
         print(f"\nProcessing: {prow}\n")
-        prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue, reservation=reservation, strictly_successful=True,
-                                 check_for_outputs=check_for_outputs, resubmit_partial_complete=resubmit_partial_complete,
+        prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
+                                 reservation=reservation, strictly_successful=True,
+                                 check_for_outputs=check_for_outputs,
+                                 resubmit_partial_complete=resubmit_partial_complete,
                                  system_name=system_name)
 
         ## If processed a dark, assign that to the dark job
@@ -312,11 +321,12 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         lasttile = curtile
         lasttype = curtype
 
-        sleep_and_report(1, message_suffix=f"to slow down the queue submission rate", dry_run=dry_run)
-
         tableng = len(ptable)
         if tableng > 0 and ii % 10 == 0 and dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
+
+        sleep_and_report(1, message_suffix=f"to slow down the queue submission rate",
+                         dry_run=dry_run)
 
         ## Flush the outputs
         sys.stdout.flush()
