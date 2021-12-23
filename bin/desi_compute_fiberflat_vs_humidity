@@ -15,11 +15,6 @@ from desispec.io import findfile,read_fiberflat
 log=get_logger()
 
 year=2021
-humidity_bins=np.array([0,10,12.5,13.75,15,16.25,17.5,18.75,20,21.25,22.5,23.75,25,27.5,30,35,40,45,50])
-nbins=humidity_bins.size
-# humidity bins have been adjusted based on the distribution of humidity at KPNO.
-# note this is the humidity in the shack which is maintained below 50%
-# all humidity values are in percent
 
 wave=None
 fiberflats_in_bin=None
@@ -84,6 +79,29 @@ for spectro in range(10) :
 
     wave = None
     goodfibers= None
+
+    # humidity bins have been adjusted based on the distribution of humidity values.
+    # note this is the humidity in the shack which is maintained below 50%
+    # all humidity values are in percent
+    # we want 'nmin' entries per bin
+    nmin=10
+    b=0
+    e=b+0.1
+    humidity_bins=[b]
+    while(True) :
+        while((np.sum((humidity_table["HUMIDITY"]>=b)&(humidity_table["HUMIDITY"]<e))<nmin)&(e<50)) :
+            e += 0.1
+            continue
+        humidity_bins.append(np.around(e,1))
+        b=e+0.
+        if e>=50. : break
+    n=np.sum((humidity_table["HUMIDITY"]>=humidity_bins[-2]))
+    if n<nmin :
+        humidity_bins.pop(len(humidity_bins)-2)
+        humidity_bins[-1]=50.
+    humidity_bins=np.array(humidity_bins)
+    log.info(f"humidity bins = {humidity_bins}")
+    nbins=humidity_bins.size
 
     # loop on bins
     for bin_index in range(nbins-1) :
