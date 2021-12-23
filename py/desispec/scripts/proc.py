@@ -833,6 +833,37 @@ def main(args=None, comm=None):
         timer.stop('find_fiberflat')
 
     #-------------------------------------------------------------------------
+    #- Fiber flat corrected for humidity
+    if args.obstype in ['SCIENCE', 'SKY'] and (not args.noprestdstarfit):
+
+        timer.start('fiberflat_humidity_correction')
+
+        if rank == 0:
+            log.info('Flatfield correction for humidity {}'.format(time.asctime()))
+
+        for i in range(rank, len(args.cameras), size):
+            camera = args.cameras[i]
+            framefile = findfile('frame', args.night, args.expid, camera)
+            hdr = fitsio.read_header(framefile, 'FLUX')
+            input_fiberflatfile=input_fiberflat[camera]
+            if input_fiberflatfile is None :
+                log.error("No input fiberflat for {}".format(camera))
+                continue
+
+            # First need a flatfield per exposure
+            fiberflatfile = findfile('fiberflatexp', args.night, args.expid, camera)
+
+            cmd = "desi_compute_humidity_corrected_fiberflat"
+            cmd += " -i {}".format(framefile)
+            cmd += " --fiberflat {}".format(input_fiberflatfile)
+            cmd += " --o {}".format(fiberflatfile)
+            runcmd(cmd, inputs=[framefile, input_fiberflatfile], outputs=[fiberflatfile,])
+
+        timer.stop('fiberflat_humidity_correction')
+        if comm is not None:
+            comm.barrier()
+
+    #-------------------------------------------------------------------------
     #- Apply fiberflat and write fframe file
 
     if args.obstype in ['SCIENCE', 'SKY'] and args.fframe and \
@@ -847,16 +878,12 @@ def main(args=None, comm=None):
             if not os.path.exists(fframefile):
                 framefile = findfile('frame', args.night, args.expid, camera)
                 fr = desispec.io.read_frame(framefile)
-                flatfilename=input_fiberflat[camera]
-                if flatfilename is not None :
-                    ff = desispec.io.read_fiberflat(flatfilename)
-                    fr.meta['FIBERFLT'] = desispec.io.shorten_filename(flatfilename)
-                    apply_fiberflat(fr, ff)
-
-                    fframefile = findfile('fframe', args.night, args.expid, camera)
-                    desispec.io.write_frame(fframefile, fr)
-                else :
-                    log.warning("Missing fiberflat for camera {}".format(camera))
+                flatfilename = findfile('fiberflatexp', args.night, args.expid, camera)
+                ff = desispec.io.read_fiberflat(flatfilename)
+                fr.meta['FIBERFLT'] = desispec.io.shorten_filename(flatfilename)
+                apply_fiberflat(fr, ff)
+                fframefile = findfile('fframe', args.night, args.expid, camera)
+                desispec.io.write_frame(fframefile, fr)
 
         timer.stop('apply_fiberflat')
         if comm is not None:
@@ -886,10 +913,7 @@ def main(args=None, comm=None):
                 continue
 
             #- Apply fiberflat then select random fibers below a flux cut
-            flatfilename=input_fiberflat[camera]
-            if flatfilename is None :
-                log.error("No fiberflat for {}".format(camera))
-                continue
+            flatfilename = findfile('fiberflatexp', args.night, args.expid, camera)
             ff = desispec.io.read_fiberflat(flatfilename)
             apply_fiberflat(fr, ff)
             sumflux = np.sum(fr.flux, axis=1)
@@ -910,6 +934,7 @@ def main(args=None, comm=None):
     #-------------------------------------------------------------------------
     #- Sky subtraction
     if args.obstype in ['SCIENCE', 'SKY'] and (not args.noskysub ) and (not args.noprestdstarfit):
+
         timer.start('skysub')
         if rank == 0:
             log.info('Starting sky subtraction at {}'.format(time.asctime()))
@@ -918,10 +943,7 @@ def main(args=None, comm=None):
             camera = args.cameras[i]
             framefile = findfile('frame', args.night, args.expid, camera)
             hdr = fitsio.read_header(framefile, 'FLUX')
-            fiberflatfile=input_fiberflat[camera]
-            if fiberflatfile is None :
-                log.error("No fiberflat for {}".format(camera))
-                continue
+            fiberflatfile = findfile('fiberflatexp', args.night, args.expid, camera)
             skyfile = findfile('sky', args.night, args.expid, camera)
 
             cmd = "desi_compute_sky"
@@ -988,7 +1010,7 @@ def main(args=None, comm=None):
 
             framefiles[sp].append(findfile('frame', night, expid, camera))
             skyfiles[sp].append(findfile('sky', night, expid, camera))
-            fiberflatfiles[sp].append(input_fiberflat[camera])
+            fiberflatfiles[sp].append(findfile('fiberflatexp', night, expid, camera))
 
         #- Hardcoded stdstar model version
         starmodels = os.path.join(
@@ -1042,7 +1064,7 @@ def main(args=None, comm=None):
             if len(r_cameras)>0 :
                 outfile    = findfile('calibstars',night, expid)
                 frames     = list2str([findfile('frame', night, expid, camera) for camera in r_cameras])
-                fiberflats = list2str([input_fiberflat[camera] for camera in r_cameras])
+                fiberflats = list2str([findfile('fiberflatexp', night, expid, camera) for camera in r_cameras])
                 skys       = list2str([findfile('sky', night, expid, camera) for camera in r_cameras])
                 models     = list2str([findfile('stdstars', night, expid,spectrograph=int(camera[1])) for camera in r_cameras])
                 cmd = f"desi_select_calib_stars --frames {frames} --fiberflats {fiberflats} --skys {skys} --models {models} -o {outfile}"
@@ -1060,8 +1082,7 @@ def main(args=None, comm=None):
             stdfile = findfile('stdstars', night, expid,spectrograph=spectrograph)
             calibfile = findfile('fluxcalib', night, expid, camera)
             calibstars = findfile('calibstars',night, expid)
-
-            fiberflatfile = input_fiberflat[camera]
+            fiberflatfile = findfile('fiberflatexp', night, expid, camera)
 
             cmd = "desi_compute_fluxcalibration"
             cmd += " --infile {}".format(framefile)
@@ -1096,8 +1117,7 @@ def main(args=None, comm=None):
             stdfile = findfile('stdstars', night, expid, spectrograph=spectrograph)
             calibfile = findfile('fluxcalib', night, expid, camera)
             cframefile = findfile('cframe', night, expid, camera)
-
-            fiberflatfile = input_fiberflat[camera]
+            fiberflatfile = findfile('fiberflatexp', night, expid, camera)
 
             cmd = "desi_process_exposure"
             cmd += " --infile {}".format(framefile)

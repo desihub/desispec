@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fit
 warnings.filterwarnings('ignore', message=".*'10\*\*6 arcsec.* did not parse as fits unit.*")
 
 # from .download import download, filepath2url
-from .fiberflat import read_fiberflat, write_fiberflat, read_fiberflat_vs_humidity
+from .fiberflat import read_fiberflat, write_fiberflat
 from .fibermap import read_fibermap, write_fibermap, empty_fibermap
 from .filters import load_filter,load_legacy_survey_filter
 from .fluxcalibration import (read_stdstar_templates, write_stdstar_models,
