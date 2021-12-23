@@ -367,6 +367,7 @@ def default_prow():
     prow = dict()
     for nam, defval in zip(colnames, coldefaults):
         prow[nam] = defval
+    return prow
 
 def table_row_to_dict(table_row):
     """
