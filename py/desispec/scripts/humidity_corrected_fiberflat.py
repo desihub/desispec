@@ -42,7 +42,7 @@ def main(args) :
     if not cfinder.haskey("FIBERFLATVSHUMIDITY"):
         log.info("No information on fiberflat vs humidity for camera {}, simply link the input fiberflat".format(frame_header["CAMERA"]))
         os.symlink(args.fiberflat,args.outfile)
-        return
+        return 0
 
     # read fiberflat
     calib_fiberflat = read_fiberflat(args.fiberflat)
@@ -77,7 +77,7 @@ def main(args) :
     if np.isnan(calib_humidity) :
         log.warning("missing humidity info for fiber flat, use link to input")
         os.symlink(args.fiberflat,args.outfile)
-        return
+        return 0
     log.info("mean humidity during calibration exposures={:.2f}".format(calib_humidity))
 
     # we can compute the correction now that we have everything in hand
@@ -86,3 +86,5 @@ def main(args) :
     # write it
     write_fiberflat(args.outfile,improved_fiberflat)
     log.info("wrote humidity corrected flat {}".format(args.outfile))
+
+    return 0
