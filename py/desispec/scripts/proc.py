@@ -89,7 +89,7 @@ def _log_timer(timer, timingfile=None, comm=None):
     else:
         timers = [timer,]
 
-    if comm.rank == 0:
+    if comm is None or comm.rank == 0:
         stats = desiutil.timer.compute_stats(timers)
         if timingfile:
             if os.path.exists(timingfile):
@@ -949,7 +949,7 @@ def main(args=None, comm=None):
             cmd = "desi_compute_sky"
             cmd += " -i {}".format(framefile)
             cmd += " --fiberflat {}".format(fiberflatfile)
-            cmd += " --o {}".format(skyfile)
+            cmd += " -o {}".format(skyfile)
             if args.no_extra_variance :
                 cmd += " --no-extra-variance"
             if not args.no_sky_wavelength_adjustment : cmd += " --adjust-wavelength"
