@@ -906,7 +906,7 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
             for survey in np.unique(surveys):
                 ntiles_surv = {
                     faprgrm : np.unique(
-                        ds[faprgrm]["TILEID"][ds["bright"]["SURVEY"] == survey]
+                        ds[faprgrm]["TILEID"][ds[faprgrm]["SURVEY"] == survey]
                     ).size for faprgrm in faprgrms
                 }
                 # AR plotting only if some tiles
