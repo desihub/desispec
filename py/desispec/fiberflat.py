@@ -7,8 +7,6 @@ We try to keep all the (fits) io separated.
 """
 from __future__ import absolute_import, division
 
-
-
 import numpy as np
 from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
@@ -22,7 +20,6 @@ import sys
 from desiutil.log import get_logger
 import math
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
-from desispec.io.meta import findfile
 
 def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=15,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
@@ -703,26 +700,6 @@ def filter_fiberflat(fiberflat) :
             badflat=fiberflat.fiberflat[fiber,bad].copy()
             fiberflat.fiberflat[fiber,bad] = np.interp(fiberflat.wave[bad],fiberflat.wave[good],fiberflat.fiberflat[fiber,good],left=1,right=1)
     return fiberflat
-
-
-def _interpolated_fiberflat_vs_humidity(fiberflat_vs_humidity , humidity_array, humidity_point) :
-    i1=np.where(humidity_array<humidity_point)[0][-1]
-    i2=i1+1
-    if i2>=humidity_array.size : # return largest value
-        return fiberflat_vs_humidity[-1]
-    return (fiberflat_vs_humidity[i2]*(humidity_point-humidity_array[i1])+fiberflat_vs_humidity[i1]*(humidity_array[i2]-humidity_point))/(humidity_array[i2]-humidity_array[i1])
-
-def compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humidity , humidity_array, calib_humidity, current_humidity) :
-
-    # interpolate flat for humidity during calibration exposures and for the current value
-    mean_fiberflat_at_current_humidity = _interpolated_fiberflat_vs_humidity(mean_fiberflat_vs_humidity , humidity_array, current_humidity)
-    mean_fiberflat_at_calib_humidity = _interpolated_fiberflat_vs_humidity(mean_fiberflat_vs_humidity , humidity_array, calib_humidity)
-
-    # apply humidity correction to current calib fiberflat
-    current_fiberflat = calib_fiberflat # do we want to make a copy?
-    current_fiberflat.fiberflat *= mean_fiberflat_at_current_humidity/mean_fiberflat_at_calib_humidity
-    return current_fiberflat
-
 
 def apply_fiberflat(frame, fiberflat):
     """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar.
