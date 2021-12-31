@@ -8,8 +8,7 @@ import numpy as np
 
 from desiutil.log import get_logger
 
-from desispec.io import read_fiberflat,write_fiberflat
-from desispec.io import findfile
+from desispec.io import read_fiberflat,write_fiberflat,findfile,read_frame
 from desispec.io.fiberflat_vs_humidity import get_humidity,read_fiberflat_vs_humidity
 from desispec.calibfinder import CalibFinder
 from desispec.fiberflat_vs_humidity import compute_humidity_corrected_fiberflat
@@ -21,6 +20,8 @@ def parse(options=None):
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
+    parser.add_argument('--use-sky-fibers', action = 'store_true',
+                        help = 'use sky fibers to improve the correction')
     parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of output fiberflar file')
     args = None
@@ -33,10 +34,16 @@ def parse(options=None):
 
 def main(args) :
 
-    log=get_logger()
+    log = get_logger()
 
     # just read frame header in case we don't need to do anything
     frame_header = fitsio.read_header(args.infile,"FLUX")
+
+    if args.use_sky_fibers :
+        # need full frame to adjust correction on data
+        frame = read_frame(args.infile)
+    else :
+        frame = None
 
     cfinder = CalibFinder([frame_header])
     if not cfinder.haskey("FIBERFLATVSHUMIDITY"):
@@ -50,7 +57,7 @@ def main(args) :
 
     # read mean fiberflat vs humidity
     filename = cfinder.findfile("FIBERFLATVSHUMIDITY")
-    mean_fiberflat_vs_humidity , humidity_array, ffh_wave, ffh_shiftcomp, ffh_shiftdelta, ffh_header = read_fiberflat_vs_humidity(filename)
+    mean_fiberflat_vs_humidity , humidity_array, ffh_wave, ffh_header = read_fiberflat_vs_humidity(filename)
     assert(np.allclose(calib_fiberflat.wave,ffh_wave))
 
     # now need to find the humidity for this frame and for this fiberflat
@@ -83,7 +90,7 @@ def main(args) :
     log.info("mean humidity during calibration exposures={:.2f}".format(calib_humidity))
 
     # we can compute the correction now that we have everything in hand
-    improved_fiberflat = compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humidity , humidity_array, ffh_shiftcomp, ffh_shiftdelta, calib_humidity, current_frame_humidity)
+    improved_fiberflat = compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humidity , humidity_array, current_frame_humidity, frame = frame)
 
     # write it
     write_fiberflat(args.outfile,improved_fiberflat)

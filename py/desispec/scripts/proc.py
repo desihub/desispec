@@ -857,6 +857,7 @@ def main(args=None, comm=None):
             cmd += " -i {}".format(framefile)
             cmd += " --fiberflat {}".format(input_fiberflatfile)
             cmd += " -o {}".format(fiberflatfile)
+            cmd += " --use-sky-fibers"
             runcmd(cmd, inputs=[framefile, input_fiberflatfile], outputs=[fiberflatfile,])
 
         timer.stop('fiberflat_humidity_correction')

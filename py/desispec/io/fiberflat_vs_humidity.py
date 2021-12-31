@@ -42,17 +42,9 @@ def read_fiberflat_vs_humidity(filename):
              if hdu not in fx : continue
              fiberflat.append(native_endian(fx[hdu].data.astype('f8')))
              humidity.append(fx[hdu].header["MEDHUM"])
-        if "SHIFTCOMP" in fx :
-            shiftcomp = native_endian(fx["SHIFTCOMP"].data.astype('f8'))
-        else :
-            shiftcomp = None
-        if "SHIFTDELTA" in fx :
-            shiftdelta = native_endian(fx["SHIFTDELTA"].data.astype('f8'))
-        else :
-            shiftdelta = None
 
     humidity  = np.array(humidity)
     fiberflat = np.array(fiberflat)
     assert(fiberflat.shape[0] == humidity.size)
     assert(fiberflat.shape[2] == wave.size)
-    return fiberflat , humidity , wave, shiftcomp , shiftdelta, header
+    return fiberflat , humidity , wave, header
