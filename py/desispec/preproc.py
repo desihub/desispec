@@ -928,7 +928,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     ivar[var>0] = 1.0 / var[var>0]
 
     #- High readnoise is bad
-    mask[readnoise>10] |= ccdmask.BADREADNOISE
+    mask[readnoise>15] |= ccdmask.BADREADNOISE
 
     if bkgsub :
         bkg = _background(image,header)
