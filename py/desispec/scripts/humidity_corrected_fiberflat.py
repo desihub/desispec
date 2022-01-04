@@ -66,11 +66,16 @@ def main(args) :
     current_frame_humidity =get_humidity(night=night,expid=frame_header["EXPID"],camera=camera)
     log.info("humidity during current exposure={:.2f}".format(current_frame_humidity))
 
+
+
+    # we can compute the correction now that we have everything in hand
+    improved_fiberflat = compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humidity , humidity_array, current_frame_humidity, frame = frame)
+
+    # add telemetry humidity for the dome flats for the record
     # try to read the night exposure table to get the list of flats
     first_expid = calib_fiberflat.header["EXPID"]
     calib_humidity=[ get_humidity(night,first_expid,camera) ]
     fiberflat_expid=[ first_expid]
-
     for expid in range(first_expid+1,first_expid+40) :
         filename=findfile("raw",night,expid)
         if not os.path.isfile(filename): continue
@@ -84,13 +89,10 @@ def main(args) :
     calib_humidity=np.mean(calib_humidity)
     if np.isnan(calib_humidity) :
         log.warning("missing humidity info for fiber flat, use link to input")
-        if not os.path.islink(args.outfile) :
-            os.symlink(args.fiberflat,args.outfile)
-        return 0
-    log.info("mean humidity during calibration exposures={:.2f}".format(calib_humidity))
-
-    # we can compute the correction now that we have everything in hand
-    improved_fiberflat = compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humidity , humidity_array, current_frame_humidity, frame = frame)
+        calib_humidity=0.
+    else :
+        log.info("mean humidity during calibration exposures={:.2f}".format(calib_humidity))
+    improved_fiberflat.header["CALTHUM"] = (calib_humidity,"dome flat humidity from telemetry")
 
     # write it
     write_fiberflat(args.outfile,improved_fiberflat)
