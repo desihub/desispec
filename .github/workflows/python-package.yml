@@ -38,7 +38,7 @@ jobs:
                 python -m pip install pytest
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
-                python -m pip install -U astropy${{ matrix.astropy-version }}
+                python -m pip install -U 'astropy${{ matrix.astropy-version }}'
                 svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data
             - name: Run the test
               run: DESIMODEL=$(pwd) pytest
