@@ -86,10 +86,12 @@ def _log_timer(timer, timingfile=None, comm=None):
     log = get_logger()
     if comm is not None:
         timers = comm.gather(timer, root=0)
+        rank, size = comm.rank, comm.size
     else:
         timers = [timer,]
+        rank, size = 0, 1
 
-    if comm.rank == 0:
+    if rank == 0:
         stats = desiutil.timer.compute_stats(timers)
         if timingfile:
             if os.path.exists(timingfile):
