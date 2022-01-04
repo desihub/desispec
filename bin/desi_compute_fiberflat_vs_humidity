@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 
 from desiutil.log import get_logger
 from desispec.io import findfile,read_fiberflat
-from desispec.io.humidity import read_fiberflat_vs_humidity
 
 log=get_logger()
 
