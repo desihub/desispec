@@ -399,12 +399,12 @@ def _find_zeros(night,cameras,minzeros=25):
                 if expid in exptable['EXPID'][badcam|badamp]:
                     badampstr=exptable['BADAMPS'][exptable['EXPID']==expid][0]
                     badcamlist=decode_camword(exptable['BADCAMWORD'][exptable['EXPID']==expid][0])
-                    for entry in expdict:
+                    for cam,entry in expdict.items():
                         if entry not in badcamlist and entry not in badampstr:
-                            entry.append(expid)
+                            expdict[cam].append(expid)
                 else:
-                    for entry in expdict:
-                        entry.append(expid)
+                    for cam,entry in expdict.items():
+                        expdict[cam].append(expid)
     else:
         expdict={f'{cam}':expids for cam in cameras}
 
