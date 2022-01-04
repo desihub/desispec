@@ -716,6 +716,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 mask[kk] |= ccdmask.BADREADNOISE
                 log.warning(f"Camera {camera} amp {amp} OSTEP={overscan_step:.2f} is too large, set ccdmask.BADREADNOISE bit mask")
 
+            # We use the overscan per row but we still compute a single readnoise value for the whole amplifier
+            row_subtracted_overscan_col = raw_overscan_col - overscan_col[:,None]
+            o,r = calc_overscan(row_subtracted_overscan_col)
+            rdnoise  = np.repeat(r,nrows)
         if bias is not False :
             # the master bias noise is already in the raw data
             # (because we already subtracted the bias)
@@ -924,7 +928,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     ivar[var>0] = 1.0 / var[var>0]
 
     #- High readnoise is bad
-    mask[readnoise>10] |= ccdmask.BADREADNOISE
+    mask[readnoise>15] |= ccdmask.BADREADNOISE
 
     if bkgsub :
         bkg = _background(image,header)
