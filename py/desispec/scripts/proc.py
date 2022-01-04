@@ -86,10 +86,12 @@ def _log_timer(timer, timingfile=None, comm=None):
     log = get_logger()
     if comm is not None:
         timers = comm.gather(timer, root=0)
+        rank, size = comm.rank, comm.size
     else:
         timers = [timer,]
+        rank, size = 0, 1
 
-    if comm is None or comm.rank == 0:
+    if rank == 0:
         stats = desiutil.timer.compute_stats(timers)
         if timingfile:
             if os.path.exists(timingfile):
@@ -204,6 +206,9 @@ def main(args=None, comm=None):
             log.critical('No --obstype, but also not just nightlybias ?!?')
             sys.exit(1)
 
+        if args.obstype == 'dark' and args.nightlybias:
+            jobdesc = 'ccdcalib'
+
         if args.obstype == 'SCIENCE':
             # if not doing pre-stdstar fitting or stdstar fitting and if there is
             # no flag stopping flux calibration, set job to poststdstar
@@ -215,11 +220,13 @@ def main(args=None, comm=None):
                 jobdesc = 'prestdstar'
             #elif (not args.noprestdstarfit) and (not args.nostdstarfit) and (not args.nofluxcalib):
             #    jobdesc = 'science'
-        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid, cameras=args.cameras,
-                                                jobdesc=jobdesc, queue=args.queue,
-                                                runtime=args.runtime,
-                                                batch_opts=args.batch_opts, timingfile=args.timingfile,
-                                                system_name=args.system_name)
+        scriptfile = create_desi_proc_batch_script(night=args.night, exp=args.expid,
+                                                   cameras=args.cameras,
+                                                   jobdesc=jobdesc, queue=args.queue,
+                                                   runtime=args.runtime,
+                                                   batch_opts=args.batch_opts,
+                                                   timingfile=args.timingfile,
+                                                   system_name=args.system_name)
         err = 0
         if not args.nosubmit:
             err = subprocess.call(['sbatch', scriptfile])
@@ -565,7 +572,8 @@ def main(args=None, comm=None):
             noisyfrac = np.sum((mask & ccdmask.BADREADNOISE) != 0) / mask.size
             if noisyfrac > 0.25*0.5:
                 log.error(f"{100*noisyfrac:.0f}% of {camera} input pixels have bad readnoise; don't use this PSF")
-                os.rename(inpsf, inpsf+'.badreadnoise')
+                if os.path.exists(inpsf):
+                    os.rename(inpsf, inpsf+'.badreadnoise')
                 continue
 
             log.info(f'Rank {rank} interpolating {camera} PSF over bad fibers')

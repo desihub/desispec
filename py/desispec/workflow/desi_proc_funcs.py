@@ -80,8 +80,8 @@ def add_desi_proc_singular_terms(parser):
     Add parameters to the argument parser that are only used by desi_proc
     """
     #parser.add_argument("-n", "--night", type=int, help="YEARMMDD night")
-    parser.add_argument("-e", "--expid", type=int, help="Exposure ID")
-    parser.add_argument("-i", "--input", type=str, help="input raw data file")
+    parser.add_argument("-e", "--expid", type=int, default=None, help="Exposure ID")
+    parser.add_argument("-i", "--input", type=str, default=None, help="input raw data file")
     parser.add_argument("--badamps", type=str, default=None, help="comma separated list of {camera}{petal}{amp}"+\
                                                                   ", i.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'")
     parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
@@ -308,6 +308,8 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
+        ncores, runtime = ncameras, 5
+    elif jobdesc in ('CCDCALIB'):
         ncores, runtime = ncameras, 5
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
