@@ -19,6 +19,7 @@ jobs:
                 os: [ubuntu-latest]
                 python-version: [3.7, 3.8]  # fitsio does not like Python < 3.7
                 astropy-version: ['==4.0.1.post1', '<4.1', '<5.0', '<6.0']
+                fitsio-version: ['==1.1.2', '==1.1.4', '==1.1.6']
         env:
             DESIUTIL_VERSION: 3.2.1
             DESIMODEL_DATA: branches/test-0.12
@@ -39,6 +40,7 @@ jobs:
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
                 python -m pip install -U 'astropy${{ matrix.astropy-version }}'
+                python -m pip install -U 'fitsio${{ matrix.fitsio-version }}'
                 svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data
             - name: Run the test
               run: DESIMODEL=$(pwd) pytest
