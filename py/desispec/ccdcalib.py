@@ -373,15 +373,41 @@ def _find_zeros(night):
     expfile = get_exposure_table_pathname(night)
     exptable = load_table(expfile, tabletype='exptable')
     bad = (exptable['OBSTYPE']=='zero') & (exptable['LASTSTEP']!='all')
-
-    if np.any(bad):
-        drop = np.isin(expids, exptable['EXPID'][bad])
+    badcam = exptable['BADCAMWORD']!=''
+    badamp = exptable['BADAMPS']!=''
+    if np.any(bad|badcam|badamp):
+        drop = np.isin(expids, exptable['EXPID'][bad|badcam|badamp])
         ndrop = np.sum(drop)
         drop_expids = expids[drop]
-        log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
-        expids = expids[~drop]
+        if len(expids) - ndrop > 30: #TODO: put in an actual threshold here
+            log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs (also from BADAMP/BADCAM): {drop_expids}')
+            expids = expids[~drop]
+            expdict={f'{cam}{petal}':expids for cam in ['b','r','z'] for petal in range(10)}
+        else:
+            drop = np.isin(expids, exptable['EXPID'][bad])
+            ndrop = np.sum(drop)
+            drop_expids = expids[drop]
+            log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}, '
+                       'additionally dropping expids for some cams because of BADCAM/BADAMP')
 
-    return expids
+            expdict={f'{cam}{petal}':expids for cam in ['b','r','z'] for petal in range(10)}
+            for expid in expids:
+                if expid in drop_expids:
+                    continue
+                if expid in exptable['EXPID'][badcam|badamp]:
+                    badampstr=exptable['BADCAMPS'][exptable['EXPID']==expid][0]
+                    badcamlist=decode_camword(exptable['BADCAMWORD'][exptable['EXPID']==expid][0])
+                    for entry in expdict:
+                        if entry not in badcamlist and entry not in badampstr:
+                            entry.append(expid)
+                        
+                else:
+                    for entry in expdict:
+                        entry.append(expid)
+    else:
+        expdict={f'{cam}{petal}':expids for cam in ['b','r','z'] for petal in range(10)}
+
+    return expdict
 
 def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         comm=None):
