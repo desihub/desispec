@@ -338,11 +338,12 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
     log.info(f"done with {camera}")
 
-def _find_zeros(night):
+def _find_zeros(night,minzeros=25):
     """Find all OBSTYPE=ZERO exposures on a given night
 
     Args:
         night (int): YEARMMDD night to search
+        minzeros (int): minimal number of zeros to not worry about keeping partially usable exposures
 
     Returns array of expids that are OBSTYPE=ZERO
 
@@ -379,7 +380,7 @@ def _find_zeros(night):
         drop = np.isin(expids, exptable['EXPID'][bad|badcam|badamp])
         ndrop = np.sum(drop)
         drop_expids = expids[drop]
-        if len(expids) - ndrop > 30: #TODO: put in an actual threshold here
+        if len(expids) - ndrop > minzeros: #TODO: put in an actual threshold here
             log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs (also from BADAMP/BADCAM): {drop_expids}')
             expids = expids[~drop]
             expdict={f'{cam}{petal}':expids for cam in ['b','r','z'] for petal in range(10)}
@@ -400,7 +401,6 @@ def _find_zeros(night):
                     for entry in expdict:
                         if entry not in badcamlist and entry not in badampstr:
                             entry.append(expid)
-                        
                 else:
                     for entry in expdict:
                         entry.append(expid)
@@ -445,7 +445,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
     #- Find all zeros for the night
     expids = None
     if rank == 0:
-        expids = _find_zeros(night)
+        expids = _find_zeros(night,nzeros)
 
     if comm is not None:
         expids = comm.bcast(expids, root=0)
