@@ -570,7 +570,8 @@ def main(args=None, comm=None):
             noisyfrac = np.sum((mask & ccdmask.BADREADNOISE) != 0) / mask.size
             if noisyfrac > 0.25*0.5:
                 log.error(f"{100*noisyfrac:.0f}% of {camera} input pixels have bad readnoise; don't use this PSF")
-                os.rename(inpsf, inpsf+'.badreadnoise')
+                if os.path.exists(inpsf):
+                    os.rename(inpsf, inpsf+'.badreadnoise')
                 continue
 
             log.info(f'Rank {rank} interpolating {camera} PSF over bad fibers')
