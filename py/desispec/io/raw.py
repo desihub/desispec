@@ -8,6 +8,7 @@ TODO: move into datamodel after we have verified the format
 import os.path
 import time
 from astropy.io import fits
+from astropy.table import Table
 import numpy as np
 
 from desiutil.depend import add_dependencies
@@ -137,11 +138,21 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
 
     img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
 
+    #- Read in fibermap from specified file.
     if fibermapfile is not None and os.path.exists(fibermapfile):
         fibermap = desispec.io.read_fibermap(fibermapfile)
     else:
-        log.warning('creating blank fibermap')
-        fibermap = desispec.io.empty_fibermap(5000)
+        try:
+            #- Assemble fibermap (astropy.Table format) from fiberassign and coordinates files.
+            prim, fibermap = desispec.io.fibermap.assemble_fibermap(night=header['NIGHT'], expid=header['EXPID'])
+            hdr = fibermap.header
+            fibermap = Table(fibermap.data)
+            desispec.io.util.addkeys(fibermap.meta, hdr)
+        except Exception as e:
+            #- Fall-through case: use a blank fibermap.
+            log.warning(e)
+            log.warning('creating blank fibermap')
+            fibermap = desispec.io.empty_fibermap(5000)
 
     #- Add image header keywords inherited from raw data to fibermap too
     desispec.io.util.addkeys(fibermap.meta, img.meta)
