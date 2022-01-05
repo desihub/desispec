@@ -362,12 +362,17 @@ def _find_zeros(night,cameras,minzeros=25):
         with open(filename) as fx:
             r = json.load(fx)
 
-        if ('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO'):
+        if (('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and
+            ('PROGRAM' in r) and  r['PROGRAM'].startswith('CALIB ZEROs')):
             expids.append(int(os.path.basename(os.path.dirname(filename))))
         else:
             continue
 
     expids = np.array(expids)
+
+    #- drop first two zeros because they are sometimes still stabilizing
+    log.info('Dropping first two ZEROs: {}'.format(expids[0:2]))
+    expids = expids[2:]
 
     #- Remove ZEROs that are flagged as bad, but allow for the possibility
     #- of ZEROs that aren't in the exposure table for whatever reason
@@ -410,6 +415,9 @@ def _find_zeros(night,cameras,minzeros=25):
                         expdict[camera].append(expid)
     else:
         expdict={f'{cam}':expids for cam in cameras}
+    
+    for camera,expids in expdict.items():
+        log.info('Keeping {} calibration ZEROs for camera {camera}'.format(len(expids)))
 
     return expdict
 
@@ -527,7 +535,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
             log.info(f'Nightly bias {camera}: maxabsdiff {maxabs1:.2f}, stddev {std1:.2f}')
             log.info(f'Default bias {camera}: maxabsdiff {maxabs2:.2f}, stddev {std2:.2f}')
 
-            if maxabs1 < maxabs2:
+            if maxabs1 < maxabs2 + 0.5 : # add handicap of 0.5 elec to favor nightly bias that also fixes bad columns
                 log.info(f'Selecting nightly bias for {night} {camera}')
                 os.rename(testbias, outfile)
             else:

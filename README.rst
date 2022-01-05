@@ -58,5 +58,5 @@ Please visit `desispec on Read the Docs`_
 License
 -------
 
-desispec is free software licensed under a 3-clause BSD-style license. For details see
-the ``LICENSE.rst`` file.
+desispec is free software licensed under a 3-clause BSD-style license.
+For details see the ``LICENSE.rst`` file.

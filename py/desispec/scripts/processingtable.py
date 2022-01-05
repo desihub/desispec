@@ -12,7 +12,7 @@ from desispec.workflow.exptable import get_exposure_table_path, get_exposure_tab
                                         night_to_month
 
 from desispec.workflow.utils import define_variable_from_environment, listpath, pathjoin, get_printable_banner
-from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, exptable_to_proctable, \
+from desispec.workflow.proctable import default_obstypes_for_proctable, get_processing_table_path, exptable_to_proctable, \
                                         get_processing_table_name
 from desispec.workflow.tableio import load_table, write_table
 
@@ -74,7 +74,7 @@ def create_processing_tables(nights=None, night_range=None, exp_table_path=None,
     if obstypes is not None:
         obstypes = [ val.strip('\t ') for val in obstypes.split(",") ]
     else:
-        obstypes = default_exptypes_for_proctable()
+        obstypes = default_obstypes_for_proctable()
 
     ## Define where to find the data
     if exp_table_path is None:
