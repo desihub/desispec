@@ -468,12 +468,14 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         expdict = comm.bcast(expdict, root=0)
 
     rawfiles_dict={}
+    skipped_cams=[]
     for cam,expids in expdict.items():
         if len(expids) < minzeros:
             msg = f'Only {len(expids)} ZEROS on {night} and cam {cam}; need at least {minzeros}'
             if rank == 0:
                 log.critical(msg)
-            raise RuntimeError(msg)
+            skipped_cams.append(cam)
+            #raise RuntimeError(msg)
 
         if len(expids) > nzeros:
             nexps = len(expids)
@@ -497,6 +499,10 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
 
     nfail = 0
     for camera in cameras[rank::size]:
+        if camera in skipped_cams:
+            log.info(f'execution was skipped for camera {camera} due to lack of usable zeros')
+            continue
+
         expids=expdict[camera]
         rawfiles=rawfiles_dict[camera]
         outfile = io.findfile('biasnight', night=night, camera=camera,
