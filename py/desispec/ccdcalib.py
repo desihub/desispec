@@ -400,10 +400,10 @@ def _find_zeros(night,cameras,minzeros=25):
         expdict={f'{cam}':expids for cam in cameras}
         if len(expids)-ndrop > minzeros:
             #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
-            log.info(f'Additionally dropping {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP: {drop_expids}')
+            log.info(f'Additionally dropping {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
         else:
             #in this case we want to recover as many as possible
-            log.info(f'additionally dropping {len(drop_expids))} bad ZEROs for some cams because of BADCAM/BADAMP: {drop_expids}')
+            log.info(f'additionally dropping {ndrop} bad ZEROs for some cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
             
             for expid in drop_expids:
                 select_exp=exptable['EXPID']==expid
