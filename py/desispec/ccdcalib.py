@@ -397,7 +397,8 @@ def _find_zeros(night,cameras,minzeros=25):
         ndrop = np.sum(drop)
         drop_expids = expids[drop]
         expids = expids[~drop]
-        expdict={f'{cam}':expids for cam in cameras}
+        #need lists here so we can append good observations on some spectrographs
+        expdict={f'{cam}':list(expids) for cam in cameras}
         if len(expids)-ndrop > minzeros:
             #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
             log.info(f'Additionally dropping {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
@@ -418,6 +419,9 @@ def _find_zeros(night,cameras,minzeros=25):
     
     for camera,expids in expdict.items():
         log.info(f'Keeping {len(expids)} calibration ZEROs for camera {camera}')
+        #make sure everything is in np arrays again
+        expdict[camera]=np.array(expids)
+
 
     return expdict
 
@@ -462,7 +466,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
     if comm is not None:
         expdict = comm.bcast(expdict, root=0)
 
-    rawfiles_all={}
+    rawfiles_dict={}
     for cam,expids in expdict.items():
         if len(expids) < minzeros:
             msg = f'Only {len(expids)} ZEROS on {night} and cam {cam}; need at least {minzeros}'
@@ -478,7 +482,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         if rank == 0:
             log.info(f'Using {len(expids)} ZEROs for nightly bias {night} and cam {cam}')
 
-        rawfiles_all[cam] = [io.findfile('raw', night, e) for e in expids]
+        rawfiles_dict[cam] = [io.findfile('raw', night, e) for e in expids]
 
     #- Rank 0 create output directory if needed
     if rank == 0:
@@ -493,7 +497,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
     nfail = 0
     for camera in cameras[rank::size]:
         expids=expdict[camera]
-        rawfiles=rawfiles_all[camera]
+        rawfiles=rawfiles_dict[camera]
         outfile = io.findfile('biasnight', night=night, camera=camera,
                               outdir=outdir)
 
