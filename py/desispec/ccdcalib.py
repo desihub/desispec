@@ -823,7 +823,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                 laststeps.append(exptable_select['LASTSTEP'][sel][0])
             else:
                 badcamwords.append("")
-                laststeps.append("")
+                laststeps.append("all")
                 camwords.append("a123456789")
                 badamps.append("")
 
