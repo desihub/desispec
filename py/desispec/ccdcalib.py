@@ -385,7 +385,7 @@ def _find_zeros(night,cameras,minzeros=25):
     notallcams = exptable['CAMWORD']!='a0123456789'
     if np.any(bad):
         #this discards observations that are bad for all cams
-        drop = np.isin(expids, exptable['EXPID'][bad|badcam|badamp|notallcams])
+        drop = np.isin(expids, exptable['EXPID'][bad])
         ndrop = np.sum(drop)
         drop_expids = expids[drop]
         log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
