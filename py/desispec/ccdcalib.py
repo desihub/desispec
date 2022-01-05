@@ -460,7 +460,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         rank, size = 0, 1
 
     #- Find all zeros for the night
-    expids = None
+    expdict = None
     if rank == 0:
         expdict = _find_zeros(night,cameras=cameras,minzeros=nzeros)
 
