@@ -121,7 +121,7 @@ else:
 speclog_file = os.path.join(tempdir, 'speclog.csv')
 if os.path.exists(speclog_file):
     log.info(f'Reading speclog from {speclog_file}')
-    speclog = Table.read(speclog_file, format='ascii')
+    speclog = Table.read(speclog_file, format='ascii',fill_values=None)   #the None is needed to avoid masking
 else:
     log.info(f'Generating speclog for nights {nights}')
     speclog = desispec.io.util.get_speclog(nights)
