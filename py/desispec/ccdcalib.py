@@ -797,7 +797,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 
     if use_exptable:
         #grab all exposures from the exposure log in case some have been marked bad
-        #note that some exposures will not be in here, so we'll still need to go through the speclog
+        #note that some exposures will not be in here, so we'll assume those are all fine
         log.info(f'Using exposure tables for {len(nightlist)} night directories')
         expfiles=[]
         for night in nightlist:
@@ -806,29 +806,32 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         exptable_all=table_vstack(exptables)
         select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
         exptable_select=exptable_all[select]
-        #speclog['MJD']=speclog['MJD-OBS']
-        #t = Time(speclog['MJD']-7/24, format='mjd')
-        #speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
-        #speclogfile = os.path.join(tempdir, 'exposure_table_speclog.csv')
-        #TODO: maybe need to add objects that are for some reason not in the exposure_table?
-        #write_table(speclog, speclogfile,'exptable')
     
     log.info(f'Scanning {len(nightlist)} night directories')
     speclog = io.util.get_speclog(nightlist)
     if use_exptable:
         badcamwords=[]
         laststeps=[]
+        badamps=[]
+        camwords=[]
         for entry in speclog:
             if entry['EXPID'] in exptable_select['EXPID']:
                 sel=entry['EXPID']==exptable_select['EXPID']
                 badcamwords.append(exptable_select['BADCAMWORD'][sel][0])
+                badamps.append(exptable_select['BADAMPS'][sel][0])
+                camwords.append(exptable_select['CAMWORD'][sel][0])
                 laststeps.append(exptable_select['LASTSTEP'][sel][0])
             else:
                 badcamwords.append("")
                 laststeps.append("")
+                camwords.append("a123456789")
+                badamps.append("")
 
         speclog.add_column(badcamwords,name='BADCAMWORD')
         speclog.add_column(laststeps,name='LASTSTEP')
+        speclog.add_column(camwords,name='CAMWORD')
+        speclog.add_column(badamps,name='LASTSTEP')
+
 
 
     t = Time(speclog['MJD']-7/24, format='mjd')
