@@ -400,7 +400,7 @@ def _find_zeros(night,cameras,minzeros=25):
         expids = expids[~drop]
         #need lists here so we can append good observations on some spectrographs
         expdict={f'{cam}':list(expids) for cam in cameras}
-        if len(expids) > minzeros:
+        if len(expids) >= minzeros:
             #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
             log.info(f'Additionally dropped {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
         else:
