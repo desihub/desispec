@@ -62,7 +62,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
                                        model_ivar=model_ivar,add_variance=add_variance,\
                                        adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
-                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,fit_offsets=fit_offsets)
+                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,fit_offsets=fit_offsets,fiberflat=fiberflat)
     else :
 
         if adjust_wavelength :
@@ -190,6 +190,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         only_use_skyfibers_for_adjustments : interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
         fit_offsets : fit offsets for regions defined in calib
+        fiberflat : desispec.FiberFlat object used for the fit of offsets
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
 
@@ -724,6 +725,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
             if fiberflat is not None :
                 flat=fiberflat.fiberflat
+                log.info("Use fiberflat when fitting for offsets")
             else :
                 flat=np.ones(frame.flux.shape)
 
