@@ -708,8 +708,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
         if len(sectors)>0 :
             # fit as many parameters as twice the number of sectors
-            # (one offset for fibers in the group and one for the others to compensate)
-            # we are going to index the fluxes
+            # (one offset for fibers/wavelength in the sector and one for the others to compensate)
 
             # need coordinates of fiber traces
             psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
@@ -765,126 +764,6 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 bkg[mask]      += offsets[ipar]
             bkg /= flat # flatfield the background
             cskyflux += bkg
-
-            import fitsio
-            fitsio.write("bkg.fits",bkg,clobber=True)
-            #sys.exit(12)
-
-        """
-        index_counter = 0
-        for amp in offsetx :
-            sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
-            inamp = (tmp_y>=sec[0].start)&(tmp_y<sec[0].stop)&(tmp_x>=sec[1].start)&(tmp_x<sec[1].stop)
-            for offx in offsetx[amp] :
-                withoffset = inamp&(tmp_x>=offx[0])&(tmp_x<sec[1].stop)
-                indices[withoffset]  = 10**index_counter
-                index_counter += 1
-                indices[~withoffset] = 10**index_counter
-                index_counter += 1
-
-        import sys
-        import fitsio
-        fitsio.write("indices.fits",indices,clobber=True)
-        sys.exit(11)
-
-        npar = index_counter
-
-
-
-        # fit a local background per amplifier and add it to the sky model
-        # get list of amplifier
-        amplifiers   = get_amp_ids(frame.meta)
-        # need to traceset to match fiber and wavelngth to location of amplifier in CCD
-        psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
-        if os.path.isfile(psf_filename) :
-            log.info("Using PSF {}".format(psf_filename))
-            tset = read_xytraceset(psf_filename)
-            tmp_fibers = np.arange(frame.nspec)
-            # compute x coordinate at central wavelength
-            xmid = tset.x_vs_wave(fiber=tmp_fibers,wavelength=(tset.wavemin+tset.wavemax)/2.)
-            bkg = np.zeros(frame.flux.shape)
-            for a,amp in enumerate(amplifiers) :
-                log.info("Compute bkg for amplifier {}".format(amp))
-                # coordinates of amplifiers in CCD
-                sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
-                ii  = (xmid>=sec[1].start)&(xmid<sec[1].stop)
-                amp_fibers =  tmp_fibers[ii]
-                #log.info("amp {} amp_fibers = {}".format(amp,amp_fibers))
-                is_amp_skyfiber = np.in1d(amp_fibers,skyfibers)
-                amp_skyfibers   = amp_fibers[is_amp_skyfiber]
-                y    = tset.y_vs_wave(fiber=amp_fibers,wavelength=frame.wave)
-                in_amp  = (y>=sec[0].start)&(y<sec[0].stop)
-
-                amp_skyfibers_bkg = np.zeros((amp_skyfibers.size,frame.wave.size))
-                for f,fiber in enumerate(amp_skyfibers) :
-
-                    if np.sum(modified_cskyivar[fiber])==0 : continue
-                    scale = np.sum(modified_cskyivar[fiber]*frame.flux[fiber]*cskyflux[fiber])/np.sum(modified_cskyivar[fiber]*cskyflux[fiber]**2)
-
-                    # median filter of sky residual to avoid effect of residual cosmics
-                    # or bad sky lines
-                    jj=in_amp[fiber-amp_fibers[0]]
-                    # fit a normalization factor
-                    medivar=np.median(modified_cskyivar[fiber,jj][modified_cskyivar[fiber,jj]>0])
-                    # set to zero the residuals for which the uncertainty is > 3 times the median uncertainty.
-                    # this automatically mask the brightest sky lines
-                    res = (modified_cskyivar[fiber,jj]>medivar/9.)*(frame.flux[fiber,jj]-scale*cskyflux[fiber,jj])
-                    res = scipy.ndimage.filters.median_filter(res,50)
-                    # fit with low order polynomial
-                    c   = np.polyfit(y[f,jj]/1000.,res,1)
-                    res = np.poly1d(c)(y[f,jj]/1000.)
-                    # the background in that sky fiber is the polynomial value
-                    amp_skyfibers_bkg[f,jj] = res
-                    amp_skyfibers_bkg[f,jj] = np.median(res)
-
-                    # extrapolate for median filtering
-                    kk=~in_amp[fiber-amp_fibers[0]]
-                    amp_skyfibers_bkg[f,kk]=np.interp(frame.wave[kk],frame.wave[jj],amp_skyfibers_bkg[f,jj])
-
-                amp_skyfibers_bkg = scipy.ndimage.filters.median_filter(amp_skyfibers_bkg,(10,1))
-
-                #amp_skyfibers_bkg = 100*(a+1) # debug
-
-                # reset out of amp values
-                amp_skyfibers_bkg *= in_amp[amp_skyfibers-amp_fibers[0]]
-
-                #for iw in range(frame.wave.size) :
-                #    jj=(amp_skyfibers_bkg[:,iw]!=0)
-                #    if np.sum(jj)>0 :
-                #        amp_skyfibers_bkg[jj,iw]=scipy.ndimage.filters.median_filter(amp_skyfibers_bkg[jj,iw],3)
-                #amp_skyfibers_bkg = scipy.ndimage.filters.median_filter(amp_skyfibers_bkg,(3,200))
-                amp_bkg = np.zeros(frame.flux.shape)
-                amp_bkg[amp_skyfibers]=amp_skyfibers_bkg
-
-                # now we interpolate across fibers
-                for iw in range(frame.wave.size) :
-                    amp_skyfibers_at_iw  = amp_fibers[amp_bkg[amp_fibers,iw]!=0]
-                    amp_fibers_at_iw     = amp_fibers[in_amp[:,iw]]
-                    #print(in_amp.shape)
-                    if np.sum(amp_skyfibers_at_iw)>0 and np.sum(amp_fibers_at_iw)>0 :
-                        #print("a",bkg[amp_fibers,iw][jj].shape)
-                        #print("b",amp_fibers[jj].shape)
-                        #print("c",amp_fibers[ii].shape)
-                        #print("d",bkg[amp_fibers][ii,iw].shape)
-                        amp_bkg[amp_fibers_at_iw,iw]=np.interp(amp_fibers_at_iw,amp_skyfibers_at_iw,amp_bkg[amp_skyfibers_at_iw,iw])
-                # fill possible gaps
-                # happens on edge of CCD because of curved wavelength solution
-                # and limited number of sky fibers
-                has_gap = np.sum((amp_bkg[amp_fibers]==0)&(in_amp),axis=1)>0
-                for fiber in amp_fibers[has_gap] :
-                    ii=(amp_bkg[fiber]==0)&(in_amp[fiber-amp_fibers[0]])
-                    jj=(amp_bkg[fiber]!=0)&(in_amp[fiber-amp_fibers[0]])
-                    amp_bkg[fiber,ii]=np.interp(frame.wave[ii],frame.wave[jj],amp_bkg[fiber,jj])
-                bkg += amp_bkg
-
-            cskyflux += bkg
-            if 0 :
-                import fitsio
-                fitsio.write("bkg.fits",bkg,clobber=True)
-                print("wrote bkg.fits")
-        else :
-            log.warning("No PSF file {}. Cannot fit a background level per amplifier".format(psf_filename))
-        """
 
     mask = (modified_cskyivar==0).astype(np.uint32)
 
