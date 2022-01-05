@@ -158,9 +158,10 @@ if args.last_expid is not None:
         sys.exit(1)
 
 if args.use_exptable:
-    #TODO: Is there a better way to parse this? What about checking BADAMPS as well?
-    keep = np.array([args.camera not in badcam for badcam in speclog['BADCAMWORD']])
-    keep &= speclog['LASTSTEP']!='ignore'
+    goodcamwords=[desispec.io.util.difference_camwords(s['CAMWORD']),s['BADCAMWORD'] for s in speclog]
+    goodcamlists=[desispec.io.util.decode_camwords(camword) for camword in goodcamwords]
+    keep = np.array([(args.camera in goodcam and args.camera not in badamp) for goodcam,badamp in zip(goodcamlists,speclog['BADAMPS'])])
+    keep &= speclog['LASTSTEP']=='all'
     speclog = speclog[keep]
     if len(speclog) == 0:
         log.critical('No exposures! exiting...')
