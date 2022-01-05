@@ -950,6 +950,7 @@ def main(args=None, comm=None):
                     cmd += " --pca-corr {}".format(pca_corr_filename)
                 else :
                     log.warning("No SKYCORR file, do you need to update DESI_SPECTRO_CALIB?")
+            cmd += " --fit-offsets"
             runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
 
             #- sframe = flatfielded sky-subtracted but not flux calibrated frame

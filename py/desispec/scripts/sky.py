@@ -50,6 +50,8 @@ def parse(options=None):
                         help = 'save adjustments of wavelength calib and LSF width in table')
     parser.add_argument('--pca-corr', type = str , default = None, required=False,
                         help = 'use this PCA frames file for interpolation of wavelength and/or LSF adjustment')
+    parser.add_argument('--fit-offsets', action = 'store_true', default = False, required=False,
+                        help = 'fit offsets in sectors of CCD specified in calib yaml file, like OFFCOLSD:"2057:3715" for columns 2057 to 3715 (excluded), in amplifier D')
 
     args = None
     if options is None:
@@ -89,6 +91,9 @@ def main(args) :
     else :
         pcacorr = None
 
+
+
+
     # compute sky model
     skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),\
                            angular_variation_deg=args.angular_variation_deg,\
@@ -96,7 +101,7 @@ def main(args) :
                            adjust_wavelength=args.adjust_wavelength,\
                            adjust_lsf=args.adjust_lsf,\
                            only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
-                           pcacorr=pcacorr
+                           pcacorr=pcacorr,fit_offsets=args.fit_offsets
     )
 
     if args.save_adjustments is not None :

@@ -24,10 +24,12 @@ import scipy.ndimage
 from desispec.maskbits import specmask
 from desispec.preproc import get_amp_ids,parse_sec_keyword
 from desispec.io import findfile,read_xytraceset
+from desispec.calibfinder import CalibFinder
+from desispec.preproc import get_amp_ids
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,\
                 adjust_wavelength=False,adjust_lsf=False,\
-                only_use_skyfibers_for_adjustments=True,pcacorr=None,bkg_per_amp=True) :
+                only_use_skyfibers_for_adjustments=True,pcacorr=None,fit_offsets=False) :
     """Compute a sky model.
 
     Input flux are expected to be flatfielded!
@@ -52,23 +54,22 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments: interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
-        bkg_per_amp : fit a sky background per amplifier
-
+        fit_offsets : fit offsets for regions defined in calib
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
     if angular_variation_deg == 0 :
         skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
                                        model_ivar=model_ivar,add_variance=add_variance,\
                                        adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
-                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,bkg_per_amp=bkg_per_amp)
+                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,fit_offsets=fit_offsets)
     else :
 
         if adjust_wavelength :
             raise RuntimeError("combination of wavelength calibration adjustment and angular variations not yet implemented")
         if adjust_lsf :
             raise RuntimeError("combination of lsf calibration adjustment and angular variations not yet implemented")
-        if bkg_per_amp :
-            raise RuntimeError("combination of bkg_per_amp and angular variations not yet implemented")
+        if fit_offsets  :
+            raise RuntimeError("combination of fit_offsets and angular variations not yet implemented")
 
         if chromatic_variation_deg < 0 :
             skymodel = compute_non_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg)
@@ -161,7 +162,7 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
 
 
 def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,\
-                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None, bkg_per_amp= True) :
+                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None, fit_offsets=False) :
 
     """Compute a sky model.
 
@@ -187,8 +188,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments : interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
-        bkg_per_amp : fit a sky background per amplifier
-
+        fit_offsets : fit offsets for regions defined in calib
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
 
@@ -662,7 +662,126 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
 
-    if bkg_per_amp :
+    if fit_offsets :
+
+        cfinder = CalibFinder([frame.meta])
+        amps    = get_amp_ids(frame.meta)
+
+        psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
+        if not os.path.isfile(psf_filename) :
+            log.error("No PSF file "+psf_filename)
+            raise IOError("No PSF file "+psf_filename)
+        log.info("Using PSF {}".format(psf_filename))
+        tset = read_xytraceset(psf_filename)
+
+        tmp_fibers = np.arange(frame.nspec)
+        tmp_x = np.zeros(frame.flux.shape,dtype=float)
+        tmp_y = np.zeros(frame.flux.shape,dtype=float)
+        for fiber in tmp_fibers :
+            tmp_x[fiber] = tset.x_vs_wave(fiber=fiber,wavelength=frame.wave)
+            tmp_y[fiber] = tset.y_vs_wave(fiber=fiber,wavelength=frame.wave)
+
+        sectors=[]
+        for amp in amps :
+            key="OFFCOLS"+amp
+            sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
+            yb=sec[0].start
+            ye=sec[0].stop
+
+            if cfinder.haskey(key) :
+                val=cfinder.value(key)
+                for tmp1 in val.split(",") :
+                    tmp2=tmp1.split(":")
+                    if len(tmp2)!=2 :
+                        mess="cannot decode {}={}".format(key,val)
+                        log.error(mess)
+                        raise KeyError(mess)
+                    xb=max(sec[1].start,int(tmp2[0]))
+                    xe=min(sec[1].stop,int(tmp2[1]))
+                    sector = [yb,ye,xb,xe]
+                    sectors.append( sector )
+                    log.info("Adding CCD sector in amp {} with offset: {}".format(amp,sector))
+
+        if len(sectors)>0 :
+            # fit as many parameters as twice the number of sectors
+            # (one offset for fibers in the group and one for the others to compensate)
+            # we are going to index the fluxes
+
+            # need coordinates of fiber traces
+            psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
+            if not os.path.isfile(psf_filename) :
+                log.error("No PSF file "+psf_filename)
+                raise IOError("No PSF file "+psf_filename)
+            log.info("Using PSF {}".format(psf_filename))
+            tset = read_xytraceset(psf_filename)
+            tmp_fibers = np.arange(frame.nspec)
+            tmp_x = np.zeros(frame.flux.shape,dtype=float)
+            tmp_y = np.zeros(frame.flux.shape,dtype=float)
+            for fiber in tmp_fibers :
+                tmp_x[fiber] = tset.x_vs_wave(fiber=fiber,wavelength=frame.wave)
+                tmp_y[fiber] = tset.y_vs_wave(fiber=fiber,wavelength=frame.wave)
+
+
+
+            # fit offsets
+            nsectors = len(sectors)
+            npar     = 2*nsectors
+            AA=np.zeros((npar,npar))
+            BB=np.zeros(npar)
+            masks = []
+            for ipar in range(npar) :
+                sec = sectors[ipar//2]
+                mask_i = (tmp_y[skyfibers]>=sec[0])&(tmp_y[skyfibers]<sec[1])&(tmp_x[skyfibers]>=sec[2])&(tmp_x[skyfibers]<sec[3])
+                if ipar%2 == 1 :
+                    mask_i = ~mask_i # the rest
+                # current_ivar = frame.ivar[skyfibers] with masked pixels from sky fit
+                BB[ipar] = np.sum(current_ivar[mask_i]*(frame.flux[skyfibers][mask_i]-cskyflux[skyfibers][mask_i]))
+                masks.append(mask_i)
+                for jpar in range(0,ipar+1) :
+                    mask_j = masks[jpar]
+                    AA[ipar,jpar] = np.sum(current_ivar[mask_i&mask_j])
+                    if ipar != jpar : AA[jpar,ipar] = AA[ipar,jpar]
+                if AA[ipar,ipar] == 0 : # no constraint on this one, so add prior it's zero
+                    AA[ipar,ipar] += np.max(AA) # same amplitude as max to be well conditioned
+            AAi=np.linalg.inv(AA)
+            offsets=AAi.dot(BB)
+            log.info("best fit offsets={}".format(list(offsets)))
+
+            # apply to model
+            bkg = np.zeros(cskyflux.shape)
+            for ipar in range(npar) :
+                sec  = sectors[ipar//2]
+                mask = (tmp_y>=sec[0])&(tmp_y<sec[1])&(tmp_x>=sec[2])&(tmp_x<sec[3])
+                if ipar%2 == 1 :
+                    mask = ~mask # the rest
+                bkg[mask]      += offsets[ipar]
+                cskyflux[mask] += offsets[ipar]
+
+            import fitsio
+            fitsio.write("bkg.fits",bkg,clobber=True)
+            #sys.exit(12)
+
+        """
+        index_counter = 0
+        for amp in offsetx :
+            sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
+            inamp = (tmp_y>=sec[0].start)&(tmp_y<sec[0].stop)&(tmp_x>=sec[1].start)&(tmp_x<sec[1].stop)
+            for offx in offsetx[amp] :
+                withoffset = inamp&(tmp_x>=offx[0])&(tmp_x<sec[1].stop)
+                indices[withoffset]  = 10**index_counter
+                index_counter += 1
+                indices[~withoffset] = 10**index_counter
+                index_counter += 1
+
+        import sys
+        import fitsio
+        fitsio.write("indices.fits",indices,clobber=True)
+        sys.exit(11)
+
+        npar = index_counter
+
+
+
         # fit a local background per amplifier and add it to the sky model
         # get list of amplifier
         amplifiers   = get_amp_ids(frame.meta)
@@ -756,6 +875,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 print("wrote bkg.fits")
         else :
             log.warning("No PSF file {}. Cannot fit a background level per amplifier".format(psf_filename))
+        """
 
     mask = (modified_cskyivar==0).astype(np.uint32)
 
