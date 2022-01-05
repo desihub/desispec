@@ -417,7 +417,7 @@ def _find_zeros(night,cameras,minzeros=25):
         expdict={f'{cam}':expids for cam in cameras}
     
     for camera,expids in expdict.items():
-        log.info(f'Keeping {} calibration ZEROs for camera {camera}'.format(len(expids)))
+        log.info(f'Keeping {len(expids)} calibration ZEROs for camera {camera}')
 
     return expdict
 
