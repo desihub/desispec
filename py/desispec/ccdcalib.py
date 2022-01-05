@@ -744,7 +744,7 @@ def model_y1d(image, smooth=0):
 
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-                      first_expid=None,night_for_name=None, use_exptable=False):
+                      first_expid=None,night_for_name=None, use_exptable=True):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
