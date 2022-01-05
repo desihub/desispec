@@ -379,10 +379,11 @@ def _find_zeros(night,cameras,minzeros=25):
     log.debug('Checking for pre-identified bad ZEROs')
     expfile = get_exposure_table_pathname(night)
     exptable = load_table(expfile, tabletype='exptable')
-    bad = (exptable['OBSTYPE']=='zero') & (exptable['LASTSTEP']!='all')
-    badcam = exptable['BADCAMWORD']!=''
-    badamp = exptable['BADAMPS']!=''
-    notallcams = exptable['CAMWORD']!='a0123456789'
+    select_zeros=exptable['OBSTYPE']=='zero'
+    bad = select_zeros & (exptable['LASTSTEP']!='all')
+    badcam = select_zeros & (exptable['BADCAMWORD']!='')
+    badamp = select_zeros & (exptable['BADAMPS']!='')
+    notallcams = select_zeros & (exptable['CAMWORD']!='a0123456789')
     if np.any(bad):
         #this discards observations that are bad for all cams
         drop = np.isin(expids, exptable['EXPID'][bad])
