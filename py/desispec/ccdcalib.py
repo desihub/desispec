@@ -15,7 +15,7 @@ from desispec.preproc import masked_median
 from desispec.preproc import parse_sec_keyword, get_amp_ids
 from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm
-from desispec.io.util import get_tempfilename, parse_cameras, decode_camword
+from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow.tableio import load_table, load_tables, write_table
 
@@ -377,34 +377,37 @@ def _find_zeros(night,cameras,minzeros=25):
     bad = (exptable['OBSTYPE']=='zero') & (exptable['LASTSTEP']!='all')
     badcam = exptable['BADCAMWORD']!=''
     badamp = exptable['BADAMPS']!=''
-    if np.any(bad|badcam|badamp):
-        drop = np.isin(expids, exptable['EXPID'][bad|badcam|badamp])
+    notallcams = exptable['CAMWORD']!='a0123456789'
+    if np.any(bad):
+        #this discards observations that are bad for all cams
+        drop = np.isin(expids, exptable['EXPID'][bad|badcam|badamp|notallcams])
         ndrop = np.sum(drop)
         drop_expids = expids[drop]
-        if len(expids) - ndrop > minzeros: #TODO: put in an actual threshold here
-            log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs (also from BADAMP/BADCAM): {drop_expids}')
-            expids = expids[~drop]
-            expdict={f'{cam}':expids for cam in cameras}
+        log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
+        expids = expids[~drop]
+        
+    if np.any(badcam|badamp|notallcams):
+        #do the by spectrograph evaluation of bad spectra
+        drop = np.isin(expids, exptable['EXPID'][badcam|badamp|notallcams])
+        ndrop = np.sum(drop)
+        drop_expids = expids[drop]
+        expids = expids[~drop]
+        expdict={f'{cam}':expids for cam in cameras}
+        if len(expids)-ndrop > minzeros:
+            #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
+            log.info(f'Additionally dropping {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP: {drop_expids}')
         else:
-            drop = np.isin(expids, exptable['EXPID'][bad])
-            ndrop = np.sum(drop)
-            drop_expids = expids[drop]
-            log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}, '
-                       'additionally dropping expids for some cams because of BADCAM/BADAMP')
-
-            expdict={f'{cam}':[] for cam in cameras}
-            for expid in expids:
-                if expid in drop_expids:
-                    continue
-                if expid in exptable['EXPID'][badcam|badamp]:
-                    badampstr=exptable['BADAMPS'][exptable['EXPID']==expid][0]
-                    badcamlist=decode_camword(exptable['BADCAMWORD'][exptable['EXPID']==expid][0])
-                    for cam,entry in expdict.items():
-                        if cam not in badcamlist and cam not in badampstr:
-                            expdict[cam].append(expid)
-                else:
-                    for cam,entry in expdict.items():
-                        expdict[cam].append(expid)
+            #in this case we want to recover as many as possible
+            log.info(f'additionally dropping {len(drop_expids))} bad ZEROs for some cams because of BADCAM/BADAMP: {drop_expids}')
+            
+            for expid in drop_expids:
+                select_exp=exptable['EXPID']==expid
+                badampstring=exptable['BADAMPS'][select_exp][0]
+                goodcamword=difference_camwords(exptable['CAMWORD'][select_exp][0],exptable['BADCAMWORD'][select_exp][0])
+                goodcamlist=decode_camword(goodcamword)
+                for camera in goodcamlist:
+                    if camera in cameras and camera not in badampstring:
+                        expdict[camera].append(expid)
     else:
         expdict={f'{cam}':expids for cam in cameras}
 
