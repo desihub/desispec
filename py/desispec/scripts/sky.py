@@ -101,7 +101,7 @@ def main(args) :
                            adjust_wavelength=args.adjust_wavelength,\
                            adjust_lsf=args.adjust_lsf,\
                            only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
-                           pcacorr=pcacorr,fit_offsets=args.fit_offsets
+                           pcacorr=pcacorr,fit_offsets=args.fit_offsets,fiberflat=fiberflat
     )
 
     if args.save_adjustments is not None :

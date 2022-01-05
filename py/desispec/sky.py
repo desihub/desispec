@@ -29,7 +29,7 @@ from desispec.preproc import get_amp_ids
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,\
                 adjust_wavelength=False,adjust_lsf=False,\
-                only_use_skyfibers_for_adjustments=True,pcacorr=None,fit_offsets=False) :
+                only_use_skyfibers_for_adjustments=True,pcacorr=None,fit_offsets=False,fiberflat=None) :
     """Compute a sky model.
 
     Input flux are expected to be flatfielded!
@@ -55,6 +55,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         only_use_skyfibers_for_adjustments: interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
         fit_offsets : fit offsets for regions defined in calib
+        fiberflat : desispec.FiberFlat object used for the fit of offsets
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
     if angular_variation_deg == 0 :
@@ -162,7 +163,7 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
 
 
 def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,\
-                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None, fit_offsets=False) :
+                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None, fit_offsets=False,fiberflat=None) :
 
     """Compute a sky model.
 
@@ -721,7 +722,10 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 tmp_x[fiber] = tset.x_vs_wave(fiber=fiber,wavelength=frame.wave)
                 tmp_y[fiber] = tset.y_vs_wave(fiber=fiber,wavelength=frame.wave)
 
-
+            if fiberflat is not None :
+                flat=fiberflat.fiberflat
+            else :
+                flat=np.ones(frame.flux.shape)
 
             # fit offsets
             nsectors = len(sectors)
@@ -735,7 +739,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 if ipar%2 == 1 :
                     mask_i = ~mask_i # the rest
                 # current_ivar = frame.ivar[skyfibers] with masked pixels from sky fit
-                BB[ipar] = np.sum(current_ivar[mask_i]*(frame.flux[skyfibers][mask_i]-cskyflux[skyfibers][mask_i]))
+                BB[ipar] = np.sum(current_ivar[mask_i]*(frame.flux[skyfibers][mask_i]-cskyflux[skyfibers][mask_i])*flat[skyfibers][mask_i])
                 masks.append(mask_i)
                 for jpar in range(0,ipar+1) :
                     mask_j = masks[jpar]
@@ -755,7 +759,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                 if ipar%2 == 1 :
                     mask = ~mask # the rest
                 bkg[mask]      += offsets[ipar]
-                cskyflux[mask] += offsets[ipar]
+            bkg /= flat # flatfield the background
+            cskyflux += bkg
 
             import fitsio
             fitsio.write("bkg.fits",bkg,clobber=True)
