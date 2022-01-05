@@ -12,7 +12,7 @@ def parse(options=None):
     p.add_argument('-n', '--night', type=int, required=True,
             help='YEARMMDD to process')
     p.add_argument('-c', '--cameras', type=str,
-            default='a0123456789', help='YEARMMDD to process')
+            default='a0123456789', help='list of cameras to process')
     p.add_argument('-o', '--outdir', type=str,
             help='output directory')
     p.add_argument('--nzeros', type=int, default=25,
