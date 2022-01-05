@@ -56,6 +56,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
         fit_offsets : fit offsets for regions defined in calib
         fiberflat : desispec.FiberFlat object used for the fit of offsets
+
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
     if angular_variation_deg == 0 :
@@ -191,6 +192,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
         fit_offsets : fit offsets for regions defined in calib
         fiberflat : desispec.FiberFlat object used for the fit of offsets
+
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
 
