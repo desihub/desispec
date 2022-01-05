@@ -12,6 +12,6 @@ srun -n 8 -c 8 desi_compute_nightly_bias --mpi -n 20211020
 srun -n 8 -c 32 desi_compute_nightly_bias --mpi -n 20211020
 """
 
-from desispec.script.nightly_bias import main
+from desispec.scripts.nightly_bias import main
 main()
 

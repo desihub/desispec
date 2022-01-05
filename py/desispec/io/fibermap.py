@@ -24,7 +24,8 @@ from desiutil.log import get_logger
 from desiutil.depend import add_dependencies, mergedep
 from desimodel.focalplane import get_tile_radius_deg
 from desimodel.io import load_focalplane
-from desispec.io.util import fitsheader, write_bintable, makepath, addkeys, parse_badamps
+from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
+    parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
 from . import iotime
 
@@ -410,31 +411,57 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     except KeyError:
         rawheader = fits.getheader(rawfile, 'SPS', disable_image_compression=True)
 
-    #- Find fiberassign file
-    rawfafile = fafile = find_fiberassign_file(night, expid)
+    #- Look for fiberassign file, gzipped or not
+    if 'TILEID' in rawheader:
+        tileid = rawheader['TILEID']
+        rawfafile = findfile('fiberassign',night=night,expid=expid,tile=tileid)
+        try:
+            rawfafile = checkgzip(rawfafile)
+        except FileNotFoundError:
+            log.error("%s not found; looking in earlier exposures", rawfafile)
+            rawfafile = find_fiberassign_file(night, expid, tileid=tileid)
+
+    #- No TILEID in raw file, but don't give up yet
+    # 20210114/00072405 is example of looking back and finding wrong file
+    # 20210220/00077103 is example of looking back and finding right one
+    #   (albeit not with a useful coordinates file)
+    else:
+        log.error("TILEID not %s; looking for most recent fiberassign file", rawfile)
+        rawfafile = find_fiberassign_file(night, expid)
+        log.info("Found %s", rawfafile)
+        tileid = int(os.path.basename(rawfafile).split('-')[1].split('.')[0])
+        log.info("Guessing TILEID=%d from filename; checking RA,dec", tileid)
+
+        #- Check for RA,DEC consistency
+        fahdr = fitsio.read_header(rawfafile, 'FIBERASSIGN')
+        if fahdr['TILERA'] != rawheader['TARGTRA']:
+            msg = 'fiberassign RA mismatch: {} {} vs. {} {}'.format(
+                    os.path.basename(rawfile), rawheader['TARGTRA'],
+                    os.path.basename(rawfafile), fahdr['TILERA'])
+            log.critical(msg)
+            raise RuntimeError(msg)
+
+        if fahdr['TILEDEC'] != rawheader['TARGTDEC']:
+            msg = 'fiberassign DEC mismatch: {} {} vs. {} {}'.format(
+                    os.path.basename(rawfile), rawheader['TARGTDEC'],
+                    os.path.basename(rawfafile), fahdr['TILEDEC'])
+            log.critical(msg)
+            raise RuntimeError(msg)
+
+    fafile = rawfafile
+    rawfafile_expid = int(os.path.basename(os.path.dirname(rawfafile)))
+    if rawfafile_expid != expid:
+        log.error('Using fiberassign from an earlier exposure %08d/%08d', night, rawfafile_expid)
 
     #- Look for override fiberassign file in svn
-    try:
-        tileid = rawheader['TILEID']
-    except KeyError:
-        #
-        # 20210114/00072405 is an example of where this happens.
-        # We use the fiberassign file that find_fiberassign_file() found
-        # by walking backwards through earlier exposures on the same night,
-        # *even if it is actually wrong*.
-        #
-        log.error("TILEID not in the header from %s!", rawfile)
-        rawfafile_expid = int(os.path.basename(os.path.dirname(rawfafile)))
-        if rawfafile_expid != expid:
-            log.error('Determining TILEID from an earlier exposure %08d/%08d!', night, rawfafile_expid)
-        tileid = int(os.path.basename(rawfafile).split('-')[1].split('.')[0])
     if allow_svn_override and ('DESI_TARGET' in os.environ):
         targdir = os.getenv('DESI_TARGET')
         testfile = f'{targdir}/fiberassign/tiles/trunk/{tileid//1000:03d}/fiberassign-{tileid:06d}.fits'
-        if os.path.exists(testfile+'.gz'):
-            fafile = testfile+'.gz'
-        elif os.path.exists(testfile):
-            fafile = testfile
+        try:
+            fafile = checkgzip(testfile)
+        except FileNotFoundError:
+            # no alternate fiberassign file in svn yet, that's ok
+            pass
 
         if rawfafile != fafile:
             log.info(f'Overriding raw fiberassign file {rawfafile} with svn {fafile}')
@@ -648,7 +675,49 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             fibermap['FIBER_Y'] = pm[f'FPA_Y_{numiter-1}']
             fibermap['DELTA_X'] = pm[f'DX_{numiter-1}']
             fibermap['DELTA_Y'] = pm[f'DY_{numiter-1}']
-        else:
+        elif ( numiter>1
+               and f'DX_{numiter-2}' in pm.colnames
+               and f'FVC_X_{numiter-2}' in pm.colnames
+               and f'FVC_X_{numiter-1}' in pm.colnames
+               and f'CNT_X_{numiter-2}' in pm.colnames
+               and f'CNT_X_{numiter-1}' in pm.colnames
+               and f'REQ_X' in pm.colnames
+               and f'DY_{numiter-2}' in pm.colnames
+               and f'FVC_Y_{numiter-2}' in pm.colnames
+               and f'FVC_Y_{numiter-1}' in pm.colnames
+               and f'CNT_Y_{numiter-2}' in pm.colnames
+               and f'CNT_Y_{numiter-1}' in pm.colnames
+               and f'REQ_Y' in pm.colnames
+               ) :
+
+               log.warning("estimate FP offsets from FVC coordinates because missing info")
+
+               expflags = pm[f'FLAGS_EXP_{numiter-2}']
+               goodmatch = ((expflags & 4) == 4)
+               cntflags = pm[f'FLAGS_CNT_{numiter-2}']
+               spotmatched = ((cntflags & 1) == 1)
+               for coord in ["X","Y"] :
+                   good = goodmatch & spotmatched
+                   key1="FVC"
+                   key2="CNT"
+                   good &= ~np.isnan(pm[f"REQ_{coord}"]+pm[f"{key1}_{coord}_{numiter-2}"]+pm[f"{key2}_{coord}_{numiter-2}"]+pm[f"{key2}_{coord}_{numiter-1}"])
+                   # fit transfo : simple linear fit here (this is a large approximation but we cannot reinvent PM here)
+                   for loop in range(2) :
+                       c=np.polyfit(pm[f"{key1}_{coord}_{numiter-1}"][good],pm[f"REQ_{coord}"][good],1)
+                       pol=np.poly1d(c)
+                       adiff=np.abs(pol(pm[f"{key1}_{coord}_{numiter-1}"])-pm[f"REQ_{coord}"])
+                       good &= adiff<1.
+                   # apply transfo to deltas
+                   # DX_N = REQ_X - FPA_X_N
+                   ddx=pol(pm[f"{key2}_{coord}_{numiter-1}"])-pol(pm[f"{key2}_{coord}_{numiter-2}"])
+                   ddx -= np.median(ddx[good])
+                   pm[f'D{coord}_{numiter-1}'] = pm[f'D{coord}_{numiter-2}'] - ddx
+                   pm[f'FPA_{coord}_{numiter-1}'] = pm[f"REQ_{coord}"] - pm[f'D{coord}_{numiter-1}']
+
+                   fibermap[f'FIBER_{coord}'] = pm[f'FPA_{coord}_{numiter-1}']
+                   fibermap[f'DELTA_{coord}'] = pm[f'D{coord}_{numiter-1}']
+
+        else :
             log.error('No FIBER_X/Y or DELTA_X/Y information from platemaker')
             fibermap['FIBER_X'] = np.zeros(len(pm))
             fibermap['FIBER_Y'] = np.zeros(len(pm))
@@ -741,6 +810,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         fibermap['DELTA_Y'] = 0.0
         fibermap['FIBER_RA'] = 0.0
         fibermap['FIBER_DEC'] = 0.0
+        fibermap['FIBERSTATUS'] |= fibermask.MISSINGPOSITION
         # Update data types to be consistent with updated value if coord file was used.
         for val in ['FIBER_X','FIBER_Y','DELTA_X','DELTA_Y']:
             old_col = fibermap[val]

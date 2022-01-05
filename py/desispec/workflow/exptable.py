@@ -265,7 +265,7 @@ def get_exposure_table_name(night, extension='csv'):
 
     Args:
         night, int or str. The night of the observations going into the exposure table.
-        extension, str. The extension (and therefore data format) without a leading period  of the saved table.
+        extension, str. The extension (and therefore data format) without a leading period of the saved table.
                         Default is 'csv'.
 
     Returns:
@@ -685,22 +685,46 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     ## Now for science exposures,
     if obstype == 'science':
         ## fiberassign used to be uncompressed, check the new format first but try old if necessary
-        fbapath = os.path.join(raw_data_dir, night, expstr, f"fiberassign-{outdict['TILEID']:06d}.fits.gz")
-        altfbapath = fbapath.replace('.fits.gz', '.fits')
-        if not os.path.isfile(fbapath) and os.path.isfile(altfbapath):
-            fbapath = altfbapath
-
-        ## Load fiberassign file. If not available return empty dict
-        if os.path.isfile(fbapath):
-            log.info(f"Found fiberassign file: {fbapath}.")
-            fba = fits.open(fbapath)
-            extra_in_fba = ('EXTRA' in fba)
-            fba_header = fba['PRIMARY'].header
-            fba.close()
-        else:
-            log.error(f"Couldn't find fiberassign file: {fbapath}.")
+        tileid = outdict['TILEID']
+        if tileid == coldefault_dict['TILEID']:
+            log.error("Science exposure didn't specify TILEID in the header!")
+            log.warning("Proceeding without a fiberassing file.")
             fba_header = {}
             extra_in_fba = False
+        else:
+            fbaraw = os.path.join(raw_data_dir, night, expstr,
+                                   f"fiberassign-{tileid:06d}.fits")
+            if os.path.exists(fbaraw+'.gz'):
+                fbaraw = fbaraw+'.gz'
+
+            targdir = os.getenv('DESI_TARGET')
+            fbasvn = os.path.join(targdir, 'fiberassign', 'tiles', 'trunk',
+                                    f'{tileid // 1000:03d}',
+                                    f'fiberassign-{tileid:06d}.fits')
+
+            fbafinal = fbaraw
+            if os.path.exists(fbasvn):
+                fbafinal = fbasvn
+            elif os.path.exists(fbasvn+'.gz'):
+                fbasvn = fbasvn+'.gz'
+                fbafinal = fbasvn
+
+            if fbafinal == fbasvn:
+                log.info(f'Overriding raw fiberassign file {fbaraw} with svn {fbasvn}')
+            else:
+                log.info(f'{fbasvn}[.gz] not found; sticking with raw data fiberassign file')
+
+            ## Load fiberassign file. If not available return empty dict
+            if os.path.isfile(fbafinal):
+                log.info(f"Found fiberassign file: {fbafinal}.")
+                fba = fits.open(fbafinal)
+                extra_in_fba = ('EXTRA' in fba)
+                fba_header = fba['PRIMARY'].header
+                fba.close()
+            else:
+                log.error(f"Couldn't find fiberassign file: {fbafinal}.")
+                fba_header = {}
+                extra_in_fba = False
 
         ## Add the fiber assign info. Try fiberassign file first, then raw data, then req
         for name in ["SURVEY","FA_SURV","FAPRGRM","GOALTIME","GOALTYPE","EBVFAC"]:
@@ -769,6 +793,29 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                     log.warning(f"Couldn't find or derive {name}, so leaving {name} with default value " +
                                 "of {outdict[name]}")
 
+        if outdict['SURVEY'] == 'main':
+            ## If defined, use effective time and speed.
+            ## Otherwise set local variables to high value so we pass the relevant cuts
+            ## while leaving the output values as the defaults
+            if outdict['EFFTIME_ETC'] > 0.:
+                efftime = outdict['EFFTIME_ETC']
+                ## Define survey speed for QA
+                ## Keep historical cuts accurate by only using new survey speed for exposures taken after 2021 shutdown
+                ## Speed ref: https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+                time_ratio = (efftime / outdict['EXPTIME'])
+                ebvfac2 = outdict['EBVFAC'] ** 2
+                if int(night) < 20210900:
+                    airfac2 = airmass_to_airfac(outdict['AIRMASS']) ** 2
+                    speed = time_ratio * ebvfac2 * airfac2
+                else:
+                    aircorr = airmass_to_aircorr(outdict['AIRMASS'])
+                    speed = time_ratio * ebvfac2 * aircorr
+                outdict['SPEED'] = speed
+            else:
+                log.warning("No EFFTIME_ETC found. Not performing speed cut.")
+                efftime = 1.0E5
+                speed = 1.0E5
+
         ## Flag the exposure based on PROGRAM information
         ## Define thresholds
         threshold_exptime = 60.
@@ -807,26 +854,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             else:
                 log.warning("No GOALTIME found. Not performing S/N cut.")
                 goaltime = 0.
-
-            ## If defined, use effective speed. Otherwise set to very high value so we pass the relevant cuts
-            if outdict['EFFTIME_ETC'] > 0.:
-                efftime = outdict['EFFTIME_ETC']
-            else:
-                log.warning("No EFFTIME_ETC found. Not performing speed cut.")
-                efftime = 1.0E5
-
-            ## Define survey speed for QA
-            ## Keep historical cuts accurate by only using new survey speed for exposures taken after 2021 shutdown
-            ## Speed ref: https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
-            time_ratio = (efftime / outdict['EXPTIME'])
-            ebvfac2 = outdict['EBVFAC'] ** 2
-            if int(night) < 20210900:
-                airfac2 = airmass_to_airfac(outdict['AIRMASS']) ** 2
-                speed = time_ratio * ebvfac2 * airfac2
-            else:
-                aircorr = airmass_to_aircorr(outdict['AIRMASS'])
-                speed = time_ratio * ebvfac2 * aircorr
-            outdict['SPEED'] = speed
 
             ## Define thresholds
             threshold_percent_goal = 0.05

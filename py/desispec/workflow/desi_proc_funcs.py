@@ -80,8 +80,8 @@ def add_desi_proc_singular_terms(parser):
     Add parameters to the argument parser that are only used by desi_proc
     """
     #parser.add_argument("-n", "--night", type=int, help="YEARMMDD night")
-    parser.add_argument("-e", "--expid", type=int, help="Exposure ID")
-    parser.add_argument("-i", "--input", type=str, help="input raw data file")
+    parser.add_argument("-e", "--expid", type=int, default=None, help="Exposure ID")
+    parser.add_argument("-i", "--input", type=str, default=None, help="input raw data file")
     parser.add_argument("--badamps", type=str, default=None, help="comma separated list of {camera}{petal}{amp}"+\
                                                                   ", i.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'")
     parser.add_argument("--fframe", action="store_true", help="Also write non-sky subtracted fframe file")
@@ -296,17 +296,21 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         runtime: int, the max time requested for the script in minutes for the processing.
     """
     config = batch.get_config(system_name)
+    log = get_logger()
 
     nspectro = (ncameras - 1) // 3 + 1
+    nodes = None
     if jobdesc in ('ARC', 'TESTARC'):
-        ncores, runtime = 10 * ncameras + 1, 45 # + 1 for worflow.schedule scheduler proc
+        ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
+        ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
-        # ncores, runtime = ncameras, 10
-        ncores, runtime = 8, 10  # only use 8 cores to give more memory per core for nightlybias
+        ncores, runtime = ncameras, 5
+    elif jobdesc in ('CCDCALIB'):
+        ncores, runtime = ncameras, 5
     elif jobdesc in ('ZERO'):
         ncores, runtime = 2, 5
     elif jobdesc == 'PSFNIGHT':
@@ -315,14 +319,19 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores, runtime = ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
         ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
+    elif jobdesc == 'NIGHTLYBIAS':
+        ncores, runtime = 15, 5
+        nodes = 2
     else:
-        print('ERROR: unknown jobdesc={}'.format(jobdesc))
-        sys.exit(1)
+        msg = 'unknown jobdesc={}'.format(jobdesc)
+        log.critical(msg)
+        raise ValueError(msg)
 
     if forced_runtime is not None:
         runtime = forced_runtime
 
-    nodes = (ncores - 1) // config['cores_per_node'] + 1
+    if nodes is None:
+        nodes = (ncores - 1) // config['cores_per_node'] + 1
 
     # - Arcs and flats make good use of full nodes, but throttle science
     # - exposures to 5 nodes to enable two to run together in the 10-node
@@ -381,7 +390,9 @@ def get_desi_proc_batch_file_name(night, exp, jobdesc, cameras):
     """
     camword = parse_cameras(cameras)
     if type(exp) is not str:
-        if np.isscalar(exp):
+        if exp is None:
+            expstr = 'none'
+        elif np.isscalar(exp):
             expstr = '{:08d}'.format(exp)
         else:
             #expstr = '-'.join(['{:08d}'.format(curexp) for curexp in exp])
@@ -470,9 +481,11 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     ncameras = len(cameras)
     nexps = 1
-    if not np.isscalar(exp) and type(exp) is not str:
+    if exp is not None and not np.isscalar(exp) and type(exp) is not str:
         nexps = len(exp)
-    ncores, nodes, runtime = determine_resources(ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
+
+    ncores, nodes, runtime = determine_resources(
+            ncameras, jobdesc.upper(), queue=queue, nexps=nexps,
             forced_runtime=runtime, system_name=system_name)
 
     #- derive from cmdline or sys.argv whether this is a nightlybias job
@@ -485,9 +498,15 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     #- nightlybias jobs are memory limited, so throttle number of ranks
     if nightlybias:
-        ncores = min(ncores, 8)
         tot_threads = batch_config['threads_per_core'] * batch_config['cores_per_node']
-        threads_per_core = tot_threads // 8
+        bias_threads_per_core = tot_threads // 8
+
+        bias_cores, bias_nodes, bias_runtime = determine_resources(
+                ncameras, 'NIGHTLYBIAS', queue=queue, nexps=nexps,
+                system_name=system_name)
+
+        nodes = max(nodes, bias_nodes)
+        runtime += bias_runtime
 
     #- arc fits require 3.2 GB of memory per bundle, so increase nodes as needed
     if jobdesc.lower() == 'arc':
@@ -547,10 +566,10 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
         cmd = ' '.join(inparams)
         cmd = cmd.replace(' --batch', ' ').replace(' --nosubmit', ' ')
-        cmd += f' --timingfile {timingfile}'
-
         if '--mpi' not in cmd:
             cmd += ' --mpi'
+
+        cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
         fx.write(f'# using {ncores} cores on {nodes} nodes\n\n')
@@ -564,13 +583,40 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             if nightlybias:
-                fx.write('\n# Ranks throttled due to high memory --nightlybias\n')
-            else:
-                fx.write('\n# Do steps at full MPI parallelism\n')
+                tmp = cmd.split()
+                has_expid = False
+                if '-e' in tmp:
+                    has_expid = True
+                    i = tmp.index('-e')
+                    tmp.pop(i)  # -e
+                    tmp.pop(i)  # EXPID
+                if '--expid' in tmp:
+                    has_expid = True
+                    i = tmp.index('--expid')
+                    tmp.pop(i)  # --expid
+                    tmp.pop(i)  # EXPID
+                bias_cmd = ' '.join(tmp)
 
-            srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
-            fx.write('echo Running {}\n'.format(srun))
-            fx.write('{}\n'.format(srun))
+                fx.write('\n# Run nightlybias first\n')
+                srun=f'srun -N {bias_nodes} -n {bias_cores} -c {bias_threads_per_core} {bias_cmd}'
+                fx.write('echo Running {}\n'.format(srun))
+                fx.write('{}\n'.format(srun))
+
+                if has_expid:
+                    fx.write('\nif [ $? -eq 0 ]; then\n')
+                    fx.write('  echo nightlybias succeeded at $(date)\n')
+                    fx.write('else\n')
+                    fx.write('  echo FAILED: nightlybias failed; stopping at $(date)\n')
+                    fx.write('  exit 1\n')
+                    fx.write('fi\n')
+
+            if ' -e ' in cmd or ' --expid ' in cmd:
+                fx.write('\n# Process exposure\n')
+                cmd = cmd.replace('--nightlybias', '')
+                srun=f'srun -N {nodes} -n {ncores} -c {threads_per_core} {cmd}'
+                fx.write('echo Running {}\n'.format(srun))
+                fx.write('{}\n'.format(srun))
+
         else:
             if jobdesc.lower() in ['science','prestdstar']:
                 fx.write('\n# Do steps through skysub at full MPI parallelism\n')

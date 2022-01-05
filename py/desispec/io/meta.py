@@ -61,7 +61,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         raw = '{rawdata_dir}/{night}/{expid:08d}/desi-{expid:08d}.fits.fz',
         coordinates = '{rawdata_dir}/{night}/{expid:08d}/coordinates-{expid:08d}.fits',
-        # fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        fiberassign = '{rawdata_dir}/{night}/{expid:08d}/fiberassign-{tile:06d}.fits.gz',
         etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
         # preproc/
