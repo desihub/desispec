@@ -476,7 +476,6 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
                 log.error(msg)
             skipped_cams.append(cam)
             continue
-            #raise RuntimeError(msg)
 
         if len(expids) > nzeros:
             nexps = len(expids)
@@ -487,6 +486,12 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
             log.info(f'Using {len(expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
 
         rawfiles_dict[cam] = [io.findfile('raw', night, e) for e in expids]
+
+    if skipped_cams==cameras:
+        if rank == 0:
+            log.critical("No camera has enough zeros")
+        raise RuntimeError("No camera has enough zeros")
+
 
     #- Rank 0 create output directory if needed
     if rank == 0:
