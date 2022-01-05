@@ -158,7 +158,7 @@ if args.last_expid is not None:
         sys.exit(1)
 
 if args.use_exptable:
-    goodcamwords=[desispec.io.util.difference_camwords(s['CAMWORD']),s['BADCAMWORD'] for s in speclog]
+    goodcamwords=[desispec.io.util.difference_camwords(s['CAMWORD'],s['BADCAMWORD']) for s in speclog]
     goodcamlists=[desispec.io.util.decode_camwords(camword) for camword in goodcamwords]
     keep = np.array([(args.camera in goodcam and args.camera not in badamp) for goodcam,badamp in zip(goodcamlists,speclog['BADAMPS'])])
     keep &= speclog['LASTSTEP']=='all'
