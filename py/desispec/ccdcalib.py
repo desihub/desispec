@@ -473,7 +473,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         if len(expids) < minzeros:
             msg = f'Only {len(expids)} ZEROS on {night} and cam {cam}; need at least {minzeros}'
             if rank == 0:
-                log.warning(msg)
+                log.error(msg)
             skipped_cams.append(cam)
             continue
             #raise RuntimeError(msg)
@@ -501,7 +501,8 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
     nfail = 0
     for camera in cameras[rank::size]:
         if camera in skipped_cams:
-            log.warning(f'execution was skipped for camera {camera} due to lack of usable zeros')
+            log.error(f'execution was skipped for camera {camera} due to lack of usable zeros')
+            nfail+=1
             continue
 
         expids=expdict[camera]
@@ -524,6 +525,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
                 compute_bias_file(rawfiles, testbias, camera,
                                   extraheader=dict(NIGHT=night))
             except Exception as ex:
+                nfail+=1
                 log.error(f'Rank {rank} camera {camera} raised {type(ex)} exception {ex}')
                 for line in traceback.format_exception(*sys.exc_info()):
                     log.error('  '+line.strip())
