@@ -830,7 +830,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         speclog.add_column(badcamwords,name='BADCAMWORD')
         speclog.add_column(laststeps,name='LASTSTEP')
         speclog.add_column(camwords,name='CAMWORD')
-        speclog.add_column(badamps,name='LASTSTEP')
+        speclog.add_column(badamps,name='BADAMPS')
 
 
 
