@@ -484,7 +484,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
             expdict[cam] = expids[n:n+nzeros]
 
         if rank == 0:
-            log.info(f'Using {len(expids)} ZEROs for nightly bias {night} and cam {cam}')
+            log.info(f'Using {len(expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
 
         rawfiles_dict[cam] = [io.findfile('raw', night, e) for e in expids]
 
