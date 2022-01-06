@@ -752,7 +752,6 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             bkg /= flat # flatfield the background
 
             # now we are going to temporarily remove the bkg in the frame.flux data, refit the sky, and then finally add back the bkg to the sky model
-            saved_frame_flux = frame.flux.copy()
             frame.flux -= bkg
 
             # refit sky (without fit_offsets!) (costly but the most reliable way to account for the fitted background)
@@ -761,8 +760,12 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                                             adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,
                                             only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,
                                             fit_offsets=False,fiberflat=None)
+
+
             # add back the background and return
-            skymodel.flux += bkg
+            frame.flux += bkg # to the frame flux in case we use it afterwards
+            skymodel.flux += bkg # to the sky model
+
             return skymodel
 
     mask = (modified_cskyivar==0).astype(np.uint32)
