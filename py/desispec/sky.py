@@ -716,40 +716,54 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             else :
                 flat=np.ones(frame.flux.shape)
 
-            # fit offsets
-            nsectors = len(sectors)
-            npar     = 2*nsectors
-            AA=np.zeros((npar,npar))
-            BB=np.zeros(npar)
-            masks = []
-            for ipar in range(npar) :
-                sec = sectors[ipar//2]
-                mask_i = (tmp_y[skyfibers]>=sec[0])&(tmp_y[skyfibers]<sec[1])&(tmp_x[skyfibers]>=sec[2])&(tmp_x[skyfibers]<sec[3])
-                if ipar%2 == 1 :
-                    mask_i = ~mask_i # the rest
-                # current_ivar = frame.ivar[skyfibers] with masked pixels from sky fit
-                BB[ipar] = np.sum(current_ivar[mask_i]*(frame.flux[skyfibers][mask_i]-cskyflux[skyfibers][mask_i])*flat[skyfibers][mask_i])
-                masks.append(mask_i)
-                for jpar in range(0,ipar+1) :
-                    mask_j = masks[jpar]
-                    AA[ipar,jpar] = np.sum(current_ivar[mask_i&mask_j])
-                    if ipar != jpar : AA[jpar,ipar] = AA[ipar,jpar]
-                if AA[ipar,ipar] == 0 : # no constraint on this one, so add prior it's zero
-                    AA[ipar,ipar] += np.max(AA) # same amplitude as max to be well conditioned
-            AAi=np.linalg.inv(AA)
-            offsets=AAi.dot(BB)
-            log.info("best fit offsets={}".format(list(offsets)))
-
-            # apply to model
             bkg = np.zeros(cskyflux.shape)
-            for ipar in range(npar) :
-                sec  = sectors[ipar//2]
-                mask = (tmp_y>=sec[0])&(tmp_y<sec[1])&(tmp_x>=sec[2])&(tmp_x<sec[3])
-                if ipar%2 == 1 :
-                    mask = ~mask # the rest
-                bkg[mask]      += offsets[ipar]
+            tmp_skyflux = cskyflux.copy()
+
+            # we fit one sector at a time
+
+            for sector in sectors :
+
+                # mask for sky fibers only
+                mask_in = (tmp_y[skyfibers]>=sector[0])&(tmp_y[skyfibers]<sector[1])&(tmp_x[skyfibers]>=sector[2])&(tmp_x[skyfibers]<sector[3])
+                mask_out = (tmp_y[skyfibers]>=sector[0])&(tmp_y[skyfibers]<sector[1])&(~mask_in) # same y range
+                sw = np.sum(current_ivar[mask_in])
+                if sw>0 :
+                    offset_in = np.sum(current_ivar[mask_in]*(frame.flux[skyfibers][mask_in]-tmp_skyflux[skyfibers][mask_in])*flat[skyfibers][mask_in])/sw
+                else :
+                    offset_in = 0.
+
+                sw = np.sum(current_ivar[mask_out])
+                if sw>0 :
+                    offset_out = np.sum(current_ivar[mask_out]*(frame.flux[skyfibers][mask_out]-tmp_skyflux[skyfibers][mask_out])*flat[skyfibers][mask_out])/sw
+                else :
+                    offset_out = 0.
+
+                log.info("sector {} offset in = {:.2f} out = {:.2f}".format(sector,offset_in,offset_out))
+
+                # mask for all fibers now
+                mask_in = (tmp_y>=sector[0])&(tmp_y<sector[1])&(tmp_x>=sector[2])&(tmp_x<sector[3])
+                mask_out = (tmp_y>=sector[0])&(tmp_y<sector[1])&(~mask_in) # same y range
+                # save diff of terms in bkg in mask
+                bkg[mask_in] += (offset_in-offset_out)
+                # apply two terms to tmp sky model while fitting the other terms
+                tmp_skyflux[mask_in]  += offset_in
+                tmp_skyflux[mask_out] += offset_out
+
             bkg /= flat # flatfield the background
-            cskyflux += bkg
+
+            # now we are going to temporarily remove the bkg in the frame.flux data, refit the sky, and then finally add back the bkg to the sky model
+            saved_frame_flux = frame.flux.copy()
+            frame.flux -= bkg
+
+            # refit sky (without fit_offsets!) (costly but the most reliable way to account for the fitted background)
+            skymodel =  compute_uniform_sky(frame,nsig_clipping=nsig_clipping,max_iterations=max_iterations,
+                                            model_ivar=model_ivar,add_variance=add_variance,
+                                            adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,
+                                            only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,
+                                            fit_offsets=False,fiberflat=None)
+            # add back the background and return
+            skymodel.flux += bkg
+            return skymodel
 
     mask = (modified_cskyivar==0).astype(np.uint32)
 
