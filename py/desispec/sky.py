@@ -671,20 +671,6 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         cfinder = CalibFinder([frame.meta])
         amps    = get_amp_ids(frame.meta)
 
-        psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
-        if not os.path.isfile(psf_filename) :
-            log.error("No PSF file "+psf_filename)
-            raise IOError("No PSF file "+psf_filename)
-        log.info("Using PSF {}".format(psf_filename))
-        tset = read_xytraceset(psf_filename)
-
-        tmp_fibers = np.arange(frame.nspec)
-        tmp_x = np.zeros(frame.flux.shape,dtype=float)
-        tmp_y = np.zeros(frame.flux.shape,dtype=float)
-        for fiber in tmp_fibers :
-            tmp_x[fiber] = tset.x_vs_wave(fiber=fiber,wavelength=frame.wave)
-            tmp_y[fiber] = tset.y_vs_wave(fiber=fiber,wavelength=frame.wave)
-
         sectors=[]
         for amp in amps :
             key="OFFCOLS"+amp
