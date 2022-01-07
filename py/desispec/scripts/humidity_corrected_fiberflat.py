@@ -92,6 +92,14 @@ def main(args) :
         calib_humidity=0.
     else :
         log.info("mean humidity during calibration exposures={:.2f}".format(calib_humidity))
+        fit_humidity = improved_fiberflat.header["CALFHUM"]
+        if np.abs(fit_humidity-calib_humidity)>10 :
+            message="large difference between best fit humidity during dome flats ({:.1f}) and value from telemetry ({:.1f})".format(fit_humidity,calib_humidity)
+            if np.abs(fit_humidity-calib_humidity)>20 :
+                log.error(message)
+                raise RuntimeError(message)
+            log.warning(message)
+
     improved_fiberflat.header["CALTHUM"] = (calib_humidity,"dome flat humidity from telemetry")
 
     # write it

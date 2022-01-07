@@ -125,4 +125,12 @@ def compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humi
     fiberflat.header["EXPFHUM"] = (hum1,"exposure humidity from flat fit")
     fiberflat.header["CALFHUM"] = (hum2,"dome flat humidity from flat fit")
 
+    if np.abs(hum1-current_humidity)>10 :
+        message="large difference between best fit humidity during science exposure ({:.1f}) and value from telemetry ({:.1f})".format(hum1,current_humidity)
+        if np.abs(hum1-current_humidity)>20 :
+            log.error(message)
+            raise RuntimeError(message)
+        log.warning(message)
+
+
     return fiberflat
