@@ -876,8 +876,6 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
             cmd += f" \\\n    --nskip-zeros {nskip_zeros}"
         if first_expid is not None:
             cmd += f" \\\n    --first-expid {first_expid}"
-        if use_exptable:
-            cmd += f" \\\n    --use_exptable"
 
         with open(batchfile, 'w') as fx:
             fx.write(f'''#!/bin/bash -l
