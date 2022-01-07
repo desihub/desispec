@@ -474,6 +474,8 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
                 nexps = len(expids)
                 n = (nexps - nzeros)//2
                 used_expdict[cam] = expids[n:n+nzeros]
+            else:
+                used_expdict[cam] = expids
 
             log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
 
