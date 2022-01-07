@@ -830,7 +830,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         speclog.add_column(camwords,name='CAMWORD')
         speclog.add_column(badamps,name='BADAMPS')
 
-
+    speclog['OBSTYPE']=np.char.upper(speclog['OBSTYPE'])
 
     t = Time(speclog['MJD']-7/24, format='mjd')
     speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
