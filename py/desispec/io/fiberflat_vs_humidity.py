@@ -10,6 +10,10 @@ def get_humidity(night,expid,camera) :
     raw_filename=findfile("raw",night=night,expid=expid)
     table=fitsio.read(raw_filename,"SPECTCONS")
     keyword="{}HUMID".format(camera[0].upper())
+    if keyword not in table.dtype.names :
+        log.warning(f"no column {keyword} in SPECTCONS table of file {raw_filename}, returning nan")
+        return np.nan
+
     unit=int(camera[1])
     selection=(table["unit"]==unit)
     if np.sum(selection)==0 :
@@ -17,6 +21,8 @@ def get_humidity(night,expid,camera) :
         return np.nan
     humidity=float(table[keyword][selection][0])
     log.debug(f"NIGHT={night} EXPID={expid} CAM={camera} HUMIDITY={humidity}")
+    if humidity <= 0 or humidity >= 100:
+        log.warning(f"Unphysical humidity value={humidity}, in column {keyword} in SPECTCONS table of file {raw_filename} for unit={unit}")
     return humidity
 
 def read_fiberflat_vs_humidity(filename):
