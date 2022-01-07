@@ -338,13 +338,13 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
     log.info(f"done with {camera}")
 
-def _find_zeros(night,cameras,minzeros=25):
+def _find_zeros(night,cameras,nzeros=25):
     """Find all OBSTYPE=ZERO exposures on a given night
 
     Args:
         night (int): YEARMMDD night to search
         cameras (str): list of cameras to process
-        minzeros (int): minimal number of zeros to not worry about keeping partially usable exposures
+        nzeros (int): number of zeros desired from valid all-cam observations to not worry about partials
 
     Returns array of expids that are OBSTYPE=ZERO
 
@@ -400,7 +400,7 @@ def _find_zeros(night,cameras,minzeros=25):
         expids = expids[~drop]
         #need lists here so we can append good observations on some spectrographs
         expdict={f'{cam}':list(expids) for cam in cameras}
-        if len(expids) >= minzeros:
+        if len(expids) >= nzeros:
             #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
             log.info(f'Additionally dropped {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
         else:
@@ -421,7 +421,7 @@ def _find_zeros(night,cameras,minzeros=25):
     for camera,expids in expdict.items():
         log.info(f'Keeping {len(expids)} calibration ZEROs for camera {camera}')
         #make sure everything is in np arrays again
-        expdict[camera]=np.array(expids)
+        expdict[camera]=np.sort(expids)
 
 
     return expdict
@@ -462,36 +462,29 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
     #- Find all zeros for the night
     expdict = None
     if rank == 0:
-        expdict = _find_zeros(night,cameras=cameras,minzeros=nzeros)
+        expdict = _find_zeros(night,cameras=cameras,nzeros=nzeros)
+        used_expdict = {}
+        for cam,expids in expdict.items():
+            if len(expids) < minzeros:
+                msg = f'Only {len(expids)} ZEROS on {night} and cam {cam}; need at least {minzeros}'
+                log.error(msg)
+                continue
+
+            if len(expids) > nzeros:
+                nexps = len(expids)
+                n = (nexps - nzeros)//2
+                used_expdict[cam] = expids[n:n+nzeros]
+
+            log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
+
+        if len(used_expdict)==0:
+            log.critical("No camera has enough zeros")
+            raise RuntimeError("No camera has enough zeros")
+        expdict=used_expdict
+
 
     if comm is not None:
         expdict = comm.bcast(expdict, root=0)
-
-    rawfiles_dict={}
-    skipped_cams=[]
-    for cam,expids in expdict.items():
-        if len(expids) < minzeros:
-            msg = f'Only {len(expids)} ZEROS on {night} and cam {cam}; need at least {minzeros}'
-            if rank == 0:
-                log.error(msg)
-            skipped_cams.append(cam)
-            continue
-
-        if len(expids) > nzeros:
-            nexps = len(expids)
-            n = (nexps - nzeros)//2
-            expdict[cam] = expids[n:n+nzeros]
-
-        if rank == 0:
-            log.info(f'Using {len(expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
-
-        rawfiles_dict[cam] = [io.findfile('raw', night, e) for e in expids]
-
-    if skipped_cams==cameras:
-        if rank == 0:
-            log.critical("No camera has enough zeros")
-        raise RuntimeError("No camera has enough zeros")
-
 
     #- Rank 0 create output directory if needed
     if rank == 0:
@@ -505,13 +498,13 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
 
     nfail = 0
     for camera in cameras[rank::size]:
-        if camera in skipped_cams:
+        if camera not in expdict.keys():
             log.error(f'execution was skipped for camera {camera} due to lack of usable zeros')
             nfail+=1
             continue
-
         expids=expdict[camera]
-        rawfiles=rawfiles_dict[camera]
+        rawfiles=[io.findfile('raw', night, e) for e in expids]
+
         outfile = io.findfile('biasnight', night=night, camera=camera,
                               outdir=outdir)
 
@@ -829,7 +822,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
             else:
                 badcamwords.append("")
                 laststeps.append("all")
-                camwords.append("a123456789")
+                camwords.append("a0123456789")
                 badamps.append("")
 
         speclog.add_column(badcamwords,name='BADCAMWORD')
