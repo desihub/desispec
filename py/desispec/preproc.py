@@ -649,6 +649,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     # Savgol
     if cfinder and cfinder.haskey("USE_ORSEC"):
         use_overscan_row = cfinder.value("USE_ORSEC")
+        log.info(f"use_overscan_row={use_overscan_row}")
     if cfinder and cfinder.haskey("SAVGOL"):
         use_savgol = cfinder.value("SAVGOL")
 
@@ -770,15 +771,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
 
-        if use_overscan_row:
-            raw_overscan_row = rawimage[ov_row].copy()
-            overscan_row = np.zeros_like(raw_overscan_row)
 
-            # Remove overscan_col from overscan_row
-            raw_overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
-            for row in range(raw_overscan_row.shape[0]):
-                o,r = calc_overscan(raw_overscan_squared[row])
-                overscan_row[row] = raw_overscan_row[row] - o
 
         kk = parse_sec_keyword(header['CCDSEC'+amp])
 
@@ -815,6 +808,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             if overscan_step > 5. :
                 mask[kk] |= ccdmask.BADREADNOISE
                 log.warning(f"Camera {camera} amp {amp} OSTEP={overscan_step:.2f} is too large, set ccdmask.BADREADNOISE bit mask")
+
+        if use_overscan_row:
+            raw_overscan_row = rawimage[ov_row].copy()
+            # Remove overscan_col from overscan_row
+            o,r =  calc_overscan(raw_overscan_col)
+            overscan_row = raw_overscan_row - o
 
         if bias is not False :
             # the master bias noise is already in the raw data
@@ -891,6 +890,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 data -= oimg_row
             else:
                 o,r = calc_overscan(overscan_row)
+                log.info("Camera {} amp {} removing overscan rows value = {:.2f}".format(camera,amp,o))
                 data -= o
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
