@@ -15,7 +15,16 @@ from desispec.fiberflat import apply_fiberflat
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 
 def _interpolated_fiberflat_vs_humidity(fiberflat_vs_humidity , humidity_array, humidity_point) :
+    """
+    Interpolates between fiberflat templates indexed by humidity.
 
+    Args:
+        fiberflat_vs_humidity: 3D numpy array (n_humidity,n_fibers,n_wavelength)
+        humidity_array: 1D numpy array (n_humidity)
+        humidity_point: float, humidity value (same unit as humidity_array)
+
+    Returns 2D numpy array (n_fibers,n_wavelength)
+    """
     if humidity_point<=humidity_array[0] :
         i1=0
     else :
@@ -29,7 +38,20 @@ def _interpolated_fiberflat_vs_humidity(fiberflat_vs_humidity , humidity_array, 
     return w1*fiberflat_vs_humidity[i1]+w2*fiberflat_vs_humidity[i2]
 
 def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_array) :
+    """
+    Finds best fit interpolation of fiberflat templates that matches an input flux frame
+    Works only if wavelength array intersects the range [4000,4600]A, i.e. the blue cameras
 
+    Args:
+        wavelength: 1D numpy array (n_wavelength) in Angstrom
+        flux: 2D numpy array (n_fibers,n_wavelength) unit does not matter
+        ivar: 2D numpy array (n_fibers,n_wavelength) inverse variance of flux
+        fibers: list or 1D number arrays of fibers to use among range(n_fibers)
+        mean_fiberflat_vs_humidity: 3D numpy array (n_humidity,n_fibers,n_wavelength)
+        humidity_array: 1D numpy array (n_humidity)
+
+    Returns best_fit_flat best_fit_humidity (2D numpy array (n_fibers,n_wavelength) and float)
+    """
     log = get_logger()
     selection = (wavelength > 4000.) & (wavelength < 4600)
     if np.sum(selection)==0 :
@@ -61,8 +83,17 @@ def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_ar
             med =  np.median(tmp_flat[index],axis=0)
             tmp_flat[index] /= med[None,:]
 
+    # chi2 between all fiberflat templates (one per humidity bin)
+    # with current flux value
+    # summed over all fibers and all wavelength
+    # after having both the fiberflat and the flux normalized to 1
+    # per fiber when averaged over all wavelength
+    # and per wavelength when averaged over all fibers
     chi2 = np.sum(np.sum(tmp_ivar*(tmp_flux-tmp_flat)**2,axis=-1),axis=-1)
 
+    # chi2 is a 1D array with size = number of humidity bins
+
+    # index of minimum, but then we refine
     minindex=np.argmin(chi2)
 
     bb=minindex-1
@@ -81,12 +112,25 @@ def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_ar
     best_humidity = min(humidity_array[-1],best_humidity)
     log.info("best fit humidity = {:.2f}".format(best_humidity))
 
+    # simple linear interpolation indexed by the humidity
     flat = _interpolated_fiberflat_vs_humidity(mean_fiberflat_vs_humidity , humidity_array, best_humidity)
 
     return flat , best_humidity
 
 def compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humidity , humidity_array, current_humidity, frame) :
+    """
+    Apply a humidity-dependent correction to an input fiber flat
+    Returns frame_fiberflat = calib_fiberflat / flat_vs_humidity_model(calib) * flat_vs_humidity_model(frame)
 
+    Args:
+        calib_fiberflat: desispec.FiberFlat object
+        mean_fiberflat_vs_humidity: 3D numpy array (n_humidity,n_fibers,n_wavelength)
+        humidity_array: 1D numpy array (n_humidity)
+        current_humidity: float (same unit as humidity_array)
+        frame: desispec.Frame object
+
+    Returns modified desispec.FiberFlat object
+    """
     log = get_logger()
 
     best_humidity = current_humidity
