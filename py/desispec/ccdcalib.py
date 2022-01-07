@@ -737,7 +737,7 @@ def model_y1d(image, smooth=0):
 
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-                      first_expid=None,night_for_name=None, use_exptable=True):
+                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime'):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -753,6 +753,7 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         nosubmit (bool): generate scripts but don't submit them to batch queue
         first_expid (int): ignore expids prior to this
         use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
+        queue (str): which batch queue to use for submission
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -875,11 +876,11 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 
 #SBATCH -C haswell
 #SBATCH -N 1
-#SBATCH --qos realtime
+#SBATCH --qos {queue}
 #SBATCH --account desi
 #SBATCH --job-name dark-{key}
 #SBATCH --output {logfile}
-#SBATCH --time=01:00:00
+#SBATCH --time={"01:00:00" if queue!="debug" else "00:30:00"}
 #SBATCH --exclusive
 
 cd {outdir}
