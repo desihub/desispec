@@ -37,7 +37,7 @@ def read_fiberflat_vs_humidity(filename):
         wave  = native_endian(fx["WAVELENGTH"].data.astype('f8'))
         fiberflat = list()
         humidity  = list()
-        for index in range(20) :
+        for index in range(100) :
              hdu="HUM{:02d}".format(index)
              if hdu not in fx : continue
              fiberflat.append(native_endian(fx[hdu].data.astype('f8')))
