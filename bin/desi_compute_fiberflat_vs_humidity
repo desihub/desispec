@@ -57,8 +57,11 @@ for spectro in range(10) :
                 if np.sum(ii)==0 :
                     log.warning(f"no spectro {spectro} in {desi_filename}")
                     continue
+                if not "BHUMID" in spectcons.dtype.names :
+                    log.warning(f"no BHUMID column in hdu SPECTCONS of {desi_filename}")
+                    continue
                 bhumid=float(spectcons["BHUMID"][ii])
-                if bhumid<=0 :
+                if bhumid<=0 or bhumid>100 :
                     log.warning(f"unphysical humidity value = {bhumid}")
                     continue
                 bhumid_vals.append(bhumid)
