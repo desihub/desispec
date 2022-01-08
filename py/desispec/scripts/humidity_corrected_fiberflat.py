@@ -49,7 +49,8 @@ def main(args) :
     if not cfinder.haskey("FIBERFLATVSHUMIDITY"):
         log.info("No information on fiberflat vs humidity for camera {}, simply link the input fiberflat".format(frame_header["CAMERA"]))
         if not os.path.islink(args.outfile) :
-            os.symlink(args.fiberflat,args.outfile)
+            relpath=os.path.relpath(args.fiberflat,os.path.dirname(args.outfile))
+            os.symlink(relpath,args.outfile)
         return 0
 
     # read fiberflat
@@ -57,6 +58,7 @@ def main(args) :
 
     # read mean fiberflat vs humidity
     filename = cfinder.findfile("FIBERFLATVSHUMIDITY")
+    log.info(f"reading {filename}")
     mean_fiberflat_vs_humidity , humidity_array, ffh_wave, ffh_header = read_fiberflat_vs_humidity(filename)
     assert(np.allclose(calib_fiberflat.wave,ffh_wave))
 
