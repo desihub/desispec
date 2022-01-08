@@ -14,14 +14,12 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
 from desispec.maskedmedian import masked_median
-from desispec.calibfinder import CalibFinder
 from desispec import util
 import scipy,scipy.sparse
 import sys
 from desiutil.log import get_logger
 import math
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
-
 
 def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=15,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.

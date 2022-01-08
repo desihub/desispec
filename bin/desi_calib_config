@@ -8,6 +8,7 @@ import numpy as np
 import copy
 import traceback
 import glob
+from shutil import copyfile
 from datetime import datetime,timedelta
 from desispec.calibfinder import CalibFinder
 from desiutil.log import get_logger
@@ -188,7 +189,7 @@ class ConfigEditor(object) :
                             help="b, r or z")
 
         parser.add_argument("--name", required=True, default=None,
-                            help="configuration version name")
+                            help="configuration version name, 'all' will modify all configs")
 
         parser.add_argument("--entries", required=True, default=None,
                             help="coma separated list of key=values, like '--keyval PSF=toto.fits,FIBERFLAT=fiberflat.fits'")
@@ -261,10 +262,10 @@ class ConfigEditor(object) :
                 sys.exit(12)
         else :
             reference_version = args.name
-            if not reference_version in data :
-                log.error("No configuration named '{}' in {}".format(reference_version,yaml_file))
-                sys.exit(12)
-
+            if reference_version != 'all' :
+                if not reference_version in data :
+                    log.error("No configuration named '{}' in {}".format(reference_version,yaml_file))
+                    sys.exit(12)
         if add_new_version :
             if data[reference_version]["DATE-OBS-BEGIN"] >= args.date_obs_begin :
                 log.warning("There is a another version with DATE-OBS-BEGIN {} >= {}".format(data[reference_version]["DATE-OBS-BEGIN"],args.date_obs_begin))
@@ -278,109 +279,121 @@ class ConfigEditor(object) :
         # write "by hand" because we want to keep all the comments,
         # the indentation, and the ordering
 
-        ifile = open(yaml_file,'r')
-
-        in_reference_version = False
-        in_some_version   = False
-
-        lines_in_header = []
-        lines_in_reference_version = []
-        lines_in_other_version  = []
-
-        with open(yaml_file,'r') as ifile :
-            for line in ifile.readlines() :
-
-                in_reference_version_header = False
-                for version in versions :
-                    if line.find(version)>=0 :
-                        in_some_version = True
-                        if version == reference_version :
-                            in_reference_version = True
-                            in_reference_version_header = True
-                        else :
-                            in_reference_version = False
-                if in_reference_version_header : continue
-
-                if in_reference_version :
-                    lines_in_reference_version.append(line)
-                else :
-                    if not in_some_version :
-                        lines_in_header.append(line)
-                    else:
-                        lines_in_other_version.append(line)
-
         if args.overwrite and args.ofilename is None :
             args.ofilename = yaml_file
 
         tmp_filename = args.ofilename+".tmp"
 
-        entries_to_remove = []
-        if args.rm_entries is not None :
-            entries_to_remove = args.rm_entries.split(",")
+        copyfile(yaml_file,tmp_filename)
 
-        with open(tmp_filename,'w') as ofile :
+        if reference_version == 'all' :
+            reference_versions = reversed(versions)
+        else :
+            reference_versions = [reference_version]
 
-            # write header
-            for line in lines_in_header :
-                ofile.write(line)
+        for reference_version in reference_versions :
 
-            if add_new_version :
-                # write new version
-                ofile.write("\n {}:\n\n".format(args.name))
-            else :
-                # update version
-                ofile.write(" {}:\n".format(reference_version))
+            in_reference_version = False
+            in_some_version   = False
 
-            if args.comments is not None :
-                # add comments
-                ofile.write (" # {}\n".format(args.comments))
+            lines_in_header = []
+            lines_in_reference_version = []
+            lines_in_other_version  = []
 
-            if add_new_version :
-                ofile.write("\n")
-                ofile.write ("  DATE-OBS-BEGIN: '{}'\n".format(args.date_obs_begin))
 
-            keys = entries.keys()
-            for line in lines_in_reference_version :
 
-                if add_new_version : # otherwise we keep this
-                    if line.find("DATE-OBS-BEGIN")>=0 : continue
-                    if line.find("DATE-OBS-END")>=0 : continue
+            with open(tmp_filename,'r') as ifile :
+                for line in ifile.readlines() :
 
-                if line.find("#")>=0 :
+                    in_reference_version_header = False
+                    for version in versions :
+                        if line.find(version)>=0 :
+                            in_some_version = True
+                            if version == reference_version or reference_version == 'all' :
+                                in_reference_version = True
+                                in_reference_version_header = True
+                            else :
+                                in_reference_version = False
+                    if in_reference_version_header : continue
+
+                    if in_reference_version :
+                        lines_in_reference_version.append(line)
+                    else :
+                        if not in_some_version :
+                            lines_in_header.append(line)
+                        else:
+                            lines_in_other_version.append(line)
+
+
+
+
+            entries_to_remove = []
+            if args.rm_entries is not None :
+                entries_to_remove = args.rm_entries.split(",")
+
+            with open(tmp_filename,'w') as ofile :
+
+                # write header
+                for line in lines_in_header :
                     ofile.write(line)
-                    continue
 
-                is_a_new_entry=False
-                for k in keys :
-                    if line.split(":")[0].find(k)>=0 :
-                        ofile.write("  {}: {}\n".format(k,entries[k]))
-                        entries.pop(k)
-                        is_a_new_entry=True
-                        break
-                if not is_a_new_entry :
-                    if len(line.strip())>0 :
-                        k=line.split(":")[0].strip()
-                        if k in entries_to_remove :
-                            ofile.write("  # {}: (removed)\n".format(k))
-                        else :
-                            ofile.write(line)
+                if add_new_version :
+                    # write new version
+                    ofile.write("\n {}:\n\n".format(args.name))
+                else :
+                    # update version
+                    ofile.write(" {}:\n".format(reference_version))
 
-            for k in entries :
-                ofile.write("  {} : {}\n".format(k,entries[k]))
-            ofile.write("\n\n")
+                if args.comments is not None :
+                    # add comments
+                    ofile.write (" # {}\n".format(args.comments))
 
-            if add_new_version :
-                # write most recent version but change or add DATE-OBS-END
-                ofile.write(" {}:\n".format(reference_version))
+                if add_new_version :
+                    ofile.write("\n")
+                    ofile.write ("  DATE-OBS-BEGIN: '{}'\n".format(args.date_obs_begin))
+
+                keys = entries.keys()
                 for line in lines_in_reference_version :
-                    if line.find("DATE-OBS-END")>=0 : continue
-                    ofile.write(line)
-                    if line.find("DATE-OBS-BEGIN")>=0 :
-                        ofile.write("  DATE-OBS-END: '{}'\n".format(previous_config_date_obs_end))
 
-            # now rewrite older versions
-            for line in lines_in_other_version :
-                ofile.write(line)
+                    if add_new_version : # otherwise we keep this
+                        if line.find("DATE-OBS-BEGIN")>=0 : continue
+                        if line.find("DATE-OBS-END")>=0 : continue
+
+                    if line.find("#")>=0 :
+                        ofile.write(line)
+                        continue
+
+                    is_a_new_entry=False
+                    for k in keys :
+                        if line.split(":")[0].find(k)>=0 :
+                            ofile.write("  {}: {}\n".format(k,entries[k]))
+                            entries.pop(k)
+                            is_a_new_entry=True
+                            break
+                    if not is_a_new_entry :
+                        if len(line.strip())>0 :
+                            k=line.split(":")[0].strip()
+                            if k in entries_to_remove :
+                                ofile.write("  # {}: (removed)\n".format(k))
+                            else :
+                                ofile.write(line)
+
+                for k in entries :
+                    ofile.write("  {} : {}\n".format(k,entries[k]))
+                ofile.write("\n\n")
+
+                if add_new_version :
+                    # write most recent version but change or add DATE-OBS-END
+                    ofile.write(" {}:\n".format(reference_version))
+                    for line in lines_in_reference_version :
+                        if line.find("DATE-OBS-END")>=0 : continue
+                        ofile.write(line)
+                        if line.find("DATE-OBS-BEGIN")>=0 :
+                            ofile.write("  DATE-OBS-END: '{}'\n".format(previous_config_date_obs_end))
+
+                # now rewrite older versions
+                for line in lines_in_other_version :
+                    ofile.write(line)
 
         # now check at least it's a valid yaml file
         # (will raise an exception if fails)
