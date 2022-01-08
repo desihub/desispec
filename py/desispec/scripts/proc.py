@@ -346,6 +346,8 @@ def main(args=None, comm=None):
                 args.input, outfile, outdir, camera)
             if args.scattered_light :
                 cmd += " --scattered-light"
+            if args.obstype in ['SCIENCE'] and camera[0].lower() == "b" and ( not args.no_bkgsub ) :
+                cmd += " --bkgsub-for-science"
             if fibermap is not None:
                 cmd += " --fibermap {}".format(fibermap)
             if not args.obstype in ['ARC'] : # never model variance for arcs

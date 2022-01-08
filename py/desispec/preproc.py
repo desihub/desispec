@@ -7,6 +7,8 @@ import os
 import numpy as np
 import scipy.interpolate
 from pkg_resources import resource_exists, resource_filename
+import numba
+import time
 
 from scipy import signal
 from scipy.ndimage.filters import median_filter
@@ -339,6 +341,103 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     log.info("done")
     return bkg
 
+@numba.jit
+def numba_mean(image_flux,image_ivar,x,hw=3) :
+    n0=image_flux.shape[0]
+    flux=np.zeros(n0)
+    ivar=np.zeros(n0)
+    for j in range(n0) :
+        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+            flux[j] += image_ivar[j,i]*image_flux[j,i]
+            ivar[j] += image_ivar[j,i]
+        if ivar[j]>0 :
+            flux[j] = flux[j]/ivar[j]
+    return flux,ivar
+
+
+def compute_background_between_fiber_blocks(image,xyset) :
+    """
+    Args :
+
+     image: desispec.image.Image object
+     xyset: desispec.xytraceset.XYTraceSet object
+
+    Returns :
+
+       model: np.array of same shape as image.pix
+    """
+
+    log = get_logger()
+
+    log.info("estimating a CCD background between the blocks of fiber traces")
+
+    ivar=image.ivar*(image.mask==0)
+    bkg=np.zeros_like(image.pix)
+
+    t0=time.time()
+
+    # proceed per amplifier
+    for amp in get_amp_ids(image.meta) :
+        sec=parse_sec_keyword(image.meta['CCDSEC'+amp])
+        log.info(f"fitting bkg for Amp {amp}, {sec}")
+
+
+        # compute value between blocks of fibers
+        nblock=21
+        xinterblock=[]
+        vinterblock=[]
+        mwidth=400
+
+        image_yy=np.arange(sec[0].start,sec[0].stop)
+
+        for block in range(nblock) :
+
+            # x coordinate of band between fiber blocks
+            if block==0 : image_xb =  xyset.x_vs_y(0,image_yy)-7.5
+            elif block==20 : image_xb =  xyset.x_vs_y(499,image_yy)+7.5
+            else : image_xb = (xyset.x_vs_y(block*25-1,image_yy)+xyset.x_vs_y(block*25,image_yy))/2.
+
+            # boxcar extraction half width (narrow to avoid pollution by tail of fiber traces for bright stars)
+            hw=1
+            # use only values in this amplifier (interpolate for others)
+            inamp = (image_xb-hw>=sec[1].start)&(image_xb+hw<sec[1].stop)
+            if np.all(~inamp) : continue
+
+            log.info(f"amp {amp} interblock {block}")
+
+            # extract
+            vb,vb_ivar = numba_mean(image.pix[sec[0]],ivar[sec[0]],image_xb)
+
+            # mask out region of brightest sky line in blue camera
+            skyline_wave=5578.9
+            if block==0 :  skyline_y =  xyset.y_vs_wave(0,skyline_wave)
+            elif block==20 : skyline_y =  xyset.y_vs_wave(499,skyline_wave)
+            else : skyline_y = (xyset.y_vs_wave(block*25-1,skyline_wave)+xyset.y_vs_wave(block*25,skyline_wave))/2.
+
+            log.info(f"interblock {block} y({skyline_wave})={skyline_y}")
+            inamp &= np.abs(image_yy-skyline_y)>5.
+
+            # keep only in amp values
+            if np.any(~inamp) :
+                vb = np.interp(image_yy,image_yy[inamp],vb[inamp])
+
+            # median filter
+            vb = median_filter(vb,mwidth)
+
+            xinterblock.append(image_xb)
+            vinterblock.append(vb)
+
+        xinterblock=np.array(xinterblock)
+        vinterblock=np.array(vinterblock)
+
+        # interpolate along x
+        xx=np.arange(sec[1].start,sec[1].stop)
+        for k,y in enumerate(image_yy) :
+            bkg[y,sec[1]]=np.interp(xx,xinterblock[:,k],vinterblock[:,k])
+
+    log.info("computing time = {:.3f}".format(time.time()-t0))
+    return bkg
+
 def get_calibration_image(cfinder, keyword, entry, header=None):
     """Reads a calibration file
 
@@ -420,11 +519,11 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
     return False
 
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
-            bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
+            bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
-            bias_img=None,model_variance=False,no_traceshift=False):
+            bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False):
 
     '''
     preprocess image using metadata in header
@@ -457,7 +556,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             to have any effect.
 
     Optional variance model if model_variance=True
-    Optional background subtraction with median filtering if bkgsub=True
+    Optional background subtraction with median filtering accross the whole CCD if bkgsub_dark=True
+    Optional background subtraction with median filtering between groups of fiber traces if bkgsub_science=True
 
     Optional disabling of cosmic ray rejection if nocosmic=True
     Optional disabling of dark trail correction if nodarktrail=True
@@ -927,7 +1027,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     #- High readnoise is bad
     mask[readnoise>15] |= ccdmask.BADREADNOISE
 
-    if bkgsub :
+    if bkgsub_dark :
         bkg = _background(image,header)
         image -= bkg
 
@@ -976,7 +1076,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         mimage[out] = image[out]
 
         log.info(f"Camera {camera} use image model to compute variance")
-        if bkgsub :
+        if bkgsub_dark :
+
             mimage += bkg
         if pixflat is not False :
             # undo pixflat
@@ -1005,6 +1106,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
             xyset = read_xytraceset(psf_filename)
         img.pix -= model_scattered_light(img,xyset)
+
+    if bkgsub_science :
+        if xyset is None :
+            if psf_filename is None :
+                psf_filename = cfinder.findfile("PSF")
+                depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
+            xyset = read_xytraceset(psf_filename)
+        img.pix -= compute_background_between_fiber_blocks(img,xyset)
 
     #- Extend header with primary header keywords too
     addkeys(img.meta, primary_header)
