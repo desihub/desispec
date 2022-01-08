@@ -670,16 +670,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
 
-        if use_overscan_row:
-            raw_overscan_row = rawimage[ov_row].copy()
-            overscan_row = np.zeros_like(raw_overscan_row)
-
-            # Remove overscan_col from overscan_row
-            raw_overscan_squared = rawimage[ov_row[0], ov_col[1]].copy()
-            for row in range(raw_overscan_row.shape[0]):
-                o,r = calc_overscan(raw_overscan_squared[row])
-                overscan_row[row] = raw_overscan_row[row] - o
-
         kk = parse_sec_keyword(header['CCDSEC'+amp])
 
         # Now remove the overscan_col
@@ -732,6 +722,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             log.info("Camera {} amp {} master bias noise {:4.3f} ADU, rdnoise {:4.3f} -> {:4.3f} ADU".format(
                 camera, amp, biasnoise_datasec, np.mean(rdnoise), np.mean(new_rdnoise)))
             rdnoise = new_rdnoise
+
+        if use_overscan_row:
+            raw_overscan_row = rawimage[ov_row].copy()
+            # Remove overscan_col from overscan_row
+            o,r = calc_overscan(raw_overscan_col)
+            overscan_row = raw_overscan_row - o
 
         rdnoise *= gain
         median_rdnoise  = np.median(rdnoise)
@@ -795,6 +791,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 data -= oimg_row
             else:
                 o,r = calc_overscan(overscan_row)
+                log.info("Camera {} amp {} removing overscan rows value = {:.2f}".format(camera,amp,o))
                 data -= o
 
         #- apply saturlev (defined in ADU), prior to multiplication by gain
