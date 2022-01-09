@@ -15,6 +15,7 @@ from desitarget.targetmask import desi_mask, bgs_mask
 from desispec.maskbits import fibermask
 from desispec.io import read_fibermap
 from desispec.tsnr import tsnr2_to_efftime
+from desiutil.log import get_logger
 from astropy.table import Table
 from astropy.io import fits
 import fitsio
@@ -28,6 +29,7 @@ from desiutil.dust import ebv as dust_ebv
 from astropy import units
 from astropy.coordinates import SkyCoord
 
+log = get_logger()
 
 # AR tile radius in degrees
 tile_radius_deg = 1.628
@@ -953,6 +955,7 @@ def make_tile_qa_plot(
     Note:
         If hdr["SURVEY"] is not "main", will not plot the n(z).
         If hdr["FAPRGRM"].lower() is not "bright" or "dark", will not plot the TSNR2 plot nor the skymap.
+        20220109 : add safety around plot_cutout() call.
     """
     # AR config
     config = get_qa_config()
@@ -1006,7 +1009,14 @@ def make_tile_qa_plot(
 
     # AR cutout
     ax = plt.subplot(gs[2:4, 1])
-    plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4)
+    try:
+        plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4)
+    except Exception as err:
+        import traceback
+        lines = traceback.format_exception(*sys.exc_info())
+        log.error("plot_cutout raised an exception:")
+        print("\n".join(lines))
+        log.warning("continuing plotting without image cutout")
 
     # AR n(z)
     # AR n(z): plotting only if main survey
