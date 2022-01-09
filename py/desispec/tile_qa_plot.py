@@ -15,6 +15,7 @@ from desitarget.targetmask import desi_mask, bgs_mask
 from desispec.maskbits import fibermask
 from desispec.io import read_fibermap
 from desispec.tsnr import tsnr2_to_efftime
+from desiutil.log import get_logger
 from astropy.table import Table
 from astropy.io import fits
 import fitsio
@@ -28,6 +29,7 @@ from desiutil.dust import ebv as dust_ebv
 from astropy import units
 from astropy.coordinates import SkyCoord
 
+log = get_logger()
 
 # AR tile radius in degrees
 tile_radius_deg = 1.628
@@ -257,6 +259,7 @@ def get_viewer_cutout(
 
     Notes:
         Duplicating fiberassign.fba_launch_io.get_viewer_cutout()
+        20220109 : adding a check on img dimension..
     """
     # AR cutout
     tmpfn = "{}tmp-{}.jpeg".format(tmpoutdir, tileid)
@@ -268,10 +271,37 @@ def get_viewer_cutout(
     try:
         subprocess.check_call(tmpstr, stderr=subprocess.DEVNULL, shell=True)
     except subprocess.CalledProcessError:
-        print("no cutout from viewer after {}s, stopping the wget call".format(timeout))
+        log.info("no cutout from viewer after {}s, stopping the wget call".format(timeout))
     try:
         img = mpimg.imread(tmpfn)
     except:
+        img = np.zeros((size, size, 3))
+    # AR check img is a np array with the correct shape
+    # AR not sure why as mpimg.imread should return the correct shape,
+    # AR    but it happens that it is not the case
+    # AR https://github.com/desihub/desispec/issues/1563
+    img_type_ok, img_shape_ok = True, True
+    if not isinstance(img, np.ndarray):
+        img_type_ok = False
+    if img_type_ok:
+        if len(img.shape) != 3:
+            img_shape_ok = False
+        else:
+            if img.shape != (size, size, 3):
+                img_shape_ok = False
+    if not img_type_ok or not img_shape_ok:
+        if not img_type_ok:
+            log.warning(
+                "unexpected img.type {} -> setting img = np.zeros(({}, {}, 3))".format(
+                    type(img), size, size,
+                )
+            )
+        if not img_shape_ok:
+            log.warning(
+                "unexpected img.shape : {} != ({}, {}, 3) -> setting img = np.zeros(({}, {}, 3))".format(
+                    img.shape, size, size, size, size,
+                )
+            )
         img = np.zeros((size, size, 3))
     if os.path.isfile(tmpfn):
         os.remove(tmpfn)
@@ -711,7 +741,7 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
         os.getenv("DESI_ROOT"), program, program
     )
     if not os.path.isfile(pixwfn) :
-        print("use dark pixweight map")
+        log.info("use dark pixweight map")
         tprogram="dark"
         pixwfn = "{}/target/catalogs/dr9/1.1.1/pixweight/main/resolve/{}/pixweight-1-{}.fits".format(
             os.getenv("DESI_ROOT"), tprogram, tprogram
@@ -925,6 +955,7 @@ def make_tile_qa_plot(
     Note:
         If hdr["SURVEY"] is not "main", will not plot the n(z).
         If hdr["FAPRGRM"].lower() is not "bright" or "dark", will not plot the TSNR2 plot nor the skymap.
+        20220109 : add safety around plot_cutout() call.
     """
     # AR config
     config = get_qa_config()
@@ -947,7 +978,7 @@ def make_tile_qa_plot(
     petalqa = h["PETALQA"].data
 
     if not "SURVEY" in hdr :
-        print("no SURVEY keyword in header, skip this tile")
+        log.info("no SURVEY keyword in header, skip this tile")
         return
 
     # AR start plotting
@@ -978,7 +1009,14 @@ def make_tile_qa_plot(
 
     # AR cutout
     ax = plt.subplot(gs[2:4, 1])
-    plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4)
+    try:
+        plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4)
+    except Exception as err:
+        import traceback
+        lines = traceback.format_exception(*sys.exc_info())
+        log.error("plot_cutout raised an exception:")
+        print("\n".join(lines))
+        log.warning("continuing plotting without image cutout")
 
     # AR n(z)
     # AR n(z): plotting only if main survey
@@ -1367,7 +1405,7 @@ def make_tile_qa_plot(
         #  AR saving plot
         plt.savefig(pngoutfile, bbox_inches="tight")
     except ValueError as e :
-        print("failed to save figure")
+        log.warning("failed to save figure")
         print(e)
         pngoutfile=None
 
