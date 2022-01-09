@@ -271,7 +271,7 @@ def get_viewer_cutout(
     try:
         subprocess.check_call(tmpstr, stderr=subprocess.DEVNULL, shell=True)
     except subprocess.CalledProcessError:
-        print("no cutout from viewer after {}s, stopping the wget call".format(timeout))
+        log.info("no cutout from viewer after {}s, stopping the wget call".format(timeout))
     try:
         img = mpimg.imread(tmpfn)
     except:
@@ -291,13 +291,13 @@ def get_viewer_cutout(
                 img_shape_ok = False
     if not img_type_ok or not img_shape_ok:
         if not img_type_ok:
-            print(
+            log.warning(
                 "unexpected img.type {} -> setting img = np.zeros(({}, {}, 3))".format(
                     type(img), size, size,
                 )
             )
         if not img_shape_ok:
-            print(
+            log.warning(
                 "unexpected img.shape : {} != ({}, {}, 3) -> setting img = np.zeros(({}, {}, 3))".format(
                     img.shape, size, size, size, size,
                 )
@@ -741,7 +741,7 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
         os.getenv("DESI_ROOT"), program, program
     )
     if not os.path.isfile(pixwfn) :
-        print("use dark pixweight map")
+        log.info("use dark pixweight map")
         tprogram="dark"
         pixwfn = "{}/target/catalogs/dr9/1.1.1/pixweight/main/resolve/{}/pixweight-1-{}.fits".format(
             os.getenv("DESI_ROOT"), tprogram, tprogram
@@ -978,7 +978,7 @@ def make_tile_qa_plot(
     petalqa = h["PETALQA"].data
 
     if not "SURVEY" in hdr :
-        print("no SURVEY keyword in header, skip this tile")
+        log.info("no SURVEY keyword in header, skip this tile")
         return
 
     # AR start plotting
@@ -1405,7 +1405,7 @@ def make_tile_qa_plot(
         #  AR saving plot
         plt.savefig(pngoutfile, bbox_inches="tight")
     except ValueError as e :
-        print("failed to save figure")
+        log.warning("failed to save figure")
         print(e)
         pngoutfile=None
 
