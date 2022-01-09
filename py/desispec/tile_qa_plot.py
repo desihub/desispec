@@ -257,6 +257,7 @@ def get_viewer_cutout(
 
     Notes:
         Duplicating fiberassign.fba_launch_io.get_viewer_cutout()
+        20220109 : adding a check on img dimension..
     """
     # AR cutout
     tmpfn = "{}tmp-{}.jpeg".format(tmpoutdir, tileid)
@@ -272,6 +273,33 @@ def get_viewer_cutout(
     try:
         img = mpimg.imread(tmpfn)
     except:
+        img = np.zeros((size, size, 3))
+    # AR check img is a np array with the correct shape
+    # AR not sure why as mpimg.imread should return the correct shape,
+    # AR    but it happens that it is not the case
+    # AR https://github.com/desihub/desispec/issues/1563
+    img_type_ok, img_shape_ok = True, True
+    if not isinstance(img, np.ndarray):
+        img_type_ok = False
+    if img_type_ok:
+        if len(img.shape) != 3:
+            img_shape_ok = False
+        else:
+            if img.shape != (size, size, 3):
+                img_shape_ok = False
+    if not img_type_ok or not img_shape_ok:
+        if not img_type_ok:
+            print(
+                "unexpected img.type {} -> setting img = np.zeros(({}, {}, 3))".format(
+                    type(img), size, size,
+                )
+            )
+        if not img_shape_ok:
+            print(
+                "unexpected img.shape : {} != ({}, {}, 3) -> setting img = np.zeros(({}, {}, 3))".format(
+                    img.shape, size, size, size, size,
+                )
+            )
         img = np.zeros((size, size, 3))
     if os.path.isfile(tmpfn):
         os.remove(tmpfn)
