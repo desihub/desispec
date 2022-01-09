@@ -1,7 +1,8 @@
 """
-desispec.tile_qa
-============
-Utility functions to generate the per-cumulative-tile QA png.
+desispec.tile_qa_plot
+=====================
+
+Utility functions to generate the tile QA png.
 """
 
 import os
@@ -13,7 +14,7 @@ from glob import glob
 import tempfile
 from desitarget.targetmask import desi_mask, bgs_mask
 from desispec.maskbits import fibermask
-from desispec.io import read_fibermap
+from desispec.io import read_fibermap, findfile
 from desispec.tsnr import tsnr2_to_efftime
 from desiutil.log import get_logger
 from astropy.table import Table
@@ -871,19 +872,15 @@ def get_expids_efftimes(tileqafits, prod):
     # AR first try spectra*fits files in the same folder as tileqafits
     tmpstr = os.path.join(
         os.path.dirname(tileqafits),
-        "spectra-*-{}-thru{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
+        "spectra-*-{}-*{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
     )
     spectra_fns = sorted(glob(tmpstr))
-    # AR then try based on prod
+    # AR then try based on prod, defaulting to "cumulative"
     if len(spectra_fns) == 0:
-        tmpstr = os.path.join(
-            prod,
-            "tiles",
-            "cumulative",
-            "{}".format(hdr["TILEID"]),
-            "{}".format(hdr["LASTNITE"]),
-            "spectra-*-{}-thru{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
-        )
+        tileid = hdr['TILEID']
+        night = hdr['LASTNITE']
+        tiledir = os.path.dirname(findfile("spectra", tile=tileid, night=night, spectrograph=0))
+        tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits')
         spectra_fns = sorted(glob(tmpstr))
     if len(spectra_fns) > 0:
         fmap = read_fibermap(spectra_fns[0])
@@ -939,7 +936,7 @@ def make_tile_qa_plot(
     refdir=resource_filename("desispec", "data/qa"),
 ):
     """
-    Generate the per-cumulative tile QA png file.
+    Generate the tile QA png file.
     Will replace .fits by .png in tileqafits for the png filename.
 
     Args:
@@ -1346,8 +1343,14 @@ def make_tile_qa_plot(
         )
         y += dy
 
+    # cumulative tiles have "thru", pernight don't
+    if "thru" in os.path.basename(tileqafits):
+        nightprefix = "thru"
+    else:
+        nightprefix = "per"
+
     for txt in [
-        ["TILEID-thruNIGHT", "{:06d}-{}".format(hdr["TILEID"], hdr["LASTNITE"])],
+        [f"TILEID-{nightprefix}NIGHT", "{:06d}-{}".format(hdr["TILEID"], hdr["LASTNITE"])],
         ["SURVEY-PROGRAM", "{}-{}".format(hdr["SURVEY"], hdr["FAPRGRM"])],
         ["RA , DEC", "{:.3f} , {:.3f}".format(hdr["TILERA"], hdr["TILEDEC"])],
         ["EBVFAC", "{:.2f}".format(hdr["EBVFAC"])],

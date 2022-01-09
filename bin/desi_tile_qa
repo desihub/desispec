@@ -32,12 +32,14 @@ def parse(options=None):
                         help = 'Output summary file (optional)')
     parser.add_argument('--recompute', action = 'store_true',
                         help = 'recompute')
+    parser.add_argument('-g', '--group', type=str, default='cumulative', required=False,
+            help = "tile group: pernight or cumulative")
     parser.add_argument('--prod', type = str, default = None, required=False,
                         help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('--exposure-qa-dir', type = str, default = None, required=False,
                         help = 'Path to exposure qa directory, default is the input prod directory')
     parser.add_argument('--outdir', type = str, default = None, required=False,
-                        help = 'Path to ouput directory, default is the input prod directory. Files written in {outdir}/tiles/cumulative/{TILEID}/{NIGHT}/')
+                        help = 'Path to ouput directory, default is the input prod directory. Files written in {outdir}/tiles/{group}/{TILEID}/{NIGHT}/')
     parser.add_argument('-t','--tileids', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 12,14 or 12:23')
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
@@ -52,12 +54,12 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None) :
+def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulative') :
     """
     Wrapper function to compute_tile_qa for multiprocessing
     """
     log = get_logger()
-    fiberqa_table , petalqa_table = compute_tile_qa(night,tileid,specprod_dir,exposure_qa_dir)
+    fiberqa_table , petalqa_table = compute_tile_qa(night,tileid,specprod_dir,exposure_qa_dir,group=group)
     if fiberqa_table is None :
         return None
 
@@ -122,7 +124,7 @@ def main():
 
     summary_rows  = list()
     for count,night in enumerate(nights) :
-        dirnames = sorted(glob.glob('{}/tiles/cumulative/*/{}'.format(args.prod,night)))
+        dirnames = sorted(glob.glob('{}/tiles/{}/*/{}'.format(args.prod, args.group, night)))
         night_tileids=[]
         for dirname in dirnames :
             try :
@@ -138,7 +140,7 @@ def main():
 
         func_args = []
         for tileid in night_tileids :
-            filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.outdir)
+            filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.outdir, groupname=args.group)
             if not args.recompute :
                 if os.path.isfile(filename) :
                     log.info("skip existing {}".format(filename))
@@ -151,7 +153,7 @@ def main():
                         entry[k]=r['value']
                     summary_rows.append(entry)
                     continue
-            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename})
+            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename, 'group':args.group})
 
         if args.nproc == 1 :
             for func_arg in func_args :

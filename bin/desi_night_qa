@@ -37,6 +37,8 @@ def parse(options=None):
                         help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-n","--night", type = int, default = None, required = True,
                         help = "night to process. ex: 20211128")
+    parser.add_argument("-g","--group", type = str, default = "cumulative", required = False,
+                        help = 'tile group "cumulative" or "pernight"')
     parser.add_argument("-o", "--outdir", type = str, default = None, required = False,
                         help = "Path to ouput folder, default is the input prod directory. Files written in {prod}/nightqa/{night}; several files will be created there")
     parser.add_argument("--css", type = str, default = None, required = False,
@@ -131,17 +133,19 @@ def main():
 
     # AR tileqa
     if "tileqa" in args.steps.split(","):
-        create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids)
+        create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids, group=args.group)
 
     # AR skyzfiber
     if "skyzfiber" in args.steps.split(","):
-        create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, np.unique(tileids), dchi2_threshold=9)
+        create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, np.unique(tileids), dchi2_threshold=9,
+                group=args.group)
 
     # AR per-petal n(z)
     if "petalnz" in args.steps.split(","):
         unq_tileids, ii = np.unique(tileids, return_index=True)
         unq_surveys = surveys[ii]
-        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids, unq_surveys, dchi2_threshold=25)
+        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids, unq_surveys, dchi2_threshold=25,
+                group=args.group)
 
     # AR create index.html
     # AR we first copy the args.css file to args.outdir
