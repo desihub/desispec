@@ -199,8 +199,7 @@ def empty_fibermap(nspec, specmin=0, survey='main'):
     fibermap['EBV'][:] = 0.001
     fibermap['PHOTSYS'][:] = 'S'
 
-    # fibermap.meta['EXTNAME'] = 'FIBERMAP'
-    fibermap.meta = fits.Header({'XTENSION': 'BINTABLE', 'EXTNAME': 'FIBERMAP'})
+    fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
     assert set(fibermap.keys()) == set([x[0] for x in columns])
 

@@ -191,8 +191,7 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
         # Add image header keywords inherited from raw data to fibermap too.
         # This is only necessary in the case where a fibermap file was not
         # already constructed by assemble_fibermap().
-        # desispec.io.util.addkeys(fibermap.meta, img.meta)
-        fibermap.meta.extend(img.meta, strip=True, unique=True)
+        desispec.io.util.addkeys(fibermap.meta, img.meta, skipkeys=('BZERO', 'BSCALE'))
 
     #- Augment the image header with some tile info from fibermap if needed
     for key in ['TILEID', 'TILERA', 'TILEDEC']:
