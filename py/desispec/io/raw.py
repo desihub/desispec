@@ -21,20 +21,43 @@ from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
 
-def read_raw(filename, camera, fibermapfile=None, **kwargs):
-    '''
-    Returns preprocessed raw data from `camera` extension of `filename`
 
-    Args:
-        filename : input fits filename with DESI raw data
-        camera : camera name (B0,R1, .. Z9) or FITS extension name or number
+def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
+    '''Returns preprocessed raw data from `camera` extension of `filename`.
 
-    Options:
-        fibermapfile : read fibermap from this file; if None create blank fm
-        Other keyword arguments are passed to desispec.preproc.preproc(),
-        e.g. bias, pixflat, mask.  See preproc() documentation for details.
+    Parameters
+    ----------
+    filename : :class:`str`
+        Input FITS filename with DESI raw data.
+    camera : :class:`str`
+        Camera name (B0, R1, ... Z9) or FITS extension name.
+    fibermapfile : :class:`str`, optional
+        Read fibermap from this file; if ``None`` create blank fibermap.
+    fill_header : :class:`list`, optional
+        A list of HDU names or numbers.  The header cards from these HDUs
+        will be added to the header of the camera HDU read from `filename`.
 
-    Returns Image object with member variables pix, ivar, mask, readnoise
+    Returns
+    -------
+    :class:`desispec.image.Image`
+        Image object with member variables pix, ivar, mask, readnoise.
+
+    Raises
+    ------
+    IOError
+        If `camera` is not a HDU in `filename`.
+    KeyError
+        If ``EXPTIME`` is not present in any header in `filename`, or if
+        both ``NIGHT`` and ``DATE-OBS`` are missing from input headers.
+    ValueError
+        If ``NIGHT`` in the primary header does not match ``NIGHT`` in the
+        camera header, or if `fill_header` is not a :class:`list`.
+
+    Notes
+    -----
+    Other keyword arguments are passed to :func:`desispec.preproc.preproc`,
+    *e.g.* bias, pixflat, mask.  See :func:`~desispec.preproc.preproc`
+    documentation for details.
     '''
 
     log = get_logger()
@@ -46,105 +69,123 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
 
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
-    hdu=0
-    while True :
-        primary_header= fx[hdu].header
-        if "EXPTIME" in primary_header : break
+    hdu = 0
+    #
+    # primary_header will typically represent HDU 1 ('SPEC') since
+    # HDU 0 is empty.
+    #
+    while True:
+        primary_header = fx[hdu].header
+        if "EXPTIME" in primary_header: break
 
-        if len(fx)>hdu+1 :
+        if len(fx) > hdu + 1:
             if hdu > 0:
-                log.warning("Did not find header keyword EXPTIME in hdu {}, moving to the next".format(hdu))
-            hdu +=1
-        else :
-            log.error("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
-            raise KeyError("Did not find header keyword EXPTIME in any HDU of {}".format(filename))
+                log.warning("Did not find header keyword EXPTIME in HDU %d, moving to the next.", hdu)
+            hdu += 1
+        else:
+            msg = "Did not find header keyword EXPTIME in any HDU of %s!"
+            log.critical(msg, filename)
+            raise KeyError(msg % filename)
 
     #- Check if NIGHT keyword is present and valid; fix if needed
     #- e.g. 20210105 have headers with NIGHT='None' instead of YEARMMDD
     try:
         tmp = int(primary_header['NIGHT'])
     except (KeyError, ValueError, TypeError):
-        primary_header['NIGHT'] = header2night(primary_header)
+        primary_header['NIGHT'] = (header2night(primary_header), 'Observing night')
 
     try:
         tmp = int(header['NIGHT'])
     except (KeyError, ValueError, TypeError):
         try:
-            header['NIGHT'] = header2night(header)
+            header['NIGHT'] = (header2night(header), 'Observing night')
         except (KeyError, ValueError, TypeError):
             #- early teststand data only have NIGHT/timestamps in primary hdr
-            header['NIGHT'] = primary_header['NIGHT']
+            header['NIGHT'] = (primary_header['NIGHT'], 'Observing night')
 
     #- early data (e.g. 20200219/51053) had a mix of int vs. str NIGHT
-    primary_header['NIGHT'] = int(primary_header['NIGHT'])
-    header['NIGHT'] = int(header['NIGHT'])
+    primary_header['NIGHT'] = (int(primary_header['NIGHT']), 'Observing night')
+    header['NIGHT'] = (int(header['NIGHT']), 'Observing night')
 
     if primary_header['NIGHT'] != header['NIGHT']:
-        msg = 'primary header NIGHT={} != camera header NIGHT={}'.format(
-            primary_header['NIGHT'], header['NIGHT'])
-        log.error(msg)
-        raise ValueError(msg)
+        msg = 'Primary header NIGHT=%d != camera header NIGHT=%d!'
+        log.critical(msg, primary_header['NIGHT'], header['NIGHT'])
+        raise ValueError(msg % (primary_header['NIGHT'], header['NIGHT']))
 
     #- early data have >8 char FIBERASSIGN key; rename to match current data
     if 'FIBERASSIGN' in primary_header:
-        log.warning('renaming long header keyword FIBERASSIGN -> FIBASSGN')
-        primary_header['FIBASSGN'] = primary_header['FIBERASSIGN']
-        del primary_header['FIBERASSIGN']
+        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in primary_header.')
+        primary_header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
 
     if 'FIBERASSIGN' in header:
-        header['FIBASSGN'] = header['FIBERASSIGN']
-        del header['FIBERASSIGN']
-
-    skipkeys = ["EXTEND","SIMPLE","NAXIS1","NAXIS2","CHECKSUM","DATASUM","XTENSION","EXTNAME","COMMENT"]
+        log.warning('Renaming long header keyword FIBERASSIGN -> FIBASSGN in header.')
+        header.rename_keyword('FIBERASSIGN', 'FIBASSGN')
+    #
+    # A lot of this inheritance stuff is moot because real data files
+    # have an empty HDU 0 with no interesting headers.
+    #
+    inherited = False
     if 'INHERIT' in header and header['INHERIT']:
-        h0 = fx[0].header
-        for key in h0:
-            if ( key not in skipkeys ) and ( key not in header ):
-                header[key] = h0[key]
+        inherited = True
+        log.info('Camera header %s will INHERIT from HDU 0.', camera)
+        header.extend(fx[0].header, strip=True, unique=True)
 
-    if "fill_header" in kwargs :
-        hdus = kwargs["fill_header"]
+    if fill_header is None:
+        if inherited:
+            hdus = []
+        else:
+            hdus = [0,]
+        if 'PLC' in fx:
+            hdus.append('PLC')
+    elif isinstance(fill_header, list):
+        hdus = fill_header
+    else:
+        msg = 'Unknown type for fill_header!'
+        log.critical(msg)
+        raise ValueError(msg)
 
-        if hdus is None :
-            hdus=[0,]
-            if "PLC" in fx :
-                hdus.append("PLC")
+    log.info('Will add header keywords from HDUs %s.', str(hdus))
 
-        if hdus is not None :
-            log.info("will add header keywords from hdus %s"%str(hdus))
-            for hdu in hdus :
-                try :
-                    ihdu = int(hdu)
-                    hdu = ihdu
-                except ValueError:
-                    pass
-                if hdu in fx :
-                    hdu_header = fx[hdu].header
-                    for key in hdu_header:
-                        if ( key not in skipkeys ) and ( key not in header ) :
-                            log.debug("adding {} = {}".format(key,hdu_header[key]))
-                            header[key] = hdu_header[key]
-                        else :
-                            log.debug("key %s already in header or in skipkeys"%key)
-                else :
-                    log.warning("warning HDU %s not in fits file"%str(hdu))
-
-        kwargs.pop("fill_header")
+    for hdu in hdus:
+        if hdu in fx or int(hdu) in fx:
+            header.extend(fx[hdu].header, strip=True, unique=True)
+        else:
+            log.warning("HDU %s is not in FITS file.", str(hdu))
 
     fx.close()
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
-
-    img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
-
+    #
+    # Other cleanup of headers
+    #
+    longstrn = fits.Card('LONGSTRN', 'OGIP 1.0', 'The OGIP Long String Convention may be used.')
+    if 'MODULE' in primary_header:
+        log.debug("Inserting LONGSTRN keyword before MODULE.")
+        primary_header.insert('MODULE', longstrn)
+    else:
+        log.debug("Inserting LONGSTRN keyword before EXTNAME.")
+        primary_header.insert('EXTNAME', longstrn)
+    log.debug("Renaming EPOCH to EQUINOX in primary_header.")
+    primary_header.rename_keyword('EPOCH', 'EQUINOX')
+    log.debug("Renaming EPOCH to EQUINOX in header.")
+    header.rename_keyword('EPOCH', 'EQUINOX')
+    #
+    # Run preproc()
+    #
+    img = preproc(rawimage, header, primary_header, **kwargs)
+    #
+    # Load fibermap data.
+    #
     if fibermapfile is not None and os.path.exists(fibermapfile):
-        fibermap = desispec.io.read_fibermap(fibermapfile)
+        fibermap = read_fibermap(fibermapfile)
     else:
         log.warning('creating blank fibermap')
-        fibermap = desispec.io.empty_fibermap(5000)
+        fibermap = empty_fibermap(5000)
 
     #- Add image header keywords inherited from raw data to fibermap too
-    desispec.io.util.addkeys(fibermap.meta, img.meta)
+    # BAW: This is unnecssary, because a fibermap file constructed by
+    # assemble_fibermap() will already have the raw data keywords. 
+    # addkeys(fibermap.meta, img.meta)
 
     #- Augment the image header with some tile info from fibermap if needed
     for key in ['TILEID', 'TILERA', 'TILEDEC']:
@@ -202,7 +243,6 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     else:
         badamp_bit = maskbits.fibermask.BADAMPZ
 
-
     if 'FIBER' in fibermap.dtype.names : # not the case in early teststand data
 
         ## Mask fibers
@@ -235,13 +275,13 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
             cfinder = CalibFinder([header,primary_header])
 
         psf_filename = cfinder.findfile("PSF")
-        tset = desispec.io.read_xytraceset(psf_filename)
+        tset = read_xytraceset(psf_filename)
         mean_wave =(tset.wavemin+tset.wavemax)/2.
         xfiber  = tset.x_vs_wave(np.arange(tset.nspec),mean_wave)
         amp_ids = desispec.preproc.get_amp_ids(header)
 
         for amp in amp_ids :
-            kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
+            kk  = parse_sec_keyword(header['CCDSEC'+amp])
             ntot = img.mask[kk].size
             nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
             if nbad / ntot > 0.5 :
@@ -254,6 +294,7 @@ def read_raw(filename, camera, fibermapfile=None, **kwargs):
     img.fibermap = fibermap
 
     return img
+
 
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     '''
