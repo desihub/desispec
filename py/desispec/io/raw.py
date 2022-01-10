@@ -166,9 +166,16 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
         log.debug("Inserting LONGSTRN keyword before EXTNAME.")
         primary_header.insert('EXTNAME', longstrn)
     log.debug("Renaming EPOCH to EQUINOX in primary_header.")
-    primary_header.rename_keyword('EPOCH', 'EQUINOX')
+    try:
+        primary_header.rename_keyword('EPOCH', 'EQUINOX')
+    except ValueError:
+        # If EPOCH is not present at all.
+        pass
     log.debug("Renaming EPOCH to EQUINOX in header.")
-    header.rename_keyword('EPOCH', 'EQUINOX')
+    try:
+        header.rename_keyword('EPOCH', 'EQUINOX')
+    except ValueError:
+        pass
     #
     # Run preproc()
     #

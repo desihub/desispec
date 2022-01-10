@@ -1010,8 +1010,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         img.pix -= model_scattered_light(img,xyset)
 
     #- Extend header with primary header keywords too
-    img.meta.extend(primary_header, strip=True, unique=True)
-    # addkeys(img.meta, primary_header)
+    try:
+        img.meta.extend(primary_header, strip=True, unique=True)
+    except AttributeError:
+        addkeys(img.meta, primary_header)
 
     return img
 
