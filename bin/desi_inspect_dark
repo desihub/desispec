@@ -47,8 +47,7 @@ with fitsio.FITS(args.infile) as fx:
     pix  = fx['IMAGE'].read()
     head = fx['IMAGE'].read_header()
     ivar = fx['IVAR'].read()
-    ### mask = (fx['MASK'].read() & extractmaskval) | (ivar==0.0)
-    mask = fx['MASK'].read() | (ivar==0.0)
+    mask = (fx['MASK'].read() & extractmaskval) | (ivar==0.0)
 
 exptime = head["EXPTIME"]
 log.info("Exposure time = {:.1f} sec".format(exptime))
@@ -120,8 +119,6 @@ for half in range(2) :
     peak[1:-1] &= (aprof[1:-1]>aprof[:-2])&(aprof[1:-1]>aprof[2:])
     peak=np.where(peak)[0]
 
-    medsize = 400
-    kernel = np.ones(medsize) * (np.pi/2) / medsize
     for p in peak :
 
         # sum over a band of 3 pixels (to account for wide bright columns)
@@ -133,17 +130,16 @@ for half in range(2) :
         # median filter for column that do not cross the whole amplifier
         medsize = 400
         medval = scipy.ndimage.median_filter(tmpval, medsize)
-        medvar = scipy.ndimage.convolve1d(tmpvar, kernel)
+        medsigma = scipy.ndimage.median_filter(tmpval/np.sqrt(tmpvar), medsize) * np.sqrt(medsize)/np.sqrt(np.pi/2)
         i = np.argmax(np.abs(medval))
         val = medval[i]
-        significance = np.abs(val)/np.sqrt(medvar[i])
-
-        import IPython; IPython.embed()
+        significance = np.abs(medsigma[i])
 
         # apply threshold here
-        # if np.abs(val)<threshold_electrons or significance < args.sigma:
-        if np.abs(val)<threshold_electrons:
+        # if np.abs(val)<threshold_electrons:
+        if np.abs(val)<threshold_electrons or significance < args.sigma:
             continue
+
         log.info("Bad column x={} val={:.2f} electrons ({:.2f} sigma) -> {:.4f} elec/sec".format(
             p, val, significance, val/exptime))
         col_x.append(p)
