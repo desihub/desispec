@@ -16,7 +16,7 @@ import desispec.io
 import desispec.io.util
 from . import iotime
 from desispec.util import header2night
-from desispec.preproc import preproc
+import desispec.preproc
 from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
@@ -172,20 +172,20 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     #
     # Run preproc()
     #
-    img = preproc(rawimage, header, primary_header, **kwargs)
+    img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
     #
     # Load fibermap data.
     #
     if fibermapfile is not None and os.path.exists(fibermapfile):
-        fibermap = read_fibermap(fibermapfile)
+        fibermap = desispec.io.read_fibermap(fibermapfile)
     else:
         log.warning('creating blank fibermap')
-        fibermap = empty_fibermap(5000)
+        fibermap = desispec.io.empty_fibermap(5000)
 
     #- Add image header keywords inherited from raw data to fibermap too
     # BAW: This is unnecssary, because a fibermap file constructed by
     # assemble_fibermap() will already have the raw data keywords.
-    # addkeys(fibermap.meta, img.meta)
+    # desispec.io.util.addkeys(fibermap.meta, img.meta)
 
     #- Augment the image header with some tile info from fibermap if needed
     for key in ['TILEID', 'TILERA', 'TILEDEC']:
@@ -275,13 +275,13 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
             cfinder = CalibFinder([header,primary_header])
 
         psf_filename = cfinder.findfile("PSF")
-        tset = read_xytraceset(psf_filename)
+        tset = desispec.io.read_xytraceset(psf_filename)
         mean_wave =(tset.wavemin+tset.wavemax)/2.
         xfiber  = tset.x_vs_wave(np.arange(tset.nspec),mean_wave)
         amp_ids = desispec.preproc.get_amp_ids(header)
 
         for amp in amp_ids :
-            kk  = parse_sec_keyword(header['CCDSEC'+amp])
+            kk  = desispec.preproc.parse_sec_keyword(header['CCDSEC'+amp])
             ntot = img.mask[kk].size
             nbad = np.sum((img.mask[kk] & maskbits.ccdmask.BADREADNOISE) > 0)
             if nbad / ntot > 0.5 :
