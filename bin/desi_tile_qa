@@ -65,11 +65,7 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulati
 
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
-    figfile = make_tile_qa_plot(outfile, specprod_dir)
-    if figfile is not None :
-        log.info("wrote QA plot {}".format(figfile))
-    else :
-        log.warning("failed to compute QA plot for {}".format(outfile))
+    _wrap_make_tile_qa_plot(outfile, specprod_dir)
 
     if "EXTNAME" in fiberqa_table.meta :
         fiberqa_table.meta.pop("EXTNAME")
@@ -81,6 +77,43 @@ def _func(arg) :
     Wrapper function to compute_tile_qa for multiprocessing
     """
     return func(**arg)
+
+def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None):
+    """
+    Utility wrapper to make qa plot with try/except/log wrappers
+
+    Args:
+        qafitsfile (str): full path to tile-qa-*.fits data
+
+    Options:
+        specprod_dir (str): full path to production directory
+
+    Returns: full path to qapngfile, or None upon failure
+
+    Notes:
+        if plotting fails, this prints traceback and logs error but doesn't
+        raise and exception itself, returning None instead
+    """
+    if specprod_dir is None:
+        specprod_dir = specprod_root() # $DESI_SPECTRO_REDUX/$SPECPROD
+
+    log = get_logger()
+    try:
+        figfile = make_tile_qa_plot(qafitsfile, specprod_dir)
+    except Exception as err:
+        figfile = None
+        import traceback
+        lines = traceback.format_exception(*sys.exc_info())
+        log.error("make_tile_qa_plot raised an exception:")
+        print("".join(lines))
+
+    if figfile is not None :
+        log.info("wrote QA plot {}".format(figfile))
+    else :
+        log.error("failed to compute QA plot for {}".format(qafitsfile))
+
+    return figfile
+
 
 def main():
 
@@ -123,23 +156,26 @@ def main():
     if tileids is not None : log.info('tileids = {}'.format(tileids))
 
     summary_rows  = list()
+    night_tileids=dict()  # dict[night] = list(tiles...)
     for count,night in enumerate(nights) :
         dirnames = sorted(glob.glob('{}/tiles/{}/*/{}'.format(args.prod, args.group, night)))
-        night_tileids=[]
+        night_tileids[night] = list()
         for dirname in dirnames :
             try :
                 tileid=int(os.path.basename(os.path.dirname(dirname)))
-                night_tileids.append(tileid)
+                night_tileids[night].append(tileid)
             except ValueError as e :
                 log.warning("ignore {}".format(dirname))
         if tileids is not None :
-            night_tileids = np.intersect1d(tileids,night_tileids)
-            if night_tileids.size == 0 :
+            night_tileids[night] = np.intersect1d(tileids,night_tileids[night])
+            if len(night_tileids[night]) == 0 :
+                log.warning(f'No tiles on night {night}; continuing')
                 continue
-        log.info("{} {}".format(night,night_tileids))
+
+        log.info("{} {}".format(night,night_tileids[night]))
 
         func_args = []
-        for tileid in night_tileids :
+        for tileid in night_tileids[night] :
             filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.outdir, groupname=args.group)
             if not args.recompute :
                 if os.path.isfile(filename) :
@@ -169,6 +205,19 @@ def main():
                     summary_rows.append(entry)
             pool.close()
             pool.join()
+
+    # check for missing png files and try again
+    # could be missing due to skipped fits file, or sky cutout server glitch
+    for night, tileids in night_tileids.items():
+        for tileid in tileids:
+            qafitsfile = findfile("tileqa", night=night, tile=tileid,
+                    specprod_dir=args.outdir, groupname=args.group)
+            qapngfile = findfile("tileqapng", night=night, tile=tileid,
+                    specprod_dir=args.outdir, groupname=args.group)
+
+            if os.path.exists(qafitsfile) and not os.path.exists(qapngfile):
+                log.info(f'Trying again on '+os.path.basename(qapngfile))
+                _wrap_make_tile_qa_plot(qafitsfile, args.outdir)
 
     if args.outfile is not None and len(summary_rows)>0 :
         colnames=None
