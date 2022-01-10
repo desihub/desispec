@@ -53,6 +53,7 @@ exptime = head["EXPTIME"]
 log.info("Exposure time = {:.1f} sec".format(exptime))
 threshold_electrons = args.threshold*exptime
 log.info("Threshold in electrons = {:.2f}".format(threshold_electrons))
+log.info("Threshold significance > {:.2f} sigma".format(args.sigma))
 
 if not args.nopsf :
     if args.psf is None :
@@ -199,7 +200,11 @@ t["COLUMN"]=col_x
 t["ELEC_PER_SEC"]=col_elec_per_sec
 t["SIGMA"]=col_sigma
 
-print(t)
+if len(t) > 0:
+    log.info(f'Bad columns in {os.path.basename(args.infile)}:')
+    print(t)
+else:
+    log.info(f'No bad columns identified in {os.path.basename(args.infile)}')
 
 if args.badcol_table is not None :
     odir=os.path.dirname(os.path.abspath(args.badcol_table))
@@ -210,9 +215,6 @@ if args.badcol_table is not None :
     t.write(tmpfile, overwrite=True)
     os.rename(tmpfile, args.badcol_table)
     log.info("wrote {}".format(args.badcol_table))
-
-
-
 
 
 if args.plot :
