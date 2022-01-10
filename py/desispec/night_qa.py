@@ -673,7 +673,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
         for fn in fns:
             fig, ax = plt.subplots()
             img = Image.open(fn)
-            ax.imshow(img, origin='lower')
+            ax.imshow(img, origin='upper')
             ax.axis("off")
             pdf.savefig(fig, bbox_inches="tight", dpi=300)
             plt.close()
