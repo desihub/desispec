@@ -201,8 +201,6 @@ def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
     Returns:
 
     """
-    print("Window: {}".format(window))
-
     ### 1st estimation
     array = data.copy()
     fitted = signal.savgol_filter(array, window, polyorder)
@@ -344,6 +342,20 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
 
 @numba.jit
 def numba_mean(image_flux,image_ivar,x,hw=3) :
+    """
+    Returns mean of pixels vs. row about x+-hw
+
+    Args:
+        image_flux: 2D array of CCD image pixels
+        image_ivar: 2D array of inverse variance of image_flux
+        x: 1D array of x location per row, len(x) = image_flux.shape[0]
+
+    Options:
+        hw (int): halfwidth over which to average
+
+    Returns (flux, ivar) 1D arrays with weighted mean and inverse variance of
+    pixels[i, int(x-hw):int(x+hw)+1] per row i
+    """
     n0=image_flux.shape[0]
     flux=np.zeros(n0)
     ivar=np.zeros(n0)
@@ -358,25 +370,33 @@ def numba_mean(image_flux,image_ivar,x,hw=3) :
 
 def compute_background_between_fiber_blocks(image,xyset) :
     """
-    Args :
+    Computes CCD background between blocks of fibers
 
-     image: desispec.image.Image object
-     xyset: desispec.xytraceset.XYTraceSet object
+    Args:
+       image: desispec.image.Image object
+       xyset: desispec.xytraceset.XYTraceSet object
 
-    Returns :
-
+    Returns (model, qadict):
        model: np.array of same shape as image.pix
+       qadict: dictionary of keywords for QA with min/max per amplifier
+
+    Notes:
+        Has hardcoded number of blocks and fibers and typical spacing between
+        blocked tuned to DESI spectrographs.
     """
 
     log = get_logger()
+    if 'CAMERA' in image.meta:
+        camera = image.meta['CAMERA']
+    else:
+        camera = 'unknown'
 
-    log.info("estimating a CCD background between the blocks of fiber traces")
+    log.info(f"Camera {camera} estimating CCD background between blocks of fiber traces")
 
     ivar=image.ivar*(image.mask==0)
     bkg=np.zeros_like(image.pix)
 
     t0=time.time()
-
 
     # first estimate contribution of light from bright fibers
 
@@ -397,7 +417,7 @@ def compute_background_between_fiber_blocks(image,xyset) :
     kern *= 0.05/np.sum(kern) # approx normalization
     cimg=fftconvolve(image.pix[yb:ye]*(ivar[yb:ye]>0),kern,mode="same")
     t1=time.time()
-    log.info("convolution to estimate contribution of light from bright fibers took {:.2f} sec".format(t1-t0))
+    log.info(f"Camera {camera} convolution to estimate contribution of light from bright fibers took {t1-t0:.2f} sec")
 
     # measure scattered light between blocks
     nblock=21
@@ -417,12 +437,13 @@ def compute_background_between_fiber_blocks(image,xyset) :
     masked_interblocks=np.where(scattered_light>0.5)[0]
 
     if masked_interblocks.size>0 :
-        log.warning("masking inter blocks {} because of scattered light from bright fibers".format(masked_interblocks))
+        log.warning(f"Camera {camera} masking inter blocks {masked_interblocks} because of scattered light from bright fibers")
+
+    qadict = dict()
 
     for amp in get_amp_ids(image.meta) :
         sec=parse_sec_keyword(image.meta['CCDSEC'+amp])
-        log.info(f"fitting bkg for Amp {amp}, {sec}")
-
+        log.info(f"Camera {camera} amp {amp} fitting bkg for {sec}")
 
         # compute value between blocks of fibers
         nblock=21
@@ -475,6 +496,13 @@ def compute_background_between_fiber_blocks(image,xyset) :
         xinterblock=np.array(xinterblock)
         vinterblock=np.array(vinterblock)
 
+        #- BBKG = Bundle Background
+        vmin, vmax = np.min(vinterblock), np.max(vinterblock)
+        qadict['BBKGMIN'+amp] = vmin
+        qadict['BBKGMAX'+amp] = vmax
+
+        log.info(f'Camera {camera} amp {amp} interbundle CCD bkg min/max {vmin:.3f} to {vmax:.3f}')
+
         if np.any(vinterblock!=0) :
 
             # set average value to masked interblocks
@@ -486,8 +514,10 @@ def compute_background_between_fiber_blocks(image,xyset) :
             for k,y in enumerate(image_yy) :
                 bkg[y,sec[1]]=np.interp(xx,xinterblock[:,k],vinterblock[:,k])
 
-    log.info("computing time = {:.3f}".format(time.time()-t0))
-    return bkg
+    dt = time.time() - t0
+    log.info(f"Camera {camera} computing time = {dt:.3f} sec")
+
+    return bkg, qadict
 
 def get_calibration_image(cfinder, keyword, entry, header=None):
     """Reads a calibration file
@@ -1164,7 +1194,11 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 psf_filename = cfinder.findfile("PSF")
                 depend.setdep(header, 'SCATTERED_LIGHT_PSF', shorten_filename(psf_filename))
             xyset = read_xytraceset(psf_filename)
-        img.pix -= compute_background_between_fiber_blocks(img,xyset)
+        ccdbkg, bkgqa = compute_background_between_fiber_blocks(img,xyset)
+        img.pix -= ccdbkg
+
+        #- Adds BBKG (Bundle Background) MIN/MAX per amp for QA/debugging
+        addkeys(img.meta, bkgqa)
 
     #- Extend header with primary header keywords too
     addkeys(img.meta, primary_header)
