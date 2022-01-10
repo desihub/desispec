@@ -16,7 +16,7 @@ import desispec.io
 import desispec.io.util
 from . import iotime
 from desispec.util import header2night
-import desispec.preproc
+from desispec.preproc import preproc
 from desiutil.log import get_logger
 from desispec.calibfinder import parse_date_obs, CalibFinder
 import desispec.maskbits as maskbits
@@ -184,7 +184,7 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
 
     #- Add image header keywords inherited from raw data to fibermap too
     # BAW: This is unnecssary, because a fibermap file constructed by
-    # assemble_fibermap() will already have the raw data keywords. 
+    # assemble_fibermap() will already have the raw data keywords.
     # addkeys(fibermap.meta, img.meta)
 
     #- Augment the image header with some tile info from fibermap if needed
