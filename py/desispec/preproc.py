@@ -12,6 +12,7 @@ import time
 
 from scipy import signal
 from scipy.ndimage.filters import median_filter
+from scipy.signal import fftconvolve
 
 from desispec.image import Image
 from desispec import cosmics
@@ -376,7 +377,48 @@ def compute_background_between_fiber_blocks(image,xyset) :
 
     t0=time.time()
 
-    # proceed per amplifier
+
+    # first estimate contribution of light from bright fibers
+
+    # inspect only central part of image
+    ny=image.pix.shape[0]
+    image_yy=np.arange(ny)
+    yb=ny//2-300
+    ye=ny//2+300
+
+    # we are convolving the image by a lorentzian profile along the cross-dispersion profile
+    # as a proxy for the scattered light from bright stars
+    # parameters (width of kernel, amplitude, tuned on b7 exposure 117268)
+    hw=30
+    nw=2*hw+1
+    kern=np.zeros((3,nw))
+    x=np.arange(-hw,hw+1)
+    kern[1]=1/(1+x**2)
+    kern *= 0.05/np.sum(kern) # approx normalization
+    cimg=fftconvolve(image.pix[yb:ye]*(ivar[yb:ye]>0),kern,mode="same")
+    t1=time.time()
+    log.info("convolution to estimate contribution of light from bright fibers took {:.2f} sec".format(t1-t0))
+
+    # measure scattered light between blocks
+    nblock=21
+    scattered_light=np.zeros(nblock)
+    for block in range(nblock) :
+        # x coordinate of band between fiber blocks
+        if block==0 : image_xb =  xyset.x_vs_y(0,image_yy)-7.5
+        elif block==20 : image_xb =  xyset.x_vs_y(499,image_yy)+7.5
+        else : image_xb = (xyset.x_vs_y(block*25-1,image_yy)+xyset.x_vs_y(block*25,image_yy))/2.
+        scattered_light[block] = np.median(numba_mean(cimg,ivar[yb:ye],image_xb[yb:ye]))
+
+    # remove median across interblocks
+    scattered_light -= np.median(scattered_light)
+
+    # anything that is higher than 0.5 electron is masked
+    # and will be set to the average value of the other blocks (average per amp)
+    masked_interblocks=np.where(scattered_light>0.5)[0]
+
+    if masked_interblocks.size>0 :
+        log.warning("masking inter blocks {} because of scattered light from bright fibers".format(masked_interblocks))
+
     for amp in get_amp_ids(image.meta) :
         sec=parse_sec_keyword(image.meta['CCDSEC'+amp])
         log.info(f"fitting bkg for Amp {amp}, {sec}")
@@ -403,7 +445,10 @@ def compute_background_between_fiber_blocks(image,xyset) :
             inamp = (image_xb-hw>=sec[1].start)&(image_xb+hw<sec[1].stop)
             if np.all(~inamp) : continue
 
-            log.info(f"amp {amp} interblock {block}")
+            if block in masked_interblocks :
+                xinterblock.append(image_xb)
+                vinterblock.append(np.zeros(image_xb.shape))
+                continue
 
             # extract
             vb,vb_ivar = numba_mean(image.pix[sec[0]],ivar[sec[0]],image_xb)
@@ -414,7 +459,7 @@ def compute_background_between_fiber_blocks(image,xyset) :
             elif block==20 : skyline_y =  xyset.y_vs_wave(499,skyline_wave)
             else : skyline_y = (xyset.y_vs_wave(block*25-1,skyline_wave)+xyset.y_vs_wave(block*25,skyline_wave))/2.
 
-            log.info(f"interblock {block} y({skyline_wave})={skyline_y}")
+            #log.info(f"interblock {block} y({skyline_wave})={skyline_y}")
             inamp &= np.abs(image_yy-skyline_y)>5.
 
             # keep only in amp values
@@ -430,10 +475,16 @@ def compute_background_between_fiber_blocks(image,xyset) :
         xinterblock=np.array(xinterblock)
         vinterblock=np.array(vinterblock)
 
-        # interpolate along x
-        xx=np.arange(sec[1].start,sec[1].stop)
-        for k,y in enumerate(image_yy) :
-            bkg[y,sec[1]]=np.interp(xx,xinterblock[:,k],vinterblock[:,k])
+        if np.any(vinterblock!=0) :
+
+            # set average value to masked interblocks
+            if np.any(vinterblock==0) :
+                vinterblock[vinterblock==0] = np.median(vinterblock[vinterblock>0])
+
+            # interpolate along x
+            xx=np.arange(sec[1].start,sec[1].stop)
+            for k,y in enumerate(image_yy) :
+                bkg[y,sec[1]]=np.interp(xx,xinterblock[:,k],vinterblock[:,k])
 
     log.info("computing time = {:.3f}".format(time.time()-t0))
     return bkg
