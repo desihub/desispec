@@ -5,7 +5,9 @@ desispec Change Log
 0.48.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Fix fitsverify errors when creating preproc files (PR `#1582`_).
+
+.. _`#1582`: https://github.com/desihub/desispec/pull/1582
 
 0.48.1 (2021-12-21)
 -------------------

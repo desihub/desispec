@@ -1201,7 +1201,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         addkeys(img.meta, bkgqa)
 
     #- Extend header with primary header keywords too
-    addkeys(img.meta, primary_header)
+    try:
+        img.meta.extend(primary_header, strip=True, unique=True)
+    except AttributeError:
+        addkeys(img.meta, primary_header)
 
     return img
 
