@@ -34,7 +34,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products")
     parser.add_argument("-p", "--prod", type = str, default = None, required = False,
-                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
+                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-n","--night", type = int, default = None, required = True,
                         help = "night to process. ex: 20211128")
     parser.add_argument("-g","--group", type = str, default = "cumulative", required = False,
