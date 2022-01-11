@@ -5,7 +5,7 @@ desispec.sky
 Utility functions to compute a sky model and subtract it.
 """
 
-
+import os
 import numpy as np
 from collections import OrderedDict
 
@@ -22,10 +22,14 @@ import sys
 from desispec.fiberbitmasking import get_fiberbitmasked_frame_arrays, get_fiberbitmasked_frame
 import scipy.ndimage
 from desispec.maskbits import specmask
+from desispec.preproc import get_amp_ids,parse_sec_keyword
+from desispec.io import findfile,read_xytraceset
+from desispec.calibfinder import CalibFinder
+from desispec.preproc import get_amp_ids
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,\
                 adjust_wavelength=False,adjust_lsf=False,\
-                only_use_skyfibers_for_adjustments=True,pcacorr=None) :
+                only_use_skyfibers_for_adjustments=True,pcacorr=None,fit_offsets=False,fiberflat=None) :
     """Compute a sky model.
 
     Input flux are expected to be flatfielded!
@@ -50,6 +54,8 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments: interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
+        fit_offsets : fit offsets for regions defined in calib
+        fiberflat : desispec.FiberFlat object used for the fit of offsets
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -57,13 +63,15 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
                                        model_ivar=model_ivar,add_variance=add_variance,\
                                        adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
-                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr)
+                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,fit_offsets=fit_offsets,fiberflat=fiberflat)
     else :
 
         if adjust_wavelength :
             raise RuntimeError("combination of wavelength calibration adjustment and angular variations not yet implemented")
         if adjust_lsf :
             raise RuntimeError("combination of lsf calibration adjustment and angular variations not yet implemented")
+        if fit_offsets  :
+            raise RuntimeError("combination of fit_offsets and angular variations not yet implemented")
 
         if chromatic_variation_deg < 0 :
             skymodel = compute_non_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg)
@@ -156,7 +164,7 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
 
 
 def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,\
-                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None) :
+                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None, fit_offsets=False,fiberflat=None) :
 
     """Compute a sky model.
 
@@ -182,6 +190,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         adjust_lsf : adjust the LSF width of the sky model on sky lines to improve the sky subtraction
         only_use_skyfibers_for_adjustments : interpolate adjustments using sky fibers only
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
+        fit_offsets : fit offsets for regions defined in calib
+        fiberflat : desispec.FiberFlat object used for the fit of offsets
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -629,6 +639,7 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
                                                  pcacorr.dlsf_mean,pcacorr.dlsf_eigenvectors,label="LSF")
                 cskyflux  += correction*dskydlsf
 
+
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
         modified_cskyivar = _model_variance(frame,cskyflux,cskyivar,skyfibers)
@@ -655,6 +666,107 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
 
+    if fit_offsets :
+
+        cfinder = CalibFinder([frame.meta])
+        amps    = get_amp_ids(frame.meta)
+
+        sectors=[]
+        for amp in amps :
+            key="OFFCOLS"+amp
+            sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
+            yb=sec[0].start
+            ye=sec[0].stop
+
+            if cfinder.haskey(key) :
+                val=cfinder.value(key)
+                for tmp1 in val.split(",") :
+                    tmp2=tmp1.split(":")
+                    if len(tmp2)!=2 :
+                        mess="cannot decode {}={}".format(key,val)
+                        log.error(mess)
+                        raise KeyError(mess)
+                    xb=max(sec[1].start,int(tmp2[0]))
+                    xe=min(sec[1].stop,int(tmp2[1]))
+                    sector = [yb,ye,xb,xe]
+                    sectors.append( sector )
+                    log.info("Adding CCD sector in amp {} with offset: {}".format(amp,sector))
+
+        if len(sectors)>0 :
+            # fit as many parameters as twice the number of sectors
+            # (one offset for fibers/wavelength in the sector and one for the others to compensate)
+
+            # need coordinates of fiber traces
+            psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
+            if not os.path.isfile(psf_filename) :
+                log.error("No PSF file "+psf_filename)
+                raise IOError("No PSF file "+psf_filename)
+            log.info("Using PSF {}".format(psf_filename))
+            tset = read_xytraceset(psf_filename)
+            tmp_fibers = np.arange(frame.nspec)
+            tmp_x = np.zeros(frame.flux.shape,dtype=float)
+            tmp_y = np.zeros(frame.flux.shape,dtype=float)
+            for fiber in tmp_fibers :
+                tmp_x[fiber] = tset.x_vs_wave(fiber=fiber,wavelength=frame.wave)
+                tmp_y[fiber] = tset.y_vs_wave(fiber=fiber,wavelength=frame.wave)
+
+            if fiberflat is not None :
+                flat=fiberflat.fiberflat
+                log.info("Use fiberflat when fitting for offsets")
+            else :
+                flat=np.ones(frame.flux.shape)
+
+            bkg = np.zeros(cskyflux.shape)
+            tmp_skyflux = cskyflux.copy()
+
+            # we fit one sector at a time
+
+            for sector in sectors :
+
+                # mask for sky fibers only
+                mask_in = (tmp_y[skyfibers]>=sector[0])&(tmp_y[skyfibers]<sector[1])&(tmp_x[skyfibers]>=sector[2])&(tmp_x[skyfibers]<sector[3])
+                mask_out = (tmp_y[skyfibers]>=sector[0])&(tmp_y[skyfibers]<sector[1])&(~mask_in) # same y range
+                sw = np.sum(current_ivar[mask_in])
+                if sw>0 :
+                    offset_in = np.sum(current_ivar[mask_in]*(frame.flux[skyfibers][mask_in]-tmp_skyflux[skyfibers][mask_in])*flat[skyfibers][mask_in])/sw
+                else :
+                    offset_in = 0.
+
+                sw = np.sum(current_ivar[mask_out])
+                if sw>0 :
+                    offset_out = np.sum(current_ivar[mask_out]*(frame.flux[skyfibers][mask_out]-tmp_skyflux[skyfibers][mask_out])*flat[skyfibers][mask_out])/sw
+                else :
+                    offset_out = 0.
+
+                log.info("sector {} offset in = {:.2f} out = {:.2f}".format(sector,offset_in,offset_out))
+
+                # mask for all fibers now
+                mask_in = (tmp_y>=sector[0])&(tmp_y<sector[1])&(tmp_x>=sector[2])&(tmp_x<sector[3])
+                mask_out = (tmp_y>=sector[0])&(tmp_y<sector[1])&(~mask_in) # same y range
+                # save diff of terms in bkg in mask
+                bkg[mask_in] += (offset_in-offset_out)
+                # apply two terms to tmp sky model while fitting the other terms
+                tmp_skyflux[mask_in]  += offset_in
+                tmp_skyflux[mask_out] += offset_out
+
+            bkg /= flat # flatfield the background
+
+            # now we are going to temporarily remove the bkg in the frame.flux data, refit the sky, and then finally add back the bkg to the sky model
+            frame.flux -= bkg
+
+            # refit sky (without fit_offsets!) (costly but the most reliable way to account for the fitted background)
+            skymodel =  compute_uniform_sky(frame,nsig_clipping=nsig_clipping,max_iterations=max_iterations,
+                                            model_ivar=model_ivar,add_variance=add_variance,
+                                            adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,
+                                            only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,
+                                            fit_offsets=False,fiberflat=None)
+
+
+            # add back the background and return
+            frame.flux += bkg # to the frame flux in case we use it afterwards
+            skymodel.flux += bkg # to the sky model
+
+            return skymodel
 
     mask = (modified_cskyivar==0).astype(np.uint32)
 
