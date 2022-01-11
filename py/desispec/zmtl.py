@@ -701,7 +701,7 @@ def write_zmtl(zmtl, outputname,
     tmark('    Creating output file...')
 
     # ADM create the necessary output directory, if it doesn't exist.
-    outputdir = os.path.dirname(outputname)
+    outputdir = os.path.dirname(os.path.abspath(outputname))
     os.makedirs(outputdir, exist_ok=True)
 
     # ADM create the header and add the standard DESI dependencies.
