@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.49.0 (unreleased)
+0.49.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.49.0 (2022-01-10)
 -------------------
 
 Used for the f5 test run.
@@ -30,6 +35,7 @@ Used for the f5 test run.
   * don't flag a tile as archived if archiving failed (PR `#1572`_).
   * Tile QA plotting updates (PR `#1577`_, )
   * Fix fitsverify errors when creating preproc files (PR `#1582`_).
+  * Added ``assemble_fibermap --tilepix`` option (PR `#1583`_)
 
 .. _`#1549`: https://github.com/desihub/desispec/pull/1549
 .. _`#1551`: https://github.com/desihub/desispec/pull/1551
@@ -47,6 +53,7 @@ Used for the f5 test run.
 .. _`#1579`: https://github.com/desihub/desispec/pull/1579
 .. _`#1581`: https://github.com/desihub/desispec/pull/1581
 .. _`#1582`: https://github.com/desihub/desispec/pull/1582
+.. _`#1583`: https://github.com/desihub/desispec/pull/1583
 
 0.48.1 (2021-12-21)
 -------------------
