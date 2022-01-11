@@ -20,6 +20,7 @@ from desitarget.targets import main_cmx_or_sv
 from desitarget.targets import zcut as lya_zcut
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
+from desispec.io import findfile
 # AR matplotlib
 import matplotlib
 from matplotlib.backends.backend_pdf import PdfPages
@@ -447,11 +448,12 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
                 marker, alpha, lw, label = "-", 0.3, 0.8, None
             ax.plot(petals, badcols[nite][camera], marker, lw=lw, alpha=alpha, color=color, label=label)
     ax.legend(loc=2)
-    ax.text(
-        0.98, 0.95, "Thin: {} previous nights ({}-{})".format(
-            n_previous_nights, nights.min(), nights.max(),
-        ), color="k", fontsize=10, ha="right", transform=ax.transAxes,
-    )
+    if len(nights) > 0:
+        ax.text(
+            0.98, 0.95, "Thin: {} previous nights ({}-{})".format(
+                n_previous_nights, nights.min(), nights.max(),
+            ), color="k", fontsize=10, ha="right", transform=ax.transAxes,
+        )
     ax.set_title("{}".format(night))
     ax.set_xlabel("PETAL_LOC")
     ax.set_xlim(petals[0] - 1, petals[-1] + 1)
@@ -634,7 +636,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                 plt.close()
 
 
-def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
+def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
     """
     For a given night, create a pdf from the tile-qa*png files, sorted by increasing EXPID.
 
@@ -644,6 +646,9 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         expids: expids of the tiles to display (list or np.array)
         tileids: tiles to display (list or np.array)
+
+    Options:
+        group (str): tile group "cumulative" or "pernight"
     """
     # AR exps, to sort by increasing EXPID for that night
     expids, tileids = np.array(expids), np.array(tileids)
@@ -658,13 +663,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
     #
     fns = []
     for tileid in tileids:
-        fn = os.path.join(
-            prod,
-            "tiles",
-            "cumulative",
-            "{}".format(tileid),
-            "{}".format(night),
-            "tile-qa-{}-thru{}.png".format(tileid, night))
+        fn = findfile('tileqapng', night=night, tile=tileid, groupname=group, specprod_dir=prod)
         if os.path.isfile(fn):
             fns.append(fn)
         else:
@@ -674,13 +673,13 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids):
         for fn in fns:
             fig, ax = plt.subplots()
             img = Image.open(fn)
-            ax.imshow(img)
+            ax.imshow(img, origin='upper')
             ax.axis("off")
             pdf.savefig(fig, bbox_inches="tight", dpi=300)
             plt.close()
 
 
-def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9):
+def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group='cumulative'):
     """
     For a given night, create a Z vs. FIBER plot for all SKY fibers.
 
@@ -691,6 +690,9 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9):
         tileids: list of tileids to consider (list or numpy array)
         dchi2_threshold (optional, defaults to 9): DELTACHI2 value to split the sample (float)
 
+    Options:
+        group (str): tile group "cumulative" or "pernight"
+
     Notes:
         Work from the redrock*fits files.
     """
@@ -700,18 +702,9 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9):
     fibers, zs, dchi2s = [], [], []
     nfn = 0
     for tileid in tileids:
-        fns = sorted(
-            glob(
-                os.path.join(
-                    prod,
-                    "tiles",
-                    "cumulative",
-                    "{}".format(tileid),
-                    "{}".format(night),
-                    "redrock-?-{}-thru{}.fits".format(tileid, night),
-                )
-            )
-        )
+        tmp = findfile('redrock', night=night, tile=tileid, groupname=group, spectrograph=0, specprod_dir=prod)
+        tiledir = os.path.dirname(tmp)
+        fns = sorted(glob(os.path.join(tiledir, f'redrock-?-{tileid}-*{night}.fits')))
         nfn += len(fns)
         for fn in fns:
             fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
@@ -747,7 +740,7 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9):
     plt.close()
 
 
-def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25):
+def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25, group='cumulative'):
     """
     For a given night, create a per-petal, per-tracer n(z) pdf file.
 
@@ -757,7 +750,10 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
         prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
         tileids: list of tileids to consider (list or numpy array)
         surveys: list of the surveys for each tileid of tileids (list or numpy array)
-        dchi2_threshold (optional, defaults to 9): DELTACHI2 value to split the sample (float)
+
+    Options:
+        dchi2_threshold (optional, defaults to 25): DELTACHI2 value to split the sample (float)
+        group (str): tile group "cumulative" or "pernight"
 
     Notes:
         Only displays:
@@ -789,14 +785,7 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
     ntiles = {"bright" : 0, "dark" : 0}
     for tileid, survey in zip(tileids, surveys):
         # AR bright or dark?
-        fn = os.path.join(
-                    prod,
-                    "tiles",
-                    "cumulative",
-                    "{}".format(tileid),
-                    "{}".format(night),
-                    "tile-qa-{}-thru{}.fits".format(tileid, night),
-        )
+        fn = findfile('tileqa', night=night, tile=tileid, groupname=group, specprod_dir=prod)
         # AR if no tile-qa*fits, we skip the tileid
         if not os.path.isfile(fn):
             log.warning("no {} file, proceeding to next tile".format(fn))
@@ -812,14 +801,7 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
         # AR reading zmtl files
         istileid = False
         for petal in petals:
-            fn = os.path.join(
-                    prod,
-                    "tiles",
-                    "cumulative",
-                    "{}".format(tileid),
-                    "{}".format(night),
-                    "zmtl-{}-{}-thru{}.fits".format(petal, tileid, night),
-                )
+            fn = findfile('zmtl', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
             if not os.path.isfile(fn):
                 log.warning("{} : no file".format(fn))
             else:

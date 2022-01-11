@@ -391,6 +391,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
         fiberqa_table.meta["PMINEXPF"]=np.min(petal_tsnr2_frac[good_petals])
         fiberqa_table.meta["PMAXEXPF"]=np.max(petal_tsnr2_frac[good_petals])
         fiberqa_table.meta['EFFTIME']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
+    else:
+        fiberqa_table.meta["PMINEXPF"]=0.0
+        fiberqa_table.meta["PMAXEXPF"]=0.0
+        fiberqa_table.meta['EFFTIME']=0.0
 
     if frame_header is not None :
         # copy some keys from the frame header

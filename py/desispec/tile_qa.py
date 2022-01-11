@@ -28,7 +28,7 @@ def _rm_meta_keywords(table) :
             if k in table.meta : table.meta.pop(k) # otherwise WARNING: MergeConflictWarning
     return table
 
-def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
+def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cumulative'):
     """
     Computes the exposure_qa
     Args:
@@ -37,6 +37,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
        specprod_dir: str, specify the production directory.
                      default is $DESI_SPECTRO_REDUX/$SPECPROD
        exposure_qa_dir: str, optional, directory where the exposure qa are saved
+       group: str, "cumulative" or "pernight" tile group
     returns two tables (astropy.table.Table), fiberqa (with one row per target and at least a TARGETID column)
             and petalqa (with one row per petal and at least a PETAL_LOC column)
     """
@@ -44,10 +45,10 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
     log=get_logger()
 
     # get list of exposures used for the tile
-    tiledir=f"{specprod_dir}/tiles/cumulative/{tileid:d}/{night}"
-    spectra_files=sorted(glob.glob(f"{tiledir}/spectra-*-{tileid:d}-thru{night}.fits"))
+    tiledir=f"{specprod_dir}/tiles/{group}/{tileid:d}/{night}"
+    spectra_files=sorted(glob.glob(f"{tiledir}/spectra-*-{tileid:d}-*{night}.fits"))
     if len(spectra_files)==0 :
-        log.error("no spectra files in "+tileid)
+        log.error(f"no spectra files in {tiledir}")
         return None, None
 
     fmap=read_fibermap(spectra_files[0])
@@ -98,7 +99,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None):
         exposure_petalqa_tables = exposure_petalqa_tables[0]
 
     # collect fibermaps and scores of all coadds
-    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-thru{night}.fits"))
+    coadd_files=sorted(glob.glob(f"{tiledir}/coadd-*-{tileid:d}-*{night}.fits"))
 
     fibermaps=[]
     scores=[]
