@@ -124,49 +124,51 @@ def get_surveys_night_expids(
     return expids, tileids, surveys
 
 
-def get_dark_night_expid(night, datadir = None):
+def get_dark_night_expid(night, prod):
     """
     Returns the EXPID of the 300s DARK exposure for a given night.
 
     Args:
         night: night (int)
-        datadir (optional, defaults to $DESI_SPECTRO_DATA): full path where the {NIGHT}/desi-{EXPID}.fits.fz files are (str)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
 
     Returns:
         expid: EXPID (int)
 
     Notes:
         If nothing found, returns None.
+        20220110 : new method, relying on processing_tables
     """
-    if datadir is None:
-        datadir = os.getenv("DESI_SPECTRO_DATA")
     #
-    fns = sorted(
-        glob(
-            os.path.join(
-                datadir,
-                "{}".format(night),
-                "????????",
-                "desi-????????.fits.fz",
-            )
-        )
-    )
     expid = None
-    for i in range(len(fns)):
-        hdr = fits.getheader(fns[i], "SPEC")
-        if (hdr["OBSTYPE"] == "DARK") & (hdr["REQTIME"] == 300):
-            expid = hdr["EXPID"]
-            break
-    if expid is None:
-        log.warning(
-            "no EXPID found as the 300s DARK for NIGHT={}".format(night)
-        )
+    proctable_fn = os.path.join(
+        prod,
+        "processing_tables",
+        "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
+    )
+    log.info("proctable_fn = {}".format(proctable_fn))
+    if not os.path.isfile(proctable_fn):
+        log.warning("no {} found; returning None".format(proctable_fn))
     else:
-        log.info(
-            "found EXPID={} as the 300s DARK for NIGHT={}".format(
-                expid, night,
+        d = Table.read(proctable_fn)
+        sel = (d["OBSTYPE"] == "dark") & (d["JOBDESC"] == "ccdcalib")
+        if sel.sum() == 0:
+            log.warning(
+                "found zero exposures with OBSTYPE=dark and JOBDESC=ccdcalib in proctable_fn; returning None",
             )
-        )
+        elif sel.sum() > 1:
+            log.warning(
+                "found {} > 1 exposures with OBSTYPE=dark and JOBDESC=ccdcalib in proctable_fn; returning None".format(
+                    sel.sum(),
+                )
+            )
+        else:
+            expid = int(str(d["EXPID"][sel][0]).strip("|"))
+            log.info(
+                "found EXPID={} as the 300s DARK for NIGHT={}".format(
+                    expid, night,
+                )
+            )
     return expid
 
 
