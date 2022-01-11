@@ -76,16 +76,17 @@ def main(args) :
     # add telemetry humidity for the dome flats for the record
     # try to read the night exposure table to get the list of flats
     first_expid = calib_fiberflat.header["EXPID"]
-    calib_humidity=[ get_humidity(night,first_expid,camera) ]
+    calib_night = calib_fiberflat.header["NIGHT"]
+    calib_humidity=[ get_humidity(calib_night,first_expid,camera) ]
     fiberflat_expid=[ first_expid]
     for expid in range(first_expid+1,first_expid+40) :
-        filename=findfile("raw",night,expid)
+        filename=findfile("raw",calib_night,expid)
         if not os.path.isfile(filename): continue
         head=fitsio.read_header(filename,1)
         if not "OBSTYPE" in head.keys() or head["OBSTYPE"]!="FLAT" :
             break
         fiberflat_expid.append(expid)
-        calib_humidity.append(get_humidity(night,expid,camera))
+        calib_humidity.append(get_humidity(calib_night,expid,camera))
     log.debug("calib expids={}".format(fiberflat_expid))
     log.debug("calib humidities={}".format(calib_humidity))
     calib_humidity=np.mean(calib_humidity)

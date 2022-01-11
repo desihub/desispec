@@ -13,6 +13,8 @@ parser.add_argument("-e", "--expid", type=int, required=True,
         help="spectroscopic exposure ID")
 parser.add_argument("-o", "--outfile", type=str, required=True,
         help="output filename")
+parser.add_argument("-t", "--tilepix", type=str, required=False,
+        help="output tilepix json filename")
 parser.add_argument("-b","--badamps", type=str,
         help="comma separated list of {camera}{petal}{amp}"+\
              ", i.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'")
@@ -29,8 +31,9 @@ parser.add_argument("--no-svn-override", action="store_true",
 
 args = parser.parse_args()
 
-import os, sys
+import os, sys, json
 from desispec.io.fibermap import assemble_fibermap
+from desispec.pixgroup import fibermap2tilepix
 from desiutil.log import get_logger
 
 log = get_logger()
@@ -51,6 +54,15 @@ tmpfile = args.outfile+'.tmp'
 fibermap.writeto(tmpfile, output_verify='fix+warn', overwrite=args.overwrite, checksum=True)
 os.rename(tmpfile, args.outfile)
 log.info(f'Wrote {args.outfile}')
+
+if args.tilepix:
+    tileid = fibermap['FIBERMAP'].header['TILEID']
+    tilepix = {str(tileid): fibermap2tilepix(fibermap['FIBERMAP'].data)}
+    tmpfile = args.tilepix+'.tmp'
+    with open(tmpfile, 'w') as fp:
+        json.dump(tilepix, fp)
+    os.rename(tmpfile, args.tilepix)
+    log.info(f'Wrote {args.tilepix}')
 
 if args.debug:
     import IPython; IPython.embed()

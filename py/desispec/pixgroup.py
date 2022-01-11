@@ -13,13 +13,37 @@ from astropy.io import fits
 from astropy.table import Table
 import healpy as hp
 
-import desimodel.footprint
+from desimodel.footprint import radec2pix
 from desiutil.log import get_logger
 import desiutil.depend
 
 from . import io
 from .maskbits import specmask
 from .tsnr import calc_tsnr2_cframe
+
+def fibermap2tilepix(fibermap, nside=64):
+    """
+    Maps fibermap to which healpix are covered by which petals
+
+    Args:
+        fibermap: table with columns TARGET_RA, TARGET_DEC, PETAL_LOC
+
+    Options:
+        nside (int): nested healpix nside (must be power of 2)
+
+    Returns dict petalpix[petal] = list(healpix covered by that petal)
+    """
+    tilepix = dict()
+    ra = fibermap['TARGET_RA']
+    dec = fibermap['TARGET_DEC']
+    ok = ~np.isnan(ra) & ~np.isnan(dec)
+    for petal in range(10):
+        ii = (fibermap['PETAL_LOC'] == petal) & ok
+        healpix = np.unique(radec2pix(nside, ra[ii], dec[ii]))
+        tilepix[petal] = [int(p) for p in healpix]
+
+    return tilepix
+
 
 def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
         nside=64, survey=None, faprogram=None, comm=None):
@@ -120,7 +144,7 @@ def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
                 ra, dec = fibermap['TARGET_RA'], fibermap['TARGET_DEC']
                 ok = ~np.isnan(ra) & ~np.isnan(dec)
                 ra, dec = ra[ok], dec[ok]
-                allpix = desimodel.footprint.radec2pix(nside, ra, dec)
+                allpix = radec2pix(nside, ra, dec)
 
                 #- Add rows for final output
                 for pix, ntargets in sorted(Counter(allpix).items()):
@@ -630,7 +654,7 @@ def frames2spectra(frames, pix=None, nside=64):
                 ok = ~np.isnan(ra) & ~np.isnan(dec)
                 ra[~ok] = 0.0
                 dec[~ok] = 0.0
-                allpix = desimodel.footprint.radec2pix(nside, ra, dec)
+                allpix = radec2pix(nside, ra, dec)
                 ii = (allpix == pix) & ok
             else:
                 ii = np.ones(bandframe.flux.shape[0]).astype(bool)

@@ -300,13 +300,16 @@ def main(args=None, comm=None):
             preprocdir = os.path.dirname(tmp)
             fibermap = os.path.join(preprocdir, os.path.basename(fibermap))
 
+            tileid = hdr['TILEID']
+            tilepix = os.path.join(preprocdir, f'tilepix-{tileid}.json')
+
             log.info('Creating fibermap {}'.format(fibermap))
-            cmd = 'assemble_fibermap -n {} -e {} -o {}'.format(
-                    args.night, args.expid, fibermap)
+            cmd = 'assemble_fibermap -n {} -e {} -o {} -t {}'.format(
+                    args.night, args.expid, fibermap, tilepix)
             if args.badamps is not None:
                 cmd += ' --badamps={}'.format(args.badamps)
 
-            runcmd(cmd, inputs=[], outputs=[fibermap])
+            runcmd(cmd, inputs=[], outputs=[fibermap, tilepix])
 
         fibermap_ok = os.path.exists(fibermap)
 
