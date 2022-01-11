@@ -2,10 +2,16 @@
 desispec Change Log
 ===================
 
-0.49.1 (unreleased)
+0.49.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.49.1 (2022-01-10)
+-------------------
+
+* Fix propagation of per-camera keywords into per-camera fibermap
+  (commit #0c7aa720)
 
 0.49.0 (2022-01-10)
 -------------------
