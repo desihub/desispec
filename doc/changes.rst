@@ -2,15 +2,52 @@
 desispec Change Log
 ===================
 
-0.48.2 (unreleased)
+0.49.0 (unreleased)
 -------------------
 
-* Fix fitsverify errors when creating preproc files (PR `#1582`_).
+Use for the f5 test run.
 
+* Major algorithmic updates:
+
+  * Fit CCD residual background between blocks of fiber traces
+    (PR `#1551`_, `#1581`_).
+  * Correction for fiberflat variations with humidity (PR `#1565`_).
+
+* Other algorithmic updates:
+
+  * Updated readnoise estimation when doing overscan per row (PR `#1564`_).
+  * Remove average of overscan cols to overscan rows (PR `#1575`_).
+  * Avoid false positive bad column mask on noisy input data (PR `#1579`_).
+  * Improvements to desi_interpolate_fiber_psf (PR `#1557`_).
+
+* Miscellaneous:
+
+  * run nightlybias on nights without a dark (PR `#1553`_).
+  * nightqa petal n(z) support programs with no tiles (PR `#1549`_, `#1554`_).
+  * Fix GitHub tests fitsio/numpy incompatibility issues (PR `#1566`_).
+  * Bad readnoise PSF failure robustness (PR `#1568`_).
+  * Tile QA plotting updates (PR `#1577`_, )
+  * Fix fitsverify errors when creating preproc files (PR `#1582`_).
+
+.. _`#1549`: https://github.com/desihub/desispec/pull/1549
+.. _`#1551`: https://github.com/desihub/desispec/pull/1551
+.. _`#1553`: https://github.com/desihub/desispec/pull/1553
+.. _`#1554`: https://github.com/desihub/desispec/pull/1554
+.. _`#1557`: https://github.com/desihub/desispec/pull/1557
+.. _`#1564`: https://github.com/desihub/desispec/pull/1564
+.. _`#1565`: https://github.com/desihub/desispec/pull/1565
+.. _`#1566`: https://github.com/desihub/desispec/pull/1566
+.. _`#1568`: https://github.com/desihub/desispec/pull/1568
+.. _`#1575`: https://github.com/desihub/desispec/pull/1575
+.. _`#1577`: https://github.com/desihub/desispec/pull/1577
+.. _`#1579`: https://github.com/desihub/desispec/pull/1579
+.. _`#1581`: https://github.com/desihub/desispec/pull/1581
 .. _`#1582`: https://github.com/desihub/desispec/pull/1582
 
 0.48.1 (2021-12-21)
 -------------------
+
+Used for the f4 test run (albeit pre-tag).
 
 * Fix deprecation warnings for latest numpy (PR `#1525`_).
 * Support astropy 5.x masked columns (PR `#1526`_).
