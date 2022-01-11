@@ -5,7 +5,7 @@ desispec Change Log
 0.49.0 (unreleased)
 -------------------
 
-Use for the f5 test run.
+Used for the f5 test run.
 
 * Major algorithmic updates:
 
@@ -26,6 +26,8 @@ Use for the f5 test run.
   * nightqa petal n(z) support programs with no tiles (PR `#1549`_, `#1554`_).
   * Fix GitHub tests fitsio/numpy incompatibility issues (PR `#1566`_).
   * Bad readnoise PSF failure robustness (PR `#1568`_).
+  * Bad exposure bookkeeping for darks and biases (PR `#1570`_).
+  * don't flag a tile as archived if archiving failed (PR `#1572`_).
   * Tile QA plotting updates (PR `#1577`_, )
   * Fix fitsverify errors when creating preproc files (PR `#1582`_).
 
@@ -38,6 +40,8 @@ Use for the f5 test run.
 .. _`#1565`: https://github.com/desihub/desispec/pull/1565
 .. _`#1566`: https://github.com/desihub/desispec/pull/1566
 .. _`#1568`: https://github.com/desihub/desispec/pull/1568
+.. _`#1570`: https://github.com/desihub/desispec/pull/1570
+.. _`#1572`: https://github.com/desihub/desispec/pull/1572
 .. _`#1575`: https://github.com/desihub/desispec/pull/1575
 .. _`#1577`: https://github.com/desihub/desispec/pull/1577
 .. _`#1579`: https://github.com/desihub/desispec/pull/1579
