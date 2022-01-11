@@ -221,14 +221,14 @@ def main():
         log.info("Inspecting TILE={} NIGHT={} ...".format(tileid,night))
 
         # find qa plot ...
-        qaplot_filename = findfile("tileqapng",night=night,tile=tileid,specprod_dir=args.qa_dir)
+        qaplot_filename = findfile("tileqapng",night=night,tile=tileid,specprod_dir=args.qa_dir,groupname="cumulative")
         if not os.path.isfile(qaplot_filename) :
             log.error("Missing {}, did you run desi_tile_qa?".format(qaplot_filename))
             continue
 
         software_answer = None
         # find qa fits ...
-        qafits_filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.qa_dir)
+        qafits_filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.qa_dir,groupname="cumulative")
         if os.path.isfile(qaplot_filename) :
             qahead = fitsio.read_header(qafits_filename,"FIBERQA")
             if "VALID" in qahead :
