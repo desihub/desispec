@@ -68,6 +68,8 @@ def main():
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
         args.prod = specprod_root(args.prod)
+    else:
+        args.prod = os.path.normpath(args.prod)
     if args.outdir is None :
         args.outdir = os.path.join(args.prod, "nightqa", "{}".format(args.night))
     if args.css is None:
