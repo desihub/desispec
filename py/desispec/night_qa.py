@@ -124,49 +124,51 @@ def get_surveys_night_expids(
     return expids, tileids, surveys
 
 
-def get_dark_night_expid(night, datadir = None):
+def get_dark_night_expid(night, prod):
     """
     Returns the EXPID of the 300s DARK exposure for a given night.
 
     Args:
         night: night (int)
-        datadir (optional, defaults to $DESI_SPECTRO_DATA): full path where the {NIGHT}/desi-{EXPID}.fits.fz files are (str)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
 
     Returns:
         expid: EXPID (int)
 
     Notes:
         If nothing found, returns None.
+        20220110 : new method, relying on processing_tables
     """
-    if datadir is None:
-        datadir = os.getenv("DESI_SPECTRO_DATA")
     #
-    fns = sorted(
-        glob(
-            os.path.join(
-                datadir,
-                "{}".format(night),
-                "????????",
-                "desi-????????.fits.fz",
-            )
-        )
-    )
     expid = None
-    for i in range(len(fns)):
-        hdr = fits.getheader(fns[i], "SPEC")
-        if (hdr["OBSTYPE"] == "DARK") & (hdr["REQTIME"] == 300):
-            expid = hdr["EXPID"]
-            break
-    if expid is None:
-        log.warning(
-            "no EXPID found as the 300s DARK for NIGHT={}".format(night)
-        )
+    proctable_fn = os.path.join(
+        prod,
+        "processing_tables",
+        "processing_table_{}-{}.csv".format(os.path.basename(prod), night),
+    )
+    log.info("proctable_fn = {}".format(proctable_fn))
+    if not os.path.isfile(proctable_fn):
+        log.warning("no {} found; returning None".format(proctable_fn))
     else:
-        log.info(
-            "found EXPID={} as the 300s DARK for NIGHT={}".format(
-                expid, night,
+        d = Table.read(proctable_fn)
+        sel = (d["OBSTYPE"] == "dark") & (d["JOBDESC"] == "ccdcalib")
+        if sel.sum() == 0:
+            log.warning(
+                "found zero exposures with OBSTYPE=dark and JOBDESC=ccdcalib in proctable_fn; returning None",
             )
-        )
+        elif sel.sum() > 1:
+            log.warning(
+                "found {} > 1 exposures with OBSTYPE=dark and JOBDESC=ccdcalib in proctable_fn; returning None".format(
+                    sel.sum(),
+                )
+            )
+        else:
+            expid = int(str(d["EXPID"][sel][0]).strip("|"))
+            log.info(
+                "found EXPID={} as the 300s DARK for NIGHT={}".format(
+                    expid, night,
+                )
+            )
     return expid
 
 
@@ -177,7 +179,7 @@ def get_ctedet_night_expid(night, prod):
 
     Args:
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
 
     Returns:
         expid: EXPID (int)
@@ -320,7 +322,7 @@ def create_dark_pdf(outpdf, night, prod, dark_expid, binning=4):
     Args:
         outpdf: output pdf file (string)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         dark_expid: EXPID of the 300s DARK exposure to display (int)
         binning (optional, defaults to 4): binning of the image (which will be beforehand trimmed) (int)
     """
@@ -398,7 +400,7 @@ def create_badcol_png(outpng, night, prod, n_previous_nights=10):
     Args:
         outpng: output png file (string)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         n_previous_nights (optional, defaults to 10): number of previous nights to plot (int)
     """
     cameras = ["b", "r", "z"]
@@ -471,7 +473,7 @@ def create_ctedet_pdf(outpdf, night, prod, ctedet_expid, nrow=21, xmin=None, xma
     Args:
         outpdf: output pdf file (string)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         ctedet_expid: EXPID for the CTE diagnosis (1s FLAT, or darker science exposure) (int)
         nrow (optional, defaults to 21): number of rows to include in median (int)
         xmin (optional, defaults to None): minimum column to display (int)
@@ -543,7 +545,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
     Args:
         outpdf: output pdf file (string)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         expids: expids to display (list or np.array)
     """
     #
@@ -643,7 +645,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
     Args:
         outpdf: output pdf file (string)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         expids: expids of the tiles to display (list or np.array)
         tileids: tiles to display (list or np.array)
 
@@ -686,7 +688,7 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
     Args:
         outpdf: output pdf file (string)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         tileids: list of tileids to consider (list or numpy array)
         dchi2_threshold (optional, defaults to 9): DELTACHI2 value to split the sample (float)
 
@@ -747,7 +749,7 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
     Args:
         outpdf: output pdf file (string)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         tileids: list of tileids to consider (list or numpy array)
         surveys: list of the surveys for each tileid of tileids (list or numpy array)
 
@@ -1128,7 +1130,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     Args:
         outfns: dictionary with filenames generated by desi_night_qa (output from get_nightqa_outfns)
         night: night (int)
-        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/ (string)
+        prod: full path to prod folder, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc (string)
         css: path to the nightqa.css file
         surveys (optional, defaults to None): considered surveys (string)
         nexp (optional, defaults to None): number of considered exposures (int)

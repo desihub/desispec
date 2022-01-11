@@ -34,7 +34,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(
                 description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products")
     parser.add_argument("-p", "--prod", type = str, default = None, required = False,
-                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
+                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
     parser.add_argument("-n","--night", type = int, default = None, required = True,
                         help = "night to process. ex: 20211128")
     parser.add_argument("-g","--group", type = str, default = "cumulative", required = False,
@@ -68,6 +68,8 @@ def main():
         args.prod = specprod_root()
     elif args.prod.find("/")<0 :
         args.prod = specprod_root(args.prod)
+    else:
+        args.prod = os.path.normpath(args.prod)
     if args.outdir is None :
         args.outdir = os.path.join(args.prod, "nightqa", "{}".format(args.night))
     if args.css is None:
@@ -107,7 +109,7 @@ def main():
         expids, tileids, surveys = get_surveys_night_expids(args.night)
     # AR dark expid
     if np.in1d(["dark", "badcol"], args.steps.split(",")).sum() > 0:
-        dark_expid = get_dark_night_expid(args.night)
+        dark_expid = get_dark_night_expid(args.night, prod)
     # AR CTE detector expid
     if "ctedet" in args.steps.split(","):
         ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
