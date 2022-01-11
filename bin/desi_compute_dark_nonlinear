@@ -104,11 +104,10 @@ else:
     daynight = 'NIGHT'
     nights = args.nights
 
-#- Get table of what exposures were taken on those days
 speclog_file = os.path.join(tempdir, 'speclog.csv')
 if os.path.exists(speclog_file):
     log.info(f'Reading speclog from {speclog_file}')
-    speclog = Table.read(speclog_file, format='ascii')
+    speclog = Table.read(speclog_file, format='ascii',fill_values=None)   #the None is needed to avoid masking
 else:
     log.info(f'Generating speclog for nights {nights}')
     speclog = desispec.io.util.get_speclog(nights)
@@ -144,6 +143,17 @@ if args.last_expid is not None:
         log.critical('No exposures! exiting...')
         sys.exit(1)
 
+colnames = speclog.colnames
+if 'CAMWORD' in colnames and 'BADCAMWORD' in colnames and 'BADAMPS' in colnames:
+    goodcamwords=[desispec.io.util.difference_camwords(s['CAMWORD'],s['BADCAMWORD']) for s in speclog]
+    goodcamlists=[desispec.io.util.decode_camword(camword) for camword in goodcamwords]
+    keep = np.array([(args.camera in goodcam and args.camera not in badamp) for goodcam,badamp in zip(goodcamlists,speclog['BADAMPS'])])
+    keep &= speclog['LASTSTEP']=='all'
+    speclog = speclog[keep]
+    if len(speclog) == 0:
+        log.critical('No exposures! exiting...')
+        sys.exit(1)
+
 #- group EXPTIMEs by integer
 speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
 
@@ -161,8 +171,8 @@ for exptime in np.unique(speclog['EXPTIME_INT']):
 speclog = speclog[keep]
 
 #- Print some summary stats before continuing
-isZero = speclog['OBSTYPE'] == 'ZERO'
-isDark = speclog['OBSTYPE'] == 'DARK'
+isZero = (speclog['OBSTYPE'] == 'ZERO') | (speclog['OBSTYPE'] == 'zero')
+isDark = (speclog['OBSTYPE'] == 'DARK') | (speclog['OBSTYPE'] == 'dark')
 for night in nights:
     ii = speclog[daynight] == night
     nzeros = np.count_nonzero(ii & isZero)

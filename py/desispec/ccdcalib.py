@@ -4,6 +4,7 @@ import datetime
 import subprocess
 
 import astropy.io.fits as pyfits
+from astropy.table import vstack as table_vstack
 from astropy.time import Time
 import numpy as np
 from scipy.signal import savgol_filter
@@ -14,9 +15,9 @@ from desispec.preproc import masked_median
 from desispec.preproc import parse_sec_keyword, get_amp_ids
 from desispec.preproc import subtract_peramp_overscan
 from desispec.calibfinder import CalibFinder, sp2sm
-from desispec.io.util import get_tempfilename, parse_cameras, decode_camword
+from desispec.io.util import get_tempfilename, parse_cameras, decode_camword, difference_camwords
 from desispec.workflow.exptable import get_exposure_table_pathname
-from desispec.workflow.tableio import load_table
+from desispec.workflow.tableio import load_table, load_tables, write_table
 
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies
@@ -337,11 +338,13 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
     log.info(f"done with {camera}")
 
-def _find_zeros(night):
+def _find_zeros(night,cameras,nzeros=25):
     """Find all OBSTYPE=ZERO exposures on a given night
 
     Args:
         night (int): YEARMMDD night to search
+        cameras (str): list of cameras to process
+        nzeros (int): number of zeros desired from valid all-cam observations to not worry about partials
 
     Returns array of expids that are OBSTYPE=ZERO
 
@@ -376,18 +379,52 @@ def _find_zeros(night):
     log.debug('Checking for pre-identified bad ZEROs')
     expfile = get_exposure_table_pathname(night)
     exptable = load_table(expfile, tabletype='exptable')
-    bad = (exptable['OBSTYPE']=='zero') & (exptable['LASTSTEP']!='all')
-
+    select_zeros=exptable['OBSTYPE']=='zero'
+    bad = select_zeros & (exptable['LASTSTEP']!='all')
+    badcam = select_zeros & (exptable['BADCAMWORD']!='')
+    badamp = select_zeros & (exptable['BADAMPS']!='')
+    notallcams = select_zeros & (exptable['CAMWORD']!='a0123456789')
     if np.any(bad):
+        #this discards observations that are bad for all cams
         drop = np.isin(expids, exptable['EXPID'][bad])
         ndrop = np.sum(drop)
         drop_expids = expids[drop]
         log.info(f'Dropping {ndrop}/{len(expids)} bad ZEROs: {drop_expids}')
         expids = expids[~drop]
+        
+    if np.any(badcam|badamp|notallcams):
+        #do the by spectrograph evaluation of bad spectra
+        drop = np.isin(expids, exptable['EXPID'][badcam|badamp|notallcams])
+        ndrop = np.sum(drop)
+        drop_expids = expids[drop]
+        expids = expids[~drop]
+        #need lists here so we can append good observations on some spectrographs
+        expdict={f'{cam}':list(expids) for cam in cameras}
+        if len(expids) >= nzeros:
+            #in this case we can just drop all partially bad exposures as we have enough that are good on all cams
+            log.info(f'Additionally dropped {ndrop} partially bad ZEROs for all cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
+        else:
+            #in this case we want to recover as many as possible
+            log.info(f'additionally dropped {ndrop} bad ZEROs for some cams because of BADCAM/BADAMP/CAMWORD: {drop_expids}')
+            
+            for expid in drop_expids:
+                select_exp=exptable['EXPID']==expid
+                badampstring=exptable['BADAMPS'][select_exp][0]
+                goodcamword=difference_camwords(exptable['CAMWORD'][select_exp][0],exptable['BADCAMWORD'][select_exp][0])
+                goodcamlist=decode_camword(goodcamword)
+                for camera in goodcamlist:
+                    if camera in cameras and camera not in badampstring:
+                        expdict[camera].append(expid)
+    else:
+        expdict={f'{cam}':expids for cam in cameras}
+    
+    for camera,expids in expdict.items():
+        log.info(f'Keeping {len(expids)} calibration ZEROs for camera {camera}')
+        #make sure everything is in np arrays again
+        expdict[camera]=np.sort(expids)
 
-    log.info('Keeping {} calibration ZEROs'.format(len(expids)))
 
-    return expids
+    return expdict
 
 def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         comm=None):
@@ -423,28 +460,33 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         rank, size = 0, 1
 
     #- Find all zeros for the night
-    expids = None
+    expdict = None
     if rank == 0:
-        expids = _find_zeros(night)
+        expdict = _find_zeros(night,cameras=cameras,nzeros=nzeros)
+        used_expdict = {}
+        for cam,expids in expdict.items():
+            if len(expids) < minzeros:
+                msg = f'Only {len(expids)} ZEROS on {night} and cam {cam}; need at least {minzeros}'
+                log.error(msg)
+                continue
+
+            if len(expids) > nzeros:
+                nexps = len(expids)
+                n = (nexps - nzeros)//2
+                used_expdict[cam] = expids[n:n+nzeros]
+            else:
+                used_expdict[cam] = expids
+
+            log.info(f'Using {len(used_expdict[cam])} ZEROs for nightly bias {night} and cam {cam}')
+
+        if len(used_expdict)==0:
+            log.critical("No camera has enough zeros")
+            raise RuntimeError("No camera has enough zeros")
+        expdict=used_expdict
+
 
     if comm is not None:
-        expids = comm.bcast(expids, root=0)
-
-    if len(expids) < minzeros:
-        msg = f'Only {len(expids)} ZEROS on {night}; need at least {minzeros}'
-        if rank == 0:
-            log.critical(msg)
-        raise RuntimeError(msg)
-
-    if len(expids) > nzeros:
-        nexps = len(expids)
-        n = (nexps - nzeros)//2
-        expids = expids[n:n+nzeros]
-
-    if rank == 0:
-        log.info(f'Using {len(expids)} ZEROs for nightly bias {night}')
-
-    rawfiles = [io.findfile('raw', night, e) for e in expids]
+        expdict = comm.bcast(expdict, root=0)
 
     #- Rank 0 create output directory if needed
     if rank == 0:
@@ -458,6 +500,13 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
 
     nfail = 0
     for camera in cameras[rank::size]:
+        if camera not in expdict.keys():
+            log.error(f'execution was skipped for camera {camera} due to lack of usable zeros')
+            nfail+=1
+            continue
+        expids=expdict[camera]
+        rawfiles=[io.findfile('raw', night, e) for e in expids]
+
         outfile = io.findfile('biasnight', night=night, camera=camera,
                               outdir=outdir)
 
@@ -476,6 +525,7 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
                 compute_bias_file(rawfiles, testbias, camera,
                                   extraheader=dict(NIGHT=night))
             except Exception as ex:
+                nfail+=1
                 log.error(f'Rank {rank} camera {camera} raised {type(ex)} exception {ex}')
                 for line in traceback.format_exception(*sys.exc_info()):
                     log.error('  '+line.strip())
@@ -689,7 +739,7 @@ def model_y1d(image, smooth=0):
 
 def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
                       linexptime=None, nskip_zeros=None, tempdir=None, nosubmit=False,
-                      first_expid=None,night_for_name=None):
+                      first_expid=None,night_for_name=None, use_exptable=True,queue='realtime'):
     """
     Generate batch script to run desi_compute_dark_nonlinear
 
@@ -704,6 +754,8 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
         tempdir (str): tempfile working directory
         nosubmit (bool): generate scripts but don't submit them to batch queue
         first_expid (int): ignore expids prior to this
+        use_exptable (bool): use shortened copy of joined exposure tables instead of spectable (need to have right $SPECPROD set)
+        queue (str): which batch queue to use for submission
 
     Args/Options are passed to the desi_compute_dark_nonlinear script
     """
@@ -743,12 +795,50 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 
     #- Create exposure log so that N>>1 jobs don't step on each other
     nightlist = [int(tmp) for tmp in nights.split()]
+
+    if use_exptable:
+        #grab all exposures from the exposure log in case some have been marked bad
+        #note that some exposures will not be in here, so we'll assume those are all fine
+        log.info(f'Using exposure tables for {len(nightlist)} night directories')
+        expfiles=[]
+        for night in nightlist:
+            expfiles.append(get_exposure_table_pathname(night))
+        exptables = load_tables(expfiles)
+        exptable_all=table_vstack(exptables)
+        select = ((exptable_all['OBSTYPE']=='zero')|(exptable_all['OBSTYPE']=='dark'))
+        exptable_select=exptable_all[select]
+    
     log.info(f'Scanning {len(nightlist)} night directories')
     speclog = io.util.get_speclog(nightlist)
+    if use_exptable:
+        badcamwords=[]
+        laststeps=[]
+        badamps=[]
+        camwords=[]
+        for entry in speclog:
+            if entry['EXPID'] in exptable_select['EXPID']:
+                sel=entry['EXPID']==exptable_select['EXPID']
+                badcamwords.append(exptable_select['BADCAMWORD'][sel][0])
+                badamps.append(exptable_select['BADAMPS'][sel][0])
+                camwords.append(exptable_select['CAMWORD'][sel][0])
+                laststeps.append(exptable_select['LASTSTEP'][sel][0])
+            else:
+                badcamwords.append("")
+                laststeps.append("all")
+                camwords.append("a0123456789")
+                badamps.append("")
+
+        speclog.add_column(badcamwords,name='BADCAMWORD')
+        speclog.add_column(laststeps,name='LASTSTEP')
+        speclog.add_column(camwords,name='CAMWORD')
+        speclog.add_column(badamps,name='BADAMPS')
+
+    speclog['OBSTYPE']=np.char.upper(speclog['OBSTYPE'])
 
     t = Time(speclog['MJD']-7/24, format='mjd')
     speclog['DAY'] = t.strftime('%Y%m%d').astype(int)
     speclogfile = os.path.join(tempdir, 'speclog.csv')
+    
     tmpfile = speclogfile + '.tmp-' + str(os.getpid())
     speclog.write(tmpfile, format='ascii.csv')
     os.rename(tmpfile, speclogfile)
@@ -788,11 +878,11 @@ def make_dark_scripts(outdir, days=None, nights=None, cameras=None,
 
 #SBATCH -C haswell
 #SBATCH -N 1
-#SBATCH --qos realtime
+#SBATCH --qos {queue}
 #SBATCH --account desi
 #SBATCH --job-name dark-{key}
 #SBATCH --output {logfile}
-#SBATCH --time=01:00:00
+#SBATCH --time={"01:00:00" if queue!="debug" else "00:30:00"}
 #SBATCH --exclusive
 
 cd {outdir}
