@@ -26,16 +26,19 @@ def archivetile(tiledir, archivedir, dryrun=False):
 
     Options:
         dryrun: if True, print messages but don't move directories.
+
+    Returns int error code, non-zero if there was a problem
     """
     log = get_logger()
     if os.path.isdir(archivedir):
         log.info(f'{archivedir} already exists')
-        return
+        return 0
 
     if not os.path.isdir(tiledir):
         log.error(f'{tiledir} missing ... skipping')
-        return
+        return 1
 
+    err = 0
     if dryrun:
         log.info(f'Dry run: archive {tiledir} -> {archivedir}')
     else:
@@ -53,6 +56,8 @@ def archivetile(tiledir, archivedir, dryrun=False):
         err = freezedir(archivedir, dryrun=dryrun)
         if err != 0:
             log.error(f'problem removing write access from {archivedir}')
+
+    return err
 
 
 def freezedir(path, dryrun=False):
@@ -188,13 +193,14 @@ else:
     log.error(f'Unable to find an exposures files in {reduxdir}; not freezing exposures')
     exposures = None
 
+failed_archive_tiles = list()
 for tileid, lastnight in archivetiles['TILEID','LASTNIGHT']:
     log.info(f'-- Archiving {tileid} {lastnight}')
 
     #- Archive tile
     tiledir = f'tiles/cumulative/{tileid}/{lastnight}'
     archivedir = f'tiles/archive/{tileid}/{archivedate}'
-    archivetile(tiledir, archivedir, args.dry_run)
+    tile_err = archivetile(tiledir, archivedir, args.dry_run)
 
     #- Remove write access from any input preproc and exposures
     if (exposures is not None) and (not args.only_tiles):
@@ -204,16 +210,25 @@ for tileid, lastnight in archivetiles['TILEID','LASTNIGHT']:
                 tmpfile = findfile(prefix, expnight, expid, 'b0',
                                    specprod_dir=reduxdir)
                 path = os.path.dirname(tmpfile).replace(reduxdir+'/', '')
-                err = freezedir(path, args.dry_run)
-                if err != 0:
+                exp_err = freezedir(path, args.dry_run)
+                tile_err |= exp_err
+                if exp_err != 0:
                     log.error(f'problem removing write access from {path}')
 
-    i = np.where(tiles['TILEID'] == tileid)[0][0]
-    tiles['ARCHIVEDATE'][i] = archivedate
-    tiles['ZDONE'][i] = 'true'
+    if tile_err == 0:
+        i = np.where(tiles['TILEID'] == tileid)[0][0]
+        tiles['ARCHIVEDATE'][i] = archivedate
+        tiles['ZDONE'][i] = 'true'
+    else:
+        log.error(f'Tile {tileid} had errors while archiving; not setting ARCHIVEDATE')
+        failed_archive_tiles.append(tileid)
 
 if not args.dry_run:
     tiles.write(args.specstatus, overwrite=True)
     log.info(f'Updated {args.specstatus} with new ZDONE and ARCHIVEDATE')
     log.info('Remember to svn commit that file now')
+
+if len(failed_archive_tiles) > 0:
+    log.critical(f'Some tiles failed archiving: {failed_archive_tiles}')
+    sys.exit(1)
 
