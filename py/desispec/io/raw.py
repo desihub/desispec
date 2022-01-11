@@ -188,10 +188,11 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
     else:
         log.warning('creating blank fibermap')
         fibermap = desispec.io.empty_fibermap(5000)
-        # Add image header keywords inherited from raw data to fibermap too.
-        # This is only necessary in the case where a fibermap file was not
-        # already constructed by assemble_fibermap().
-        desispec.io.util.addkeys(fibermap.meta, img.meta, skipkeys=('BZERO', 'BSCALE'))
+
+    # Add image header keywords inherited from raw data to fibermap too.
+    # This can include spectrograph-specific keywords like SPECGRPH that
+    # aren't present in the fibermap header
+    desispec.io.util.addkeys(fibermap.meta, img.meta, skipkeys=('BZERO', 'BSCALE'))
 
     #- Augment the image header with some tile info from fibermap if needed
     for key in ['TILEID', 'TILERA', 'TILEDEC']:
