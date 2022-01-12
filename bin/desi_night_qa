@@ -107,9 +107,11 @@ def main():
     # AR expids, tileids, surveys
     if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], args.steps.split(",")).sum() > 0:
         expids, tileids, surveys = get_surveys_night_expids(args.night)
+
     # AR dark expid
     if np.in1d(["dark", "badcol"], args.steps.split(",")).sum() > 0:
-        dark_expid = get_dark_night_expid(args.night, prod)
+        dark_expid = get_dark_night_expid(args.night, args.prod)
+
     # AR CTE detector expid
     if "ctedet" in args.steps.split(","):
         ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
