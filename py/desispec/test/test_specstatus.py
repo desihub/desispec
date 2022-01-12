@@ -129,6 +129,19 @@ class TestSpecStatus(unittest.TestCase):
         self.assertEqual(len(newstatus), len(specstatus)+1)
         self.assertIn(1000, newstatus['TILEID'])
 
+    def test_update_lastnight(self):
+        """update_all should update LASTNIGHT, even if it became earlier"""
+        specstatus = self._create_specstatus(3)
+        tiles = self._create_tiles(3)
+        tiles['LASTNIGHT'] -= 1
+
+        newstatus = update_specstatus(specstatus, tiles, update_all=False)
+        self.assertTrue(np.all(newstatus['LASTNIGHT'] == specstatus['LASTNIGHT']))
+        self.assertTrue(np.all(newstatus['LASTNIGHT'] != tiles['LASTNIGHT']))
+
+        newstatus = update_specstatus(specstatus, tiles, update_all=True)
+        self.assertTrue(np.all(newstatus['LASTNIGHT'] != specstatus['LASTNIGHT']))
+        self.assertTrue(np.all(newstatus['LASTNIGHT'] == tiles['LASTNIGHT']))
 
 def test_suite():
     """Allows testing of only this module with the command::

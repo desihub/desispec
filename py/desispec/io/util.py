@@ -8,6 +8,7 @@ import os
 import glob
 import time
 import datetime
+import subprocess
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -774,7 +775,7 @@ def is_svn_current(dirname):
         results = subprocess.run(args, check=True, stdout=subprocess.PIPE).stdout
         #- no stdout = no diffs = up-to-date
         return len(results) == 0
-    except CalledProcessError:
+    except subprocess.CalledProcessError:
         log = get_logger()
         msg = f'FAILED {cmd}'
         log.error(msg)
