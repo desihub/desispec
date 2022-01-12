@@ -2,10 +2,24 @@
 desispec Change Log
 ===================
 
-0.49.2 (unreleased)
+0.50.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Algorithmic changes:
+
+  * Use sky fibers to correct for serial readout CTE problems (PR `#1571`_).
+
+* Miscellaneous:
+
+  * Approximate for missing turbulence corrections in FIBER_RA/DEC
+    during Dec 2021 (PR `#1539`_).
+  * nightqa improved selection of which 5min dark was used (PR `#1584`_).
+  * findfile(tileqapng) bugfix for tile/night QA (PR `#1585`_).
+
+.. _`#1539`: https://github.com/desihub/desispec/pull/1539
+.. _`#1571`: https://github.com/desihub/desispec/pull/1571
+.. _`#1584`: https://github.com/desihub/desispec/pull/1584
+.. _`#1585`: https://github.com/desihub/desispec/pull/1585
 
 0.49.1 (2022-01-10)
 -------------------

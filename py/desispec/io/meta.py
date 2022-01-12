@@ -174,7 +174,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
 
     #- default group is "cumulative" for tile-based files
     if groupname is None and tile is not None and filetype in (
-            'spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa', 'zmtl',
+            'spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa', 'tileqapng', 'zmtl',
             'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile',
             ):
         groupname = 'cumulative'

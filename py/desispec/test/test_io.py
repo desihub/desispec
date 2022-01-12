@@ -798,24 +798,30 @@ class TestIO(unittest.TestCase):
         tileid = 1234
         night = 20201010
         sp = 9
-        tile_filetypes = ('spectra', 'coadd', 'redrock', 'tileqa', 'zmtl')
+        tile_filetypes = ('spectra', 'coadd', 'redrock', 'tileqa', 'tileqapng', 'zmtl')
+
+        #- groupname='cumulative' is default
         for filetype in tile_filetypes:
             filepath = findfile(filetype, tile=tileid, night=night, spectrograph=sp)
+            filepath2 = findfile(filetype, tile=tileid, night=night, spectrograph=sp, groupname='cumulative')
+            self.assertEqual(filepath, filepath2)
             dirname, filename = os.path.split(filepath)
             self.assertTrue(dirname.endswith(f'tiles/cumulative/{tileid}/{night}'))
-            self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.png'))
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
 
-        for filetype in tile_filetypes:
-            filepath = findfile(filetype, tile=tileid, night=night, spectrograph=sp, groupname='cumulative')
-            dirname, filename = os.path.split(filepath)
-            self.assertTrue(dirname.endswith(f'tiles/cumulative/{tileid}/{night}'))
-            self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
-
+        #- groupname='pernight' is different
         for filetype in tile_filetypes:
             filepath = findfile(filetype, tile=tileid, night=night, spectrograph=sp, groupname='pernight')
             dirname, filename = os.path.split(filepath)
             self.assertTrue(dirname.endswith(f'tiles/pernight/{tileid}/{night}'))
-            self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.png'))  #- no "thru"
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
+
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.

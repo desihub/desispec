@@ -663,6 +663,24 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
         pm.sort('LOCATION')
         log.info('%d/%d fibers in coordinates file', len(pm), len(fa))
 
+        #- Exposures 114320 (part way through night 20211216) until 20211222 (exp 115150)
+        #- have FVC turbulence corrections applied to FPA_X/Y_n and DX_n/DY_n
+        #- columns, but this isn't applied to FIBER_RA/DEC yet, so make
+        #- an approximate correction to TARGET_RA/DEC instead.
+        #- NOTE: in the future there may also be an end date after which
+        #- they are applied, but we don't know if/when that is yet.
+        i = numiter-1
+        if (114320 <= expid < 115150 and
+            f'TURB_X_{i}' in pm.colnames and f'TURB_Y_{i}' in pm.colnames and
+            f'DX_{i}' in pm.colnames and f'DY_{i}' in pm.colnames and
+            'FIBER_RA' in pm.colnames and 'FIBER_DEC' in pm.colnames
+            ):
+            log.info('Updating FIBER_RA/DEC values with turbulance corrections')
+
+            #- approximate RA/DEC correction; see desispec issue #1538
+            pm['FIBER_RA'] = pm['TARGET_RA'] - pm[f'DX_{i}']*1000/(70*3600)/np.cos(pm['TARGET_DEC']*np.pi/180)
+            pm['FIBER_DEC'] = pm['TARGET_DEC'] + pm[f'DY_{i}']*1000/(70*3600)
+
         #- Create fibermap table to merge with fiberassign file
         fibermap = Table()
         fibermap['LOCATION'] = pm['LOCATION']
