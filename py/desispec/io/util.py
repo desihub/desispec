@@ -761,3 +761,22 @@ def addkeys(hdr1, hdr2, skipkeys=None):
             hdr1[key] = hdr2[key]
         else:
             log.debug('Skipping %s', key)
+
+def is_svn_current(dirname):
+    """
+    Return True/False for if svn checkout dirname is up-to-date with server
+
+    Raises ValueError if unable to determine (e.g. dirname isn't svn checkout)
+    """
+    cmd = f"svn diff -r BASE:HEAD {dirname}"
+    args = cmd.split()
+    try:
+        results = subprocess.run(args, check=True, stdout=subprocess.PIPE).stdout
+        #- no stdout = no diffs = up-to-date
+        return len(results) == 0
+    except CalledProcessError:
+        log = get_logger()
+        msg = f'FAILED {cmd}'
+        log.error(msg)
+        raise ValueError(msg)
+
