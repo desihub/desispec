@@ -476,7 +476,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     elif len(globfiles) == 0:
         message = f'No coordinates*.fits file in fiberassign dir {dirname}'
         if force:
-            log.error(message + '; continuing anyway')
+            log.error(message + '; force=True so continuing anyway')
             coordfile = None
         else:
             raise FileNotFoundError(message)
@@ -497,7 +497,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     elif len(globfiles) == 0:
         message = f'No guide-*.fits.fz file in fiberassign dir {dirname}'
         if force:
-            log.error(message + '; continuing anyway')
+            log.error(message + '; force=True continuing anyway')
             guidefile = None
         else:
             raise FileNotFoundError(message)
@@ -623,8 +623,12 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     pm = None
     numiter = 0
     if coordfile is None:
-        log.error('No coordinates file, thus no info on fiber positioning')
-    else:
+        msg = 'No coordinates file, thus no info on fiber positioning'
+        log.error(msg)
+        if not force:
+            raise FileNotFoundError(msg)
+
+    else:  #- coorfile is not None, use it
         pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
 
         #- If missing columns *and* not the first in a (split) sequence,
@@ -819,6 +823,11 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     else:
         #- No coordinates file or no positioning iterations;
         #- just use fiberassign + dummy columns
+        if not force:
+            msg = 'Unable to find useful coordinates file; use force=True to proceed with dummy values'
+            log.error(msg)
+            raise FileNotFoundError(msg)
+
         log.error('Unable to find useful coordinates file; proceeding with fiberassign + dummy columns')
         fibermap = fa
         fibermap['NUM_ITER'] = 0
