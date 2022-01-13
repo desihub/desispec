@@ -96,24 +96,35 @@ def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_ar
     # index of minimum, but then we refine
     minindex=np.argmin(chi2)
 
-    bb=minindex-1
-    ee=minindex+2
-    if bb<0 :
-        bb+=1
-        ee+=1
-    if ee>=chi2.size :
-        bb-=1
-        ee-=1
+    if minindex==0 or minindex==humidity_array.size-1 :
 
-    # get the chi2 minimum
-    c=np.polyfit(humidity_array[bb:ee],chi2[bb:ee],2)
-    best_humidity = -c[1]/2./c[0]
-    best_humidity = max(humidity_array[0],best_humidity)
-    best_humidity = min(humidity_array[-1],best_humidity)
+        best_humidity = humidity_array[minindex]
+        flat = mean_fiberflat_vs_humidity[minindex]
+        log.warning("best fit at edge of model humidity range")
+
+    else :
+
+        bb=minindex-1
+        ee=minindex+2
+        if bb<0 :
+            bb+=1
+            ee+=1
+        if ee>=chi2.size :
+            bb-=1
+            ee-=1
+
+        # get the chi2 minimum
+        c=np.polyfit(humidity_array[bb:ee],chi2[bb:ee],2)
+        best_humidity = -c[1]/2./c[0]
+        best_humidity = max(humidity_array[0],best_humidity)
+        best_humidity = min(humidity_array[-1],best_humidity)
+
+        # simple linear interpolation indexed by the humidity
+        flat = _interpolated_fiberflat_vs_humidity(mean_fiberflat_vs_humidity , humidity_array, best_humidity)
+
+
     log.info("best fit humidity = {:.2f}".format(best_humidity))
 
-    # simple linear interpolation indexed by the humidity
-    flat = _interpolated_fiberflat_vs_humidity(mean_fiberflat_vs_humidity , humidity_array, best_humidity)
 
     return flat , best_humidity
 
