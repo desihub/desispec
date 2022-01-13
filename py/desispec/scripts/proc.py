@@ -125,6 +125,7 @@ def main(args=None, comm=None):
 
     log = get_logger()
     start_time = time.time()
+    error_count = 0
 
     start_mpi_connect = time.time()
     if comm is not None:
@@ -309,7 +310,9 @@ def main(args=None, comm=None):
             if args.badamps is not None:
                 cmd += ' --badamps={}'.format(args.badamps)
 
-            runcmd(cmd, inputs=[], outputs=[fibermap, tilepix])
+            err = runcmd(cmd, inputs=[], outputs=[fibermap, tilepix])
+            if err != 0:
+                error_count += 1
 
         fibermap_ok = os.path.exists(fibermap)
 
@@ -319,8 +322,10 @@ def main(args=None, comm=None):
         if not fibermap_ok and int(args.night) <	20200310:
             log.info("Since night is before 20200310, trying to force fibermap creation without coords file")
             cmd += ' --force'
-            runcmd(cmd, inputs=[], outputs=[fibermap])
+            err = runcmd(cmd, inputs=[], outputs=[fibermap])
             fibermap_ok = os.path.exists(fibermap)
+            if err != 0 or not fibermap_ok:
+                error_count += 1
 
     #- If assemble_fibermap failed and obstype is SCIENCE, exit now
     if comm is not None:
@@ -356,7 +361,9 @@ def main(args=None, comm=None):
             if not args.obstype in ['ARC'] : # never model variance for arcs
                 if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
-            runcmd(cmd, inputs=[args.input], outputs=[outfile])
+            err = runcmd(cmd, inputs=[args.input], outputs=[outfile])
+            if err != 0:
+                error_count += 1
 
         timer.stop('preproc')
         if comm is not None:
@@ -426,7 +433,9 @@ def main(args=None, comm=None):
                     cmd = "desi_inspect_dark"
                     cmd += " -i {}".format(preprocfile)
                     cmd += " --badcol-table {}".format(badcolumnsfile)
-                    runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
+                    err = runcmd(cmd, inputs=[preprocfile], outputs=[badcolumnsfile])
+                    if err != 0:
+                        error_count += 1
                 else:
                     log.info(f'{badcolumnsfile} already exists; skipping desi_inspect_dark')
 
@@ -468,7 +477,9 @@ def main(args=None, comm=None):
                     cmd += " --outpsf {}".format(outpsf)
                 else :
                     cmd = "ln -s {} {}".format(inpsf,outpsf)
-                runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+                err = runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+                if err != 0:
+                    error_count += 1
             else :
                 log.info("PSF {} exists".format(outpsf))
 
@@ -500,7 +511,9 @@ def main(args=None, comm=None):
                 cmd += " --degxx 0 --degxy 0 --degyx 0 --degyy 0"
                 cmd += ' --arc-lamps'
                 cmd += " --outpsf {}".format(outpsf)
-                runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+                err = runcmd(cmd, inputs=[preprocfile, inpsf], outputs=[outpsf])
+                if err != 0:
+                    error_count += 1
             else :
                 log.info("PSF {} exists".format(outpsf))
 
@@ -555,7 +568,9 @@ def main(args=None, comm=None):
             log.warning('fitting PSFs without MPI parallelism; this will be SLOW')
             for camera in args.cameras:
                 if camera in cmds:
-                    runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+                    err = runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+                    if err != 0:
+                        error_count += 1
 
         if comm is not None:
             comm.barrier()
@@ -598,7 +613,10 @@ def main(args=None, comm=None):
                     cmd += ' --outfile {}'.format(outpsf)
                     cmd += ' --fibers {}'.format(fibers_to_ignore_str)
                     log.info('For camera {} interpolating PSF for fibers: {}'.format(camera,fibers_to_ignore_str))
-                    runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
+                    err = runcmd(cmd, inputs=[inpsf], outputs=[outpsf])
+                    if err != 0:
+                        error_count += 1
+
                     if os.path.isfile(outpsf) :
                         os.rename(inpsf,inpsf.replace("fit-psf","fit-psf-before-listed-fix"))
                         subprocess.call('cp {} {}'.format(outpsf,inpsf),shell=True)
@@ -726,6 +744,7 @@ def main(args=None, comm=None):
                         for outfile in outputs[camera]:
                             if not os.path.exists(outfile):
                                 log.error(f'Camera {camera} extraction missing output {outfile}')
+                                error_count += 1
 
             comm.barrier()
 
@@ -733,7 +752,9 @@ def main(args=None, comm=None):
             log.warning('running extractions without MPI parallelism; this will be SLOW')
             for camera in args.cameras:
                 if camera in cmds:
-                    runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+                    err = runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
+                    if err != 0:
+                        error_count += 1
 
         timer.stop('extract')
         if comm is not None:
@@ -761,7 +782,9 @@ def main(args=None, comm=None):
                 continue
 
             if os.path.exists(badcolfile):
-                runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+                err = runcmd(cmd, inputs=[infile,psffile,badcolfile], outputs=[outfile])
+                if err != 0:
+                    error_count += 1
                 #- if successful, remove temporary frame-*-no-badcolumn-mask
                 if os.path.isfile(outfile) :
                     log.info("rm "+infile)
@@ -800,7 +823,9 @@ def main(args=None, comm=None):
                 cmd = "desi_compute_fiberflat"
                 cmd += " -i {}".format(framefile)
                 cmd += " -o {}".format(fiberflatfile)
-                runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+                err = runcmd(cmd, inputs=[framefile,], outputs=[fiberflatfile,])
+                if err != 0:
+                    error_count += 1
 
             timer.stop('fiberflat')
             if comm is not None:
@@ -867,11 +892,13 @@ def main(args=None, comm=None):
             fiberflatfile = findfile('fiberflatexp', args.night, args.expid, camera)
 
             cmd = "desi_compute_humidity_corrected_fiberflat"
+            cmd += " --use-sky-fibers"
             cmd += " -i {}".format(framefile)
             cmd += " --fiberflat {}".format(input_fiberflatfile)
             cmd += " -o {}".format(fiberflatfile)
-            cmd += " --use-sky-fibers"
-            runcmd(cmd, inputs=[framefile, input_fiberflatfile], outputs=[fiberflatfile,])
+            err = runcmd(cmd, inputs=[framefile, input_fiberflatfile], outputs=[fiberflatfile,])
+            if err != 0:
+                error_count += 1
 
         timer.stop('fiberflat_humidity_correction')
         if comm is not None:
@@ -979,7 +1006,10 @@ def main(args=None, comm=None):
                 else :
                     log.warning("No SKYCORR file, do you need to update DESI_SPECTRO_CALIB?")
             cmd += " --fit-offsets"
-            runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
+
+            err = runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
+            if err != 0:
+                error_count += 1
 
             #- sframe = flatfielded sky-subtracted but not flux calibrated frame
             #- Note: this re-reads and re-does steps previously done for picking
@@ -987,14 +1017,32 @@ def main(args=None, comm=None):
             #- not I/O or CPU efficiency...
             sframefile = desispec.io.findfile('sframe', args.night, args.expid, camera)
             if not os.path.exists(sframefile):
-                frame = desispec.io.read_frame(framefile)
-                fiberflat = desispec.io.read_fiberflat(fiberflatfile)
-                sky = desispec.io.read_sky(skyfile)
-                apply_fiberflat(frame, fiberflat)
-                subtract_sky(frame, sky, apply_throughput_correction=True)
-                frame.meta['IN_SKY'] = shorten_filename(skyfile)
-                frame.meta['FIBERFLT'] = shorten_filename(fiberflatfile)
-                desispec.io.write_frame(sframefile, frame)
+                missing_inputs = False
+                for filename in [framefile, fiberflatfile, skyfile]:
+                    if not os.path.exists(filename):
+                        log.error(f'Camera {camera} missing sframe input {filename}')
+                        missing_inputs = True
+
+                if missing_inputs:
+                    log.error(f'Camera {camera} missing sframe inputs; skipping')
+                    error_count += 1
+                else:
+                    try:
+                        frame = desispec.io.read_frame(framefile)
+                        fiberflat = desispec.io.read_fiberflat(fiberflatfile)
+                        sky = desispec.io.read_sky(skyfile)
+                        apply_fiberflat(frame, fiberflat)
+                        subtract_sky(frame, sky, apply_throughput_correction=True)
+                        frame.meta['IN_SKY'] = shorten_filename(skyfile)
+                        frame.meta['FIBERFLT'] = shorten_filename(fiberflatfile)
+                        desispec.io.write_frame(sframefile, frame)
+                    except Exception as err:
+                        import traceback
+                        lines = traceback.format_exception(*sys.exc_info())
+                        log.error(f"Camera {camera} sframe raised an exception:")
+                        print("".join(lines))
+                        log.warning(f'Continuing without {sframefile}')
+                        error_count += 1
 
         timer.stop('skysub')
         if comm is not None:
@@ -1049,7 +1097,9 @@ def main(args=None, comm=None):
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
-            runcmd(cmd, inputs=inputs, outputs=[stdfile])
+            err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+            if err != 0:
+                error_count += 1
 
         timer.stop('stdstarfit')
         if comm is not None:
@@ -1059,10 +1109,8 @@ def main(args=None, comm=None):
     # - Flux calibration
 
     def list2str(xx) :
-        s=""
-        for x in xx :
-            s+=" "+str(x)
-        return s
+        """converts list xx to string even if elements aren't strings"""
+        return " ".join([str(x) for x in xx])
 
     if args.obstype in ['SCIENCE'] and \
                 (not args.noskysub) and \
@@ -1078,13 +1126,22 @@ def main(args=None, comm=None):
                     r_cameras.append(camera)
             if len(r_cameras)>0 :
                 outfile    = findfile('calibstars',night, expid)
-                frames     = list2str([findfile('frame', night, expid, camera) for camera in r_cameras])
-                fiberflats = list2str([findfile('fiberflatexp', night, expid, camera) for camera in r_cameras])
-                skys       = list2str([findfile('sky', night, expid, camera) for camera in r_cameras])
-                models     = list2str([findfile('stdstars', night, expid,spectrograph=int(camera[1])) for camera in r_cameras])
-                cmd = f"desi_select_calib_stars --frames {frames} --fiberflats {fiberflats} --skys {skys} --models {models} -o {outfile}"
-                cmd += " --delta-color-cut 0.1"
-                runcmd(cmd,inputs=[],outputs=[outfile,])
+                frames     = [findfile('frame', night, expid, camera) for camera in r_cameras]
+                fiberflats = [findfile('fiberflatexp', night, expid, camera) for camera in r_cameras]
+                skys       = [findfile('sky', night, expid, camera) for camera in r_cameras]
+                models     = [findfile('stdstars', night, expid,spectrograph=int(camera[1])) for camera in r_cameras]
+
+                inputs = frames + fiberflats + skys + models
+                cmd = "desi_select_calib_stars --delta-color-cut 0.1 "
+                cmd += " --frames {}".format(list2str(frames))
+                cmd += " --fiberflats {}".format(list2str(fiberflats))
+                cmd += " --skys {}".format(list2str(skys))
+                cmd += " --models {}".format(list2str(models))
+                cmd += f"-o {outfile}"
+
+                err = runcmd(cmd, inputs=inputs, outputs=[outfile,])
+                if err != 0:
+                    error_count += 1
 
         if comm is not None:
             comm.barrier()
@@ -1108,7 +1165,9 @@ def main(args=None, comm=None):
             cmd += " --selected-calibration-stars {}".format(calibstars)
 
             inputs = [framefile, skyfile, fiberflatfile, stdfile, calibstars]
-            runcmd(cmd, inputs=inputs, outputs=[calibfile,])
+            err = runcmd(cmd, inputs=inputs, outputs=[calibfile,])
+            if err != 0:
+                error_count += 1
 
         timer.stop('fluxcalib')
         if comm is not None:
@@ -1145,12 +1204,23 @@ def main(args=None, comm=None):
                 cmd += " --no-xtalk"
 
             inputs = [framefile, fiberflatfile, skyfile, calibfile]
-            runcmd(cmd, inputs=inputs, outputs=[cframefile,])
+            err = runcmd(cmd, inputs=inputs, outputs=[cframefile,])
+            if err != 0:
+                error_count += 1
 
         if comm is not None:
             comm.barrier()
 
         timer.stop('applycalib')
+
+    #-------------------------------------------------------------------------
+    #- Collect error count
+    if comm is not None:
+        all_error_counts = comm.gather(error_count, root=0)
+        error_count = int(comm.bcast(np.sum(all_error_counts), root=0))
+
+    if rank == 0 and error_count > 0:
+        log.error(f'{error_count} processing errors; see logs above')
 
     #-------------------------------------------------------------------------
     #- Wrap up
@@ -1163,3 +1233,5 @@ def main(args=None, comm=None):
 
         log.info('All done at {}; duration {}m{}s'.format(
             time.asctime(), mm, ss))
+
+    return error_count
