@@ -21,8 +21,10 @@ from desispec.specstatus import update_specstatus
 p = argparse.ArgumentParser()
 p.add_argument('-s', '--specstatus', type=str, required=False,
         help='Input tiles-specstatus.ecsv file')
-p.add_argument('-t', '--tiles', type=str, required=False,
+p.add_argument('-t', '--tilesfile', type=str, required=False,
         help='Input tiles.csv, default from $DESI_SPECTRO_REDUX/$SPECPROD/tiles.csv')
+p.add_argument('--tileids', type=str, required=False,
+        help='Comma separated list of TILEIDs to update; ignore others')
 p.add_argument('-o', '--outfile', type=str, required=False,
         help='output file; default overrides --specstatus in-place')
 p.add_argument('-n', '--lastnight', type=int, required=False,
@@ -40,8 +42,8 @@ log = get_logger()
 if args.specstatus is None:
     args.specstatus = 'tiles-specstatus.ecsv'
 
-if args.tiles is None:
-    args.tiles = os.path.join(specprod_root(), 'tiles.csv')
+if args.tilesfile is None:
+    args.tilesfile = os.path.join(specprod_root(), 'tiles.csv')
 
 if args.outfile is None:
     args.outfile = args.specstatus
@@ -50,12 +52,12 @@ if not os.path.exists(args.specstatus):
     log.critical(f'Missing {args.specstatus}')
     sys.exit(1)
 
-if not os.path.exists(args.tiles):
-    log.critical(f'Missing {args.tiles}')
+if not os.path.exists(args.tilesfile):
+    log.critical(f'Missing {args.tilesfile}')
     sys.exit(1)
 
 log.info(f'Input specstatus {args.specstatus}')
-log.info(f'Updating with tiles from {args.tiles}')
+log.info(f'Updating with tiles from {args.tilesfile}')
 
 svndir = os.path.dirname(os.path.abspath(args.specstatus))
 try:
@@ -74,7 +76,7 @@ except ValueError:
         log.critical(f'Unable to determine if {svndir} is up-to-date; use --force to proceed anyway')
         sys.exit(1)
 
-tiles = Table.read(args.tiles)
+tiles = Table.read(args.tilesfile)
 specstatus = Table.read(args.specstatus)
 
 if args.lastnight is not None:
@@ -83,6 +85,15 @@ if args.lastnight is not None:
         tiles = tiles[keep]
     else:
         log.critical(f'No input tiles with LASTNIGHT={args.lastnight}')
+        sys.exit(1)
+
+if args.tileids is not None:
+    tileids = [int(x) for x in args.tileids.split(',')]
+    keep = np.isin(tiles['TILEID'], tileids)
+    if np.sum(keep) > 0:
+        tiles = tiles[keep]
+    else:
+        log.critical(f'TILEIDs {tileids} not found in {args.tilesfile}')
         sys.exit(1)
 
 if args.all:
