@@ -534,7 +534,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if system_name == 'perlmutter-gpu':
             # default queue realtime not available on perlmutter-gpu, so set to regular
             fx.write('#SBATCH --qos regular\n'.format(queue))
-            # needs perlmutter-gpu requires projects name with "_g" appended 
+            # perlmutter-gpu requires projects name with "_g" appended 
             fx.write('#SBATCH --account desi_g\n')
         else:
             fx.write('#SBATCH --qos {}\n'.format(queue))
