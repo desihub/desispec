@@ -56,11 +56,12 @@ def main(args):
         raise ValueError(msg)
 
     #- outdir is relative to specprod
-    outdir = f'healpix/{args.survey}/{args.faprogram}/{args.healpix//100}/{args.healpix}'
-    suffix = f'{args.faprogram}-{args.healpix}'
     reduxdir = io.specprod_root()
-    scriptdir = f'{reduxdir}/run/scripts/healpix/{args.healpix//100}'
-    jobname = f'coz-hpix-{args.healpix}'
+    subdir = f'healpix/{args.survey}/{args.faprogram}/{args.healpix//100}'
+    outdir = f'{reduxdir}/{subdir}/{args.healpix}'
+    scriptdir = f'{reduxdir}/run/scripts/{subdir}'
+    suffix = f'{args.faprogram}-{args.healpix}'
+    jobname = f'zpix-{args.survey}-{suffix}'
     batchscript = f'{scriptdir}/{jobname}.slurm'
 
     os.makedirs(scriptdir, exist_ok=True)

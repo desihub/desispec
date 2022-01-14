@@ -155,9 +155,10 @@ def main(args=None, comm=None):
 
     #- Get table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
     t0 = time.time()
-    exp2pix = get_exp2healpix_map(nights=nights, expids=expids, comm=comm,
-                                  nside=args.nside, specprod_dir=args.reduxdir,
-                                  survey=args.survey, faprogram=args.faprogram)
+    exp2pix = get_exp2healpix_map(
+            survey=args.survey, faprogram=args.faprogram,
+            specprod_dir=args.reduxdir)
+
     assert len(exp2pix) > 0
     if rank == 0:
         dt = time.time() - t0
@@ -183,9 +184,8 @@ def main(args=None, comm=None):
         keep &= (exp2pix['FAPROGRAM'] == faprogram)
         keep &= (exp2pix['HEALPIX'] == pix)
         iipix = np.where(keep)[0]
-        ntargets = np.sum(exp2pix['NTARGETS'][iipix])
-        log.info('Rank {} pix {} with {} targets on {} frames'.format(
-            rank, pix, ntargets, len(iipix)))
+        nframes = 3*len(iipix)
+        log.info(f'Rank {rank} pix {pix} with {nframes} frames')
         sys.stdout.flush()
         framekeys = list()
         for i in iipix:

@@ -2,15 +2,14 @@
 Tools to regroup spectra in individual exposures by healpix on the sky
 """
 
-from __future__ import absolute_import, division, print_function
-import glob, os, sys, time
+import glob, os, sys, time, json
 from collections import Counter, OrderedDict
 
 import numpy as np
 
 import fitsio
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, vstack
 import healpy as hp
 
 from desimodel.footprint import radec2pix
@@ -44,8 +43,79 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
+def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
+        strict=False):
+    """
+    Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
 
-def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
+    Options:
+        survey (str): filter by this survey (main, sv3, sv1, ...)
+        faprogram (str): filter by this FAPRGRM (dark, bright, backup, other)
+        specprod_dir (str): override $DESI_SPECTRO_REDUX/$SPECPROD
+
+    Returns table with columns NIGHT EXPID SPECTRO HEALPIX
+    """
+    log = get_logger()
+    if specprod_dir is None:
+        specprod_dir = io.specprod_root()
+
+    #- Read all exposure tables, filtered by SURVEY and FAPRGRM
+    expdir = f'{specprod_dir}/exposure_tables'
+    exp_tables = list()
+    for expfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
+        t = Table.read(expfile)
+        keep = (t['OBSTYPE'] == 'science')
+        keep &= (t['LASTSTEP'] == 'all')
+        keep &= (t['TILEID'] > 0)
+        if survey is not None:
+            keep &= (t['SURVEY'] == survey)
+        if faprogram is not None:
+            keep &= (t['FAPRGRM'] == faprogram)
+
+        if np.any(keep):
+            t = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
+            exp_tables.append(t)
+
+    if len(exp_tables) == 0:
+        raise RuntimeError('No matching tiles found in exposure tables')
+
+    exptab = vstack(exp_tables)
+
+    #- columns NIGHT EXPID SPECTRO HEALPIX
+    rows = list()
+
+    #- we only need to read one tilepix file per TILEID
+    for i in np.unique(exptab['TILEID'], return_index=True)[1]:
+        night = exptab['NIGHT'][i]
+        expid = exptab['EXPID'][i]
+        tileid = exptab['TILEID'][i]
+        survey = exptab['SURVEY'][i]
+        faprogram = exptab['FAPRGRM'][i]
+        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid)
+
+        if not os.path.exists(tilepixfile):
+            if strict:
+                raise FileNotFoundError(tilepixfile)
+            else:
+                continue
+
+        with open(tilepixfile) as fp:
+            tilepix = json.load(fp)
+
+        for petal_str in tilepix[str(tileid)]:
+            for healpix in tilepix[str(tileid)][petal_str]:
+                rows.append( (night, expid, tileid, survey, faprogram, int(petal_str), healpix) )
+
+    if len(rows) == 0:
+        raise RuntimeError('No matching tilepix found')
+
+    exp2pix = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM', 'SPECTRO', 'HEALPIX'))
+
+    return exp2pix
+
+
+#- Orig version...
+def _get_exp2healpix_map_0(nights=None, expids=None, specprod_dir=None,
         nside=64, survey=None, faprogram=None, comm=None):
     '''
     Returns table with columns NIGHT EXPID SPECTRO HEALPIX NTARGETS
