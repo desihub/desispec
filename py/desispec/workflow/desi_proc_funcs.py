@@ -527,12 +527,18 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
     with open(scriptfile, 'w') as fx:
         fx.write('#!/bin/bash -l\n\n')
         fx.write('#SBATCH -N {}\n'.format(nodes))
-        fx.write('#SBATCH --qos {}\n'.format(queue))
         for opts in batch_config['batch_opts']:
             fx.write('#SBATCH {}\n'.format(opts))
         if batch_opts is not None:
             fx.write('#SBATCH {}\n'.format(batch_opts))
-        fx.write('#SBATCH --account desi\n')
+        if system_name == 'perlmutter-gpu':
+            # default queue realtime not available on perlmutter-gpu, so set to regular
+            fx.write('#SBATCH --qos regular\n'.format(queue))
+            # needs perlmutter-gpu requires projects name with "_g" appended 
+            fx.write('#SBATCH --account desi_g\n')
+        else:
+            fx.write('#SBATCH --qos {}\n'.format(queue))
+            fx.write('#SBATCH --account desi\n')
         fx.write('#SBATCH --job-name {}\n'.format(jobname))
         fx.write('#SBATCH --output {}/{}-%j.log\n'.format(batchdir, jobname))
         fx.write('#SBATCH --time={:02d}:{:02d}:00\n'.format(runtime_hh, runtime_mm))
