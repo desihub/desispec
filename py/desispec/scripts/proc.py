@@ -1137,7 +1137,7 @@ def main(args=None, comm=None):
                 cmd += " --fiberflats {}".format(list2str(fiberflats))
                 cmd += " --skys {}".format(list2str(skys))
                 cmd += " --models {}".format(list2str(models))
-                cmd += f"-o {outfile}"
+                cmd += f" -o {outfile}"
 
                 err = runcmd(cmd, inputs=inputs, outputs=[outfile,])
                 if err != 0:
