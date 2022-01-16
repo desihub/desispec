@@ -681,9 +681,10 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
             plt.close()
 
 
-def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group='cumulative'):
+def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group="cumulative"):
     """
-    For a given night, create a Z vs. FIBER plot for all SKY fibers.
+    For a given night, create a Z vs. FIBER plot for all SKY fibers, and one for
+        each of the main backup/bright/dark programs
 
     Args:
         outpdf: output pdf file (string)
@@ -701,12 +702,32 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
     # AR safe
     tileids = np.unique(tileids)
     # AR gather all infos from the redrock*fits files
-    fibers, zs, dchi2s = [], [], []
+    fibers, zs, dchi2s, faflavors = [], [], [], []
     nfn = 0
     for tileid in tileids:
-        tmp = findfile('redrock', night=night, tile=tileid, groupname=group, spectrograph=0, specprod_dir=prod)
+        # AR main backup/bright/dark ?
+        faflavor = None
+        fns = sorted(
+            glob(
+                os.path.join(
+                    os.getenv("DESI_ROOT"),
+                    "spectro",
+                    "data",
+                    "{}".format(night),
+                    "*",
+                    "fiberassign-{:06d}.fits.*".format(tileid),
+                )
+            )
+        )
+        if len(fns) > 0:
+            hdr = fits.getheader(fns[0], 0)
+            if "FAFLAVOR" in hdr:
+                faflavor = hdr["FAFLAVOR"]
+        log.info("identified FAFLAVOR for {}: {}".format(tileid, faflavor))
+        # AR
+        tmp = findfile("redrock", night=night, tile=tileid, groupname=group, spectrograph=0, specprod_dir=prod)
         tiledir = os.path.dirname(tmp)
-        fns = sorted(glob(os.path.join(tiledir, f'redrock-?-{tileid}-*{night}.fits')))
+        fns = sorted(glob(os.path.join(tiledir, f"redrock-?-{tileid}-*{night}.fits")))
         nfn += len(fns)
         for fn in fns:
             fm = fitsio.read(fn, ext="FIBERMAP", columns=["OBJTYPE", "FIBER"])
@@ -716,28 +737,44 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
             fibers += fm["FIBER"][sel].tolist()
             zs += rr["Z"][sel].tolist()
             dchi2s += rr["DELTACHI2"][sel].tolist()
-    fibers, zs, dchi2s = np.array(fibers), np.array(zs), np.array(dchi2s)
+            faflavors += [faflavor for x in range(sel.sum())]
+    fibers, zs, dchi2s, faflavors = np.array(fibers), np.array(zs), np.array(dchi2s), np.array(faflavors, dtype=str)
     # AR plot
-    fig, ax = plt.subplots()
-    for sel, selname, color in zip(
-        [
-            dchi2s < dchi2_threshold,
-            dchi2s > dchi2_threshold
-        ],
-        [
-            "OBJTYPE=SKY and DELTACHI2<{}".format(dchi2_threshold),
-            "OBJTYPE=SKY and DELTACHI2 > {}".format(dchi2_threshold),
-        ],
-        ["orange", "b"]
-    ):
-        ax.scatter(fibers[sel], zs[sel], c=color, s=1, alpha=0.1, label="{} ({} fibers)".format(selname, sel.sum()))
-    ax.grid()
-    ax.set_title("NIGHT = {} ({} fibers from {} redrock*fits files)".format(night, len(fibers), nfn))
-    ax.set_xlabel("FIBER")
-    ax.set_xlim(-100, 5100)
-    ax.set_label("Z")
-    ax.set_ylim(-0.1, 6.0)
-    ax.legend(loc=2, markerscale=10)
+    plot_faflavors = ["all", "mainbackup", "mainbright", "maindark"]
+    fig = plt.figure(figsize=(20, 5))
+    gs = gridspec.GridSpec(1, len(plot_faflavors), wspace=0.1)
+    for ip, plot_faflavor in enumerate(plot_faflavors):
+        ax = plt.subplot(gs[ip])
+        if plot_faflavor == "all":
+            faflavor_sel = np.ones(len(fibers), dtype=bool)
+            title = "NIGHT = {}\n({} fibers)".format(night, len(fibers))
+        else:
+            faflavor_sel = faflavors == plot_faflavor
+            title = "NIGHT = {}\nFAFLAVOR={} ({} fibers)".format(night, plot_faflavor, faflavor_sel.sum())
+        if faflavor_sel.sum() < 5000:
+            alpha = 0.3
+        else:
+            alpha = 0.1
+        for sel, selname, color in zip(
+            [
+                (faflavor_sel) & (dchi2s < dchi2_threshold),
+                (faflavor_sel) & (dchi2s > dchi2_threshold),
+            ],
+            [
+                "OBJTYPE=SKY and DELTACHI2<{}".format(dchi2_threshold),
+                "OBJTYPE=SKY and DELTACHI2>{}".format(dchi2_threshold),
+            ],
+            ["orange", "b"]
+        ):
+            ax.scatter(fibers[sel], zs[sel], c=color, s=1, alpha=alpha, label="{} ({} fibers)".format(selname, sel.sum()))
+        ax.grid()
+        ax.set_title(title)
+        ax.set_xlabel("FIBER")
+        ax.set_xlim(-100, 5100)
+        if ip == 0:
+            ax.set_ylabel("Z")
+        ax.set_ylim(-0.1, 6.0)
+        ax.legend(loc=2, markerscale=10)
     plt.savefig(outpng, bbox_inches="tight")
     plt.close()
 
