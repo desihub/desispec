@@ -741,6 +741,8 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
     fibers, zs, dchi2s, faflavors = np.array(fibers), np.array(zs), np.array(dchi2s), np.array(faflavors, dtype=str)
     # AR plot
     plot_faflavors = ["all", "mainbackup", "mainbright", "maindark"]
+    ylim = (-1.1, 1.1)
+    yticks = np.array([0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6])
     fig = plt.figure(figsize=(20, 5))
     gs = gridspec.GridSpec(1, len(plot_faflavors), wspace=0.1)
     for ip, plot_faflavor in enumerate(plot_faflavors):
@@ -766,14 +768,16 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
             ],
             ["orange", "b"]
         ):
-            ax.scatter(fibers[sel], zs[sel], c=color, s=1, alpha=alpha, label="{} ({} fibers)".format(selname, sel.sum()))
+            ax.scatter(fibers[sel], np.log10(0.1 + zs[sel]), c=color, s=1, alpha=alpha, label="{} ({} fibers)".format(selname, sel.sum()))
         ax.grid()
         ax.set_title(title)
         ax.set_xlabel("FIBER")
         ax.set_xlim(-100, 5100)
         if ip == 0:
             ax.set_ylabel("Z")
-        ax.set_ylim(-0.1, 6.0)
+        ax.set_ylim(ylim)
+        ax.set_yticks(np.log10(0.1 + yticks))
+        ax.set_yticklabels(yticks.astype(str))
         ax.legend(loc=2, markerscale=10)
     plt.savefig(outpng, bbox_inches="tight")
     plt.close()
