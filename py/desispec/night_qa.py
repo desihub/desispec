@@ -1290,7 +1290,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     for case, caselab, width, text in zip(
         ["dark", "badcol", "ctedet", "sframesky", "tileqa", "skyzfiber", "petalnz"],
         ["DARK", "bad columns", "CTE detector", "sframesky", "Tile QA", "SKY Z vs. FIBER", "Per-petal n(z)"],
-        ["100%", "35%", "100%", "75%", "90%", "35%", "100%"],
+        ["100%", "35%", "100%", "75%", "90%", "90%", "100%"],
         [
             "This pdf displays the 300s (binned) DARK (one page per spectrograph; non-valid pixels are displayed in red)\nWatch it and report unsual features (easy to say!)",
             "This plot displays the histograms of the bad columns.\nWatch it and report unsual features (easy to say!)",
