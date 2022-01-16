@@ -749,7 +749,7 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
         ax = plt.subplot(gs[ip])
         if plot_faflavor == "all":
             faflavor_sel = np.ones(len(fibers), dtype=bool)
-            title = "NIGHT = {}\n({} fibers)".format(night, len(fibers))
+            title = "NIGHT = {}\nAll tiles ({} fibers)".format(night, len(fibers))
         else:
             faflavor_sel = faflavors == plot_faflavor
             title = "NIGHT = {}\nFAFLAVOR={} ({} fibers)".format(night, plot_faflavor, faflavor_sel.sum())
