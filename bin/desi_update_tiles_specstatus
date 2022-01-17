@@ -7,121 +7,34 @@ Update surveyops/ops/tile-specstatus.ecsv with spectro pipeline tiles.csv
 import os
 import sys
 import argparse
-import subprocess
 import numpy as np
-from astropy.table import Table, vstack
+from astropy.table import Table
 
 from desiutil.log import get_logger
 
 from desispec.io.meta import specprod_root
-from desispec.io.util import get_tempfilename
-
-def update_specstatus(specstatus, tiles):
-    """
-    return new specstatus table, updated with tiles table
-
-    Args:
-        specstatus: astropy Table from surveyops/ops/tiles-specstatus.ecsv
-        tiles: astropy Table from spectro/redux/daily/tiles.csv
-
-    Returns: updated specstatus table, sorted by TILEID
-
-    New TILEID found in tiles are added to specstatus, and any entries
-    where tiles['LASTNIGHT'] > specstatus['LASTNIGHT'] (i.e. new data)
-    have their non-QA columsn updated.
-
-    This does not modify either of the input tables.
-    """
-
-    log = get_logger()
-    specstatus = specstatus.copy()
-    tiles = tiles.copy()
-
-    #- Confirm that they have the same columns except QA-specific ones
-    tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT', 'ARCHIVEDATE'])
-    if tilecol != set(specstatus.colnames):
-        log.error('Column mismatch: {tiles.colnames} vs. {specstatus.colnames}')
-        raise ValueError('Incompatible specstatus and tiles columns')
-
-    #- even if present in tiles, specstatus trumps for these columns
-    qacols = ['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT', 'ARCHIVEDATE']
-
-    #- Add any new tiles
-    newtilerows = np.isin(tiles['TILEID'], specstatus['TILEID'], invert=True)
-    num_newtiles = np.count_nonzero(newtilerows)
-    if num_newtiles > 0:
-        tt = list(tiles['TILEID'][newtilerows])
-        log.info(f'Adding {num_newtiles} new tiles: {tt}')
-
-        newtiles = tiles[newtilerows]
-        newtiles['USER'] = np.repeat('none',num_newtiles)
-        newtiles['QA'] = np.repeat('none',num_newtiles)
-        newtiles['OVERRIDE'] = np.repeat(0,num_newtiles)
-        newtiles['ZDONE'] = np.repeat('false',num_newtiles)
-        newtiles['QANIGHT'] = np.repeat(0,num_newtiles)
-        newtiles['ARCHIVEDATE'] = np.repeat(0,num_newtiles)
-        newtiles = newtiles[specstatus.colnames]  #- columns in same order
-
-        specstatus = vstack([specstatus, newtiles])
-    else:
-        log.info('No new tiles to add')
-
-    #- At this point, every TILEID in tiles should be in specstatus,
-    #- but ok if specstatus has TILEID not in tiles
-    assert np.all(np.isin(tiles['TILEID'], specstatus['TILEID']))
-
-    #- For rows with more recent LASTNIGHT (new data), update non-QA columns.
-    #- Note: there is probably a more efficient way of doing this in bulk,
-    #- but let's favor obvious over clever unless efficiency is needed
-    num_updatedtiles = 0
-    for i, tileid in enumerate(tiles['TILEID']):
-        j = np.where(specstatus['TILEID'] == tileid)[0][0]
-        if tiles['LASTNIGHT'][i] > specstatus['LASTNIGHT'][j]:
-            log.info('Updating tileid {} LASTNIGHT {} > {}'.format(
-                tileid, tiles['LASTNIGHT'][i], specstatus['LASTNIGHT'][j]))
-
-            num_updatedtiles += 1
-            for col in specstatus.colnames:
-                if col not in qacols:
-                    specstatus[col][j] = tiles[col][i]
-
-    log.info(f'Added {num_newtiles} and updated {num_updatedtiles} tiles')
-
-    specstatus.sort('TILEID')
-
-    return specstatus
-
-def is_svn_current(dirname):
-    """
-    Return True/False for if svn checkout dirname is up-to-date with server
-
-    Raises ValueError if unable to determine (e.g. dirname isn't svn checkout)
-    """
-    cmd = f"svn diff -r BASE:HEAD {dirname}"
-    args = cmd.split()
-    try:
-        results = subprocess.run(args, check=True, stdout=subprocess.PIPE).stdout
-        #- no stdout = no diffs = up-to-date
-        return len(results) == 0
-    except CalledProcessError:
-        log = get_logger()
-        msg = f'FAILED {cmd}'
-        log.error(msg)
-        raise ValueError(msg)
+from desispec.io.util import get_tempfilename, is_svn_current
+from desispec.specstatus import update_specstatus
 
 #-------------------------------------------------------------------------
 
 p = argparse.ArgumentParser()
 p.add_argument('-s', '--specstatus', type=str, required=False,
         help='Input tiles-specstatus.ecsv file')
-p.add_argument('-t', '--tiles', type=str, required=False,
+p.add_argument('-t', '--tilesfile', type=str, required=False,
         help='Input tiles.csv, default from $DESI_SPECTRO_REDUX/$SPECPROD/tiles.csv')
+p.add_argument('--tileids', type=str, required=False,
+        help='Comma separated list of TILEIDs to update; ignore others')
 p.add_argument('-o', '--outfile', type=str, required=False,
         help='output file; default overrides --specstatus in-place')
+p.add_argument('-n', '--lastnight', type=int, required=False,
+        help='Only update tiles from this LASTNIGHT')
 p.add_argument('--dry-run', action='store_true',
         help="Determine updates but don't write any files")
 p.add_argument('--force', action='store_true',
         help="run even if input specstatus is svn out-of-date")
+p.add_argument('--all', action='store_true',
+        help="update tiles even if LASTNIGHT isn't updated")
 
 args = p.parse_args()
 log = get_logger()
@@ -129,8 +42,8 @@ log = get_logger()
 if args.specstatus is None:
     args.specstatus = 'tiles-specstatus.ecsv'
 
-if args.tiles is None:
-    args.tiles = os.path.join(specprod_root(), 'tiles.csv')
+if args.tilesfile is None:
+    args.tilesfile = os.path.join(specprod_root(), 'tiles.csv')
 
 if args.outfile is None:
     args.outfile = args.specstatus
@@ -139,12 +52,12 @@ if not os.path.exists(args.specstatus):
     log.critical(f'Missing {args.specstatus}')
     sys.exit(1)
 
-if not os.path.exists(args.tiles):
-    log.critical(f'Missing {args.tiles}')
+if not os.path.exists(args.tilesfile):
+    log.critical(f'Missing {args.tilesfile}')
     sys.exit(1)
 
 log.info(f'Input specstatus {args.specstatus}')
-log.info(f'Updating with tiles from {args.tiles}')
+log.info(f'Updating with tiles from {args.tilesfile}')
 
 svndir = os.path.dirname(os.path.abspath(args.specstatus))
 try:
@@ -163,10 +76,30 @@ except ValueError:
         log.critical(f'Unable to determine if {svndir} is up-to-date; use --force to proceed anyway')
         sys.exit(1)
 
-tiles = Table.read(args.tiles)
+tiles = Table.read(args.tilesfile)
 specstatus = Table.read(args.specstatus)
 
-specstatus = update_specstatus(specstatus, tiles)
+if args.lastnight is not None:
+    keep = tiles['LASTNIGHT'] == args.lastnight
+    if np.sum(keep) > 0:
+        tiles = tiles[keep]
+    else:
+        log.critical(f'No input tiles with LASTNIGHT={args.lastnight}')
+        sys.exit(1)
+
+if args.tileids is not None:
+    tileids = [int(x) for x in args.tileids.split(',')]
+    keep = np.isin(tiles['TILEID'], tileids)
+    if np.sum(keep) > 0:
+        tiles = tiles[keep]
+    else:
+        log.critical(f'TILEIDs {tileids} not found in {args.tilesfile}')
+        sys.exit(1)
+
+if args.all:
+    log.info("Updating tiles even if LASTNIGHT isn't new")
+
+specstatus = update_specstatus(specstatus, tiles, update_all=args.all)
 
 if not args.dry_run:
     tmpfile = get_tempfilename(args.outfile)

@@ -206,10 +206,15 @@ for tileid, lastnight in archivetiles['TILEID','LASTNIGHT']:
     if (exposures is not None) and (not args.only_tiles):
         ii = (exposures['TILEID'] == tileid)
         for prefix in ['preproc', 'frame']:
-            for expnight, expid in exposures['NIGHT', 'EXPID'][ii]:
+            for expnight, expid, efftime in exposures['NIGHT', 'EXPID', 'EFFTIME_SPEC'][ii]:
                 tmpfile = findfile(prefix, expnight, expid, 'b0',
                                    specprod_dir=reduxdir)
                 path = os.path.dirname(tmpfile).replace(reduxdir+'/', '')
+
+                #- missing dir ok if efftime==0, otherwise error
+                if efftime == 0.0 and not os.path.exists(path):
+                    continue
+
                 exp_err = freezedir(path, args.dry_run)
                 tile_err |= exp_err
                 if exp_err != 0:
