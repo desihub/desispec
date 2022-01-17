@@ -44,7 +44,7 @@ def fibermap2tilepix(fibermap, nside=64):
     return tilepix
 
 def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
-        strict=False):
+        strict=False, nights=None, expids=None):
     """
     Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
 
@@ -63,6 +63,16 @@ def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
     expdir = f'{specprod_dir}/exposure_tables'
     exp_tables = list()
     for expfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
+
+        #- don't read file if it isn't in the nights list
+        if nights is not None:
+            tmp = os.path.splitext(os.path.basename(expfile))[0]
+            night = int(tmp.split('_')[2])
+            if night not in nights:
+                continue
+
+        #- read and filter entries to good science exposures of
+        #- requested survey/faprogram/expids
         t = Table.read(expfile)
         keep = (t['OBSTYPE'] == 'science')
         keep &= (t['LASTSTEP'] == 'all')
@@ -71,6 +81,8 @@ def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
             keep &= (t['SURVEY'] == survey)
         if faprogram is not None:
             keep &= (t['FAPRGRM'] == faprogram)
+        if expids is not None:
+            keep &= np.isin(t['EXPID'], expids)
 
         if np.any(keep):
             t = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
