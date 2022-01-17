@@ -2,12 +2,21 @@
 desispec Change Log
 ===================
 
-0.50.0 (unreleased)
+0.50.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.50.0 (2022-01-16)
+-------------------
+
+Used for the f5 test run part II.
 
 * Algorithmic changes:
 
   * Use sky fibers to correct for serial readout CTE problems (PR `#1571`_).
+  * Bug fixes for fiberflat_vs_humidity when near edge of model range
+    (PRs `#1589`_, `#1594`_).
 
 * Miscellaneous:
 
@@ -15,22 +24,34 @@ desispec Change Log
     during Dec 2021 (PR `#1539`_).
   * nightqa improved selection of which 5min dark was used (PR `#1584`_).
   * findfile(tileqapng) bugfix for tile/night QA (PR `#1585`_).
+  * night QA 5min DARK expid selection bug fix (PR `#1586`_).
+  * fix qprod non-empty fibermaps (PR `#1587`_).
+  * desi_update_specstatus --lastnight and --all options (PR `#1588`_).
+  * better desi_proc error tracking (PR `#1590`_).
+  * assemble_fibermap fail faster on invalid inputs (PR `#1592`_).
 
 .. _`#1539`: https://github.com/desihub/desispec/pull/1539
 .. _`#1571`: https://github.com/desihub/desispec/pull/1571
 .. _`#1584`: https://github.com/desihub/desispec/pull/1584
 .. _`#1585`: https://github.com/desihub/desispec/pull/1585
+.. _`#1586`: https://github.com/desihub/desispec/pull/1586
+.. _`#1587`: https://github.com/desihub/desispec/pull/1587
+.. _`#1588`: https://github.com/desihub/desispec/pull/1588
+.. _`#1589`: https://github.com/desihub/desispec/pull/1589
+.. _`#1590`: https://github.com/desihub/desispec/pull/1590
+.. _`#1592`: https://github.com/desihub/desispec/pull/1592
+.. _`#1594`: https://github.com/desihub/desispec/pull/1594
 
 0.49.1 (2022-01-10)
 -------------------
+
+Used for the f5 test run part I.
 
 * Fix propagation of per-camera keywords into per-camera fibermap
   (commit #0c7aa720)
 
 0.49.0 (2022-01-10)
 -------------------
-
-Used for the f5 test run.
 
 * Major algorithmic updates:
 
