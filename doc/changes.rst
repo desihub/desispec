@@ -5,7 +5,9 @@ desispec Change Log
 0.50.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Modification extname in QN afterburner outputs. Add flag in desi_qso_catalog_maker for retro-compatibility (PR `#1597`)
+
+.. _`#1597`: https://github.com/desihub/desispec/pull/1597
 
 0.50.0 (2022-01-16)
 -------------------
