@@ -41,6 +41,8 @@ def collect_argparser():
     parser.add_argument("--clobber", type=bool, required=False, default=True,
                         help="EXPAND (clobber=False) or OVERWRITE (clobber=True) the output file. By default clobber=True")
 
+    parser.add_argument("--use_old_extname_for_fitsio", type=bool, required=False, default=False,
+                        help="For FUJI extname QN+RR is remplaced by QN_RR to avoid error with newer version of fitsio (>= 1.1.3). To use desi_qso_qn_afterburner for everest and older files please activate this flag and use ONLY fitsio = 1.1.2")
 
     return parser.parse_args()
 
@@ -352,7 +354,12 @@ if __name__ == "__main__":
         # load info from mgii
         mgii_cat = fitsio.read(args.mgii, 'MGII')
         # load info from qn with new run of RR
-        qn_cat = fitsio.read(args.qn, 'QN+RR')
+        if args.use_old_extname_for_fitsio:
+            # before FUJI
+            qn_cat = fitsio.read(args.qn, 'QN+RR')
+        else:
+            # from FUJI
+            qn_cat = fitsio.read(args.qn, 'QN_RR')
 
         # Apply the selection following the flowchart
         QSO_from_RR = select_qso_with_RR(zbest, fibermap, exp_fibermap, qn_cat)
