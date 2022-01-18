@@ -791,7 +791,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
     else:
         all_valid_states = list(resubmission_states.copy())
-        all_valid_states.extend(['RUNNING','PENDING','SUBMITTED','PROCESSING'])
+        all_valid_states.extend(['RUNNING','PENDING','SUBMITTED','COMPLETED'])
         for idep in np.sort(np.atleast_1d(ideps)):
             if proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
                 log.warning(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
