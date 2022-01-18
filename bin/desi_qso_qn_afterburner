@@ -340,7 +340,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['Z_Halpha'] = np.array([dataframe['Z_LINES'][i][5] for i in range(dataframe.shape[0])])
 
     fits = fitsio.FITS(filename, 'rw', clobber=clobber)
-    fits.write(data, extname='QN+RR')
+    fits.write(data, extname='QN_RR')
     if clobber:
         log.info(f'OVERWRITE the file : {filename}')
     else:
