@@ -70,8 +70,12 @@ for what in [ "DWAVE" , "DLSF" ] :
         mdelta=np.max(np.abs(delta))
         if what=="DWAVE" :
             threshold=0.3
-        else :
+        elif what=="DLSF" :
             threshold=2.
+        else:
+            print(f"ERROR: unknown threshold for {what}; please update code")
+            sys.exit(1)
+
         if mdelta>threshold :
             print(f"skip {filename} with max {what} = {mdelta} > {threshold} A")
             continue
