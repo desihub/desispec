@@ -790,6 +790,17 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     if ideps is None:
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
     else:
+        all_valid_states = list(resubmission_states.copy())
+        all_valid_states.extend(['RUNNING','PENDING','SUBMITTED','PROCESSING'])
+        for idep in np.sort(np.atleast_1d(ideps)):
+            if proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
+                log.warning(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
+                            f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
+                            f" but that exposure has state" +
+                            f" {proc_table['STATUS'][id_to_row_map[idep]]} that" +
+                            f" isn't in the list of resubmission states." +
+                            f" Exiting this job's resubmission attempt.")
+                return proc_table, submits
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
             if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
