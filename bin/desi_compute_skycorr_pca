@@ -67,7 +67,15 @@ for what in [ "DWAVE" , "DLSF" ] :
             continue
         print("{} rms {} = {}".format(filename,what,rms))
 
-
+        mdelta=np.max(np.abs(delta))
+        if what=="DWAVE" :
+            threshold=0.3
+        else :
+            threshold=2.
+        if mdelta>threshold :
+            print(f"skip {filename} with max {what} = {mdelta} > {threshold} A")
+            continue
+        threshold=0.
         deltas.append(delta)
 
         if wave is None :
