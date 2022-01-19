@@ -974,9 +974,15 @@ def make_tile_qa_plot(
     fiberqa = h["FIBERQA"].data
     petalqa = h["PETALQA"].data
 
-    if not "SURVEY" in hdr :
-        log.info("no SURVEY keyword in header, skip this tile")
-        return
+    # AR handling cases with no SURVEY, FAPRGRM, EBVFAC
+    # AR (can happen for early tiles)
+    for key,val in zip(
+        ["SURVEY", "FAPRGRM", "EBVFAC"],
+        ["none", "none", -1.0],
+    ):
+        if not key in hdr :
+            hdr[key] = val
+            log.warning("no {} keyword in header".format(key))
 
     # AR start plotting
     fig = plt.figure(figsize=(20, 15))
