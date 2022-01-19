@@ -80,6 +80,33 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
             exposure_fiberqa_table , exposure_petalqa_table = read_exposure_qa(filename)
         if exposure_qa_meta is None :
             exposure_qa_meta = exposure_fiberqa_table.meta
+            # AR case no GOALTIME, MINTFRAC (can happen for early tiles):
+            # - set GOALTIME=1000/150/30 for dark,cmx/bright/backup
+            # - set MINTFRAC=0.9
+            if "GOALTIME" not in exposure_qa_meta:
+                fafn = findfile("fiberassign", night=night, expid=expid, tile=tileid)
+                if not os.path.isfile(fafn):
+                    log.error("missing {}".format(fafn))
+                    raise FileNotFoundError("missing {}".format(fafn))
+                fahdr = fitsio.read_header(fafn, 0)
+                if "TARG" not in fahdr:
+                    log.error("TARG keyword missing in {} header".format(fafn))
+                    raise ValueError("TARG keyword missing in {} header".format(fafn))
+                prog = os.path.basename(os.path.normpath(fahdr["TARG"]))
+                if prog in ["no-obscon", "dark"]:
+                    exposure_qa_meta["GOALTIME"] = 1000
+                elif prog == "bright":
+                    exposure_qa_meta["GOALTIME"] = 150
+                elif prog == "backup":
+                    exposure_qa_meta["GOALTIME"] = 30
+                if "GOALTIME" in exposure_qa_meta:
+                    log.warning("no GOALTIME -> setting GOALTIME={}, as prog={}".format(exposure_qa_meta["GOALTIME"], prog))
+                else:
+                    log.error("could not identify prog")
+                    raise ValueError("could not identify prog")
+            if "MINTFRAC" not in exposure_qa_meta:
+                exposure_qa_meta["MINTFRAC"] = 0.9
+                log.warning("no MINTFRAC -> setting MINTFRAC=0.9")
         else :
             exposure_fiberqa_table.meta=None # otherwise MergeConflictWarning
             exposure_petalqa_table.meta=None # otherwise MergeConflictWarning
