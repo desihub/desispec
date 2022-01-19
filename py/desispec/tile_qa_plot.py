@@ -875,13 +875,19 @@ def get_expids_efftimes(tileqafits, prod):
         "spectra-*-{}-*{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
     )
     spectra_fns = sorted(glob(tmpstr))
-    # AR then try based on prod, defaulting to "cumulative"
+    # AR then try based on prod ("cumulative", then "pernight")
     if len(spectra_fns) == 0:
         tileid = hdr['TILEID']
         night = hdr['LASTNITE']
-        tiledir = os.path.dirname(findfile("spectra", tile=tileid, night=night, spectrograph=0))
-        tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits')
-        spectra_fns = sorted(glob(tmpstr))
+        for groupname in ["cumulative", "pernight"]:
+            if len(spectra_fns) == 0:
+                tiledir = os.path.dirname(
+                    findfile(
+                        "spectra", tile=tileid, groupname=groupname, night=night, spectrograph=0
+                    )
+                )
+                tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits')
+                spectra_fns = sorted(glob(tmpstr))
     if len(spectra_fns) > 0:
         fmap = read_fibermap(spectra_fns[0])
         expids, ii = np.unique(fmap["EXPID"], return_index=True)
