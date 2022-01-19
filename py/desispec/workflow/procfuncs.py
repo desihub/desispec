@@ -735,7 +735,8 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
     proc_table = update_from_queue(proc_table, dry_run=False)
     log.info("Updated processing table queue information:")
-    cols = ['INTID','EXPID','OBSTYPE','JOBDESC','TILEID','LATEST_QID','STATUS']
+    cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
+            'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
     print(np.array(cols))
     for row in proc_table:
         print(np.array(row[cols]))
