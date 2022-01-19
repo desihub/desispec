@@ -82,7 +82,7 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', -99         ]
 
     colnames2 += [ 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
-    coltypes2 += [  int         , 'S10'   , 'S40'       ]
+    coltypes2 += [  int         , 'S14'   , 'S40'       ]
     coldeflt2 += [ -99          , 'U'     , ''   ]
 
     colnames2 += ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
