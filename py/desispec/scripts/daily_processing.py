@@ -223,6 +223,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     all_exps = set(etable['EXPID'])
     arcs, flats, sciences, calibjobs, curtype, lasttype, \
     curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
+    do_bias = ('bias' in procobstypes or 'dark' in procobstypes)
 
     ## While running on the proper night and during night hours,
     ## or doing a dry_run or override_night, keep looping
@@ -317,7 +318,7 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             curtype,curtile = get_type_and_tile(erow)
 
-            if lasttype is None and curtype != 'dark':
+            if lasttype is None and curtype != 'dark' and do_bias:
                 print("\nNo dark found at the beginning of the night."
                       + "Submitting nightlybias before processing exposures.\n")
                 prow = default_prow()
