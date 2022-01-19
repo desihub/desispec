@@ -275,6 +275,15 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         curtype, curtile = get_type_and_tile(erow)
 
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
+            cur_z_submit_types = z_submit_types
+            if lasttype == 'science':
+                tile_exps = etable['EXPID'][etable['TILEID'] == lasttile]
+                unprocd_exps = [exp not in ptable_expids for exp in tile_exps]
+                if np.any(unprocd_exps):
+                    if 'perexp' in z_submit_types:
+                        cur_z_submit_types = ['perexp']
+                    else:
+                        cur_z_submit_types = None
             ptable, calibjobs, sciences, internal_id \
                 = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences,
                                                 calibjobs,
@@ -285,7 +294,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                                 strictly_successful=True,
                                                 check_for_outputs=check_for_outputs,
                                                 resubmit_partial_complete=resubmit_partial_complete,
-                                                z_submit_types=z_submit_types,
+                                                z_submit_types=cur_z_submit_types,
                                                 system_name=system_name)
 
         prow = erow_to_prow(erow)
@@ -310,7 +319,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         ## Add the processing row to the processing table
         ptable.add_row(prow)
-        #ptable_expids = np.append(ptable_expids, erow['EXPID'])
+        ptable_expids = np.append(ptable_expids, erow['EXPID'])
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and calibjobs['nightlyflat'] is None \
