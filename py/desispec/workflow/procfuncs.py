@@ -800,6 +800,7 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
                             f" {proc_table['STATUS'][id_to_row_map[idep]]} that" +
                             f" isn't in the list of resubmission states." +
                             f" Exiting this job's resubmission attempt.")
+                proc_table['STATUS'][rown] = "DEPFAIL"
                 return proc_table, submits
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
