@@ -943,7 +943,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                           & (ptable['TILEID'] == int(zprows[0]['TILEID'])) )
         nightly_zprows = []
         for prow in ptable[prow_selection]:
-            nightly_zprows.append(prow)
+            nightly_zprows.append(table_row_to_dict(prow))
 
         for zsubtype in z_submit_types:
             if zsubtype == 'perexp':
