@@ -260,11 +260,12 @@ def read_raw(filename, camera, fibermapfile=None, fill_header=None, **kwargs):
 
         ## Mask bad fibers
         fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BROKENFIBERS"]))] |= maskbits.fibermask.BROKENFIBER
-        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BADCOLUMNFIBERS"]))] |= maskbits.fibermask.BADCOLUMN
+
+        fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["BADCOLUMNFIBERS"]))] |= badamp_bit
         fibermap['FIBERSTATUS'][np.in1d(fibers,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"]))] |= maskbits.fibermask.LOWTRANSMISSION
         # Also, for backward compatibility
         fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BROKENFIBERS"])%500)] |= maskbits.fibermask.BROKENFIBER
-        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BADCOLUMNFIBERS"])%500)] |= maskbits.fibermask.BADCOLUMN
+        fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["BADCOLUMNFIBERS"])%500)] |= badamp_bit
         fibermap['FIBERSTATUS'][np.in1d(fibers%500,cfinder.badfibers(["LOWTRANSMISSIONFIBERS"])%500)] |= maskbits.fibermask.LOWTRANSMISSION
 
         # Mask Fibers that are set to be excluded due to CCD/amp/readout issues
