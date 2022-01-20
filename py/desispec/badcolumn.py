@@ -80,14 +80,14 @@ def compute_badcolumn_specmask(frame,xyset,badcolumns_table,threshold_value=0.00
 
     return mask
 
-def compute_badcolumn_fibermask(frame_mask,camera_arm,threshold_specfrac=0.4) :
+def compute_badcolumn_fibermask(frame_mask,camera_arm,threshold_specfrac=0.6) :
     """
     fills a mask for fibers affected by a bad CCD column.
 
     Args:
 
      frame_mask: 2D integer numpy array (nfibers x nwavelength), with bitmask defined in desispec.maskbits.specmask
-     threshold_specfrac: fraction of specmask.BADCOLUMN masked pixels to trigger a fibermask bitmask fibermask.BADCOLUMN.
+     threshold_specfrac: fraction of specmask.BADCOLUMN masked pixels to trigger a fibermask bitmask fibermask.BADAMP... .
      camera_arm: 'B','R' or 'Z'
 
     Returns:
@@ -109,7 +109,7 @@ def compute_badcolumn_fibermask(frame_mask,camera_arm,threshold_specfrac=0.4) :
 
     return fiber_mask
 
-def add_badcolumn_mask(frame,xyset,badcolumns_table,threshold_value=0.005,threshold_specfrac=0.4) :
+def add_badcolumn_mask(frame,xyset,badcolumns_table,threshold_value=0.005,threshold_specfrac=0.6) :
     """
     Modifies the input frame spectral mask and fiber mask (frame.mask and frame.fibermap["FIBERSTATUS"].mask)
     by adding (bitwise OR) the BADCOLUMN bits for values/fibers affected by bad CCD columns.
