@@ -78,6 +78,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     if proc_obstypes is None:
         proc_obstypes = default_obstypes_for_proctable()
+    print(f"Processing the following obstypes: {proc_obstypes}")
 
     ## Determine where the exposure table will be written
     if exp_table_path is None:
@@ -137,6 +138,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         for laststep in laststeps:
             if laststep not in laststep_options:
                 raise ValueError(f"Couldn't understand laststep={laststep} in laststeps={laststeps}.")
+    print(f"Processing exposures with the following LASTSTEP's: {laststeps}")
 
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
     if os.path.exists(proc_table_pathname):

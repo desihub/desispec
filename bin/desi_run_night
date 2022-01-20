@@ -75,7 +75,7 @@ def parse_args():  # options=None):
 
     # convert str lists to actual lists
     if args.proc_obstypes is not None:
-        args.proc_obstypes = [pobstypes.strip().lower() for pobstypes in
+        args.proc_obstypes = [pobstype.strip().lower() for pobstype in
                                    args.proc_obstypes.split(',')]
 
     if args.tiles is not None:
