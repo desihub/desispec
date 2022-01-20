@@ -9,7 +9,8 @@ from astropy.table import Table, vstack
 from desispec.workflow.tableio import load_tables, write_table
 from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.timing import what_night_is_it
-from desispec.workflow.exptable import get_exposure_table_path, get_exposure_table_name
+from desispec.workflow.exptable import get_exposure_table_path, \
+    get_exposure_table_name, get_last_step_options
 from desispec.workflow.proctable import default_obstypes_for_proctable, get_processing_table_path, \
                                         get_processing_table_name, erow_to_prow, table_row_to_dict, \
                                         default_prow
@@ -19,12 +20,13 @@ from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
 from desispec.workflow.desi_proc_funcs import get_desi_proc_batch_file_path
 from desispec.io.util import decode_camword, difference_camwords, create_camword
 
-def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime', reservation=None, system_name=None,
+def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime',
+                 reservation=None, system_name=None,
                  exp_table_path=None, proc_table_path=None, tab_filetype='csv',
                  dry_run_level=0, dry_run=False, no_redshifts=False, error_if_not_available=True,
                  append_to_proc_table=False, ignore_proc_table_failures = False,
                  dont_check_job_outputs=False, dont_resubmit_partial_jobs=False,
-                 tiles=None, surveys=None):
+                 tiles=None, surveys=None, laststeps=None):
     """
     Creates a processing table and an unprocessed table from a fully populated exposure table and submits those
     jobs for processing (unless dry_run is set).
@@ -64,7 +66,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                                           remaining cameras not found to exist.
         tiles, array-like, optional. Only submit jobs for these TILEIDs.
         surveys, array-like, optional. Only submit science jobs for these surveys (lowercase)
-
+        laststeps, array-like, optional. Only submit jobs for exposures with LASTSTEP in these laststeps (lowercase)
     Returns:
         None.
     """
@@ -127,6 +129,15 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     elif dry_run_level > 0:
         dry_run = True
 
+    ## If laststeps not defined, default is only LASTSTEP=='all' exposures
+    if laststeps is None:
+        laststeps = ['all']
+    else:
+        laststep_options = get_last_step_options()
+        for laststep in laststeps:
+            if laststep not in laststep_options:
+                raise ValueError(f"Couldn't understand laststep={laststep} in laststeps={laststeps}.")
+
     ## Check if night has already been submitted and don't submit if it has, unless told to with ignore_existing
     if os.path.exists(proc_table_pathname):
         if not append_to_proc_table:
@@ -143,6 +154,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
     ## Load in the files defined above
     etable, ptable = load_tables(tablenames=table_pathnames, tabletypes=table_types)
+    full_etable = etable.copy()
 
     ## filter by TILEID if requested
     if tiles is not None:
@@ -150,9 +162,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         if etable is not None:
             keep = np.isin(etable['TILEID'], tiles)
             etable = etable[keep]
-        if ptable is not None:
-            keep = np.isin(ptable['TILEID'], tiles)
-            ptable = ptable[keep]
+        #if ptable is not None:
+        #    keep = np.isin(ptable['TILEID'], tiles)
+        #    ptable = ptable[keep]
 
     if surveys is not None:
         log.info(f'Filtering by surveys={surveys}')
@@ -168,13 +180,20 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                 keep |= etable['SURVEY'] == survey
 
             etable = etable[keep]
-        if ptable is not None:
-            # ptable doesn't have "SURVEY", so filter by the TILEIDs we just kept
-            keep = np.isin(ptable['TILEID'], etable['TILEID'])
-            ptable = ptable[keep]
+        #if ptable is not None:
+        #    # ptable doesn't have "SURVEY", so filter by the TILEIDs we just kept
+        #    keep = np.isin(ptable['TILEID'], etable['TILEID'])
+        #    ptable = ptable[keep]
 
-    good_exps = np.array([col.lower() != 'ignore' for col in etable['LASTSTEP']]).astype(bool)
-    good_types = np.array([val in proc_obstypes for val in etable['OBSTYPE']]).astype(bool)
+    ## Cut on LASTSTEP
+    good_exps = np.isin(etable['LASTSTEP'], laststeps)
+    etable = etable[good_exps]
+
+    ## Cut on OBSTYPES
+    good_types = np.isin(etable['OBSTYPE'], proc_obstypes)
+    etable = etable[good_types]
+
+    ## Cut on EXPTIME
     good_exptimes = []
     for erow in etable:
         if erow['OBSTYPE'] == 'science' and erow['EXPTIME'] < 60:
@@ -185,32 +204,20 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             good_exptimes.append(False)
         else:
             good_exptimes.append(True)
-
-    good_exptimes = np.array(good_exptimes)
-    good = (good_exps & good_types & good_exptimes)
-    unproc_table = etable[~good]
-    etable = etable[good]
-
+    etable = etable[np.array(good_exptimes)]
 
     ## Simple table organization to ensure cals processed first
     ## To be eventually replaced by more sophisticated cal selection
     ## Get one dark first
     isdark = np.array([erow['OBSTYPE'] == 'dark' and 'calib' in erow['PROGRAM']
-              and np.abs(float(erow['EXPTIME'])-300.) < 1. for erow in etable])
+                       for erow in etable])
     if np.sum(isdark)>0:
         wheredark = np.where(isdark)[0]
-        if len(wheredark) > 1:
-            unproc_table = vstack([unproc_table, etable[wheredark[1:]]])
-            unproc_table.sort('EXPID')
         etable = vstack([etable[wheredark[0]], etable[~isdark]])
 
     ## Then get rest of the cals above scis
     issci = (etable['OBSTYPE'] == 'science')
     etable = vstack([etable[~issci], etable[issci]])
-
-    ## Done determining what not to process, so write out unproc file
-    if dry_run_level < 3:
-        write_table(unproc_table, tablename=unproc_table_pathname)
 
     ## Get relevant data from the tables
     arcs, flats, sciences, calibjobs, curtype, lasttype, \
@@ -231,6 +238,16 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         ptable_expids = np.array([], dtype=int)
 
     tableng = len(ptable)
+
+    ## Now figure out everything that isn't in the final list, which we'll
+    ## Write out to the unproccessed table
+    toprocess = np.isin(full_etable['EXPID'], etable['EXPID'])
+    processed = np.isin(full_etable['EXPID'], ptable_expids)
+    unproc_table = full_etable[~(toprocess|processed)]
+
+    ## Done determining what not to process, so write out unproc file
+    if dry_run_level < 3:
+        write_table(unproc_table, tablename=unproc_table_pathname)
 
     ## If just starting out and no dark, do the nightlybias
     do_bias = ('bias' in proc_obstypes or 'dark' in proc_obstypes)
