@@ -937,19 +937,18 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
 
     ## Now run redshifts
     if descriptor == 'science' and len(zprows) > 0 and z_submit_types is not None:
-        log.info(" ")
-        nightly_zprows = zprows.copy()
-        zprow_intids = [zprow['INTID'] for zprow in zprows]
         prow_selection = (  (ptable['OBSTYPE'] == 'science')
                           & (ptable['LASTSTEP'] == 'all')
                           & (ptable['JOBDESC'] == 'poststdstar')
                           & (ptable['TILEID'] == int(zprows[0]['TILEID'])) )
+        nightly_zprows = []
         for prow in ptable[prow_selection]:
-            if prow['INTID'] not in zprow_intids:
-                nightly_zprows.append(prow)
+            nightly_zprows.append(prow)
+
         for zsubtype in z_submit_types:
             if zsubtype == 'perexp':
                 for zprow in zprows:
+                    log.info(" ")
                     log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
                     joint_prow = make_joint_prow([zprow], descriptor=zsubtype, internal_id=internal_id)
                     internal_id += 1
@@ -958,6 +957,7 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
                     ptable.add_row(joint_prow)
             else:
+                log.info(" ")
                 log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {nightly_zprows[0]['TILEID']}.")
                 expids = [prow['EXPID'][0] for prow in nightly_zprows]
                 log.info(f"Expids: {expids}.\n")
