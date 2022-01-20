@@ -80,7 +80,7 @@ def compute_badcolumn_specmask(frame,xyset,badcolumns_table,threshold_value=0.00
 
     return mask
 
-def compute_badcolumn_fibermask(frame_mask,threshold_specfrac=0.4) :
+def compute_badcolumn_fibermask(frame_mask,camera_arm,threshold_specfrac=0.4) :
     """
     fills a mask for fibers affected by a bad CCD column.
 
@@ -88,7 +88,7 @@ def compute_badcolumn_fibermask(frame_mask,threshold_specfrac=0.4) :
 
      frame_mask: 2D integer numpy array (nfibers x nwavelength), with bitmask defined in desispec.maskbits.specmask
      threshold_specfrac: fraction of specmask.BADCOLUMN masked pixels to trigger a fibermask bitmask fibermask.BADCOLUMN.
-
+    camera_arm: 'B','R' or 'Z'
     Returns:
 
      fiber mask 1D numpy array of size nfibers (bitwise OR of the orginal mask with the newly set bits)
@@ -97,7 +97,12 @@ def compute_badcolumn_fibermask(frame_mask,threshold_specfrac=0.4) :
 
     fiber_mask = np.zeros(frame_mask.shape[0],dtype='uint32')
     badfibers  = np.sum((frame_mask & specmask.BADCOLUMN)>0,axis=1) >= (threshold_specfrac*frame_mask.shape[1])
-    fiber_mask[badfibers] |= fibermask.BADCOLUMN
+    camera_arm_up = camera_arm.upper()
+    if camera_arm_up not in ["B","R","Z"] :
+        mess="camera_arm must be B,R or Z (upper or lower case)"
+        log.error(mess)
+        raise ValueError(mess)
+    fiber_mask[badfibers] |= fibermask["BADAMP"+camera_arm_up]
 
     log.info("Masked {} fibers".format(np.sum(badfibers)))
 
@@ -131,5 +136,6 @@ def add_badcolumn_mask(frame,xyset,badcolumns_table,threshold_value=0.005,thresh
     else :
         frame.mask = mask
 
-    fiber_mask = compute_badcolumn_fibermask(frame.mask,threshold_specfrac=threshold_specfrac)
+    camera_arm = frame.meta["CAMERA"][0].upper()
+    fiber_mask = compute_badcolumn_fibermask(frame.mask,camera_arm,threshold_specfrac=threshold_specfrac)
     frame.fibermap["FIBERSTATUS"] |= fiber_mask
