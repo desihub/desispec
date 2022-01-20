@@ -281,7 +281,11 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
                 tile_exps = etable['EXPID'][etable['TILEID'] == lasttile]
                 unprocd_exps = [exp not in ptable_expids for exp in tile_exps]
                 if np.any(unprocd_exps):
+                    print(f"Identified that tile {lasttile} has future exposures"
+                          + f" for this night. Not submitting full night "
+                          + f"redshift jobs.")
                     if 'perexp' in z_submit_types:
+                        print("Still submitting perexp redshifts")
                         cur_z_submit_types = ['perexp']
                     else:
                         cur_z_submit_types = None
