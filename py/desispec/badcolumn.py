@@ -88,7 +88,8 @@ def compute_badcolumn_fibermask(frame_mask,camera_arm,threshold_specfrac=0.4) :
 
      frame_mask: 2D integer numpy array (nfibers x nwavelength), with bitmask defined in desispec.maskbits.specmask
      threshold_specfrac: fraction of specmask.BADCOLUMN masked pixels to trigger a fibermask bitmask fibermask.BADCOLUMN.
-    camera_arm: 'B','R' or 'Z'
+     camera_arm: 'B','R' or 'Z'
+
     Returns:
 
      fiber mask 1D numpy array of size nfibers (bitwise OR of the orginal mask with the newly set bits)
