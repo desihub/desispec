@@ -230,9 +230,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     else:
         ptable_expids = np.array([], dtype=int)
 
-    ## Loop over new exposures and process them as relevant to that type
     tableng = len(ptable)
 
+    ## If just starting out and no dark, do the nightlybias
     do_bias = ('bias' in proc_obstypes or 'dark' in proc_obstypes)
     if tableng == 0 and np.sum(isdark) == 0 and do_bias:
         print("\nNo dark found. Submitting nightlybias before processing exposures.\n")
@@ -264,6 +264,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             sleep_and_report(2, message_suffix=f"after nightlybias",
                              dry_run=dry_run)
 
+    ## Loop over new exposures and process them as relevant to that type
     for ii, erow in enumerate(etable):
         if erow['EXPID'] in ptable_expids:
             continue

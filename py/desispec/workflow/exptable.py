@@ -823,7 +823,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             outdict['LASTSTEP'] = 'ignore'
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
             log.warning(f"LASTSTEP CHANGE. Exposure {exp} identified as system test. Not processing.")
-        elif obstype == 'skysub' and 'undither' in outdict['PROGRAM']:
+        elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
             outdict['LASTSTEP'] = 'skysub'
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as undithered. Processing through " +
                         "sky subtraction.")
