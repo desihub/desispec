@@ -195,7 +195,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     ## Simple table organization to ensure cals processed first
     ## To be eventually replaced by more sophisticated cal selection
     ## Get one dark first
-    isdark = (etable['OBSTYPE'] == 'dark')
+    isdark = np.array([erow['OBSTYPE'] == 'dark' and 'calib' in erow['PROGRAM']
+              and np.abs(float(erow['EXPTIME'])-300.) < 1. for erow in etable])
     if np.sum(isdark)>0:
         wheredark = np.where(isdark)[0]
         if len(wheredark) > 1:
