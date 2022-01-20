@@ -278,7 +278,8 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
             cur_z_submit_types = z_submit_types
             if lasttype == 'science':
-                tile_exps = etable['EXPID'][etable['TILEID'] == lasttile]
+                tile_exps = etable['EXPID'][((etable['TILEID'] == lasttile) &
+                                             (etable['LASTSTEP'] == 'all'))]
                 unprocd_exps = [exp not in ptable_expids for exp in tile_exps]
                 if np.any(unprocd_exps):
                     print(f"Identified that tile {lasttile} has future exposures"
