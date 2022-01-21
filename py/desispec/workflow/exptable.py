@@ -824,19 +824,13 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
             log.warning(f"LASTSTEP CHANGE. Exposure {exp} identified as system test. Not processing.")
         elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
-            outdict['LASTSTEP'] = 'fluxcal'
+            outdict['LASTSTEP'] = 'skysub'
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as undithered. Processing through " +
-                        "flux calibration.")
+                        "sky subtraction.")
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'undithered dither')
-        elif obstype == 'science' and 'dither' in outdict['PROGRAM']:
+        elif (obstype == 'science' and 'dither' in outdict['PROGRAM']) or extra_in_fba:
             outdict['LASTSTEP'] = 'skysub'
-            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
-            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as dither. Processing " +
-                        "through sky subtraction.")
-        ## Otherwise flag exposure based on "extra" hdu being in the fiberassign file
-        elif extra_in_fba:
-            outdict['LASTSTEP'] = 'skysub'
-            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
+            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither seq')
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as dither. Processing " +
                         "through sky subtraction.")
         ## Otherwise check that the data meets quality standards

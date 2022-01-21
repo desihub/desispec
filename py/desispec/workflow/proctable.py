@@ -116,7 +116,7 @@ def default_obstypes_for_proctable():
         list. A list of default obstypes to be included in a processing table.
     """
     ## Define the science types to be included in the exposure table (case insensitive)
-    return ['arc', 'dark', 'flat', 'science', 'twilight', 'sci', 'dither']
+    return ['bias', 'dark', 'arc', 'flat', 'science', 'twilight', 'sci', 'dither']
 
 def get_processing_table_name(specprod=None, prodmod=None, extension='csv'):
     """

@@ -936,11 +936,22 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                 zprows.append(row)
 
     ## Now run redshifts
-    if descriptor == 'science' and len(zprows) > 0:
-        log.info(" ")
+    if descriptor == 'science' and len(zprows) > 0 and z_submit_types is not None:
+        prow_selection = (  (ptable['OBSTYPE'] == 'science')
+                          & (ptable['LASTSTEP'] == 'all')
+                          & (ptable['JOBDESC'] == 'poststdstar')
+                          & (ptable['TILEID'] == int(zprows[0]['TILEID'])) )
+        nightly_zprows = []
+        if np.sum(prow_selection) == len(zprows):
+            nightly_zprows = zprows.copy()
+        else:
+            for prow in ptable[prow_selection]:
+                nightly_zprows.append(table_row_to_dict(prow))
+
         for zsubtype in z_submit_types:
             if zsubtype == 'perexp':
                 for zprow in zprows:
+                    log.info(" ")
                     log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
                     joint_prow = make_joint_prow([zprow], descriptor=zsubtype, internal_id=internal_id)
                     internal_id += 1
@@ -949,8 +960,11 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
                     ptable.add_row(joint_prow)
             else:
-                log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.\n")
-                joint_prow = make_joint_prow(zprows, descriptor=zsubtype, internal_id=internal_id)
+                log.info(" ")
+                log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {nightly_zprows[0]['TILEID']}.")
+                expids = [prow['EXPID'][0] for prow in nightly_zprows]
+                log.info(f"Expids: {expids}.\n")
+                joint_prow = make_joint_prow(nightly_zprows, descriptor=zsubtype, internal_id=internal_id)
                 internal_id += 1
                 joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,
