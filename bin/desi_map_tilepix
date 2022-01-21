@@ -32,7 +32,7 @@ assert args.outfile.endswith('.fits')
 #- tilepix[tileid][petal] = [list of healpix]
 tilepix = dict()
 
-spectrafiles = sorted(iterfiles(f'{args.reduxdir}/healpix/sv', 'spectra-'))
+spectrafiles = sorted(iterfiles(f'{args.reduxdir}/healpix', 'spectra-'))
 
 n = len(spectrafiles)
 if n == 0:
