@@ -11,6 +11,7 @@ import subprocess
 from pkg_resources import resource_filename
 import yaml
 from glob import glob
+from datetime import datetime
 import tempfile
 from desitarget.targetmask import desi_mask, bgs_mask
 from desitarget.io import read_targets_in_tiles
@@ -20,8 +21,11 @@ from desispec.tsnr import tsnr2_to_efftime
 from desimodel.focalplane.geometry import get_tile_radius_deg
 from desimodel.footprint import is_point_in_desi
 from desiutil.log import get_logger
+from desiutil.dust import ebv as dust_ebv
 from astropy.table import Table, vstack
 from astropy.io import fits
+from astropy import units
+from astropy.coordinates import SkyCoord
 import fitsio
 import numpy as np
 import healpy as hp
@@ -29,10 +33,6 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import matplotlib
 import matplotlib.image as mpimg
-from desiutil.dust import ebv as dust_ebv
-from astropy import units
-from astropy.coordinates import SkyCoord
-from datetime import datetime
 
 
 log = get_logger()
