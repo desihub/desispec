@@ -228,13 +228,20 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         ptable = update_from_queue(ptable, dry_run=0)
         if dry_run_level < 3:
             write_table(ptable, tablename=proc_table_pathname)
-        if any_jobs_not_complete(ptable['STATUS']) and not ignore_proc_table_failures:
-            print("ERROR: Some jobs have an incomplete job status. This script will "+
-                  "not fix them. You should remedy those first. Exiting")
-            return
+        if any_jobs_not_complete(ptable['STATUS']):
+            if not ignore_proc_table_failures:
+                print("ERROR: Some jobs have an incomplete job status. This script "
+                      + "will not fix them. You should remedy those first. "
+                      + "To proceed anyway use '--ignore-proc-table-failures'. Exiting.")
+                return
+            else:
+                print("Warning: Some jobs have an incomplete job status, but "
+                      + "you entered '--ignore-proc-table-failures'. This "
+                      + "script will not fix them. "
+                      + "You should have fixed those first. Proceeding...")
         ptable_expids = np.unique(np.concatenate(ptable['EXPID']))
         if len(set(etable['EXPID']).difference(set(ptable_expids))) == 0:
-            print("ERROR: All EXPID's already present in processing table. Exiting")
+            print("All EXPID's already present in processing table, nothing to run. Exiting")
             return
     else:
         ptable_expids = np.array([], dtype=int)
