@@ -32,19 +32,18 @@ assert args.outfile.endswith('.fits')
 #- tilepix[tileid][petal] = [list of healpix]
 tilepix = dict()
 
-coadds = sorted(iterfiles(f'{args.reduxdir}/healpix/sv2/dark/60', 'spectra-'))
-#coadds = sorted(iterfiles(f'{args.reduxdir}/healpix', 'coadd-'))
-#fibermaps = sorted(iterfiles(f'{args.reduxdir}/preproc', 'fibermap'))
+spectrafiles = sorted(iterfiles(f'{args.reduxdir}/healpix/sv2/dark/60/600', 'spectra-'))
+#spectrafiles = sorted(iterfiles(f'{args.reduxdir}/healpix', 'spectra-'))
 
-n = len(coadds)
+n = len(spectrafiles)
 if n == 0:
-    log.error(f'No coadded spectra found in {args.reduxdir}/healpix')
+    log.error(f'No spectra found in {args.reduxdir}/healpix')
     sys.exit(1)
 else:
-    log.info(f'Processing {n} coadded spectra from {args.reduxdir}/healpix')
+    log.info(f'Processing {n} spectra from {args.reduxdir}/healpix')
 
 columns = ['PETAL_LOC', 'TARGET_RA', 'TARGET_DEC', 'TILEID']
-for filename in coadds:
+for filename in spectrafiles:
     fm = fitsio.read(filename, 'FIBERMAP', columns=columns)
     for tileid in set(fm['TILEID']):
         if tileid in tilepix:
@@ -53,7 +52,7 @@ for filename in coadds:
             shortfile = filename.replace(f'{args.reduxdir}/healpix/', '')
             log.info(f'tile {tileid} fibermap {shortfile}')
             fmtile = fm[fm['TILEID'] == tileid]
-            tilepix[tileid] = fibermap2tilepix(fmtile, args.nside)
+            tilepix[str(tileid)] = fibermap2tilepix(fmtile, args.nside)
 
 #- Convert to a table
 rows = list()
@@ -70,7 +69,6 @@ tx.meta['EXTNAME'] = 'TILEPIX'
 tx.meta['HPXNSIDE'] = args.nside
 tx.meta['HPXNEST'] = True
 tx.write(args.outfile, overwrite=True)
-import pdb ; pdb.set_trace()    
 
 jsonout = os.path.splitext(args.outfile)[0] + '.json'
 with open(jsonout, 'w') as fx:
