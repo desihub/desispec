@@ -875,13 +875,19 @@ def get_expids_efftimes(tileqafits, prod):
         "spectra-*-{}-*{}.fits".format(hdr["TILEID"], hdr["LASTNITE"]),
     )
     spectra_fns = sorted(glob(tmpstr))
-    # AR then try based on prod, defaulting to "cumulative"
+    # AR then try based on prod ("cumulative", then "pernight")
     if len(spectra_fns) == 0:
         tileid = hdr['TILEID']
         night = hdr['LASTNITE']
-        tiledir = os.path.dirname(findfile("spectra", tile=tileid, night=night, spectrograph=0))
-        tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits')
-        spectra_fns = sorted(glob(tmpstr))
+        for groupname in ["cumulative", "pernight"]:
+            if len(spectra_fns) == 0:
+                tiledir = os.path.dirname(
+                    findfile(
+                        "spectra", tile=tileid, groupname=groupname, night=night, spectrograph=0
+                    )
+                )
+                tmpstr = os.path.join(tiledir, f'spectra-*-{tileid}-*{night}.fits')
+                spectra_fns = sorted(glob(tmpstr))
     if len(spectra_fns) > 0:
         fmap = read_fibermap(spectra_fns[0])
         expids, ii = np.unique(fmap["EXPID"], return_index=True)
@@ -974,9 +980,15 @@ def make_tile_qa_plot(
     fiberqa = h["FIBERQA"].data
     petalqa = h["PETALQA"].data
 
-    if not "SURVEY" in hdr :
-        log.info("no SURVEY keyword in header, skip this tile")
-        return
+    # AR handling cases with no SURVEY, FAPRGRM, EBVFAC
+    # AR (can happen for early tiles)
+    for key,val in zip(
+        ["SURVEY", "FAPRGRM", "EBVFAC"],
+        ["none", "none", -1.0],
+    ):
+        if not key in hdr :
+            hdr[key] = val
+            log.warning("no {} keyword in header".format(key))
 
     # AR start plotting
     fig = plt.figure(figsize=(20, 15))
