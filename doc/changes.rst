@@ -11,6 +11,8 @@ desispec Change Log
 
 * Miscellaneous:
 
+  * Ensure ``tilepix.fits`` only contains healpixels with reduced data (PR
+    `#1614`_).  
   * Approximate for missing turbulence corrections in FIBER_RA/DEC
     during Dec 2021 (PR `#1539`_).
   * nightqa improved selection of which 5min dark was used (PR `#1584`_).
@@ -20,6 +22,7 @@ desispec Change Log
 .. _`#1571`: https://github.com/desihub/desispec/pull/1571
 .. _`#1584`: https://github.com/desihub/desispec/pull/1584
 .. _`#1585`: https://github.com/desihub/desispec/pull/1585
+.. _`#1614`: https://github.com/desihub/desispec/pull/1614
 
 0.49.1 (2022-01-10)
 -------------------
