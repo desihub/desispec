@@ -2,12 +2,30 @@
 desispec Change Log
 ===================
 
-0.50.1 (unreleased)
+0.50.2 (unreleased)
 -------------------
 
-* Modification extname in QN afterburner outputs. Add flag in desi_qso_catalog_maker for retro-compatibility (PR `#1597`_).
+* No changes yet.
+
+0.50.1 (2022-01-20)
+-------------------
+
+* Modification extname in QN afterburner outputs. Add flag in
+  desi_qso_catalog_maker for retro-compatibility (PR `#1597`_).
+* Outlier rejection in skycor PCA (PR `#1598`_).
+* Include FAILED jobs in resubmissions (PR `#1602`_).
+* tile-qa updates for special tiles (PR `#1603`_).
+* Better masking behavior for BADCOLUMN (PR `#1605`_).
+* Add DEPNAM/DEPVER to fibermap HDUs (PR `#1607`_).
+* desi_run_night enhancements and bug fixes (PR `#1608`_).
 
 .. _`#1597`: https://github.com/desihub/desispec/pull/1597
+.. _`#1598`: https://github.com/desihub/desispec/pull/1598
+.. _`#1602`: https://github.com/desihub/desispec/pull/1602
+.. _`#1603`: https://github.com/desihub/desispec/pull/1603
+.. _`#1605`: https://github.com/desihub/desispec/pull/1605
+.. _`#1607`: https://github.com/desihub/desispec/pull/1607
+.. _`#1608`: https://github.com/desihub/desispec/pull/1608
 
 0.50.0 (2022-01-16)
 -------------------
