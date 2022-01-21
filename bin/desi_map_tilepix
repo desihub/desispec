@@ -32,7 +32,7 @@ assert args.outfile.endswith('.fits')
 #- tilepix[tileid][petal] = [list of healpix]
 tilepix = dict()
 
-spectrafiles = sorted(iterfiles(f'{args.reduxdir}/healpix', 'spectra-'))
+spectrafiles = sorted(iterfiles(f'{args.reduxdir}/healpix/sv', 'spectra-'))
 
 n = len(spectrafiles)
 if n == 0:
@@ -61,7 +61,7 @@ for tileid in tilepix:
             rows.append( (tileid, petal, pix) )
 
 tx = Table(rows=rows, names=('TILEID', 'PETAL_LOC', 'HEALPIX'),
-        dtype=(np.int32, np.int8, np.int32))
+        dtype=(np.int32, np.int16, np.int32))
 
 #- Write fits and json outputs
 tx.meta['EXTNAME'] = 'TILEPIX'
