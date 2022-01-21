@@ -133,7 +133,7 @@ def get_skysub_fiberbitmask_val():
 
 def get_flat_fiberbitmask_val():
     return (fmsk.BROKENFIBER | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
-            fmsk.BADCOLUMN | fmsk.MANYBADCOL | fmsk.MANYREJECTED )
+            fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
 def get_fluxcalib_fiberbitmask_val():
     return get_all_fiberbitmask_val()
@@ -150,7 +150,7 @@ def get_all_nonamp_fiberbitmask_val():
     but not necessarily fatal for otherwise processing a normal fiber.
     """
     return (fmsk.UNASSIGNED | fmsk.BROKENFIBER | fmsk.MISSINGPOSITION | \
-            fmsk.BADPOSITION | fmsk.BADCOLUMN | \
+            fmsk.BADPOSITION | \
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
