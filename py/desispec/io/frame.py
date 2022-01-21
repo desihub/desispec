@@ -55,7 +55,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
 
     add_dependencies(hdr)
 
-    # Vette
+    # Vet
     diagnosis = frame.vet()
     if diagnosis != 0:
         raise IOError("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
@@ -86,6 +86,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if fibermap is not None:
         fibermap = Table(fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        add_dependencies(fibermap.meta)
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.fibermap is not None:
         fibermap = Table(frame.fibermap)

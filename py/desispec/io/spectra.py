@@ -74,6 +74,7 @@ def write_spectra(outfile, spec, units=None):
     # Next is the fibermap
     fmap = spec.fibermap.copy()
     fmap.meta['EXTNAME'] = 'FIBERMAP'
+    add_dependencies(fmap.meta)
 
     with warnings.catch_warnings():
         #- nanomaggies aren't an official IAU unit but don't complain
