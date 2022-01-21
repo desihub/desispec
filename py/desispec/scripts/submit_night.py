@@ -188,11 +188,11 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
         #    ptable = ptable[keep]
 
     ## Cut on LASTSTEP
-    good_exps = np.isin(etable['LASTSTEP'], laststeps)
+    good_exps = np.isin(np.array(etable['LASTSTEP']).astype(str), laststeps)
     etable = etable[good_exps]
 
     ## Cut on OBSTYPES
-    good_types = np.isin(etable['OBSTYPE'], proc_obstypes)
+    good_types = np.isin(np.array(etable['OBSTYPE']).astype(str), proc_obstypes)
     etable = etable[good_types]
 
     ## Cut on EXPTIME
