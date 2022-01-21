@@ -5,7 +5,10 @@ desispec Change Log
 0.50.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Ensure ``tilepix.fits`` only contains healpixels with reduced data (PR
+  `#1614`_).   
+
+.. _`#1614`: https://github.com/desihub/desispec/pull/1614
 
 0.50.1 (2022-01-20)
 -------------------

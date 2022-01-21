@@ -32,25 +32,26 @@ assert args.outfile.endswith('.fits')
 #- tilepix[tileid][petal] = [list of healpix]
 tilepix = dict()
 
-fibermaps = sorted(iterfiles(f'{args.reduxdir}/preproc', 'fibermap'))
+spectrafiles = sorted(iterfiles(f'{args.reduxdir}/healpix', 'spectra-'))
 
-n = len(fibermaps)
+n = len(spectrafiles)
 if n == 0:
-    log.error(f'No fibermaps found in {args.reduxdir}')
+    log.error(f'No spectra found in {args.reduxdir}/healpix')
     sys.exit(1)
 else:
-    log.info(f'Processing {n} fibermaps from {args.reduxdir}')
+    log.info(f'Processing {n} spectra from {args.reduxdir}/healpix')
 
-columns = ['PETAL_LOC', 'TARGET_RA', 'TARGET_DEC']
-for filename in fibermaps:
-    fm, hdr = fitsio.read(filename, 'FIBERMAP', header=True, columns=columns)
-    tileid = hdr['TILEID']
-    if tileid in tilepix:
-        continue
-    else:
-        shortfile = filename.replace(f'{args.reduxdir}/preproc/', '')
-        log.info(f'tile {tileid} fibermap {shortfile}')
-        tilepix[tileid] = fibermap2tilepix(fm, args.nside)
+columns = ['PETAL_LOC', 'TARGET_RA', 'TARGET_DEC', 'TILEID']
+for filename in spectrafiles:
+    fm = fitsio.read(filename, 'FIBERMAP', columns=columns)
+    for tileid in set(fm['TILEID']):
+        if tileid in tilepix:
+            continue
+        else:
+            shortfile = filename.replace(f'{args.reduxdir}/healpix/', '')
+            log.info(f'tile {tileid} fibermap {shortfile}')
+            fmtile = fm[fm['TILEID'] == tileid]
+            tilepix[str(tileid)] = fibermap2tilepix(fmtile, args.nside)
 
 #- Convert to a table
 rows = list()
@@ -60,7 +61,7 @@ for tileid in tilepix:
             rows.append( (tileid, petal, pix) )
 
 tx = Table(rows=rows, names=('TILEID', 'PETAL_LOC', 'HEALPIX'),
-        dtype=(np.int32, np.int8, np.int32))
+        dtype=(np.int32, np.int16, np.int32))
 
 #- Write fits and json outputs
 tx.meta['EXTNAME'] = 'TILEPIX'
