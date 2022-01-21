@@ -33,6 +33,8 @@ def parse(options=None):
             help="input spectra healpix nside (default %(default)s)")
     parser.add_argument("--healpix", type=str,
             help="Comma separated list of healpix to generate")
+    parser.add_argument("--specgroup", type=str, nargs=2,
+            help="SPECGROUP GROUPNAME to propagate to headers, e.g. pernight 20201010 or healpix 1234")
     parser.add_argument("-o", "--outdir", type=str,
             help="output directory; all outputs in this directory")
     parser.add_argument("--outroot", type=str,
@@ -91,10 +93,15 @@ def main(args=None, comm=None):
 
             log.info('Combining into spectra')
             spectra = frames2spectra(frames)
-            log.info('Writing {}'.format(args.outfile))
-            spectra.write(args.outfile)
-            log.info('Done at {}'.format(time.asctime()))
 
+            header = dict()
+            if args.specgroup is not None:
+                header['SPGRPNAM'] = args.specgroup[0]
+                header['SPGRPVAL'] = args.specgroup[1]
+
+            log.info('Writing {}'.format(args.outfile))
+            spectra.write(args.outfile, header=header)
+            log.info('Done at {}'.format(time.asctime()))
 
         #- All done; all ranks exit
         return 0
@@ -227,7 +234,15 @@ def main(args=None, comm=None):
             spectra = newspectra
 
         #- Write new spectra file
-        header = dict(HPXNSIDE=args.nside, HPXPIXEL=pix, HPXNEST=True)
+        header = dict(
+            HPXNSIDE=args.nside,
+            HPXPIXEL=pix,
+            HPXNEST=True,
+            SURVEY=survey,
+            FAPRGRM=faprogram,
+            SPGRPNAM='healpix',
+            SPGRPVAL=pix,   # yes, this is redundant with HPXPIXEL
+            )
         spectra.write(specfile, header=header)
     
     dt = time.time() - t0

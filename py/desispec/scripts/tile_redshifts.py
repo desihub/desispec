@@ -430,7 +430,7 @@ echo Waiting for redrock to finish at $(date)
 wait
 """)
 
-        if group == 'cumulative':
+        if group in ('pernight', 'cumulative'):
             fx.write(f"""
 echo
 tileqa={outdir}/tile-qa-{suffix}.fits
@@ -439,7 +439,7 @@ if [ -f $tileqa ]; then
 else
     echo --- Running desi_tile_qa
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
-    desi_tile_qa -n {night} -t {tileid} &> $tile_qa_log
+    desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
 fi
 """)
 
