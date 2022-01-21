@@ -735,7 +735,8 @@ def update_and_recurvsively_submit(proc_table, submits=0, resubmission_states=No
     log.info(f"Resubmitting jobs with current states in the following: {resubmission_states}")
     proc_table = update_from_queue(proc_table, dry_run=False)
     log.info("Updated processing table queue information:")
-    cols = ['INTID','EXPID','OBSTYPE','JOBDESC','TILEID','LATEST_QID','STATUS']
+    cols = ['INTID', 'INT_DEP_IDS', 'EXPID', 'TILEID',
+            'OBSTYPE', 'JOBDESC', 'LATEST_QID', 'STATUS']
     print(np.array(cols))
     for row in proc_table:
         print(np.array(row[cols]))
@@ -790,6 +791,18 @@ def recursive_submit_failed(rown, proc_table, submits, id_to_row_map, ptab_name=
     if ideps is None:
         proc_table['LATEST_DEP_QID'][rown] = np.ndarray(shape=0).astype(int)
     else:
+        all_valid_states = list(resubmission_states.copy())
+        all_valid_states.extend(['RUNNING','PENDING','SUBMITTED','COMPLETED'])
+        for idep in np.sort(np.atleast_1d(ideps)):
+            if proc_table['STATUS'][id_to_row_map[idep]] not in all_valid_states:
+                log.warning(f"Proc INTID: {proc_table['INTID'][rown]} depended on" +
+                            f" INTID {proc_table['INTID'][id_to_row_map[idep]]}" +
+                            f" but that exposure has state" +
+                            f" {proc_table['STATUS'][id_to_row_map[idep]]} that" +
+                            f" isn't in the list of resubmission states." +
+                            f" Exiting this job's resubmission attempt.")
+                proc_table['STATUS'][rown] = "DEP_NOT_SUBD"
+                return proc_table, submits
         qdeps = []
         for idep in np.sort(np.atleast_1d(ideps)):
             if proc_table['STATUS'][id_to_row_map[idep]] in resubmission_states:
@@ -923,11 +936,22 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                 zprows.append(row)
 
     ## Now run redshifts
-    if descriptor == 'science' and len(zprows) > 0:
-        log.info(" ")
+    if descriptor == 'science' and len(zprows) > 0 and z_submit_types is not None:
+        prow_selection = (  (ptable['OBSTYPE'] == 'science')
+                          & (ptable['LASTSTEP'] == 'all')
+                          & (ptable['JOBDESC'] == 'poststdstar')
+                          & (ptable['TILEID'] == int(zprows[0]['TILEID'])) )
+        nightly_zprows = []
+        if np.sum(prow_selection) == len(zprows):
+            nightly_zprows = zprows.copy()
+        else:
+            for prow in ptable[prow_selection]:
+                nightly_zprows.append(table_row_to_dict(prow))
+
         for zsubtype in z_submit_types:
             if zsubtype == 'perexp':
                 for zprow in zprows:
+                    log.info(" ")
                     log.info(f"Submitting redshift fit of type {zsubtype} for TILEID {zprow['TILEID']} and EXPID {zprow['EXPID']}.\n")
                     joint_prow = make_joint_prow([zprow], descriptor=zsubtype, internal_id=internal_id)
                     internal_id += 1
@@ -936,8 +960,11 @@ def joint_fit(ptable, prows, internal_id, queue, reservation, descriptor, z_subm
                                                    resubmit_partial_complete=resubmit_partial_complete, system_name=system_name)
                     ptable.add_row(joint_prow)
             else:
-                log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {zprows[0]['TILEID']}.\n")
-                joint_prow = make_joint_prow(zprows, descriptor=zsubtype, internal_id=internal_id)
+                log.info(" ")
+                log.info(f"Submitting joint redshift fits of type {zsubtype} for TILEID {nightly_zprows[0]['TILEID']}.")
+                expids = [prow['EXPID'][0] for prow in nightly_zprows]
+                log.info(f"Expids: {expids}.\n")
+                joint_prow = make_joint_prow(nightly_zprows, descriptor=zsubtype, internal_id=internal_id)
                 internal_id += 1
                 joint_prow = create_and_submit(joint_prow, queue=queue, reservation=reservation, joint=True, dry_run=dry_run,
                                                strictly_successful=strictly_successful, check_for_outputs=check_for_outputs,

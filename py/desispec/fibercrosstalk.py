@@ -156,10 +156,6 @@ def compute_contamination(frame,dfiber,kernel,params,xyset,fiberflat=None,fracti
     # because the only think that is bad about them is their position in the focal plane.
     would_be_ok = fibermask.STUCKPOSITIONER|fibermask.UNASSIGNED|fibermask.MISSINGPOSITION|fibermask.BADPOSITION
 
-    # also include BADCOLUMN since those are a small effect (really bad columns
-    # are part of the BADFIBER mask) so it is better to make some correction
-    would_be_ok |= fibermask.BADCOLUMN
-
     fiberstatus = frame.fibermap["FIBERSTATUS"]
     fiber_should_be_considered = (fiberstatus==(fiberstatus&would_be_ok))
 
