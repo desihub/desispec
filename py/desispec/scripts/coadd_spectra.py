@@ -114,6 +114,11 @@ def main(args=None):
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
             camera = frame.meta['CAMERA']
+            tileid = frame.meta['TILEID']
+            # Add NIGHT and TILEID to fibermap so we can compute COADD_NUMNIGHT
+            # and COADD_NUMTILE.
+            frame.fibermap['NIGHT'] = night
+            frame.fibermap['TILEID'] = tileid
             frames[(night,expid,camera)] = frame
             if args.coadd_cameras:
                 cam,spec = camera[0],camera[1]
@@ -134,8 +139,7 @@ def main(args=None):
                         for cam in camlist:
                             frames.pop((night,expid,cam+spec))
                             log.warning("Removing {}{} from Night {} EXP {}".format(cam,spec,night,expid))
-        #import pdb
-        #pdb.set_trace()
+                            
         spectra = frames2spectra(frames)
 
         #- hacks to make SpectraLite like a Spectra

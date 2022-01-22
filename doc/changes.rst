@@ -5,10 +5,18 @@ desispec Change Log
 0.50.2 (unreleased)
 -------------------
 
-* Ensure ``tilepix.fits`` only contains healpixels with reduced data (PR
-  `#1614`_).   
+* Fix bookkeeping of nights and tiles in coadds (issue `#1349`_) and enable
+  coadding of previously coadded cframe files (issue `#1359`_) (PR `#1616`_).
+* Ensure ``tilepix.fits`` only contains healpixels with reduced data (issue
+  `#1374`_). Also fix issues `#1373`_ and `#1379`_ (PR `#1614`_).
 
+.. _`#1349`: https://github.com/desihub/desispec/issues/1349
+.. _`#1359`: https://github.com/desihub/desispec/issues/1359
+.. _`#1373`: https://github.com/desihub/desispec/issues/1373
+.. _`#1374`: https://github.com/desihub/desispec/issues/1374
+.. _`#1379`: https://github.com/desihub/desispec/issues/1379
 .. _`#1614`: https://github.com/desihub/desispec/pull/1614
+.. _`#1616`: https://github.com/desihub/desispec/pull/1616
 
 0.50.1 (2022-01-20)
 -------------------
