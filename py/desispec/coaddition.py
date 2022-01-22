@@ -238,16 +238,13 @@ def coadd_fibermap(fibermap, onetile=False):
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
 
-        #- TODO: this isn't fully consistent with COADD_NUMEXP if all the
-        #- exposures on a night were discarded
-
         # Note: NIGHT and TILEID may not be present when coadding previously
         # coadded spectra.
         if 'NIGHT' in fibermap.colnames:
-            tfmap['COADD_NUMNIGHT'][i] = len(np.unique(fibermap['NIGHT'][jj]))
+            tfmap['COADD_NUMNIGHT'][i] = len(np.unique(fibermap['NIGHT'][jj][good_coadds]))
         if 'TILEID' in fibermap.colnames:
-            tfmap['COADD_NUMTILE'][i] = len(np.unique(fibermap['TILEID'][jj]))
-
+            tfmap['COADD_NUMTILE'][i] = len(np.unique(fibermap['TILEID'][jj][good_coadds]))
+        
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
         for k in mean_cols:
