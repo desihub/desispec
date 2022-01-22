@@ -217,7 +217,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
             spectro_string=spectro_string, suffix=suffix,
             frame_glob=frame_glob,
             queue=queue, system_name=system_name,
-            onetile=True, tileid=tileid, night=night,
+            onetile=True, tileid=tileid, night=night, expid=expid,
             run_zmtl=run_zmtl, noafterburners=noafterburners)
 
     err = 0
@@ -244,7 +244,7 @@ def write_redshift_script(batchscript, outdir,
         jobname, num_nodes,
         group, spectro_string, suffix, frame_glob,
         queue='regular', system_name=None,
-        onetile=True, tileid=None, night=None,
+        onetile=True, tileid=None, night=None, expid=None,
         run_zmtl=False, noafterburners=False,
         redrock_nodes=1, redrock_cores_per_rank=1,
         ):
@@ -266,7 +266,8 @@ def write_redshift_script(batchscript, outdir,
         system_name (str): e.g. cori-haswell, cori-knl, perlmutter-gpu
         onetile (bool): coadd assuming input is for a single tile?
         tileid (int): tileid to process; only needed for group='cumulative'
-        night (int): process through night YEARMMDD; only needed for group='cumulative'
+        night (int): process through or on night YEARMMDD; for group='cumulative' and 'pernight'
+        expid (int): expid for group='perexp'
         run_zmtl (bool): if True, also run zmtl
         noafterburners (bool): if True, skip QSO afterburners
         redrock_nodes (int): number of nodes for each redrock call
@@ -291,21 +292,31 @@ def write_redshift_script(batchscript, outdir,
 
     #- tileid and night are required for cumulative redshifts but not others
     #- (frameglob captures the info for other cases)
-    if group == 'cumulative':
+    if group in ('cumulative', 'pernight'):
         err = False
         if tileid is None:
-            log.error("group='cumulative' requires tileid to be set")
+            log.error(f"group='{group}' requires tileid to be set")
             err = True
         if night is None:
-            log.error("group='cumulative' requires night to be set")
+            log.error(f"group='{group}' requires night to be set")
             err = True
         if err:
-            raise ValueError("group='cumulative' missing tileid and/or night")
+            raise ValueError(f"group='{group}' missing tileid and/or night")
 
     if onetile:
         onetileopt = '--onetile'
     else:
         onetileopt = ''
+
+
+    if group == 'cumulative':
+        headeropt = f'--header SPGRP={group} SPGRPVAL={night} NIGHT={night} TILEID={tileid} PETAL=$SPECTRO'
+    elif group == 'pernight':
+        headeropt = f'--header SPGRP={group} SPGRPVAL={night} NIGHT={night} TILEID={tileid} PETAL=$SPECTRO'
+    elif group == 'perexp':
+        headeropt = f'--header SPGRP={group} SPGRPVAL={expid} EXPID={expid} TILEID={tileid} PETAL=$SPECTRO'
+    else:
+        headeropt = ''
 
     #- system specific options, e.g. "--constraint=haswell"
     batch_opts = list()
@@ -366,7 +377,7 @@ for SPECTRO in {spectro_string}; do
         fi
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
-            cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_group_spectra --inframes $CFRAMES --outfile $spectra"
+            cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_group_spectra --inframes $CFRAMES --outfile $spectra {headeropt}"
             echo RUNNING $cmd &> $splog
             $cmd &>> $splog &
             sleep 0.5
