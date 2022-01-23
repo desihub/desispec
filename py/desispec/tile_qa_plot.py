@@ -993,10 +993,10 @@ def get_tilecov(
         If the tile is not covered by randoms, ntilecov=np.nan, tileids=[] (and no plot is made).
         The "regular" use is to provide a single PROGRAM in programs (e.g., programs="DARK").
         This function relies on the following files:
-            $DESI_SURVEYOPS/ops/tiles-{SURVEY}.ecsv for SURVEY in surveys
-            $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv
-            $DESI_ROOT/spectro/redux/daily/exposures-daily.fits
+            $DESI_SURVEYOPS/ops/tiles-{SURVEY}.ecsv for SURVEY in surveys (to get the tiles to consider)
+            $DESI_ROOT/spectro/redux/daily/exposures-daily.fits (to get the existing observations up to lastnight)
             $DESI_TARGET/catalogs/dr9/2.4.0/randoms/resolve/randoms-1-0/
+        If one wants to consider the latest observations, one should wait the 10am pacific update of exposures-daily.fits.
     """
     # AR lastnight
     if lastnight is None:
@@ -1015,10 +1015,14 @@ def get_tilecov(
         os.path.join(os.getenv("DESI_SURVEYOPS"), "ops", "tiles-{}.ecsv".format(survey))
         for survey in surveys.split(",")
     ]
-    statusfn = os.path.join(os.getenv("DESI_SURVEYOPS"), "ops", "tiles-specstatus.ecsv")
     expsfn = os.path.join(os.getenv("DESI_ROOT"), "spectro", "redux", "daily", "exposures-daily.fits")
     # AR we need that specific version which is healpix-split, hence readable by read_targets_in_tile(quick=True))
     randdir = os.path.join(os.getenv("DESI_TARGET"), "catalogs", "dr9", "2.4.0", "randoms", "resolve", "randoms-1-0")
+
+    # AR exposures with EFFTIME_SPEC>0 and NIGHT<=LASTNIGHT
+    exps = Table.read(expsfn, "EXPOSURES")
+    sel = (exps["EFFTIME_SPEC"] > 0) & (exps["NIGHT"] <= lastnight)
+    exps = exps[sel]
 
     # AR read the tiles
     ds = []
@@ -1062,7 +1066,9 @@ def get_tilecov(
     if verbose:
         log.info("found {} randoms in TILEID={}".format(len(d), tileid))
 
-    # AR then cut on: PROGRAM, IN_DESI, STATUS
+    # AR then cut on:
+    # AR - PROGRAM, IN_DESI: to get the tiles to consider
+    # AR - exposures: to get the observations with NIGHT <= LASTNIGHT
     sel = np.ones(len(tiles), dtype=bool)
     if verbose:
         log.info("starting from {} tiles".format(len(tiles)))
@@ -1074,15 +1080,9 @@ def get_tilecov(
         sel &= tiles["IN_DESI"]
         if verbose:
             log.info("considering {} tiles after cutting on IN_DESI".format(sel.sum()))
-    sel &= np.in1d(tiles["STATUS"], ["obsstart", "obsend", "done"])
+    sel &= np.in1d(tiles["TILEID"], exps["TILEID"])
     if verbose:
-        log.info("considering {} tiles after cutting on STATUS=obsstart,obsend,done".format(sel.sum()))
-    # AR lastnight
-    status = Table.read(statusfn)
-    status = status[status["LASTNIGHT"] <= lastnight]
-    sel &= np.in1d(tiles["TILEID"], status["TILEID"])
-    if verbose:
-        log.info("considering {} tiles after cutting on LASTNIGHT <= {}".format(sel.sum(), lastnight))
+        log.info("considering {} tiles after cutting on NIGHT <= {}".format(sel.sum(), lastnight))
     tiles = tiles[sel]
     # AR overlap
     cs = SkyCoord(ra=tiles["RA"] * units.degree, dec=tiles["DEC"] * units.degree, frame="icrs")
@@ -1092,7 +1092,6 @@ def get_tilecov(
         log.info("selecting {} overlapping tiles: {}".format(len(tiles), tiles["TILEID"].tolist()))
 
     # AR get exposures
-    exps = Table.read(expsfn)
     outdict = {
         tileid : exps["EXPID"][exps["TILEID"] == tileid].tolist()
         for tileid in tiles["TILEID"]
