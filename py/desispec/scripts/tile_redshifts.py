@@ -312,12 +312,10 @@ def write_redshift_script(batchscript, outdir,
 
     #- header keywords to record spectra grouping
     headeropt = f'--header SPGRP={group}'
-    if group == 'cumulative':
-        headeropt += f' SPGRPVAL={night} NIGHT={night}'
-    elif group == 'pernight':
+    if group in ('cumulative', 'pernight'):
         headeropt += f' SPGRPVAL={night} NIGHT={night}'
     elif group == 'perexp':
-        headeropt += f' SPGRPVAL={expid} EXPID={expid}'
+        headeropt += f' SPGRPVAL={expid} NIGHT={night} EXPID={expid}'
     else:
         headeropt += f' SPGRPVAL=None'
 
