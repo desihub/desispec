@@ -2,7 +2,8 @@
 
 """Find exposures with a significant fraction of bad positioners.
 
-desi_find_badpos --reduxdir /global/cfs/cdirs/desi/spectro/redux/everest --mp 32 -o everest-badpos.fits
+time desi_find_badpos --reduxdir /global/cfs/cdirs/desi/spectro/redux/everest --mp 32 -o badpos-everest.fits
+time desi_find_badpos --reduxdir /global/cfs/cdirs/desi/spectro/redux/daily --mp 32 -o badpos-daily-20220123.fits
 
 """
 import os, sys, argparse, pdb
@@ -36,8 +37,6 @@ def badpos_in_fibermap(fibermapfile):
     out = Table(rows=rows, names=('NIGHT', 'EXPID', 'PETAL_LOC', 'FBAD'),
                 dtype=(np.int32, np.int32, np.int16, np.float32))
 
-    pdb.set_trace()
-    
     return out
 
 def main():
@@ -53,8 +52,9 @@ def main():
     if args.reduxdir is None:
         args.reduxdir = specprod_root()
 
-    #fibermapfiles = sorted(iterfiles(f'{args.reduxdir}/preproc', 'fibermap-'))
-    fibermapfiles = ['/global/cfs/cdirs/desi/spectro/redux/everest/preproc/20210614/00094626/fibermap-00094626.fits'] # testing
+    fibermapfiles = sorted(iterfiles(f'{args.reduxdir}/preproc', 'fibermap-'))
+    #fibermapfiles = sorted(iterfiles(f'{args.reduxdir}/preproc/20210614', 'fibermap-'))
+    #fibermapfiles = ['/global/cfs/cdirs/desi/spectro/redux/everest/preproc/20210614/00094626/fibermap-00094626.fits'] # testing
     
     n = len(fibermapfiles)
     if n == 0:
@@ -64,11 +64,11 @@ def main():
         log.info(f'Processing {n} fibermaps from {args.reduxdir}/preproc')
 
     if args.mp > 1:
-        mpargs = [[fibermapfile] for fibermapfile in fibermapfiles]
+        mpargs = [[fibermapfile] for fibermapfile in fibermapfiles if 'old' not in fibermapfile and 'stash' not in fibermapfile]
         with multiprocessing.Pool(args.mp) as P:
             out = P.map(_badpos_in_fibermap, mpargs)
     else:
-        out = [badpos_in_fibermap(fibermapfile) for fibermapfile in fibermapfiles]
+        out = [badpos_in_fibermap(fibermapfile) for fibermapfile in fibermapfiles if 'old' not in fibermapfile and 'stash' not in fibermapfile]
 
     # stack and write out
     out = Table(np.hstack(out))        
