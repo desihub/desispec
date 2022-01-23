@@ -10,7 +10,7 @@ from desiutil.log import get_logger
 import desispec.io
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow import batch
-
+from desispec.util import parse_int_args
 
 def parse(options=None):
     import argparse
@@ -19,6 +19,8 @@ def parse(options=None):
     p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
     p.add_argument("-t", "--tileid", type=int, help="Tile ID")
     p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
+    p.add_argument("-s", "--spectrographs", type=str,
+            help="spectrographs to include, e.g. 0-4,9; includes final number in range")
     p.add_argument("-g", "--group", type=str, required=True,
                    help="cumulative, pernight, perexp, or a custom name")
     p.add_argument("--run_zmtl", action="store_true",
@@ -308,15 +310,18 @@ def write_redshift_script(batchscript, outdir,
     else:
         onetileopt = ''
 
-
+    #- header keywords to record spectra grouping
+    headeropt = f'--header SPGRP={group}'
     if group == 'cumulative':
-        headeropt = f'--header SPGRP={group} SPGRPVAL={night} NIGHT={night} TILEID={tileid} PETAL=$SPECTRO'
+        headeropt += f' SPGRPVAL={night} NIGHT={night}'
     elif group == 'pernight':
-        headeropt = f'--header SPGRP={group} SPGRPVAL={night} NIGHT={night} TILEID={tileid} PETAL=$SPECTRO'
+        headeropt += f' SPGRPVAL={night} NIGHT={night}'
     elif group == 'perexp':
-        headeropt = f'--header SPGRP={group} SPGRPVAL={expid} EXPID={expid} TILEID={tileid} PETAL=$SPECTRO'
+        headeropt += f' SPGRPVAL={expid} EXPID={expid}'
     else:
-        headeropt = ''
+        headeropt += f' SPGRPVAL=None'
+
+    headeropt += f' TILEID={tileid} SPECTRO=$SPECTRO PETAL=$SPECTRO'
 
     #- system specific options, e.g. "--constraint=haswell"
     batch_opts = list()
@@ -588,6 +593,7 @@ def _read_minimal_exptables(nights=None):
 
 
 def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, explist=None,
+                                   spectrographs=None,
                                    run_zmtl=False, noafterburners=False,
                                    batch_queue='realtime', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
@@ -601,6 +607,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         tileid (int): Tile ID.
         expid (int, or list or np.array of int's): Exposure IDs.
         explist (str): File with columns TILE NIGHT EXPID to use
+        spectrographs (str or list of int): spectrographs to include
         run_zmtl (bool): If True, also run make_zmtl_files
         noafterburners (bool): If True, do not run QSO afterburners
         batch_queue (str): Batch queue name. Default is 'realtime'.
@@ -682,6 +689,12 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         log.critical(f'No exposures left after filtering by tileid/night/expid')
         sys.exit(1)
 
+    if spectrographs is not None:
+        if isinstance(spectrographs, str):
+            spectrographs = parse_int_args(spectrographs, include_end=True)
+    else:
+        spectrographs = list(range(10))
+
     # - If cumulative, find all prior exposures that also observed these tiles
     # - NOTE: depending upon options, this might re-read all the exptables again
     # - NOTE: this may not scale well several years into the survey
@@ -707,6 +720,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         log.info(f'Tile {tileid} nights={nights} expids={expids}')
         submit = (not nosubmit)
         opts = dict(
+                spectrographs=spectrographs,
                 submit=submit,
                 run_zmtl=run_zmtl,
                 noafterburners=noafterburners,
