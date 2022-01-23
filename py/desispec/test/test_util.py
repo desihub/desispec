@@ -103,6 +103,11 @@ class TestNight(unittest.TestCase):
             for v1,v2 in zip(returned_arr,arr):
                 self.assertEqual(int(v1),int(v2))
 
+        arr1 = util.parse_fibers('0-3', include_end=True)
+        self.assertTrue(np.all(arr1 == np.array([0,1,2,3])))
+        arr2 = util.parse_fibers('0-3,6-8', include_end=True)
+        self.assertTrue(np.all(arr1 == np.array([0,1,2,3, 6,7,8])))
+
 #- TODO: override log level to quiet down error messages that are supposed
 #- to be there from these tests
 class TestRunCmd(unittest.TestCase):
