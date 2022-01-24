@@ -33,6 +33,8 @@ def parse(options=None):
             help="input spectra healpix nside (default %(default)s)")
     parser.add_argument("--healpix", type=str,
             help="Comma separated list of healpix to generate")
+    parser.add_argument("--header", type=str, nargs="*",
+            help="KEYWORD=VALUE entries to add to the output header")
     parser.add_argument("-o", "--outdir", type=str,
             help="output directory; all outputs in this directory")
     parser.add_argument("--outroot", type=str,
@@ -76,6 +78,15 @@ def main(args=None, comm=None):
     if args.outroot is None and args.outdir is None:
         args.outroot = io.specprod_root()
 
+    header = dict()
+    if args.header is not None:
+        for keyval in args.header:
+            key, value = keyval.split('=', maxsplit=1)
+            try:
+                header[key] = int(value)
+            except ValueError:
+                header[key] = value
+
     #- Combining a set of frame files instead of a healpix?
     if args.inframes is not None:
         if rank == 0:
@@ -91,10 +102,10 @@ def main(args=None, comm=None):
 
             log.info('Combining into spectra')
             spectra = frames2spectra(frames)
-            log.info('Writing {}'.format(args.outfile))
-            spectra.write(args.outfile)
-            log.info('Done at {}'.format(time.asctime()))
 
+            log.info('Writing {}'.format(args.outfile))
+            spectra.write(args.outfile, header=header)
+            log.info('Done at {}'.format(time.asctime()))
 
         #- All done; all ranks exit
         return 0
@@ -227,8 +238,17 @@ def main(args=None, comm=None):
             spectra = newspectra
 
         #- Write new spectra file
-        header = dict(HPXNSIDE=args.nside, HPXPIXEL=pix, HPXNEST=True)
-        spectra.write(specfile, header=header)
+        hdr = dict(
+            HPXNSIDE=args.nside,
+            HPXPIXEL=pix,
+            HPXNEST=True,
+            SURVEY=survey,
+            FAPRGRM=faprogram,
+            SPGRPNAM='healpix',
+            SPGRPVAL=pix,   # yes, this is redundant with HPXPIXEL
+            )
+        hdr.update(header)
+        spectra.write(specfile, header=hdr)
     
     dt = time.time() - t0
     log.info('Rank {} done in {:.1f} minutes'.format(rank, dt/60))
