@@ -86,9 +86,17 @@ parser.add_argument("-o", "--outfile",type=str,
         help="output file")
 parser.add_argument("--minimal", action='store_true',
         help="only include minimal output columns")
-parser.add_argument("--tiles", type=str,
+parser.add_argument("-t", "--tiles", type=str,
         help="ascii file with tileids to include (one per line)")
-parser.add_argument("--prefix", type=str, default='redrock', help="prefix of redrock files (older versions used 'zbest' instead of 'redrock'")
+parser.add_argument("--prefix", type=str, default='redrock',
+        help="prefix of redrock files (older versions used 'zbest' "
+             "instead of 'redrock'")
+parser.add_argument("-g", "--group", type=str,
+        help="Add columns specific to this spectral grouping "
+             "e.g. pernight adds NIGHT column from input header keyword")
+parser.add_argument("--header", type=str, nargs="*",
+        help="KEYWORD=VALUE entries to add to the output header")
+
 # parser.add_argument("--match", type=str, nargs="*",
 #         help="match other tables (targets,truth...)")
 
@@ -126,11 +134,18 @@ if nfiles == 0:
     log.critical(msg)
     raise ValueError(msg)
 
-data = list()
+zcatdata = list()
 exp_fibermaps = list()
 for ifile, rrfile in enumerate(redrockfiles):
     log.info(f'Reading {ifile+1}/{nfiles} {rrfile}')
     with fitsio.FITS(rrfile) as fx:
+        hdr = fx[0].read_header()
+        if args.group is not None and 'SPGRP' in hdr and \
+                hdr['SPGRP'] != args.group:
+            log.warning("Skipping {} with SPGRP {} != args.group {}".format(
+                rrfile, hdr['SPGRP'], args.group))
+            continue
+
         if 'ZBEST' in fx: #check if the older hdu name for REDSHIFT exist, in which case we read only the FIBERMAP and no TSNR2.
             redshifts = fx['ZBEST'].read()
             fibermap = fx['FIBERMAP'].read()
@@ -161,10 +176,10 @@ for ifile, rrfile in enumerate(redrockfiles):
             fibermap_.rename_column('TARGET_RA','RA')
             fibermap_.rename_column('TARGET_DEC','DEC')
             fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SCND_TARGET'])
-            data.append(hstack([Table(redshifts), fibermap_]))
+            data = hstack( [Table(redshifts), fibermap_] )
 
         else:
-            data.append(hstack([Table(redshifts), Table(fibermap[fmcols])]))
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
 
     else:
         fmcols = list(fibermap.dtype.names)
@@ -172,13 +187,42 @@ for ifile, rrfile in enumerate(redrockfiles):
         if tsnr2 is not None:
             tsnr2cols = list(tsnr2.dtype.names)
             tsnr2cols.remove('TARGETID')
-            data.append(hstack(
-            [Table(redshifts), Table(fibermap[fmcols]), Table(tsnr2[tsnr2cols])]
-            ))
+            data = hstack([
+                Table(redshifts),
+                Table(fibermap[fmcols]),
+                Table(tsnr2[tsnr2cols]),
+                ])
         else:
-            data.append(hstack(
-            [Table(redshifts), Table(fibermap[fmcols])]
-            ))
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+
+    #- Add group specific columns, recognizing some some of them may
+    #- have already been inherited from the fibermap.
+    #- Put these columns right after TARGETID
+    nrows = len(data)
+    icol = 1
+    if args.group in ('perexp', 'pernight', 'cumulative'):
+        if 'TILEID' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['TILEID'], dtype=np.int32),
+                    index=icol, name='TILEID')
+            icol += 1
+        if 'PETAL_LOC' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['PETAL'], dtype=np.int16),
+                    index=icol, name='PETAL_LOC')
+            icol += 1
+
+    if args.group == 'perexp':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+        data.add_column(np.full(nrows, hdr['EXPID'], dtype=np.int32),
+                index=icol+1, name='EXPID')
+    elif args.group == 'pernight':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+    elif args.group == 'cumulative':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='LASTNIGHT')
+
+    zcatdata.append(data)
 
     if expfibermap is not None:
         exp_fibermaps.append(expfibermap)
@@ -199,7 +243,21 @@ else:
 #         log.info("matching {}".format(filename))
 #         zcat = match(zcat,fitsio.read(filename))
 
+#- Inherit header from first input, but remove keywords that don't apply
+#- across multiple files
 header = fitsio.read_header(redrockfiles[0], 0)
+for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID']:
+    if key in header:
+        header.delete(key)
+
+if args.header is not None:
+    for keyval in args.header:
+        key, value = keyval.split('=', maxsplit=1)
+        try:
+            header[key] = int(value)
+        except ValueError:
+            header[key] = value
+
 
 log.info(f'Writing {args.outfile}')
 tmpfile = args.outfile + '.tmp'
