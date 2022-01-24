@@ -26,6 +26,7 @@ from astropy.table import Table, hstack, vstack
 
 from desiutil.log import get_logger
 from desispec import io
+from desispec.zcatalog import find_primary_spectra
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -229,13 +230,24 @@ for ifile, rrfile in enumerate(redrockfiles):
 
 
 log.info('Stacking zcat')
-zcat = np.array(vstack(data))
+zcat = vstack(data)
 if exp_fibermaps:
     log.info('Stacking exposure fibermaps')
     expfm = np.hstack(exp_fibermaps)
 else:
     expfm = None
 
+#- if TARGETIDs appear more than once, which one is best within this catalog?
+if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
+    log.info('Finding best spectrum for each target')
+    nspec, primary = find_primary_spectra(zcat)
+    zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
+    zcat['ZCAT_PRIMARY'] = primary
+else:
+    log.info('Missing TSNR2_LRG or ZWARN; not adding ZCAT_PRIMARY/_NSPEC')
+
+#- we're done adding columns, convert to numpy array for fitsio
+zcat = np.array(zcat)
 
 #- untested with new formats, so commenting out for now
 # if args.match:
@@ -258,7 +270,6 @@ if args.header is not None:
         except ValueError:
             header[key] = value
 
-
 log.info(f'Writing {args.outfile}')
 tmpfile = args.outfile + '.tmp'
 fitsio.write(tmpfile, zcat, header=header, extname='ZCATALOG', clobber=True)
@@ -269,8 +280,4 @@ if not args.minimal and expfm is not None:
 os.rename(tmpfile, args.outfile)
 
 log.info("Successfully wrote {}".format(args.outfile))
-
-
-
-
 
