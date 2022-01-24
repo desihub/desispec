@@ -2,21 +2,52 @@
 desispec Change Log
 ===================
 
-0.50.2 (unreleased)
+0.51.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.51.0 (2022-01-24)
+-------------------
+
+This version will be used for Fuji.
+
+Algorithm update:
+
+* Normalize fiberflat variation of each fiber for humidity correction
+  (PR `#1621`_).
+
+Metadata tracking updates:
+
+* Add BADAMP[BRZ] bits to QAFIBERSTATUS (PR `#1610`_).
+* specgroup metadata in spectra, coadd, zcat files (PR `#1618`_).
+
+New and fixed scripts / functions:
+
+* Add desispec.zcatalog.find_primary_spectra (PR `#1609`_).
+* Add desispec.tile_qa.get_tilecov tile coverage plotting
+  (PRs `#1613`_, `#1617`_).
 * Fix bookkeeping of nights and tiles in coadds (issue `#1349`_) and enable
   coadding of previously coadded cframe files (issue `#1359`_) (PR `#1616`_).
 * Ensure ``tilepix.fits`` only contains healpixels with reduced data (issue
   `#1374`_). Also fix issues `#1373`_ and `#1379`_ (PR `#1614`_).
+* Add desi_find_badpos script to find exp-petals with catastrophic positioning
+  (PR `#1620`_).
 
 .. _`#1349`: https://github.com/desihub/desispec/issues/1349
 .. _`#1359`: https://github.com/desihub/desispec/issues/1359
 .. _`#1373`: https://github.com/desihub/desispec/issues/1373
 .. _`#1374`: https://github.com/desihub/desispec/issues/1374
 .. _`#1379`: https://github.com/desihub/desispec/issues/1379
+.. _`#1609`: https://github.com/desihub/desispec/pull/1609
+.. _`#1610`: https://github.com/desihub/desispec/pull/1610
+.. _`#1613`: https://github.com/desihub/desispec/pull/1613
 .. _`#1614`: https://github.com/desihub/desispec/pull/1614
 .. _`#1616`: https://github.com/desihub/desispec/pull/1616
+.. _`#1617`: https://github.com/desihub/desispec/pull/1617
+.. _`#1618`: https://github.com/desihub/desispec/pull/1618
+.. _`#1620`: https://github.com/desihub/desispec/pull/1620
+.. _`#1621`: https://github.com/desihub/desispec/pull/1621
 
 0.50.1 (2022-01-20)
 -------------------
