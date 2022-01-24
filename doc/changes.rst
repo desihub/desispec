@@ -5,7 +5,8 @@ desispec Change Log
 0.51.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Updated desi_find_badpos script to cross-reference flagged petals against
+  existing bad-exposure tables.
 
 0.51.0 (2022-01-24)
 -------------------
