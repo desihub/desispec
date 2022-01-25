@@ -1459,7 +1459,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
             "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
             "This plot displays all the SKY fibers for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
-            "This pdf displays the per-tracer, per-petal n(z) for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
+            "This pdf displays the per-tracer, per-petal n(z) for the {} night.\nWatch it and report unsual features (easy to say!)\nIn particular, if some maindark tiles have been observed, pay attention to the two Ly-a related plots on the first row.".format(night),
         ]
     ):
         html.write(
