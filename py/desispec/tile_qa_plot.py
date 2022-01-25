@@ -1339,9 +1339,9 @@ def make_tile_qa_plot(
     # AR    (equivalent of OBJTYPE!="TGT" in fiberassign-TILEID.fits.gz)
     # AR    undirect way, as not all columns are here...
     # AR the DESI_TARGET column for sky should be present + correctly set
-    # AR for all surveys (with same bits); SUPP_SKY will have SKY set too
+    # AR for all surveys (with same bits)
     nontgt = np.zeros(len(fiberqa), dtype=bool)
-    for msk in ["SKY", "BAD_SKY"]:
+    for msk in ["SKY", "BAD_SKY", "SUPP_SKY"]:
         nontgt |= (fiberqa["DESI_TARGET"] & desi_mask[msk]) > 0
     for msk in ["UNASSIGNED", "STUCKPOSITIONER", "BROKENFIBER"]:
         nontgt |= (fiberqa["QAFIBERSTATUS"] & fibermask[msk]) > 0
