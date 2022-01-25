@@ -801,7 +801,8 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
     Notes:
         Only displays:
             - sv1, sv2, sv3, main, as otherwise the plotted tracers are not relevant;
-            - FAPRGRM="bright" or "dark" tileids.
+            - FAPRGRM="bright" or "dark" tileids;
+            - for the main survey, tiles with EFFTIME > MINTFRAC * GOALTIME.
         If the tile-qa-TILEID-thruNIGHT.fits file is missing, that tileid is skipped.
         For the Lya, work from the zmtl*fits files, trying to mimick what is done in desitarget.mtl.make_mtl().
         The LRG, ELG, QSO, BGS_BRIGHT, BGS_FAINT bit are the same for sv1, sv2, sv3, main,
@@ -822,7 +823,26 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
             )
         )
         tileids, surveys = tileids[sel], surveys[sel]
-    #
+    # AR for main tiles, restrict to tiles with EFFTIME > MINTFRAC * GOALTIME
+    # AR we also read the tile-qa*fits header below in the loop,
+    # AR    but it is simpler/safer to do separate this first loop
+    # AR    to modify the tileids, surveys, if need be.
+    sel = np.ones(len(tileids), dtype=bool)
+    for i in range(len(tileids)):
+        if surveys[i] == "main":
+            fn = findfile("tileqa", night=night, tile=tileids[i], groupname=group, specprod_dir=prod)
+            if not os.path.isfile(fn):
+                log.warning("no {} file, proceeding to next tile".format(fn))
+                continue
+            hdr = fits.getheader(fn, "FIBERQA")
+            if hdr["EFFTIME"] < hdr["MINTFRAC"] * hdr["GOALTIME"]:
+                sel[i] = False
+                log.info(
+                    "discarding main survey TILEID={}, as EFFTIME={:.1f} < MINTFRAC*GOALTIME={:.2f}*{:.0f}={:.1f}".format(
+                        tileids[i], hdr["EFFTIME"], hdr["MINTFRAC"], hdr["GOALTIME"], hdr["MINTFRAC"] * hdr["GOALTIME"],
+                    )
+                )
+    tileids, surveys = tileids[sel], surveys[sel]
     # AR gather all infos from the zmtl*fits files
     ds = {"bright" : [], "dark" : []}
     ntiles = {"bright" : 0, "dark" : 0}
