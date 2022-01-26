@@ -86,8 +86,12 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
             if "GOALTIME" not in exposure_qa_meta:
                 fafn = findfile("fiberassign", night=night, expid=expid, tile=tileid)
                 if not os.path.isfile(fafn):
-                    log.error("missing {}".format(fafn))
-                    raise FileNotFoundError("missing {}".format(fafn))
+                    log.warning("missing {}".format(fafn))
+                    fafn=fafn.replace(".fits.gz",".fits")
+                    log.warning("trying {}...".format(fafn))
+                    if not os.path.isfile(fafn):
+                        log.error("missing {}".format(fafn))
+                        raise FileNotFoundError("missing {}".format(fafn))
                 fahdr = fitsio.read_header(fafn, 0)
                 if "TARG" not in fahdr:
                     log.error("TARG keyword missing in {} header".format(fafn))
