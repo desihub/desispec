@@ -81,7 +81,7 @@ class TestFiberFlat(unittest.TestCase):
                 Rdata[i,:,j] = kernel
 
         #- Run the code
-        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0)
+        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0, meta=dict(CAMERA='x0'))
         ff = compute_fiberflat(frame)
 
         #- Check shape of outputs
@@ -123,7 +123,7 @@ class TestFiberFlat(unittest.TestCase):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
         #- Run the code
-        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
+        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0, meta=dict(CAMERA='x0'))
         ff = compute_fiberflat(frame)
 
         #- These fiber flats should all be ~1
@@ -158,7 +158,7 @@ class TestFiberFlat(unittest.TestCase):
         for i in range(nspec):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
-        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
+        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0, meta=dict(CAMERA='x0'))
         ff = compute_fiberflat(frame)
 
         #- flux[1] is brighter, so should fiberflat[1].  etc.
@@ -200,7 +200,7 @@ class TestFiberFlat(unittest.TestCase):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
         #- Run the code
-        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
+        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0, meta=dict(CAMERA='x0'))
         #- Set an accuracy for this
         accuracy=1.e-9
         ff = compute_fiberflat(frame,accuracy=accuracy)
@@ -227,7 +227,7 @@ class TestFiberFlat(unittest.TestCase):
         nspec = 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones_like(flux)
-        frame = Frame(wave, flux, ivar, spectrograph=0)
+        frame = Frame(wave, flux, ivar, spectrograph=0, meta=dict(CAMERA='x0'))
 
         fiberflat = np.ones_like(flux)
         ffivar = 2*np.ones_like(flux)
@@ -268,7 +268,7 @@ class TestFiberFlat(unittest.TestCase):
         nspec = 3
         flux = np.random.uniform(0.9, 1.0, size=(nspec, nwave))
         ivar = np.ones_like(flux)
-        origframe = Frame(wave, flux, ivar, spectrograph=0)
+        origframe = Frame(wave, flux, ivar, spectrograph=0, meta=dict(CAMERA='x0'))
 
         fiberflat = np.ones_like(flux)
         ffmask = np.zeros_like(flux)
@@ -336,7 +336,7 @@ class TestFiberFlat(unittest.TestCase):
 
         #- write out the frame
         frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0, fibermap=fibermap,
-                      meta=dict(FLAVOR='flat'))
+                      meta=dict(FLAVOR='flat', CAMERA='x0'))
         write_frame(self.testframe, frame, fibermap=fibermap)
 
         # set program arguments
