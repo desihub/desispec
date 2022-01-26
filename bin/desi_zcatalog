@@ -230,7 +230,7 @@ for ifile, rrfile in enumerate(redrockfiles):
 
 
 log.info('Stacking zcat')
-zcat = vstack(data)
+zcat = vstack(zcatdata)
 if exp_fibermaps:
     log.info('Stacking exposure fibermaps')
     expfm = np.hstack(exp_fibermaps)
