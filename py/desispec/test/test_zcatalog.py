@@ -26,6 +26,8 @@ class TestZCatalog(unittest.TestCase):
            (50, 4,  10.0, 0),
            (60, 0,  10.0, 1),  # TSNR2=0 doesn't break things
            (60, 0,   0.0, 0),
+           (-1, 0,  10.0, 1),  # negative TARGETIDs are ok
+           (-1, 0,   0.0, 0),
         ]
 
         zcat = Table(rows=rows, names=('TARGETID','ZWARN','TSNR2_LRG','TEST'))
