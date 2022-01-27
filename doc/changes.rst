@@ -2,11 +2,28 @@
 desispec Change Log
 ===================
 
-0.51.1 (unreleased)
+0.51.2 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.51.1 (2022-01-26)
+-------------------
+
+Fuji bugfix tag made from the fuji branch mid-processing.  These changes
+fix crashes but do not impact any data that were already successfully run.
 
 * Updated desi_find_badpos script to cross-reference flagged petals against
   existing bad-exposure tables.
+* Fix fiberflat crash when almost all input data are masked for a fiber
+  (PR `#1629`_).
+* Fix tile QA for cases when input fiberassign file is not gzipped
+  (PR `#1630`_).
+* Fix zcat stacking typo (PR `#1633`_).
+
+.. _`#1629`: https://github.com/desihub/desispec/pull/1629
+.. _`#1630`: https://github.com/desihub/desispec/pull/1630
+.. _`#1633`: https://github.com/desihub/desispec/pull/1633
 
 0.51.0 (2022-01-24)
 -------------------
