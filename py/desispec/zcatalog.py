@@ -84,15 +84,12 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
 
     # Set the NSPEC for every target 
     tsel['NSPEC'] = num[return_indices]
-    
-    # Some of the TARGETIDs are negative, these are either faulty fibers or sky fibers
-    neg_targets = (tsel['TARGETID'].data < 0)
 
-    # Starting with fuji, these should be uniquely defined (one TARGETID per sky position).
-    # As a precaution, we set SPECPRIMARY=1 and NSPEC=1 for all the negative TARGETIDs
-    tsel['SPECPRIMARY'][neg_targets] = 1
-    tsel['NSPEC'][neg_targets] = 1
-    
+    # Note: SPECPRIMARY for negative TARGETIDs (stuck positioners on sky locations) is a bit
+    # meaningless, but tile-based perexp and pernight catalogs can have repeats of those
+    # and they are treated like other targets so that there is strictly one SPECPRIMARY
+    # entry per TARGETID
+
     ## Sort by ROW_NUMBER to get the original order -
     tsel.sort('ROW_NUMBER')
     
@@ -104,4 +101,4 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
 
 ####################################################################################################
 ####################################################################################################
-    
+
