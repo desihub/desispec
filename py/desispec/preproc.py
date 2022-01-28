@@ -856,6 +856,28 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # Now remove the overscan_col
         nrows=raw_overscan_col.shape[0]
         log.info(f"Camera {camera} {nrows} rows in overscan")
+
+        if not nodarktrail and cfinder is not None :
+            if cfinder.haskey("DARKTRAILAMP%s"%amp) :
+                log.info("Perform a dark trail correction before fitting the overscan region")
+                amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
+                width = cfinder.value("DARKTRAILWIDTH%s"%amp)
+                # region is BIASSEC+DATASEC
+                ii    = parse_sec_keyword(header["BIASSEC"+amp])
+                jj    = parse_sec_keyword(header["DATASEC"+amp])
+                start = min(ii[1].start,jj[1].start)
+                stop  = max(ii[1].stop,jj[1].stop)
+                jj=np.s_[jj[0].start:jj[0].stop, start:stop]
+                o,r = calc_overscan(rawimage[jj])
+                # tmp copy or rawimage
+                tmp=rawimage[jj].copy()-o
+                ll=np.s_[0:tmp.shape[0],0:tmp.shape[1]]
+                correct_dark_trail(tmp,ll,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
+                tmp -= (rawimage[jj].copy()-o) # subtract input to keep only the correction
+                start = ii[1].start-jj[1].start
+                stop  = ii[1].stop-jj[1].start
+                raw_overscan_col += tmp[:,start:stop] # apply the correction only to the overscan cols
+
         overscan_col = np.zeros(nrows)
         rdnoise  = np.zeros(nrows)
         for j in range(nrows) :
