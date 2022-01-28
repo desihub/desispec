@@ -605,7 +605,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
-            keep_overscan_cols=True):
+            keep_overscan_cols=False):
 
     '''
     preprocess image using metadata in header
