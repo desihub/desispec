@@ -94,6 +94,7 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--no-traceshift', action="store_true", help="do not adjust the trace coordinates when computing a model of the CCD image")
     parser.add_argument('--ncpu', type=int, default=default_nproc,
             help=f"number of parallel processes to use [{default_nproc}]")
+    parser.add_argument('--keep-overscan-cols', action="store_true", help="keep overscan columns in preproc image for debugging")
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -192,7 +193,8 @@ def main(args=None):
                 psf_filename=args.psf,
                 model_variance=args.model_variance,
                 zero_masked=args.zero_masked,
-                no_traceshift=args.no_traceshift
+                no_traceshift=args.no_traceshift,
+                keep_overscan_cols=args.keep_overscan_cols
         )
         opts_array.append(opts)
 

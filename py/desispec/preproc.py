@@ -604,7 +604,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
             overscan_per_row=False, use_overscan_row=False, use_savgol=None,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
-            bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False):
+            bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
+            keep_overscan_cols=True):
 
     '''
     preprocess image using metadata in header
@@ -684,6 +685,20 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     '''
     log=get_logger()
 
+    if keep_overscan_cols :
+        if dark is not False :
+            mess="need dark=False because keep_overscal_col=True, try option --nodark"
+            log.error(mess)
+            raise RuntimeError(mess)
+        if mask is not False :
+            mess="need mask=False because keep_overscal_col=True, try option --nomask"
+            log.error(mess)
+            raise RuntimeError(mess)
+        if pixflat is not False :
+            mess="need pixflat=False because keep_overscal_col=True, try option --nopixflat"
+            log.error(mess)
+            raise RuntimeError(mess)
+
     header = header.copy()
     depend.setdep(header, 'DESI_SPECTRO_CALIB', os.getenv('DESI_SPECTRO_CALIB'))
 
@@ -740,6 +755,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     else:
         bias = bias_img
 
+    overscan_col_width = 0
+
     #- Output arrays
     ny=0
     nx=0
@@ -747,6 +764,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         yy, xx = parse_sec_keyword(header['CCDSEC%s'%amp])
         ny=max(ny,yy.stop)
         nx=max(nx,xx.stop)
+
+    if keep_overscan_cols :
+        amp = amp_ids[0]
+        tt     = parse_sec_keyword(header['DATASEC'+amp])
+        ov_col = parse_sec_keyword(header['BIASSEC%s'%amp])
+        overscan_col_width = max((tt[1].start-ov_col[1].start),(ov_col[1].stop-tt[1].stop))
+        log.info(f"will keep overscan columns of width = {overscan_col_width} pixels")
+        nx += 2*overscan_col_width
+
     image = np.zeros((ny,nx))
 
     readnoise = np.zeros_like(image)
@@ -853,6 +879,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         kk = parse_sec_keyword(header['CCDSEC'+amp])
 
+        if keep_overscan_cols :
+            if kk[1].stop>image.shape[1]//2 :
+                start = kk[1].start + overscan_col_width
+                stop  = kk[1].stop + 2*overscan_col_width
+            else :
+                start = kk[1].start
+                stop  = kk[1].stop + overscan_col_width
+            kk = np.s_[kk[0].start:kk[0].stop, start:stop]
+
         # Now remove the overscan_col
         nrows=raw_overscan_col.shape[0]
         log.info(f"Camera {camera} {nrows} rows in overscan")
@@ -919,6 +954,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             # so we only need to add the quadratic difference of the master bias read noise
             # between the active region and the overscan columns
             jj = parse_sec_keyword(header['DATASEC'+amp])
+
             o,biasnoise_datasec = calc_overscan(bias[jj])
             o,biasnoise_ovcol   = calc_overscan(bias[ov_col])
             new_rdnoise         = np.sqrt(rdnoise**2+biasnoise_datasec**2-biasnoise_ovcol**2)
@@ -971,6 +1007,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         #- subtract overscan from data region and apply gain
         jj = parse_sec_keyword(header['DATASEC'+amp])
+        if keep_overscan_cols :
+            start=min(jj[1].start,ov_col[1].start)
+            stop=max(jj[1].stop,ov_col[1].stop)
+            jj = np.s_[jj[0].start:jj[0].stop, start:stop]
 
         data = rawimage[jj].copy()
         # Subtract columns
@@ -1091,7 +1131,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             if cfinder.haskey("DARKTRAILAMP%s"%amp) :
                 amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
-                ii    = _parse_sec_keyword(header["CCDSEC"+amp])
+                ii    = parse_sec_keyword(header["CCDSEC"+amp])
                 log.info("Camera {} amp {} removing dark trails with width={:3.1f} and amplitude={:5.4f}".format(
                     camera, amp, width, amplitude))
                 correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
