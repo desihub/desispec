@@ -211,9 +211,16 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
     ## Simple table organization to ensure cals processed first
     ## To be eventually replaced by more sophisticated cal selection
     ## Get one dark first
-    isdark = np.array([erow['OBSTYPE'] == 'dark' and 'calib' in erow['PROGRAM']
-                       for erow in etable])
-    if np.sum(isdark)>0:
+    isdarkcal = np.array([(erow['OBSTYPE'] == 'dark' and 'calib' in
+                          erow['PROGRAM']) for erow in etable])
+    isdark = np.array([(erow['OBSTYPE'] == 'dark') for erow in etable])
+    ## If a cal, want to select that but ignore all other darks
+    ## elif only a dark sequence, use that
+    if np.sum(isdarkcal)>0:
+        wheredark = np.where(isdarkcal)[0]
+        ## note this is ~isdark because want to get rid of all other darks
+        etable = vstack([etable[wheredark[0]], etable[~isdark]])
+    elif np.sum(isdark)>0:
         wheredark = np.where(isdark)[0]
         etable = vstack([etable[wheredark[0]], etable[~isdark]])
 
