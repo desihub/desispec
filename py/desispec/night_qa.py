@@ -1092,6 +1092,13 @@ def create_petalnz_pdf(
                     " and ".join(["{} {}".format(ntiles_surv[faprgrm], faprgrm.upper()) for faprgrm in faprgrms]),
                     night,
                 )
+                if "dark" in ntiles_surv:
+                    tmpn = ntiles_surv["dark"]
+                else:
+                    tmpn = 0
+                title_dark = "SURVEY={} : {} DARK tiles from {}".format(
+                    survey, tmpn, night,
+                )
                 # AR fraction of ~VALID fibers, bright+dark together
                 ax = plt.subplot(gs[0])
                 ys = np.nan + np.zeros(len(petals))
@@ -1143,7 +1150,7 @@ def create_petalnz_pdf(
                         islya = (isqso) & (ds[faprgrm]["LYA"])
                         ys[petal] = islya.sum() / isqso.sum()
                     ax.plot(petals, ys, "-o", color=colors["QSO"])
-                ax.set_title(title)
+                ax.set_title(title_dark)
                 ax.set_xlabel("PETAL_LOC")
                 ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
                 ax.xaxis.set_major_locator(MultipleLocator(1))
@@ -1180,7 +1187,7 @@ def create_petalnz_pdf(
                         tmpd["NTILECOV"],
                         tmpd["NNEWLYA"] / (tmpd["NVALIDFIBER"] / nvalifiber_norm),
                         tileids=tmpd["TILEID"],
-                        title=title,
+                        title=title_dark,
                         xlabel="Number of observed tiles on {}".format(night),
                         ylabel="Number of newly identified LYA candidates\n(VALID QSO fibers only, normalized to {} fibers)".format(nvalifiber_norm),
                     )
