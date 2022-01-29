@@ -1132,6 +1132,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 amplitude = cfinder.value("DARKTRAILAMP%s"%amp)
                 width = cfinder.value("DARKTRAILWIDTH%s"%amp)
                 ii    = parse_sec_keyword(header["CCDSEC"+amp])
+                if keep_overscan_cols and ii[1].stop>image.shape[1]//2 :
+                    start = ii[1].start + overscan_col_width
+                    stop  = ii[1].stop  + 2*overscan_col_width
+                    ii = np.s_[ii[0].start:ii[0].stop, start:stop]
                 log.info("Camera {} amp {} removing dark trails with width={:3.1f} and amplitude={:5.4f}".format(
                     camera, amp, width, amplitude))
                 correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
