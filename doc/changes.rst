@@ -2,10 +2,22 @@
 desispec Change Log
 ===================
 
-0.51.2 (unreleased)
+0.51.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.51.2 (2022-01-27)
+-------------------
+
+Fuji bug fixes (impacted nights will be re-run; nights run with earlier
+tags not impacted)
+
+* fix pipeline bug on nights with multiple 300s darks (PR `#1635`_).
+* fix ``io.findfile(..., groupname='perexp')`` (PR `#1637`_).
+
+.. _`#1635`: https://github.com/desihub/desispec/pull/1635
+.. _`#1637`: https://github.com/desihub/desispec/pull/1637
 
 0.51.1 (2022-01-26)
 -------------------

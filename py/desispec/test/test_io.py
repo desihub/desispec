@@ -797,6 +797,7 @@ class TestIO(unittest.TestCase):
         #- cumulative vs. pernight
         tileid = 1234
         night = 20201010
+        expid = 555666
         sp = 9
         tile_filetypes = ('spectra', 'coadd', 'redrock', 'tileqa', 'tileqapng', 'zmtl')
 
@@ -821,6 +822,21 @@ class TestIO(unittest.TestCase):
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.png'))  #- no "thru"
             else:
                 self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
+
+        #- groupname='perexp' is also different
+        for filetype in tile_filetypes:
+            if filetype == 'zmtl':
+                #- zmtl doesn't apply for perexp
+                continue
+
+            #- NOTE: perexp uses expid input, not night input
+            filepath = findfile(filetype, tile=tileid, expid=expid, spectrograph=sp, groupname='perexp')
+            dirname, filename = os.path.split(filepath)
+            self.assertTrue(dirname.endswith(f'tiles/perexp/{tileid}/{expid:08d}'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.png'))  #- exp not thru
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
 
 
     def test_findfile_outdir(self):
