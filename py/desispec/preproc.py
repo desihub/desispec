@@ -1136,6 +1136,10 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                     start = ii[1].start + overscan_col_width
                     stop  = ii[1].stop  + 2*overscan_col_width
                     ii = np.s_[ii[0].start:ii[0].stop, start:stop]
+                else :
+                    start = ii[1].start
+                    stop  = ii[1].stop  + overscan_col_width
+                    ii = np.s_[ii[0].start:ii[0].stop, start:stop]
                 log.info("Camera {} amp {} removing dark trails with width={:3.1f} and amplitude={:5.4f}".format(
                     camera, amp, width, amplitude))
                 correct_dark_trail(image,ii,left=((amp=="B")|(amp=="D")),width=width,amplitude=amplitude)
