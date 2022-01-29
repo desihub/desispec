@@ -1153,6 +1153,7 @@ def create_petalnz_pdf(
                 ax.set_title(title_dark)
                 ax.set_xlabel("PETAL_LOC")
                 ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
+                ax.set_xlim(-0.5, 9.5)
                 ax.xaxis.set_major_locator(MultipleLocator(1))
                 ax.set_ylim(0, 1)
                 ax.grid()
