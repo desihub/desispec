@@ -307,7 +307,7 @@ class ConfigEditor(object) :
 
                     in_reference_version_header = False
                     for version in versions :
-                        if line.find(version)>=0 and line.find("#")<=0:
+                        if line.find(version)>=0 and line.find("#")<0:
                             in_some_version = True
                             if version == reference_version or reference_version == 'all' :
                                 in_reference_version = True
