@@ -2,10 +2,23 @@
 desispec Change Log
 ===================
 
-0.51.3 (unreleased)
+0.51.4 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.51.3 (2022-01-31)
+-------------------
+
+NOTE: this tag fixes a crash, but also produces slightly different humidity
+correction for a small set Fuji/Guadalupe exposures already run with an
+earlier tag.  This note will be updated if those exposures are reprocessed
+with this tag.
+
+* Fix fiberflat humidity correction indexing bug when hear (but not at)
+  upper limit of model humidity range (PR `#1642`_).
+
+.. _`#1642`: https://github.com/desihub/desispec/pull/1642
 
 0.51.2 (2022-01-27)
 -------------------
