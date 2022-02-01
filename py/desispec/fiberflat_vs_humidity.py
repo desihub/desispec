@@ -109,7 +109,7 @@ def _fit_flat(wavelength,flux,ivar,fibers,mean_fiberflat_vs_humidity,humidity_ar
         if bb<0 :
             bb+=1
             ee+=1
-        if ee>=chi2.size :
+        if ee>chi2.size :
             bb-=1
             ee-=1
 
