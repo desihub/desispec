@@ -15,7 +15,7 @@ import sys
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-from astropy.time import time
+from astropy.time import Time
 from pytz import utc
 
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
