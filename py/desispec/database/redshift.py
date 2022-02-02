@@ -27,7 +27,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, REAL
 
-from desiutil.iers import freeze_iers()
+from desiutil.iers import freeze_iers
 from desiutil.log import get_logger, DEBUG, INFO
 
 from ..io.meta import specprod_root, faflavor2program
