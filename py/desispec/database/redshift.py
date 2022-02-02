@@ -15,6 +15,7 @@ import sys
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
+from astropy.time import time
 from pytz import utc
 
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
@@ -26,6 +27,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, REAL
 
+from desiutil.iers import freeze_iers()
 from desiutil.log import get_logger, DEBUG, INFO
 
 from ..io.meta import specprod_root, faflavor2program
@@ -218,6 +220,7 @@ class Exposure(SchemaMixin, Base):
     tileid = Column(Integer, nullable=False, index=True)
     tilera = Column(DOUBLE_PRECISION, nullable=False)   #- Calib exposures don't have RA, dec
     tiledec = Column(DOUBLE_PRECISION, nullable=False)
+    date_obs = Column(DateTime(True), nullable=False)
     mjd = Column(DOUBLE_PRECISION, nullable=False)
     survey = Column(String(7), nullable=False)
     faprgrm = Column(String(15), nullable=False)
@@ -316,6 +319,39 @@ class Frame(SchemaMixin, Base):
 
     def __repr__(self):
         return "Frame(expid={0.expid:d}, camera='{0.camera}')".format(self)
+
+
+# class Tile(SchemaMixin, Base):
+#     """Representation of the tiles file.
+#
+#     Notes
+#     -----
+#     Most of the data that are currently in the tiles file are derivable
+#     from the exposures table with much greater precision::
+#
+#         CREATE VIEW f5.tile AS SELECT tileid,
+#             -- SURVEY, FAPRGRM, FAFLAVOR?
+#             COUNT(*) AS nexp, SUM(exptime) AS exptime,
+#             MIN(tilera) AS tilera, MIN(tiledec) AS tiledec,
+#             SUM(efftime_etc) AS efftime_etc, SUM(efftime_spec) AS efftime_spec,
+#             SUM(efftime_gfa) AS efftime_gfa, MIN(goaltime) AS goaltime,
+#             -- OBSSTATUS?
+#             SUM(lrg_efftime_dark) AS lrg_efftime_dark,
+#             SUM(elg_efftime_dark) AS elg_efftime_dark,
+#             SUM(bgs_efftime_bright) AS bgs_efftime_bright,
+#             SUM(lya_efftime_dark) AS lya_efftime_dark,
+#             -- GOALTYPE?
+#             MIN(mintfrac) AS mintfrac, MAX(night) AS lastnight
+#         FROM f5.exposure GROUP BY tileid;
+#     """
+#
+#     tileid = Column(Integer, primary_key=True, autoincrement=False)
+#     nexp = Column(Integer, nullable=False)  # In principle this could be replaced by a count of exposures
+#     obsstatus = Column(String(8), nullable=False)
+#     lastnight = Column(Integer, nullable=False) # In principle this could be replaced by MAX(night) grouped by exposures.
+#
+#     def __repr__(self):
+#         return "Tile(tileid={0.tileid:d})".format(self)
 
 
 class ZCat(SchemaMixin, Base):
@@ -492,6 +528,9 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
             log.info("Read %d rows of data from %s HDU %s.", len(data), filepath, hdu)
         elif filepath.endswith('.ecsv'):
             data = Table.read(filepath, format='ascii.ecsv')
+            log.info("Read %d rows of data from %s.", len(data), filepath)
+        elif filepath.endswith('.csv'):
+            data = Table.read(filepath, format='ascii.csv')
             log.info("Read %d rows of data from %s.", len(data), filepath)
         else:
             log.error("Unrecognized data file, %s!", filepath)
@@ -1032,6 +1071,7 @@ def main():
         An integer suitable for passing to :func:`sys.exit`.
     """
     global log
+    freeze_iers()
     #
     # command-line arguments
     #
@@ -1053,8 +1093,8 @@ def main():
     loader = [{'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Exposure,
                'hdu': 'EXPOSURES',
-               'insert': {'faprgrm': ('program',)},
-               'convert': {'program': faflavor2program},
+               'insert': {'faprgrm': ('program',), 'mjd': ('date_obs',)},
+               'convert': {'program': faflavor2program, 'date_obs': lambda x: Time(x, format='mjd').to_value('datetime').replace(tzinfo=utc)},
                'q3c': 'tilera',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
@@ -1065,7 +1105,12 @@ def main():
                'preload': _frameid,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
-               },]
+               }]
+              # {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'tiles-{specprod}.csv'.format(specprod=os.environ['SPECPROD'])),
+              #  'tcls': Tile,
+              #  'chunksize': options.chunksize,
+              #  'maxrows': options.maxrows
+              #  },]
     # loader = [{'filepaths': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
     #            'tcls': Truth,
     #            'hdu': 'TRUTH',
