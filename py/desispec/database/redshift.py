@@ -211,13 +211,66 @@ class Target(SchemaMixin, Base):
         return "<Target(targetid={0.targetid})>".format(self)
 
 
+class Tile(SchemaMixin, Base):
+    """Representation of the tiles file.
+
+    Notes
+    -----
+    Most of the data that are currently in the tiles file are derivable
+    from the exposures table with much greater precision::
+
+        CREATE VIEW f5.tile AS SELECT tileid,
+            -- SURVEY, FAPRGRM, FAFLAVOR?
+            COUNT(*) AS nexp, SUM(exptime) AS exptime,
+            MIN(tilera) AS tilera, MIN(tiledec) AS tiledec,
+            SUM(efftime_etc) AS efftime_etc, SUM(efftime_spec) AS efftime_spec,
+            SUM(efftime_gfa) AS efftime_gfa, MIN(goaltime) AS goaltime,
+            -- OBSSTATUS?
+            SUM(lrg_efftime_dark) AS lrg_efftime_dark,
+            SUM(elg_efftime_dark) AS elg_efftime_dark,
+            SUM(bgs_efftime_bright) AS bgs_efftime_bright,
+            SUM(lya_efftime_dark) AS lya_efftime_dark,
+            -- GOALTYPE?
+            MIN(mintfrac) AS mintfrac, MAX(night) AS lastnight
+        FROM f5.exposure GROUP BY tileid;
+
+    However because of some unresolved discrepancies, we'll just load the
+    full tiles file for now.
+    """
+
+    tileid = Column(Integer, primary_key=True, autoincrement=False)
+    survey = Column(String(7), nullable=False)
+    faprgrm = Column(String(15), nullable=False)
+    program = Column(String(6), nullable=False)  # will be filled via desispec.io.meta.faflavor2program()
+    faflavor = Column(String(18), nullable=False)
+    nexp = Column(Integer, nullable=False)  # In principle this could be replaced by a count of exposures
+    exptime = Column(DOUBLE_PRECISION, nullable=False)
+    tilera = Column(DOUBLE_PRECISION, nullable=False)   #- Calib exposures don't have RA, dec
+    tiledec = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_etc = Column(REAL, nullable=False)
+    efftime_spec = Column(DOUBLE_PRECISION, nullable=False)
+    efftime_gfa = Column(DOUBLE_PRECISION, nullable=False)
+    goaltime = Column(DOUBLE_PRECISION, nullable=False)
+    obsstatus = Column(String(8), nullable=False)
+    lrg_efftime_dark = Column(REAL, nullable=False)
+    elg_efftime_dark = Column(REAL, nullable=False)
+    bgs_efftime_bright = Column(REAL, nullable=False)
+    lya_efftime_dark = Column(DOUBLE_PRECISION, nullable=False)
+    goaltype = Column(String(6), nullable=False)
+    mintfrac = Column(DOUBLE_PRECISION, nullable=False)
+    lastnight = Column(Integer, nullable=False) # In principle this could be replaced by MAX(night) grouped by exposures.
+
+    def __repr__(self):
+        return "Tile(tileid={0.tileid:d})".format(self)
+
+
 class Exposure(SchemaMixin, Base):
     """Representation of the EXPOSURES HDU in the exposures file.
     """
 
     night = Column(Integer, nullable=False, index=True)
     expid = Column(Integer, primary_key=True, autoincrement=False)
-    tileid = Column(Integer, nullable=False, index=True)
+    tileid = Column(Integer, ForeignKey('tile.tileid'), nullable=False, index=True)
     tilera = Column(DOUBLE_PRECISION, nullable=False)   #- Calib exposures don't have RA, dec
     tiledec = Column(DOUBLE_PRECISION, nullable=False)
     date_obs = Column(DateTime(True), nullable=False)
@@ -319,39 +372,6 @@ class Frame(SchemaMixin, Base):
 
     def __repr__(self):
         return "Frame(expid={0.expid:d}, camera='{0.camera}')".format(self)
-
-
-# class Tile(SchemaMixin, Base):
-#     """Representation of the tiles file.
-#
-#     Notes
-#     -----
-#     Most of the data that are currently in the tiles file are derivable
-#     from the exposures table with much greater precision::
-#
-#         CREATE VIEW f5.tile AS SELECT tileid,
-#             -- SURVEY, FAPRGRM, FAFLAVOR?
-#             COUNT(*) AS nexp, SUM(exptime) AS exptime,
-#             MIN(tilera) AS tilera, MIN(tiledec) AS tiledec,
-#             SUM(efftime_etc) AS efftime_etc, SUM(efftime_spec) AS efftime_spec,
-#             SUM(efftime_gfa) AS efftime_gfa, MIN(goaltime) AS goaltime,
-#             -- OBSSTATUS?
-#             SUM(lrg_efftime_dark) AS lrg_efftime_dark,
-#             SUM(elg_efftime_dark) AS elg_efftime_dark,
-#             SUM(bgs_efftime_bright) AS bgs_efftime_bright,
-#             SUM(lya_efftime_dark) AS lya_efftime_dark,
-#             -- GOALTYPE?
-#             MIN(mintfrac) AS mintfrac, MAX(night) AS lastnight
-#         FROM f5.exposure GROUP BY tileid;
-#     """
-#
-#     tileid = Column(Integer, primary_key=True, autoincrement=False)
-#     nexp = Column(Integer, nullable=False)  # In principle this could be replaced by a count of exposures
-#     obsstatus = Column(String(8), nullable=False)
-#     lastnight = Column(Integer, nullable=False) # In principle this could be replaced by MAX(night) grouped by exposures.
-#
-#     def __repr__(self):
-#         return "Tile(tileid={0.tileid:d})".format(self)
 
 
 class ZCat(SchemaMixin, Base):
@@ -494,7 +514,8 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
     expand : :class:`dict`, optional
         If set, map FITS column names to one or more alternative column names.
     insert : :class:`dict`, optional
-        If set, insert one or more columns, before an existing column.
+        If set, insert one or more columns, before an existing column. The
+        existing column will be copied into the new column(s).
     convert : :class:`dict`, optional
         If set, convert the data for a named (database) column using the
         supplied function.
@@ -1090,10 +1111,17 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+    loader = [{'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'tiles-{specprod}.csv'.format(specprod=os.environ['SPECPROD'])),
+               'tcls': Tile,
+               'insert': {'faflavor': ('program',)},
+               'convert': {'program': faflavor2program},
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
+               },
+              {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Exposure,
                'hdu': 'EXPOSURES',
-               'insert': {'faprgrm': ('program',), 'mjd': ('date_obs',)},
+               'insert': {'faflavor': ('program',), 'mjd': ('date_obs',)},
                'convert': {'program': faflavor2program, 'date_obs': lambda x: Time(x, format='mjd').to_value('datetime').replace(tzinfo=utc)},
                'q3c': 'tilera',
                'chunksize': options.chunksize,
@@ -1106,11 +1134,6 @@ def main():
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                }]
-              # {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'tiles-{specprod}.csv'.format(specprod=os.environ['SPECPROD'])),
-              #  'tcls': Tile,
-              #  'chunksize': options.chunksize,
-              #  'maxrows': options.maxrows
-              #  },]
     # loader = [{'filepaths': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
     #            'tcls': Truth,
     #            'hdu': 'TRUTH',
