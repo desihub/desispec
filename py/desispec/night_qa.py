@@ -793,7 +793,7 @@ def plot_newlya(
     title=None,
     xlabel="Number of observed tiles",
     ylabel="Number of newly identified LYA candidates",
-    xlim=(0.5, 5.0),
+    xlim=(0.5, 6.5),
     ylim=(0, 400),
     nvalifiber_norm=3900,
 ):
@@ -808,7 +808,7 @@ def plot_newlya(
         title (optional, defaults to None): plot title (str)
         xlabel (optional, defaults to "Number of observed tiles"): plot xlabel (str)
         ylabel (optional, defaults to "Number of newly identified LYA candidates"): plot ylabel(str)
-        xlim (optional, defaults to (0.5, 5.0)): plot xlim (tuple)
+        xlim (optional, defaults to (0.5, 6.5)): plot xlim (tuple)
         ylim (optional, defaults to (0, 400): plot ylim (tuple)
         nvalifiber_norm (optional, defaults to 3900): number of valid fibers to normalize to, for the expected regions (int)
     """
@@ -820,7 +820,7 @@ def plot_newlya(
     # AR - sigma: using here Poisson (though not 100% correct, as there is some normalizations in there...)
     myfunc = lambda nobs, n, alpha: n * np.exp( alpha * (nobs - 1.))
     n, alpha = 295, -0.7
-    tmpxs = np.linspace(1, 5, 1000)
+    tmpxs = np.linspace(1, xlim[1], 1000)
     tmpys = myfunc(tmpxs, n, alpha)
     ax.plot(tmpxs, tmpys, color="k", zorder=0)
     for nsig, col in zip([1, 2, 3], ["b", "g", "r"]):
@@ -829,9 +829,9 @@ def plot_newlya(
         else:
             ax.fill_between(tmpxs, tmpys - nsig * np.sqrt(tmpys), tmpys - (nsig-1) * np.sqrt(tmpys), color=col, alpha=0.25)
             ax.fill_between(tmpxs, tmpys + (nsig - 1) * np.sqrt(tmpys), tmpys + nsig * np.sqrt(tmpys), color=col, alpha=0.25)
-    ax.text(0.025, 0.15, r"Blue  : approx. expected 1$\sigma$", color="b", transform=ax.transAxes)
-    ax.text(0.025, 0.10, r"Green: approx. expected 2$\sigma$", color="g", transform=ax.transAxes)
-    ax.text(0.025, 0.05, r"Red   : approx. expected 3$\sigma$", color="r", transform=ax.transAxes)
+    ax.text(0.975, 0.55, r"Blue  : approx. expected 1$\sigma$", color="b", ha="right", transform=ax.transAxes)
+    ax.text(0.975, 0.50, r"Green: approx. expected 2$\sigma$", color="g", ha="right", transform=ax.transAxes)
+    ax.text(0.975, 0.45, r"Red   : approx. expected 3$\sigma$", color="r", ha="right", transform=ax.transAxes)
     # AR clipping so that each point is visible on the plot
     ys = np.clip(nnewlyas, ylim[0], ylim[1])
     ax.scatter(ntilecovs, ys, color="k", s=30, alpha=0.8, zorder=1)
@@ -1092,6 +1092,13 @@ def create_petalnz_pdf(
                     " and ".join(["{} {}".format(ntiles_surv[faprgrm], faprgrm.upper()) for faprgrm in faprgrms]),
                     night,
                 )
+                if "dark" in ntiles_surv:
+                    tmpn = ntiles_surv["dark"]
+                else:
+                    tmpn = 0
+                title_dark = "SURVEY={} : {} DARK tiles from {}".format(
+                    survey, tmpn, night,
+                )
                 # AR fraction of ~VALID fibers, bright+dark together
                 ax = plt.subplot(gs[0])
                 ys = np.nan + np.zeros(len(petals))
@@ -1143,15 +1150,16 @@ def create_petalnz_pdf(
                         islya = (isqso) & (ds[faprgrm]["LYA"])
                         ys[petal] = islya.sum() / isqso.sum()
                     ax.plot(petals, ys, "-o", color=colors["QSO"])
-                ax.set_title(title)
+                ax.set_title(title_dark)
                 ax.set_xlabel("PETAL_LOC")
                 ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
+                ax.set_xlim(-0.5, 9.5)
                 ax.xaxis.set_major_locator(MultipleLocator(1))
                 ax.set_ylim(0, 1)
                 ax.grid()
                 # AR - newly identified Ly-a = f(ntilecov)
                 ax = plt.subplot(gs[3])
-                ylim = (0, 400)
+                xlim, ylim = (0.5, 6.5), (0, 400)
                 nvalifiber_norm = 3900
                 if "dark" in faprgrms:
                     faprgrm = "dark"
@@ -1180,12 +1188,18 @@ def create_petalnz_pdf(
                         tmpd["NTILECOV"],
                         tmpd["NNEWLYA"] / (tmpd["NVALIDFIBER"] / nvalifiber_norm),
                         tileids=tmpd["TILEID"],
-                        title=title,
-                        xlabel="Number of observed tiles on {}".format(night),
-                        ylabel="Number of newly identified LYA candidates\n(VALID QSO fibers only, normalized to {} fibers)".format(nvalifiber_norm),
+                        xlim=xlim,
+                        ylim=ylim,
                     )
                     if newlya_ecsv is not None:
                         tmpd.write(newlya_ecsv, overwrite=True)
+                else:
+                    ax.set_xlim(xlim)
+                    ax.set_ylim(ylim)
+                    ax.grid()
+                ax.set_title(title_dark)
+                ax.set_xlabel("Avg nb of previously observed overlapping tiles on {}".format(night))
+                ax.set_ylabel("Number of newly identified LYA candidates\n(VALID QSO fibers only, normalized to {} fibers)".format(nvalifiber_norm))
                 #
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close()
