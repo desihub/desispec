@@ -1057,7 +1057,7 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['STATUS'] = 'U'
     joint_prow['SCRIPTNAME'] = ''
     joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
-    if descriptor == 'stdstarfit' and len(prows) > 1:
+    if descriptor == 'stdstarfit':
         pcamwords = [prow['PROCCAMWORD'] for prow in prows]
         joint_prow['PROCCAMWORD'] = camword_union(pcamwords, full_spectros_only=True)
 
