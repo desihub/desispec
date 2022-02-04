@@ -568,10 +568,18 @@ def camword_union(camwords, full_spectros_only=False):
              truncation of incomplete spectrographs may or may not be performed
              based on full_spectros_only.
     """
-    cams = set(decode_camword(camwords[0]))
-    for camword in camwords[1:]:
-        cams = cams.union(set(decode_camword(camword)))
-    camword = create_camword(list(cams))
+    camword = ''
+    if np.isscalar(camwords):
+        if not isinstance(camwords, str):
+            ValueError(f"camwords must be array-like or str. Received type: {type(camwords)}")
+        else:
+            camword = camwords
+    else:
+        cams = set(decode_camword(camwords[0]))
+        for camword in camwords[1:]:
+            cams = cams.union(set(decode_camword(camword)))
+        camword = create_camword(list(cams))
+
     if full_spectros_only:
         full_sps = camword_to_spectros(camword, full_spectros_only=True)
         final_camword = 'a' + ''.join([str(sp) for sp in full_sps])

@@ -1076,9 +1076,10 @@ class TestIO(unittest.TestCase):
         fcamwords = [['a01b2r2r3', 'a01z2'],
                      ['a013', 'a2'],
                      ['a013456789b2r2', 'a01b2z2'],
-                     ['a013456789b2r2', 'a0']]
-        truecams = ['a012r3', 'a0123', 'a0123456789', 'a013456789b2r2']
-        truespecs = ['a012', 'a0123', 'a0123456789', 'a013456789']
+                     ['a013456789b2r2', 'a0'],
+                     ['a0b1r1z12']]
+        truecams = ['a012r3', 'a0123', 'a0123456789', 'a013456789b2r2', 'a01z2']
+        truespecs = ['a012', 'a0123', 'a0123456789', 'a013456789', 'a01']
         for fcws, truecamw, truespecw in zip(fcamwords, truecams, truespecs):
             outcw = camword_union(fcws, full_spectros_only=False)
             self.assertEqual(outcw, truecamw)
