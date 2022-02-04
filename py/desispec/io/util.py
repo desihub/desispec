@@ -581,8 +581,9 @@ def camword_union(camwords, full_spectros_only=False):
         camword = create_camword(list(cams))
 
     if full_spectros_only:
-        full_sps = camword_to_spectros(camword, full_spectros_only=True)
-        final_camword = 'a' + ''.join([str(sp) for sp in full_sps])
+        full_sps = np.sort(camword_to_spectros(camword,
+                                               full_spectros_only=True)).astype(str)
+        final_camword = 'a' + ''.join(full_sps)
     else:
         final_camword = camword
     return final_camword
