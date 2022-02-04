@@ -22,7 +22,8 @@ from desispec.workflow.proctable import table_row_to_dict
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
-from desispec.io.util import decode_camword, create_camword, difference_camwords, camword_to_spectros
+from desispec.io.util import decode_camword, create_camword, difference_camwords, \
+                             camword_to_spectros, camword_union
 
 #################################################
 ############## Misc Functions ###################
@@ -1053,11 +1054,17 @@ def make_joint_prow(prows, descriptor, internal_id):
     joint_prow['LATEST_QID'] = -99
     joint_prow['ALL_QIDS'] = np.ndarray(shape=0).astype(int)
     joint_prow['SUBMIT_DATE'] = -99
-    joint_prow['STATUS'] =  'U'
+    joint_prow['STATUS'] = 'U'
     joint_prow['SCRIPTNAME'] = ''
-    joint_prow['EXPID'] = np.array([ currow['EXPID'][0] for currow in prows ], dtype=int)
+    joint_prow['EXPID'] = np.array([currow['EXPID'][0] for currow in prows], dtype=int)
+    if descriptor == 'stdstarfit' and len(prows) > 1:
+        pcamwords = [prow['PROCCAMWORD'] for prow in prows]
+        joint_prow['PROCCAMWORD'] = camword_union(pcamwords, full_spectros_only=True)
+
     joint_prow = assign_dependency(joint_prow,dependency=prows)
     return joint_prow
+
+
 
 def checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
                                   lasttype, internal_id, z_submit_types=None, dry_run=0,
