@@ -553,8 +553,10 @@ def camword_union(camwords, full_spectros_only=False):
     those spectros with complete b, r, and z cameras. Note this intentionally
     does the union before truncating spectrographs, so two partial camwords
     can lead to an entire spectrograph,
+
        e.g. [a0b1z1, a3r1z2] -> [a013z2] if full_spectros_only=False
             [a0b1z1, a3r1z2] -> [a013] if full_spectros_only=True
+
     even through no camword has a complete set of camera 1, a complete set is
     represented in the union.
 
