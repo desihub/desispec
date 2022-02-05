@@ -2,10 +2,20 @@
 desispec Change Log
 ===================
 
-0.51.4 (unreleased)
+0.51.5 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.51.4 (2022-02-04)
+-------------------
+
+Pipelining fix for Fuji; previously run impacted nights will be resubmitted.
+
+* Fix stdstar camword logic when input exposures have different cameras
+  available (PR `#1658`_).
+
+.. _`#1658`: https://github.com/desihub/desispec/pull/1658
 
 0.51.3 (2022-01-31)
 -------------------

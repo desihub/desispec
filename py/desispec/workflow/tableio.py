@@ -225,7 +225,8 @@ def translate_type_to_pathname(tabletype, use_specprod=True):
         tablename = pathjoin(tablepath, tablename)
     return tablename
 
-def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, process_mixins=True, use_specprod=True):
+def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False,
+               process_mixins=True, use_specprod=True, suppress_logging=False):
     """
     Workflow function to read in exposure, processing, and unprocessed tables. It allows for multi-valued table cells, which are
     generated from strings using the joinsymb. It reads from the file given by tablename (or the default for table of
@@ -246,6 +247,9 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
                               to arise.
         use_specprod, bool. If True and tablename not specified and tabletype is exposure table, this looks for the
                             table in the SPECPROD rather than the exptab repository. Default is True.
+        suppress_logging, bool. If True, the log.info() messages are skipped. This
+                           is useful in scripts looping over many tables to reduce the
+                           amount of things printed to the screen.
 
     Returns:
         table, Table. Either exposure table or processing table that was loaded from tablename (or from default name
@@ -266,7 +270,8 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
             tablename = translate_type_to_pathname(tabletype, use_specprod=use_specprod)
     else:
         if tabletype is None:
-            log.info("tabletype not given in load_table(), trying to guess based on filename")
+            if not suppress_logging:
+                log.info("tabletype not given in load_table(), trying to guess based on filename")
             filename = os.path.split(tablename)[-1]
             if 'exp' in filename or 'etable' in filename:
                 tabletype = 'exptable'
@@ -278,12 +283,15 @@ def load_table(tablename=None, tabletype=None, joinsymb='|', verbose=False, proc
             if tabletype is None:
                 log.warning(f"Couldn't identify type based on filename {filename}")
             else:
-                log.info(f"Based on filename {filename}, identified type as {tabletype}")
+                if not suppress_logging:
+                    log.info(f"Based on filename {filename}, identified type as {tabletype}")
 
     if os.path.isfile(tablename):
-        log.info(f"Found table: {tablename}")
+        if not suppress_logging:
+            log.info(f"Found table: {tablename}")
     elif tabletype is not None:
-        log.info(f'Table {tablename} not found, creating new table of type {tabletype}')
+        if not suppress_logging:
+            log.info(f'Table {tablename} not found, creating new table of type {tabletype}')
         if tabletype == 'exptable':
             return instantiate_exposure_table()
         elif tabletype == 'unproctable':

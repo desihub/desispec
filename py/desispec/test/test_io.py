@@ -1069,6 +1069,23 @@ class TestIO(unittest.TestCase):
             diff = difference_camwords(fcw, bcw)
             self.assertEqual(diff, truth)
 
+    def test_camword_union(self):
+        """ Test desispec.io.camword_union
+        """
+        from ..io.util import camword_union
+        fcamwords = [['a01b2r2r3', 'a01z2'],
+                     ['a013', 'a2'],
+                     ['a013456789b2r2', 'a01b2z2'],
+                     ['a013456789b2r2', 'a0'],
+                     ['a0b1r1z12']]
+        truecams = ['a012r3', 'a0123', 'a0123456789', 'a013456789b2r2', 'a01z2']
+        truespecs = ['a012', 'a0123', 'a0123456789', 'a013456789', 'a01']
+        for fcws, truecamw, truespecw in zip(fcamwords, truecams, truespecs):
+            outcw = camword_union(fcws, full_spectros_only=False)
+            self.assertEqual(outcw, truecamw)
+            outcw = camword_union(fcws, full_spectros_only=True)
+            self.assertEqual(outcw, truespecw)
+
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix
         """
