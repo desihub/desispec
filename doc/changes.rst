@@ -2,10 +2,18 @@
 desispec Change Log
 ===================
 
-0.51.5 (unreleased)
+0.51.6 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.51.5 (2022-02-07)
+-------------------
+
+* Additional desi_compute_nightlybias options for flexibility on which ZEROs
+  to use (PR `#1662`_).
+
+.. _`#1662`: https://github.com/desihub/desispec/pull/1662
 
 0.51.4 (2022-02-04)
 -------------------
