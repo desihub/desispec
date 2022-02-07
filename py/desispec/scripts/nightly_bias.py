@@ -17,7 +17,7 @@ def parse(options=None):
             help='output directory')
     p.add_argument('--nzeros', type=int, default=25,
             help='number of input ZEROS to use (saves memory)')
-    p.add_argument('--minzeros', type=int, default=20,
+    p.add_argument('--minzeros', type=int, default=15,
             help='minimum number of good ZEROs required')
     p.add_argument('--mpi', action='store_true',
             help='use_mpi')
@@ -41,4 +41,3 @@ def main(args=None, comm=None):
 
     del args.__dict__['mpi']
     compute_nightly_bias(**args.__dict__, comm=comm)
-
