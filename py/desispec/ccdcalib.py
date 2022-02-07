@@ -338,13 +338,17 @@ def compute_bias_file(rawfiles, outfile, camera, explistfile=None,
 
     log.info(f"done with {camera}")
 
-def _find_zeros(night,cameras,nzeros=25):
+def _find_zeros(night, cameras, nzeros=25, nskip=2, anyzeros=False):
     """Find all OBSTYPE=ZERO exposures on a given night
 
     Args:
         night (int): YEARMMDD night to search
         cameras (str): list of cameras to process
+
+    Options:
         nzeros (int): number of zeros desired from valid all-cam observations to not worry about partials
+        nskip (int): number of initial zeros to skip
+        anyzeros (bool): allow any ZEROs, not just those taken for CCD calib seq
 
     Returns array of expids that are OBSTYPE=ZERO
 
@@ -362,8 +366,11 @@ def _find_zeros(night,cameras,nzeros=25):
         with open(filename) as fx:
             r = json.load(fx)
 
+        #- CALIB ZEROs, or any ZEROs if anyzeros=True,
+        #- while being robust to missing OBSTYPE or PROGRAM
         if (('OBSTYPE' in r) and (r['OBSTYPE'] == 'ZERO') and
-            ('PROGRAM' in r) and  r['PROGRAM'].startswith('CALIB ZEROs')):
+            ((('PROGRAM' in r) and  r['PROGRAM'].startswith('CALIB ZEROs')) or
+             anyzeros)):
             expids.append(int(os.path.basename(os.path.dirname(filename))))
         else:
             continue
@@ -371,8 +378,9 @@ def _find_zeros(night,cameras,nzeros=25):
     expids = np.array(expids)
 
     #- drop first two zeros because they are sometimes still stabilizing
-    log.info('Dropping first two ZEROs: {}'.format(expids[0:2]))
-    expids = expids[2:]
+    if nskip > 0:
+       log.info('Dropping first {} ZEROs: {}'.format(nskip, expids[0:2]))
+       expids = expids[nskip:]
 
     #- Remove ZEROs that are flagged as bad, but allow for the possibility
     #- of ZEROs that aren't in the exposure table for whatever reason
@@ -426,8 +434,8 @@ def _find_zeros(night,cameras,nzeros=25):
 
     return expdict
 
-def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
-        comm=None):
+def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=15,
+        nskip=2, anyzeros=False, comm=None):
     """Create nightly biases for cameras on night
 
     Args:
@@ -438,6 +446,8 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
         outdir (str): write files to this output directory
         nzeros (int): number of OBSTYPE=ZERO exposures to use
         minzeros (int): minimum number of OBSTYPE=ZERO exposures required
+        nskip (int): number of initial zeros to skip
+        anyzeros (bool): allow any ZEROs, not just those taken for CCD calib seq
         comm: MPI communicator for parallelism
 
     Returns:
@@ -462,7 +472,8 @@ def compute_nightly_bias(night, cameras, outdir=None, nzeros=25, minzeros=20,
     #- Find all zeros for the night
     expdict = None
     if rank == 0:
-        expdict = _find_zeros(night,cameras=cameras,nzeros=nzeros)
+        expdict = _find_zeros(night, cameras=cameras, nzeros=nzeros,
+                nskip=nskip, anyzeros=anyzeros)
         used_expdict = {}
         for cam,expids in expdict.items():
             if len(expids) < minzeros:
