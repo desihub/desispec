@@ -185,7 +185,7 @@ def subtract_peramp_overscan(image, hdr):
         image[s0,s1] -= overscan
 
 
-def _savgol_clipped(data, window=101, polyorder=3, niter=0, threshold=3., margin=30):
+def _savgol_clipped(data, window=101, polyorder=3, niter=0, threshold=3., margin=30, left=True):
     """
     Simple method to iteratively do a SavGol filter
     with rejection and replacing rejected pixels by
@@ -204,8 +204,10 @@ def _savgol_clipped(data, window=101, polyorder=3, niter=0, threshold=3., margin
     ### 1st estimation
     mdata = median_filter(data,5)
     array = mdata.copy()
-    array[:margin]=np.median(array[margin:margin+window])
-    array[-margin:]=np.median(array[-margin-window:-margin])
+    if left :
+        array[:margin]=np.median(array[margin:margin+window])
+    else :
+        array[-margin:]=np.median(array[-margin-window:-margin])
 
 
 
@@ -233,8 +235,10 @@ def _savgol_clipped(data, window=101, polyorder=3, niter=0, threshold=3., margin
     # Return
 
     # use original data in the margin (not the filtered version)
-    fitted[:margin]  = mdata[:margin]
-    fitted[-margin:] =  mdata[-margin:]
+    if left :
+        fitted[:margin]  = mdata[:margin]
+    else :
+        fitted[-margin:] =  mdata[-margin:]
 
     return fitted
 
@@ -1040,7 +1044,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 for col in range(overscan_row.shape[1]):
                     o, _ = calc_overscan(overscan_row[:,col])
                     collapse_oscan_row[col] = o
-                oscan_row = _savgol_clipped(collapse_oscan_row, niter=0)
+                jj    = parse_sec_keyword(header["DATASEC"+amp])
+                left = (ov_row[1].start < rawimage.shape[1]//2)
+                oscan_row = _savgol_clipped(collapse_oscan_row, niter=0,left=left)
                 oimg_row = np.outer(np.ones(data.shape[0]), oscan_row)
                 data -= oimg_row
             else:
