@@ -482,7 +482,7 @@ class Fiberassign(SchemaMixin, Base):
       ever implemented.
     """
 
-    tileid = Column(Integer, primary_key=True, index=True)
+    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
     targetid = Column(BigInteger, primary_key=True, index=True)
     petal_loc = Column(SmallInteger, nullable=False)
     device_loc = Column(Integer, nullable=False)
@@ -508,7 +508,7 @@ class Potential(SchemaMixin, Base):
     """Representation of the POTENTIAL_ASSIGNMENTS table in a fiberassign file.
     """
 
-    tileid = Column(Integer, primary_key=True, index=True)
+    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
     targetid = Column(BigInteger, primary_key=True, index=True)
     fiber = Column(Integer, nullable=False)
     location = Column(Integer, primary_key=True)
@@ -554,7 +554,7 @@ def _tileid(data):
         log.error("Could not find TILEID in metadata!")
         raise
     data.add_column(tileid, name='TILEID', index=0)
-    if 'PLATE_RA' not in data.colnames:
+    if 'TARGET_RA' in data.colnames and 'PLATE_RA' not in data.colnames:
         log.debug("Adding PLATE_RA, PLATE_DEC.")
         data['PLATE_RA'] = data['TARGET_RA']
         data['PLATE_DEC'] = data['TARGET_DEC']
