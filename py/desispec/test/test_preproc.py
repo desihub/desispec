@@ -106,7 +106,6 @@ class TestPreProc(unittest.TestCase):
         self.header = hdr
         self.rawimage = np.zeros((2*self.ny+2*self.noverscan_row, 2*self.nx+2*self.noverscan))
         self.offset = {'A':100.0, 'B':100.5, 'C':50.3, 'D':200.4}
-        self.offset_row = {'A':50.0, 'B':50.5, 'C':20.3, 'D':40.4}
         self.gain = {'A':1.0, 'B':1.5, 'C':0.8, 'D':1.2}
         self.rdnoise = {'A':2.0, 'B':2.2, 'C':2.4, 'D':2.6}
 
@@ -122,7 +121,6 @@ class TestPreProc(unittest.TestCase):
             # Overscan row
             xy = parse_sec_keyword(hdr['ORSEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
-            self.rawimage[xy] += self.offset_row[amp]
             self.rawimage[xy] += self.offset[amp]
             self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
             # Overscan col
@@ -140,7 +138,6 @@ class TestPreProc(unittest.TestCase):
             xy = parse_sec_keyword(hdr['DATASEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             self.rawimage[xy] += self.offset[amp]
-            #self.rawimage[xy] += self.offset_row[amp]
             self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
 
         #- raw data are integers, not floats
@@ -156,7 +153,6 @@ class TestPreProc(unittest.TestCase):
         for amp in ('A', 'B', 'C', 'D'):
             old_header.pop('ORSEC{}'.format(amp))
             xy = parse_sec_keyword(self.header['DATASEC'+amp])
-            #old_image[xy] -= np.int32(self.offset_row[amp]) -- OR_SEC now zero
         #
         image = preproc(old_image, old_header, primary_header = self.primary_header)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
@@ -171,6 +167,18 @@ class TestPreProc(unittest.TestCase):
 
     def test_preproc(self):
         image = preproc(self.rawimage, self.header, primary_header = self.primary_header)
+        self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
+        self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
+        for amp in ('A', 'B', 'C', 'D'):
+            pix = image.pix[self.quad[amp]]
+            rdnoise = np.median(image.readnoise[self.quad[amp]])
+            npixover = self.ny * self.noverscan
+            self.assertAlmostEqual(np.mean(pix), 0.0, delta=5*rdnoise/np.sqrt(npixover)) # JXP increased this
+            self.assertAlmostEqual(np.std(pix), self.rdnoise[amp], delta=0.2)
+            self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
+
+    def test_preproc_with_overscan_rows(self):
+        image = preproc(self.rawimage, self.header, primary_header = self.primary_header, use_overscan_rows = True)
         self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
         self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
         for amp in ('A', 'B', 'C', 'D'):
