@@ -1115,6 +1115,7 @@ def main():
                'tcls': Tile,
                'insert': {'faflavor': ('program',)},
                'convert': {'program': faflavor2program},
+               'q3c': 'tilera',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
                },
