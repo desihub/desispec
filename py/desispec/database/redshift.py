@@ -6,6 +6,15 @@ desispec.database.redshift
 
 Code for loading spectroscopic pipeline results (specifically redshifts)
 into a database.
+
+Notes
+-----
+* Future devlopment:
+
+  - Plan for how to support fuji+guadalupe combined analysis.  May need to look
+    into cross-schema views, or daughter tables that inherit from both schemas.
+  - Anticipating loading afterburners and VACs into the database.
+
 """
 import os
 import re
@@ -20,7 +29,7 @@ from pytz import utc
 
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
                         BigInteger, Boolean, Integer, String, Float, DateTime,
-                        bindparam)
+                        SmallInteger, bindparam)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
@@ -31,6 +40,7 @@ from desiutil.iers import freeze_iers
 from desiutil.log import get_logger, DEBUG, INFO
 
 from ..io.meta import specprod_root, faflavor2program
+from ..io.util import checkgzip
 from .util import convert_dateobs, parse_pgpass, cameraid
 
 Base = declarative_base()
@@ -98,109 +108,115 @@ class Truth(SchemaMixin, Base):
 
 
 class Target(SchemaMixin, Base):
-    """Representation of the target table.
+    """Representation of the TARGETS table in target files.
+
+    Notes
+    -----
+    The various ``LC`` (light curve) columns, which are vector-valued, are not yet
+    implemented.
     """
 
-    release = Column(Integer, nullable=False)
+    release = Column(SmallInteger, nullable=False)
     brickid = Column(Integer, nullable=False)
     brickname = Column(String(8), nullable=False)
     brick_objid = Column(Integer, nullable=False)
     morphtype = Column(String(4), nullable=False)
-    ra = Column(Float, nullable=False)
-    ra_ivar = Column(Float, nullable=False)
-    dec = Column(Float, nullable=False)
-    dec_ivar = Column(Float, nullable=False)
-    dchisq_psf = Column(Float, nullable=False)
-    dchisq_rex = Column(Float, nullable=False)
-    dchisq_dev = Column(Float, nullable=False)
-    dchisq_exp = Column(Float, nullable=False)
-    dchisq_ser = Column(Float, nullable=False)
-    ebv = Column(Float, nullable=False)
-    flux_g = Column(Float, nullable=False)
-    flux_r = Column(Float, nullable=False)
-    flux_z = Column(Float, nullable=False)
-    flux_ivar_g = Column(Float, nullable=False)
-    flux_ivar_r = Column(Float, nullable=False)
-    flux_ivar_z = Column(Float, nullable=False)
-    mw_transmission_g = Column(Float, nullable=False)
-    mw_transmission_r = Column(Float, nullable=False)
-    mw_transmission_z = Column(Float, nullable=False)
-    fracflux_g = Column(Float, nullable=False)
-    fracflux_r = Column(Float, nullable=False)
-    fracflux_z = Column(Float, nullable=False)
-    fracmasked_g = Column(Float, nullable=False)
-    fracmasked_r = Column(Float, nullable=False)
-    fracmasked_z = Column(Float, nullable=False)
-    fracin_g = Column(Float, nullable=False)
-    fracin_r = Column(Float, nullable=False)
-    fracin_z = Column(Float, nullable=False)
-    nobs_g = Column(Integer, nullable=False)
-    nobs_r = Column(Integer, nullable=False)
-    nobs_z = Column(Integer, nullable=False)
-    psfdepth_g = Column(Float, nullable=False)
-    psfdepth_r = Column(Float, nullable=False)
-    psfdepth_z = Column(Float, nullable=False)
-    galdepth_g = Column(Float, nullable=False)
-    galdepth_r = Column(Float, nullable=False)
-    galdepth_z = Column(Float, nullable=False)
-    flux_w1 = Column(Float, nullable=False)
-    flux_w2 = Column(Float, nullable=False)
-    flux_w3 = Column(Float, nullable=False)
-    flux_w4 = Column(Float, nullable=False)
-    flux_ivar_w1 = Column(Float, nullable=False)
-    flux_ivar_w2 = Column(Float, nullable=False)
-    flux_ivar_w3 = Column(Float, nullable=False)
-    flux_ivar_w4 = Column(Float, nullable=False)
-    mw_transmission_w1 = Column(Float, nullable=False)
-    mw_transmission_w2 = Column(Float, nullable=False)
-    mw_transmission_w3 = Column(Float, nullable=False)
-    mw_transmission_w4 = Column(Float, nullable=False)
-    allmask_g = Column(Float, nullable=False)
-    allmask_r = Column(Float, nullable=False)
-    allmask_z = Column(Float, nullable=False)
-    fiberflux_g = Column(Float, nullable=False)
-    fiberflux_r = Column(Float, nullable=False)
-    fiberflux_z = Column(Float, nullable=False)
-    fibertotflux_g = Column(Float, nullable=False)
-    fibertotflux_r = Column(Float, nullable=False)
-    fibertotflux_z = Column(Float, nullable=False)
-    ref_epoch = Column(Float, nullable=False)
-    wisemask_w1 = Column(Integer, nullable=False)
-    wisemask_w2 = Column(Integer, nullable=False)
-    maskbits = Column(Integer, nullable=False)
-    shape_r = Column(Float, nullable=False)
-    shape_e1 = Column(Float, nullable=False)
-    shape_e2 = Column(Float, nullable=False)
-    shape_r_ivar = Column(Float, nullable=False)
-    shape_e1_ivar = Column(Float, nullable=False)
-    shape_e2_ivar = Column(Float, nullable=False)
-    sersic = Column(Float, nullable=False)
-    sersic_ivar = Column(Float, nullable=False)
+    ra = Column(DOUBLE_PRECISION, nullable=False)
+    ra_ivar = Column(REAL, nullable=False)
+    dec = Column(DOUBLE_PRECISION, nullable=False)
+    dec_ivar = Column(REAL, nullable=False)
+    dchisq_psf = Column(REAL, nullable=False)
+    dchisq_rex = Column(REAL, nullable=False)
+    dchisq_dev = Column(REAL, nullable=False)
+    dchisq_exp = Column(REAL, nullable=False)
+    dchisq_ser = Column(REAL, nullable=False)
+    ebv = Column(REAL, nullable=False)
+    flux_g = Column(REAL, nullable=False)
+    flux_r = Column(REAL, nullable=False)
+    flux_z = Column(REAL, nullable=False)
+    flux_ivar_g = Column(REAL, nullable=False)
+    flux_ivar_r = Column(REAL, nullable=False)
+    flux_ivar_z = Column(REAL, nullable=False)
+    mw_transmission_g = Column(REAL, nullable=False)
+    mw_transmission_r = Column(REAL, nullable=False)
+    mw_transmission_z = Column(REAL, nullable=False)
+    fracflux_g = Column(REAL, nullable=False)
+    fracflux_r = Column(REAL, nullable=False)
+    fracflux_z = Column(REAL, nullable=False)
+    fracmasked_g = Column(REAL, nullable=False)
+    fracmasked_r = Column(REAL, nullable=False)
+    fracmasked_z = Column(REAL, nullable=False)
+    fracin_g = Column(REAL, nullable=False)
+    fracin_r = Column(REAL, nullable=False)
+    fracin_z = Column(REAL, nullable=False)
+    nobs_g = Column(SmallInteger, nullable=False)
+    nobs_r = Column(SmallInteger, nullable=False)
+    nobs_z = Column(SmallInteger, nullable=False)
+    psfdepth_g = Column(REAL, nullable=False)
+    psfdepth_r = Column(REAL, nullable=False)
+    psfdepth_z = Column(REAL, nullable=False)
+    galdepth_g = Column(REAL, nullable=False)
+    galdepth_r = Column(REAL, nullable=False)
+    galdepth_z = Column(REAL, nullable=False)
+    flux_w1 = Column(REAL, nullable=False)
+    flux_w2 = Column(REAL, nullable=False)
+    flux_w3 = Column(REAL, nullable=False)
+    flux_w4 = Column(REAL, nullable=False)
+    flux_ivar_w1 = Column(REAL, nullable=False)
+    flux_ivar_w2 = Column(REAL, nullable=False)
+    flux_ivar_w3 = Column(REAL, nullable=False)
+    flux_ivar_w4 = Column(REAL, nullable=False)
+    mw_transmission_w1 = Column(REAL, nullable=False)
+    mw_transmission_w2 = Column(REAL, nullable=False)
+    mw_transmission_w3 = Column(REAL, nullable=False)
+    mw_transmission_w4 = Column(REAL, nullable=False)
+    allmask_g = Column(SmallInteger, nullable=False)
+    allmask_r = Column(SmallInteger, nullable=False)
+    allmask_z = Column(SmallInteger, nullable=False)
+    fiberflux_g = Column(REAL, nullable=False)
+    fiberflux_r = Column(REAL, nullable=False)
+    fiberflux_z = Column(REAL, nullable=False)
+    fibertotflux_g = Column(REAL, nullable=False)
+    fibertotflux_r = Column(REAL, nullable=False)
+    fibertotflux_z = Column(REAL, nullable=False)
+    ref_epoch = Column(REAL, nullable=False)
+    wisemask_w1 = Column(SmallInteger, nullable=False)
+    wisemask_w2 = Column(SmallInteger, nullable=False)
+    maskbits = Column(SmallInteger, nullable=False)
+    # LC FLUX...
+    shape_r = Column(REAL, nullable=False)
+    shape_e1 = Column(REAL, nullable=False)
+    shape_e2 = Column(REAL, nullable=False)
+    shape_r_ivar = Column(REAL, nullable=False)
+    shape_e1_ivar = Column(REAL, nullable=False)
+    shape_e2_ivar = Column(REAL, nullable=False)
+    sersic = Column(REAL, nullable=False)
+    sersic_ivar = Column(REAL, nullable=False)
     ref_id = Column(BigInteger, nullable=False)
     ref_cat = Column(String(2), nullable=False)
-    gaia_phot_g_mean_mag = Column(Float, nullable=False)
-    gaia_phot_g_mean_flux_over_error = Column(Float, nullable=False)
-    gaia_phot_bp_mean_mag = Column(Float, nullable=False)
-    gaia_phot_bp_mean_flux_over_error = Column(Float, nullable=False)
-    gaia_phot_rp_mean_mag = Column(Float, nullable=False)
-    gaia_phot_rp_mean_flux_over_error = Column(Float, nullable=False)
-    gaia_phot_bp_rp_excess_factor = Column(Float, nullable=False)
-    gaia_astrometric_excess_noise = Column(Float, nullable=False)
+    gaia_phot_g_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)
+    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)
+    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)
+    gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
+    gaia_astrometric_excess_noise = Column(REAL, nullable=False)
     gaia_duplicated_source = Column(Boolean, nullable=False)
-    gaia_astrometric_sigma5d_max = Column(Float, nullable=False)
-    gaia_astrometric_params_solved = Column(BigInteger, nullable=False)
-    parallax = Column(Float, nullable=False)
-    parallax_ivar = Column(Float, nullable=False)
-    pmra = Column(Float, nullable=False)
-    pmra_ivar = Column(Float, nullable=False)
-    pmdec = Column(Float, nullable=False)
-    pmdec_ivar = Column(Float, nullable=False)
+    gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
+    gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)
+    parallax = Column(REAL, nullable=False)
+    parallax_ivar = Column(REAL, nullable=False)
+    pmra = Column(REAL, nullable=False)
+    pmra_ivar = Column(REAL, nullable=False)
+    pmdec = Column(REAL, nullable=False)
+    pmdec_ivar = Column(REAL, nullable=False)
     photsys = Column(String(1), nullable=False)
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
     mws_target = Column(BigInteger, nullable=False)
-    subpriority = Column(Float, nullable=False)
+    subpriority = Column(DOUBLE_PRECISION, nullable=False)
     obsconditions = Column(BigInteger, nullable=False)
     priority_init = Column(BigInteger, nullable=False)
     numobs_init = Column(BigInteger, nullable=False)
@@ -208,7 +224,7 @@ class Target(SchemaMixin, Base):
     hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
-        return "<Target(targetid={0.targetid})>".format(self)
+        return "Target(targetid={0.targetid})".format(self)
 
 
 class Tile(SchemaMixin, Base):
@@ -266,6 +282,10 @@ class Tile(SchemaMixin, Base):
 
 class Exposure(SchemaMixin, Base):
     """Representation of the EXPOSURES HDU in the exposures file.
+
+    Notes
+    -----
+    The column ``program`` is filled in via :func:`~desispec.io.meta.faflavor2program`.
     """
 
     night = Column(Integer, nullable=False, index=True)
@@ -327,6 +347,14 @@ class Exposure(SchemaMixin, Base):
 
 class Frame(SchemaMixin, Base):
     """Representation of the FRAMES HDU in the exposures file.
+
+    Notes
+    -----
+    The column ``frameid`` is a combination of ``expid`` and the camera name::
+
+        frameid = 100*expid + cameraid(camera)
+
+    where ``cameraid()`` is :func:`desispec.database.util.cameraid`.
     """
 
     frameid = Column(Integer, primary_key=True, autoincrement=False)  # Arbitrary integer composed from expid + cameraid
@@ -440,38 +468,47 @@ class ZCat(SchemaMixin, Base):
         return "<ZCat(targetid={0.targetid:d})>".format(self)
 
 
-class FiberAssign(SchemaMixin, Base):
-    """Representation of the fiberassign table.
+class Fiberassign(SchemaMixin, Base):
+    """Representation of the FIBERASSIGN table in a fiberassign file.
+
+    Notes
+    -----
+    * Targets are assigned to a ``location``.  A ``location`` happens to
+      correspond to a ``fiber``, but this correspondence could change over
+      time, and therefore should not be assumed to be a rigid 1:1 mapping.
     """
 
-    tileid = Column(Integer, index=True, primary_key=True)
-    targetid = Column(BigInteger, index=True, nullable=False)
-    petal_loc = Column(Integer, nullable=False)
+    tileid = Column(Integer, primary_key=True, index=True)
+    targetid = Column(BigInteger, primary_key=True, index=True)
+    petal_loc = Column(SmallInteger, nullable=False)
     device_loc = Column(Integer, nullable=False)
-    location = Column(Integer, nullable=False)
+    location = Column(Integer, primary_key=False)
     fiber = Column(Integer, primary_key=True)
     fiberstatus = Column(Integer, nullable=False)
-    target_ra = Column(Float, nullable=False)
-    target_dec = Column(Float, nullable=False)
-    pmra = Column(Float, nullable=False)
-    pmdec = Column(Float, nullable=False)
-    pmra_ivar = Column(Float, nullable=False)
-    pmdec_ivar = Column(Float, nullable=False)
-    ref_epoch = Column(Float, nullable=False)
-    lambda_ref = Column(Float, nullable=False)
+    lambda_ref = Column(REAL, nullable=False)
     fa_target = Column(BigInteger, nullable=False)
-    fa_type = Column(Integer, nullable=False)
-    objtype = Column(String, nullable=False)
-    fiberassign_x = Column(Float, nullable=False)
-    fiberassign_y = Column(Float, nullable=False)
-    numtarget = Column(Integer, nullable=False)
+    fa_type = Column(SmallInteger, nullable=False)
+    fiberassign_x = Column(REAL, nullable=False)
+    fiberassign_y = Column(REAL, nullable=False)
     priority = Column(Integer, nullable=False)
-    subpriority = Column(Float, nullable=False)
-    obsconditions = Column(BigInteger, nullable=False)
-    numobs_more = Column(Integer, nullable=False)
+    plate_ra = Column(DOUBLE_PRECISION, nullable=False)
+    plate_dec = Column(DOUBLE_PRECISION, nullable=False)
 
     def __repr__(self):
-        return "<FiberAssign(tileid={0.tileid:d}, fiber={0.fiber:d})>".format(self)
+        return "Fiberassign(tileid={0.tileid:d}, fiber={0.fiber:d})".format(self)
+
+
+class Potential(SchemaMixin, Base):
+    """Representation of the POTENTIAL_ASSIGNMENTS table in a fiberassign file.
+    """
+
+    tileid = Column(Integer, primary_key=True, index=True)
+    targetid = Column(BigInteger, primary_key=True, index=True)
+    fiber = Column(Integer, nullable=False)
+    location = Column(Integer, primary_key=True)
+
+    def __repr__(self):
+        return "Potential(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
 
 
 def _frameid(data):
@@ -489,6 +526,28 @@ def _frameid(data):
     """
     frameid = 100*data['EXPID'] + np.array([cameraid(c) for c in data['CAMERA']], dtype=data['EXPID'].dtype)
     data.add_column(frameid, name='FRAMEID', index=0)
+    return data
+
+
+def _tileid(data):
+    """Update the ``tileid`` column.
+
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`astropy.table.Table`
+        Updated data table.
+    """
+    try:
+        tileid = data.meta['TILEID']*np.ones(len(data), dtype=np.int32)
+    except KeyError:
+        log.error("Could not find TILEID in metadata!")
+        raise
+    data.add_column(tileid, name='TILEID', index=0)
     return data
 
 
@@ -1068,6 +1127,9 @@ def get_options(*args):
     prsr.add_argument('-s', '--schema', action='store', dest='schema',
                       metavar='SCHEMA',
                       help='Set the schema name in the PostgreSQL database.')
+    prsr.add_argument('-t', '--tiles-path', action='store', dest='tilespath', metavar='PATH',
+                      default=os.path.join(os.environ['DESI_TARGET'], 'fiberassign', 'tiles', 'trunk'),
+                      help="Load fiberassign data from PATH (default %(default)s).")
     prsr.add_argument('-U', '--username', action='store', dest='username',
                       metavar='USERNAME', default='desidev_admin',
                       help="If specified, connect to a PostgreSQL database with USERNAME (default %(default)s).")
@@ -1178,6 +1240,16 @@ def main():
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())
+    #
+    # Find the tiles that need to be loaded. Not all fiberassign files are compressed!
+    #
+    try:
+        fiberassign_files = [checkgzip(os.path.join(options.tilespath, (f"{tileid[0]:06d}")[0:3], f"fiberassign-{tileid[0]:06d}.fits"))
+                             for tileid in dbSession.query(Tile.tileid).order_by(Tile.tileid)]
+    except FileNotFoundError:
+        log.error("Some fiberassign files were not found!")
+        return 1
+    log.debug(fiberassign_files)
     #
     # Update truth table.
     #

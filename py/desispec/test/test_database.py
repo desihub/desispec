@@ -61,7 +61,7 @@ class TestDatabase(unittest.TestCase):
     def test_datachallenge_classes(self):
         """Test SQLAlchemy classes in desispec.database.datachallenge.
         """
-        from ..database.redshift import (Exposure, Frame)
+        from ..database.redshift import (Exposure, Frame, Tile, Fiberassign, Potential)
         pass
 
     @unittest.skipUnless(sqlalchemy_available, "SQLAlchemy not installed; skipping metadata DB tests.")
