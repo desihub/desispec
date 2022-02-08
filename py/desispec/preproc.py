@@ -185,7 +185,7 @@ def subtract_peramp_overscan(image, hdr):
         image[s0,s1] -= overscan
 
 
-def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
+def _savgol_clipped(data, window=101, polyorder=3, niter=0, threshold=3., margin=30):
     """
     Simple method to iteratively do a SavGol filter
     with rejection and replacing rejected pixels by
@@ -202,7 +202,13 @@ def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
 
     """
     ### 1st estimation
-    array = data.copy()
+    mdata = median_filter(data,5)
+    array = mdata.copy()
+    array[:margin]=np.median(array[margin:margin+window])
+    array[-margin:]=np.median(array[-margin-window:-margin])
+
+
+
     fitted = signal.savgol_filter(array, window, polyorder)
     filtered = array - fitted
     ### nth iteration
@@ -225,6 +231,11 @@ def _savgol_clipped(data, window=15, polyorder=5, niter=0, threshold=3.):
         ### Refit
         fitted = signal.savgol_filter(array, window, polyorder)
     # Return
+
+    # use original data in the margin (not the filtered version)
+    fitted[:margin]  = mdata[:margin]
+    fitted[-margin:] =  mdata[-margin:]
+
     return fitted
 
 
@@ -602,7 +613,7 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
-            overscan_per_row=False, use_overscan_row=False, use_savgol=None,
+            overscan_per_row=False, use_overscan_rows=False,
             nodarktrail=False,remove_scattered_light=False,psf_filename=None,
             bias_img=None,model_variance=False,no_traceshift=False,bkgsub_science=False,
             keep_overscan_cols=False):
@@ -630,12 +641,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     Optional overscan features:
         overscan_per_row : bool,  Subtract the overscan_col values
             row by row from the data.
-        use_overscan_row : bool,  Subtract off the overscan_row
+        use_overscan_rows : bool,  Subtract off the overscan_row
             from the data (default: False).  Requires ORSEC in
             the Header
-        use_savgol : bool,  Specify whether to use Savitsky-Golay filter for
-            the overscan.   (default: False).  Requires use_overscan_row=True
-            to have any effect.
 
     Optional variance model if model_variance=True
     Optional background subtraction with median filtering accross the whole CCD if bkgsub_dark=True
@@ -744,9 +752,12 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     # Savgol
     if cfinder and cfinder.haskey("USE_ORSEC"):
-        use_overscan_row = cfinder.value("USE_ORSEC")
+        use_overscan_rows = cfinder.value("USE_ORSEC")
+
     if cfinder and cfinder.haskey("SAVGOL"):
         use_savgol = cfinder.value("SAVGOL")
+    else :
+        use_savgol = True # true by default, only applied if use_overscan_rows
 
     # Set bias image, as desired
     if bias_img is None:
@@ -840,9 +851,9 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         ov_col = parse_sec_keyword(header['BIASSEC'+amp])
         if 'ORSEC'+amp in header.keys():
             ov_row = parse_sec_keyword(header['ORSEC'+amp])
-        elif use_overscan_row:
+        elif use_overscan_rows:
             log.error(f'Camera {camera} no ORSEC{amp} keyword; not using overscan_row')
-            use_overscan_row = False
+            use_overscan_rows = False
 
         if nogain :
             gain = 1.
@@ -962,7 +973,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 camera, amp, biasnoise_datasec, np.mean(rdnoise), np.mean(new_rdnoise)))
             rdnoise = new_rdnoise
 
-        if use_overscan_row:
+        if use_overscan_rows:
             raw_overscan_row = rawimage[ov_row].copy()
             # Remove overscan_col from overscan_row
             o,r = calc_overscan(raw_overscan_col)
@@ -1021,7 +1032,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         header['SATUELE'+amp] = (saturlev_elec,"saturation or non lin. level, in electrons")
 
         # And now the rows
-        if use_overscan_row:
+        if use_overscan_rows :
             # Savgol?
             if use_savgol:
                 log.info(f"Camera {camera} amp {amp} Using savgol")
