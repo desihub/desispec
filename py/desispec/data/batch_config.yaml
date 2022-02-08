@@ -34,7 +34,7 @@ perlmutter-gpu:
     memory: 256
     timefactor: 1.0
     gpus_per_node: 4
-    batch_opts: ['--constraint=gpu']      # TBD
+    batch_opts: ['--constraint=gpu']
 
 dirac:
     site: LBNL-HPCS

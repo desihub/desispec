@@ -338,11 +338,16 @@ def write_redshift_script(batchscript, outdir,
 
     logdir = os.path.join(outdir, 'logs')
 
+    if system_name=='perlmutter-gpu':
+        account='desi_g'
+    else:
+        account='desi'
+
     with open(batchscript, 'w') as fx:
         fx.write(f"""#!/bin/bash
 
 #SBATCH -N {num_nodes}
-#SBATCH --account desi
+#SBATCH --account {account}
 #SBATCH --qos {queue}
 #SBATCH --job-name {jobname}
 #SBATCH --output {batchlog}
