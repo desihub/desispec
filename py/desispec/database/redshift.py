@@ -556,7 +556,7 @@ def _tileid(data):
     data.add_column(tileid, name='TILEID', index=0)
     if 'PLATE_RA' not in data.colnames:
         log.debug("Adding PLATE_RA, PLATE_DEC.")
-        data['PLATE_RA'] = target['TARGET_RA']
+        data['PLATE_RA'] = data['TARGET_RA']
         data['PLATE_DEC'] = data['TARGET_DEC']
     return data
 
