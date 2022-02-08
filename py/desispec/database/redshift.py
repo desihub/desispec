@@ -476,6 +476,10 @@ class Fiberassign(SchemaMixin, Base):
     * Targets are assigned to a ``location``.  A ``location`` happens to
       correspond to a ``fiber``, but this correspondence could change over
       time, and therefore should not be assumed to be a rigid 1:1 mapping.
+    * ``PLATE_RA``, ``PLATE_DEC`` are sometimes missing.  These can be
+      copies of ``TARGET_RA``, ``TARGET_DEC``, but in principle they could
+      be different if chromatic offsets in targeting positions were
+      ever implemented.
     """
 
     tileid = Column(Integer, primary_key=True, index=True)
@@ -485,6 +489,8 @@ class Fiberassign(SchemaMixin, Base):
     location = Column(Integer, primary_key=False)
     fiber = Column(Integer, primary_key=True)
     fiberstatus = Column(Integer, nullable=False)
+    target_ra = Column(DOUBLE_PRECISION, nullable=False)
+    target_dec = Column(DOUBLE_PRECISION, nullable=False)
     lambda_ref = Column(REAL, nullable=False)
     fa_target = Column(BigInteger, nullable=False)
     fa_type = Column(SmallInteger, nullable=False)
@@ -530,7 +536,7 @@ def _frameid(data):
 
 
 def _tileid(data):
-    """Update the ``tileid`` column.
+    """Update the ``tileid`` column.  Also check for the presence of ``PLATE_RA``, ``PLATE_DEC``.
 
     Parameters
     ----------
@@ -548,6 +554,10 @@ def _tileid(data):
         log.error("Could not find TILEID in metadata!")
         raise
     data.add_column(tileid, name='TILEID', index=0)
+    if 'PLATE_RA' not in data.colnames:
+        log.debug("Adding PLATE_RA, PLATE_DEC.")
+        data['PLATE_RA'] = target['TARGET_RA']
+        data['PLATE_DEC'] = data['TARGET_DEC']
     return data
 
 
@@ -1250,6 +1260,29 @@ def main():
         log.error("Some fiberassign files were not found!")
         return 1
     log.debug(fiberassign_files)
+    loader = [{'filepaths': fiberassign_files,
+           'tcls': Fiberassign,
+           'hdu': 'FIBERASSIGN',
+           'preload': _tileid,
+           'q3c': 'target_ra',
+          },
+          {'filepaths': fiberassign_files,
+           'tcls': Potential,
+           'hdu': 'POTENTIAL_ASSIGNMENTS',
+           'preload': _tileid,
+          }]
+    for l in loader:
+        tn = l['tcls'].__tablename__
+        #
+        # Don't use .one().  It actually fetches *all* rows.
+        #
+        q = dbSession.query(l['tcls']).first()
+        if q is None:
+            log.info("Loading %s from %s.", tn, str(l['filepaths']))
+            load_file(**l)
+            log.info("Finished loading %s.", tn)
+        else:
+            log.info("%s table already loaded.", tn.title())
     #
     # Update truth table.
     #
