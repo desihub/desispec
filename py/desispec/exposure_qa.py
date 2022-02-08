@@ -306,6 +306,9 @@ def compute_exposure_qa(night, expid, specprod_dir):
         for band in ["B","R","Z"] :
              camera="{}{}".format(band.lower(),spectro)
              cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+             if not os.path.isfile(cframe_filename):
+                 log.warning("missing {} => using {}_{}=0".format(cframe_filename, tsnr2_for_efftime_key, band))
+                 continue
              scores = fitsio.read(cframe_filename,"SCORES")
              tsnr2_for_efftime_vals += scores[tsnr2_for_efftime_key+"_"+band]
         target_type=tsnr2_for_efftime_key.split("_")[1].upper()
