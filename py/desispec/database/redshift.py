@@ -64,167 +64,47 @@ class SchemaMixin(object):
         return {'schema': schemaname}
 
 
-class Truth(SchemaMixin, Base):
-    """Representation of the truth table.
-    """
-
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
-    mockid = Column(BigInteger, nullable=False)
-    truez = Column(Float, nullable=False)
-    truespectype = Column(String, nullable=False)
-    templatetype = Column(String, nullable=False)
-    templatesubtype = Column(String, nullable=False)
-    templateid = Column(Integer, nullable=False)
-    seed = Column(BigInteger, nullable=False)
-    mag = Column(Float, nullable=False)
-    magfilter = Column(String, nullable=False)
-    flux_g = Column(Float, nullable=False)
-    flux_r = Column(Float, nullable=False)
-    flux_z = Column(Float, nullable=False)
-    flux_w1 = Column(Float, nullable=False)
-    flux_w2 = Column(Float, nullable=False)
-    flux_w3 = Column(Float, nullable=False)
-    flux_w4 = Column(Float, nullable=False)
-    oiiflux = Column(Float, nullable=False, default=-9999.0)
-    hbetaflux = Column(Float, nullable=False, default=-9999.0)
-    ewoii = Column(Float, nullable=False, default=-9999.0)
-    ewhbeta = Column(Float, nullable=False, default=-9999.0)
-    d4000 = Column(Float, nullable=False, default=-9999.0)
-    vdisp = Column(Float, nullable=False, default=-9999.0)
-    oiidoublet = Column(Float, nullable=False, default=-9999.0)
-    oiiihbeta = Column(Float, nullable=False, default=-9999.0)
-    oiihbeta = Column(Float, nullable=False, default=-9999.0)
-    niihbeta = Column(Float, nullable=False, default=-9999.0)
-    siihbeta = Column(Float, nullable=False, default=-9999.0)
-    mabs_1450 = Column(Float, nullable=False, default=-9999.0)
-    bal_templateid = Column(Integer, nullable=False, default=-1)
-    truez_norsd = Column(Float, nullable=False, default=-9999.0)
-    teff = Column(Float, nullable=False, default=-9999.0)
-    logg = Column(Float, nullable=False, default=-9999.0)
-    feh = Column(Float, nullable=False, default=-9999.0)
-
-    def __repr__(self):
-        return "<Truth(targetid={0.targetid:d})>".format(self)
-
-
-class Target(SchemaMixin, Base):
-    """Representation of the TARGETS table in target files.
-
-    Notes
-    -----
-    The various ``LC`` (light curve) columns, which are vector-valued, are not yet
-    implemented.
-    """
-
-    release = Column(SmallInteger, nullable=False)
-    brickid = Column(Integer, nullable=False)
-    brickname = Column(String(8), nullable=False)
-    brick_objid = Column(Integer, nullable=False)
-    morphtype = Column(String(4), nullable=False)
-    ra = Column(DOUBLE_PRECISION, nullable=False)
-    ra_ivar = Column(REAL, nullable=False)
-    dec = Column(DOUBLE_PRECISION, nullable=False)
-    dec_ivar = Column(REAL, nullable=False)
-    dchisq_psf = Column(REAL, nullable=False)
-    dchisq_rex = Column(REAL, nullable=False)
-    dchisq_dev = Column(REAL, nullable=False)
-    dchisq_exp = Column(REAL, nullable=False)
-    dchisq_ser = Column(REAL, nullable=False)
-    ebv = Column(REAL, nullable=False)
-    flux_g = Column(REAL, nullable=False)
-    flux_r = Column(REAL, nullable=False)
-    flux_z = Column(REAL, nullable=False)
-    flux_ivar_g = Column(REAL, nullable=False)
-    flux_ivar_r = Column(REAL, nullable=False)
-    flux_ivar_z = Column(REAL, nullable=False)
-    mw_transmission_g = Column(REAL, nullable=False)
-    mw_transmission_r = Column(REAL, nullable=False)
-    mw_transmission_z = Column(REAL, nullable=False)
-    fracflux_g = Column(REAL, nullable=False)
-    fracflux_r = Column(REAL, nullable=False)
-    fracflux_z = Column(REAL, nullable=False)
-    fracmasked_g = Column(REAL, nullable=False)
-    fracmasked_r = Column(REAL, nullable=False)
-    fracmasked_z = Column(REAL, nullable=False)
-    fracin_g = Column(REAL, nullable=False)
-    fracin_r = Column(REAL, nullable=False)
-    fracin_z = Column(REAL, nullable=False)
-    nobs_g = Column(SmallInteger, nullable=False)
-    nobs_r = Column(SmallInteger, nullable=False)
-    nobs_z = Column(SmallInteger, nullable=False)
-    psfdepth_g = Column(REAL, nullable=False)
-    psfdepth_r = Column(REAL, nullable=False)
-    psfdepth_z = Column(REAL, nullable=False)
-    galdepth_g = Column(REAL, nullable=False)
-    galdepth_r = Column(REAL, nullable=False)
-    galdepth_z = Column(REAL, nullable=False)
-    flux_w1 = Column(REAL, nullable=False)
-    flux_w2 = Column(REAL, nullable=False)
-    flux_w3 = Column(REAL, nullable=False)
-    flux_w4 = Column(REAL, nullable=False)
-    flux_ivar_w1 = Column(REAL, nullable=False)
-    flux_ivar_w2 = Column(REAL, nullable=False)
-    flux_ivar_w3 = Column(REAL, nullable=False)
-    flux_ivar_w4 = Column(REAL, nullable=False)
-    mw_transmission_w1 = Column(REAL, nullable=False)
-    mw_transmission_w2 = Column(REAL, nullable=False)
-    mw_transmission_w3 = Column(REAL, nullable=False)
-    mw_transmission_w4 = Column(REAL, nullable=False)
-    allmask_g = Column(SmallInteger, nullable=False)
-    allmask_r = Column(SmallInteger, nullable=False)
-    allmask_z = Column(SmallInteger, nullable=False)
-    fiberflux_g = Column(REAL, nullable=False)
-    fiberflux_r = Column(REAL, nullable=False)
-    fiberflux_z = Column(REAL, nullable=False)
-    fibertotflux_g = Column(REAL, nullable=False)
-    fibertotflux_r = Column(REAL, nullable=False)
-    fibertotflux_z = Column(REAL, nullable=False)
-    ref_epoch = Column(REAL, nullable=False)
-    wisemask_w1 = Column(SmallInteger, nullable=False)
-    wisemask_w2 = Column(SmallInteger, nullable=False)
-    maskbits = Column(SmallInteger, nullable=False)
-    # LC FLUX...
-    shape_r = Column(REAL, nullable=False)
-    shape_e1 = Column(REAL, nullable=False)
-    shape_e2 = Column(REAL, nullable=False)
-    shape_r_ivar = Column(REAL, nullable=False)
-    shape_e1_ivar = Column(REAL, nullable=False)
-    shape_e2_ivar = Column(REAL, nullable=False)
-    sersic = Column(REAL, nullable=False)
-    sersic_ivar = Column(REAL, nullable=False)
-    ref_id = Column(BigInteger, nullable=False)
-    ref_cat = Column(String(2), nullable=False)
-    gaia_phot_g_mean_mag = Column(REAL, nullable=False)
-    gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)
-    gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)
-    gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
-    gaia_astrometric_excess_noise = Column(REAL, nullable=False)
-    gaia_duplicated_source = Column(Boolean, nullable=False)
-    gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
-    gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)
-    parallax = Column(REAL, nullable=False)
-    parallax_ivar = Column(REAL, nullable=False)
-    pmra = Column(REAL, nullable=False)
-    pmra_ivar = Column(REAL, nullable=False)
-    pmdec = Column(REAL, nullable=False)
-    pmdec_ivar = Column(REAL, nullable=False)
-    photsys = Column(String(1), nullable=False)
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
-    desi_target = Column(BigInteger, nullable=False)
-    bgs_target = Column(BigInteger, nullable=False)
-    mws_target = Column(BigInteger, nullable=False)
-    subpriority = Column(DOUBLE_PRECISION, nullable=False)
-    obsconditions = Column(BigInteger, nullable=False)
-    priority_init = Column(BigInteger, nullable=False)
-    numobs_init = Column(BigInteger, nullable=False)
-    scnd_target = Column(BigInteger, nullable=False)
-    hpxpixel = Column(BigInteger, nullable=False)
-
-    def __repr__(self):
-        return "Target(targetid={0.targetid})".format(self)
+# class Truth(SchemaMixin, Base):
+#     """Representation of the truth table.
+#     """
+#
+#     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+#     mockid = Column(BigInteger, nullable=False)
+#     truez = Column(Float, nullable=False)
+#     truespectype = Column(String, nullable=False)
+#     templatetype = Column(String, nullable=False)
+#     templatesubtype = Column(String, nullable=False)
+#     templateid = Column(Integer, nullable=False)
+#     seed = Column(BigInteger, nullable=False)
+#     mag = Column(Float, nullable=False)
+#     magfilter = Column(String, nullable=False)
+#     flux_g = Column(Float, nullable=False)
+#     flux_r = Column(Float, nullable=False)
+#     flux_z = Column(Float, nullable=False)
+#     flux_w1 = Column(Float, nullable=False)
+#     flux_w2 = Column(Float, nullable=False)
+#     flux_w3 = Column(Float, nullable=False)
+#     flux_w4 = Column(Float, nullable=False)
+#     oiiflux = Column(Float, nullable=False, default=-9999.0)
+#     hbetaflux = Column(Float, nullable=False, default=-9999.0)
+#     ewoii = Column(Float, nullable=False, default=-9999.0)
+#     ewhbeta = Column(Float, nullable=False, default=-9999.0)
+#     d4000 = Column(Float, nullable=False, default=-9999.0)
+#     vdisp = Column(Float, nullable=False, default=-9999.0)
+#     oiidoublet = Column(Float, nullable=False, default=-9999.0)
+#     oiiihbeta = Column(Float, nullable=False, default=-9999.0)
+#     oiihbeta = Column(Float, nullable=False, default=-9999.0)
+#     niihbeta = Column(Float, nullable=False, default=-9999.0)
+#     siihbeta = Column(Float, nullable=False, default=-9999.0)
+#     mabs_1450 = Column(Float, nullable=False, default=-9999.0)
+#     bal_templateid = Column(Integer, nullable=False, default=-1)
+#     truez_norsd = Column(Float, nullable=False, default=-9999.0)
+#     teff = Column(Float, nullable=False, default=-9999.0)
+#     logg = Column(Float, nullable=False, default=-9999.0)
+#     feh = Column(Float, nullable=False, default=-9999.0)
+#
+#     def __repr__(self):
+#         return "<Truth(targetid={0.targetid:d})>".format(self)
 
 
 class Tile(SchemaMixin, Base):
@@ -402,6 +282,175 @@ class Frame(SchemaMixin, Base):
         return "Frame(expid={0.expid:d}, camera='{0.camera}')".format(self)
 
 
+class Fiberassign(SchemaMixin, Base):
+    """Representation of the FIBERASSIGN table in a fiberassign file.
+
+    Notes
+    -----
+    * Targets are assigned to a ``location``.  A ``location`` happens to
+      correspond to a ``fiber``, but this correspondence could change over
+      time, and therefore should not be assumed to be a rigid 1:1 mapping.
+    * ``PLATE_RA``, ``PLATE_DEC`` are sometimes missing.  These can be
+      copies of ``TARGET_RA``, ``TARGET_DEC``, but in principle they could
+      be different if chromatic offsets in targeting positions were
+      ever implemented.
+    """
+
+    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
+    targetid = Column(BigInteger, primary_key=True, index=True)
+    petal_loc = Column(SmallInteger, nullable=False)
+    device_loc = Column(Integer, nullable=False)
+    location = Column(Integer, primary_key=False)
+    fiber = Column(Integer, primary_key=True)
+    fiberstatus = Column(Integer, nullable=False)
+    target_ra = Column(DOUBLE_PRECISION, nullable=False)
+    target_dec = Column(DOUBLE_PRECISION, nullable=False)
+    lambda_ref = Column(REAL, nullable=False)
+    fa_target = Column(BigInteger, nullable=False)
+    fa_type = Column(SmallInteger, nullable=False)
+    fiberassign_x = Column(REAL, nullable=False)
+    fiberassign_y = Column(REAL, nullable=False)
+    priority = Column(Integer, nullable=False)
+    plate_ra = Column(DOUBLE_PRECISION, nullable=False)
+    plate_dec = Column(DOUBLE_PRECISION, nullable=False)
+
+    def __repr__(self):
+        return "Fiberassign(tileid={0.tileid:d}, fiber={0.fiber:d})".format(self)
+
+
+class Potential(SchemaMixin, Base):
+    """Representation of the POTENTIAL_ASSIGNMENTS table in a fiberassign file.
+    """
+
+    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
+    targetid = Column(BigInteger, primary_key=True, index=True)
+    fiber = Column(Integer, nullable=False)
+    location = Column(Integer, primary_key=True)
+
+    def __repr__(self):
+        return "Potential(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
+
+
+class Target(SchemaMixin, Base):
+    """Representation of the TARGETS table in target files.
+
+    Notes
+    -----
+    The various ``LC`` (light curve) columns, which are vector-valued, are not yet
+    implemented.
+    """
+
+    release = Column(SmallInteger, nullable=False)
+    brickid = Column(Integer, nullable=False)
+    brickname = Column(String(8), nullable=False)
+    brick_objid = Column(Integer, nullable=False)
+    morphtype = Column(String(4), nullable=False)
+    ra = Column(DOUBLE_PRECISION, nullable=False)
+    ra_ivar = Column(REAL, nullable=False)
+    dec = Column(DOUBLE_PRECISION, nullable=False)
+    dec_ivar = Column(REAL, nullable=False)
+    dchisq_psf = Column(REAL, nullable=False)
+    dchisq_rex = Column(REAL, nullable=False)
+    dchisq_dev = Column(REAL, nullable=False)
+    dchisq_exp = Column(REAL, nullable=False)
+    dchisq_ser = Column(REAL, nullable=False)
+    ebv = Column(REAL, nullable=False)
+    flux_g = Column(REAL, nullable=False)
+    flux_r = Column(REAL, nullable=False)
+    flux_z = Column(REAL, nullable=False)
+    flux_ivar_g = Column(REAL, nullable=False)
+    flux_ivar_r = Column(REAL, nullable=False)
+    flux_ivar_z = Column(REAL, nullable=False)
+    mw_transmission_g = Column(REAL, nullable=False)
+    mw_transmission_r = Column(REAL, nullable=False)
+    mw_transmission_z = Column(REAL, nullable=False)
+    fracflux_g = Column(REAL, nullable=False)
+    fracflux_r = Column(REAL, nullable=False)
+    fracflux_z = Column(REAL, nullable=False)
+    fracmasked_g = Column(REAL, nullable=False)
+    fracmasked_r = Column(REAL, nullable=False)
+    fracmasked_z = Column(REAL, nullable=False)
+    fracin_g = Column(REAL, nullable=False)
+    fracin_r = Column(REAL, nullable=False)
+    fracin_z = Column(REAL, nullable=False)
+    nobs_g = Column(SmallInteger, nullable=False)
+    nobs_r = Column(SmallInteger, nullable=False)
+    nobs_z = Column(SmallInteger, nullable=False)
+    psfdepth_g = Column(REAL, nullable=False)
+    psfdepth_r = Column(REAL, nullable=False)
+    psfdepth_z = Column(REAL, nullable=False)
+    galdepth_g = Column(REAL, nullable=False)
+    galdepth_r = Column(REAL, nullable=False)
+    galdepth_z = Column(REAL, nullable=False)
+    flux_w1 = Column(REAL, nullable=False)
+    flux_w2 = Column(REAL, nullable=False)
+    flux_w3 = Column(REAL, nullable=False)
+    flux_w4 = Column(REAL, nullable=False)
+    flux_ivar_w1 = Column(REAL, nullable=False)
+    flux_ivar_w2 = Column(REAL, nullable=False)
+    flux_ivar_w3 = Column(REAL, nullable=False)
+    flux_ivar_w4 = Column(REAL, nullable=False)
+    mw_transmission_w1 = Column(REAL, nullable=False)
+    mw_transmission_w2 = Column(REAL, nullable=False)
+    mw_transmission_w3 = Column(REAL, nullable=False)
+    mw_transmission_w4 = Column(REAL, nullable=False)
+    allmask_g = Column(SmallInteger, nullable=False)
+    allmask_r = Column(SmallInteger, nullable=False)
+    allmask_z = Column(SmallInteger, nullable=False)
+    fiberflux_g = Column(REAL, nullable=False)
+    fiberflux_r = Column(REAL, nullable=False)
+    fiberflux_z = Column(REAL, nullable=False)
+    fibertotflux_g = Column(REAL, nullable=False)
+    fibertotflux_r = Column(REAL, nullable=False)
+    fibertotflux_z = Column(REAL, nullable=False)
+    ref_epoch = Column(REAL, nullable=False)
+    wisemask_w1 = Column(SmallInteger, nullable=False)
+    wisemask_w2 = Column(SmallInteger, nullable=False)
+    maskbits = Column(SmallInteger, nullable=False)
+    # LC FLUX...
+    shape_r = Column(REAL, nullable=False)
+    shape_e1 = Column(REAL, nullable=False)
+    shape_e2 = Column(REAL, nullable=False)
+    shape_r_ivar = Column(REAL, nullable=False)
+    shape_e1_ivar = Column(REAL, nullable=False)
+    shape_e2_ivar = Column(REAL, nullable=False)
+    sersic = Column(REAL, nullable=False)
+    sersic_ivar = Column(REAL, nullable=False)
+    ref_id = Column(BigInteger, nullable=False)
+    ref_cat = Column(String(2), nullable=False)
+    gaia_phot_g_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)
+    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)
+    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)
+    gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)
+    gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
+    gaia_astrometric_excess_noise = Column(REAL, nullable=False)
+    gaia_duplicated_source = Column(Boolean, nullable=False)
+    gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
+    gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)
+    parallax = Column(REAL, nullable=False)
+    parallax_ivar = Column(REAL, nullable=False)
+    pmra = Column(REAL, nullable=False)
+    pmra_ivar = Column(REAL, nullable=False)
+    pmdec = Column(REAL, nullable=False)
+    pmdec_ivar = Column(REAL, nullable=False)
+    photsys = Column(String(1), nullable=False)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+    desi_target = Column(BigInteger, nullable=False)
+    bgs_target = Column(BigInteger, nullable=False)
+    mws_target = Column(BigInteger, nullable=False)
+    subpriority = Column(DOUBLE_PRECISION, nullable=False)
+    obsconditions = Column(BigInteger, nullable=False)
+    priority_init = Column(BigInteger, nullable=False)
+    numobs_init = Column(BigInteger, nullable=False)
+    scnd_target = Column(BigInteger, nullable=False)
+    hpxpixel = Column(BigInteger, nullable=False)
+
+    def __repr__(self):
+        return "Target(targetid={0.targetid})".format(self)
+
+
 class ZCat(SchemaMixin, Base):
     """Representation of the zcat table.
     """
@@ -465,56 +514,7 @@ class ZCat(SchemaMixin, Base):
     # hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
-        return "<ZCat(targetid={0.targetid:d})>".format(self)
-
-
-class Fiberassign(SchemaMixin, Base):
-    """Representation of the FIBERASSIGN table in a fiberassign file.
-
-    Notes
-    -----
-    * Targets are assigned to a ``location``.  A ``location`` happens to
-      correspond to a ``fiber``, but this correspondence could change over
-      time, and therefore should not be assumed to be a rigid 1:1 mapping.
-    * ``PLATE_RA``, ``PLATE_DEC`` are sometimes missing.  These can be
-      copies of ``TARGET_RA``, ``TARGET_DEC``, but in principle they could
-      be different if chromatic offsets in targeting positions were
-      ever implemented.
-    """
-
-    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
-    targetid = Column(BigInteger, primary_key=True, index=True)
-    petal_loc = Column(SmallInteger, nullable=False)
-    device_loc = Column(Integer, nullable=False)
-    location = Column(Integer, primary_key=False)
-    fiber = Column(Integer, primary_key=True)
-    fiberstatus = Column(Integer, nullable=False)
-    target_ra = Column(DOUBLE_PRECISION, nullable=False)
-    target_dec = Column(DOUBLE_PRECISION, nullable=False)
-    lambda_ref = Column(REAL, nullable=False)
-    fa_target = Column(BigInteger, nullable=False)
-    fa_type = Column(SmallInteger, nullable=False)
-    fiberassign_x = Column(REAL, nullable=False)
-    fiberassign_y = Column(REAL, nullable=False)
-    priority = Column(Integer, nullable=False)
-    plate_ra = Column(DOUBLE_PRECISION, nullable=False)
-    plate_dec = Column(DOUBLE_PRECISION, nullable=False)
-
-    def __repr__(self):
-        return "Fiberassign(tileid={0.tileid:d}, fiber={0.fiber:d})".format(self)
-
-
-class Potential(SchemaMixin, Base):
-    """Representation of the POTENTIAL_ASSIGNMENTS table in a fiberassign file.
-    """
-
-    tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
-    targetid = Column(BigInteger, primary_key=True, index=True)
-    fiber = Column(Integer, nullable=False)
-    location = Column(Integer, primary_key=True)
-
-    def __repr__(self):
-        return "Potential(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
+        return "ZCat(targetid={0.targetid:d})".format(self)
 
 
 def _frameid(data):
@@ -876,104 +876,6 @@ def load_redrock(datapath=None, hdu='REDSHIFTS', q3c=False):
     return
 
 
-def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
-                     latest_epoch=False, last_column='NUMOBS_MORE'):
-    """Load fiber assignment files into the fiberassign table.
-
-    Tile files can appear in multiple epochs, so for a given tileid, load
-    the tile file with the largest value of epoch.  In the "real world",
-    a tile file appears in each epoch until it is observed, therefore
-    the tile file corresponding to the actual observation is the one
-    with the largest epoch.
-
-    Parameters
-    ----------
-    datapath : :class:`str`
-        Full path to the directory containing tile files.
-    maxpass : :class:`int`, optional
-        Search for pass numbers up to this value (default 4).
-    hdu : :class:`int` or :class:`str`, optional
-        Read a data table from this HDU (default 'FIBERASSIGN').
-    q3c : :class:`bool`, optional
-        If set, create q3c index on the table.
-    latest_epoch : :class:`bool`, optional
-        If set, search for the latest tile file among several epochs.
-    last_column : :class:`str`, optional
-        Do not load columns past this name (default 'NUMOBS_MORE').
-    """
-    fiberpath = os.path.join(datapath, 'fiberassign*.fits*')
-    log.info("Using tile file search path: %s.", fiberpath)
-    tile_files = glob.glob(fiberpath)
-    if len(tile_files) == 0:
-        log.error("No tile files found!")
-        return
-    log.info("Found %d tile files.", len(tile_files))
-    #
-    # Find the latest epoch for every tile file.
-    #
-    latest_tiles = dict()
-    if latest_epoch:
-        tileidre = re.compile(r'/(\d+)/fiberassign/fiberassign\-(\d+)\.fits')
-        for f in tile_files:
-            m = tileidre.search(f)
-            if m is None:
-                log.error("Could not match %s!", f)
-                continue
-            epoch, tileid = map(int, m.groups())
-            if tileid in latest_tiles:
-                if latest_tiles[tileid][0] < epoch:
-                    latest_tiles[tileid] = (epoch, f)
-            else:
-                latest_tiles[tileid] = (epoch, f)
-    else:
-        for f in tile_files:
-            # fiberassign-TILEID.fits
-            tileid = int(re.match(r'fiberassign\-(\d+)\.fits',
-                         os.path.basename(f))[1])
-            latest_tiles[tileid] = (0, f)
-    log.info("Identified %d tile files for loading.", len(latest_tiles))
-    #
-    # Read the identified tile files.
-    #
-    data_index = None
-    for tileid in latest_tiles:
-        epoch, f = latest_tiles[tileid]
-        with fits.open(f) as hdulist:
-            data = hdulist[hdu].data
-        log.info("Read data from %s HDU %s", f, hdu)
-        for col in data.names[:data_index]:
-            if data[col].dtype.kind == 'f':
-                bad = np.isnan(data[col])
-                if np.any(bad):
-                    nbad = bad.sum()
-                    log.warning("%d rows of bad data detected in column " +
-                                "%s of %s.", nbad, col, f)
-                    #
-                    # This replacement may be deprecated in the future.
-                    #
-                    if col in ('TARGET_RA', 'TARGET_DEC', 'FIBERASSIGN_X', 'FIBERASSIGN_Y'):
-                        data[col][bad] = -9999.0
-                assert not np.any(np.isnan(data[col]))
-                assert np.all(np.isfinite(data[col]))
-        n_rows = len(data)
-        if data_index is None:
-            data_index = data.names.index(last_column) + 1
-        data_list = ([[tileid]*n_rows] +
-                     [data[col].tolist() for col in data.names[:data_index]])
-        data_names = ['tileid'] + [col.lower() for col in data.names[:data_index]]
-        log.info("Initial column conversion complete on tileid = %d.", tileid)
-        data_rows = list(zip(*data_list))
-        log.info("Converted columns into rows on tileid = %d.", tileid)
-        dbSession.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
-                                                     for row in data_rows])
-        log.info("Inserted %d rows in %s for tileid = %d.",
-                 n_rows, FiberAssign.__tablename__, tileid)
-        dbSession.commit()
-    if q3c:
-        q3c_index('fiberassign', ra='target_ra')
-    return
-
-
 def q3c_index(table, ra='ra'):
     """Create a q3c index on a table.
 
@@ -1284,21 +1186,15 @@ def main():
         else:
             log.info("%s table already loaded.", tn.title())
     #
+    # Find targetids that need to be loaded.
+    #
+    # dbSession.query(Fiberassign.targetid)
+    #
     # Update truth table.
     #
     # for h in ('BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'WD'):
     #     update_truth(os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
     #                  'TRUTH_' + h)
-    #
-    # Load fiber assignment files.
-    #
-    # q = dbSession.query(FiberAssign).first()
-    # if q is None:
-    #     log.info("Loading FiberAssign from %s.", options.datapath)
-    #     load_fiberassign(options.datapath, q3c=postgresql)
-    #     log.info("Finished loading FiberAssign.")
-    # else:
-    #     log.info("FiberAssign table already loaded.")
     return 0
 
 
