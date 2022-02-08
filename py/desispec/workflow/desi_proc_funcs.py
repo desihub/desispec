@@ -54,6 +54,7 @@ def get_shared_desi_proc_parser():
                         help="use this night to find nightly PSF and fiberflats")
     parser.add_argument("--scattered-light", action='store_true', help="fit and remove scattered light")
     parser.add_argument("--no-bkgsub", action='store_true', help="disable CCD bkg fit between fiber blocks")
+    parser.add_argument("--use-overscan-rows", action='store_true', help="use overscan rows for blue cameras preprocessing")
     parser.add_argument("--no-extra-variance", action='store_true',
                         help='disable increase sky model variance based on chi2 on sky lines')
     parser.add_argument("--batch", action="store_true", help="Submit a batch job to process this exposure")
@@ -534,7 +535,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if system_name == 'perlmutter-gpu':
             # default queue realtime not available on perlmutter-gpu, so set to regular
             fx.write('#SBATCH --qos regular\n'.format(queue))
-            # perlmutter-gpu requires projects name with "_g" appended 
+            # perlmutter-gpu requires projects name with "_g" appended
             fx.write('#SBATCH --account desi_g\n')
         else:
             fx.write('#SBATCH --qos {}\n'.format(queue))

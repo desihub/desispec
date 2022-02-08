@@ -361,6 +361,8 @@ def main(args=None, comm=None):
             if not args.obstype in ['ARC'] : # never model variance for arcs
                 if not args.no_model_pixel_variance and args.obstype != 'DARK' :
                     cmd += " --model-variance"
+            if args.use_overscan_rows and camera[0].lower()=="b" :
+                cmd += "--use-overscan-rows"
             err = runcmd(cmd, inputs=[args.input], outputs=[outfile])
             if err != 0:
                 error_count += 1
