@@ -603,7 +603,7 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
     log.info("Identified %d files for ingestion.", len(filepaths))
     loaded_rows = 0
     for filepath in filepaths:
-        if filepath.endswith('.fits'):
+        if filepath.endswith('.fits') or filepath.endswith('.fits.gz'):
             data = Table.read(filepath, hdu=hdu, format='fits')
             log.info("Read %d rows of data from %s HDU %s.", len(data), filepath, hdu)
         elif filepath.endswith('.ecsv'):
