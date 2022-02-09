@@ -247,6 +247,7 @@ def write_redshift_script(batchscript, outdir,
         group, spectro_string, suffix,
         frame_glob=None, expfile=None,
         healpix=None,
+        extra_header=None,
         queue='regular', system_name=None,
         onetile=True, tileid=None, night=None, expid=None,
         run_zmtl=False, noafterburners=False,
@@ -268,6 +269,7 @@ def write_redshift_script(batchscript, outdir,
         frame_glob (str): glob for finding input cframes
         expfile (str): filename with NIGHT EXPID SPECTRO
         healpix (int): healpix number (to use with group=healpix)
+        extra_header (dict): extra key/value pairs to add to header
         queue (str): queue name
         system_name (str): e.g. cori-haswell, cori-knl, perlmutter-gpu
         onetile (bool): coadd assuming input is for a single tile?
@@ -328,10 +330,12 @@ def write_redshift_script(batchscript, outdir,
     else:
         headeropt += f' SPGRPVAL=None'
 
-    if group == 'healpix':
-        headeropt += f' HPXPIXEL={healpix}'
-    else:
+    if group != 'healpix':
         headeropt += f' TILEID={tileid} SPECTRO=$SPECTRO PETAL=$SPECTRO'
+
+    if extra_header is not None:
+        for key, value in extra_header.items():
+            headeropt += f' {key}={value}'
 
     #- system specific options, e.g. "--constraint=haswell"
     batch_opts = list()

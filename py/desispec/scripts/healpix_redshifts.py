@@ -78,6 +78,13 @@ def main(args):
         expfile = f'{outdir}/hpixexp-{healpix}.csv'
         exppix[ii].write(expfile, overwrite=True)
 
+        extra_header = dict(
+                HPXPIXEL=healpix,
+                HPXNSIDE=args.nside,
+                SURVEY=args.survey,
+                PROGRAM=args.program,
+            )
+
         write_redshift_script(
                 batchscript=batchscript,
                 outdir=outdir,
@@ -89,6 +96,7 @@ def main(args):
                 frame_glob=None,
                 expfile=expfile,
                 healpix=healpix,
+                extra_header=extra_header,
                 queue=args.batch_queue,
                 system_name=args.system_name,
                 onetile=False,
