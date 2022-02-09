@@ -1108,7 +1108,7 @@ def main():
                'preload': _frameid,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
-               }]
+              }]
     # loader = [{'filepaths': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
     #            'tcls': Truth,
     #            'hdu': 'TRUTH',
@@ -1163,16 +1163,20 @@ def main():
         return 1
     log.debug(fiberassign_files)
     loader = [{'filepaths': fiberassign_files,
-           'tcls': Fiberassign,
-           'hdu': 'FIBERASSIGN',
-           'preload': _tileid,
-           'q3c': 'target_ra',
-          },
-          {'filepaths': fiberassign_files,
-           'tcls': Potential,
-           'hdu': 'POTENTIAL_ASSIGNMENTS',
-           'preload': _tileid,
-          }]
+               'tcls': Fiberassign,
+               'hdu': 'FIBERASSIGN',
+               'preload': _tileid,
+               'q3c': 'target_ra',
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
+              },
+              {'filepaths': fiberassign_files,
+               'tcls': Potential,
+               'hdu': 'POTENTIAL_ASSIGNMENTS',
+               'preload': _tileid,
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
+              }]
     for l in loader:
         tn = l['tcls'].__tablename__
         #
