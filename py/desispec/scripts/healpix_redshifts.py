@@ -3,7 +3,7 @@ script for running healpix-based coadds+redshifts, assuming that the
 spectral regrouping into healpix has already happened
 """
 
-import os, sys
+import os, sys, time
 import subprocess
 import numpy as np
 
@@ -81,6 +81,7 @@ def main(args):
         extra_header = dict(
                 HPXPIXEL=healpix,
                 HPXNSIDE=args.nside,
+                HPXNEST=True,
                 SURVEY=args.survey,
                 PROGRAM=args.program,
             )
@@ -122,3 +123,5 @@ def main(args):
                 log.info(f'submitted {basename}')
             else:
                 log.error(f'Error {err} submitting {basename}')
+
+            time.sleep(0.1)

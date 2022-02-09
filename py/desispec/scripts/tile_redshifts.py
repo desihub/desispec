@@ -345,6 +345,10 @@ def write_redshift_script(batchscript, outdir,
     batch_opts = '\n'.join(batch_opts)
 
     runtime = 10 + int(10 * batch_config['timefactor'] * redrock_cores_per_rank)
+    #- some healpix have lots of targets; adhoc increase runtime
+    if group == 'healpix':
+        runtime += 15
+
     runtime_hh = runtime // 60
     runtime_mm = runtime % 60
 
