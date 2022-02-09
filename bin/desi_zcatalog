@@ -26,6 +26,7 @@ from astropy.table import Table, hstack, vstack
 
 from desiutil.log import get_logger
 from desispec import io
+from desispec.zcatalog import find_primary_spectra
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -86,8 +87,16 @@ parser.add_argument("-o", "--outfile",type=str,
         help="output file")
 parser.add_argument("--minimal", action='store_true',
         help="only include minimal output columns")
-parser.add_argument("--tiles", type=str,
+parser.add_argument("-t", "--tiles", type=str,
         help="ascii file with tileids to include (one per line)")
+parser.add_argument("--prefix", type=str, default='redrock',
+        help="prefix of redrock files (older versions used 'zbest' "
+             "instead of 'redrock'")
+parser.add_argument("-g", "--group", type=str,
+        help="Add columns specific to this spectral grouping "
+             "e.g. pernight adds NIGHT column from input header keyword")
+parser.add_argument("--header", type=str, nargs="*",
+        help="KEYWORD=VALUE entries to add to the output header")
 
 # parser.add_argument("--match", type=str, nargs="*",
 #         help="match other tables (targets,truth...)")
@@ -104,20 +113,21 @@ if args.outfile is None:
     args.outfile = io.findfile('zcatalog')
 
 #- Get redrock*.fits files in subdirs, excluding e.g. redrock*.log
+
 log.info(f'Looking for redrock files in subdirectories of {args.indir}')
 if args.tiles is not None:
-    tiles = np.loadtxt(args.tiles, dtype=int)
+    tiles = np.atleast_1d(np.loadtxt(args.tiles, dtype=int))
     ntiles = len(tiles)
     log.info(f'Filtering to {ntiles} tiles from {args.tiles}')
     redrockfiles = list()
     for tileid in tiles:
-        tmp = sorted(io.iterfiles(f'{args.indir}/{tileid}', 'redrock', suffix='.fits'))
+        tmp = sorted(io.iterfiles(f'{args.indir}/{tileid}', prefix=args.prefix, suffix='.fits'))
         if len(tmp) > 0:
             redrockfiles.extend(tmp)
         else:
             log.error(f'no redrock files found in {args.indir}/{tileid}')
 else:
-    redrockfiles = sorted(io.iterfiles(args.indir, 'redrock', suffix='.fits'))
+    redrockfiles = sorted(io.iterfiles(args.indir, prefix=args.prefix, suffix='.fits'))
 
 nfiles = len(redrockfiles)
 if nfiles == 0:
@@ -125,41 +135,119 @@ if nfiles == 0:
     log.critical(msg)
     raise ValueError(msg)
 
-data = list()
+zcatdata = list()
 exp_fibermaps = list()
 for ifile, rrfile in enumerate(redrockfiles):
     log.info(f'Reading {ifile+1}/{nfiles} {rrfile}')
     with fitsio.FITS(rrfile) as fx:
-        redshifts = fx['REDSHIFTS'].read()
-        fibermap = fx['FIBERMAP'].read()
-        expfibermap = fx['EXP_FIBERMAP'].read()
-        tsnr2 = fx['TSNR2'].read()
+        hdr = fx[0].read_header()
+        if args.group is not None and 'SPGRP' in hdr and \
+                hdr['SPGRP'] != args.group:
+            log.warning("Skipping {} with SPGRP {} != args.group {}".format(
+                rrfile, hdr['SPGRP'], args.group))
+            continue
 
-    assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
-    assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+        if 'ZBEST' in fx: #check if the older hdu name for REDSHIFT exist, in which case we read only the FIBERMAP and no TSNR2.
+            redshifts = fx['ZBEST'].read()
+            fibermap = fx['FIBERMAP'].read()
+            assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
+            if ['EXP_FIBERMAP','TSNR2'] in fx:
+                expfibermap = fx['EXP_FIBERMAP'].read()
+                tsnr2 = fx['TSNR2'].read()
+                assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+            else:
+                expfibermap = None
+                tsnr2 = None
+
+        else:
+            redshifts = fx['REDSHIFTS'].read()
+            fibermap = fx['FIBERMAP'].read()
+            expfibermap = fx['EXP_FIBERMAP'].read()
+            tsnr2 = fx['TSNR2'].read()
+            assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
+            assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
 
     if args.minimal:
         fmcols = ['TARGET_RA', 'TARGET_DEC', 'FLUX_G', 'FLUX_R', 'FLUX_Z']
         for colname in fibermap.dtype.names:
             if colname.endswith('_TARGET') and colname != 'FA_TARGET':
                 fmcols.append(colname)
+        if args.prefix == 'zbest':
+            fibermap_=Table(fibermap[fmcols])
+            fibermap_.rename_column('TARGET_RA','RA')
+            fibermap_.rename_column('TARGET_DEC','DEC')
+            fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SCND_TARGET'])
+            data = hstack( [Table(redshifts), fibermap_] )
 
-        data.append(hstack([Table(redshifts), Table(fibermap[fmcols])]))
+        else:
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+
     else:
         fmcols = list(fibermap.dtype.names)
         fmcols.remove('TARGETID')
-        tsnr2cols = list(tsnr2.dtype.names)
-        tsnr2cols.remove('TARGETID')
-        data.append(hstack(
-            [Table(redshifts), Table(fibermap[fmcols]), Table(tsnr2[tsnr2cols])]
-            ))
+        if tsnr2 is not None:
+            tsnr2cols = list(tsnr2.dtype.names)
+            tsnr2cols.remove('TARGETID')
+            data = hstack([
+                Table(redshifts),
+                Table(fibermap[fmcols]),
+                Table(tsnr2[tsnr2cols]),
+                ])
+        else:
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
 
-    exp_fibermaps.append(expfibermap)
+    #- Add group specific columns, recognizing some some of them may
+    #- have already been inherited from the fibermap.
+    #- Put these columns right after TARGETID
+    nrows = len(data)
+    icol = 1
+    if args.group in ('perexp', 'pernight', 'cumulative'):
+        if 'TILEID' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['TILEID'], dtype=np.int32),
+                    index=icol, name='TILEID')
+            icol += 1
+        if 'PETAL_LOC' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['PETAL'], dtype=np.int16),
+                    index=icol, name='PETAL_LOC')
+            icol += 1
+
+    if args.group == 'perexp':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+        data.add_column(np.full(nrows, hdr['EXPID'], dtype=np.int32),
+                index=icol+1, name='EXPID')
+    elif args.group == 'pernight':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+    elif args.group == 'cumulative':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='LASTNIGHT')
+
+    zcatdata.append(data)
+
+    if expfibermap is not None:
+        exp_fibermaps.append(expfibermap)
+
 
 log.info('Stacking zcat')
-zcat = np.array(vstack(data))
-log.info('Stacking exposure fibermaps')
-expfm = np.hstack(exp_fibermaps)
+zcat = vstack(zcatdata)
+if exp_fibermaps:
+    log.info('Stacking exposure fibermaps')
+    expfm = np.hstack(exp_fibermaps)
+else:
+    expfm = None
+
+#- if TARGETIDs appear more than once, which one is best within this catalog?
+if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
+    log.info('Finding best spectrum for each target')
+    nspec, primary = find_primary_spectra(zcat)
+    zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
+    zcat['ZCAT_PRIMARY'] = primary
+else:
+    log.info('Missing TSNR2_LRG or ZWARN; not adding ZCAT_PRIMARY/_NSPEC')
+
+#- we're done adding columns, convert to numpy array for fitsio
+zcat = np.array(zcat)
 
 #- untested with new formats, so commenting out for now
 # if args.match:
@@ -167,19 +255,29 @@ expfm = np.hstack(exp_fibermaps)
 #         log.info("matching {}".format(filename))
 #         zcat = match(zcat,fitsio.read(filename))
 
+#- Inherit header from first input, but remove keywords that don't apply
+#- across multiple files
 header = fitsio.read_header(redrockfiles[0], 0)
+for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID']:
+    if key in header:
+        header.delete(key)
+
+if args.header is not None:
+    for keyval in args.header:
+        key, value = keyval.split('=', maxsplit=1)
+        try:
+            header[key] = int(value)
+        except ValueError:
+            header[key] = value
 
 log.info(f'Writing {args.outfile}')
 tmpfile = args.outfile + '.tmp'
 fitsio.write(tmpfile, zcat, header=header, extname='ZCATALOG', clobber=True)
-if not args.minimal:
+
+if not args.minimal and expfm is not None:
     fitsio.write(tmpfile, expfm, extname='EXP_FIBERMAP')
 
 os.rename(tmpfile, args.outfile)
 
 log.info("Successfully wrote {}".format(args.outfile))
-
-
-
-
 

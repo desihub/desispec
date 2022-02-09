@@ -60,7 +60,7 @@ def main(args, comm=None):
 
     imgfile = args.input_image
     outfile = args.output_psf
-        
+
     nproc = 1
     rank = 0
     if comm is not None:
@@ -185,7 +185,7 @@ def main(args, comm=None):
 
         com.extend(optarray)
 
-        log.debug("proc {} calling {}".format(rank, " ".join(com)))
+        log.info("proc {} calling {}".format(rank, " ".join(com)))
 
         retval = run_specex(com)
 
@@ -194,6 +194,8 @@ def main(args, comm=None):
             log.error("desi_psf_fit on process {} failed with return "
                 "value {} running {}".format(rank, retval, comstr))
             failcount += 1
+        else:
+            log.info(f"proc {rank} succeeded generating {outbundlefits}")
 
     if comm is not None:
         from mpi4py import MPI
@@ -237,6 +239,104 @@ def main(args, comm=None):
 
     return
 
+def run(comm,cmds,cameras):
+    """
+    Run PSF fits with specex on a set of ccd images in parallel using the run method 
+    of the desispec.workflow.schedule.Schedule (Schedule) class.
+
+    Args:
+        comm:    MPI communicator containing all processes available for work and 
+                 scheduling (usually MPI_COMM_WORLD); at least 21 processes should 
+                 be available, one for scheduling and (group_size=) 20 to fit all 
+                 bundles for a given ccd image. Otherwise there is no constraint on 
+                 the number of ranks available, but (comm.Get_size()-1)%group_size 
+                 will be unused, since every job is assigned exactly group_size=20 
+                 ranks. The variable group_size is set at the number of bundles on 
+                 a ccd, and there is currently no support for any other number, due 
+                 to the way merging of bundles is currently done. 
+        cmds:    dictionary keyed by a camera string (e.g. 'b0', 'r1', ...) with 
+                 values being the 'desi_compute_psf ...' string that one would run 
+                 on the command line.
+        cameras: list of camera strings identifying the entries in cmds to be run 
+                 as jobs in parallel jobs, one entry per ccd image to be fit; entries 
+                 not in the dictionary will be logged as an error while still 
+                 continuing with the others and not crashing.
+                 
+    The function first defines the procedure to call specex for a given ccd image 
+    with the "fitbundles" inline function, passes the fitbundles function 
+    to the Schedule initialization method, and then calls the run method of the 
+    Schedule class to call fitbundles len(cameras) times, each with group_size = 20 
+    processes.
+    """
+
+    from desispec.workflow.schedule import Schedule
+    from desiutil.log import get_logger, DEBUG, INFO
+       
+    log = get_logger()
+    
+    group_size = 20
+    # reverse to do b cameras last since they take least time
+    cameras = sorted(cameras, reverse=True)
+    def fitbundles(comm,job):
+        '''
+        Run PSF fit with specex on all bundles for a single ccd image 
+
+        Args:
+            comm: MPI communicator 
+            job:  job index corresponding to position in list of cmds entries 
+            
+        This is an inline function for use by desispec.workflow.schedule.Schedule, 
+        i.e. via the lines
+            sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
+            sc.run()
+        immediately after this inline function definition. 
+        
+        This function uses the external variables group_size, cmds, and cameras. In 
+        particular, the list of camera strings (cameras) provides the mapping of the
+        job index (job) to the commands (cmds) that specify the arguments 
+        to the specex.parse method, i.e.
+            camera = cameras[job]
+            ...
+            cmdargs = cmds[camera].split()[1:]
+            cmdargs = parse(cmdargs)
+            ...
+        From the point of view of the Schedule.run method, it is running fitbundles 
+        njobs = len(cameras) times, each time using group_size processes with a new 
+        value of job in the range 0 to len(cameras)-1.  
+        '''
+      
+        rank = comm.Get_rank()
+        camera = cameras[job]
+        if not camera in cmds:
+            log.error(f'FAILED: commands for camera {camera} not found for'+
+                      f' MPI group ranks {rank}-{rank+group_size-1}')
+            return        
+        if camera in cmds:
+            cmdargs = cmds[camera].split()[1:]
+            cmdargs = parse(cmdargs)
+            if rank == 0:
+                t0 = time.time()
+                timestamp = time.asctime()
+                log.info(f'MPI ranks {rank}-{rank+group_size-1}'+
+                         f' fitting PSF for {camera} at {timestamp}')
+            try:
+                main(cmdargs, comm=comm)
+            except Exception as e:
+                 if rank == 0:
+                     log.error(f'FAILED: MPI group ranks {rank}-{rank+group_size-1}'+
+                               f' on camera {camera}')
+                     log.error('FAILED: {}'.format(cmds[camera]))
+                     log.error(e)
+            if rank == 0:
+                specex_time = time.time() - t0
+                log.info(f'specex fit for {camera} took {specex_time:.1f} seconds')
+
+        return
+
+    sc = Schedule(fitbundles,comm=comm,njobs=len(cameras),group_size=group_size)
+    sc.run()
+
+    return
 
 def compatible(head1, head2) :
     """
@@ -418,6 +518,7 @@ def mean_psf(inputs, output):
                 coeff.append(tables[p][entry]["COEFF"])
             else :
                 log.info("need to refit legendre polynomial ...")
+                from numpy.polynomial.legendre import legval,legfit
                 icoeff = tables[p][entry]["COEFF"]
                 ocoeff = np.zeros(icoeff.shape)
                 # need to reshape legpol
@@ -482,31 +583,32 @@ def mean_psf(inputs, output):
             hdulist["PSF"].header["B{:02d}RCHI2".format(bundle)] = \
                 output_rchi2[bundle]
 
-        if len(xtrace)>0 :
-            xtrace=np.array(xtrace)
-            ytrace=np.array(ytrace)
-            for p in range(xtrace.shape[0]) :
-                if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
-                    continue
-
-                # need to reshape legpol
-                iu = np.linspace(-1,1,npar+3)
-                iwavemin = wavemins[p]
-                iwavemax = wavemaxs[p]
-                wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
-                ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
-
-                for f in range(icoeff.shape[0]) :
-                    val = legval(iu,xtrace[f])
-                    xtrace[f] = legfit(ou,val,deg=npar-1)
-                    val = legval(iu,ytrace[f])
-                    ytrace[f] = legfit(ou,val,deg=npar-1)
-
-            hdulist["xtrace"].data = np.mean(xtrace,axis=0)
-            hdulist["ytrace"].data = np.mean(ytrace,axis=0)
-
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
+
+    if len(xtrace)>0 :
+        xtrace=np.array(xtrace)
+        ytrace=np.array(ytrace)
+        npar = xtrace.shape[2] # assume all have same npar
+        for p in range(xtrace.shape[0]) :
+            if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
+                continue
+
+
+            # need to reshape legpol
+            iu = np.linspace(-1,1,npar+3)
+            iwavemin = wavemins[p]
+            iwavemax = wavemaxs[p]
+            wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
+            ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
+            for f in range(icoeff.shape[0]):
+                val = legval(iu,xtrace[p][f])
+                xtrace[p][f] = legfit(ou,val,deg=npar-1)
+                val = legval(iu,ytrace[p][f])
+                ytrace[p][f] = legfit(ou,val,deg=npar-1)
+
+        hdulist["xtrace"].data = np.mean(xtrace,axis=0)
+        hdulist["ytrace"].data = np.mean(ytrace,axis=0)
 
     for hdu in ["XTRACE","YTRACE","PSF"] :
         if hdu in hdulist :

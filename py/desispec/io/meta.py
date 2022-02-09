@@ -61,7 +61,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         raw = '{rawdata_dir}/{night}/{expid:08d}/desi-{expid:08d}.fits.fz',
         coordinates = '{rawdata_dir}/{night}/{expid:08d}/coordinates-{expid:08d}.fits',
-        # fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        fiberassign = '{rawdata_dir}/{night}/{expid:08d}/fiberassign-{tile:06d}.fits.gz',
         etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
         # preproc/
@@ -81,21 +81,28 @@ def findfile(filetype, night=None, expid=None, camera=None,
         fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
         frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
         psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
+        fitpsf='{specprod_dir}/exposures/{night}/{expid:08d}/fit-psf-{camera}-{expid:08d}.fits',
         qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',
         sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits',
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
+        skycorr = '{specprod_dir}/exposures/{night}/{expid:08d}/skycorr-{camera}-{expid:08d}.fits',
+        fiberflatexp = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflatexp-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
+        calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
         #  qa
         exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
-        tileqa     = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-thru{night}.fits',
-        tileqapng  = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/tile-qa-{tile:d}-thru{night}.png',
-        zmtl  = '{specprod_dir}/tiles/cumulative/{tile:d}/{night}/zmtl-{spectrograph:d}-{tile:d}-thru{night}.fits',
+        tileqa     = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.fits',
+        tileqapng  = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.png',
+        zmtl  = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/zmtl-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         #
         # calibnight/
         #
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
+        biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
+        badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
+        badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
         #
         # spectra- healpix based
         #
@@ -107,17 +114,19 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- tile based
         #
-        coadd_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-thru{night}.fits',
-        rrdetails_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-thru{night}.h5',
-        spectra_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-thru{night}.fits',
-        redrock_tile='{specprod_dir}/tiles/cumulative/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-thru{night}.fits',
+        coadd_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{night}.h5',
+        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         #
         # spectra- single exp tile based
         #
-        coadd_single='{specprod_dir}/tiles/{tile:d}/exposures/coadd-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        rrdetails_single='{specprod_dir}/tiles/{tile:d}/exposures/rrdetails-{spectrograph:d}-{tile:d}-{expid:08d}.h5',
-        spectra_single='{specprod_dir}/tiles/{tile:d}/exposures/spectra-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        redrock_single='{specprod_dir}/tiles/{tile:d}/exposures/redrock-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
+        coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
+        spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        redrock_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/redrock-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
+        tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
         #
         # Deprecated QA files below this point.
         #
@@ -144,19 +153,42 @@ def findfile(filetype, night=None, expid=None, camera=None,
     )
     location['desi'] = location['raw']
 
+    #- default group is "cumulative" for tile-based files
+    if groupname is None and tile is not None and filetype in (
+            'spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa', 'tileqapng', 'zmtl',
+            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile',
+            ):
+        groupname = 'cumulative'
+
+    if str(groupname) == "cumulative":
+        nightprefix = "thru"
+    elif groupname == 'perexp':
+        nightprefix = "exp"
+    else:
+        nightprefix = ""
+
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
-        location['coadd'] = location['coadd_tile']
-        location['redrock'] = location['redrock_tile']
-        location['spectra'] = location['spectra_tile']
-        location['rrdetails'] = location['rrdetails_tile']
+        if groupname == 'perexp':
+            location['coadd'] = location['coadd_single']
+            location['redrock'] = location['redrock_single']
+            location['spectra'] = location['spectra_single']
+            location['rrdetails'] = location['rrdetails_single']
+            location['tileqa'] = location['tileqa_single']
+            location['tileqapng'] = location['tileqapng_single']
+        else:
+            location['coadd'] = location['coadd_tile']
+            location['redrock'] = location['redrock_tile']
+            location['spectra'] = location['spectra_tile']
+            location['rrdetails'] = location['rrdetails_tile']
+            # tileqa/tileqapng default already correct for pernight/cumulative
     else:
         location['coadd'] = location['coadd_hp']
         location['redrock'] = location['redrock_hp']
         location['spectra'] = location['spectra_hp']
         location['rrdetails'] = location['rrdetails_hp']
 
-    if groupname is not None:
+    if groupname is not None and tile is None:
         hpix = int(groupname)
         log.debug('healpix_subdirectory(%d, %d)', nside, hpix)
         hpixdir = healpix_subdirectory(nside, hpix)
@@ -201,14 +233,14 @@ def findfile(filetype, night=None, expid=None, camera=None,
            and camera in ['b', 'r', 'z']:
             raise ValueError('Specify camera=b0,r1..z9, not camera=b/r/z + spectrograph')
 
-        if camera != '*' and re.match('[brz\*\?][0-9\*\?]', camera) is None:
+        if camera != '*' and re.match(r'[brz\*\?][0-9\*\?]', camera) is None:
             raise ValueError('Camera {} should be b0,r1..z9, or with ?* wildcards'.format(camera))
 
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band,
-        'spectrograph':spectrograph,
+        'spectrograph':spectrograph, 'nightprefix':nightprefix,
         }
 
     #- survey and faprogram should be lower, but don't trip on None

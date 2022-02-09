@@ -78,25 +78,25 @@ def create_model(spectra, redshifts,
         zb = redshifts[i]
 
         if archetype_fit:
-          archetypes = All_archetypes(archetypes_dir=archetypes_dir).archetypes
-          archetype  = archetypes[zb['SPECTYPE']]
-          coeff      = zb['COEFF']
+            archetypes = All_archetypes(archetypes_dir=archetypes_dir).archetypes
+            archetype  = archetypes[zb['SPECTYPE']]
+            coeff      = zb['COEFF']
 
-          for band in spectra.bands:
-              wave                = spectra.wave[band]
-              wavehash            = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1], spectra.R[band].data.shape[0]))
-              dwave               = {wavehash: wave}
-              mx                  = archetype.eval(zb['SUBTYPE'], dwave, coeff, wave, zb['Z'])
-              model_flux[band][i] = spectra.R[band][i].dot(mx)
+            for band in spectra.bands:
+                wave                = spectra.wave[band]
+                wavehash            = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1], spectra.R[band].data.shape[0]))
+                dwave               = {wavehash: wave}
+                mx                  = archetype.eval(zb['SUBTYPE'], dwave, coeff, wave, zb['Z'])
+                model_flux[band][i] = spectra.R[band][i].dot(mx)
 
         else:
-          tx    = templates[(zb['SPECTYPE'], zb['SUBTYPE'])]
-          coeff = zb['COEFF'][0:tx.nbasis]
-          model = tx.flux.T.dot(coeff).T
+            tx    = templates[(zb['SPECTYPE'], zb['SUBTYPE'])]
+            coeff = zb['COEFF'][0:tx.nbasis]
+            model = tx.flux.T.dot(coeff).T
 
-          for band in spectra.bands:
-              mx                  = resample_flux(spectra.wave[band], tx.wave*(1+zb['Z']), model)
-              model_flux[band][i] = spectra.R[band][i].dot(mx)
+            for band in spectra.bands:
+                mx                  = resample_flux(spectra.wave[band], tx.wave*(1+zb['Z']), model)
+                model_flux[band][i] = spectra.R[band][i].dot(mx)
 
     #- Now combine, if needed, to a single wavelength grid across all cameras
     if spectra.bands == ['brz'] :
@@ -164,6 +164,11 @@ def get_spectra(spectra_name, redrock_name, lambda_width, index_to_fit,
         spectra = coadd_cameras(spectra)
 
     redshifts = Table.read(redrock_name, 'REDSHIFTS')[index_to_fit]
+
+    # astropy 5.x incorrectly interprets blank strings as masked values; undo
+    if hasattr(redshifts['SUBTYPE'], 'mask'):
+        redshifts['SUBTYPE'][redshifts['SUBTYPE'].mask] = ''
+
     if archetypes_dir is not None:
         model_wave, model_flux = create_model(spectra,
                                               redshifts,

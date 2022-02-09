@@ -67,6 +67,7 @@ def write_spectra(outfile, spec, units=None):
 
     # metadata goes in empty primary HDU
     hdr = fitsheader(spec.meta)
+    hdr['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(hdr)
 
     all_hdus.append(fits.PrimaryHDU(header=hdr))
@@ -74,6 +75,8 @@ def write_spectra(outfile, spec, units=None):
     # Next is the fibermap
     fmap = spec.fibermap.copy()
     fmap.meta['EXTNAME'] = 'FIBERMAP'
+    fmap.meta['LONGSTRN'] = 'OGIP 1.0'
+    add_dependencies(fmap.meta)
 
     with warnings.catch_warnings():
         #- nanomaggies aren't an official IAU unit but don't complain

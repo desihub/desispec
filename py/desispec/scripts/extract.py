@@ -24,7 +24,7 @@ from desiutil import depend
 
 from desispec import io
 from desispec.frame import Frame
-from desispec.maskbits import specmask
+from desispec.maskbits import specmask,extractmaskval
 
 import desispec.scripts.mergebundles as mergebundles
 from desispec.specscore import compute_and_append_frame_scores
@@ -131,7 +131,7 @@ def barycentric_correction_multiplicative_factor(header) :
     log.debug("Barycentric correction factor = {}".format(val))
 
     return val
-    
+
 
 def main(args):
 
@@ -239,7 +239,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         #- Extraction uses pix and mask-applied ivar
         image = {
             'image': img.pix,
-            'ivar': img.ivar*(img.mask==0)
+            'ivar': img.ivar*((img.mask & extractmaskval)==0)
         }
         #- If GPU, move image and ivar arrays to device
         if args.gpu:
@@ -299,7 +299,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
 
         log.info('Applying barycentric_correction_factor: {}'.format(barycentric_correction_factor))
 
-        #- Print parameters                                                                                    
+        #- Print parameters
         log.info("extract:  input = {}".format(args.input))
         log.info("extract:  psf = {}".format(args.psf))
         log.info("extract:  specmin = {}".format(args.specmin))
@@ -307,11 +307,11 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         log.info("extract:  wavelength = {},{},{}".format(wmin, wmax, dw))
         log.info("extract:  nwavestep = {}".format(args.nwavestep))
         log.info("extract:  regularize = {}".format(args.regularize))
-    
+
         if barycentric_correction_factor != 1. :
             img.meta['HELIOCOR']   = barycentric_correction_factor
 
-        #- Augment input image header for output                                
+        #- Augment input image header for output
         img.meta['NSPEC']   = (args.nspec, 'Number of spectra')
         img.meta['WAVEMIN'] = (wmin, 'First wavelength [Angstroms]')
         img.meta['WAVEMAX'] = (wmax, 'Last wavelength [Angstroms]')
@@ -429,7 +429,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         #   wavelength node to an electron 'density'
         frame.meta['BUNIT'] = 'electron/Angstrom'
 
-        #- Add scores to frame                                                               
+        #- Add scores to frame
         if not args.no_scores:
             log.info('Computing scores and appending to frame')
             compute_and_append_frame_scores(frame, suffix="RAW")
@@ -470,7 +470,7 @@ def main_mpi(args, comm=None, timing=None):
     if comm is not None:
         nproc = comm.size
         rank = comm.rank
-        
+
     mark_start = time.time()
 
     log = get_logger()
@@ -482,7 +482,7 @@ def main_mpi(args, comm=None, timing=None):
     # to be divided among processes.
     specmin = args.specmin
     nspec = args.nspec
-        
+
     #- Load input files and broadcast
 
     # FIXME: after we have fixed the serialization
@@ -494,7 +494,7 @@ def main_mpi(args, comm=None, timing=None):
         img = io.read_image(input_file)
     if comm is not None:
         img = comm.bcast(img, root=0)
-        
+
     psf = load_psf(psf_file)
 
     mark_read_input = time.time()
@@ -502,7 +502,7 @@ def main_mpi(args, comm=None, timing=None):
     # get spectral range
     if nspec is None:
         nspec = psf.nspec
-        
+
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
     else:
@@ -534,7 +534,7 @@ def main_mpi(args, comm=None, timing=None):
     raw_wave = np.arange(raw_wstart, raw_wstop+raw_dw/2.0, raw_dw)
     nwave = len(raw_wave)
     bundlesize = args.bundlesize
-    
+
     if args.barycentric_correction :
         if ('RA' in img.meta) or ('TARGTRA' in img.meta):
             barycentric_correction_factor = \
@@ -550,7 +550,7 @@ def main_mpi(args, comm=None, timing=None):
             raise KeyError(msg)
     else :
         barycentric_correction_factor = 1.
-    
+
     # Explictly define the correct wavelength values to avoid confusion of reference frame
     # If correction applied, otherwise divide by 1 and use the same raw values
     wstart = raw_wstart/barycentric_correction_factor
@@ -565,9 +565,9 @@ def main_mpi(args, comm=None, timing=None):
         raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
     if psf_wavemax+5 < wstop:
         raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
-    
+
     if rank == 0:
-        #- Print parameters                                                                                    
+        #- Print parameters
         log.info("extract:  input = {}".format(input_file))
         log.info("extract:  psf = {}".format(psf_file))
         log.info("extract:  specmin = {}".format(specmin))
@@ -575,11 +575,11 @@ def main_mpi(args, comm=None, timing=None):
         log.info("extract:  wavelength = {},{},{}".format(wstart, wstop, dw))
         log.info("extract:  nwavestep = {}".format(args.nwavestep))
         log.info("extract:  regularize = {}".format(args.regularize))
-    
+
     if barycentric_correction_factor != 1. :
         img.meta['HELIOCOR']   = barycentric_correction_factor
 
-    #- Augment input image header for output                                
+    #- Augment input image header for output
     img.meta['NSPEC']   = (nspec, 'Number of spectra')
     img.meta['WAVEMIN'] = (raw_wstart, 'First wavelength [Angstroms]')
     img.meta['WAVEMAX'] = (raw_wstop, 'Last wavelength [Angstroms]')
@@ -613,11 +613,11 @@ def main_mpi(args, comm=None, timing=None):
                           wave, raw_wave, fibers, fibermap,
                           args.output, args.model,
                           bundlesize, args, log)
-        
-        #- This is it if we aren't running MPI, so return                      
+
+        #- This is it if we aren't running MPI, so return
         return
     #else:
-    #    # Continue to the MPI section, which could go under this else statment             
+    #    # Continue to the MPI section, which could go under this else statment
     #    # But to save on indentation we'll just pass on to the rest of the function
     #    # since the alternative has already returned
     #    pass
@@ -630,7 +630,7 @@ def main_mpi(args, comm=None, timing=None):
 
     bspecmin = {}
     bnspec = {}
-    
+
     for b in bundles:
         if specmin > b * bundlesize:
             bspecmin[b] = specmin
@@ -671,7 +671,7 @@ def main_mpi(args, comm=None, timing=None):
     time_total_extraction = 0.0
     time_total_write_output = 0.0
     failcount = 0
-    
+
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         mark_iteration_start = time.time()
         outbundle = "{}_{:02d}.fits".format(outroot, b)
@@ -751,11 +751,11 @@ def main_mpi(args, comm=None, timing=None):
 def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fibers, fibermap,
                       outbundle, outmodel, bundlesize, args, log):
     '''
-    Performs the main extraction and saving of extracted frames found in the body of the 
-    main loop. Refactored to be callable by both MPI and non-MPI versions of the code. 
+    Performs the main extraction and saving of extracted frames found in the body of the
+    main loop. Refactored to be callable by both MPI and non-MPI versions of the code.
     This should be viewed as a shorthand for the following commands.
     '''
-    results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin,
+    results = ex2d(img.pix, img.ivar*((img.mask & extractmaskval)==0), psf, bspecmin,
                    bnspec, wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                    bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
                    full_output=True, nsubbundles=args.nsubbundles,
@@ -770,34 +770,34 @@ def _extract_and_save(img, psf, bspecmin, bnspec, specmin, wave, raw_wave, fiber
     mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
     mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
     mask[chi2pix>100.0] |= specmask.BAD2DFIT
-    
+
     if fibermap is not None:
         bfibermap = fibermap[bspecmin-specmin:bspecmin+bnspec-specmin]
     else:
         bfibermap = None
 
     bfibers = fibers[bspecmin-specmin:bspecmin+bnspec-specmin]
-    
-    #- Save the raw wavelength, not the corrected one (if corrected)                  
+
+    #- Save the raw wavelength, not the corrected one (if corrected)
     frame = Frame(raw_wave, flux, ivar, mask=mask, resolution_data=Rdata,
                   fibers=bfibers, meta=img.meta, fibermap=bfibermap,
                   chi2pix=chi2pix)
 
-    #- Add unit                                                                           
-    #   In specter.extract.ex2d one has flux /= dwave                                     
-    #   to convert the measured total number of electrons per                            
-    #   wavelength node to an electron 'density'                                             
+    #- Add unit
+    #   In specter.extract.ex2d one has flux /= dwave
+    #   to convert the measured total number of electrons per
+    #   wavelength node to an electron 'density'
     frame.meta['BUNIT'] = 'electron/Angstrom'
-    
-    #- Add scores to frame                                                               
+
+    #- Add scores to frame
     if not args.no_scores :
         compute_and_append_frame_scores(frame,suffix="RAW")
 
     mark_extraction = time.time()
-        
-    #- Write output                                                          
+
+    #- Write output
     io.write_frame(outbundle, frame)
-    
+
     if args.model is not None:
         fits.writeto(outmodel, results['modelimage'], header=frame.meta)
 

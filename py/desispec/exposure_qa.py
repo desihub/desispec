@@ -14,11 +14,11 @@ from pkg_resources import resource_filename
 
 from desiutil.log import get_logger
 
-from desispec.io import findfile,specprod_root,read_fibermap,read_xytraceset,read_stdstar_models,read_frame
+from desispec.io import findfile,specprod_root,read_fibermap,read_xytraceset,read_stdstar_models,read_frame,read_flux_calibration
 from desispec.maskbits import fibermask
 from desispec.interpolation import resample_flux
 from desispec.tsnr import tsnr2_to_efftime
-
+from desispec.preproc import get_amp_ids,parse_sec_keyword
 _qa_params = None
 def get_qa_params() :
     """
@@ -154,30 +154,30 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 frame_header = head
 
             readnoise_is_bad = False
-            for amp in ["A","B","C","D"] :
+
+            amp_ids = get_amp_ids(head)
+
+            for amp in amp_ids :
                 rdnoise=head['OBSRDN'+amp]
                 worst_rdnoise = max(worst_rdnoise,rdnoise)
                 worst_rdnoise_per_petal = max(worst_rdnoise_per_petal,rdnoise)
                 if rdnoise > max_rdnoise :
                     log.warning("readnoise is bad in camera {} amplifier {} : {}".format(camera,amp,rdnoise))
                     readnoise_is_bad = True
+
             petalqa_table["WORSTREADNOISE"][petal]=worst_rdnoise_per_petal
 
             if readnoise_is_bad :
-
-                rdnoise_left  = max(head['OBSRDNA'],head['OBSRDNC'])
-                rdnoise_right = max(head['OBSRDNB'],head['OBSRDND'])
-
                 log.warning("readnoise is bad in at least one amplifier, flag affected fibers")
                 psf_filename=findfile('psf',night,expid,camera,specprod_dir=specprod_dir)
                 tset = read_xytraceset(psf_filename)
-                twave=np.linspace(tset.wavemin,tset.wavemax,20)
-                xtrans=float(head['CCDSIZE'].split(',')[0])/2.
-                xfiber=tset.x_vs_wave(fiber=np.arange(tset.nspec),wavelength=twave)[:,0]
-                if rdnoise_left>max_rdnoise :
-                    fiberqa_table['QAFIBERSTATUS'][entries[xfiber<xtrans]] |= bad_rdnoise_mask
-                elif rdnoise_right>max_rdnoise :
-                    fiberqa_table['QAFIBERSTATUS'][entries[xfiber>=xtrans]] |= bad_rdnoise_mask
+                fibers = fiberqa_table['FIBER'][entries]%500 # in case the ordering has changed
+                x = tset.x_vs_wave(fiber=fibers,wavelength=(tset.wavemin+tset.wavemax)/2.)
+                for amp in amp_ids :
+                    if head['OBSRDN'+amp] > max_rdnoise :
+                        sec = parse_sec_keyword(head['CCDSEC'+amp])
+                        ii  = (x>=sec[1].start)&(x<sec[1].stop)
+                        fiberqa_table['QAFIBERSTATUS'][entries[ii]] |= bad_rdnoise_mask
 
         # masks
         ################
@@ -199,47 +199,82 @@ def compute_exposure_qa(night, expid, specprod_dir):
         ####################################################################
         stdstars_filename = findfile("stdstars",night,expid,spectrograph=spectro,specprod_dir=specprod_dir)
         if os.path.isfile(stdstars_filename) :
-            t = fitsio.read(stdstars_filename,'METADATA')
-            # SNR cut is same as in stdstars.py, this is redundant,
-            # but for clarity on the selection, I repeat the cuts here
-            # CHI2DOF and color cut are used in flux calibration
-            # generous color cut here.
-            good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)
-            if "MODEL_G-R" in t.dtype.names :
-                good &= (np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.3)
-            ngood=np.sum(good)
+
+            starfibers = fitsio.read(stdstars_filename,'FIBERS')
+
+            # New reductions have list of used standard stars in calibration files
+            camera=f"r{spectro}"
+            fluxcal_filename=findfile('fluxcalib',night,expid,camera,specprod_dir=specprod_dir)
+
+            if not os.path.isfile(fluxcal_filename) :
+                log.warning("no file {}".format(fluxcal_filename))
+                continue
+            fluxcal = read_flux_calibration(fluxcal_filename)
+
+            cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
+            if not os.path.isfile(cframe_filename) :
+                continue
+            cframe = read_frame(cframe_filename)
+
+            if fluxcal.stdstar_fibermap is not None :
+                log.info("Use the list of stars from the fluxcalibration file")
+                goodfibers  = fluxcal.stdstar_fibermap["FIBER"]
+                goodindices = []
+                for fiber in goodfibers :
+                    goodindices.append( np.where(starfibers==fiber)[0][0])
+            else :
+                log.info("Apply the same cuts as in compute_flux_calibration to get the list of stars")
+                t = fitsio.read(stdstars_filename,'METADATA')
+                # SNR cut is same as in stdstars.py, this is redundant,
+                # but for clarity on the selection, I repeat the cuts here
+                # CHI2DOF and color cut are used in flux calibration
+                # generous color cut here.
+                good=(t["CHI2DOF"]<2.)&(t["BLUE_SNR"]>=4.)
+                if "MODEL_G-R" in t.dtype.names :
+                    good &= (np.abs(t["MODEL_G-R"]-t["DATA_G-R"])<0.1) # 0.1 is the selection cut used in prod
+                goodindices = np.where(good)[0]
+                goodfibers = starfibers[goodindices]
+
+            ngood=goodfibers.size
             petalqa_table["NSTDSTAR"][petal]=ngood
 
             if ngood < qa_params["min_number_of_good_stdstars_per_petal"] :
                 log.warning("petal #{} has only {} good std stars for calibration".format(petal,ngood))
-                fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
-            else :
+                if ngood <= 1 :
+                    fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
+                    # else we will keep the data if the few stars we have give similar calibration
+            if ngood > 1 :
                 log.info("petal #{} has {} good std stars for calibration".format(petal,ngood))
 
                 # measure RMS
-                goodindices = np.where(good)[0]
                 modelwave = fitsio.read(stdstars_filename,'WAVELENGTH')
                 modelflux = fitsio.read(stdstars_filename,'FLUX')
                 modelflux = modelflux[goodindices]
 
-                starfibers = fitsio.read(stdstars_filename,'FIBERS')
-                goodfibers = starfibers[goodindices]%500
+                log.debug("good fibers = {}".format(goodfibers))
+                log.debug("star fibers = {}".format(starfibers))
+                log.debug("goodindices = {}".format(goodindices))
 
-                camera=f"r{spectro}"
-                cframe_filename=findfile('cframe',night,expid,camera,specprod_dir=specprod_dir)
-                if not os.path.isfile(cframe_filename) :
-                    continue
-                cframe = read_frame(cframe_filename)
-                frameflux=cframe.flux[goodfibers]
+
+
+
+                goodfibers_indices=goodfibers%500
                 scale=np.zeros(ngood)
                 wave=np.linspace(6000,7500,100) # coarse
                 for i in range(ngood) :
                     mflux=resample_flux(wave,modelwave,modelflux[i])
-                    dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers[i]],cframe.ivar[goodfibers[i]])
-                    scale[i] = np.sum(dflux*mflux)/np.sum(mflux**2)
-                calib_rms=np.sqrt(np.mean((scale-1)**2))
+                    dflux,ivar=resample_flux(wave,cframe.wave,cframe.flux[goodfibers_indices[i]],cframe.ivar[goodfibers_indices[i]])
+                    scale[i] = np.sum(ivar*dflux*mflux)/np.sum(ivar*mflux**2)
+                log.debug("scale={}".format(scale))
+                calib_rms=np.sqrt(np.mean((scale-1)**2))*np.sqrt(ngood/(ngood-1.))
                 petalqa_table["STARRMS"][petal]=calib_rms
-                if calib_rms>qa_params["max_rms_of_rflux_ratio_of_stdstars"] :
+
+                if ngood >= qa_params["min_number_of_good_stdstars_per_petal"] :
+                    max_rms = qa_params["max_rms_of_rflux_ratio_of_stdstars"]
+                else : # stricter requirement because only few stars
+                    max_rms = qa_params["max_rms_of_rflux_ratio_of_stdstars_if_few_stars"]
+
+                if calib_rms>max_rms :
                     log.warning("petal #{} has std stars calib rms={:3.2f}>{:3.2f}".format(petal,calib_rms,qa_params["max_rms_of_rflux_ratio_of_stdstars"]))
                     fiberqa_table['QAFIBERSTATUS'][entries] |= fibermask.mask("BADPETALSTDSTAR")
                 else :
@@ -310,7 +345,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
                 # calib value of central fibers, central wavelength
                 calib=fitsio.read(calib_filename,0)
                 nwave=calib.shape[1]
-                cal=np.median(calib[230:270,nwave//2-200:nwave//2+200])
+                # mean of half of the wavelength array to avoid dichroic regions
+                cal=np.mean(calib[:,nwave//4:nwave-nwave//4],axis=1)
+                # median over fibers because some fibers have large positioning offsets
+                cal=np.median(cal)
                 petalqa_table[band.upper()+"THRUFRAC"][petal]=cal
             else :
                 log.warning("missing {}".format(calib_filename))
@@ -353,6 +391,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
         fiberqa_table.meta["PMINEXPF"]=np.min(petal_tsnr2_frac[good_petals])
         fiberqa_table.meta["PMAXEXPF"]=np.max(petal_tsnr2_frac[good_petals])
         fiberqa_table.meta['EFFTIME']=np.mean(petalqa_table['EFFTIME_SPEC'][good_petals])
+    else:
+        fiberqa_table.meta["PMINEXPF"]=0.0
+        fiberqa_table.meta["PMAXEXPF"]=0.0
+        fiberqa_table.meta['EFFTIME']=0.0
 
     if frame_header is not None :
         # copy some keys from the frame header

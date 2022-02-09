@@ -295,7 +295,7 @@ class template_ensemble(object):
         self.smooth = smooth
 
         ##
-        smoothing = np.ceil(smooth / self.wdelta).astype(np.int)
+        smoothing = np.ceil(smooth / self.wdelta).astype(int)
 
         log.info('Applying {:.3f} AA smoothing ({:d} pixels)'.format(smooth, smoothing))
         dflux = flux.copy()
@@ -505,29 +505,27 @@ def fb_rdnoise(fibers, frame, tset):
                  units as OBSRDNA, e.g. ang per pix.
     '''
 
-    ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(np.float)
+    ccdsizes = np.array(frame.meta['CCDSIZE'].split(',')).astype(float)
 
     xtrans = ccdsizes[0] / 2.
     ytrans = ccdsizes[1] / 2.
 
     rdnoise = np.zeros_like(frame.flux)
 
+    amp_ids = desispec.preproc.get_amp_ids(frame.meta)
+    amp_sec     = { amp : desispec.preproc.parse_sec_keyword(frame.meta['CCDSEC'+amp]) for amp in amp_ids }
+    amp_rdnoise = { amp : frame.meta['OBSRDN'+amp] for amp in amp_ids }
+
     twave=np.linspace(tset.wavemin,tset.wavemax,20) # precision better than 0.3 pixel with 20 nodes
     for ifiber in fibers:
-        #wave_lim = tset.wave_vs_y(fiber=ifiber, y=ytrans) # this is slow because requires inversion
-        ty = tset.y_vs_wave(fiber=ifiber, wavelength=twave)
-        wave_lim = np.interp(ytrans,ty,twave)
-        x = tset.x_vs_wave(fiber=ifiber, wavelength=wave_lim)
+        x = tset.x_vs_wave(fiber=ifiber, wavelength=frame.wave)
+        y = tset.y_vs_wave(fiber=ifiber, wavelength=frame.wave)
+        for amp in amp_ids :
+            sec = amp_sec[amp]
+            ii=(x>=sec[1].start)&(x<sec[1].stop)&(y>=sec[0].start)&(y<sec[0].stop)
+            if np.sum(ii)>0 :
+                rdnoise[ifiber, ii] = amp_rdnoise[amp]
 
-        # A | C.
-        if x < xtrans:
-            rdnoise[ifiber, frame.wave <  wave_lim] = frame.meta['OBSRDNA']
-            rdnoise[ifiber, frame.wave >= wave_lim] = frame.meta['OBSRDNC']
-
-        # B | D
-        else:
-            rdnoise[ifiber, frame.wave <  wave_lim] = frame.meta['OBSRDNB']
-            rdnoise[ifiber, frame.wave >= wave_lim] = frame.meta['OBSRDND']
     return rdnoise
 
 def surveyspeed_fiberfrac(tracer, exposure_seeing_fwhm):
@@ -649,7 +647,7 @@ def gen_mask(frame, skymodel, hw=5.):
     """
     log = get_logger()
 
-    maskfactor = np.ones_like(frame.mask, dtype=np.float)
+    maskfactor = np.ones_like(frame.mask, dtype=float)
     maskfactor[frame.mask > 0] = 0.0
 
     # https://github.com/desihub/desispec/blob/294cfb66428aa8be3797fd046adbd0a2267c4409/py/desispec/sky.py#L1267
@@ -988,13 +986,13 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     etc_fiberfracs={}
 
     etcpath=findfile('etc', night=night, expid=expid)
-        
+
     ##  https://github.com/desihub/desietc/blob/main/header.md
-    if 'ETCFRACP' in frame.meta:            
+    if 'ETCFRACP' in frame.meta:
         ## Transparency-weighted average of FFRAC over the exposure calculated for a PSF source profile. Calculated as (ETCTHRUP/ETCTRANS)*0.56198 where the constant is the nominal PSF FFRAC.
-        ## Note: unnormalized equivalent to ETCTHRUP, etc. 
+        ## Note: unnormalized equivalent to ETCTHRUP, etc.
         etc_fiberfracs['psf'] = frame.meta['ETCFRACP']
-            
+
         ## PSF -> ELG
         etc_fiberfracs['elg'] = frame.meta['ETCFRACE']
 
@@ -1002,7 +1000,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
         etc_fiberfracs['bgs'] = frame.meta['ETCFRACB']
 
         log.info('Retrieved etc data from frame hdr.')
-        
+
     elif os.path.exists(etcpath):
         with open(etcpath) as f:
             etcdata = json.load(f)
@@ -1012,7 +1010,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
                 etc_fiberfracs[tracer]=etcdata['expinfo']['ffrac_{}'.format(tracer)]
 
             log.info('Retrieved etc data from {}'.format(etcpath))
-                
+
         except:
             log.warning('Failed to find etc expinfo/ffrac for all tracers.')
 
@@ -1083,7 +1081,7 @@ def calc_tsnr2(frame, fiberflat, skymodel, fluxcalib, alpha_only=False, include_
     if alpha_only:
         return {}, alpha
 
-    maskfactor = np.ones_like(frame.mask, dtype=np.float)
+    maskfactor = np.ones_like(frame.mask, dtype=float)
     maskfactor[frame.mask > 0] = 0.0
     maskfactor *= (frame.ivar > 0.0)
     tsnrs = {}

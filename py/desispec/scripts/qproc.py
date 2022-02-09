@@ -106,7 +106,7 @@ def main(args=None):
             print("ERROR: Need to specify camera to open a raw fits image (with all cameras in different fits HDUs)")
             print("Try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_qproc --help' for more options")
             sys.exit(12)
-        image = read_raw(args.image, args.camera,fill_header=[1,])
+        image = read_raw(args.image, args.camera, args.fibermap, fill_header=[1,])
 
     
     if args.auto :
@@ -172,6 +172,20 @@ def main(args=None):
             fibermap = None
     else :
         fibermap = None
+
+    # select fibermap for one spectrograph
+    if fibermap is not None:
+        try:
+            if args.camera is not None:
+                camera = args.camera
+            else:
+                camera = image.meta['CAMERA']
+            petal = int(camera[-1])
+            fibermap = fibermap[fibermap['PETAL_LOC'] == petal]
+
+        except Exception as e:
+            log.error(e)
+
 
     if "OBSTYPE" in image.meta :
         obstype = image.meta["OBSTYPE"].upper()

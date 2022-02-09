@@ -10,7 +10,7 @@ from desiutil.log import get_logger
 import desispec.io
 from desispec.workflow.exptable import get_exposure_table_pathname
 from desispec.workflow import batch
-
+from desispec.util import parse_int_args
 
 def parse(options=None):
     import argparse
@@ -19,6 +19,8 @@ def parse(options=None):
     p.add_argument("-n", "--night", type=int, nargs='+', help="YEARMMDD nights")
     p.add_argument("-t", "--tileid", type=int, help="Tile ID")
     p.add_argument("-e", "--expid", type=int, nargs='+', help="exposure IDs")
+    p.add_argument("-s", "--spectrographs", type=str,
+            help="spectrographs to include, e.g. 0-4,9; includes final number in range")
     p.add_argument("-g", "--group", type=str, required=True,
                    help="cumulative, pernight, perexp, or a custom name")
     p.add_argument("--run_zmtl", action="store_true",
@@ -217,7 +219,7 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
             spectro_string=spectro_string, suffix=suffix,
             frame_glob=frame_glob,
             queue=queue, system_name=system_name,
-            onetile=True, tileid=tileid, night=night,
+            onetile=True, tileid=tileid, night=night, expid=expid,
             run_zmtl=run_zmtl, noafterburners=noafterburners)
 
     err = 0
@@ -244,7 +246,7 @@ def write_redshift_script(batchscript, outdir,
         jobname, num_nodes,
         group, spectro_string, suffix, frame_glob,
         queue='regular', system_name=None,
-        onetile=True, tileid=None, night=None,
+        onetile=True, tileid=None, night=None, expid=None,
         run_zmtl=False, noafterburners=False,
         redrock_nodes=1, redrock_cores_per_rank=1,
         ):
@@ -266,7 +268,8 @@ def write_redshift_script(batchscript, outdir,
         system_name (str): e.g. cori-haswell, cori-knl, perlmutter-gpu
         onetile (bool): coadd assuming input is for a single tile?
         tileid (int): tileid to process; only needed for group='cumulative'
-        night (int): process through night YEARMMDD; only needed for group='cumulative'
+        night (int): process through or on night YEARMMDD; for group='cumulative' and 'pernight'
+        expid (int): expid for group='perexp'
         run_zmtl (bool): if True, also run zmtl
         noafterburners (bool): if True, skip QSO afterburners
         redrock_nodes (int): number of nodes for each redrock call
@@ -291,21 +294,32 @@ def write_redshift_script(batchscript, outdir,
 
     #- tileid and night are required for cumulative redshifts but not others
     #- (frameglob captures the info for other cases)
-    if group == 'cumulative':
+    if group in ('cumulative', 'pernight'):
         err = False
         if tileid is None:
-            log.error("group='cumulative' requires tileid to be set")
+            log.error(f"group='{group}' requires tileid to be set")
             err = True
         if night is None:
-            log.error("group='cumulative' requires night to be set")
+            log.error(f"group='{group}' requires night to be set")
             err = True
         if err:
-            raise ValueError("group='cumulative' missing tileid and/or night")
+            raise ValueError(f"group='{group}' missing tileid and/or night")
 
     if onetile:
         onetileopt = '--onetile'
     else:
         onetileopt = ''
+
+    #- header keywords to record spectra grouping
+    headeropt = f'--header SPGRP={group}'
+    if group in ('cumulative', 'pernight'):
+        headeropt += f' SPGRPVAL={night} NIGHT={night}'
+    elif group == 'perexp':
+        headeropt += f' SPGRPVAL={expid} NIGHT={night} EXPID={expid}'
+    else:
+        headeropt += f' SPGRPVAL=None'
+
+    headeropt += f' TILEID={tileid} SPECTRO=$SPECTRO PETAL=$SPECTRO'
 
     #- system specific options, e.g. "--constraint=haswell"
     batch_opts = list()
@@ -324,11 +338,16 @@ def write_redshift_script(batchscript, outdir,
 
     logdir = os.path.join(outdir, 'logs')
 
+    if system_name=='perlmutter-gpu':
+        account='desi_g'
+    else:
+        account='desi'
+
     with open(batchscript, 'w') as fx:
         fx.write(f"""#!/bin/bash
 
 #SBATCH -N {num_nodes}
-#SBATCH --account desi
+#SBATCH --account {account}
 #SBATCH --qos {queue}
 #SBATCH --job-name {jobname}
 #SBATCH --output {batchlog}
@@ -366,7 +385,7 @@ for SPECTRO in {spectro_string}; do
         fi
         if [ $NUM_CFRAMES -gt 0 ]; then
             echo Grouping $NUM_CFRAMES cframes into $(basename $spectra), see $splog
-            cmd="srun -N 1 -n 1 -c {threads_per_node} desi_group_spectra --inframes $CFRAMES --outfile $spectra"
+            cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_group_spectra --inframes $CFRAMES --outfile $spectra {headeropt}"
             echo RUNNING $cmd &> $splog
             $cmd &>> $splog &
             sleep 0.5
@@ -391,7 +410,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $coadd) already exists, skipping coadd
     elif [ -f $spectra ]; then
         echo Coadding $(basename $spectra) into $(basename $coadd), see $colog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_coadd_spectra {onetileopt} --nproc 16 -i $spectra -o $coadd"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_coadd_spectra {onetileopt} --nproc 16 -i $spectra -o $coadd"
         echo RUNNING $cmd &> $colog
         $cmd &>> $colog &
         sleep 0.5
@@ -418,7 +437,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $redrock) already exists, skipping redshifts
     elif [ -f $coadd ]; then
         echo Running redrock on $(basename $coadd), see $rrlog
-        cmd="srun -N {redrock_nodes} -n {cores_per_node*redrock_nodes//redrock_cores_per_rank} -c {threads_per_core*redrock_cores_per_rank} rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
+        cmd="srun -N {redrock_nodes} -n {cores_per_node*redrock_nodes//redrock_cores_per_rank} -c {threads_per_core*redrock_cores_per_rank} --cpu-bind=cores rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 0.5
@@ -430,7 +449,7 @@ echo Waiting for redrock to finish at $(date)
 wait
 """)
 
-        if group == 'cumulative':
+        if group in ('pernight', 'cumulative'):
             fx.write(f"""
 echo
 tileqa={outdir}/tile-qa-{suffix}.fits
@@ -439,7 +458,7 @@ if [ -f $tileqa ]; then
 else
     echo --- Running desi_tile_qa
     tile_qa_log={logdir}/tile-qa-{tileid}-thru{night}.log
-    desi_tile_qa -n {night} -t {tileid} &> $tile_qa_log
+    desi_tile_qa -g {group} -n {night} -t {tileid} &> $tile_qa_log
 fi
 """)
 
@@ -486,7 +505,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $qsomgii) already exists, skipping QSO MgII afterburner
     elif [ -f $redrock ]; then
         echo Running QSO MgII afterburner, see $qsomgiilog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_mgii_afterburner --coadd $coadd --redrock $redrock --output $qsomgii --target_selection qso --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_qso_mgii_afterburner --coadd $coadd --redrock $redrock --output $qsomgii --target_selection all --save_target all"
         echo RUNNING $cmd &> $qsomgiilog
         $cmd &>> $qsomgiilog &
         sleep 0.5
@@ -499,7 +518,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $qsoqn) already exists, skipping QSO QuasarNet afterburner
     elif [ -f $redrock ]; then
         echo Running QSO QuasarNet afterburner, see $qsoqnlog
-        cmd="srun -N 1 -n 1 -c {threads_per_node} desi_qso_qn_afterburner --coadd $coadd --redrock $redrock --output $qsoqn --target_selection qso --save_target all"
+        cmd="srun -N 1 -n 1 -c {threads_per_node} --cpu-bind=none desi_qso_qn_afterburner --coadd $coadd --redrock $redrock --output $qsoqn --target_selection all --save_target all"
         echo RUNNING $cmd &> $qsoqnlog
         $cmd &>> $qsoqnlog &
         sleep 0.5
@@ -577,6 +596,7 @@ def _read_minimal_exptables(nights=None):
 
 
 def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, explist=None,
+                                   spectrographs=None,
                                    run_zmtl=False, noafterburners=False,
                                    batch_queue='realtime', batch_reservation=None,
                                    batch_dependency=None, system_name=None, nosubmit=False):
@@ -590,6 +610,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         tileid (int): Tile ID.
         expid (int, or list or np.array of int's): Exposure IDs.
         explist (str): File with columns TILE NIGHT EXPID to use
+        spectrographs (str or list of int): spectrographs to include
         run_zmtl (bool): If True, also run make_zmtl_files
         noafterburners (bool): If True, do not run QSO afterburners
         batch_queue (str): Batch queue name. Default is 'realtime'.
@@ -605,7 +626,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
                                    that returned a batcherr.
     """
     log = get_logger()
-    
+
     # - If --tileid, --night, and --expid are all given, create exptable
     if ((tileid is not None) and (night is not None) and
             (len(night) == 1) and (expid is not None)):
@@ -614,19 +635,19 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         exptable['EXPID'] = expid
         exptable['NIGHT'] = night[0]
         exptable['TILEID'] = tileid
-    
+
         if explist is not None:
             log.warning('Ignoring --explist, using --tileid --night --expid')
-    
+
     # - otherwise load exposure tables for those nights
     elif explist is None:
         if night is not None:
             log.info(f'Loading production exposure tables for nights {night}')
         else:
             log.info(f'Loading production exposure tables for all nights')
-    
+
         exptable = _read_minimal_exptables(night)
-    
+
     else:
         log.info(f'Loading exposure list from {explist}')
         if explist.endswith('.fits'):
@@ -637,11 +658,11 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
             exptable = Table.read(explist, format='ascii.ecsv')
         else:
             exptable = Table.read(explist, format='ascii')
-    
+
         if night is not None:
             keep = np.in1d(exptable['NIGHT'], night)
             exptable = exptable[keep]
-    
+
     # - Filter exposure tables by exposure IDs or by tileid
     # - Note: If exptable was created from --expid --night --tileid these should
     # - have no effect, but are left in for code flow simplicity
@@ -650,27 +671,33 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         exptable = exptable[keep]
         #expids = np.array(exptable['EXPID'])
         tileids = np.unique(np.array(exptable['TILEID']))
-    
+
         # - if provided, tileid should be redundant with the tiles in those exps
         if tileid is not None:
             if not np.all(exptable['TILEID'] == tileid):
                 log.critical(f'Exposure TILEIDs={tileids} != --tileid={tileid}')
                 sys.exit(1)
-    
+
     elif tileid is not None:
         keep = (exptable['TILEID'] == tileid)
         exptable = exptable[keep]
         #expids = np.array(exptable['EXPID'])
         tileids = np.array([tileid, ])
-    
+
     else:
         tileids = np.unique(np.array(exptable['TILEID']))
-    
+
     # - anything left?
     if len(exptable) == 0:
         log.critical(f'No exposures left after filtering by tileid/night/expid')
         sys.exit(1)
-    
+
+    if spectrographs is not None:
+        if isinstance(spectrographs, str):
+            spectrographs = parse_int_args(spectrographs, include_end=True)
+    else:
+        spectrographs = list(range(10))
+
     # - If cumulative, find all prior exposures that also observed these tiles
     # - NOTE: depending upon options, this might re-read all the exptables again
     # - NOTE: this may not scale well several years into the survey
@@ -696,6 +723,7 @@ def generate_tile_redshift_scripts(group, night=None, tileid=None, expid=None, e
         log.info(f'Tile {tileid} nights={nights} expids={expids}')
         submit = (not nosubmit)
         opts = dict(
+                spectrographs=spectrographs,
                 submit=submit,
                 run_zmtl=run_zmtl,
                 noafterburners=noafterburners,

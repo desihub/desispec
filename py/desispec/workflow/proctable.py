@@ -82,7 +82,7 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
     coldeflt2 = [ 'a0123456789'    , 0          ,  -99   , ''       , 'unknown', -99         ]
 
     colnames2 += [ 'SUBMIT_DATE', 'STATUS', 'SCRIPTNAME']
-    coltypes2 += [  int         , 'S10'   , 'S40'       ]
+    coltypes2 += [  int         , 'S14'   , 'S40'       ]
     coldeflt2 += [ -99          , 'U'     , ''   ]
 
     colnames2 += ['INT_DEP_IDS'                  , 'LATEST_DEP_QID'               , 'ALL_QIDS'                     ]
@@ -108,7 +108,7 @@ def get_processing_table_column_defs(return_default_values=False, overlap_only=F
         else:
             return colnames, coldtypes
 
-def default_exptypes_for_proctable():
+def default_obstypes_for_proctable():
     """
     Defines the exposure types to be recognized by the workflow and saved in the processing table by default.
 
@@ -116,7 +116,7 @@ def default_exptypes_for_proctable():
         list. A list of default obstypes to be included in a processing table.
     """
     ## Define the science types to be included in the exposure table (case insensitive)
-    return ['arc','flat','twilight','science','sci','dither']
+    return ['bias', 'dark', 'arc', 'flat', 'science', 'twilight', 'sci', 'dither']
 
 def get_processing_table_name(specprod=None, prodmod=None, extension='csv'):
     """
@@ -345,6 +345,28 @@ def erow_to_prow(erow):#, colnames=None, coldtypes=None, coldefaults=None, joins
         prow['PROCCAMWORD'] = difference_camwords(prow['PROCCAMWORD'],newbadcamword)
         prow['BADAMPS'] = ''
 
+    return prow
+
+def default_prow():
+    """
+    Creates a processing table row. The columns are filled with default values.
+
+    Args:
+        None
+
+    Returns:
+        prow, dict. The output processing table row.
+    """
+    ## Define the column names for the exposure table and their respective datatypes
+    #if colnames is None:
+    colnames, coldtypes, coldefaults \
+        = get_processing_table_column_defs(return_default_values=True)
+    colnames = np.array(colnames,dtype=object)
+    coldefaults = np.array(coldefaults,dtype=object)
+
+    prow = dict()
+    for nam, defval in zip(colnames, coldefaults):
+        prow[nam] = defval
     return prow
 
 def table_row_to_dict(table_row):

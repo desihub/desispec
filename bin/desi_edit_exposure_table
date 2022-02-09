@@ -19,11 +19,16 @@ def get_parser():
     parser.add_argument("-c", "--colname", type=str, help="Name of the column you want to edit.")
     parser.add_argument("-v", "--value", type=str, help="The value you want to place in the given 'colname' column. Can "+
                                                     "only be a single string, float, int, etc. Per script call.")
+    parser.add_argument("--include-comment", type=str, default='', help="Add a supplied string to the COMMENTS column"+
+                                                                        " after making the column change.")
     parser.add_argument("-p", "--tablepath", type=str, default='none', help="Path to the table. If not specified, it "+
                                                                             "will look in default location.")
-    parser.add_argument("--append-string", action="store_true", help="Append the given value to existing string")
-    parser.add_argument("--overwrite-value", action="store_true", help="Change column value even if value isn't the "+
-                                                                       "default value.")
+    parser.add_argument("--append-string", action="store_true", help="Append the given value to existing string. "+
+                                                                     "Understands camwords and properly combine them.")
+    parser.add_argument("--overwrite-value", action="store_true", help="Change column value even if value is already "+
+                                                                       "user-defined. If column is array type, this "+
+                                                                       "will replace the existing array "+
+                                                                       "with a length 1 array containing the value.")
     parser.add_argument("--read-user-version", action="store_true", help="Read user version of the exposure tables "+
                                                "if it exists. This is for debug tweaking a table to suitability "+
                                                "before overwriting the original. Appends username to filename.")
@@ -33,7 +38,8 @@ def get_parser():
     parser.add_argument("--use-spec-prod", type=str, default='true', help="Look for exposure table under SPECPROD location "+
                                                                      "rather than the repo location.")
     parser.add_argument("--overwrite-file", type=str, default='true', help="overwrite existing exposure tables")
-    #parser.add_argument("-j", "--joinsymb", type=str, help="The join symbol used for lists isntead of a comma.")
+    parser.add_argument("-j", "--joinsymb", type=str, default=',', help="The join symbol used for string versions " +
+                                                           "of lists (default is comma).")
 
     return parser
 

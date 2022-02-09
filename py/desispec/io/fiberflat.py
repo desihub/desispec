@@ -10,6 +10,7 @@ from __future__ import absolute_import
 # The line above will help with 2to3 support.
 import os
 import time
+import numpy as np
 from astropy.io import fits
 
 from desiutil.io import encode_table

@@ -12,11 +12,13 @@ This script is used to do a visual validation of the tiles based on the automate
 import os,sys
 import argparse
 import glob
+from getpass import getuser
 import numpy as np
 import multiprocessing
 from astropy.table import Table
 import fitsio
 import subprocess
+import datetime
 
 from desiutil.log import get_logger
 from desispec.io import specprod_root, findfile
@@ -34,16 +36,23 @@ def parse(options=None):
                         help = 'Comma, or colon separated list of nights to process. ex: 12,14 or 12:23')
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
-    parser.add_argument('-i','--infile', type = str, default = None, required=False,
-                        help = 'Specific input tile file, default is proddir/tiles.csv')
+    parser.add_argument('-i','--infile', type = str, default = 'tiles-specstatus.ecsv', required=False,
+                        help = 'Specific input tile file, default is tiles-specstatus.ecsv')
     parser.add_argument('-o','--outfile', type = str, default = None, required=False,
                         help = 'Output tile file, default is same as input')
-    parser.add_argument('-u','--user', type = str, default = None, required=True,
+    parser.add_argument('-u','--user', type = str, default = getuser(), required=False,
                         help = 'your name or initials')
     parser.add_argument('--viewer', type = str, default = "eog", required=False,
                         help = 'image viewer (default is eog)')
     parser.add_argument('--new', action = 'store_true', required=False,
-                        help = 'only inspect new tiles')
+                        help = 'only inspect new tiles (equivalent to --qastatus none)')
+    parser.add_argument('--qastatus', type=str, default=None, required=False,
+                        help = 'only inspect tiles with this QA status (e.g. "unsure")')
+    parser.add_argument('--survey', type = str, default = 'main', required=False,
+                        help = 'look only at tiles from this survey')
+    parser.add_argument('--program', type=str, nargs='+', required=False,
+                        default=['dark', 'bright'],
+                        help='look only at tiles from these programs')
 
     args = None
     if options is None:
@@ -65,7 +74,7 @@ def input2(message):
 blank_responses = {'', '(no entry)'}
 viewer=None
 
-def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
+def yesnohelp(message,_pass=True, _skip=True, _help=True):
     '''Wrapper for user input which cleans up human-entered values and returns
     a string of exactly 'yes', 'no', or 'help'. Also can give user option to
     exit the program.
@@ -73,29 +82,58 @@ def yesnohelp(message,_save=True,_exit=True,_pass=True,_help=True):
     Boolean args allow you to turn off options for the user.
     '''
     suffix_parts = ['y','n']
-    if _save: suffix_parts.append('save')
-    if _exit: suffix_parts.append('exit')
-    if _pass: suffix_parts.append('pass')
+    if _pass: suffix_parts.append('unsure')
     if _help: suffix_parts.append('help')
+    if _skip: suffix_parts.append('skip')
     suffix = '/'.join(suffix_parts)
     answer =  input2(f'{message} ({suffix})')
     if _help and answer.lower() in {'h', 'help', 'doc', 'man'}:
         return 'help'
     if answer.lower() in {'n', 'no', 'false'}:
         return 'no'
-    if _pass and answer.lower() in {'pass'}:
+    if _pass and answer.lower() in {'u', 'unsure'}:
         return 'pass'
-    if _save and answer.lower() in {'save'}:
-        return 'save'
     if answer.lower() in {'y', 'yes', 'true'}:
         return 'yes'
-    if _exit and answer.lower() in {'exit'}:
-        res=yesnohelp("Are you sure you want to exit without saving?",_pass=False,_save=False,_exit=False,_help=False)
-        if res=="yes" :
-            print('Exiting at user request.')
-            if viewer is not None: viewer.kill()
-            sys.exit(0)
+    if _skip and answer.lower() in {'s', 'skip'}:
+        return 'skip'
     return yesnohelp(message)
+
+
+def print_summary(new, orig):
+    """Print a summary of the status of tile VI.
+
+    Arguments are the new and original tile tables."""
+    import datetime
+    twoweeksago = datetime.date.today() + datetime.timedelta(days=-14)
+    twoweeksagoint = (twoweeksago.year*10000 +
+                      twoweeksago.month*100 +
+                      twoweeksago.day)
+    newtiles = (new['QA'] != 'none') & (orig['QA'] == 'none')
+    oldtiles = ~newtiles & (new['LASTNIGHT'] >= twoweeksagoint)
+    veryoldtiles = ~newtiles & ~oldtiles
+    print('Tile status')
+    rows = []
+    classes = {'new': newtiles, 'old': oldtiles, 'very old': veryoldtiles}
+    programs = {'dark': new['FAFLAVOR'] == 'maindark',
+                'bright': new['FAFLAVOR'] == 'mainbright',
+                'other': ((new['SURVEY'] == 'main') &
+                          (~np.isin(new['FAPRGRM'], ['dark', 'bright'])))}
+    for class0 in classes:
+        for program0 in programs:
+            m = classes[class0] & programs[program0]
+            rows.append((
+                class0 + ' ' + program0,
+                np.sum((new['QA'] == 'good') & m),
+                np.sum((new['QA'] == 'unsure') & m),
+                np.sum((new['QA'] == 'bad') & m),
+            ))
+
+    print('%20s %8s %8s %8s' % ('type', 'good', 'unsure', 'bad'))
+    for row in rows:
+        print('%20s %8d %8d %8d' % row)
+
+
 
 def main():
     global viewer
@@ -103,6 +141,10 @@ def main():
     log = get_logger()
 
     args=parse()
+
+    if args.new and args.qastatus is not None:
+        log.error('Specify --new or --qastatus QA but not both')
+        sys.exit(1)
 
     if args.prod is None:
         args.prod = specprod_root()
@@ -113,8 +155,6 @@ def main():
     log.info('prod    = {}'.format(args.prod))
     log.info('qa dir  = {}'.format(args.qa_dir))
 
-    if args.infile is None :
-        args.infile = os.path.join(args.prod,"tiles.csv")
     if args.outfile is None :
         args.outfile = args.infile
 
@@ -132,6 +172,7 @@ def main():
         print("Add or change --prod or --infile ... ?")
         sys.exit(12)
     tiles_table = Table.read(args.infile)
+    tiles_table_orig = tiles_table.copy()
 
     if not "QA" in tiles_table.dtype.names :
         tiles_table["QA"]=np.array(np.repeat("none",len(tiles_table)),dtype='<U20')
@@ -141,9 +182,19 @@ def main():
         tiles_table["OVERRIDE"]=np.zeros(len(tiles_table),dtype=int)
 
     log.info("Found {} tiles in {}".format(len(tiles_table),args.infile))
-    selection=(tiles_table["ZDONE"]=="false")&(tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))&(tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad")
+    selection = (tiles_table["ZDONE"]=="false")
+    selection &= (tiles_table["EFFTIME_SPEC"]>=(tiles_table["GOALTIME"]*tiles_table["MINTFRAC"]))
+    selection &= ((tiles_table["QA"]!="good")&(tiles_table["QA"]!="bad") |
+                  (tiles_table["QA"]=="bad")&(tiles_table["LASTNIGHT"]>tiles_table["QANIGHT"]))
     if args.new :
         selection &= (tiles_table["QA"]=="none")
+    if args.survey is not None :
+        selection &= (tiles_table["SURVEY"]==args.survey)
+    if args.program is not None:
+        selection &= np.isin([x.lower() for x in tiles_table['FAPRGRM']],
+                             [x.lower() for x in args.program])
+    if args.qastatus is not None:
+        selection &= (tiles_table["QA"]==args.qastatus)
 
     log.info("Includes {} tiles with ZDONE=false but EFFTIME_SPEC>=GOALTIME*MINTFRAC".format(np.sum(selection)))
 
@@ -170,14 +221,14 @@ def main():
         log.info("Inspecting TILE={} NIGHT={} ...".format(tileid,night))
 
         # find qa plot ...
-        qaplot_filename = findfile("tileqapng",night=night,tile=tileid,specprod_dir=args.qa_dir)
+        qaplot_filename = findfile("tileqapng",night=night,tile=tileid,specprod_dir=args.qa_dir,groupname="cumulative")
         if not os.path.isfile(qaplot_filename) :
             log.error("Missing {}, did you run desi_tile_qa?".format(qaplot_filename))
             continue
 
         software_answer = None
         # find qa fits ...
-        qafits_filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.qa_dir)
+        qafits_filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.qa_dir,groupname="cumulative")
         if os.path.isfile(qaplot_filename) :
             qahead = fitsio.read_header(qafits_filename,"FIBERQA")
             if "VALID" in qahead :
@@ -205,40 +256,40 @@ def main():
             if res=="help" :
                 print("y: yes, this tile is valid.")
                 print("n: no, it's bad and we should discard one or several exposures or fix the processing.")
-                print("pass: skip this one, because unsure.")
-                print("exit: exit without saving anything in this session.")
-                print("save: save output file {}".format(args.outfile))
-            elif res=="save" :
-                tiles_table.write(args.outfile,overwrite=True)
-                print("wrote",args.outfile)
+                print("skip: skip this one; just show the image and move on.")
+                print("unsure: mark this one as unsure.")
             elif res=="yes" :
-                tiles_table["ZDONE"][index]="true"
                 tiles_table["QA"][index]="good"
                 tiles_table["USER"][index]=args.user
+                tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
                 if software_answer is not None :
                     if software_answer is False :
                         tiles_table["OVERRIDE"][index]=1
                         print("Your have overridden the automated validation.")
+                tiles_table.write(args.outfile,overwrite=True)
                 break
             elif res=="no" :
                 tiles_table["QA"][index]="bad"
                 tiles_table["USER"][index]=args.user
+                tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
                 if software_answer is not None :
                     if software_answer is True :
                         tiles_table["OVERRIDE"][index]=1
                         print("Your have overridden the automated validation.")
+                tiles_table.write(args.outfile,overwrite=True)
                 break
             elif res=="pass" :
                 tiles_table["QA"][index]="unsure"
                 tiles_table["USER"][index]=args.user
+                tiles_table["QANIGHT"][index]=tiles_table["LASTNIGHT"][index]
+                tiles_table.write(args.outfile,overwrite=True)
+                break
+            elif res=="skip" :
                 break
 
         viewer.kill()
         viewer=None
-    res=yesnohelp("all done, save result in {}?".format(args.outfile),_save=False,_exit=False,_pass=False)
-    if res == "yes" :
-        tiles_table.write(args.outfile,overwrite=True)
-        print("wrote",args.outfile)
+    print_summary(tiles_table, tiles_table_orig)
 
 
 if __name__ == '__main__':

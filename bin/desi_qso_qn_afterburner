@@ -10,8 +10,12 @@ import fitsio
 import numpy as np
 import pandas as pd
 
-from desitarget.targetmask import desi_mask
 from desitarget.targets import main_cmx_or_sv
+from desitarget.targetmask import desi_mask
+from desitarget.sv3.sv3_targetmask import desi_mask as sv3_mask
+from desitarget.sv2.sv2_targetmask import desi_mask as sv2_mask
+from desitarget.sv1.sv1_targetmask import desi_mask as sv1_mask
+from desitarget.cmx.cmx_targetmask import cmx_mask
 
 from desiutil.log import get_logger
 
@@ -46,8 +50,8 @@ def collect_argparser():
 
     parser.add_argument("--target_selection", type=str, required=False, default="qso_targets",
                         help="on which sample the QN is performed: " +
-                             "qso_targets (QSO targets)" +
-                             " / all_targets (All targets in the coadd file)")
+                             "qso_targets (QSO targets) -- qso (works also)" +
+                             " / all_targets (All targets in the coadd file) -- all (works also)")
     parser.add_argument("--save_target", type=str, required=False, default="restricted",
                         help="which objects will be saved in the output files:" +
                              "restricted (objects which are identify as QSO by QN and where we have a new run of RR)" +
@@ -63,12 +67,12 @@ def collect_argparser():
     # for RR
     parser.add_argument("--template", type=str, required=False, default=qso_template_filename,
                         help="give the RR template for the new RR run, by default:redrock_qso_template")
-    parser.add_argument("--filename_priors", type=str, required=False, default=f'priors-{pid}.fits',
-                        help="filename for the RR prior file, default priors-PID.fits")
-    parser.add_argument("--filename_output_rerun_RR", type=str, required=False, default=f"rrdetails-{pid}.h5",
-                        help="filename for the output of the new run of RR, by default:rrdetails-PID.h5")
-    parser.add_argument("--filename_redrock_rerun_RR", type=str, required=False, default=f"redrock-{pid}.fits",
-                        help="filename for the redrock file of the new run of RR, by default:redrock-PID.fits")
+    parser.add_argument("--filename_priors", type=str, required=False, default=None,
+                        help="filename for the RR prior file, by default use the directory of coadd file")
+    parser.add_argument("--filename_output_rerun_RR", type=str, required=False, default=None,
+                        help="filename for the output of the new run of RR, by default use the directory of coadd file")
+    parser.add_argument("--filename_redrock_rerun_RR", type=str, required=False, default=None,
+                        help="filename for the redrock file of the new run of RR, by default use the directory of coadd file")
     parser.add_argument("--delete_RR_output", type=str, required=False, default='True',
                         help="delete RR outputs: True or False, they are useless since everything usefull are saved in output, by defaut:True")
 
@@ -302,7 +306,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     Returns:
         None
     """
-    # Ok we cannot use dataframe.to_records() since coeffs/c_lines are saved in a list form and cannot be easily converted.
+    # Ok we cannot use dataframe.to_records() since coeffs are saved in a list form and cannot be easily converted.
     data = np.zeros(dataframe.shape[0], dtype=[('TARGETID', 'i8'), ('RA','f8'), ('DEC','f8'), ('Z_NEW','f8'), ('ZERR_NEW', 'f4'), (DESI_TARGET, 'i8'),
                                                ('COEFFS', ('f4', 10)), ('SPECTYPE', 'U10'), ('Z_RR', 'f4'), ('Z_QN', 'f4'), ('IS_QSO_QN_NEW_RR', '?'),
                                                ('C_LYA', 'f4'), ('C_CIV', 'f4'), ('C_CIII', 'f4'), ('C_MgII', 'f4'), ('C_Hbeta', 'f4'), ('C_Halpha', 'f4'),
@@ -336,7 +340,7 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
     data['Z_Halpha'] = np.array([dataframe['Z_LINES'][i][5] for i in range(dataframe.shape[0])])
 
     fits = fitsio.FITS(filename, 'rw', clobber=clobber)
-    fits.write(data, extname='QN+RR')
+    fits.write(data, extname='QN_RR')
     if clobber:
         log.info(f'OVERWRITE the file : {filename}')
     else:
@@ -347,7 +351,6 @@ def save_dataframe_to_fits(dataframe, filename, DESI_TARGET, clobber=True):
 
 
 if __name__ == "__main__":
-
     start = time.time()
 
     args = collect_argparser()
@@ -355,11 +358,21 @@ if __name__ == "__main__":
     ## Selection param for QuasarNet
     param_QN = {'c_thresh':args.c_thresh, 'n_thresh':args.n_thresh}
 
-    param_RR = {'template_filename':args.template,
-                'filename_priors':args.filename_priors,
-                'filename_output_rerun_RR':args.filename_output_rerun_RR,
-                'filename_redrock_rerun_RR':args.filename_redrock_rerun_RR,
-                'delete_RR_output':args.delete_RR_output}
+    ## param for the new run of RR
+    param_RR = {'template_filename':args.template}
+    if args.filename_priors is None:
+        param_RR['filename_priors'] = args.coadd.replace('coadd', 'priors-tmp')
+    else:
+        param_RR['filename_priors'] = args.filename_priors
+    if args.filename_output_rerun_RR is None:
+        param_RR['filename_output_rerun_RR'] = args.coadd.replace('coadd', 'rrdetails-tmp')
+    else:
+        param_RR['filename_output_rerun_RR'] = args.filename_output_rerun_RR
+    if (args.filename_redrock_rerun_RR is None):
+        param_RR['filename_redrock_rerun_RR'] = args.coadd.replace('coadd', 'redrock-tmp')
+    else:
+        param_RR['filename_redrock_rerun_RR'] = args.filename_redrock_rerun_RR
+    param_RR['delete_RR_output'] = args.delete_RR_output
 
     if os.path.isfile(args.coadd) & os.path.isfile(args.redrock):
         # open best fit file generated by redrock
@@ -378,7 +391,21 @@ if __name__ == "__main__":
         DESI_TARGET = main_cmx_or_sv(fibermap)[0][0]
 
         if args.target_selection.lower() in ('qso', 'qso_targets'):
-            sel_to_QN = fibermap[DESI_TARGET] & desi_mask.QSO != 0
+            if DESI_TARGET == 'DESI_TARGET':
+                qso_mask_bit = desi_mask.mask('QSO')
+            elif DESI_TARGET == 'SV3_DESI_TARGET':
+                qso_mask_bit = sv3_mask.mask('QSO')
+            elif DESI_TARGET == 'SV2_DESI_TARGET':
+                qso_mask_bit = sv2_mask.mask('QSO')
+            elif DESI_TARGET == 'SV1_DESI_TARGET':
+                qso_mask_bit = sv1_mask.mask('QSO')
+            elif DESI_TARGET == 'CMX_TARGET':
+                qso_mask_bit = cmx_mask.mask('MINI_SV_QSO|SV0_QSO')
+            else:
+                log.error("**** DESI_TARGET IS NOT CMX / SV1 / SV2 / SV3 / MAIN ****")
+                sys.exit(1)
+            sel_to_QN = fibermap[DESI_TARGET] & qso_mask_bit != 0
+
         elif args.target_selection.lower() in ('all', 'all_targets'):
             sel_to_QN = np.ones(redrock['TARGETID'].size, dtype=bool)
         else:
@@ -399,7 +426,12 @@ if __name__ == "__main__":
                      f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
             save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
         else:
-            log.warning("No objects selected to save; no output written")
+            file = open(os.path.splitext(args.output)[0]+'.notargets', "w")
+            file.write("No targets were selected by QN afterburner to be a QSO.")
+            file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
+            file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
+            file.close()
+            log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets'} is written")
 
 
     else: # file for the consider Tile / Night / petal does not exist

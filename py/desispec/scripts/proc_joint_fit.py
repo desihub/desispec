@@ -6,14 +6,15 @@ import traceback
 import subprocess
 from copy import deepcopy
 import json
+import glob
 
 import numpy as np
 import fitsio
 from astropy.io import fits
-import glob
+
 import desiutil.timer
 import desispec.io
-from desispec.io import findfile
+from desispec.io import findfile, replace_prefix
 from desispec.io.util import create_camword
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.fiberflat import apply_fiberflat
@@ -177,37 +178,44 @@ def main(args=None, comm=None):
     if args.obstype in ['ARC']:
         timer.start('psfnight')
         num_cmd = num_err = 0
-        if rank == 0:
-            for camera in args.cameras:
-                psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
-                if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
-                    psfs = [findfile('psf', args.night, expid, camera).replace("psf", "fit-psf") for expid in args.expids]
-                    log.info("Number of PSF for night={} camera={} = {}".format(args.night, camera, len(psfs)))
-                    if len(psfs) > 4:  # lets do it!
-                        log.info("Computing psfnight ...")
-                        dirname = os.path.dirname(psfnightfile)
-                        if not os.path.isdir(dirname):
-                            os.makedirs(dirname)
-                        num_cmd += 1
-
-                        #- generic try/except so that any failure doesn't leave
-                        #- MPI rank 0 hanging while others are waiting for it
-                        try:
-                            desispec.scripts.specex.mean_psf(psfs, psfnightfile)
-                        except:
-                            log.error('specex.meanpsf failed for {}'.format(os.path.basename(psfnightfile)))
-                            exc_type, exc_value, exc_traceback = sys.exc_info()
-                            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                            log.error(''.join(lines))
-                            sys.stdout.flush()
-
-                        if not os.path.exists(psfnightfile):
-                            log.error(f'Failed to create {psfnightfile}')
-                            num_err += 1
+        for camera in args.cameras[rank::size]:
+            psfnightfile = findfile('psfnight', args.night, args.expids[0], camera)
+            if not os.path.isfile(psfnightfile):  # we still don't have a psf night, see if we can compute it ...
+                psfs = list()
+                for expid in args.expids:
+                    psffile = findfile('fitpsf', args.night, expid, camera)
+                    if os.path.exists(psffile):
+                        psfs.append( psffile )
                     else:
-                        log.info("Fewer than 4 psfs were provided, can't compute psfnight. Exiting ...")
-                        num_cmd += 1
+                        log.warning(f'Missing {psffile}')
+
+                log.info("Number of PSF for night={} camera={} = {}/{}".format(
+                        args.night, camera, len(psfs), len(args.expids)))
+                if len(psfs) >= 3:  # lets do it!
+                    log.info(f"Rank {rank} computing {camera} psfnight ...")
+                    dirname = os.path.dirname(psfnightfile)
+                    if not os.path.isdir(dirname):
+                        os.makedirs(dirname)
+                    num_cmd += 1
+
+                    #- generic try/except so that any failure doesn't leave
+                    #- MPI rank 0 hanging while others are waiting for it
+                    try:
+                        desispec.scripts.specex.mean_psf(psfs, psfnightfile)
+                    except:
+                        log.error('Rank {} specex.meanpsf failed for {}'.format(rank, os.path.basename(psfnightfile)))
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                        log.error(''.join(lines))
+                        sys.stdout.flush()
+
+                    if not os.path.exists(psfnightfile):
+                        log.error(f'Rank {rank} failed to create {psfnightfile}')
                         num_err += 1
+                else:
+                    log.info(f"Fewer than 3 {camera} psfs were provided, can't compute psfnight. Exiting ...")
+                    num_cmd += 1
+                    num_err += 1
 
         timer.stop('psfnight')
 
@@ -231,84 +239,97 @@ def main(args=None, comm=None):
         #- Track number of commands run and number of errors for exit code
         num_cmd = 0
         num_err = 0
+
+        # Commands to run:
+        # - desi_average_fiberflat for each (camera, lampbox) combo (max 30*4 = 120)
+        # - desi_autocalib_fiberflat for each (b,r,z)
+
+        #- temp directory for averaged flats
+        fiberflatnightfile = findfile('fiberflatnight', args.night, args.expids[0], args.cameras[0])
+        fiberflatdirname = os.path.dirname(fiberflatnightfile)
+        tmpdir = os.path.join(fiberflatdirname, "tmp")
+
+        #- expected inputs and outputs
+        inflats = list()
+        inflats_for_camera = dict()
+        average_flats_for_camera = dict()
+        camera_lampboxes = list()
+        flats_for_arm = dict(b=list(), r=list(), z=list())
+        for camera in args.cameras:
+            inflats_for_camera[camera] = list()
+            for expid in args.expids:
+                filename = findfile('fiberflat', args.night, expid, camera)
+                inflats.append(filename)
+                inflats_for_camera[camera].append(filename)
+
+            average_flats_for_camera[camera] = list()
+            for lampbox in range(4):
+                ofile = os.path.join(tmpdir, f"fiberflatnight-camera-{camera}-lamp-{lampbox}.fits")
+                average_flats_for_camera[camera].append(ofile)
+                camera_lampboxes.append( (camera, lampbox, ofile) )
+                arm = camera[0].lower()
+                flats_for_arm[arm].append(ofile)
+
+        #- rank 0 checks if we have enough inputs
+        enough_inputs = True
         if rank == 0:
-            fiberflatnightfile = findfile('fiberflatnight', args.night, args.expids[0], args.cameras[0])
-            fiberflatdirname = os.path.dirname(fiberflatnightfile)
-            if os.path.isfile(fiberflatnightfile):
-                log.info("Fiberflatnight already exists. Exitting ...")
-            elif len(args.cameras) < 6:  # we still don't have them, see if we can compute them
-                # , but need at least 2 spectros ...
-                log.info("Fewer than 6 cameras were available, so couldn't perform joint fit. Exiting ...")
+            log.info("Number of fiberflat for night {} = {}".format(args.night, len(inflats)))
+            if len(inflats) < 3 * 4 * len(args.cameras):
+                log.critical("Fewer than 3 exposures with 4 lamps were available. Can't perform joint fit. Exiting...")
+                enough_inputs = False
+            elif len(args.cameras) < 6:
+                log.critical("Fewer than 6 cameras were available, so couldn't perform joint fit. Exiting ...")
+                enough_inputs = False
+
+        if comm is not None:
+            enough_inputs = comm.bcast(enough_inputs, root=0)
+
+        if not enough_inputs:
+            sys.exit(1)
+
+        #- we have enough inputs, ok to proceed
+        if rank == 0:
+            log.info("Computing fiberflatnight per lamp and camera ...")
+
+        #- rank 0 create tmpdir; other ranks wait at barrier
+        if rank == 0:
+            os.makedirs(tmpdir, exist_ok=True)
+
+        if comm is not None:
+            comm.barrier()
+
+        #- Averaged fiberflats per camera and lampbox
+        for camera, lampbox, ofile in camera_lampboxes[rank::size]:
+            if not os.path.isfile(ofile):
+                log.info(f"Rank {rank} average flat for camera {camera} and lamp box #{lampbox}")
+                pg = f"CALIB DESI-CALIB-0{lampbox} LEDs only"
+
+                cmd = f"desi_average_fiberflat --program '{pg}' --outfile {ofile} -i "
+                for flat in inflats_for_camera[camera]:
+                    cmd += f" {flat} "
+                num_cmd += 1
+                err = runcmd(cmd, inputs=inflats_for_camera[camera], outputs=[ofile, ])
+                if err:
+                    num_err += 1
             else:
-                flats = []
-                for camera in args.cameras:
-                    for expid in args.expids:
-                        flats.append(findfile('fiberflat', args.night, expid, camera))
-                log.info("Number of fiberflat for night {} = {}".format(args.night, len(flats)))
-                if len(flats) < 3 * 4 * len(args.cameras):
-                    log.info("Fewer than 3 exposures with 4 lamps were available. Can't perform joint fit. Exiting...")
-                else:
-                    log.info("Computing fiberflatnight per lamp and camera ...")
-                    tmpdir = os.path.join(fiberflatdirname, "tmp")
-                    if not os.path.isdir(tmpdir):
-                        os.makedirs(tmpdir)
-                                
-                    log.info("First average measurements per camera and per lamp")
-                    average_flats = dict()
-                    for camera in args.cameras:
-                        # list of flats for this camera
-                        flats_for_this_camera = []
-                        for flat in flats:
-                            if flat.find(camera) >= 0:
-                                flats_for_this_camera.append(flat)
-                        # log.info("For camera {} , flats = {}".format(camera,flats_for_this_camera))
-                        # sys.exit(12)
-                                            
-                        # average per lamp (and camera)
-                        average_flats[camera] = list()
-                        for lampbox in range(4):
-                            ofile = os.path.join(tmpdir, "fiberflatnight-camera-{}-lamp-{}.fits".format(camera, lampbox))
-                            if not os.path.isfile(ofile):
-                                log.info("Average flat for camera {} and lamp box #{}".format(camera, lampbox))
-                                pg = "CALIB DESI-CALIB-0{} LEDs only".format(lampbox)
+                log.info(f"Rank {rank} will use existing {ofile}")
 
-                                cmd = "desi_average_fiberflat --program '{}' --outfile {} -i ".format(pg, ofile)
-                                for flat in flats_for_this_camera:
-                                    cmd += " {} ".format(flat)
-                                num_cmd += 1
-                                err = runcmd(cmd, inputs=flats_for_this_camera, outputs=[ofile, ])
-                                if err:
-                                    num_err += 1
-                                if os.path.isfile(ofile):
-                                    average_flats[camera].append(ofile)
-                                else:
-                                    log.error(f"Generating {ofile} failed; proceeding with other flats")
-                            else:
-                                log.info("Will use existing {}".format(ofile))
-                                average_flats[camera].append(ofile)
+        if comm is not None:
+            comm.barrier()
 
-                    log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
-                    for camera_arm in ["b", "r", "z"]:
-                        cameras_for_this_arm = []
-                        flats_for_this_arm = []
-                        for camera in args.cameras:
-                            if camera[0].lower() == camera_arm:
-                                cameras_for_this_arm.append(camera)
-                                if camera in average_flats:
-                                    for flat in average_flats[camera]:
-                                        flats_for_this_arm.append(flat)
-                        if len(flats_for_this_arm) > 0:
-                            cmd = "desi_autocalib_fiberflat --night {} --arm {} -i ".format(args.night, camera_arm)
-                            for flat in flats_for_this_arm:
-                                cmd += " {} ".format(flat)
-                            num_cmd += 1
-                            err = runcmd(cmd, inputs=flats_for_this_arm, outputs=[])
-                            if err:
-                                num_err += 1
-                        else:
-                            log.error(f'No flats found for arm {camera_arm}')
+        log.info("Auto-calibration across lamps and spectro  per camera arm (b,r,z)")
+        for camera_arm in ["b", "r", "z"][rank::size]:
+            log.info(f"Rank {rank} autocalibrating across spectro for camera arm {camera_arm}")
+            cmd = f"desi_autocalib_fiberflat --night {args.night} --arm {camera_arm} -i "
+            for flat in flats_for_arm[camera_arm]:
+                cmd += f" {flat} "
+            num_cmd += 1
+            err = runcmd(cmd, inputs=flats_for_arm[camera_arm], outputs=[])
+            if err:
+                num_err += 1
 
-                    log.info("Done with fiber flats per night")
+        if comm is not None:
+            comm.barrier()
 
         timer.stop('fiberflatnight')  
         num_cmd, num_err = mpi_count_failures(num_cmd, num_err, comm=comm)
@@ -318,6 +339,12 @@ def main(args=None, comm=None):
         if rank == 0:
             if num_err > 0:
                 log.error(f'{num_err}/{num_cmd} fiberflat commands failed')
+            else:
+                log.info('All commands succeeded; removing lamp-averaged fiberflats')
+                for camera, lampbox, ofile in camera_lampboxes:
+                    os.remove(ofile)
+
+                os.rmdir(tmpdir)
 
         if num_err>0 and num_err==num_cmd:
             if rank == 0:
@@ -392,20 +419,44 @@ def main(args=None, comm=None):
             input_fiberflat = comm.bcast(input_fiberflat, root=0)
 
         # - Group inputs by spectrograph
+        # - collect inputs on rank 0 so only one rank checks for file existence
         framefiles = dict()
         skyfiles = dict()
         fiberflatfiles = dict()
-        for camera in args.cameras:
-            sp = int(camera[1])
-            if sp not in framefiles:
-                framefiles[sp] = list()
-                skyfiles[sp] = list()
-                fiberflatfiles[sp] = list()
+        num_brz = dict()
+        if rank == 0:
+            for camera in args.cameras:
+                sp = int(camera[1])
+                if sp not in framefiles:
+                    framefiles[sp] = list()
+                    skyfiles[sp] = list()
+                    fiberflatfiles[sp] = list()
+                    num_brz[sp] = dict(b=0, r=0, z=0)
 
-            fiberflatfiles[sp].append(input_fiberflat[camera])
-            for expid in args.expids:
-                framefiles[sp].append(findfile('frame', args.night, expid, camera))
-                skyfiles[sp].append(findfile('sky', args.night, expid, camera))
+                fiberflatfiles[sp].append(input_fiberflat[camera])
+                for expid in args.expids:
+                    tmpframefile = findfile('frame', args.night, expid, camera)
+                    tmpskyfile = findfile('sky', args.night, expid, camera)
+
+                    inputsok = True
+                    if not os.path.exists(tmpframefile):
+                        log.error(f'Missing expected frame {tmpframefile}')
+                        inputsok = False
+
+                    if not os.path.exists(tmpskyfile):
+                        log.error(f'Missing expected sky {tmpskyfile}')
+                        inputsok = False
+
+                    if inputsok:
+                        framefiles[sp].append(tmpframefile)
+                        skyfiles[sp].append(tmpskyfile)
+                        num_brz[sp][camera[0]] += 1
+
+        if comm is not None:
+            framefiles = comm.bcast(framefiles, root=0)
+            skyfiles = comm.bcast(skyfiles, root=0)
+            fiberflatfiles = comm.bcast(fiberflatfiles, root=0)
+            num_brz = comm.bcast(num_brz, root=0)
 
         # - Hardcoded stdstar model version
         starmodels = os.path.join(
@@ -446,6 +497,18 @@ def main(args=None, comm=None):
 
         for i in range(spectro_start, len(spectro_nums), spectro_step):
             sp = spectro_nums[i]
+
+            have_all_cameras = True
+            for cam in ['b', 'r', 'z']:
+                if num_brz[sp][cam] == 0:
+                    log.critical(f"Missing {cam}{sp} for all exposures; Can't fit standard stars")
+                    have_all_cameras = False
+
+            if not have_all_cameras:
+                num_cmd += 1
+                num_err += 1
+                continue
+
             # - NOTE: Saving the joint fit file with only the name of the first exposure
             stdfile = findfile('stdstars', args.night, args.expids[0], spectrograph=sp)
             #stdfile.replace('{:08d}'.format(args.expids[0]),'-'.join(['{:08d}'.format(eid) for eid in args.expids]))

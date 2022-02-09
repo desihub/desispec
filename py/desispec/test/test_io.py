@@ -403,6 +403,53 @@ class TestIO(unittest.TestCase):
             self.assertTrue(xsky.flux.dtype.isnative)
             self.assertEqual(sky.mask.dtype, xsky.mask.dtype)
 
+    def test_skycorr_rw(self):
+        """Test reading and writing skycorr files.
+        """
+        from ..skycorr import SkyCorr
+        from ..io.skycorr import read_skycorr, write_skycorr
+        nspec, nwave = 5,10
+        wave  = np.linspace(4000.,8000,nwave)
+        dwave = 0.02*np.random.uniform(size=(nspec, nwave))
+        dlsf  = 0.1*np.random.uniform(size=(nspec, nwave))
+        header = {"HELLO":"WORLD"}
+        skycorr = SkyCorr(wave=wave, dwave=dwave, dlsf=dlsf, header=header)
+        write_skycorr(self.testfile, skycorr)
+        xskycorr = read_skycorr(self.testfile)
+        self.assertTrue(np.all(skycorr.wave.astype('f8')  == xskycorr.wave))
+        self.assertTrue(np.all(skycorr.dwave.astype('f4').astype('f8') == xskycorr.dwave))
+        self.assertTrue(np.all(skycorr.dlsf.astype('f4').astype('f8')  == xskycorr.dlsf))
+
+    def test_skycorr_pca_rw(self):
+        """Test reading and writing skycorr files.
+        """
+        from ..skycorr import SkyCorrPCA
+        from ..io.skycorr import read_skycorr_pca, write_skycorr_pca
+        nspec, nwave = 5,10
+        wave  = np.linspace(4000.,8000,nwave)
+        dwave_mean = 0.02*np.random.uniform(size=(nspec, nwave))
+        dwave_eigenvectors = 0.02*np.random.uniform(size=(3,nspec, nwave))
+        dwave_eigenvalues = np.random.uniform(size=12)
+        dlsf_mean  = 0.1*np.random.uniform(size=(nspec, nwave))
+        dlsf_eigenvectors = 0.1*np.random.uniform(size=(3,nspec, nwave))
+        dlsf_eigenvalues = np.random.uniform(size=12)
+
+        header = {"HELLO":"WORLD"}
+        skycorr = SkyCorrPCA(wave=wave,
+                             dwave_mean=dwave_mean,
+                             dwave_eigenvectors=dwave_eigenvectors,
+                             dwave_eigenvalues=dwave_eigenvalues,
+                             dlsf_mean=dlsf_mean,
+                             dlsf_eigenvectors=dlsf_eigenvectors,
+                             dlsf_eigenvalues=dlsf_eigenvalues,
+                             header=header)
+        write_skycorr_pca(self.testfile, skycorr)
+        xskycorr = read_skycorr_pca(self.testfile)
+        self.assertTrue(np.all(skycorr.wave.astype('f8')  == xskycorr.wave))
+        self.assertTrue(np.all(skycorr.dwave_mean.astype('f4').astype('f8') == xskycorr.dwave_mean))
+        self.assertTrue(np.all(skycorr.dlsf_mean.astype('f4').astype('f8')  == xskycorr.dlsf_mean))
+
+
     # fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave
     def test_fiberflat_rw(self):
         """Test reading and writing fiberflat files.
@@ -627,6 +674,36 @@ class TestIO(unittest.TestCase):
             self.assertTrue(data2.dtype.isnative, dtype+' is not native endian')
             self.assertTrue(np.all(data1 == data2))
 
+    def test_checkzip(self):
+        """Test desispec.io.util.checkzip"""
+        from ..io.util import checkgzip
+
+        #- create test files
+        fitsfile = os.path.join(self.testDir, 'abc.fits')
+        gzfile = os.path.join(self.testDir, 'xyz.fits.gz')
+        fx = open(fitsfile, 'w'); fx.close()
+        fx = open(gzfile, 'w'); fx.close()
+
+        #- non-gzip file exists
+        fn = checkgzip(fitsfile)
+        self.assertEqual(fn, fitsfile)
+
+        #- looking for .gz but finding non-gz
+        fn = checkgzip(fitsfile+'.gz')
+        self.assertEqual(fn, fitsfile)
+
+        #- gzip file exists
+        fn = checkgzip(gzfile)
+        self.assertEqual(fn, gzfile)
+
+        #- looking for non-gzip file but finding gzip file
+        fn = checkgzip(gzfile[0:-3])
+        self.assertEqual(fn, gzfile)
+
+        #- Don't find what isn't there
+        with self.assertRaises(FileNotFoundError):
+            checkgzip(os.path.join(self.testDir, 'nope.fits'))
+
     def test_findfile(self):
         """Test desispec.io.meta.findfile and desispec.io.download.filepath2url.
         """
@@ -716,6 +793,51 @@ class TestIO(unittest.TestCase):
                          '68000', '20200314',
                          'spectra-2-68000-thru20200314.fits')
         self.assertEqual(a, b)
+
+        #- cumulative vs. pernight
+        tileid = 1234
+        night = 20201010
+        expid = 555666
+        sp = 9
+        tile_filetypes = ('spectra', 'coadd', 'redrock', 'tileqa', 'tileqapng', 'zmtl')
+
+        #- groupname='cumulative' is default
+        for filetype in tile_filetypes:
+            filepath = findfile(filetype, tile=tileid, night=night, spectrograph=sp)
+            filepath2 = findfile(filetype, tile=tileid, night=night, spectrograph=sp, groupname='cumulative')
+            self.assertEqual(filepath, filepath2)
+            dirname, filename = os.path.split(filepath)
+            self.assertTrue(dirname.endswith(f'tiles/cumulative/{tileid}/{night}'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.png'))
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
+
+        #- groupname='pernight' is different
+        for filetype in tile_filetypes:
+            filepath = findfile(filetype, tile=tileid, night=night, spectrograph=sp, groupname='pernight')
+            dirname, filename = os.path.split(filepath)
+            self.assertTrue(dirname.endswith(f'tiles/pernight/{tileid}/{night}'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.png'))  #- no "thru"
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
+
+        #- groupname='perexp' is also different
+        for filetype in tile_filetypes:
+            if filetype == 'zmtl':
+                #- zmtl doesn't apply for perexp
+                continue
+
+            #- NOTE: perexp uses expid input, not night input
+            filepath = findfile(filetype, tile=tileid, expid=expid, spectrograph=sp, groupname='perexp')
+            dirname, filename = os.path.split(filepath)
+            self.assertTrue(dirname.endswith(f'tiles/perexp/{tileid}/{expid:08d}'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.png'))  #- exp not thru
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
+
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
@@ -947,6 +1069,23 @@ class TestIO(unittest.TestCase):
             diff = difference_camwords(fcw, bcw)
             self.assertEqual(diff, truth)
 
+    def test_camword_union(self):
+        """ Test desispec.io.camword_union
+        """
+        from ..io.util import camword_union
+        fcamwords = [['a01b2r2r3', 'a01z2'],
+                     ['a013', 'a2'],
+                     ['a013456789b2r2', 'a01b2z2'],
+                     ['a013456789b2r2', 'a0'],
+                     ['a0b1r1z12']]
+        truecams = ['a012r3', 'a0123', 'a0123456789', 'a013456789b2r2', 'a01z2']
+        truespecs = ['a012', 'a0123', 'a0123456789', 'a013456789', 'a01']
+        for fcws, truecamw, truespecw in zip(fcamwords, truecams, truespecs):
+            outcw = camword_union(fcws, full_spectros_only=False)
+            self.assertEqual(outcw, truecamw)
+            outcw = camword_union(fcws, full_spectros_only=True)
+            self.assertEqual(outcw, truespecw)
+
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix
         """
@@ -957,6 +1096,20 @@ class TestIO(unittest.TestCase):
         oldfile = 'blat-foo-blat.fits'
         newfile = 'quat-foo-blat.fits'
         self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+
+    def test_get_tempfilename(self):
+        """test desispec.io.util.get_tempfilename
+        """
+        from ..io.util import get_tempfilename
+        filename = '/a/b/c.fits'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits'))
+
+        filename = 'blat.ecsv'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.ecsv'))
 
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''

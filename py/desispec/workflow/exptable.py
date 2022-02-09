@@ -71,7 +71,7 @@ def exposure_table_column_defs():
                 ('GOALTIME', float, -99.),
                 ('GOALTYPE', 'S10', 'unknown'),
                 ('EBVFAC', float, 1.0),
-                ('AIRFAC', float, 1.0),
+                ('AIRMASS', float, 1.0),
                 ('SPEED', float, -99.0),
                 ('TARGTRA', float, 89.99),
                 ('TARGTDEC', float, -89.99),
@@ -265,7 +265,7 @@ def get_exposure_table_name(night, extension='csv'):
 
     Args:
         night, int or str. The night of the observations going into the exposure table.
-        extension, str. The extension (and therefore data format) without a leading period  of the saved table.
+        extension, str. The extension (and therefore data format) without a leading period of the saved table.
                         Default is 'csv'.
 
     Returns:
@@ -389,51 +389,6 @@ def deconstruct_keyval_reporting(entry):
     val1,val2 = values.split("->")
     return key, val1, val2
 
-def validate_badamps(badamps,joinsymb=','):
-    """
-    Checks (and transforms) badamps string for consistency with the for need in an exposure or processing table
-    for use in the Pipeline. Specifically ensure they come in (camera,petal,amplifier) sets,
-    with appropriate checking of those values to make sure they're valid. Returns the input string
-    except removing whitespace and replacing potential character separaters with joinsymb (default ',').
-    Returns None if None is given.
-
-    Args:
-        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (comma
-                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
-        joinsymb, str. The symbol separating entries in the str list given by badamps.
-
-    Returns:
-        newbadamps, str. Input badamps string of {camera}{petal}{amp} entries separated by symbol given with
-                      joinsymb (comma by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
-                      Differs from input in that other symbols used to separate terms are replaaced by joinsymb
-                      and whitespace is removed.
-
-    """
-    if badamps is None:
-        return badamps
-
-    log = get_logger()
-    ## Possible other joining symbols to automatically replace
-    symbs = [';', ':', '|', '.', ',','-','_']
-
-    ## Not necessary, as joinsymb would just be replaced with itself, but this is good better form
-    if joinsymb in symbs:
-        symbs.remove(joinsymb)
-
-    ## Remove whitespace and replace possible joining symbols with the designated one.
-    newbadamps = badamps.replace(' ', '').strip()
-    for symb in symbs:
-        newbadamps = newbadamps.replace(symb, joinsymb)
-
-    ## test that the string can be parsed. Raises exception if it fails to parse
-    throw = parse_badamps(newbadamps, joinsymb=joinsymb)
-
-    ## Inform user of the result
-    if badamps == newbadamps:
-        log.info(f'Badamps given as: {badamps} verified to work')
-    else:
-        log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}') 
-    return newbadamps
 
 def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, coldefaults=None, verbosely=False):
     """
@@ -581,7 +536,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     if not os.path.exists(datpath):
         if 'OBSTYPE' not in req_dict:
             logtype = log.error
-        elif req_dict['OBSTYPE'].lower() in ['science','arc','flat']:
+        elif req_dict['OBSTYPE'].lower() in ['science','arc','flat', 'dark']:
             logtype = log.error
         else:
             logtype = log.info
@@ -643,7 +598,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     for key,default in coldefault_dict.items():
         ## These are dealt with separately
         if key in ['EFFTIME_ETC', 'CAMWORD', 'NIGHT', 'SURVEY', 'FA_SURV', 'FAPRGRM', 'GOALTIME', 'GOALTYPE', 'SPEED',
-                   'EBVFAC', 'AIRFAC', 'LASTSTEP', 'BADCAMWORD', 'BADAMPS', 'EXPFLAG', 'HEADERERR', 'COMMENTS']:
+                   'EBVFAC', 'LASTSTEP', 'BADCAMWORD', 'BADAMPS', 'EXPFLAG', 'HEADERERR', 'COMMENTS']:
             continue
         ## Try to find the key in the raw data header
         elif key in dat_header:
@@ -729,21 +684,47 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
     ## Now for science exposures,
     if obstype == 'science':
-        ## fiberassign is based on TILEID, so glob it. (Could just as easily
-        ## use TILEID but need to glob fz vs gz anyway)
-        fbapath = os.path.join(raw_data_dir, night, expstr, f"fiberassign-{outdict['TILEID']:06d}.fits.gz")
-
-        ## Load fiberassign file. If not available return empty dict
-        if os.path.isfile(fbapath):
-            log.info(f"Found fiberassign file: {fbapath}.")
-            fba = fits.open(fbapath)
-            extra_in_fba = ('EXTRA' in fba)
-            fba_header = fba['PRIMARY'].header
-            fba.close()
-        else:
-            log.error(f"Couldn't find fiberassign file: {fbapath}.")
+        ## fiberassign used to be uncompressed, check the new format first but try old if necessary
+        tileid = outdict['TILEID']
+        if tileid == coldefault_dict['TILEID']:
+            log.error("Science exposure didn't specify TILEID in the header!")
+            log.warning("Proceeding without a fiberassing file.")
             fba_header = {}
             extra_in_fba = False
+        else:
+            fbaraw = os.path.join(raw_data_dir, night, expstr,
+                                   f"fiberassign-{tileid:06d}.fits")
+            if os.path.exists(fbaraw+'.gz'):
+                fbaraw = fbaraw+'.gz'
+
+            targdir = os.getenv('DESI_TARGET')
+            fbasvn = os.path.join(targdir, 'fiberassign', 'tiles', 'trunk',
+                                    f'{tileid // 1000:03d}',
+                                    f'fiberassign-{tileid:06d}.fits')
+
+            fbafinal = fbaraw
+            if os.path.exists(fbasvn):
+                fbafinal = fbasvn
+            elif os.path.exists(fbasvn+'.gz'):
+                fbasvn = fbasvn+'.gz'
+                fbafinal = fbasvn
+
+            if fbafinal == fbasvn:
+                log.info(f'Overriding raw fiberassign file {fbaraw} with svn {fbasvn}')
+            else:
+                log.info(f'{fbasvn}[.gz] not found; sticking with raw data fiberassign file')
+
+            ## Load fiberassign file. If not available return empty dict
+            if os.path.isfile(fbafinal):
+                log.info(f"Found fiberassign file: {fbafinal}.")
+                fba = fits.open(fbafinal)
+                extra_in_fba = ('EXTRA' in fba)
+                fba_header = fba['PRIMARY'].header
+                fba.close()
+            else:
+                log.error(f"Couldn't find fiberassign file: {fbafinal}.")
+                fba_header = {}
+                extra_in_fba = False
 
         ## Add the fiber assign info. Try fiberassign file first, then raw data, then req
         for name in ["SURVEY","FA_SURV","FAPRGRM","GOALTIME","GOALTYPE","EBVFAC"]:
@@ -802,17 +783,38 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
 
         ## Get the airmass factor from the etc. If unavailable, try to calculate from the airmass in the raw data
         ## Default if both fail is 1 (already set)
-        if 'expinfo' in etc_dict and 'atm_extinction' in etc_dict['expinfo']:
-            outdict['AIRFAC'] = 1.0 / etc_dict['expinfo']['atm_extinction']
-        elif 'AIRMASS' in dat_header:
-            outdict['AIRFAC'] = np.power(10.0, (0.114 * (dat_header['AIRMASS'] - 1.0) / 2.5))
+        if outdict['AIRMASS']==coldefault_dict['AIRMASS'] and 'expinfo' in etc_dict and 'AIRMASS' in etc_dict['expinfo']:
+            outdict['AIRMASS'] = etc_dict['expinfo']['AIRMASS']
 
         ## If main survey data, report when varibles weren't available
         if int(night) > 20210500:
-            for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE",'AIRFAC','EBVFAC']:#,'EFFTIME_ETC']:
+            for name in ["FA_SURV","FAPRGRM","GOALTIME","GOALTYPE",'AIRMASS','EBVFAC']:#,'EFFTIME_ETC']:
                 if outdict[name] == coldefault_dict[name]:
                     log.warning(f"Couldn't find or derive {name}, so leaving {name} with default value " +
                                 "of {outdict[name]}")
+
+        if outdict['SURVEY'] == 'main':
+            ## If defined, use effective time and speed.
+            ## Otherwise set local variables to high value so we pass the relevant cuts
+            ## while leaving the output values as the defaults
+            if outdict['EFFTIME_ETC'] > 0.:
+                efftime = outdict['EFFTIME_ETC']
+                ## Define survey speed for QA
+                ## Keep historical cuts accurate by only using new survey speed for exposures taken after 2021 shutdown
+                ## Speed ref: https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+                time_ratio = (efftime / outdict['EXPTIME'])
+                ebvfac2 = outdict['EBVFAC'] ** 2
+                if int(night) < 20210900:
+                    airfac2 = airmass_to_airfac(outdict['AIRMASS']) ** 2
+                    speed = time_ratio * ebvfac2 * airfac2
+                else:
+                    aircorr = airmass_to_aircorr(outdict['AIRMASS'])
+                    speed = time_ratio * ebvfac2 * aircorr
+                outdict['SPEED'] = speed
+            else:
+                log.warning("No EFFTIME_ETC found. Not performing speed cut.")
+                efftime = 1.0E5
+                speed = 1.0E5
 
         ## Flag the exposure based on PROGRAM information
         ## Define thresholds
@@ -822,19 +824,13 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'test')
             log.warning(f"LASTSTEP CHANGE. Exposure {exp} identified as system test. Not processing.")
         elif obstype == 'science' and 'undither' in outdict['PROGRAM']:
-            outdict['LASTSTEP'] = 'fluxcal'
+            outdict['LASTSTEP'] = 'skysub'
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as undithered. Processing through " +
-                        "flux calibration.")
+                        "sky subtraction.")
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'undithered dither')
-        elif obstype == 'science' and 'dither' in outdict['PROGRAM']:
+        elif (obstype == 'science' and 'dither' in outdict['PROGRAM']) or extra_in_fba:
             outdict['LASTSTEP'] = 'skysub'
-            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
-            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as dither. Processing " +
-                        "through sky subtraction.")
-        ## Otherwise flag exposure based on "extra" hdu being in the fiberassign file
-        elif extra_in_fba:
-            outdict['LASTSTEP'] = 'skysub'
-            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither')
+            outdict['COMMENTS'] = np.append(outdict['COMMENTS'], 'dither seq')
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} identified as dither. Processing " +
                         "through sky subtraction.")
         ## Otherwise check that the data meets quality standards
@@ -852,17 +848,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             else:
                 log.warning("No GOALTIME found. Not performing S/N cut.")
                 goaltime = 0.
-
-            ## If defined, use effective speed. Otherwise set to very high value so we pass the relevant cuts
-            if outdict['EFFTIME_ETC'] > 0.:
-                efftime = outdict['EFFTIME_ETC']
-            else:
-                log.warning("No EFFTIME_ETC found. Not performing speed cut.")
-                efftime = 1.0E5
-
-            ## Define survey speed for QA
-            speed = (efftime / outdict['EXPTIME']) * (outdict['EBVFAC'] * outdict['AIRFAC']) ** 2
-            outdict['SPEED'] = speed
 
             ## Define thresholds
             threshold_percent_goal = 0.05
@@ -900,3 +885,45 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
 
+def airfac_to_airmass(airfac, k=0.114):
+    """
+    Transforms an "AIRFAC" term of survey speed to airmass:
+    AIRFAC = 10^[k*(X-1)/2.5]
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    X = 1+((2.5/k)*np.log10(airfac))
+    return X
+
+def airmass_to_airfac(airmass, k=0.114):
+    """
+    Transforms an airmass to "AIRFAC":
+    AIRFAC = 10^[k*(X-1)/2.5]
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    airfac = 10**(k*(airmass-1)/2.5)
+    return airfac
+
+def airmass_to_aircorr(airmass):
+    """
+    Transforms an airmass to "air correction" term of survey speed:
+    AIRCORR = X^1.75
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    aircorr = np.power(airmass,1.75)
+    return aircorr
+
+def aircorr_to_airmass(aircorr):
+    """
+    Transforms an "air correction" term of survey speed to airmass:
+    AIRCORR = X^1.75
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    airmass = np.power(aircorr,1/1.75)
+    return airmass
+
+def airfac_to_aircorr(airfac):
+    """
+    Transforms an "AIRFAC" term of survey speed to an "air correction" term of survey speed
+    https://desi.lbl.gov/trac/wiki/SurveyOps/SurveySpeed
+    """
+    return airmass_to_aircorr(airfac_to_airmass(airfac))

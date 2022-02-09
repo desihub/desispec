@@ -60,6 +60,7 @@ fibermask:
     - [MISSINGPOSITION, 8, "Fiber location information is missing"]
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
     - [POORPOSITION,   10, "Fiber >30 microns from target location"]
+    - [LOWTRANSMISSION, 12, "Low fiber transmission. Cannot use for sky."]
     - [LOWEFFTIME,     15, "Effective time for this fiber is too low"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]
@@ -91,6 +92,7 @@ specmask:
     - [BAD2DFIT,     7, "Bad fit of extraction 2D model to pixel data"]
     - [NODATA,       8, "No data exists"]
     - [BADFIBER,     9, "fibermask has a non-zero bit"]
+    - [BADCOLUMN,    10, "Bad CCD column biases the flux"]
 
 #- zmask: reasons why redshift fitting failed
 """)
@@ -101,6 +103,8 @@ try:
     specmask = BitMask('specmask', _bitdefs)
     ccdmask = BitMask('ccdmask', _bitdefs)
     fibermask = BitMask('fibermask', _bitdefs)
+    extractmaskval = ccdmask.mask("BAD|HOT|DEAD|SATURATED|COSMIC|PIXFLATZERO|PIXFLATLOW|HIGHVAR")
+
 except TypeError:
     #
     # This is needed to allow documentation to build even if desiutil is not

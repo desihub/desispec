@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+
+"""
+Hartmann doors data analysis script
+"""
+
+import os
+import argparse
+import numpy as np
+import matplotlib.pyplot as plt
+import fitsio
+
+from desispec.io import read_xytraceset
+from desispec.calibfinder import sp2sm
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+description="Hartmann doors analysis",
+epilog='''
+Hartmann doors data analysis sequence:
+1) take 2 series of exposures with arc lamps on the white spots,
+   one with the left hartmann door closed, and the other one with
+   the right hartmann door closed.
+2) preprocess the exposures (see desi_preproc )
+3) for all exposures, fit trace shifts using the preproc images and either the default or the most recent
+   nightly psf (use desi_compute_trace_shifts --arc-lamps --psf psf-yyy.fits -i preproc-xxx.fits -o psf-xxx.fits)
+4) run this desi_hartmann_analysis script, using as input the shifted psf(s) from the previous step,
+   specifying the set of exposures with the left door closed and the one with the right door closed
+
+This script will determine an average offset in Y_ccd (in pixel units) that
+can be converted into a camera focus offset.
+
+A positive delta Y means an negative value of the 'defocus'
+as defined in https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=4585 .
+
+In order to restore a good focus, the cryostat has to moved in order to increase
+the "absolute value* of the gauge readings.
+
+The average ratio of pixel_offsets/defocus = 20.240, 20.322, 20.389 pixel/mm for the BLUE, RED and NIR camera respectively.
+'''
+)
+
+parser.add_argument('--left-closed-psf', type = str, required=True, nargs="*",
+                    help = 'path to psf with trace coordinates for arc lamp obs with closed left hartmann door')
+parser.add_argument('--right-closed-psf', type = str, required=True, nargs="*",
+                    help = 'path to psf with trace coordinates for arc lamp obs with closed right hartmann door')
+parser.add_argument('--plot', action = 'store_true')
+
+args        = parser.parse_args()
+
+camera=None
+dy_vals=[]
+nmeas=len(args.left_closed_psf)
+for i in range(nmeas) :
+
+    if not os.path.isfile(args.left_closed_psf[i]) :
+        print("missing",args.left_closed_psf[i])
+        continue
+    if not os.path.isfile(args.right_closed_psf[i]) :
+        print("missing",args.right_closed_psf[i])
+        continue
+
+    head=fitsio.read_header(args.left_closed_psf[i],"PSF")
+    if camera is None :
+        camera=head["CAMERA"].strip().lower()
+    else :
+        assert(camera == head["CAMERA"].strip().lower())
+    head=fitsio.read_header(args.right_closed_psf[i],"PSF")
+    assert(camera == head["CAMERA"].strip().lower())
+
+    left  = read_xytraceset(args.left_closed_psf[i])
+    right = read_xytraceset(args.right_closed_psf[i])
+
+    wave=np.linspace(left.wavemin+200,left.wavemax-200,10)
+    fibers=np.arange(left.nspec)
+
+    x=np.zeros((fibers.size,wave.size))
+    y=np.zeros((fibers.size,wave.size))
+    dx=np.zeros((fibers.size,wave.size))
+    dy=np.zeros((fibers.size,wave.size))
+    for fiber in range(fibers.size) :
+        xleft  = left.x_vs_wave(fiber,wave)
+        xright = right.x_vs_wave(fiber,wave)
+        x[fiber]=(xleft+xright)/2
+        dx[fiber]=(xleft-xright)
+        yleft  = left.y_vs_wave(fiber,wave)
+        yright = right.y_vs_wave(fiber,wave)
+        y[fiber]=(yleft+yright)/2
+        dy[fiber]=(yleft-yright)
+
+
+    meandy=np.mean(dy)
+    rmsdy=np.std(dy)
+    print("LEFT = {} RIGHT= {} dy = {:.3f} +- {:.3f} pixels".format(args.left_closed_psf[i],args.right_closed_psf[i],meandy,rmsdy))
+    dy_vals.append(meandy)
+
+nmeas=len(dy_vals)
+
+meandy=np.median(dy_vals)
+if nmeas>=2 :
+    errdy=np.sqrt(np.pi/2./(nmeas-1.))*np.std(dy_vals)
+else :
+    errdy=0.
+
+camera=str(camera).replace("'","").strip(" ")
+
+if camera[0] == "b" :
+    focus_pixels2mm = -1/20.240 # mm/pixel
+elif camera[0] == "r" :
+    focus_pixels2mm = -1/20.322 # mm/pixel
+elif camera[0] == "z" :
+    focus_pixels2mm = -1/20.389 # mm/pixel
+else :
+    print("error camera name '{}' does not start with b,r or z: I don't know what to do".format(camera))
+    sys.exit(12)
+
+defocus=focus_pixels2mm*meandy
+err=errdy*np.abs(focus_pixels2mm)
+
+camera=str(camera).replace("'","").strip(" ")
+spectro=int(camera[1])
+sm=sp2sm(spectro)
+print("SM{}-{} LEFT-RIGHT(closed) DELTA = {:+.3f} +- {:.4f} pix (N={})".format(sm,camera,meandy,errdy,nmeas))
+print("SM{}-{} DEFOCUS = {:+.3f} +- {:.4f} mm (N={}) (the correction to apply is of opposite sign)".format(sm,camera,defocus,err,nmeas))
+
+if args.plot :
+    for fiber in range(fibers.size) :
+        plt.plot(x,dy)
+
+    plt.grid()
+
+    plt.xlabel("x ccd (fiber direction)")
+    plt.ylabel("dy ccd (wavelength direction)")
+    plt.show()

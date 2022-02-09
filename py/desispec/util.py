@@ -51,6 +51,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             input_time = max(input_time, os.stat(x).st_mtime)
 
     if err > 0:
+        log.critical("FAILED err={} {}".format(err, cmd))
         return err
 
     #- Check if outputs already exist and that their timestamp is after
@@ -444,7 +445,7 @@ def healpix_degrade_fixed(nside, pixel):
     return (subnside, subpixel)
 
 
-def parse_int_args(arg_string) :
+def parse_int_args(arg_string, include_end=False) :
     """
     Short func that parses a string containing a comma separated list of
     integers, which can include ":" or ".." or "-" labeled ranges
@@ -452,19 +453,28 @@ def parse_int_args(arg_string) :
     Args:
         arg_string (str) : list of integers or integer ranges
 
+    Options:
+        include_end (bool): if True, include end-value in ranges
+
     Returns (array 1-D):
         1D numpy array listing all of the integers given in the list,
         including enumerations of ranges given.
 
-    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1,2,3,4
+    unless `include_end` is True, which then returns 1,2,3,4,5
     """
     if arg_string is None :
-        return np.array([])
+        return np.array([], dtype=int)
     else:
         arg_string = str(arg_string)
 
     if len(arg_string.strip(' \t'))==0:
         return np.array([])
+
+    if include_end:
+        pad = 1
+    else:
+        pad = 0
 
     fibers=[]
 
@@ -481,16 +491,17 @@ def parse_int_args(arg_string) :
                 tmp = sub.split(symbol)
                 if (len(tmp) == 2) and tmp[0].isdigit() and tmp[1].isdigit() :
                     match = True
-                    for f in range(int(tmp[0]),int(tmp[1])) :
+                    for f in range(int(tmp[0]),int(tmp[1])+pad) :
                         fibers.append(f)
 
         if not match:
-            log.warning("parsing error. Didn't understand {}".format(sub))
-            sys.exit(1)
+            msg = "parsing error. Didn't understand {}".format(sub)
+            log.error(msg)
+            raise ValueError(msg)
 
     return np.array(fibers)
 
-def parse_fibers(fiber_string) :
+def parse_fibers(fiber_string, include_end=False) :
     """
     Short func that parses a string containing a comma separated list of
     integers, which can include ":" or ".." or "-" labeled ranges
@@ -498,13 +509,17 @@ def parse_fibers(fiber_string) :
     Args:
         fiber_string (str) : list of integers or integer ranges
 
+    Options:
+        include_end (bool): if True, include end-value in ranges
+
     Returns (array 1-D):
         1D numpy array listing all of the integers given in the list,
         including enumerations of ranges given.
 
     Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    unless `include_end` is True, which then returns 1,2,3,4,5
     """
-    return parse_int_args(fiber_string)
+    return parse_int_args(fiber_string, include_end)
 
 def ordered_unique(ar, return_index=False):
     """Find the unique elements of an array in the order they first appear

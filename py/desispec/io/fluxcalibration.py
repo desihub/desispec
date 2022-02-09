@@ -140,6 +140,11 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
                     if value in fluxcalib.fibercorr_comments.keys() :
                         hdu.header[key] = (value, fluxcalib.fibercorr_comments[value])
 
+    if fluxcalib.stdstar_fibermap is not None :
+        fibermap = encode_table(fluxcalib.stdstar_fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'STDSTAR_FIBERMAP'
+        hx.append( fits.convenience.table_to_hdu(fibermap) )
+
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
@@ -175,13 +180,17 @@ def read_flux_calibration(filename):
             fibercorr = None
             fibercorr_comments = None
 
-
+        if 'STDSTAR_FIBERMAP' in fx:
+            stdstar_fibermap = fx['STDSTAR_FIBERMAP'].data
+        else :
+            stdstar_fibermap = None
 
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask,
-                          fibercorr=fibercorr, fibercorr_comments=fibercorr_comments)
+                          fibercorr=fibercorr, fibercorr_comments=fibercorr_comments,
+                          stdstar_fibermap = stdstar_fibermap)
     fluxcalib.header = header
 
     return fluxcalib
@@ -219,7 +228,7 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
         hx[-1].header['MDFFRACF'] = averagefluxcalib.median_ffracflux
         hx[-1].header['FACWPOW'] = averagefluxcalib.fac_wave_power
         hx[-1].header['FSTNIGHT'] = averagefluxcalib.first_night
-    
+
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)

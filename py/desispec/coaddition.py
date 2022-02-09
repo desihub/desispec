@@ -238,11 +238,13 @@ def coadd_fibermap(fibermap, onetile=False):
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
 
-        #- TODO: this isn't fully consistent with COADD_NUMEXP if all the
-        #- exposures on a night were discarded
-        tfmap['COADD_NUMNIGHT'][i] = len(np.unique(fibermap['NIGHT'][jj]))
-        tfmap['COADD_NUMTILE'][i] = len(np.unique(fibermap['TILEID'][jj]))
-
+        # Note: NIGHT and TILEID may not be present when coadding previously
+        # coadded spectra.
+        if 'NIGHT' in fibermap.colnames:
+            tfmap['COADD_NUMNIGHT'][i] = len(np.unique(fibermap['NIGHT'][jj][good_coadds]))
+        if 'TILEID' in fibermap.colnames:
+            tfmap['COADD_NUMTILE'][i] = len(np.unique(fibermap['TILEID'][jj][good_coadds]))
+        
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
         for k in mean_cols:
@@ -490,16 +492,19 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
             wave=np.append(wave,spectra.wave[b][spectra.wave[b]>wave[-1]+tolerance])
     nwave=wave.size
 
-    # check alignment
+    # check alignment, caching band wavelength grid indices as we go
+    windict = {}
     number_of_overlapping_cameras=np.zeros(nwave)
     for b in spectra.bands :
-        windices=np.argmin((np.tile(wave,(spectra.wave[b].size,1))-np.tile(spectra.wave[b],(wave.size,1)).T)**2,axis=1)
-        dist=np.sqrt(np.max(spectra.wave[b] - wave[windices]))
-        log.debug("camera {} max dist= {}A".format(b,dist))
-        if dist > tolerance :
-            log.error("Cannot directly coadd the camera spectra because wavelength are not aligned, use --lin-step or --log10-step to resample to a common grid")
-            sys.exit(12)
+        imin = np.argmin(np.abs(spectra.wave[b][0] - wave))
+        windices = np.arange(imin, imin+len(spectra.wave[b]), dtype=int)
+        dwave = spectra.wave[b] - wave[windices]
+        if np.any(np.abs(dwave) > tolerance):
+            msg = "Input wavelength grids (band '{}') are not aligned. Use --lin-step or --log10-step to resample to a common grid.".format(b)
+            log.error(msg)
+            raise ValueError(msg)
         number_of_overlapping_cameras[windices] += 1
+        windict[b] = windices
 
     # targets
     targets = ordered_unique(spectra.fibermap["TARGETID"])
@@ -530,7 +535,7 @@ def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
         log.debug("coadding band '{}'".format(b))
 
         # indices
-        windices=np.argmin((np.tile(wave,(spectra.wave[b].size,1))-np.tile(spectra.wave[b],(wave.size,1)).T)**2,axis=1)
+        windices = windict[b]
 
         band_ndiag = spectra.resolution_data[b].shape[1]
 

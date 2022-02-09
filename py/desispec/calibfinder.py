@@ -10,7 +10,7 @@ import os
 import numpy as np
 import yaml
 import os.path
-from desispec.util import parse_fibers, header2night
+from desispec.util import parse_int_args, header2night
 from desiutil.log import get_logger
 
 def parse_date_obs(value):
@@ -94,12 +94,12 @@ def findcalibfile(headers,key,yaml_file=None) :
     Args:
         headers: list of fits headers, or list of dictionnaries
         key: type of calib file, e.g. 'PSF' or 'FIBERFLAT'
-        
+
     Optional:
             yaml_file: path to a specific yaml file. By default, the code will
             automatically find the yaml file from the environment variable
             DESI_SPECTRO_CALIB and the CAMERA keyword in the headers
-    
+
     Returns path to calibration file
     """
     cfinder = CalibFinder(headers,yaml_file)
@@ -108,16 +108,34 @@ def findcalibfile(headers,key,yaml_file=None) :
     else :
         return None
 
+def badfibers(headers,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"],yaml_file=None) :
+    """
+    find list of bad fibers from $DESI_SPECTRO_CALIB using the keywords found in the headers
+
+    Args:
+        headers: list of fits headers, or list of dictionnaries
+
+    Optional:
+        keys: list of keywords, among ["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS"]. Default is all of them.
+        yaml_file: path to a specific yaml file. By default, the code will
+        automatically find the yaml file from the environment variable
+        DESI_SPECTRO_CALIB and the CAMERA keyword in the headers
+
+    Returns List of bad fibers as a 1D array of intergers
+    """
+    cfinder = CalibFinder(headers,yaml_file)
+    return cfinder.badfibers(keys)
+
 class CalibFinder() :
 
-    
+
     def __init__(self,headers,yaml_file=None) :
         """
         Class to read and select calibration data from $DESI_SPECTRO_CALIB using the keywords found in the headers
-        
+
         Args:
             headers: list of fits headers, or list of dictionnaries
-        
+
         Optional:
             yaml_file: path to a specific yaml file. By default, the code will
             automatically find the yaml file from the environment variable
@@ -125,9 +143,9 @@ class CalibFinder() :
 
         """
         log = get_logger()
-                    
+
         old_version = False
-        
+
         # temporary backward compatibility
         if not "DESI_SPECTRO_CALIB" in os.environ :
             if "DESI_CCD_CALIBRATION_DATA" in os.environ :
@@ -139,12 +157,12 @@ class CalibFinder() :
                 raise KeyError("Need environment variable DESI_SPECTRO_CALIB")
         else :
             self.directory = os.environ["DESI_SPECTRO_CALIB"]
-        
+
         if len(headers)==0 :
             log.error("Need at least a header")
             raise RuntimeError("Need at least a header")
 
-        header=dict() 
+        header=dict()
         for other_header in headers :
             for k in other_header :
                 if k not in header :
@@ -160,10 +178,10 @@ class CalibFinder() :
             for k in header :
                 log.error("{} : {}".format(k,header[k]))
             raise KeyError("no 'CAMERA' keyword in header, cannot find calib")
-        
+
         log.debug("header['CAMERA']={}".format(header['CAMERA']))
         camera=header["CAMERA"].strip().lower()
-        
+
         if "SPECID" in header :
             log.debug("header['SPECID']={}".format(header['SPECID']))
             specid=int(header["SPECID"])
@@ -202,7 +220,7 @@ class CalibFinder() :
         if not os.path.isdir(self.directory):
             raise IOError("Calibration directory {} not found".format(self.directory))
 
-        
+
         if dateobs < 20191211 or detector == 'SIM': # old spectro identifiers
             cameraid = camera
             spectro=int(camera[-1])
@@ -219,23 +237,23 @@ class CalibFinder() :
             cameraid    = "sm{}-{}".format(specid,camera[0].lower())
             if yaml_file is None :
                 yaml_file = "{}/spec/sm{}/{}.yaml".format(self.directory,specid,cameraid)
-        
+
         if not os.path.isfile(yaml_file) :
             log.error("Cannot read {}".format(yaml_file))
             raise IOError("Cannot read {}".format(yaml_file))
-        
+
 
         log.debug("reading calib data in {}".format(yaml_file))
-        
+
         stream = open(yaml_file, 'r')
         data   = yaml.safe_load(stream)
         stream.close()
 
-        
+
         if not cameraid in data :
             log.error("Cannot find data for camera %s in filename %s"%(cameraid,yaml_file))
             raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,yaml_file))
-        
+
         data=data[cameraid]
         log.debug("Found %d data for camera %s in filename %s"%(len(data),cameraid,yaml_file))
         log.debug("Finding matching version ...")
@@ -267,8 +285,8 @@ class CalibFinder() :
                     log.debug("Skip version %s with CCDTMING=%s != %s "%(version,data[version]["CCDTMING"],ccdtming))
                     continue
 
-            
-            
+
+
             #if dosver is not None and "DOSVER" in data[version] and dosver != str(data[version]["DOSVER"]).strip() :
             #     log.debug("Skip version %s with DOSVER=%s != %s "%(version,data[version]["DOSVER"],dosver))
             #    continue
@@ -287,9 +305,9 @@ class CalibFinder() :
             log.error("Didn't find matching calibration data in %s"%(yaml_file))
             raise KeyError("Didn't find matching calibration data in %s"%(yaml_file))
 
-        
+
         self.data = matching_data
-                
+
     def haskey(self,key) :
         """
         Args:
@@ -307,7 +325,7 @@ class CalibFinder() :
             data found in yaml file
         """
         return self.data[key]
-    
+
     def findfile(self,key) :
         """
         Args:
@@ -315,40 +333,26 @@ class CalibFinder() :
         Returns:
             path to calibration file
         """
-        return os.path.join(self.directory,self.data[key]) 
+        return os.path.join(self.directory,self.data[key])
 
-    def fiberblacklist(self):
+    def badfibers(self,keys=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]) :
         """
         Args:
-            None
+            keys: ptional, list of keywords, among BROKENFIBERS,BADCOLUMNFIBERS,LOWTRANSMISSIONFIBERS,BADAMPFIBERS,EXCLUDEFIBERS. Default is all of them.
+
         Returns:
-            List of blacklisted fibers from yaml file as a 1D array of intergers
-            If no blacklisted fibers, returns None
+            List of bad fibers from yaml file as a 1D array of intergers
         """
         log = get_logger()
-        blacklistkey="FIBERBLACKLIST"
-        if not self.haskey(blacklistkey) and self.haskey("BROKENFIBERS") :
-            log.warning("BROKENFIBERS yaml keyword deprecated, please use FIBERBLACKLIST")
-            blacklistkey="BROKENFIBERS"
-        if self.haskey(blacklistkey):
-            fiberblacklist_str = self.value(blacklistkey)
-            fiberblacklist = parse_fibers(fiberblacklist_str)
-        else:
-             fiberblacklist = np.array([])  
-        return fiberblacklist
-
-    def fibers_to_exclude(self):
-        """                                                                                         
-        Args:                                                                                       
-            None                                                                                  
-        Returns:                                                                                    
-            List of excluded fibers from yaml file as a 1D array of intergers                    
-            If no excluded fibers, returns None                                                  
-        """
-        key = 'EXCLUDEFIBERS'
-        if not self.haskey(key) :
-            excluded = np.array([])
-        else:
-            excluded_str =  self.value(key)
-            excluded = parse_fibers(excluded_str)
-        return excluded
+        fibers=[]
+        badfiber_keywords=["BROKENFIBERS","BADCOLUMNFIBERS","LOWTRANSMISSIONFIBERS","BADAMPFIBERS","EXCLUDEFIBERS"]
+        for key in keys :
+            if key not in badfiber_keywords  :
+                log.error(f"key '{key}' not in the list of valid keys for bad fibers: {validkeys}")
+                continue
+            if self.haskey(key) :
+                val = self.value(key)
+                fibers.append(parse_int_args(val))
+        if len(fibers)==0 :
+            return np.array([],dtype=int)
+        return np.unique(np.hstack(fibers))

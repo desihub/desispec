@@ -51,15 +51,13 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["EFFTIME_GFA"]=np.zeros(ntiles)
     res["GOALTIME"]  = np.zeros(ntiles)
     res["OBSSTATUS"] = np.array(np.repeat("unknown",ntiles),dtype='<U20')
-    res["ZDONE"]   = np.array(np.repeat("false",ntiles),dtype='<U20')
+    res["LRG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["ELG_EFFTIME_DARK"]=np.zeros(ntiles)
     res["BGS_EFFTIME_BRIGHT"]=np.zeros(ntiles)
     res["LYA_EFFTIME_DARK"]=np.zeros(ntiles)
     res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
     res["LASTNIGHT"] = np.zeros(ntiles, dtype=np.int32)
-    res["QA"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
-    res["USER"]   = np.array(np.repeat("none",ntiles),dtype='<U20')
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     if auxiliary_table_filenames is not None :
@@ -105,7 +103,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     for i,tile in enumerate(tiles) :
         jj=(exposure_table["TILEID"]==tile)
         res["NEXP"][i]=np.sum(jj)
-        for k in ["EXPTIME","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK","EFFTIME_ETC","EFFTIME_GFA"] :
+        for k in ["EXPTIME","LRG_EFFTIME_DARK","ELG_EFFTIME_DARK","BGS_EFFTIME_BRIGHT","LYA_EFFTIME_DARK","EFFTIME_SPEC","EFFTIME_ETC","EFFTIME_GFA"] :
             if k in exposure_table.dtype.names :
                 res[k][i] = np.sum(exposure_table[k][jj])
                 if k == "EFFTIME_ETC" or k == "EFFTIME_GFA" :
@@ -138,16 +136,11 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
         if k.find("EXPTIME")>=0 or k.find("EFFTIME")>=0 :
             res[k] = np.around(res[k],1)
 
-    # default efftime is ELG_EFFTIME_DARK
-    res["EFFTIME_SPEC"]=res["ELG_EFFTIME_DARK"]
-
-    # trivial completeness for now (all of this work for this?)
-    efftime_keyword_per_goaltype = {}
-    efftime_keyword_per_goaltype["bright"]="BGS_EFFTIME_BRIGHT"
-    efftime_keyword_per_goaltype["backup"]="BGS_EFFTIME_BRIGHT"
-
-    ii=((res["GOALTYPE"]=="bright")|(res["GOALTYPE"]=="backup"))
-    res["EFFTIME_SPEC"][ii]=res["BGS_EFFTIME_BRIGHT"][ii]
+    # efftime_spec set per exposure and here we simpy use the sum
+    # default efftime is LRG_EFFTIME_DARK
+    #res["EFFTIME_SPEC"]=res["LRG_EFFTIME_DARK"]
+    #ii=((res["GOALTYPE"]=="bright")|(res["GOALTYPE"]=="backup"))
+    #res["EFFTIME_SPEC"][ii]=res["BGS_EFFTIME_BRIGHT"][ii]
 
     done=(res["EFFTIME_SPEC"]>res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][done]="obsend"
@@ -168,18 +161,13 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
     assert np.all(res['LASTNIGHT'] > 0)
 
-    for i in np.where((res["OBSSTATUS"]=="obsend")&(res["ZDONE"]=="false"))[0] :
-        tileid=res["TILEID"][i]
-        night=res["LASTNIGHT"][i]
-        log.info(f"checking redshifts for tile {tileid} on night {night}")
-        nok = number_of_good_redrock(tileid=tileid,night=night,specprod_dir=specprod_dir)
-        if nok >= min_number_of_petals :
-            log.info("Tile {} is done but need final vetting.".format(tileid))
-            #res["ZDONE"][i]="true"
-        elif nok > 0 :
-            log.warning("keep ZDONE=false for tile {} because only {} good petals (requirement is >={})".format(tileid,nok,min_number_of_petals))
     partial=(res["EFFTIME_SPEC"]>0.)&(res["EFFTIME_SPEC"]<=res["MINTFRAC"]*res["GOALTIME"])
     res["OBSSTATUS"][partial]="obsstart"
+
+    # special cases that are in list but have efftime_spec=0.0,
+    # e.g. dither tiles or tiles where all exp so far are bad
+    other = (res['EFFTIME_SPEC'] == 0.0)
+    res['OBSSTATUS'][other] = 'other'
 
     res = reorder_columns(res)
 
@@ -190,13 +178,14 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','ZDONE','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT','QA','USER']
+    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
-        print("error, mismatch of some keys")
-        print(sorted(neworder))
-        print(sorted(table.dtype.names))
-        sys.exit(12)
+        log = get_logger()
+        log.critical("error, mismatch of some keys")
+        log.critical("new: {}".format(sorted(neworder)))
+        log.critical("input: {}".format(sorted(table.dtype.names)))
+        raise ValueError('mismatch of input and reordered columns')
 
     if np.all(np.array(neworder)==np.array(table.dtype.names)) : # same
         return table
@@ -213,16 +202,21 @@ def is_same_table_rows(table1,index1,table2,index2) :
     #if table1[index1] == table2[index2] : return True
 
     if sorted(table1.dtype.names) != sorted(table2.dtype.names) :
-        print("not same keys??")
-        return False
+        message="not same columns in the two tables {} != {}".format(sorted(table1.dtype.names),sorted(table2.dtype.names))
+        log.error(message)
+        raise KeyError(message)
     for k in table1.dtype.names :
-        if table1[k][index1] != table2[k][index2] :
+        v1=table1[k][index1]
+        v2=table2[k][index2]
+        if np.isreal(v1) :
+            if np.isnan(v1) and np.isnan(v2) : continue
+        if v1 != v2 :
             return False
     return True
 
 
 def merge_tile_completeness_table(previous_table,new_table) :
-    """ Merges tile summary tables. Entries with tiles previously marked as ZDONE are not modified.
+    """ Merges tile summary tables.
 
     Args:
       previous_table: astropy.table.Table
@@ -232,14 +226,23 @@ def merge_tile_completeness_table(previous_table,new_table) :
 
     log = get_logger()
 
+    # first check columns and add in previous if missing
+    for k in new_table.dtype.names :
+        if not k in previous_table.dtype.names :
+            log.info("New column {}".format(k))
+            previous_table[k] = np.zeros(len(previous_table),dtype=new_table[k].dtype)
+
     # check whether there is any difference for the new ones
     t2i={t:i for i,t in enumerate(previous_table["TILEID"])}
 
     nadd=0
     nmod=0
-    nsame=0
     nforcekeep=0
-    keep_from_previous = []
+
+    # keep all tiles that are not in the new table
+    keep_from_previous = list(np.where(~np.in1d(previous_table["TILEID"],new_table["TILEID"]))[0])
+    nsame = len(keep_from_previous)
+
     add_from_new = []
     for j,t in enumerate(new_table["TILEID"]) :
         if t not in t2i :
@@ -247,27 +250,36 @@ def merge_tile_completeness_table(previous_table,new_table) :
             add_from_new.append(j)
             continue
         i=t2i[t]
+
         if is_same_table_rows(previous_table,i,new_table,j) :
             nsame += 1
             keep_from_previous.append(i)
             continue
-        if previous_table["ZDONE"][i]=="true" and new_table["ZDONE"][j]!="true" :
-            if previous_table["OBSSTATUS"][i]==new_table["OBSSTATUS"][j] :
-                nforcekeep += 1
+
+        # do some sanity check
+        any_change=False
+        for k in ["SURVEY","GOALTYPE"] :
+            if new_table[k][j] == "unknown" and previous_table[k][i] != "unknown" :
+                log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
+                new_table[k][j] = previous_table[k][i]
+                any_change=True
+
+        survey = new_table["SURVEY"][j]
+        if survey in ["cmx","sv1","sv2","sv3"]:
+            for k in ["GOALTIME","OBSSTATUS"] :
+                if new_table[k][j] != previous_table[k][i] :
+                    log.warning("IGNORE change for tile {} of {}: {} -> {}".format(t,k,previous_table[k][i],new_table[k][j]))
+                    new_table[k][j] = previous_table[k][i]
+                    any_change=True
+
+        if any_change : # recheck if still different
+            if is_same_table_rows(previous_table,i,new_table,j) :
                 nsame += 1
                 keep_from_previous.append(i)
-                log.warning("For tile {} zdone=true for lastnight={} but zdone={} for lastnight={}".format(t,previous_table["LASTNIGHT"][i],new_table["ZDONE"][j],new_table["LASTNIGHT"][j]))
-                log.warning("previously: {}".format(previous_table[i]))
-                log.warning("newly: {}".format(new_table[j]))
                 continue
-            elif previous_table["GOALTIME"][i] != new_table["GOALTIME"][j] :
-                log.warning("For tile {} GOALTIME changed from {} to {} ???".format(t,previous_table["GOALTIME"][i],new_table["GOALTIME"][j]))
-            else :
-                log.warning("For tile {} OBSTATUS changed from {} to {} ???".format(t,previous_table["OBSSTATUS"][i],new_table["OBSSTATUS"][j]))
 
         nmod += 1
         add_from_new.append(j)
-
 
     log.info("{} tiles unchanged".format(nsame))
     log.info("{} tiles modified".format(nmod))

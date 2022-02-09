@@ -98,8 +98,23 @@ def make_new_zmtl(redrockname, qn_flag=False, sq_flag=False, abs_flag=False,
 
     # ADM read in the redrock and fibermap extensions for the RR
     # ADM redshift catalog, if they exist.
+
+    zs=None
     try:
         zs = fitsio.read(redrockname, "REDSHIFTS")
+        log.info(f'Read {redrockname}')
+    except (FileNotFoundError, OSError):
+        log.warning(f'Cannot open hdu REDSHIFTS in {redrockname}')
+    if zs is None :
+        try:
+            log.warning("Trying ZBEST...")
+            zs = fitsio.read(redrockname, "ZBEST")
+            log.info(f'Read {redrockname}')
+        except (FileNotFoundError, OSError):
+            log.error(f'Cannot open hdu REDSHIFTS in {redrockname}')
+            return False
+
+    try:
         fms = fitsio.read(redrockname, "FIBERMAP")
         log.info(f'Read {redrockname}')
     except (FileNotFoundError, OSError):
@@ -686,7 +701,7 @@ def write_zmtl(zmtl, outputname,
     tmark('    Creating output file...')
 
     # ADM create the necessary output directory, if it doesn't exist.
-    outputdir = os.path.dirname(outputname)
+    outputdir = os.path.dirname(os.path.abspath(outputname))
     os.makedirs(outputdir, exist_ok=True)
 
     # ADM create the header and add the standard DESI dependencies.
@@ -855,4 +870,3 @@ def create_zmtl(zmtldir, outputdir, tile=None, night=None, petal_num=None,
 
         tmark('    --{} written out correctly.'.format(full_outputname))
         log.info('='*79)
-

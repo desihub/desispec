@@ -26,7 +26,7 @@ from   pkg_resources import resource_filename
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat
 from   pathlib import Path
-from   desispec.io.meta import findfile, specprod_root
+from   desispec.io.meta import findfile, specprod_root, faflavor2program
 from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
@@ -56,11 +56,11 @@ def parse(options=None):
                         help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  ' +
                                'or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. ' +
                                'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
-    parser.add_argument('--cameras', type = str, default = None, required=False,
+    parser.add_argument('-c', '--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
-    parser.add_argument('--expids', type = str, default = None, required=False,
+    parser.add_argument('-e', '--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to process')
-    parser.add_argument('--nights', type = str, default = None, required=False,
+    parser.add_argument('-n', '--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--recompute', action='store_true',
                         help = 'Recompute TSNR values')
@@ -68,9 +68,7 @@ def parse(options=None):
                         help = 'Only compute the alpha for tsnr.')
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
-    parser.add_argument('--efftime-config', type = str, default = None, required=False,
-                        help = 'Use this config file instead of default data/tsnr/tsnr-efftime.yaml')
-    parser.add_argument('--tile-completeness', type = str, default = None, required=False,
+    parser.add_argument('-t', '--tile-completeness', type = str, default = None, required=False,
                         help = 'Output tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
                         help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits ' +
@@ -83,6 +81,8 @@ def parse(options=None):
                         help = 'recompute sky mags')
     parser.add_argument('--multinode', action='store_true',
                         help = 'Paralleize TSNR recomputation across multiple nodes using mpi4py. Requires args.update to be False.')
+    parser.add_argument('--add-badexp', action='store_true',
+                        help = "Include entries for known bad exposures that weren't processed")
 
     args = None
     if options is None:
@@ -146,6 +146,13 @@ def update_targ_info(entry, targ_in):
             entry["GOALTYPE"]="dark"
         elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
             entry["GOALTYPE"]="bright"
+
+    if entry['FAPRGRM'].startswith('dith'):
+        if entry['SURVEY'] == 'unknown':
+            entry['SURVEY'] = 'cmx'
+
+    if entry['GOALTYPE'] in ('unknown', 'other'):
+        entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
 
     return entry
 
@@ -277,30 +284,50 @@ def update_table(table1,table2,keys) :
     else :
         return table2
 
-def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_missing=True) :
+def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_badexp=True) :
     """ Compute summary tables.
 
     Args:
       summary_rows: list of dictionnaries
       output_filename: str, output filename
-      efftime_config: dictionnary with scaling factors from TSNR2 to effective exp. time
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
+
+    Options:
+      add_badexp (bool): add known bad exposures that weren't processed
 
     Returns tsnr2_expid_table , tsnr2_frame_table
     """
     log = get_logger()
 
     #- Create camera summary table; specify names to preserve column order
+    ## Get copy of the columns, one to preserve the original cols and one to add any new cols encountered
     colnames = list(summary_rows[0].keys())
+    orig_colnames = list(summary_rows[0].keys())
     first_print = True
     for ii,row in enumerate(summary_rows):
-        if len(row.keys()) != len(colnames) :
+        missing = [key for key in orig_colnames if key not in row.keys()]
+        additional =  [key for key in row.keys() if key not in orig_colnames]
+        if len(missing) > 0 or len(additional) > 0:
+            ## Only print the column names once to reduce verbosity
             if first_print:
-                log.warning(f"First row of summary_rows had colnames={colnames}")
+                log.warning(f"First row of summary_rows had colnames={orig_colnames}")
                 first_print = False
-            log.warning(f"Row {ii} differs from first, row={row}" )
+            ## List missing columns compared to the first row (if any)
+            if len(missing) > 0:
+                log.warning(f"Row {ii} differs from first, row is missing columns={missing}" )
+            ## Could have both additional and missing columns, so this is independent check. List additional
+            if len(additional) > 0:
+                log.warning(f"Row {ii} differs from first, row has additional columns={additional}" )
+
+        ## Beyond the differences listed above, make sure to keep a complete list of column names
+        ## for the table generation
+        newcols =  [key for key in row.keys() if key not in colnames]
+        if len(newcols) > 0:
+            log.warning(f"Identified the following new columns: {newcols}. Adding to colnames.")
+            colnames.extend(newcols)
+
 
     #- specify names to preserve column order
     masked_cam_summary = Table(rows=summary_rows, names=colnames)
@@ -359,7 +386,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     exp_summary = Table(rows=rows, names=colnames)
     exp_summary.meta['EXTNAME'] = 'EXPOSURES'
 
-    if add_missing:
+    if add_badexp:
       # check the production exposure table
       for night in np.unique(exp_summary["NIGHT"]) :
         prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
@@ -374,6 +401,16 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
             ucam=np.unique(cam_summary["CAMERA"])
 
             for i in np.where(missing)[0] :
+
+                #- If the exposure was supposed to be processed but is unexpectedly
+                #- missing from prod, log error but don't add it to table because
+                #- we are in an ambiguous/error state of processing
+                if prod_table["LASTSTEP"][i] == 'all':
+                    tileid = prod_table['TILEID'][i]
+                    expid = prod_table['EXPID'][i]
+                    log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
+                    continue
+
                 entry={}
                 entry["EXPID"]=prod_table["EXPID"][i]
                 entry["NIGHT"]=night
@@ -418,6 +455,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                         vals.append(entry[k])
                     else :
                         vals.append(0.)
+
                 log.warning("Adding missing exposure {}".format(vals))
                 exp_summary.add_row(vals)
 
@@ -433,27 +471,10 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                     log.debug("Adding missing exposure.cam {}".format(vals))
                     cam_summary.add_row(vals)
 
-    if preexisting_tsnr2_expid_table is not None :
-        log.debug("Update to preexisting")
-
-        # backward compatibility issue
-        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
-            nentries=len(preexisting_tsnr2_expid_table)
-            if k not in preexisting_tsnr2_expid_table.dtype.names :
-                log.warning("adding column {}".format(k))
-                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
-        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV"]:
-            if k not in preexisting_tsnr2_expid_table.dtype.names :
-                log.warning("adding column {}".format(k))
-                preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
-
-        exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
-    if preexisting_tsnr2_frame_table is not None :
-        log.debug("Update to preexisting")
-        cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
 
     log.info("Add effective times from TSNR2 values")
 
+    exp_summary['LRG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_LRG'],"LRG")
     exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG")
     exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS")
 
@@ -467,8 +488,12 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     if 'TSNR2_LYA' in exp_summary.dtype.names:
         exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA")
 
-    # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG.
-    exp_summary['EFFTIME_SPEC'] = exp_summary['ELG_EFFTIME_DARK']
+    # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG before Sept 1, 2021 and TSNR2_LRG after
+    before_sept2021 = (exp_summary["NIGHT"]<20210901)
+    after_sept2021 = ~before_sept2021
+    exp_summary['EFFTIME_SPEC'] = np.zeros(len(exp_summary))
+    exp_summary['EFFTIME_SPEC'][before_sept2021] = exp_summary['ELG_EFFTIME_DARK'][before_sept2021]
+    exp_summary['EFFTIME_SPEC'][after_sept2021]  = exp_summary['LRG_EFFTIME_DARK'][after_sept2021]
 
     # EFFTIME SPEC FOR GOALTYPE bright determined by TSNR2_BGS.
     ii = (exp_summary['GOALTYPE']=='bright')
@@ -482,6 +507,27 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     else:
         exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
+
+    if preexisting_tsnr2_expid_table is not None :
+        log.debug("Update to preexisting")
+
+        # backward compatibility issue
+        for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
+            nentries=len(preexisting_tsnr2_expid_table)
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
+        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV","LRG_EFFTIME_DARK"]:
+            if k not in preexisting_tsnr2_expid_table.dtype.names :
+                log.warning("adding column {}".format(k))
+                preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
+
+        exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
+
+    if preexisting_tsnr2_frame_table is not None :
+        log.debug("Update to preexisting")
+        cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
+
     # sort table rows
     ii = np.argsort(exp_summary['EXPID'])
     exp_summary = exp_summary[ii]
@@ -494,7 +540,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     neworder=['NIGHT','EXPID','TILEID','TILERA','TILEDEC','MJD',
               'SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
               'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
-              'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','ELG_EFFTIME_DARK',
+              'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK',
               'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
               'TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA',
               'FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
@@ -775,11 +821,6 @@ def main():
         log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
         sys.exit(1)
 
-    log.info('outfile = {}'.format(args.outfile))
-    if args.details_dir is not None : log.info('details-dir = {}'.format(args.details_dir))
-
-    log.info('prod = {}'.format(args.prod))
-
     if args.multinode & use_mpi():
         from mpi4py import  MPI
         from desispec.parallel import default_nproc
@@ -812,6 +853,13 @@ def main():
 
         multinode = False
 
+    if rank == 0:
+        log.info('outfile = {}'.format(args.outfile))
+        if args.details_dir is not None :
+            log.info('details-dir = {}'.format(args.details_dir))
+
+        log.info('prod = {}'.format(args.prod))
+
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
         cameras = [x[0] + x[1] for x in itertools.product(['b', 'r', 'z'], petals.astype(np.str))]
@@ -820,10 +868,8 @@ def main():
 
     if args.expids is not None:
         expids = [np.int(x) for x in args.expids.split(',')]
-        add_missing = False
     else:
         expids = None
-        add_missing = True
 
     if args.nights is None:
         dirnames = sorted(glob.glob('{}/exposures/*'.format(args.prod)))
@@ -837,23 +883,29 @@ def main():
     else :
         nights = parse_int_args(args.nights)
 
-    log.info('cameras = {}'.format(cameras))
-    log.info("nights = {}".format(nights))
-    if expids is not None : log.info('expids = {}'.format(expids))
-
-    efftime_config_filename = args.efftime_config
-    if efftime_config_filename is None :
-        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
-    with open(efftime_config_filename) as f:
-        efftime_config = yaml.load(f, Loader=yaml.FullLoader)
-    log.info("Eff. time scale factors = {}".format(efftime_config))
+    if rank == 0:
+        log.info('cameras = {}'.format(cameras))
+        log.info("nights = {}".format(nights))
+        if expids is not None :
+            log.info('expids = {}'.format(expids))
 
     preexisting_tsnr2_expid_table = None
     preexisting_tsnr2_frame_table = None
+    ## Check for existing files
+    ## If opening returns a keyerror due to misnamed HDU, try the old naming convention
     if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
-        preexisting_tsnr2_expid_table = Table.read(args.outfile,"EXPOSURES")
-        preexisting_tsnr2_frame_table = Table.read(args.outfile,"FRAMES")
+        try:
+            preexisting_tsnr2_expid_table = Table.read(args.outfile,"EXPOSURES")
+        except KeyError:
+            log.warning("Couldn't find the EXPOSURES HDU, looking for old format name TSNR2_EXPID")
+            preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
+        try:
+            preexisting_tsnr2_frame_table = Table.read(args.outfile,"FRAMES")
+        except KeyError:
+            log.warning("Couldn't find the FRAMES HDU, looking for old format name TSNR2_FRAME")
+            preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
+
 
 
     # starting computing
@@ -900,10 +952,10 @@ def main():
 
         # write result after every night.
         if len(rows)>0 :
-            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,efftime_config,
+            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,
                                                                          preexisting_tsnr2_expid_table,
                                                                          preexisting_tsnr2_frame_table,args.prod,
-                                                                         add_missing=add_missing)
+                                                                         add_badexp=args.add_badexp)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
             log.info("wrote {} entries in tmp file {}".format(len(rows),tmpfilename))
 
@@ -982,10 +1034,10 @@ def main():
         if multinode:
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
 
-        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,
+        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,
         #                                                               preexisting_tsnr2_expid_table,
         #                                                               preexisting_tsnr2_frame_table,args.prod,
-        #                                                               add_missing=add_missing)
+        #                                                               add_badexp=add_badexp)
 
         if args.skymags is not None :
             skymags_table = Table.read(args.skymags)
@@ -1093,7 +1145,23 @@ def main():
         if args.tile_completeness is not None :
             # reread the exposure table
             exposure_table = Table.read(args.outfile)
-            new_tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
+
+            # get list of tiles to look at
+            selection = np.repeat(True,len(exposure_table))
+            if args.expids is not None or args.nights is not None :
+                if args.expids is not None :
+                    expids = parse_int_args(args.expids)
+                    selection &= np.in1d(exposure_table["EXPID"],expids)
+                if args.nights is not None :
+                    nights = parse_int_args(args.nights)
+                    selection &= np.in1d(exposure_table["NIGHT"],nights)
+
+                # consider only the tiles observed in this selection of exposures
+                tiles=np.unique(exposure_table["TILEID"][selection])
+                # keep all exposures of those tiles
+                selection = np.in1d(exposure_table["TILEID"],tiles)
+
+            new_tile_table = compute_tile_completeness_table(exposure_table[selection],args.prod,auxiliary_table_filenames=args.aux)
             if os.path.isfile(args.tile_completeness) :
                 previous_table = Table.read(args.tile_completeness)
                 new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)

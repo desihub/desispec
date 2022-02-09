@@ -150,17 +150,6 @@ def tsnr_efftime(exposures_table_filename, tsnr_table_filename, tracer, plot=Tru
     else :
         slope_tsnr2    = 1.
 
-
-    if not use_sv1 :
-        # also compute the mean seeing
-        ffrac=ext_calib["ETCFFRAC_PSF"]
-        fa=FastFiberAcceptance()
-        exposure_seeing_fwhm_um = fa.psf_seeing_fwhm(ffrac) # [microns]
-        fiber_params = load_desiparams()['fibers']
-        exposure_seeing_fwhm_arcsec = exposure_seeing_fwhm_um / fiber_params['diameter_um'] *fiber_params['diameter_arcsec']
-        median_exposure_seeing_fwhm_arcsec = np.median(exposure_seeing_fwhm_arcsec)
-        log.info("Median derived ETC FWHM = {:4.3f} arcsec".format(median_exposure_seeing_fwhm_arcsec))
-
     if plot:
         plt.figure("efftime-vs-tsnr2-{}".format(tracer))
         plt.plot(tsnr_run[tsnr_col], tsnr_run[efftime_col_ref], c='k', marker='.', lw=0.0, markersize=1)
@@ -216,7 +205,7 @@ def main(args):
     log.info("tracer = {}".format(tracer))
 
     if args.exclude is not None:
-        args.exclude = [np.int(x) for x in args.exclude.split(',')]
+        args.exclude = [int(x) for x in args.exclude.split(',')]
 
     slope_efftime,slope_tsnr2 = tsnr_efftime(exposures_table_filename=effective_time_calibration_table_filename, tsnr_table_filename=args.tsnr_table_filename, tracer=tracer,plot=args.plot, exclude=args.exclude, use_sv1=args.sv1)
 

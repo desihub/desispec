@@ -1,0 +1,163 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script generates the $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products, once all tile-qa*fits are done.
+"""
+
+
+import os,sys
+import numpy as np
+import argparse
+from desiutil.log import get_logger
+from desispec.io import specprod_root
+from pkg_resources import resource_filename
+from desispec.night_qa import (
+    get_nightqa_outfns,
+    get_surveys_night_expids,
+    get_dark_night_expid,
+    get_ctedet_night_expid,
+    create_dark_pdf,
+    create_badcol_png,
+    create_ctedet_pdf,
+    create_sframesky_pdf,
+    create_tileqa_pdf,
+    create_skyzfiber_png,
+    create_petalnz_pdf,
+    write_nightqa_html,
+)
+
+def parse(options=None):
+    parser = argparse.ArgumentParser(
+                description="Generate $DESI_ROOT/spectro/redux/nightqa/{NIGHT}/nightqa-{NIGHT}.html page, and related products")
+    parser.add_argument("-p", "--prod", type = str, default = None, required = False,
+                        help = "Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.")
+    parser.add_argument("-n","--night", type = int, default = None, required = True,
+                        help = "night to process. ex: 20211128")
+    parser.add_argument("-g","--group", type = str, default = "cumulative", required = False,
+                        help = 'tile group "cumulative" or "pernight"')
+    parser.add_argument("-o", "--outdir", type = str, default = None, required = False,
+                        help = "Path to ouput folder, default is the input prod directory. Files written in {prod}/nightqa/{night}; several files will be created there")
+    parser.add_argument("--css", type = str, default = None, required = False,
+                        help = "html formatting css file; default to pkg_resources.resource_filename('desispec', 'data/qa/nightqa.css')")
+    parser.add_argument("--recompute", action = "store_true",
+                        help = "recompute (i.e. overwrite args.outfile if already existing")
+    parser.add_argument("--steps", type = str, default = "dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html", required = False,
+                        help = "comma-separated list of steps to execute (default=dark,badcol,ctedet,sframesky,tileqa,skyzfiber,petalnz,html)")
+    parser.add_argument("--html_only", action = "store_true",
+                        help = "only regenerate the nightqa-{NIGHT}.html page")
+
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main():
+
+    log = get_logger()
+
+    # AR arguments: reading/defaulting
+    args = parse()
+    if args.prod is None:
+        args.prod = specprod_root()
+    elif args.prod.find("/")<0 :
+        args.prod = specprod_root(args.prod)
+    else:
+        args.prod = os.path.normpath(args.prod)
+    if args.outdir is None :
+        args.outdir = os.path.join(args.prod, "nightqa", "{}".format(args.night))
+    if args.css is None:
+        args.css = resource_filename("desispec", "data/qa/nightqa.css")
+    for kwargs in args._get_kwargs():
+        log.info(kwargs)
+
+    # AR is ffmpeg installed
+    # AR disabled for now, as using pdf; keep the lines in case we generate mp4 later
+    # if os.system("which ffmpeg") != 0:
+    #    log.error("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'")
+    #    raise RuntimeError("ffmpeg needs to be installed to create the mp4 movies; it can be installed at nersc with 'module load ffmpeg'")
+
+    # AR existing output folder?
+    if not os.path.isdir(args.outdir):
+        log.info("creating {}".format(args.outdir))
+        os.makedirs(args.outdir, exist_ok=True)
+    # AR files that will be created
+    outfns = get_nightqa_outfns(args.outdir, args.night)
+    # AR existing output files?
+    if not args.html_only:
+        for key in outfns:
+            fn = outfns[key]
+            if key in args.steps.split(","):
+                log.info("will create {}".format(fn))
+                if os.path.isfile(fn):
+                    if args.recompute:
+                        log.warning("\texisting {} will be overwritten".format(fn))
+                    else:
+                        log.error("\t{} already exists, and args.recompute = False".format(fn))
+                        raise RuntimeError("\t{} already exists, and args.recompute = False".format(fn))
+            else:
+                log.info("{} not in args.steps={}\t=> not creating {}".format(key, args.steps, fn))
+
+    # AR expids, tileids, surveys
+    if np.in1d(["sframesky", "tileqa", "skyzfiber", "petalnz", "html"], args.steps.split(",")).sum() > 0:
+        expids, tileids, surveys = get_surveys_night_expids(args.night)
+
+    # AR dark expid
+    if np.in1d(["dark", "badcol"], args.steps.split(",")).sum() > 0:
+        dark_expid = get_dark_night_expid(args.night, args.prod)
+
+    # AR CTE detector expid
+    if "ctedet" in args.steps.split(","):
+        ctedet_expid = get_ctedet_night_expid(args.night, args.prod)
+
+    # AR dark
+    if "dark" in args.steps.split(","):
+        if dark_expid is not None:
+            create_dark_pdf(outfns["dark"], args.night, args.prod, dark_expid)
+
+    # AR badcolumn
+    if "badcol" in args.steps.split(","):
+        if dark_expid is not None:
+            create_badcol_png(outfns["badcol"], args.night, args.prod)
+
+    # AR CTE detector
+    if "ctedet" in args.steps.split(","):
+        if ctedet_expid is not None:
+            create_ctedet_pdf(outfns["ctedet"], args.night, args.prod, ctedet_expid)
+
+    # AR sframesky
+    if "sframesky" in args.steps.split(","):
+        create_sframesky_pdf(outfns["sframesky"], args.night, args.prod, expids)
+
+    # AR tileqa
+    if "tileqa" in args.steps.split(","):
+        create_tileqa_pdf(outfns["tileqa"], args.night, args.prod, expids, tileids, group=args.group)
+
+    # AR skyzfiber
+    if "skyzfiber" in args.steps.split(","):
+        create_skyzfiber_png(outfns["skyzfiber"], args.night, args.prod, np.unique(tileids), dchi2_threshold=9,
+                group=args.group)
+
+    # AR per-petal n(z)
+    if "petalnz" in args.steps.split(","):
+        unq_tileids, ii = np.unique(tileids, return_index=True)
+        unq_surveys = surveys[ii]
+        create_petalnz_pdf(outfns["petalnz"], args.night, args.prod, unq_tileids, unq_surveys, dchi2_threshold=25,
+                group=args.group)
+
+    # AR create index.html
+    # AR we first copy the args.css file to args.outdir
+    if "html" in args.steps.split(","):
+        os.system("cp {} {}".format(args.css, args.outdir))
+        write_nightqa_html(
+            outfns, args.night, args.prod, os.path.basename(args.css),
+            surveys="/".join(np.unique(surveys)), nexp=expids.size, ntile=len(set(tileids)))
+
+if __name__ == "__main__":
+    main()

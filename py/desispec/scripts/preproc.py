@@ -75,8 +75,11 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--cosmics-c2fudge', type = float, default = 0.5, required=False,
                         help = 'for cosmic ray rejection : fudge factor applied to PSF')
 
-    parser.add_argument('--bkgsub', action='store_true',
+    parser.add_argument('--bkgsub-for-dark', action='store_true',
                         help = 'do a background subtraction prior to cosmic ray rejection')
+    parser.add_argument('--bkgsub-for-science', action='store_true',
+                        help = 'do a background subtraction in science exposures (measured between blocks of fiber traces)')
+
 
     parser.add_argument('--zero-masked', action='store_true',
                         help = 'set to zero the flux of masked pixels (for convenience to display images, no impact on analysis)')
@@ -88,8 +91,10 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--scattered-light', action="store_true", help="fit and remove scattered light")
     parser.add_argument('--psf', type = str, required=False, default=None, help="psf file to remove scattered light or to compute the variance model")
     parser.add_argument('--model-variance', action="store_true", help="compute a model of the CCD image to derive the Poisson noise")
+    parser.add_argument('--no-traceshift', action="store_true", help="do not adjust the trace coordinates when computing a model of the CCD image")
     parser.add_argument('--ncpu', type=int, default=default_nproc,
             help=f"number of parallel processes to use [{default_nproc}]")
+    parser.add_argument('--keep-overscan-cols', action="store_true", help="keep overscan columns in preproc image for debugging")
 
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -172,7 +177,8 @@ def main(args=None):
                 outdir = args.outdir,
                 fibermap = args.fibermap,
                 bias=bias, dark=dark, pixflat=pixflat, mask=mask,
-                bkgsub=args.bkgsub,
+                bkgsub_dark=args.bkgsub_for_dark,
+                bkgsub_science=args.bkgsub_for_science,
                 nocosmic=args.nocosmic,
                 cosmics_nsig=args.cosmics_nsig,
                 cosmics_cfudge=args.cosmics_cfudge,
@@ -186,7 +192,9 @@ def main(args=None):
                 remove_scattered_light=args.scattered_light,
                 psf_filename=args.psf,
                 model_variance=args.model_variance,
-                zero_masked=args.zero_masked
+                zero_masked=args.zero_masked,
+                no_traceshift=args.no_traceshift,
+                keep_overscan_cols=args.keep_overscan_cols
         )
         opts_array.append(opts)
 

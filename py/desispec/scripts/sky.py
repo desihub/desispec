@@ -7,6 +7,9 @@ from desispec.io import write_sky
 from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.io import shorten_filename
+from desispec.io import write_skycorr
+from desispec.io import read_skycorr_pca
+from desispec.skycorr import SkyCorr
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.qa import qa_plots
@@ -41,6 +44,14 @@ def parse(options=None):
                         help = 'adjust wavelength calibration of sky model on sky lines to improve sky subtraction for all fibers')
     parser.add_argument('--adjust-lsf', action='store_true',
                         help = 'adjust LSF width of sky model on sky lines to improve sky subtraction for all fibers')
+    parser.add_argument('--adjust-with-more-fibers', action='store_true',
+                        help = 'use more fibers than just the sky fibers for the adjustements')
+    parser.add_argument('--save-adjustments', type = str , default = None, required=False,
+                        help = 'save adjustments of wavelength calib and LSF width in table')
+    parser.add_argument('--pca-corr', type = str , default = None, required=False,
+                        help = 'use this PCA frames file for interpolation of wavelength and/or LSF adjustment')
+    parser.add_argument('--fit-offsets', action = 'store_true', default = False, required=False,
+                        help = 'fit offsets in sectors of CCD specified in calib yaml file, like OFFCOLSD:"2057:3715" for columns 2057 to 3715 (excluded), in amplifier D')
 
     args = None
     if options is None:
@@ -53,6 +64,11 @@ def parse(options=None):
 def main(args) :
 
     log=get_logger()
+
+    if args.save_adjustments and ((not args.adjust_lsf) or (not args.adjust_wavelength)) :
+        mess="need both options --adjust-wavelength and --adjust-lsf to run with --save-adjustments"
+        log.error(mess)
+        raise Exception(mess)
 
     log.info("starting")
 
@@ -69,12 +85,29 @@ def main(args) :
     # apply fiberflat to sky fibers
     apply_fiberflat(frame, fiberflat)
 
+    # load pca corr if set
+    if args.pca_corr is not None :
+        pcacorr = read_skycorr_pca(args.pca_corr)
+    else :
+        pcacorr = None
+
+
+
+
     # compute sky model
     skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),\
                            angular_variation_deg=args.angular_variation_deg,\
                            chromatic_variation_deg=args.chromatic_variation_deg,\
                            adjust_wavelength=args.adjust_wavelength,\
-                           adjust_lsf=args.adjust_lsf)
+                           adjust_lsf=args.adjust_lsf,\
+                           only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
+                           pcacorr=pcacorr,fit_offsets=args.fit_offsets,fiberflat=fiberflat
+    )
+
+    if args.save_adjustments is not None :
+        skycorr=SkyCorr(wave=skymodel.wave,dwave=skymodel.dwave,dlsf=skymodel.dlsf,header=skymodel.header)
+        write_skycorr(args.save_adjustments,skycorr)
+        log.info("wrote {}".format(args.save_adjustments))
 
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
