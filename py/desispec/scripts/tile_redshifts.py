@@ -244,7 +244,9 @@ def batch_tile_redshifts(tileid, exptable, group, spectrographs=None,
 
 def write_redshift_script(batchscript, outdir,
         jobname, num_nodes,
-        group, spectro_string, suffix, frame_glob,
+        group, spectro_string, suffix,
+        frame_glob=None, expfile=None,
+        healpix=None,
         queue='regular', system_name=None,
         onetile=True, tileid=None, night=None, expid=None,
         run_zmtl=False, noafterburners=False,
@@ -261,9 +263,11 @@ def write_redshift_script(batchscript, outdir,
         group (str): used for tile redshifts, e.g. 'cumulative'
         spectro_string (str): e.g. '0 1 2 3' spectrographs to run
         suffix (str): filename suffix (e.g. TILEID-thruNIGHT)
-        frame_glob (str): glob for finding input cframes
 
     Options:
+        frame_glob (str): glob for finding input cframes
+        expfile (str): filename with NIGHT EXPID SPECTRO
+        healpix (int): healpix number (to use with group=healpix)
         queue (str): queue name
         system_name (str): e.g. cori-haswell, cori-knl, perlmutter-gpu
         onetile (bool): coadd assuming input is for a single tile?
@@ -280,6 +284,9 @@ def write_redshift_script(batchscript, outdir,
 
     Note: Use redrock_cores_per_rank > 1 to reserve extra memory per rank
     for large input coadd files (e.g. sv3 healpix).
+
+    Note: must specify frame_glob for tile-based groups, and expfile for
+    group=healpix.
     """
     log = get_logger()
 
@@ -316,10 +323,15 @@ def write_redshift_script(batchscript, outdir,
         headeropt += f' SPGRPVAL={night} NIGHT={night}'
     elif group == 'perexp':
         headeropt += f' SPGRPVAL={expid} NIGHT={night} EXPID={expid}'
+    elif group == 'healpix':
+        headeropt += f' SPGRPVAL={healpix}'
     else:
         headeropt += f' SPGRPVAL=None'
 
-    headeropt += f' TILEID={tileid} SPECTRO=$SPECTRO PETAL=$SPECTRO'
+    if group == 'healpix':
+        headeropt += f' HPXPIXEL={healpix}'
+    else:
+        headeropt += f' TILEID={tileid} SPECTRO=$SPECTRO PETAL=$SPECTRO'
 
     #- system specific options, e.g. "--constraint=haswell"
     batch_opts = list()
@@ -358,7 +370,7 @@ mkdir -p {outdir}
 mkdir -p {logdir}
 
 echo
-echo --- Generating files in $(pwd)/{outdir}
+echo --- Generating files in {outdir}
 echo""")
 
         if frame_glob is not None:
@@ -392,6 +404,23 @@ done
 echo Waiting for desi_group_spectra to finish at $(date)
 wait
 """)
+        elif expfile is not None and group == 'healpix':
+            fx.write(f"""
+echo --- Grouping frames to spectra at $(date)
+for SPECTRO in {spectro_string}; do
+    spectra={outdir}/spectra-$SPECTRO-{suffix}.fits
+    splog={logdir}/spectra-$SPECTRO-{suffix}.log
+
+    if [ -f $spectra ]; then
+        echo $(basename $spectra) already exists, skipping grouping
+    else
+        cmd="desi_group_spectra --expfile {expfile} --outfile $spectra --healpix {healpix} {headeropt}"
+        echo RUNNING $cmd &> $splog
+        $cmd &>> $splog
+    fi
+done
+""")
+
 
         fx.write(f"""
 echo
@@ -530,7 +559,7 @@ wait
 echo
 echo --- Files in {outdir}:
 for prefix in spectra coadd redrock zmtl qso_qn qso_mgii tile-qa; do
-    echo  "   " $(ls {outdir}/$prefix*.fits | wc -l) $prefix
+    echo  "   " $(ls {outdir}/$prefix*.fits |& grep -v 'cannot access' | wc -l) $prefix
 done
 
 popd &> /dev/null

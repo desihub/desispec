@@ -43,15 +43,17 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
-def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
-        strict=False, nights=None, expids=None):
+def get_exp2healpix_map(survey=None, program=None, expfile=None,
+        specprod_dir=None, strict=False, nights=None, expids=None):
     """
     Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
 
     Options:
         survey (str): filter by this survey (main, sv3, sv1, ...)
-        faprogram (str): filter by this FAPRGRM (dark, bright, backup, other)
+        program (str): filter by this FAPRGRM (dark, bright, backup, other)
         specprod_dir (str): override $DESI_SPECTRO_REDUX/$SPECPROD
+
+        TODO...
 
     Returns table with columns NIGHT EXPID SPECTRO HEALPIX
     """
@@ -59,39 +61,58 @@ def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
     if specprod_dir is None:
         specprod_dir = io.specprod_root()
 
-    #- Read all exposure tables, filtered by SURVEY and FAPRGRM
-    expdir = f'{specprod_dir}/exposure_tables'
-    exp_tables = list()
-    for expfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
-
-        #- don't read file if it isn't in the nights list
-        if nights is not None:
-            tmp = os.path.splitext(os.path.basename(expfile))[0]
-            night = int(tmp.split('_')[2])
-            if night not in nights:
-                continue
-
-        #- read and filter entries to good science exposures of
-        #- requested survey/faprogram/expids
+    if expfile is not None:
+        log.info(f'Reading exposures list from {expfile}')
         t = Table.read(expfile)
-        keep = (t['OBSTYPE'] == 'science')
-        keep &= (t['LASTSTEP'] == 'all')
-        keep &= (t['TILEID'] > 0)
+        #- override FAPRGRM with what we would set it to now
+        t['FAPRGRM'] = io.meta.faflavor2program(t['FAFLAVOR'])
+        keep = t['TILEID'] > 0
         if survey is not None:
             keep &= (t['SURVEY'] == survey)
-        if faprogram is not None:
-            keep &= (t['FAPRGRM'] == faprogram)
+        if program is not None:
+            keep &= (t['FAPRGRM'] == program)
         if expids is not None:
             keep &= np.isin(t['EXPID'], expids)
+        if nights is not None:
+            keep &= np.isin(t['NIGHT'], nights)
 
-        if np.any(keep):
-            t = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
-            exp_tables.append(t)
+        exptab = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
 
-    if len(exp_tables) == 0:
-        raise RuntimeError('No matching tiles found in exposure tables')
+    else:
+        #- Read all exposure tables, filtered by SURVEY and FAPRGRM
+        expdir = f'{specprod_dir}/exposure_tables'
+        log.info(f'Reading exposures from {expdir}')
+        exp_tables = list()
+        for expfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
 
-    exptab = vstack(exp_tables)
+            #- don't read file if it isn't in the nights list
+            if nights is not None:
+                tmp = os.path.splitext(os.path.basename(expfile))[0]
+                night = int(tmp.split('_')[2])
+                if night not in nights:
+                    continue
+
+            #- read and filter entries to good science exposures of
+            #- requested survey/program/expids
+            t = Table.read(expfile)
+            keep = (t['OBSTYPE'] == 'science')
+            keep &= (t['LASTSTEP'] == 'all')
+            keep &= (t['TILEID'] > 0)
+            if survey is not None:
+                keep &= (t['SURVEY'] == survey)
+            if program is not None:
+                keep &= (t['FAPRGRM'] == program)
+            if expids is not None:
+                keep &= np.isin(t['EXPID'], expids)
+
+            if np.any(keep):
+                t = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
+                exp_tables.append(t)
+
+        if len(exp_tables) == 0:
+            raise RuntimeError('No matching tiles found in exposure tables')
+
+        exptab = vstack(exp_tables)
 
     #- columns NIGHT EXPID SPECTRO HEALPIX
     rows = list()
@@ -102,7 +123,7 @@ def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
         expid = exptab['EXPID'][i]
         tileid = exptab['TILEID'][i]
         survey = exptab['SURVEY'][i]
-        faprogram = exptab['FAPRGRM'][i]
+        program = exptab['FAPRGRM'][i]
         tilepixfile = io.findfile('tilepix', night, expid, tile=tileid)
 
         if not os.path.exists(tilepixfile):
@@ -116,7 +137,7 @@ def get_exp2healpix_map(survey=None, faprogram=None, specprod_dir=None,
 
         for petal_str in tilepix[str(tileid)]:
             for healpix in tilepix[str(tileid)][petal_str]:
-                rows.append( (night, expid, tileid, survey, faprogram, int(petal_str), healpix) )
+                rows.append( (night, expid, tileid, survey, program, int(petal_str), healpix) )
 
     if len(rows) == 0:
         raise RuntimeError('No matching tilepix found')
