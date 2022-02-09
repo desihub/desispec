@@ -165,24 +165,6 @@ def main(args, comm=None) :
     # READ DATA
     ############################################
     # First loop through and group by exposure and spectrograph
-    frames_by_expid = {}
-    rows = list()
-    for filename in args.frames :
-        log.info("reading %s"%filename)
-        frame=io.read_frame(filename)
-        night = safe_read_key(frame.meta,"NIGHT")
-        expid = safe_read_key(frame.meta,"EXPID")
-        camera = safe_read_key(frame.meta,"CAMERA").strip().lower()
-        rows.append( (night, expid, camera) )
-        spec = camera[1]
-        uniq_key = (expid,spec)
-        if uniq_key in frames_by_expid.keys():
-            frames_by_expid[uniq_key][camera] = frame
-        else:
-            frames_by_expid[uniq_key] = {camera: frame}
-
-    input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'CAMERA'))
-
     frames={}
     starfibers=None
     starindices=None
@@ -200,7 +182,7 @@ def main(args, comm=None) :
             rows = list()
             for filename in args.frames :
                 log.info("reading %s"%filename)
-                frame=io.read_frame(filename)
+                frame = io.read_frame(filename)
                 night = safe_read_key(frame.meta,"NIGHT")
                 expid = safe_read_key(frame.meta,"EXPID")
                 camera = safe_read_key(frame.meta,"CAMERA").strip().lower()
