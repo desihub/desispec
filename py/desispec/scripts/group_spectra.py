@@ -33,15 +33,11 @@ def parse(options=None):
             help="nested healpix to generate")
     parser.add_argument("--header", type=str, nargs="*",
             help="KEYWORD=VALUE entries to add to the output header")
-    parser.add_argument("-o", "--outdir", type=str,
-            help="output directory; all outputs in this directory")
-    parser.add_argument("--outroot", type=str,
-            help="output root directory; files in subdirectories of this dir")
     parser.add_argument("--expfile", type=str,
             help="File with NIGHT and EXPID  to use (fits, csv, or ecsv)")
     parser.add_argument("--inframes", type=str, nargs='*',
             help="input frame files; ignore --reduxdir, --nights, --nside")
-    parser.add_argument("--outfile", type=str,
+    parser.add_argument("-o", "--outfile", type=str,
             help="output spectra filename")
 
     if options is None:
@@ -58,8 +54,9 @@ def main(args=None):
     if args is None:
         args = parse()
 
-    if args.outroot is None and args.outdir is None:
-        args.outroot = io.specprod_root()
+    if args.inframes is None and args.expfile is None:
+        log.critical('Must provide --inframes or --expfile')
+        sys.exit(1)
 
     header = dict()
     if args.header is not None:
@@ -105,6 +102,10 @@ def main(args=None):
 
     if args.healpix is not None:
         keep &= nightexp['HEALPIX'] == args.healpix
+
+    if args.nights is not None:
+        nights = [int(x) for x in args.nights.split(',')]
+        keep &= np.isin(nightexp['NIGHT'], nights)
 
     nightexp = nightexp[keep]
     if len(nightexp) == 0:
