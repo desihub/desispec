@@ -162,10 +162,67 @@ def _model_variance(frame,cskyflux,cskyivar,skyfibers) :
     return (cskyivar>0)/(skyvar+(skyvar==0))
 
 
+def get_sector_masks(frame):
+    # get sector info from metadata
 
-def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,\
-                        adjust_wavelength=True,adjust_lsf=True,only_use_skyfibers_for_adjustments = True, pcacorr=None, fit_offsets=False,fiberflat=None) :
+    meta = frame.meta
+    cfinder = CalibFinder([meta])
+    amps = get_amp_ids(meta)
+    log = get_logger()
 
+    sectors = []
+    for amp in amps:
+        key = "OFFCOLS"+amp
+        sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
+        yb = sec[0].start
+        ye = sec[0].stop
+
+    if cfinder.haskey(key) :
+        val = cfinder.value(key)
+        for tmp1 in val.split(",") :
+            tmp2 = tmp1.split(":")
+            if len(tmp2) != 2 :
+                mess="cannot decode {}={}".format(key,val)
+                log.error(mess)
+                raise KeyError(mess)
+            xb = max(sec[1].start,int(tmp2[0]))
+            xe = min(sec[1].stop,int(tmp2[1]))
+            sector = [yb,ye,xb,xe]
+            sectors.append(sector)
+            log.info("Adding CCD sector in amp {} with offset: {}".format(
+                amp,sector))
+
+    if len(sectors) == 0:
+        return []
+
+    psf_filename = findfile('psf', meta["NIGHT"], meta["EXPID"],
+                            meta["CAMERA"])
+    if not os.path.isfile(psf_filename) :
+        log.error("No PSF file "+psf_filename)
+        raise IOError("No PSF file "+psf_filename)
+    log.info("Using PSF {}".format(psf_filename))
+    tset = read_xytraceset(psf_filename)
+    tmp_fibers = np.arange(frame. nspec)
+    tmp_x = np.zeros(frame.flux.shape, dtype=float)
+    tmp_y = np.zeros(frame.flux.shape, dtype=float)
+    for fiber in tmp_fibers :
+        tmp_x[fiber] = tset.x_vs_wave(fiber=fiber, wavelength=frame.wave)
+        tmp_y[fiber] = tset.y_vs_wave(fiber=fiber, wavelength=frame.wave)
+
+    masks = []
+    print(sectors)
+    for ymin, ymax, xmin, xmax in sectors:
+        mask = ((tmp_y >= ymin) & (tmp_y < ymax) &
+                (tmp_x >= xmin) & (tmp_x < xmax))
+        masks.append(mask)
+    return masks
+
+
+def compute_uniform_sky(
+        frame, nsig_clipping=4., max_iterations=100, model_ivar=False,
+        add_variance=True, adjust_wavelength=True, adjust_lsf=True,
+        only_use_skyfibers_for_adjustments=True, pcacorr=None,
+        fit_offsets=False, fiberflat=None, skygradpca=True):
     """Compute a sky model.
 
     Sky[fiber,i] = R[fiber,i,j] Flux[j]
@@ -259,6 +316,28 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
     #max_iterations=2 ; log.warning("DEBUGGING LIMITING NUMBER OF ITERATIONS")
 
+    if fit_offsets:
+        sectors = get_sector_masks(frame)
+    else:
+        sectors = []
+
+    if skygradpca:
+        camera = frame.meta['CAMERA']
+        skygradpcafn = os.path.join(
+            os.environ['SKYGRADPCA_DIR'],
+            f'skygradpca-{camera}.fits')
+        from astropy.io import fits
+        skygradpca = fits.getdata(skygradpcafn)
+        # we should instead pass in the relevant structure.
+        nskygradpc = skygradpca['FLUX'].shape[1]
+        dxskygradpca = frame.fibermap['FIBERASSIGN_X']
+        dyskygradpca = frame.fibermap['FIBERASSIGN_Y']
+        dxskygradpca -= np.mean(dxskygradpca[skyfibers])
+        dyskygradpca -= np.mean(dyskygradpca[skyfibers])
+    else:
+        nskygradpc = 0
+        skygradpca = None
+
     nout_tot=0
     for iteration in range(max_iterations) :
 
@@ -283,36 +362,77 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
         # B = sum_fiber sum_wave_w sqrt(ivar)[fiber,w]*flux[fiber,w] sqrtwR[fiber,wave]
 
         #A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
-        A=scipy.sparse.csr_matrix((nwave,nwave))
-        B=np.zeros((nwave))
 
-        # diagonal sparse matrix with content = sqrt(ivar)*flat of a given fiber
-        SD=scipy.sparse.dia_matrix((nwave,nwave))
+        # Julien can do A^T C^-1 A, A^T C^-1 b himself, but I like to write it
+        # out
+        # the model is that
+        # frame = R*(sky spectrum + sum(PC * (a*(x-<x>) + b*(y-<y>)))) + offsets
+        # We could consider adding a mild prior to deal with ill-conditioned
+        # matrices.
+
+        nsector = len(sectors)
+        npar = nwave + nsector + nskygradpc*2
+
+        yy = np.zeros((nwave*nfibers))
+
+        SD = scipy.sparse.dia_matrix((nwave*nfibers,nwave*nfibers))
+        SD.setdiag(current_ivar.reshape(-1))
 
         # loop on fiber to handle resolution
-        for fiber in range(nfibers) :
-            if fiber%10==0 :
+        allrows = []
+        allcols = []
+        allvals = []
+        for fiber in range(nfibers):
+            if fiber % 10 == 0:
                 log.info("iter %d sky fiber %d/%d"%(iteration,fiber,nfibers))
             R = Rsky[fiber]
+            rows, cols, vals = scipy.sparse.find(R)
+            allrows.append(rows+fiber*nwave)
+            allcols.append(cols)
+            allvals.append(vals)
+            yy[fiber*nwave:(fiber+1)*nwave] = flux[fiber]
+            for skygradpcind in range(nskygradpc):
+                convskygradpc = R.dot(skygradpca['FLUX'][:, skygradpcind])
+                allrows.append(np.arange(nwave)+fiber*nwave)
+                allcols.append(nwave + nsector + skygradpcind*2 +
+                               np.zeros(nwave, dtype='i4'))
+                allvals.append(convskygradpc * dxskygradpca[skyfibers[fiber]])
+                allrows.append(np.arange(nwave)+fiber*nwave)
+                allcols.append(nwave + nsector + skygradpcind*2 + 1 +
+                               np.zeros(nwave, dtype='i4'))
+                allvals.append(convskygradpc * dyskygradpca[skyfibers[fiber]])
 
-            # diagonal sparse matrix with content = sqrt(ivar)
-            SD.setdiag(sqrtw[fiber])
+        for i, secmask in enumerate(sectors):
+            rows = np.flatnonzero(secmask[skyfibers])
+            cols = np.full(len(rows), nwave+i)
+            flat = fiberflat[secmask[skyfibers]].ravel()
+            vals = 1/(flat + (flat == 0))
+            allrows.append(rows)
+            allcols.append(cols)
+            allvals.append(vals)
 
-            sqrtwR = SD*R # each row r of R is multiplied by sqrtw[r]
-            A += sqrtwR.T*sqrtwR
-            B += sqrtwR.T*sqrtwflux[fiber]
+
+        design = scipy.sparse.coo_matrix(
+            (np.concatenate(allvals),
+             (np.concatenate(allrows), np.concatenate(allcols))),
+            shape=(nwave*nfibers, npar))
+        design = design.tocsr()
+
+        A = design.T.dot(SD.dot(design))
         A = A.toarray()
+        B = design.T.dot(SD.dot(yy))
 
         log.info("iter %d solving"%iteration)
-        w = A.diagonal()>0
+        w = A.diagonal() > 0
         A_pos_def = A[w,:]
         A_pos_def = A_pos_def[:,w]
-        deconvolved_sky = B*0
+        param = B*0
         try:
-            deconvolved_sky[w]=cholesky_solve(A_pos_def,B[w])
+            param[w]=cholesky_solve(A_pos_def,B[w])
         except:
             log.info("cholesky failed, trying svd in iteration {}".format(iteration))
-            deconvolved_sky[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
+            param[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
+        deconvolved_sky = param[:nwave]
 
         log.info("iter %d compute chi2"%iteration)
 
@@ -362,9 +482,6 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
             sqrtwflux *= (bad==0)
             nout_iter += np.sum(bad)
 
-
-
-
         nout_tot += nout_iter
 
         sum_chi2=float(np.sum(chi2))
@@ -406,9 +523,11 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
     log.info("compute convolved sky and ivar")
 
+    parameter_sky_covar = parameter_covar[:nwave, :nwave]
+
     # The parameters are directly the unconvolved sky
     # First convolve with average resolution :
-    convolved_sky_covar=Rmean.dot(parameter_covar).dot(Rmean.T.todense())
+    convolved_sky_covar=Rmean.dot(parameter_sky_covar).dot(Rmean.T.todense())
 
     # and keep only the diagonal
     convolved_sky_var=np.diagonal(convolved_sky_covar)
@@ -420,11 +539,24 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     cskyivar = np.tile(convolved_sky_ivar, frame.nspec).reshape(frame.nspec, nwave)
 
     # The sky model for each fiber (simple convolution with resolution of each fiber)
+    # cskyflux = design.dot(param).reshape(frame.flux.shape)
+    # this is right for the sky fibers only.
     cskyflux = np.zeros(frame.flux.shape)
     for i in range(frame.nspec):
         cskyflux[i] = frame.R[i].dot(deconvolved_sky)
+        for j in range(nskygradpc):
+            pcagradspechere = skygradpca['FLUX'][:, j]*(
+                dxskygradpca[i]*param[nwave + nsector + 2*j] +
+                dyskygradpca[i]*param[nwave + nsector + 2*j + 1])
+            cskyflux[i] += frame.R[i].dot(pcagradspechere)
+
+    for secmask, offset in zip(sectors, param[nwave:nwave+nsector]):
+        cskyflux[secmask] += offset
+
 
     # See if we can improve the sky model by readjusting the wavelength and/or the width of sky lines
+    # now cskyflux contains the offsets plus the reconvolved, deconvolved sky.
+    # I'm not sure if that will negatively impact the following stanza.
     if adjust_wavelength or adjust_lsf :
         log.info("adjust the wavelength of sky spectrum on sky lines to improve sky subtraction ...")
 
@@ -648,7 +780,8 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
 
     # set sky flux and ivar to zero to poorly constrained regions
     # and add margins to avoid expolation issues with the resolution matrix
-    wmask = (np.diagonal(A)<=0).astype(float)
+    # limit to sky spectrum part of A
+    wmask = (np.diagonal(A[:nwave, :nwave])<=0).astype(float)
     # empirically, need to account for the full width of the resolution band
     # (realized here by applying twice the resolution)
     wmask = Rmean.dot(Rmean.dot(wmask))
@@ -665,108 +798,6 @@ def compute_uniform_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=Fa
     bad[1:-1] |= bad[:-2]
     cskyflux[:,bad]=0.
     modified_cskyivar[:,bad]=0.
-
-    if fit_offsets :
-
-        cfinder = CalibFinder([frame.meta])
-        amps    = get_amp_ids(frame.meta)
-
-        sectors=[]
-        for amp in amps :
-            key="OFFCOLS"+amp
-            sec = parse_sec_keyword(frame.meta['CCDSEC'+amp])
-            yb=sec[0].start
-            ye=sec[0].stop
-
-            if cfinder.haskey(key) :
-                val=cfinder.value(key)
-                for tmp1 in val.split(",") :
-                    tmp2=tmp1.split(":")
-                    if len(tmp2)!=2 :
-                        mess="cannot decode {}={}".format(key,val)
-                        log.error(mess)
-                        raise KeyError(mess)
-                    xb=max(sec[1].start,int(tmp2[0]))
-                    xe=min(sec[1].stop,int(tmp2[1]))
-                    sector = [yb,ye,xb,xe]
-                    sectors.append( sector )
-                    log.info("Adding CCD sector in amp {} with offset: {}".format(amp,sector))
-
-        if len(sectors)>0 :
-            # fit as many parameters as twice the number of sectors
-            # (one offset for fibers/wavelength in the sector and one for the others to compensate)
-
-            # need coordinates of fiber traces
-            psf_filename = findfile('psf',frame.meta["NIGHT"],frame.meta["EXPID"],frame.meta["CAMERA"])
-            if not os.path.isfile(psf_filename) :
-                log.error("No PSF file "+psf_filename)
-                raise IOError("No PSF file "+psf_filename)
-            log.info("Using PSF {}".format(psf_filename))
-            tset = read_xytraceset(psf_filename)
-            tmp_fibers = np.arange(frame.nspec)
-            tmp_x = np.zeros(frame.flux.shape,dtype=float)
-            tmp_y = np.zeros(frame.flux.shape,dtype=float)
-            for fiber in tmp_fibers :
-                tmp_x[fiber] = tset.x_vs_wave(fiber=fiber,wavelength=frame.wave)
-                tmp_y[fiber] = tset.y_vs_wave(fiber=fiber,wavelength=frame.wave)
-
-            if fiberflat is not None :
-                flat=fiberflat.fiberflat
-                log.info("Use fiberflat when fitting for offsets")
-            else :
-                flat=np.ones(frame.flux.shape)
-
-            bkg = np.zeros(cskyflux.shape)
-            tmp_skyflux = cskyflux.copy()
-
-            # we fit one sector at a time
-
-            for sector in sectors :
-
-                # mask for sky fibers only
-                mask_in = (tmp_y[skyfibers]>=sector[0])&(tmp_y[skyfibers]<sector[1])&(tmp_x[skyfibers]>=sector[2])&(tmp_x[skyfibers]<sector[3])
-                mask_out = (tmp_y[skyfibers]>=sector[0])&(tmp_y[skyfibers]<sector[1])&(~mask_in) # same y range
-                sw = np.sum(current_ivar[mask_in])
-                if sw>0 :
-                    offset_in = np.sum(current_ivar[mask_in]*(frame.flux[skyfibers][mask_in]-tmp_skyflux[skyfibers][mask_in])*flat[skyfibers][mask_in])/sw
-                else :
-                    offset_in = 0.
-
-                sw = np.sum(current_ivar[mask_out])
-                if sw>0 :
-                    offset_out = np.sum(current_ivar[mask_out]*(frame.flux[skyfibers][mask_out]-tmp_skyflux[skyfibers][mask_out])*flat[skyfibers][mask_out])/sw
-                else :
-                    offset_out = 0.
-
-                log.info("sector {} offset in = {:.2f} out = {:.2f}".format(sector,offset_in,offset_out))
-
-                # mask for all fibers now
-                mask_in = (tmp_y>=sector[0])&(tmp_y<sector[1])&(tmp_x>=sector[2])&(tmp_x<sector[3])
-                mask_out = (tmp_y>=sector[0])&(tmp_y<sector[1])&(~mask_in) # same y range
-                # save diff of terms in bkg in mask
-                bkg[mask_in] += (offset_in-offset_out)
-                # apply two terms to tmp sky model while fitting the other terms
-                tmp_skyflux[mask_in]  += offset_in
-                tmp_skyflux[mask_out] += offset_out
-
-            bkg /= flat # flatfield the background
-
-            # now we are going to temporarily remove the bkg in the frame.flux data, refit the sky, and then finally add back the bkg to the sky model
-            frame.flux -= bkg
-
-            # refit sky (without fit_offsets!) (costly but the most reliable way to account for the fitted background)
-            skymodel =  compute_uniform_sky(frame,nsig_clipping=nsig_clipping,max_iterations=max_iterations,
-                                            model_ivar=model_ivar,add_variance=add_variance,
-                                            adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,
-                                            only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,
-                                            fit_offsets=False,fiberflat=None)
-
-
-            # add back the background and return
-            frame.flux += bkg # to the frame flux in case we use it afterwards
-            skymodel.flux += bkg # to the sky model
-
-            return skymodel
 
     mask = (modified_cskyivar==0).astype(np.uint32)
 
