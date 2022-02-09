@@ -1196,7 +1196,7 @@ def main(args=None, comm=None):
                 try:
                     cmdargs = cmd.split()[1:]
                     cmdargs = desispec.scripts.stdstars.parse(cmdargs)
-                    err = runcmd(desispec.scripts.stdstars.main, 
+                    err = runcmd(desispec.scripts.stdstars.main,
                         args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile]
                     )
                 except:
