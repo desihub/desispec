@@ -1030,9 +1030,9 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         if "EXPTIME" in frame.meta : fluxcal *= frame.meta["EXPTIME"]
 
         # fit scale factor
-        ivar = (stdstars.mask==0)*stdstars.ivar
-        scaleivar = np.sum(ivar*(fluxcal[None,:]*convolved_model_flux)**2)
-        scale = np.sum(ivar*fluxcal[None,:]*convolved_model_flux*stdstars.flux)/scaleivar
+        # use a median instead of an optimal fit here
+        waveindices = np.where(fluxcal>0.5*np.median(fluxcal))[0]
+        scale = np.median(stdstars.flux[:,waveindices]/(fluxcal[waveindices][None,:]*convolved_model_flux[:,waveindices]*point_source_correction[stdfibers,None]))
         log.info("Scale factor = {:4.3f}".format(scale))
         minscale = 0.0001
         if scale<minscale :
@@ -1047,8 +1047,6 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         ccalibration = np.tile(fluxcal,(nfibers,1))
         ccalibivar = 1/(ccalibration**2+(ccalibration==0)) # 100% uncertainty!
         mask = np.ones(ccalibration.shape,dtype=int)
-        mccalibration = fluxcal
-
 
         fibercorr = dict()
         fibercorr_comments = dict()
