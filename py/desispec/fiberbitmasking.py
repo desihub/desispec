@@ -79,7 +79,7 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         if bitmask.isnumeric():
             bad = np.int32(bitmask)
         else:
-            band = 'b' # default, which is the most constraining (for stdstar fit)
+            band = 'brz' # all by default
             if frame.meta is not None :
                 if "CAMERA" in frame.meta.keys() :
                     camera = frame.meta["CAMERA"].lower()
@@ -144,9 +144,7 @@ def get_fluxcalib_fiberbitmask_val(band):
     return get_all_fiberbitmask_with_amp(band)
 
 def get_stdstars_fiberbitmask_val(band):
-    # for standard stars, it's important to have blue camera
-    # in order to fit Balmer lines
-    return get_all_fiberbitmask_with_amp("b") | fmsk.POORPOSITION
+    return get_all_fiberbitmask_with_amp(band) | fmsk.POORPOSITION
 
 def get_all_nonamp_fiberbitmask_val():
     """Return a mask for all fatally bad FIBERSTATUS bits except BADAMPB/R/Z
@@ -161,24 +159,18 @@ def get_all_nonamp_fiberbitmask_val():
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
-
 def get_justamps_fiberbitmask():
     return ( fmsk.BADAMPB | fmsk.BADAMPR | fmsk.BADAMPZ )
 
 def get_all_fiberbitmask_with_amp(band):
-    nonamp_mask = get_all_nonamp_fiberbitmask_val()
-    if band.lower()[0] == 'b':
-        amp_mask = fmsk.BADAMPB
-    elif band.lower()[0] == 'r':
-        amp_mask = fmsk.BADAMPR
-    elif band.lower()[0] == 'z':
-        amp_mask = fmsk.BADAMPZ
-    else:
-        log = get_logger()
-        log.error("Didn't recognize band={}".format(band))
-        amp_mask = np.int32(0)
-
-    return ( nonamp_mask | amp_mask )
+    amp_mask = get_all_nonamp_fiberbitmask_val()
+    if band.lower().find('b')>=0:
+        amp_mask |= fmsk.BADAMPB
+    if band.lower().find('r')>=0:
+        amp_mask |= fmsk.BADAMPR
+    if band.lower().find('z')>=0:
+        amp_mask |= fmsk.BADAMPZ
+    return amp_mask
 
 def get_all_fiberbitmask_val():
     return ( get_all_nonamp_fiberbitmask_val() | get_justamps_fiberbitmask() )
