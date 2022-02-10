@@ -2,10 +2,33 @@
 desispec Change Log
 ===================
 
-0.51.5 (unreleased)
+0.51.7 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.51.6 (2022-02-09)
+-------------------
+
+Used for Fuji healpix redshifts and cleanup of failed tile-qa.
+Backwards compatible with previously run steps.
+
+* Make tile-qa robust to missing cameras (PR `#1665`_)
+* Refactor healpix redshifts workflow (PR `#1668`_)
+
+.. _`#1665`: https://github.com/desihub/desispec/pull/1665
+.. _`#1668`: https://github.com/desihub/desispec/pull/1668
+
+0.51.5 (2022-02-07)
+-------------------
+
+Used for processing nightly biases for Fuji nights 20210331 and 20210422,
+and Guadalupe night 20210629.  Backwards compatible with other nights.
+
+* Additional desi_compute_nightlybias options for flexibility on which ZEROs
+  to use (PR `#1662`_).
+
+.. _`#1662`: https://github.com/desihub/desispec/pull/1662
 
 0.51.4 (2022-02-04)
 -------------------
