@@ -79,7 +79,9 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         if bitmask.isnumeric():
             bad = np.int32(bitmask)
         else:
-            bad = get_fiberbitmask_comparison_value(kind=bitmask)
+            camera = frame.meta["CAMERA"].lower()
+            band   = camera[0]
+            bad    = get_fiberbitmask_comparison_value(kind=bitmask,band=band)
     else:
         bad = bitmask[0]
         for bit in bitmask[1:]:
@@ -100,46 +102,48 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         return ivar
 
 
-def get_fiberbitmask_comparison_value(kind='fluxcalib'):
+def get_fiberbitmask_comparison_value(kind,band):
     """
         Takes a string argument and returns a 32-bit integer representing the logical OR of all
         relevant fibermask bits for that given reduction step
 
         input:
              kind: str : string designating which combination of bits to use based on the operation
-
+             band: str : ('b' 'r' or 'z')
         possible values are:
               "all", "sky" (or "skysub"), "flat", "flux" (or "fluxcalib"), "star" (or "stdstars")
     """
     if kind.lower() == 'all':
-        return get_all_fiberbitmask_val()
+        return get_all_fiberbitmask_with_amp(band)
     elif kind.lower()[:3] == 'sky':
-        return get_skysub_fiberbitmask_val()
+        return get_skysub_fiberbitmask_val(band)
     elif kind.lower() == 'flat':
-        return get_flat_fiberbitmask_val()
+        return get_flat_fiberbitmask_val(band)
     elif 'star' in kind.lower():
-        return get_stdstars_fiberbitmask_val()
+        return get_stdstars_fiberbitmask_val(band)
     elif 'flux' in kind.lower():
-        return get_fluxcalib_fiberbitmask_val()
+        return get_fluxcalib_fiberbitmask_val(band)
     else:
         log = get_logger()
         log.warning("Keyword {} given to get_fiberbitmask_comparison_value() is invalid.".format(kind)+\
                     " Using 'fluxcalib' fiberbitmask.")
-        return get_fluxcalib_fiberbitmask_val()
+        return get_fluxcalib_fiberbitmask_val(band)
 
 
-def get_skysub_fiberbitmask_val():
-    return get_all_fiberbitmask_val()
+def get_skysub_fiberbitmask_val(band):
+    return get_all_fiberbitmask_with_amp(band)
 
-def get_flat_fiberbitmask_val():
+def get_flat_fiberbitmask_val(band):
     return (fmsk.BROKENFIBER | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
-def get_fluxcalib_fiberbitmask_val():
-    return get_all_fiberbitmask_val()
+def get_fluxcalib_fiberbitmask_val(band):
+    return get_all_fiberbitmask_with_amp(band)
 
-def get_stdstars_fiberbitmask_val():
-    return get_all_fiberbitmask_val() | fmsk.POORPOSITION
+def get_stdstars_fiberbitmask_val(band):
+    # for standard stars, it's important to have blue camera
+    # in order to fit Balmer lines
+    return get_all_fiberbitmask_with_amp("b") | fmsk.POORPOSITION
 
 def get_all_nonamp_fiberbitmask_val():
     """Return a mask for all fatally bad FIBERSTATUS bits except BADAMPB/R/Z
