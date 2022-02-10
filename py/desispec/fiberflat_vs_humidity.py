@@ -159,8 +159,11 @@ def compute_humidity_corrected_fiberflat(calib_fiberflat, mean_fiberflat_vs_humi
     if frame is not None :
         log.info("using frame to fit for the best fit current humidity")
         ivar = frame.ivar*(frame.mask==0)
-        camera = frame.meta["CAMERA"].lower()
-        band   = camera[0]
+        band = 'brz' # all by default
+        if frame.meta is not None :
+            if "CAMERA" in frame.meta.keys() :
+                camera = frame.meta["CAMERA"].lower()
+                band   = camera[0]
         badfibermask = get_skysub_fiberbitmask_val(band=band)
         selection = (frame.fibermap["OBJTYPE"]=="SKY") & (frame.fibermap["FIBERSTATUS"] & badfibermask == 0) & (np.sum(ivar!=0,axis=1)>10)
         if np.sum(selection)>0 :
