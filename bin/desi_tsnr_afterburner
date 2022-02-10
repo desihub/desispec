@@ -31,6 +31,7 @@ from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
 from   desispec.io import findfile
+from   desispec.io.meta import faflavor2program
 from   desispec.io.fluxcalibration import read_flux_calibration
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
@@ -79,7 +80,7 @@ def parse(options=None):
                         help = 'path to table with sky magnitudes. Expected keys=NIGHT,EXPID,SKY_MAG_G,SKY_MAG_R,SKY_MAG_Z')
     parser.add_argument('--compute-skymags', action='store_true',
                         help = 'recompute sky mags')
-    parser.add_argument('--multinode', action='store_true',
+    parser.add_argument('--mpi', action='store_true',
                         help = 'Paralleize TSNR recomputation across multiple nodes using mpi4py. Requires args.update to be False.')
     parser.add_argument('--add-badexp', action='store_true',
                         help = "Include entries for known bad exposures that weren't processed")
@@ -136,9 +137,13 @@ def update_targ_info(entry, targ_in):
             entry["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
 
         if entry["SURVEY"]=="unknown" :
-            if faflavor.find("sv1")>=0. : entry["SURVEY"]="sv1"
-            elif faflavor.find("sv2")>=0. : entry["SURVEY"]="sv2"
-            elif faflavor.find("cmx")>=0. : entry["SURVEY"]="cmx"
+            #- despite the name, "cmxlrgqso" and "cmxelg" are sv1 tiles
+            if faflavor.find("sv1")>=0. or faflavor in ('cmxlrgqso', 'cmxelg') :
+                entry["SURVEY"]="sv1"
+            elif faflavor.find("sv2")>=0. :
+                entry["SURVEY"]="sv2"
+            elif faflavor.find("cmx")>=0. :
+                entry["SURVEY"]="cmx"
 
     if entry["GOALTYPE"]=="unknown" :
         if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0. or \
@@ -537,8 +542,11 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
 
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
+    #- standardizing N>>1 sv1-era FAPRGRM/FAFLAVOR into dark/bright/backup/other
+    exp_summary['PROGRAM'] = faflavor2program(exp_summary['FAFLAVOR'])
+
     neworder=['NIGHT','EXPID','TILEID','TILERA','TILEDEC','MJD',
-              'SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+              'SURVEY','PROGRAM','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
               'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
               'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK',
               'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
@@ -821,7 +829,7 @@ def main():
         log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
         sys.exit(1)
 
-    if args.multinode & use_mpi():
+    if args.mpi and use_mpi():
         from mpi4py import  MPI
         from desispec.parallel import default_nproc
 
@@ -834,11 +842,11 @@ def main():
         multinode = True
 
         if args.update:
-            log.critical('--update is not supported for the --multinode option.  Remove --update.')
+            log.critical('--update is not supported for the --mpi option.  Remove --update.')
             raise RuntimeError()
 
         if not args.recompute:
-            log.critical('--recompute for the --multinode option.  Add --recompute.')
+            log.critical('need --recompute for the --mpi option.  Add --recompute.')
             raise RuntimeError()
 
         if (args.tile_completeness is not None):
@@ -964,15 +972,13 @@ def main():
 
         nights     = comm.bcast(nights, root=0)
 
-        inight     = np.linspace(0, len(nights), size+1, dtype=int)
-        ranknights = nights[inight[rank]:inight[rank+1]]
+        #- which nights should this rank process
+        ranknights = nights[rank:len(nights):size]
 
         if len(ranknights) > 0:
             rank_summary_rows = list()
 
             log.info('Rank {:d} processes nights {} with nproc={}'.format(rank, ranknights, default_nproc))
-
-            comm.barrier()
 
             outdir = os.path.dirname(args.outfile)
             if outdir == "" :
@@ -987,6 +993,9 @@ def main():
                     tmpfilename=args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
 
                     one_night(count, night, rank_summary_rows, tmpfilename)
+        else:
+            log.warning('Rank {:d} has no nights to process'.format(rank))
+
 
         comm.barrier()
 
@@ -1167,6 +1176,12 @@ def main():
                 new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
             new_tile_table.write(args.tile_completeness,overwrite=True)
             log.info("wrote {}".format(args.tile_completeness))
+
+            if args.tile_completeness.endswith('.fits'):
+                head, ext = os.path.splitext(args.tile_completeness)
+                csvtiles = head + '.csv'
+                new_tile_table.write(csvtiles, overwrite=True)
+                log.info("wrote {}".format(csvtiles))
 
 if __name__ == '__main__':
     main()
