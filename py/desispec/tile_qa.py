@@ -84,7 +84,7 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
             # - set GOALTIME=1000/150/30 for dark,cmx/bright/backup
             # - set MINTFRAC=0.9
             if "GOALTIME" not in exposure_qa_meta:
-                fafn = findfile("fiberassign", night=night, expid=expid, tile=tileid)
+                fafn = findfile("fiberassign", night=exposure_night, expid=expid, tile=tileid)
                 if not os.path.isfile(fafn):
                     log.warning("missing {}".format(fafn))
                     fafn=fafn.replace(".fits.gz",".fits")
