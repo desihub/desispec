@@ -79,8 +79,11 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         if bitmask.isnumeric():
             bad = np.int32(bitmask)
         else:
-            camera = frame.meta["CAMERA"].lower()
-            band   = camera[0]
+            band = 'b' # default, which is the most constraining (for stdstar fit)
+            if frame.meta is not None :
+                if "CAMERA" in frame.meta.keys() :
+                    camera = frame.meta["CAMERA"].lower()
+                    band   = camera[0]
             bad    = get_fiberbitmask_comparison_value(kind=bitmask,band=band)
     else:
         bad = bitmask[0]
