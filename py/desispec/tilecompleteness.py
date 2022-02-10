@@ -30,10 +30,6 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
 
     default_goaltime = 1000. # objective effective time in seconds
 
-
-
-
-
     tiles, ii = np.unique(exposure_table["TILEID"], return_index=True)
     ntiles=tiles.size
     res=Table()
@@ -42,6 +38,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["TILERA"]=exposure_table['TILERA'][ii]
     res["TILEDEC"]=exposure_table['TILEDEC'][ii]
     res["SURVEY"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
+    res["PROGRAM"]=exposure_table['PROGRAM'][ii]
     res["FAPRGRM"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["FAFLAVOR"]=np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["NEXP"]=np.zeros(ntiles,dtype=int)
@@ -58,6 +55,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     res["GOALTYPE"]   = np.array(np.repeat("unknown",ntiles),dtype='<U20')
     res["MINTFRAC"]   = np.array(np.repeat(0.9,ntiles),dtype=float)
     res["LASTNIGHT"] = np.zeros(ntiles, dtype=np.int32)
+    res.meta['EXTNAME'] = 'TILE_COMPLETENESS'
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     if auxiliary_table_filenames is not None :
@@ -178,7 +176,7 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     return res
 
 def reorder_columns(table) :
-    neworder=['TILEID','SURVEY','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT']
+    neworder=['TILEID','SURVEY','PROGRAM','FAPRGRM','FAFLAVOR','NEXP','EXPTIME','TILERA','TILEDEC','EFFTIME_ETC','EFFTIME_SPEC','EFFTIME_GFA','GOALTIME','OBSSTATUS','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GOALTYPE','MINTFRAC','LASTNIGHT']
 
     if not np.all(np.in1d(neworder,table.dtype.names)) or not np.all(np.in1d(table.dtype.names,neworder)) :
         log = get_logger()
