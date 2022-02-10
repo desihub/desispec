@@ -2,10 +2,19 @@
 desispec Change Log
 ===================
 
-0.51.7 (unreleased)
+0.51.8 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.51.7 (2022-02-10)
+-------------------
+
+* Fix tsnr_afterburner exposure files SURVEY column (PR `#1675`_).
+* fix tile-qa expid bookkeeping (PR `#1670`_).
+
+.. _`#1670`: https://github.com/desihub/desispec/pull/1670
+.. _`#1675`: https://github.com/desihub/desispec/pull/1675
 
 0.51.6 (2022-02-09)
 -------------------
