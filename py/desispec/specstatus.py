@@ -31,6 +31,10 @@ def update_specstatus(specstatus, tiles, update_all=False):
     specstatus = specstatus.copy()
     tiles = tiles.copy()
 
+    #- Added for Fuji, but not in tiles-specstatus so remove
+    if 'PROGRAM' in tiles.colnames:
+        tiles.remove_column('PROGRAM')
+
     #- Confirm that they have the same columns except QA-specific ones
     tilecol = set(tiles.colnames) | set(['USER', 'QA', 'OVERRIDE', 'ZDONE', 'QANIGHT', 'ARCHIVEDATE'])
     if tilecol != set(specstatus.colnames):
