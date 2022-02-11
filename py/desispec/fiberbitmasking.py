@@ -79,7 +79,12 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         if bitmask.isnumeric():
             bad = np.int32(bitmask)
         else:
-            bad = get_fiberbitmask_comparison_value(kind=bitmask)
+            band = 'brz' # all by default
+            if frame.meta is not None :
+                if "CAMERA" in frame.meta.keys() :
+                    camera = frame.meta["CAMERA"].lower()
+                    band   = camera[0]
+            bad    = get_fiberbitmask_comparison_value(kind=bitmask,band=band)
     else:
         bad = bitmask[0]
         for bit in bitmask[1:]:
@@ -100,46 +105,46 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
         return ivar
 
 
-def get_fiberbitmask_comparison_value(kind='fluxcalib'):
+def get_fiberbitmask_comparison_value(kind,band):
     """
         Takes a string argument and returns a 32-bit integer representing the logical OR of all
         relevant fibermask bits for that given reduction step
 
         input:
              kind: str : string designating which combination of bits to use based on the operation
-
+             band: str : ('b' 'r' or 'z')
         possible values are:
               "all", "sky" (or "skysub"), "flat", "flux" (or "fluxcalib"), "star" (or "stdstars")
     """
     if kind.lower() == 'all':
-        return get_all_fiberbitmask_val()
+        return get_all_fiberbitmask_with_amp(band)
     elif kind.lower()[:3] == 'sky':
-        return get_skysub_fiberbitmask_val()
+        return get_skysub_fiberbitmask_val(band)
     elif kind.lower() == 'flat':
-        return get_flat_fiberbitmask_val()
+        return get_flat_fiberbitmask_val(band)
     elif 'star' in kind.lower():
-        return get_stdstars_fiberbitmask_val()
+        return get_stdstars_fiberbitmask_val(band)
     elif 'flux' in kind.lower():
-        return get_fluxcalib_fiberbitmask_val()
+        return get_fluxcalib_fiberbitmask_val(band)
     else:
         log = get_logger()
         log.warning("Keyword {} given to get_fiberbitmask_comparison_value() is invalid.".format(kind)+\
                     " Using 'fluxcalib' fiberbitmask.")
-        return get_fluxcalib_fiberbitmask_val()
+        return get_fluxcalib_fiberbitmask_val(band)
 
 
-def get_skysub_fiberbitmask_val():
-    return get_all_fiberbitmask_val()
+def get_skysub_fiberbitmask_val(band):
+    return get_all_fiberbitmask_with_amp(band)
 
-def get_flat_fiberbitmask_val():
+def get_flat_fiberbitmask_val(band):
     return (fmsk.BROKENFIBER | fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
-def get_fluxcalib_fiberbitmask_val():
-    return get_all_fiberbitmask_val()
+def get_fluxcalib_fiberbitmask_val(band):
+    return get_all_fiberbitmask_with_amp(band)
 
-def get_stdstars_fiberbitmask_val():
-    return get_all_fiberbitmask_val() | fmsk.POORPOSITION
+def get_stdstars_fiberbitmask_val(band):
+    return get_all_fiberbitmask_with_amp(band) | fmsk.POORPOSITION
 
 def get_all_nonamp_fiberbitmask_val():
     """Return a mask for all fatally bad FIBERSTATUS bits except BADAMPB/R/Z
@@ -154,24 +159,18 @@ def get_all_nonamp_fiberbitmask_val():
             fmsk.BADFIBER | fmsk.BADTRACE | fmsk.BADARC | fmsk.BADFLAT | \
             fmsk.MANYBADCOL | fmsk.MANYREJECTED )
 
-
 def get_justamps_fiberbitmask():
     return ( fmsk.BADAMPB | fmsk.BADAMPR | fmsk.BADAMPZ )
 
 def get_all_fiberbitmask_with_amp(band):
-    nonamp_mask = get_all_nonamp_fiberbitmask_val()
-    if band.lower()[0] == 'b':
-        amp_mask = fmsk.BADAMPB
-    elif band.lower()[0] == 'r':
-        amp_mask = fmsk.BADAMPR
-    elif band.lower()[0] == 'z':
-        amp_mask = fmsk.BADAMPZ
-    else:
-        log = get_logger()
-        log.error("Didn't recognize band={}".format(band))
-        amp_mask = np.int32(0)
-
-    return ( nonamp_mask | amp_mask )
+    amp_mask = get_all_nonamp_fiberbitmask_val()
+    if band.lower().find('b')>=0:
+        amp_mask |= fmsk.BADAMPB
+    if band.lower().find('r')>=0:
+        amp_mask |= fmsk.BADAMPR
+    if band.lower().find('z')>=0:
+        amp_mask |= fmsk.BADAMPZ
+    return amp_mask
 
 def get_all_fiberbitmask_val():
     return ( get_all_nonamp_fiberbitmask_val() | get_justamps_fiberbitmask() )
