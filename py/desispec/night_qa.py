@@ -306,7 +306,7 @@ def create_mp4(fns, outmp4, duration=15):
         _ = os.system("cp {} {}/tmp-{:04d}.png".format(fns[i], tmpoutdir, i))
     print(fns)
     # AR ffmpeg settings
-    default_fps = 25. # ffmpeg default fps 
+    default_fps = 25. # ffmpeg default fps
     pts_fac = "{:.1f}".format(duration / (n_img / default_fps))
     # cmd = "ffmpeg -i {}/tmp-%04d.png -filter:v 'setpts={}*PTS' {}".format(tmpoutdir, pts_fac, outmp4)
     # AR following encoding so that mp4 are displayed in safari, firefox
@@ -593,10 +593,11 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                                 mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
                             mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], h["FLUX"].data, axis=0)
                             mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(h["FLUX"].data.shape[0], dtype=int))
-                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0)
+                            band = camera.lower()[0]
+                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
                             if tileid is None:
                                 tileid = h["FIBERMAP"].header["TILEID"]
-                            print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0).sum(), "/", sel.sum())
+                            print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
                     print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
                 #
                 fig = plt.figure(figsize=(20, 10))
@@ -629,7 +630,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                     ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
                     if ic == 0:
                         ax.set_title("EXPID={:08d}  NIGHT={}  TILED={}  {} SKY fibers".format(
-                            expid, night, tileid, nsky) 
+                            expid, night, tileid, nsky)
                         )
                     ax.set_xlim(xlim)
                     if ic == 2:
@@ -1533,4 +1534,3 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     write_html_today(html)
     html.write("</html></body>\n")
     html.close()
-
