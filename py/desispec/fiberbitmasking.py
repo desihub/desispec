@@ -52,7 +52,7 @@ def get_fiberbitmasked_frame_arrays(frame,bitmask=None,ivar_framemask=True,retur
     example bitmask list:
         bitmask = [fmsk.BROKENFIBER,fmsk.UNASSIGNED,fmsk.BADFIBER,\
                     fmsk.BADTRACE,fmsk.MANYBADCOL, fmsk.MANYREJECTED]
-        bitmask = get_fiberbitmask_comparison_value(kind='fluxcalib')
+        bitmask = get_fiberbitmask_comparison_value(kind='fluxcalib', band='brz')
         bitmask = 'fluxcalib'
         bitmask = 4128780
     """
@@ -111,10 +111,16 @@ def get_fiberbitmask_comparison_value(kind,band):
         relevant fibermask bits for that given reduction step
 
         input:
-             kind: str : string designating which combination of bits to use based on the operation
-             band: str : ('b' 'r' or 'z')
-        possible values are:
-              "all", "sky" (or "skysub"), "flat", "flux" (or "fluxcalib"), "star" (or "stdstars")
+             kind: str : string designating which combination of bits to use based on the operation.
+                         Possible values are "all", "sky" (or "skysub"), "flat", 
+                         "flux" (or "fluxcalib"), "star" (or "stdstars")
+             band: str : BADAMP band bits to set. Values include 'b', 'r', 'z', or 
+                         combinations thereof such as 'brz'
+                         
+        output:
+             bitmask : 32 bit bitmask corresponding to the fiberbitmask of the desired kind
+                       in the desired cameras (bands).
+        
     """
     if kind.lower() == 'all':
         return get_all_fiberbitmask_with_amp(band)
