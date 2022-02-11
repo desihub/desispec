@@ -18,7 +18,7 @@ from shutil import rmtree
 from pkg_resources import resource_filename
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, MaskedColumn
 from ..frame import Frame
 
 
@@ -210,6 +210,44 @@ class TestIO(unittest.TestCase):
         #
         write_bintable(self.testfile, data, header=hdr, extname='FOOBAR', clobber=True)
 
+    def test_read_table(self):
+        """test desispec.io.table.read_table"""
+        from ..io.table import read_table
+
+        t = Table()
+        t['a'] = ['a', 'b', '']
+        t['x'] = [1.0, 2.0, np.NaN]
+        t['blat'] = [10, 20, 30]
+        t.meta['EXTNAME'] = 'TABLE'
+        t.meta['BLAT'] = 'foo'
+
+        testfile = os.path.join(self.testDir, 'testtable.fits')
+        t.write(testfile)
+
+        tx = read_table(testfile)
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
+
+        #- read a non-default extension
+        t.meta['EXTNAME'] = 'KUMQUAT'
+        t.write(testfile, append=True)
+
+        tx = read_table(testfile, 'KUMQUAT')
+        self.assertEqual(tx.meta['EXTNAME'], 'KUMQUAT')
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
 
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.

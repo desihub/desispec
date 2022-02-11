@@ -28,6 +28,7 @@ from desispec.io.util import (fitsheader, write_bintable, makepath, addkeys,
     parse_badamps, checkgzip)
 from desispec.io.meta import rawdata_root, findfile
 from . import iotime
+from .table import read_table
 
 from desispec.maskbits import fibermask
 
@@ -528,7 +529,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #----
     #- Read and assemble
 
-    fa = Table.read(fafile, 'FIBERASSIGN')
+    fa = read_table(fafile, 'FIBERASSIGN')
     fa.sort('LOCATION')
     fa_header = fits.getheader(fafile, 'FIBERASSIGN')
     #
@@ -547,7 +548,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
     #- if using svn fiberassign override, check consistency of columns that
     #- ICS / platemaker used for actual observations; they should never change
     if fafile != rawfafile:
-        rawfa = Table.read(rawfafile, 'FIBERASSIGN')
+        rawfa = read_table(rawfafile, 'FIBERASSIGN')
         rawfa.sort('LOCATION')
         badcol = compare_fiberassign(rawfa, fa)
 
@@ -629,7 +630,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             raise FileNotFoundError(msg)
 
     else:  #- coorfile is not None, use it
-        pm = Table.read(coordfile, 'DATA')  #- PM = PlateMaker
+        pm = read_table(coordfile, 'DATA')   #- PM = PlateMaker
 
         #- If missing columns *and* not the first in a (split) sequence,
         #- try again with the first expid in the sequence
@@ -642,7 +643,7 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
                     origcorrdfile = coordfile
                     coordfile = findfile('coordinates', night, firstexp)
                     log.info(f'trying again with {coordfile}')
-                    pm = Table.read(coordfile, 'DATA')
+                    pm = read_table(coordfile, 'DATA')
                 else:
                     log.error(f'no earlier coordinates file for this tile')
             else:
