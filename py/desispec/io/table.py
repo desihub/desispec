@@ -2,7 +2,7 @@
 desispec.io.table
 =================
 
-Utility functions for reading FITS tables 
+Utility functions for reading FITS tables
 """
 
 import fitsio
@@ -12,7 +12,7 @@ from .util import addkeys
 def read_table(filename, ext=None):
     """
     Reads a FITS table into an astropy Table, avoiding masked columns
-   
+
     Args:
         filename (str): full path to input fits file
 
