@@ -28,7 +28,9 @@ def read_table(filename, ext=None):
     table = Table(data)
     if 'EXTNAME' in header:
         table.meta['EXTNAME'] = header['EXTNAME']
-    # table.meta.update(header)
+
+    # add header keywords while not propagating TFORM, BITPIX, etc
     addkeys(table.meta, header)
+
     return table
 

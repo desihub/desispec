@@ -19,6 +19,7 @@ from pkg_resources import resource_filename
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table, MaskedColumn
+import fitsio
 from ..frame import Frame
 
 
@@ -236,7 +237,7 @@ class TestIO(unittest.TestCase):
 
         #- read a non-default extension
         t.meta['EXTNAME'] = 'KUMQUAT'
-        t.write(testfile, append=True)
+        fitsio.write(testfile, np.array(t), header=t.meta, extname='KUMQUAT')
 
         tx = read_table(testfile, 'KUMQUAT')
         self.assertEqual(tx.meta['EXTNAME'], 'KUMQUAT')
