@@ -46,7 +46,7 @@ def main(args=None, comm=None):
     elif isinstance(args, (list, tuple)):
         args = parse(args)
 
-    log = get_logger(timestamp=True)
+    log = get_logger()
 
     start_mpi_connect = time.time()
     if comm is not None:
