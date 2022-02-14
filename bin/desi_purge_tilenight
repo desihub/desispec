@@ -50,16 +50,19 @@ def remove_directory(dirname, dry_run=True):
 
 def purge_tilenight(tiles, night, dry_run=True):
     """
-        Removes all files assosciated with tiles on a given night.
-        Removes preproc files, exposures files including frames, redrock files
-        for perexp and pernight, and cumulative redshifts for nights on or
-        after the night in question. Only exposures assosciated with the tile
-        on the given night are removed.
+    Removes all files assosciated with tiles on a given night.
+
+    Removes preproc files, exposures files including frames, redrock files
+    for perexp and pernight, and cumulative redshifts for nights on or
+    after the night in question. Only exposures assosciated with the tile
+    on the given night are removed.
 
     Args:
         tiles, list of int. Tile to remove from current prod.
         night, int. Night that tiles were observed.
         dry_run, bool. If True, only prints actions it would take
+
+    Note: does not yet remove healpix redshifts touching this tile
     """
     if night is None:
         raise ValueError("Must specify night.")
