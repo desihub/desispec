@@ -352,6 +352,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         if coordinator.work_comm is not None:
             corrected_wavelength = coordinator.work_comm.bcast(corrected_wavelength, root=0)
 
+        #- TODO: debugging gpu extractions failures
         import gpu_specter.extract.gpu
         expid_cam_str = '-'.join(os.path.splitext(os.path.basename(args.input))[0].split('-')[1:][::-1])
         gpu_specter.extract.gpu.debug_filename = 'nan-' + expid_cam_str
@@ -396,6 +397,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         fibermap = result['fibermap']
         wave = result['wave']
 
+        #- TODO: debugging gpu extractions failures
         if np.any(np.isnan(flux)):
             log.warn(f"Found nan in flux: count={np.sum(np.isnan(flux))}")
             flux[np.isnan(flux)] = 0
