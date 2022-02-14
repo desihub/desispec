@@ -193,7 +193,7 @@ def main(args, comm=None) :
                     frames_by_expid[uniq_key][camera] = frame
                 else:
                     frames_by_expid[uniq_key] = {camera: frame}
-            input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID'))
+            input_frames_table = Table(rows=rows, names=('NIGHT', 'EXPID', 'CAMERA'))
 
             spectrograph=None
             # For each unique expid,spec pair, get the logical OR of the FIBERSTATUS for all
