@@ -384,7 +384,8 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
             ## Note: Assumption here on number of flats
             if curtype == 'flat' and calibjobs['nightlyflat'] is None \
-                    and int(erow['SEQTOT']) < 5 and float(erow['EXPTIME']) > 100.:
+                    and int(erow['SEQTOT']) < 5 \
+                    and np.abs(float(erow['EXPTIME'])-120.) < 1.:
                 flats.append(prow)
             elif curtype == 'arc' and calibjobs['psfnight'] is None:
                 arcs.append(prow)
