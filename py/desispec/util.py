@@ -86,6 +86,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
 
     #- run command
     if isinstance(cmd, collections.abc.Callable):
+        #- TODO: should we check outputs before returning when cmd is callable?
         if args is None:
             return cmd()
         elif isinstance(args, argparse.Namespace):
@@ -94,7 +95,8 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             return cmd(*args)
     else:
         if args is None:
-            raise RuntimeError("Do not use!")
+            #- TODO: print warning? deprecate?
+            # raise RuntimeError("Do not use!")
             err = sp.call(cmd, shell=True)
         else:
             raise ValueError("Don't provide args unless cmd is function")
