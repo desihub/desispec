@@ -17,7 +17,7 @@ import time
 
 def get_parser():
     """
-    Creates an arguments parser for the edit_exposure_table script
+    Creates an arguments parser for the desi_purge_tilenight script
     """
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("-n", "--night", type=int, required=True,
@@ -118,7 +118,7 @@ def purge_tilenight(tiles, night, dry_run=True):
                     remove_directory(dirname, dry_run)
 
     ## Load old processing table
-    timestamp = time.strftime('%Y%M%d_%Hh%mm')
+    timestamp = time.strftime('%Y%m%d_%Hh%Mm')
     ppathname = get_processing_table_pathname(prodmod=str(night))
     ptable = load_table(tablename=ppathname, tabletype='proctable')
 
