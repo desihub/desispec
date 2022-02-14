@@ -2,15 +2,14 @@
 Tools to regroup spectra in individual exposures by healpix on the sky
 """
 
-from __future__ import absolute_import, division, print_function
-import glob, os, sys, time
+import glob, os, sys, time, json
 from collections import Counter, OrderedDict
 
 import numpy as np
 
 import fitsio
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, vstack
 import healpy as hp
 
 from desimodel.footprint import radec2pix
@@ -44,134 +43,108 @@ def fibermap2tilepix(fibermap, nside=64):
 
     return tilepix
 
-
-def get_exp2healpix_map(nights=None, expids=None, specprod_dir=None,
-        nside=64, survey=None, faprogram=None, comm=None):
-    '''
-    Returns table with columns NIGHT EXPID SPECTRO HEALPIX NTARGETS
+def get_exp2healpix_map(survey=None, program=None, expfile=None,
+        specprod_dir=None, strict=False, nights=None, expids=None):
+    """
+    Maps exposures to healpixels using preproc/NIGHT/EXPID/tilepix*.json files
 
     Options:
-        nights: list of YEARMMDD to scan for exposures (default all)
-        expids: list of exposure IDs to keep (default all)
-        specprod_dir: override $DESI_SPECTRO_REDUX/$SPECPROD
-        nside: healpix nside, must be power of 2
-        survey: only include exposures for this SURVEY (or FA_SURV)
-        faprogram: only include exposures in this fiberassign program
-        comm: MPI communicator
+        survey (str): filter by this survey (main, sv3, sv1, ...)
+        program (str): filter by this FAPRGRM (dark, bright, backup, other)
+        specprod_dir (str): override $DESI_SPECTRO_REDUX/$SPECPROD
 
-    Note: This could be replaced by a DB query when the production DB exista,
-    or by parsing the exposure tables.
+        TODO...
 
-    survey e.g. cmx, sv1, sv2, sv3, main, special
-    faprogram e.g. dark, bright, backup, other
-    '''
+    Returns table with columns NIGHT EXPID SPECTRO HEALPIX
+    """
     log = get_logger()
-    if comm is None:
-        rank, size = 0, 1
-    else:
-        rank, size = comm.rank, comm.size
-
     if specprod_dir is None:
         specprod_dir = io.specprod_root()
 
-    if nights is None and rank == 0:
-        nights = io.get_nights(specprod_dir=specprod_dir)
+    if expfile is not None:
+        log.info(f'Reading exposures list from {expfile}')
+        t = Table.read(expfile)
+        #- override FAPRGRM with what we would set it to now
+        t['FAPRGRM'] = io.meta.faflavor2program(t['FAFLAVOR'])
+        keep = t['TILEID'] > 0
+        if survey is not None:
+            keep &= (t['SURVEY'] == survey)
+        if program is not None:
+            keep &= (t['FAPRGRM'] == program)
+        if expids is not None:
+            keep &= np.isin(t['EXPID'], expids)
+        if nights is not None:
+            keep &= np.isin(t['NIGHT'], nights)
 
-    if comm:
-        nights = comm.bcast(nights, root=0)
-        expids = comm.bcast(expids, root=0)
+        exptab = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
 
-    #-----
-    #- Distribute nights over ranks, scanning their exposures to build
-    #- map of exposures -> healpix
+    else:
+        #- Read all exposure tables, filtered by SURVEY and FAPRGRM
+        expdir = f'{specprod_dir}/exposure_tables'
+        log.info(f'Reading exposures from {expdir}')
+        exp_tables = list()
+        for expfile in sorted(glob.glob(f'{expdir}/20????/exposure_table_????????.csv')):
 
-    #- Rows to add to the output table
+            #- don't read file if it isn't in the nights list
+            if nights is not None:
+                tmp = os.path.splitext(os.path.basename(expfile))[0]
+                night = int(tmp.split('_')[2])
+                if night not in nights:
+                    continue
+
+            #- read and filter entries to good science exposures of
+            #- requested survey/program/expids
+            t = Table.read(expfile)
+            keep = (t['OBSTYPE'] == 'science')
+            keep &= (t['LASTSTEP'] == 'all')
+            keep &= (t['TILEID'] > 0)
+            if survey is not None:
+                keep &= (t['SURVEY'] == survey)
+            if program is not None:
+                keep &= (t['FAPRGRM'] == program)
+            if expids is not None:
+                keep &= np.isin(t['EXPID'], expids)
+
+            if np.any(keep):
+                t = t['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM'][keep]
+                exp_tables.append(t)
+
+        if len(exp_tables) == 0:
+            raise RuntimeError('No matching tiles found in exposure tables')
+
+        exptab = vstack(exp_tables)
+
+    #- columns NIGHT EXPID SPECTRO HEALPIX
     rows = list()
 
-    #- for tracking exposures that we've already mapped in a different band
-    night_expid_spectro = set()
+    #- we only need to read one tilepix file per TILEID
+    for i in np.unique(exptab['TILEID'], return_index=True)[1]:
+        night = exptab['NIGHT'][i]
+        expid = exptab['EXPID'][i]
+        tileid = exptab['TILEID'][i]
+        survey = exptab['SURVEY'][i]
+        program = exptab['FAPRGRM'][i]
+        tilepixfile = io.findfile('tilepix', night, expid, tile=tileid)
 
-    for night in nights[rank::size]:
-        night = str(night)
-        nightdir = os.path.join(specprod_dir, 'exposures', night)
-        for expid in io.get_exposures(night, specprod_dir=specprod_dir,
-                                      raw=False):
-            if (expids is not None) and (expid not in expids):
+        if not os.path.exists(tilepixfile):
+            if strict:
+                raise FileNotFoundError(tilepixfile)
+            else:
                 continue
 
-            tmpframe = io.findfile('cframe', night, expid, 'r0',
-                                   specprod_dir=specprod_dir)
-            expdir = os.path.split(tmpframe)[0]
-            cframefiles = sorted(glob.glob(expdir + '/cframe*.fits'))
-            for filename in cframefiles:
-                #- parse 'path/night/expid/cframe-r0-12345678.fits'
-                camera = os.path.basename(filename).split('-')[1]
-                channel, spectro = camera[0], int(camera[1])
+        with open(tilepixfile) as fp:
+            tilepix = json.load(fp)
 
-                #- skip if we already have this expid/spectrograph
-                if (night, expid, spectro) in night_expid_spectro:
-                    continue
-                else:
-                    night_expid_spectro.add((night, expid, spectro))
+        for petal_str in tilepix[str(tileid)]:
+            for healpix in tilepix[str(tileid)][petal_str]:
+                rows.append( (night, expid, tileid, survey, program, int(petal_str), healpix) )
 
-                log.debug('Rank {} mapping {} {}'.format(rank, night,
-                    os.path.basename(filename)))
-                sys.stdout.flush()
+    if len(rows) == 0:
+        raise RuntimeError('No matching tilepix found')
 
-                #- determine SURVEY and FAPRGRM and whether to include
-                hdr = fitsio.read_header(filename, 'FIBERMAP')
-                if 'SURVEY' in hdr:
-                    expsurvey = hdr['SURVEY'].lower()
-                elif 'FA_SURV' in hdr:
-                    expsurvey = hdr['FA_SURV'].lower()
-                else:
-                    expsurvey = 'unknown'
+    exp2pix = Table(rows=rows, names=('NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'PROGRAM', 'SPECTRO', 'HEALPIX'))
 
-                if survey is not None and survey != expsurvey:
-                    continue
-
-                if 'FAPRGRM' in hdr and expsurvey != 'sv1':
-                    expprogram = hdr['FAPRGRM'].lower()
-                else:
-                    expprogram = io.meta.faflavor2program(hdr['FAFLAVOR'])
-
-                if faprogram is not None and faprogram != expprogram:
-                    continue
-
-                #- Determine healpix, allowing for NaN
-                columns = ['TARGET_RA', 'TARGET_DEC']
-                fibermap = fitsio.read(filename, 'FIBERMAP', columns=columns)
-                ra, dec = fibermap['TARGET_RA'], fibermap['TARGET_DEC']
-                ok = ~np.isnan(ra) & ~np.isnan(dec)
-                ra, dec = ra[ok], dec[ok]
-                allpix = radec2pix(nside, ra, dec)
-
-                #- Add rows for final output
-                for pix, ntargets in sorted(Counter(allpix).items()):
-                    rows.append((night, expid, spectro, pix,
-                        expsurvey, expprogram, ntargets))
-
-    #- Collect rows from individual ranks back to rank 0
-    if comm:
-        rank_rows = comm.gather(rows, root=0)
-        if rank == 0:
-            rows = list()
-            for r in rank_rows:
-                rows.extend(r)
-        else:
-            rows = None
-
-        rows = comm.bcast(rows, root=0)
-
-    #- Create the final output table
-    exp2healpix = np.array(rows, dtype=[
-        ('NIGHT', 'i4'), ('EXPID', 'i8'), ('SPECTRO', 'i4'),
-        ('HEALPIX', 'i8'),
-        ('SURVEY', 'U12'),
-        ('FAPROGRAM', 'U12'),
-        ('NTARGETS', 'i8')])
-
-    return exp2healpix
+    return exp2pix
 
 #-----
 class FrameLite(object):

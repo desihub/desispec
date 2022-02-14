@@ -309,7 +309,8 @@ def main(args=None, comm=None):
             fibermap = os.path.join(preprocdir, os.path.basename(fibermap))
 
             tileid = hdr['TILEID']
-            tilepix = os.path.join(preprocdir, f'tilepix-{tileid}.json')
+            # tilepix = os.path.join(preprocdir, f'tilepix-{tileid}.json')
+            tilepix = findfile('tilepix', args.night, args.expid, tile=tileid)
 
             log.info('Creating fibermap {}'.format(fibermap))
             cmd = 'assemble_fibermap -n {} -e {} -o {} -t {}'.format(
