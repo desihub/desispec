@@ -114,16 +114,12 @@ def get_exp2healpix_map(survey=None, program=None, expfile=None,
 
         exptab = vstack(exp_tables)
 
-    #- columns NIGHT EXPID SPECTRO HEALPIX
-    rows = list()
-
-    #- we only need to read one tilepix file per TILEID
+    #- read one tilepix file per TILEID
+    tilepix = dict()
     for i in np.unique(exptab['TILEID'], return_index=True)[1]:
         night = exptab['NIGHT'][i]
         expid = exptab['EXPID'][i]
         tileid = exptab['TILEID'][i]
-        survey = exptab['SURVEY'][i]
-        program = exptab['FAPRGRM'][i]
         tilepixfile = io.findfile('tilepix', night, expid, tile=tileid)
 
         if not os.path.exists(tilepixfile):
@@ -133,8 +129,13 @@ def get_exp2healpix_map(survey=None, program=None, expfile=None,
                 continue
 
         with open(tilepixfile) as fp:
-            tilepix = json.load(fp)
+            tilepix.update( json.load(fp) )
 
+    #- rows for table columns NIGHT EXPID TILEID SURVEY PROGRAM SPECTRO HEALPIX
+    rows = list()
+
+    #- Add entries for each exposure
+    for night, expid, tileid, survey, program in exptab['NIGHT', 'EXPID', 'TILEID', 'SURVEY', 'FAPRGRM']:
         for petal_str in tilepix[str(tileid)]:
             for healpix in tilepix[str(tileid)][petal_str]:
                 rows.append( (night, expid, tileid, survey, program, int(petal_str), healpix) )
