@@ -2,18 +2,40 @@
 desispec Change Log
 ===================
 
-0.51.8 (unreleased)
+0.51.9 (unreleased)
 -------------------
 
 * No changes yet.
 
+0.51.8 (2022-02-13)
+-------------------
+
+Bugfixes for Fuji; all impacted tiles/nights/healpix rerun with this tag,
+remaining tiles/nights/healpix are backwards compatible.
+
+* Set specmask BADFIBER only for impacted cameras, not all BRZ
+  (PRs `#1674`_ (master), `#1678`_ (fuji))
+* Fix assemble_fibermap with input NaNs for astropy 5.0 (PR `#1681`_).
+* Use only 120s flats for nightlyflat (PR `#1682`_).
+* Add desi_purge_tilenight script (PR `#1683`_).
+* Fix healpix input expid bookkeeping (PR `#1684`_).
+
+.. _`#1674`: https://github.com/desihub/desispec/pull/1674
+.. _`#1678`: https://github.com/desihub/desispec/pull/1678
+.. _`#1681`: https://github.com/desihub/desispec/pull/1681
+.. _`#1682`: https://github.com/desihub/desispec/pull/1682
+.. _`#1683`: https://github.com/desihub/desispec/pull/1683
+.. _`#1684`: https://github.com/desihub/desispec/pull/1684
+
 0.51.7 (2022-02-10)
 -------------------
 
-* Fix tsnr_afterburner exposure files SURVEY column (PR `#1675`_).
 * fix tile-qa expid bookkeeping (PR `#1670`_).
+* desi_tile_qa exposure/night bookkeeping fix (PR `#1672`_).
+* Fix tsnr_afterburner exposure files SURVEY column (PR `#1675`_).
 
 .. _`#1670`: https://github.com/desihub/desispec/pull/1670
+.. _`#1672`: https://github.com/desihub/desispec/pull/1672
 .. _`#1675`: https://github.com/desihub/desispec/pull/1675
 
 0.51.6 (2022-02-09)
