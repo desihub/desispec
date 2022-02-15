@@ -75,7 +75,7 @@ def main(args):
         os.makedirs(outdir, exist_ok=True)
 
         ii = exppix['HEALPIX'] == healpix
-        expfile = f'{outdir}/hpixexp-{healpix}.csv'
+        expfile = f'{outdir}/hpixexp-{args.survey}-{args.program}-{healpix}.csv'
         exppix[ii].write(expfile, overwrite=True)
 
         extra_header = dict(

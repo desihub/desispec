@@ -202,7 +202,9 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
             good_exptimes.append(False)
         elif erow['OBSTYPE'] == 'arc' and erow['EXPTIME'] > 8.:
             good_exptimes.append(False)
-        elif erow['OBSTYPE'] == 'dark' and np.abs(float(erow['EXPTIME'])-300.) > 1:
+        elif erow['OBSTYPE'] == 'dark' and np.abs(float(erow['EXPTIME']) - 300.) > 1:
+            good_exptimes.append(False)
+        elif erow['OBSTYPE'] == 'flat' and np.abs(float(erow['EXPTIME']) - 120.) > 1:
             good_exptimes.append(False)
         else:
             good_exptimes.append(True)
@@ -363,7 +365,7 @@ def submit_night(night, proc_obstypes=None, z_submit_types=None, queue='realtime
 
         ## Note: Assumption here on number of flats
         if curtype == 'flat' and calibjobs['nightlyflat'] is None \
-                and int(erow['SEQTOT']) < 5 and float(erow['EXPTIME']) > 100.:
+                and int(erow['SEQTOT']) < 5:
             flats.append(prow)
         elif curtype == 'arc' and calibjobs['psfnight'] is None:
             arcs.append(prow)
