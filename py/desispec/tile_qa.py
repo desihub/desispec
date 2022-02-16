@@ -81,7 +81,9 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         if exposure_qa_meta is None :
             exposure_qa_meta = exposure_fiberqa_table.meta
             # AR case no GOALTIME, MINTFRAC (can happen for early tiles):
-            # - set GOALTIME=1000/150/30 for dark,cmx/bright/backup
+            # - set GOALTIME:
+            #   - to 1000/150/30 for dark,cmx/bright/backup;
+            #   - to 0 if TILEID=80715 (sv1m31), 80718 (sv1rosette)
             # - set MINTFRAC=0.9
             if "GOALTIME" not in exposure_qa_meta:
                 fafn = findfile("fiberassign", night=exposure_night, expid=expid, tile=tileid)
@@ -103,6 +105,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
                     exposure_qa_meta["GOALTIME"] = 150
                 elif prog == "backup":
                     exposure_qa_meta["GOALTIME"] = 30
+                elif tileid in [80715, 80718]:
+                    exposure_qa_meta["GOALTIME"] = 0
                 if "GOALTIME" in exposure_qa_meta:
                     log.warning("no GOALTIME -> setting GOALTIME={}, as prog={}".format(exposure_qa_meta["GOALTIME"], prog))
                 else:
