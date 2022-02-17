@@ -31,7 +31,6 @@ from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
 from   desispec.io import findfile
-from   desispec.io.meta import faflavor2program
 from   desispec.io.fluxcalibration import read_flux_calibration
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
@@ -145,6 +144,7 @@ def update_targ_info(entry, targ_in):
             elif faflavor.find("cmx")>=0. :
                 entry["SURVEY"]="cmx"
 
+    entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
     if entry["GOALTYPE"]=="unknown" :
         if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0. or \
            entry["FAPRGRM"].find("elg")>=0. or entry["FAPRGRM"].find("dark")>=0. :
@@ -573,13 +573,16 @@ def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexistin
     return exp_summary, cam_summary
 
 def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename,output_csv_filename=None) :
-    """ Writes a summary fits file.
+    """Writes a summary fits file.
 
     Args:
-     tsnr2_expid_table: astropy.table.Table
-     tsnr2_frame_table: astropy.table.Table
-     output_fits_filename: str, output fits filename
-     output_csv_filename: str, output csv filename
+        tsnr2_expid_table: astropy.table.Table
+        tsnr2_frame_table: astropy.table.Table
+        output_fits_filename: str, output fits filename
+        output_csv_filename: str, output csv filename
+
+    If writing a csv file, this does an in-place rounding of multiple columns
+    of the input tsnr2_expid_table after writing the full-precision fits file
 
     Returns nothing
     """
@@ -1134,26 +1137,14 @@ def main():
             tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
 
         # end of loop on nights
-        if len(tsnr2_frame_table)>0 :
-            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,
-                                 output_csv_filename=args.outfile.replace(".fits",".csv"))
 
-            # remove temporary file if successful
-            if os.path.isfile(args.outfile) :
-                tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-                if os.path.isfile(tmpfilename) :
-                    log.info("rm temporary file {}".format(tmpfilename))
-                    os.unlink(tmpfilename)
-                tmpfilename=args.outfile.replace(".fits","_tmp.csv")
-                if os.path.isfile(tmpfilename) :
-                    log.info("rm temporary file {}".format(tmpfilename))
-                    os.unlink(tmpfilename)
-            else :
-                log.error("no valid exposures added")
+        if len(tsnr2_frame_table) == 0:
+            log.error("no valid exposures added")
+            return 1
 
         if args.tile_completeness is not None :
-            # reread the exposure table
-            exposure_table = Table.read(args.outfile)
+            # renaming for historical code reasons
+            exposure_table = tsnr2_expid_table
 
             # get list of tiles to look at
             selection = np.repeat(True,len(exposure_table))
@@ -1182,6 +1173,30 @@ def main():
                 csvtiles = head + '.csv'
                 new_tile_table.write(csvtiles, overwrite=True)
                 log.info("wrote {}".format(csvtiles))
+
+            # compute_tile_completeness_table may have found new GOALTIME info
+            # from auxiliary_table_filename, so update exposures if needed
+            for tileid, goaltime in new_tile_table['TILEID', 'GOALTIME']:
+                ii = tsnr2_expid_table['TILEID'] == tileid
+                if goaltime>0.0 and np.any(tsnr2_expid_table['GOALTIME'][ii] == 0.0):
+                    tsnr2_expid_table['GOALTIME'][ii] = goaltime
+
+        write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,
+                             output_csv_filename=args.outfile.replace(".fits",".csv"))
+
+        # remove temporary file if successful
+        if os.path.isfile(args.outfile) :
+            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
+            if os.path.isfile(tmpfilename) :
+                log.info("rm temporary file {}".format(tmpfilename))
+                os.unlink(tmpfilename)
+            tmpfilename=args.outfile.replace(".fits","_tmp.csv")
+            if os.path.isfile(tmpfilename) :
+                log.info("rm temporary file {}".format(tmpfilename))
+                os.unlink(tmpfilename)
+        else :
+            log.error("no valid exposures added")
+
 
 if __name__ == '__main__':
     main()

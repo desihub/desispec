@@ -20,7 +20,8 @@ from desispec.workflow.tableio import load_table, write_table
 
 parser = optparse.OptionParser(usage = "%prog [options] indir outdir")
 parser.add_option("--explist", help="file with NIGHT EXPID to copy")
-parser.add_option("--night", default='20??????', help="YEARMMDD to copy (can include glob wildcards)")
+parser.add_option("-n", "--night", default='20??????',
+        help="YEARMMDD to copy (can include glob wildcards)")
 parser.add_option("--fullcopy", action="store_true",
         help="Copy files instead of linking")
 parser.add_option("--abspath", action="store_true",
