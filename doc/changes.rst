@@ -2,10 +2,26 @@
 desispec Change Log
 ===================
 
-0.51.9 (unreleased)
+0.51.10 (unreleased)
+--------------------
+
+* No changes yet
+
+0.51.9 (2022-02-17)
 -------------------
 
-* No changes yet.
+Fuji cleanup bugfixes.
+
+* tile-qa goaltime special case for tiles 80715,80718 (PR `#1689`_).
+* qso afterburner output breadcrumb file if missing input camera (PR `#1691`_).
+* fix unwisebrightblue PROGRAM=other not bright (PR `#1694`_).
+* fix tsnr afterburner GOALTIME exp vs. tile consistency (PR `#1694`_).
+* fix plot_spectra with astropy 5 (PR `#1695`_).
+
+.. _`#1689`: https://github.com/desihub/desispec/pull/1689
+.. _`#1691`: https://github.com/desihub/desispec/pull/1691
+.. _`#1694`: https://github.com/desihub/desispec/pull/1694
+.. _`#1695`: https://github.com/desihub/desispec/pull/1695
 
 0.51.8 (2022-02-13)
 -------------------
