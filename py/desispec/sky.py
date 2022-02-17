@@ -29,7 +29,7 @@ from desispec.preproc import get_amp_ids
 
 def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,angular_variation_deg=0,chromatic_variation_deg=0,\
                 adjust_wavelength=False,adjust_lsf=False,\
-                only_use_skyfibers_for_adjustments=True,pcacorr=None,fit_offsets=False,fiberflat=None) :
+                only_use_skyfibers_for_adjustments=True,pcacorr=None,fit_offsets=False,fiberflat=None, skygradpca=None) :
     """Compute a sky model.
 
     Input flux are expected to be flatfielded!
@@ -56,6 +56,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
         fit_offsets : fit offsets for regions defined in calib
         fiberflat : desispec.FiberFlat object used for the fit of offsets
+        skygradpca : desispec.skygradpca.SkyGradPCA object used for sky gradient fits
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -63,7 +64,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         skymodel = compute_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,\
                                        model_ivar=model_ivar,add_variance=add_variance,\
                                        adjust_wavelength=adjust_wavelength,adjust_lsf=adjust_lsf,\
-                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,fit_offsets=fit_offsets,fiberflat=fiberflat)
+                                       only_use_skyfibers_for_adjustments=only_use_skyfibers_for_adjustments,pcacorr=pcacorr,fit_offsets=fit_offsets,fiberflat=fiberflat, skygradpca=skygradpca)
     else :
 
         if adjust_wavelength :
@@ -222,7 +223,7 @@ def compute_uniform_sky(
         frame, nsig_clipping=4., max_iterations=100, model_ivar=False,
         add_variance=True, adjust_wavelength=True, adjust_lsf=True,
         only_use_skyfibers_for_adjustments=True, pcacorr=None,
-        fit_offsets=False, fiberflat=None, skygradpca=True):
+        fit_offsets=False, fiberflat=None, skygradpca=None):
     """Compute a sky model.
 
     Sky[fiber,i] = R[fiber,i,j] Flux[j]
@@ -249,6 +250,7 @@ def compute_uniform_sky(
         pcacorr : SkyCorrPCA object to interpolate the wavelength or LSF adjustment from sky fibers to all fibers
         fit_offsets : fit offsets for regions defined in calib
         fiberflat : desispec.FiberFlat object used for the fit of offsets
+        skygradpca : desispec.skygradpca.SkyGradPCA object to use to fit sky gradients, or None
 
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -321,22 +323,21 @@ def compute_uniform_sky(
     else:
         sectors = []
 
-    if skygradpca:
-        camera = frame.meta['CAMERA']
-        skygradpcafn = os.path.join(
-            os.environ['SKYGRADPCA_DIR'],
-            f'skygradpca-{camera}.fits')
-        from astropy.io import fits
-        skygradpca = fits.getdata(skygradpcafn)
-        # we should instead pass in the relevant structure.
-        nskygradpc = skygradpca['FLUX'].shape[1]
+    if skygradpca is not None:
+        nskygradpc = skygradpca.flux.shape[0]
         dxskygradpca = frame.fibermap['FIBERASSIGN_X']
         dyskygradpca = frame.fibermap['FIBERASSIGN_Y']
         dxskygradpca -= np.mean(dxskygradpca[skyfibers])
         dyskygradpca -= np.mean(dyskygradpca[skyfibers])
+        meanR = np.sum(frame.R) / len(frame.R)
+        deconvskygradpca = np.zeros_like(skygradpca.flux)
+        for i in range(nskygradpc):
+            deconvskygradpca[i] = np.linalg.solve(
+                meanR.T.dot(meanR).toarray(),
+                meanR.T.dot(skygradpca.flux[i]))
+        skygradpca.deconvflux = deconvskygradpca
     else:
         nskygradpc = 0
-        skygradpca = None
 
     nout_tot=0
     for iteration in range(max_iterations) :
@@ -392,7 +393,7 @@ def compute_uniform_sky(
             allvals.append(vals)
             yy[fiber*nwave:(fiber+1)*nwave] = flux[fiber]
             for skygradpcind in range(nskygradpc):
-                convskygradpc = R.dot(skygradpca['FLUX'][:, skygradpcind])
+                convskygradpc = R.dot(skygradpca.deconvflux[skygradpcind])
                 allrows.append(np.arange(nwave)+fiber*nwave)
                 allcols.append(nwave + nsector + skygradpcind*2 +
                                np.zeros(nwave, dtype='i4'))
@@ -405,7 +406,11 @@ def compute_uniform_sky(
         for i, secmask in enumerate(sectors):
             rows = np.flatnonzero(secmask[skyfibers])
             cols = np.full(len(rows), nwave+i)
-            flat = fiberflat[secmask[skyfibers]].ravel()
+            if fiberflat is not None:
+                flat = (
+                    fiberflat.fiberflat[skyfibers][secmask[skyfibers]].ravel())
+            else:
+                flat = np.ones(rows.shape)
             vals = 1/(flat + (flat == 0))
             allrows.append(rows)
             allcols.append(cols)
@@ -503,6 +508,9 @@ def compute_uniform_sky(
     # no need to restore the original ivar to compute the model errors when modeling ivar
     # the sky inverse variances are very similar
 
+    if nsector > 0:
+        log.info('sectors: %d sectors fit, offsets %s' %
+                 (nsector, ' '.join([str(x) for x in param[-nsector:]])))
     log.info("compute the parameter covariance")
     # we may have to use a different method to compute this
     # covariance
@@ -545,14 +553,25 @@ def compute_uniform_sky(
     for i in range(frame.nspec):
         cskyflux[i] = frame.R[i].dot(deconvolved_sky)
         for j in range(nskygradpc):
-            pcagradspechere = skygradpca['FLUX'][:, j]*(
+            pcagradspechere = skygradpca.deconvflux[j]*(
                 dxskygradpca[i]*param[nwave + nsector + 2*j] +
                 dyskygradpca[i]*param[nwave + nsector + 2*j + 1])
             cskyflux[i] += frame.R[i].dot(pcagradspechere)
 
-    for secmask, offset in zip(sectors, param[nwave:nwave+nsector]):
-        cskyflux[secmask] += offset
+    if nskygradpc > 0:
+        log.info(('Fit with %d spatial PCs, amplitudes ' % nskygradpc) +
+                 ' '.join(['%.1f' % x for x in param[nwave+nsector:]]))
 
+    # remove sector offsets before adjusting wavelengths et al.
+    # add back at the end
+    background = np.zeros_like(cskyflux)
+    if fiberflat is not None:
+        flat = fiberflat.fiberflat
+    else:
+        flat = np.ones(cskyflux.shape)
+    for secmask, offset in zip(sectors, param[nwave:nwave+nsector]):
+        background[secmask] += offset/(flat[secmask] + (flat[secmask] == 0))
+    frame.flux -= background
 
     # See if we can improve the sky model by readjusting the wavelength and/or the width of sky lines
     # now cskyflux contains the offsets plus the reconvolved, deconvolved sky.
@@ -777,6 +796,9 @@ def compute_uniform_sky(
         modified_cskyivar = _model_variance(frame,cskyflux,cskyivar,skyfibers)
     else :
         modified_cskyivar = cskyivar.copy()
+
+    cskyflux += background
+    frame.flux += background
 
     # set sky flux and ivar to zero to poorly constrained regions
     # and add margins to avoid expolation issues with the resolution matrix
