@@ -581,9 +581,6 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
         output_fits_filename: str, output fits filename
         output_csv_filename: str, output csv filename
 
-    If writing a csv file, this does an in-place rounding of multiple columns
-    of the input tsnr2_expid_table after writing the full-precision fits file
-
     Returns nothing
     """
     log = get_logger()
@@ -600,6 +597,8 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
 
     # also write first table as csv
     if output_csv_filename is not None :
+        # make a copy before modifying precision of columns
+        tsnr2_expid_table = tsnr2_expid_table.copy(copy_data=True)
         for k in tsnr2_expid_table.keys() :
             if k.find("TIME")>=0 or k.find("SNR2")>=0 :
                 try :
@@ -1181,8 +1180,9 @@ def main():
                 if goaltime>0.0 and np.any(tsnr2_expid_table['GOALTIME'][ii] == 0.0):
                     tsnr2_expid_table['GOALTIME'][ii] = goaltime
 
+        output_csv_filename = os.path.splitext(args.outfile)[0] + '.csv'
         write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,
-                             output_csv_filename=args.outfile.replace(".fits",".csv"))
+                             output_csv_filename=output_csv_filename)
 
         # remove temporary file if successful
         if os.path.isfile(args.outfile) :
