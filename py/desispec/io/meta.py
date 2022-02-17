@@ -582,7 +582,7 @@ def faflavor2program(faflavor):
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
     bright  = faflavor == 'sv1bgsmws'
-    bright |= np.char.endswith(faflavor, 'bright')
+    bright |= (faflavor != 'sv1unwisebluebright') & np.char.endswith(faflavor, 'bright')
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='backup'
     backup  = faflavor == 'sv1backup1'

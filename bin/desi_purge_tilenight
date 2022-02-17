@@ -88,7 +88,7 @@ def purge_tilenight(tiles, night, dry_run=True):
                 remove_directory(dirname, dry_run)
 
             groupname = 'perexp'
-            ftype = 'redrock_tile'
+            ftype = 'redrock'
             dirname = os.path.dirname(findfile(filetype=ftype, night=night,
                                                expid=expid, camera='b0',
                                                spectrograph=0, tile=tile,
@@ -97,7 +97,7 @@ def purge_tilenight(tiles, night, dry_run=True):
 
         ## Remove the pernight redshift directory if it exists
         groupname = 'pernight'
-        ftype = 'redrock_tile'
+        ftype = 'redrock'
         dirname = os.path.dirname(findfile(filetype=ftype, night=night,
                                            camera='b0', spectrograph=0,
                                            tile=tile, groupname=groupname))
@@ -106,7 +106,7 @@ def purge_tilenight(tiles, night, dry_run=True):
         ## Look at all cumulative redshifts and remove any that would include the
         ## give tile-night data (any THRUNIGHT on or after the night given)
         groupname = 'cumulative'
-        ftype = 'redrock_tile'
+        ftype = 'redrock'
         tiledirname = os.path.dirname(os.path.dirname(
             findfile(filetype=ftype, night=night, camera='b0', spectrograph=0,
                      tile=tile, groupname=groupname)))

@@ -894,15 +894,18 @@ class TestIO(unittest.TestCase):
             'cmxelg', 'cmxlrgqso',
             'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
             'sv1bgsmws', 'sv1backup1', 'blat', 'foo',
-            'sv2dark', 'sv3bright', 'mainbackup']
+            'sv2dark', 'sv3bright', 'mainbackup',
+            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint']
         program = np.array([
             'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
             'bright', 'backup', 'other', 'other',
-            'dark', 'bright', 'backup'])
+            'dark', 'bright', 'backup',
+            'other', 'other', 'other'])
 
         #- list input
         p = faflavor2program(flavor)
-        self.assertTrue(np.all(p==program))
+        for i in range(len(flavor)):
+            self.assertEqual(p[i], program[i], f'flavor {flavor[i]}')
 
         #- array input
         p = faflavor2program(np.array(flavor))
