@@ -222,6 +222,9 @@ for ifile, rrfile in enumerate(redrockfiles):
     elif args.group == 'cumulative':
         data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                 index=icol, name='LASTNIGHT')
+    elif args.group == 'healpix':
+        data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
+                index=icol, name='HEALPIX')
 
     zcatdata.append(data)
 
@@ -258,7 +261,7 @@ zcat = np.array(zcat)
 #- Inherit header from first input, but remove keywords that don't apply
 #- across multiple files
 header = fitsio.read_header(redrockfiles[0], 0)
-for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID']:
+for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL']:
     if key in header:
         header.delete(key)
 
