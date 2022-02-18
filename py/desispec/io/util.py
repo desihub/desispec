@@ -547,6 +547,49 @@ def difference_camwords(fullcamword,badcamword):
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
 
+def camword_union(camwords, full_spectros_only=False):
+    """
+    Returns the union of a list of camwords. Optionally can return only
+    those spectros with complete b, r, and z cameras. Note this intentionally
+    does the union before truncating spectrographs, so two partial camwords
+    can lead to an entire spectrograph,
+
+       e.g. [a0b1z1, a3r1z2] -> [a013z2] if full_spectros_only=False
+            [a0b1z1, a3r1z2] -> [a013] if full_spectros_only=True
+
+    even through no camword has a complete set of camera 1, a complete set is
+    represented in the union.
+
+    Args:
+        camwords, list or array of strings. List of camwords.
+        full_spectros_only, bool. True if only complete spectrographs with
+                  b, r, and z cameras in the funal union should be returned.
+
+    Returns:
+        final_camword, str. The final union of all input camwords, where
+             truncation of incomplete spectrographs may or may not be performed
+             based on full_spectros_only.
+    """
+    camword = ''
+    if np.isscalar(camwords):
+        if not isinstance(camwords, str):
+            ValueError(f"camwords must be array-like or str. Received type: {type(camwords)}")
+        else:
+            camword = camwords
+    else:
+        cams = set(decode_camword(camwords[0]))
+        for camword in camwords[1:]:
+            cams = cams.union(set(decode_camword(camword)))
+        camword = create_camword(list(cams))
+
+    if full_spectros_only:
+        full_sps = np.sort(camword_to_spectros(camword,
+                                               full_spectros_only=True)).astype(str)
+        final_camword = 'a' + ''.join(full_sps)
+    else:
+        final_camword = camword
+    return final_camword
+
 def camword_to_spectros(camword, full_spectros_only=False):
     """
     Takes a camword as input and returns any spectrograph represented within that camword. By default this includes partial

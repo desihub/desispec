@@ -76,16 +76,16 @@ for filename in args.infile :
     if args.std_stars :
         selection = isStdStar(frame.fibermap)
         fibers = np.sort(frame.fibermap["FIBER"][selection])
-        print("showing std stars fibers: {}".format(fibers))
+        print("showing {} std stars fibers: {}".format(fibers.size,list(fibers)))
     if args.sky_fibers :
         selection = frame.fibermap["OBJTYPE"]=="SKY"
         fibers = np.sort(frame.fibermap["FIBER"][selection])
-        print("showing std stars fibers: {}".format(fibers))
+        print("showing {} sky fibers fibers: {}".format(fibers.size,list(fibers)))
 
-
+    selection = np.in1d(frame.fibermap["FIBER"],fibers)
     if args.focal_plane and frame.fibermap is not None :
-        x.append(frame.fibermap["FIBERASSIGN_X"])
-        y.append(frame.fibermap["FIBERASSIGN_Y"])
+        x.append(frame.fibermap["FIBERASSIGN_X"][selection])
+        y.append(frame.fibermap["FIBERASSIGN_Y"][selection])
 
         if args.wmin is not None and len(frame.wave.shape) == 1 :
             b=np.where(frame.wave>=args.wmin)[0][0]
@@ -96,7 +96,8 @@ for filename in args.infile :
         else :
             e=frame.wave.size-200 # to avoid edge of camera with variable dichroic transmission
 
-        vals = np.median(frame.flux[:,b:e],axis=1)*(frame.fibermap["FIBERSTATUS"]==0)
+        #vals = np.median(frame.flux[:,b:e],axis=1)[selection]*(frame.fibermap["FIBERSTATUS"]==0)[selection]
+        vals = np.median(frame.flux[:,b:e],axis=1)[selection]
         z.append(vals)
         continue
 
@@ -206,7 +207,7 @@ if args.focal_plane :
     else :
         vmax=mz+3*rmsz
 
-    plt.scatter(x[ii],y[ii],c=z[ii],vmin=vmin,vmax=vmax,s=9)
+    plt.scatter(x[ii],y[ii],c=z[ii],vmin=vmin,vmax=vmax,s=30)
     plt.axis("off")
     plt.colorbar()
     plt.tight_layout()

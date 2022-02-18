@@ -2,10 +2,90 @@
 desispec Change Log
 ===================
 
-0.51.4 (unreleased)
+0.51.10 (unreleased)
+--------------------
+
+* No changes yet
+
+0.51.9 (2022-02-17)
 -------------------
 
-* No changes yet.
+Fuji cleanup bugfixes.
+
+* tile-qa goaltime special case for tiles 80715,80718 (PR `#1689`_).
+* qso afterburner output breadcrumb file if missing input camera (PR `#1691`_).
+* fix unwisebrightblue PROGRAM=other not bright (PR `#1694`_).
+* fix tsnr afterburner GOALTIME exp vs. tile consistency (PR `#1694`_).
+* fix plot_spectra with astropy 5 (PR `#1695`_).
+
+.. _`#1689`: https://github.com/desihub/desispec/pull/1689
+.. _`#1691`: https://github.com/desihub/desispec/pull/1691
+.. _`#1694`: https://github.com/desihub/desispec/pull/1694
+.. _`#1695`: https://github.com/desihub/desispec/pull/1695
+
+0.51.8 (2022-02-13)
+-------------------
+
+Bugfixes for Fuji; all impacted tiles/nights/healpix rerun with this tag,
+remaining tiles/nights/healpix are backwards compatible.
+
+* Set specmask BADFIBER only for impacted cameras, not all BRZ
+  (PRs `#1674`_ (master), `#1678`_ (fuji))
+* Fix assemble_fibermap with input NaNs for astropy 5.0 (PR `#1681`_).
+* Use only 120s flats for nightlyflat (PR `#1682`_).
+* Add desi_purge_tilenight script (PR `#1683`_).
+* Fix healpix input expid bookkeeping (PR `#1684`_).
+
+.. _`#1674`: https://github.com/desihub/desispec/pull/1674
+.. _`#1678`: https://github.com/desihub/desispec/pull/1678
+.. _`#1681`: https://github.com/desihub/desispec/pull/1681
+.. _`#1682`: https://github.com/desihub/desispec/pull/1682
+.. _`#1683`: https://github.com/desihub/desispec/pull/1683
+.. _`#1684`: https://github.com/desihub/desispec/pull/1684
+
+0.51.7 (2022-02-10)
+-------------------
+
+* fix tile-qa expid bookkeeping (PR `#1670`_).
+* desi_tile_qa exposure/night bookkeeping fix (PR `#1672`_).
+* Fix tsnr_afterburner exposure files SURVEY column (PR `#1675`_).
+
+.. _`#1670`: https://github.com/desihub/desispec/pull/1670
+.. _`#1672`: https://github.com/desihub/desispec/pull/1672
+.. _`#1675`: https://github.com/desihub/desispec/pull/1675
+
+0.51.6 (2022-02-09)
+-------------------
+
+Used for Fuji healpix redshifts and cleanup of failed tile-qa.
+Backwards compatible with previously run steps.
+
+* Make tile-qa robust to missing cameras (PR `#1665`_)
+* Refactor healpix redshifts workflow (PR `#1668`_)
+
+.. _`#1665`: https://github.com/desihub/desispec/pull/1665
+.. _`#1668`: https://github.com/desihub/desispec/pull/1668
+
+0.51.5 (2022-02-07)
+-------------------
+
+Used for processing nightly biases for Fuji nights 20210331 and 20210422,
+and Guadalupe night 20210629.  Backwards compatible with other nights.
+
+* Additional desi_compute_nightlybias options for flexibility on which ZEROs
+  to use (PR `#1662`_).
+
+.. _`#1662`: https://github.com/desihub/desispec/pull/1662
+
+0.51.4 (2022-02-04)
+-------------------
+
+Pipelining fix for Fuji; previously run impacted nights will be resubmitted.
+
+* Fix stdstar camword logic when input exposures have different cameras
+  available (PR `#1658`_).
+
+.. _`#1658`: https://github.com/desihub/desispec/pull/1658
 
 0.51.3 (2022-01-31)
 -------------------

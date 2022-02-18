@@ -18,7 +18,8 @@ from shutil import rmtree
 from pkg_resources import resource_filename
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, MaskedColumn
+import fitsio
 from ..frame import Frame
 
 
@@ -210,6 +211,44 @@ class TestIO(unittest.TestCase):
         #
         write_bintable(self.testfile, data, header=hdr, extname='FOOBAR', clobber=True)
 
+    def test_read_table(self):
+        """test desispec.io.table.read_table"""
+        from ..io.table import read_table
+
+        t = Table()
+        t['a'] = ['a', 'b', '']
+        t['x'] = [1.0, 2.0, np.NaN]
+        t['blat'] = [10, 20, 30]
+        t.meta['EXTNAME'] = 'TABLE'
+        t.meta['BLAT'] = 'foo'
+
+        testfile = os.path.join(self.testDir, 'testtable.fits')
+        t.write(testfile)
+
+        tx = read_table(testfile)
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
+
+        #- read a non-default extension
+        t.meta['EXTNAME'] = 'KUMQUAT'
+        fitsio.write(testfile, np.array(t), header=t.meta, extname='KUMQUAT')
+
+        tx = read_table(testfile, 'KUMQUAT')
+        self.assertEqual(tx.meta['EXTNAME'], 'KUMQUAT')
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
 
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.
@@ -855,15 +894,18 @@ class TestIO(unittest.TestCase):
             'cmxelg', 'cmxlrgqso',
             'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
             'sv1bgsmws', 'sv1backup1', 'blat', 'foo',
-            'sv2dark', 'sv3bright', 'mainbackup']
+            'sv2dark', 'sv3bright', 'mainbackup',
+            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint']
         program = np.array([
             'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
             'bright', 'backup', 'other', 'other',
-            'dark', 'bright', 'backup'])
+            'dark', 'bright', 'backup',
+            'other', 'other', 'other'])
 
         #- list input
         p = faflavor2program(flavor)
-        self.assertTrue(np.all(p==program))
+        for i in range(len(flavor)):
+            self.assertEqual(p[i], program[i], f'flavor {flavor[i]}')
 
         #- array input
         p = faflavor2program(np.array(flavor))
@@ -1068,6 +1110,23 @@ class TestIO(unittest.TestCase):
         for fcw, bcw, truth in zip(fcamwords, bcamwords, truediffs):
             diff = difference_camwords(fcw, bcw)
             self.assertEqual(diff, truth)
+
+    def test_camword_union(self):
+        """ Test desispec.io.camword_union
+        """
+        from ..io.util import camword_union
+        fcamwords = [['a01b2r2r3', 'a01z2'],
+                     ['a013', 'a2'],
+                     ['a013456789b2r2', 'a01b2z2'],
+                     ['a013456789b2r2', 'a0'],
+                     ['a0b1r1z12']]
+        truecams = ['a012r3', 'a0123', 'a0123456789', 'a013456789b2r2', 'a01z2']
+        truespecs = ['a012', 'a0123', 'a0123456789', 'a013456789', 'a01']
+        for fcws, truecamw, truespecw in zip(fcamwords, truecams, truespecs):
+            outcw = camword_union(fcws, full_spectros_only=False)
+            self.assertEqual(outcw, truecamw)
+            outcw = camword_union(fcws, full_spectros_only=True)
+            self.assertEqual(outcw, truespecw)
 
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix

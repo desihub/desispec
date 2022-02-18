@@ -40,6 +40,7 @@ from .raw import read_raw, write_raw
 from .sky import read_sky, write_sky
 from .skycorr import (read_skycorr, write_skycorr, read_skycorr_pca, write_skycorr_pca)
 from .skygradpca import read_skygradpca, write_skygradpca
+from .table import read_table
 from .util import (header2wave, fitsheader, native_endian, makepath,
                    write_bintable, iterfiles, healpix_degrade_fixed,
                    healpix_subdirectory, replace_prefix)
