@@ -1007,7 +1007,7 @@ def main(args=None, comm=None):
                 else :
                     log.warning("No SKYCORR file, do you need to update DESI_SPECTRO_CALIB?")
             cmd += " --fit-offsets"
-            if (not args.no_skygradpca):
+            if args.skygradpca:
                 skygradpca_filename = findcalibfile([hdr, camhdr[camera]], 'SKYGRADPCA')
                 if skygradpca_filename is not None :
                     cmd += " --skygradpca {}".format(skygradpca_filename)

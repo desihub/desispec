@@ -73,7 +73,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
     parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
-    parser.add_argument("--no-skygradpca", action="store_true", help="Do not fit sky gradient")
+    parser.add_argument("--skygradpca", action="store_true", help="Fit sky gradient")
 
     return parser
 
