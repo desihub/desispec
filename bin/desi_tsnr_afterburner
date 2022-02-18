@@ -664,7 +664,7 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         table_output_filename= f'{details_dir}/{night}/{expid:08d}/tsnr-{camera}-{expid:08d}.fits'
         if os.path.isfile(table_output_filename):
             log.debug(f'Using previously generated {table_output_filename}')
-            table = read_table(table_output_filename)
+            table = Table.read(table_output_filename)
             compute_tsnr = False
 
     #- compute tsnr
