@@ -217,8 +217,6 @@ def dist_discrete_all(worksizes, nworkers, power=1.0):
         warnings.warn("Too many workers ({}) for {} work items.  Some workers"
             " idle.".format(nworkers, len(worksizes)), RuntimeWarning)
 
-    target = np.sum(weights) / nworkers
-
     dist = []
 
     off = 0
@@ -227,8 +225,7 @@ def dist_discrete_all(worksizes, nworkers, power=1.0):
         if curweight + weights[cur] > max_per_proc:
             ## dist.append( (off, cur-off) )
             dist.append( list(range(off, cur)) )
-            over = curweight - target
-            curweight = weights[cur] + over
+            curweight = weights[cur]
             off = cur
         else:
             curweight += weights[cur]
