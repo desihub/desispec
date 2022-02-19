@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.51.10 (unreleased)
+0.51.11 (unreleased)
 --------------------
 
 * No changes yet
+
+0.51.10 (2022-02-18)
+--------------------
+
+* tile-qa avoid divide-by-zero crash on unknown goaltime (PR `#1698`_).
+* propagate HEALPIX into zpix redshift catalogs (PR `#1699`_).
+* Fix GOALTIME in exposures FRAMES HDU; avoid EFFTIME_ETC NaN (PR `#1701`_).
+
+.. _`#1698`: https://github.com/desihub/desispec/pull/1698
+.. _`#1699`: https://github.com/desihub/desispec/pull/1699
+.. _`#1701`: https://github.com/desihub/desispec/pull/1701
 
 0.51.9 (2022-02-17)
 -------------------
