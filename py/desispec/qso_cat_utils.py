@@ -341,14 +341,14 @@ def build_qso_catalog_from_healpix(redux='/global/cfs/cdirs/desi/spectro/redux/'
         QSO_cat = pd.concat(pool.starmap(qso_catalog_for_a_pixel, arguments), ignore_index=True)
     logging.getLogger("QSO_CAT_UTILS").setLevel(logging.INFO)
 
-    suffix = ''
-    if keep_all:
-        suffix = '_all'
     if keep_qso_targets:
         log.info('Keep only qso targets...')
         suffix = '_only_qso_targets'
-        QSO_cat = QSO_cat.iloc[QSO_cat[desi_target_from_survey(survey)].values & 2**2 != 0]
+        save_dataframe_to_fits(QSO_cat.iloc[QSO_cat[desi_target_from_survey(survey)].values & 2**2 != 0], os.path.join(dir_output, f'QSO_cat_{release}_{survey}_{program}_healpix_only_qso_targets.fits'))
 
+    suffix = ''
+    if keep_all:
+        suffix = '_all'
     save_dataframe_to_fits(QSO_cat, os.path.join(dir_output, f'QSO_cat_{release}_{survey}_{program}_healpix{suffix}.fits'))
 
 
