@@ -56,7 +56,7 @@ def collect_argparser():
                         help="which objects will be saved in the output files:" +
                              "restricted (objects which are identify as QSO by QN and where we have a new run of RR)" +
                              " / all (All objects which are tested by QN" +
-                             " --> To have 500 objects in the ouput file: set --target_selection all_targets --save_target all")
+                             " --> To have coadd.size objects in the ouput file: set --target_selection all_targets --save_target all")
 
     # for QN
     parser.add_argument("--c_thresh", type=float, required=False, default=0.5,
@@ -199,7 +199,7 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     Args:
         redrock: fitsio hdu 'REDSHIFTS' from redrock file
         fibermap:  fitsio hdu 'FIBERMAP' from redrock file
-        sel_to_QN (bool array): size 500. Select on which objects QN will be apply (index based on redrock)
+        sel_to_QN (bool array): Select on which objects QN will be apply (index based on redrock)
         DESI_TARGET (str): name of DESI_TARGET for the wanted version of the target selection
         spectra_name (str): The name of the spectra file
         param_QN (dict): contains info for QN as n_thresh and c_thresh
@@ -217,7 +217,9 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
     data, index_with_QN = load_desi_coadd(spectra_name, sel_to_QN)
 
     if len(index_with_QN) == 0: # if there is no object for QN :(
-        QSO_sel = pd.DataFrame()
+        sel_QN = np.zeros(sel_to_QN.size, dtype='bool')
+        index_with_QN_with_no_pb = sel_QN.copy()
+        c_line, z_line, z_QN = np.array([]), np.array([]), np.array([])
     else:
         p = model_QN.predict(data[:, :, None])
         c_line, z_line, z_QN, c_line_bal, z_line_bal = process_preds(p, lines, lines_bal, verbose=False) # c_line.size = index_with_QN.size and not index_to_QN !!
@@ -242,54 +244,54 @@ def selection_targets_with_QN(redrock, fibermap, sel_to_QN, DESI_TARGET, spectra
         if sel_QN.sum() != 0:
             # Re-run Redrock with prior and with only qso templates to compute the redshift of QSO_QN
             redshift, err_redshift, coeffs = collect_redshift_with_new_RR_run(spectra_name, redrock['TARGETID'][sel_QN], z_QN[index_with_QN_with_no_pb], param_RR)
-        QSO_sel = pd.DataFrame()
 
-        if save_target == 'restricted':
-            index_to_save = sel_QN.copy()
-            index_to_save_QN_result = sel_QN[sel_to_QN]
-        elif save_target == 'all':
-            index_to_save = sel_to_QN.copy()
-            # save every object with nan value if it is necessary --> there are sel_to_QN.sum() objects to save
-            # index_with_QN is size of sel_to_QN.sum()
-            index_to_save_QN_result = np.ones(sel_to_QN.sum(), dtype=bool)
-        else:
-            # never happen since a test is performed before running this function in desi_qso_qn_afterburner
-            log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
+    if save_target == 'restricted':
+        index_to_save = sel_QN.copy()
+        index_to_save_QN_result = sel_QN[sel_to_QN]
+    elif save_target == 'all':
+        index_to_save = sel_to_QN.copy()
+        # save every object with nan value if it is necessary --> there are sel_to_QN.sum() objects to save
+        # index_with_QN is size of sel_to_QN.sum()
+        index_to_save_QN_result = np.ones(sel_to_QN.sum(), dtype=bool)
+    else:
+        # never happen since a test is performed before running this function in desi_qso_qn_afterburner
+        log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
 
-        QSO_sel['TARGETID'] = redrock['TARGETID'][index_to_save]
-        QSO_sel['RA'] = fibermap['TARGET_RA'][index_to_save]
-        QSO_sel['DEC'] = fibermap['TARGET_DEC'][index_to_save]
-        QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][index_to_save]
-        QSO_sel['IS_QSO_QN_NEW_RR'] = sel_QN[index_to_save]
-        QSO_sel['SPECTYPE'] = redrock['SPECTYPE'][index_to_save]
-        QSO_sel['Z_RR'] = redrock['Z'][index_to_save]
+    QSO_sel = pd.DataFrame()
+    QSO_sel['TARGETID'] = redrock['TARGETID'][index_to_save]
+    QSO_sel['RA'] = fibermap['TARGET_RA'][index_to_save]
+    QSO_sel['DEC'] = fibermap['TARGET_DEC'][index_to_save]
+    QSO_sel[DESI_TARGET] = fibermap[DESI_TARGET][index_to_save]
+    QSO_sel['IS_QSO_QN_NEW_RR'] = sel_QN[index_to_save]
+    QSO_sel['SPECTYPE'] = redrock['SPECTYPE'][index_to_save]
+    QSO_sel['Z_RR'] = redrock['Z'][index_to_save]
 
-        tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
-        tmp_arr[index_with_QN] = z_QN
-        QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
+    tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
+    tmp_arr[index_with_QN] = z_QN
+    QSO_sel['Z_QN'] = tmp_arr[index_to_save_QN_result]
 
-        tmp_arr = np.NaN*np.ones((6, sel_to_QN.sum()))
-        tmp_arr[:, index_with_QN] = c_line
-        QSO_sel['C_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
+    tmp_arr = np.NaN*np.ones((6, sel_to_QN.sum()))
+    tmp_arr[:, index_with_QN] = c_line
+    QSO_sel['C_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
 
-        tmp_arr = np.NaN*np.ones((6, sel_to_QN.sum()))
-        tmp_arr[:, index_with_QN] = z_line
-        QSO_sel['Z_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
+    tmp_arr = np.NaN*np.ones((6, sel_to_QN.sum()))
+    tmp_arr[:, index_with_QN] = z_line
+    QSO_sel['Z_LINES'] = tmp_arr.T[index_to_save_QN_result].tolist()
 
-        tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
-        if index_with_QN_with_no_pb.sum() != 0: # in case where sel_QN.sum() == 0 and redshift is so not defined
-            tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redshift
-        QSO_sel['Z_NEW'] = tmp_arr[index_to_save_QN_result]
+    tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
+    if index_with_QN_with_no_pb.sum() != 0: # in case where sel_QN.sum() == 0 and redshift is so not defined
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = redshift
+    QSO_sel['Z_NEW'] = tmp_arr[index_to_save_QN_result]
 
-        tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
-        if index_with_QN_with_no_pb.sum() != 0:
-            tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = err_redshift
-        QSO_sel['ZERR_NEW'] = tmp_arr[index_to_save_QN_result]
+    tmp_arr = np.NaN*np.ones(sel_to_QN.sum())
+    if index_with_QN_with_no_pb.sum() != 0:
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb]] = err_redshift
+    QSO_sel['ZERR_NEW'] = tmp_arr[index_to_save_QN_result]
 
-        tmp_arr = np.NaN*np.ones((sel_to_QN.sum(), 10))
-        if index_with_QN_with_no_pb.sum() != 0:
-            tmp_arr[index_with_QN[index_with_QN_with_no_pb], :] = coeffs
-        QSO_sel['COEFFS'] = tmp_arr[index_to_save_QN_result].tolist()
+    tmp_arr = np.NaN*np.ones((sel_to_QN.sum(), 10))
+    if index_with_QN_with_no_pb.sum() != 0:
+        tmp_arr[index_with_QN[index_with_QN_with_no_pb], :] = coeffs
+    QSO_sel['COEFFS'] = tmp_arr[index_to_save_QN_result].tolist()
 
     return QSO_sel
 
@@ -375,72 +377,64 @@ if __name__ == "__main__":
     param_RR['delete_RR_output'] = args.delete_RR_output
 
     if os.path.isfile(args.coadd) & os.path.isfile(args.redrock):
-        # testing if the three camera is in the coadd file. If note create a blank file.
-        if np.isin(['B_FLUX', 'R_FLUX', 'Z_FLUX'], [hdu.get_extname() for hdu in fitsio.FITS(args.coadd)]).sum() != 3:
-            file = open(os.path.splitext(args.output)[0]+'.misscamera', "w")
-            file.write(f"It misses at least one camera in the coadd file: {args.coadd}")
-            file.write("\nThis is expected for the exposure directory.")
-            file.write('\nThis is NOT expected for cumulative / healpix directory!')
-            file.close()
-            log.warning(f"It misses at least one camera in the coadd file; blanck file {os.path.splitext(args.output)[0]+'.misscamera'} is written")
+        # open best fit file generated by redrock
+        with fitsio.FITS(args.redrock) as redrock_file:
+            redrock = redrock_file['REDSHIFTS'].read()
+            fibermap = redrock_file['FIBERMAP'].read()
+
+        # from everest REDSHIFTS hdu and FIBERMAP hdu have the same order (the indices match)
+        if np.sum(redrock['TARGETID'] == fibermap['TARGETID']) == redrock['TARGETID'].size:
+            log.info("SANITY CHECK: The indices of REDROCK HDU and FIBERMAP HDU match.")
         else:
-            # open best fit file generated by redrock
-            with fitsio.FITS(args.redrock) as redrock_file:
-                redrock = redrock_file['REDSHIFTS'].read()
-                fibermap = redrock_file['FIBERMAP'].read()
+            log.error("**** The indices of REDROCK HDU AND FIBERMAP DHU do not match. This is not expected ! ****")
+            sys.exit(1)
 
-            # from everest REDSHIFTS hdu and FIBERMAP hdu have the same order (the indices match)
-            if np.sum(redrock['TARGETID'] == fibermap['TARGETID']) == redrock['TARGETID'].size:
-                log.info("SANITY CHECK: The indices of REDROCK HDU and FIBERMAP HDU match.")
+        # Find which selection is used (SV1/ SV2 / SV3 / MAIN / ...)
+        DESI_TARGET = main_cmx_or_sv(fibermap)[0][0]
+
+        if args.target_selection.lower() in ('qso', 'qso_targets'):
+            if DESI_TARGET == 'DESI_TARGET':
+                qso_mask_bit = desi_mask.mask('QSO')
+            elif DESI_TARGET == 'SV3_DESI_TARGET':
+                qso_mask_bit = sv3_mask.mask('QSO')
+            elif DESI_TARGET == 'SV2_DESI_TARGET':
+                qso_mask_bit = sv2_mask.mask('QSO')
+            elif DESI_TARGET == 'SV1_DESI_TARGET':
+                qso_mask_bit = sv1_mask.mask('QSO')
+            elif DESI_TARGET == 'CMX_TARGET':
+                qso_mask_bit = cmx_mask.mask('MINI_SV_QSO|SV0_QSO')
             else:
-                log.error("**** The indices of REDROCK HDU AND FIBERMAP DHU do not match. This is not expected ! ****")
+                log.error("**** DESI_TARGET IS NOT CMX / SV1 / SV2 / SV3 / MAIN ****")
                 sys.exit(1)
+            sel_to_QN = fibermap[DESI_TARGET] & qso_mask_bit != 0
 
-            # Find which selection is used (SV1/ SV2 / SV3 / MAIN / ...)
-            DESI_TARGET = main_cmx_or_sv(fibermap)[0][0]
+        elif args.target_selection.lower() in ('all', 'all_targets'):
+            sel_to_QN = np.ones(redrock['TARGETID'].size, dtype=bool)
+        else:
+            log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (qso_targets / all_targets) ****")
+            sys.exit(1)
 
-            if args.target_selection.lower() in ('qso', 'qso_targets'):
-                if DESI_TARGET == 'DESI_TARGET':
-                    qso_mask_bit = desi_mask.mask('QSO')
-                elif DESI_TARGET == 'SV3_DESI_TARGET':
-                    qso_mask_bit = sv3_mask.mask('QSO')
-                elif DESI_TARGET == 'SV2_DESI_TARGET':
-                    qso_mask_bit = sv2_mask.mask('QSO')
-                elif DESI_TARGET == 'SV1_DESI_TARGET':
-                    qso_mask_bit = sv1_mask.mask('QSO')
-                elif DESI_TARGET == 'CMX_TARGET':
-                    qso_mask_bit = cmx_mask.mask('MINI_SV_QSO|SV0_QSO')
-                else:
-                    log.error("**** DESI_TARGET IS NOT CMX / SV1 / SV2 / SV3 / MAIN ****")
-                    sys.exit(1)
-                sel_to_QN = fibermap[DESI_TARGET] & qso_mask_bit != 0
+        # Check args.save_target to avoid a crash after the QN + new RR Run
+        if not (args.save_target in ['restricted', 'all']):
+            log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
+            sys.exit(1)
 
-            elif args.target_selection.lower() in ('all', 'all_targets'):
-                sel_to_QN = np.ones(redrock['TARGETID'].size, dtype=bool)
-            else:
-                log.error("**** CHOOSE CORRECT TARGET_SELECTION FLAG (qso_targets / all_targets) ****")
-                sys.exit(1)
+        log.info(f"Nbr objetcs for QN: {sel_to_QN.sum()}")
+        QSO_from_QN = selection_targets_with_QN(redrock, fibermap, sel_to_QN,
+                DESI_TARGET, args.coadd, param_QN, param_RR, args.save_target)
 
-            # Check args.save_target to avoid a crash after the QN + new RR Run
-            if not (args.save_target in ['restricted', 'all']):
-                log.error('**** CHOOSE CORRECT SAVE_TARGET FLAG (restricted / all) ****')
-                sys.exit(1)
+        if QSO_from_QN.shape[0] > 0:
+            log.info(f"Number of targets saved : {QSO_from_QN.shape[0]} -- "
+                     f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
+            save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
+        else:
+            file = open(os.path.splitext(args.output)[0]+'.notargets', "w")
+            file.write("No targets were selected by QN afterburner to be a QSO.")
+            file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
+            file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
+            file.close()
+            log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets'} is written")
 
-            log.info(f"Nbr objetcs for QN: {sel_to_QN.sum()}")
-            QSO_from_QN = selection_targets_with_QN(redrock, fibermap, sel_to_QN,
-                    DESI_TARGET, args.coadd, param_QN, param_RR, args.save_target)
-
-            if QSO_from_QN.shape[0] > 0:
-                log.info(f"Number of targets saved : {QSO_from_QN.shape[0]} -- "
-                         f"Selected with QN + new RR: {QSO_from_QN['IS_QSO_QN_NEW_RR'].sum()}")
-                save_dataframe_to_fits(QSO_from_QN, args.output, DESI_TARGET)
-            else:
-                file = open(os.path.splitext(args.output)[0]+'.notargets', "w")
-                file.write("No targets were selected by QN afterburner to be a QSO.")
-                file.write(f"\nThis is done with the following parametrization : target_selection = {args.target_selection}\n")
-                file.write("\nIN SOME CASE (BRIGHT TILE + target_selection=QSO), this file is expected !")
-                file.close()
-                log.warning(f"No objects selected to save; blanck file {os.path.splitext(args.output)[0]+'.notargets'} is written")
 
     else: # file for the consider Tile / Night / petal does not exist
         log.error(f"**** There is problem with files: {args.coadd} or {args.redrock} ****")
