@@ -2,10 +2,17 @@
 desispec Change Log
 ===================
 
-0.51.11 (unreleased)
+0.51.12 (unreleased)
 --------------------
 
-* No changes yet
+* No changes yet.
+
+0.51.11 (2022-02-21)
+--------------------
+
+* qso_qn afterburner fix for case when all inputs are masked (PR `#1704`_).
+
+.. _`#1704`: https://github.com/desihub/desispec/pull/1704
 
 0.51.10 (2022-02-18)
 --------------------
