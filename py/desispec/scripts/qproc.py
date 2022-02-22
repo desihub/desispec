@@ -13,7 +13,8 @@ import numpy as np
 import astropy.io.fits as fits
 from desiutil.log import get_logger
 from desispec.util import option_list
-from desispec.io import read_raw,read_image,read_fibermap,write_image,write_fiberflat,read_fiberflat
+from desispec.io import read_image,read_fibermap,write_image,write_fiberflat,read_fiberflat
+from desispec.io.raw import read_raw
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.io.xytraceset import read_xytraceset,write_xytraceset
 import desispec.scripts.trace_shifts as trace_shifts_script

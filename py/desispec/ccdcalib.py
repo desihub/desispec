@@ -102,7 +102,7 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             thisbias = False
 
         # read raw data and preprocess them
-        img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
+        img = io.raw.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
                 mask=False, dark=False, pixflat=False)
 
         # propagate gains to first_image_header

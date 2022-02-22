@@ -249,7 +249,7 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
     Note: either `outfile` or `outdir` must be provided
     """
     try:
-        img = io.read_raw(infile, camera,
+        img = io.raw.read_raw(infile, camera,
                           fibermapfile=fibermap,
                           **preproc_opts)
     except IOError as e:

@@ -7,7 +7,8 @@ import os,sys
 import astropy
 import astropy.io.fits as fits 
 from desispec import io
-from desispec.io import read_raw,read_image
+from desispec.io import read_image
+from desispec.io.raw import read_raw
 from desispec.io.meta import findfile
 from desispec.io.fluxcalibration import read_average_flux_calibration
 from desispec.calibfinder import findcalibfile
