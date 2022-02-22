@@ -125,7 +125,7 @@ class TestQL_PA(unittest.TestCase):
         hdr['DOSVER'] = 'SIM'
         hdr['FEEVER'] = 'SIM'
         hdr['DETECTOR'] = 'SIM'
-        desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
+        desispec.io.raw.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
 
         

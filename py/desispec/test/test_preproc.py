@@ -253,16 +253,16 @@ class TestPreProc(unittest.TestCase):
         self.assertTrue(np.all(image.mask[10:20,10:20] & ccdmask.PIXFLATLOW))
 
     def test_io(self):
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='R1')
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='z9')
+        io.raw.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
+        io.raw.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='R1')
+        io.raw.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='z9')
         self.header['CAMERA'] = 'B3'
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
+        io.raw.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
 
-        b0 = io.read_raw(self.rawfile, 'b0')
-        #b1 = io.read_raw(self.rawfile, 'b1')
-        #r1 = io.read_raw(self.rawfile, 'r1')
-        #z9 = io.read_raw(self.rawfile, 'Z9')
+        b0 = io.raw.read_raw(self.rawfile, 'b0')
+        #b1 = io.raw.read_raw(self.rawfile, 'b1')
+        #r1 = io.raw.read_raw(self.rawfile, 'r1')
+        #z9 = io.raw.read_raw(self.rawfile, 'Z9')
 
         self.assertEqual(b0.meta['CAMERA'], 'b0')
         #self.assertEqual(b1.meta['CAMERA'], 'b1')
@@ -281,15 +281,15 @@ class TestPreProc(unittest.TestCase):
 
         #- Primary HDU should be blank
         #- Should be written as vanilla ImageHDU
-        io.write_raw(self.rawfile, data64, self.header, primary_header = self.primary_header, camera='b0')
+        io.raw.write_raw(self.rawfile, data64, self.header, primary_header = self.primary_header, camera='b0')
         #- Should be written as vanilla ImageHDU
-        io.write_raw(self.rawfile, data64, self.header, primary_header = self.primary_header, camera='b1')
+        io.raw.write_raw(self.rawfile, data64, self.header, primary_header = self.primary_header, camera='b1')
         #- Should be converted to 32-bit CompImageHDU
-        io.write_raw(self.rawfile, datasmall64, self.header, primary_header = self.primary_header, camera='b2')
+        io.raw.write_raw(self.rawfile, datasmall64, self.header, primary_header = self.primary_header, camera='b2')
         #- Should be 32-bit CompImageHDU
-        io.write_raw(self.rawfile, data32, self.header, primary_header = self.primary_header, camera='b3')
+        io.raw.write_raw(self.rawfile, data32, self.header, primary_header = self.primary_header, camera='b3')
         #- Should be 16-bit CompImageHDU
-        io.write_raw(self.rawfile, data16, self.header, primary_header = self.primary_header, camera='b4')
+        io.raw.write_raw(self.rawfile, data16, self.header, primary_header = self.primary_header, camera='b4')
 
         fx = fits.open(self.rawfile)
 
@@ -342,7 +342,7 @@ class TestPreProc(unittest.TestCase):
         #       del self.header[keyword]
 
         #       with self.assertRaises(KeyError):
-        #           io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
+        #           io.raw.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
 
         #      self.header[keyword] = value
 
@@ -382,8 +382,8 @@ class TestPreProc(unittest.TestCase):
         image = preproc(self.rawimage, hdr, primary_header = self.primary_header)
 
     def test_preproc_script(self):
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
-        io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b1')
+        io.raw.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b0')
+        io.raw.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header, camera='b1')
         args = ['--infile', self.rawfile, '--cameras', 'b0',
                 '--outfile', self.pixfile]
         if os.path.exists(self.pixfile):

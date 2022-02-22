@@ -157,7 +157,7 @@ class TestQL_QA(unittest.TestCase):
         hdr['FEEVER'] = 'SIM'
         hdr['DETECTOR'] = 'SIM'
 
-        desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
+        desispec.io.raw.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
         
         #- read psf, should use specter.PSF.load_psf instead of desispec.PSF(), otherwise need to create a psfboot somewhere.
