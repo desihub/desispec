@@ -243,6 +243,8 @@ for ifile, rrfile in enumerate(redrockfiles):
 
         data.add_column(np.full(nrows, hdr['SPGRPVAL'], dtype=dtype),
                 index=icol, name='SPGRPVAL')
+    else:
+        log.warning(f'SPGRPVAL keyword missing from {rrfile}')
 
     zcatdata.append(data)
 
