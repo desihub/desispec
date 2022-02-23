@@ -442,7 +442,7 @@ def decode_camword(camword):
             searchstr = searchstr[1:]
     return sorted(camlist)
 
-def parse_cameras(cameras):
+def parse_cameras(cameras, loglevel='INFO'):
     """
     Function that takes in a representation
     of all spectrographs and outputs a string that succinctly lists all
@@ -454,11 +454,14 @@ def parse_cameras(cameras):
     Args:
        cameras, str. 1-d array, list: Either a str that is a comma separated list or a series of spectrographs.
                                       Also accepts a list or iterable that is processed with create_camword().
+    Options:
+        loglevel, str: use e.g. "WARNING" to avoid INFO-level log messages for just this call
+
     Returns (str):
        camword, str. A string representing all information about the spectrographs/cameras
                      given in the input iterable, e.g. a01234678b59z9
     """
-    log = get_logger()
+    log = get_logger(loglevel)
     if cameras is None:
         camword = None
     elif type(cameras) is str:
