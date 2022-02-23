@@ -62,14 +62,13 @@ if args.specprod is not None:
 specprod = os.environ['SPECPROD']
 
 if args.outfile is not None:
-    #- get abspath because we will chdir later
     args.outfile = os.path.abspath(args.outfile)
 
-if args.expfile is None:
-    args.expfile = f'exposures-{specprod}.fits'
+reduxdir = desispec.io.specprod_root()
+log.info(f'Inspecting {reduxdir}')
 
-os.chdir(desispec.io.specprod_root())
-log.info(f'Inspecting {os.getcwd()}')
+if args.expfile is None:
+    args.expfile = f'{reduxdir}/exposures-{specprod}.fits'
 
 #- read exposures and frames in this production
 log.info(f'Reading exposures from {args.expfile}')
