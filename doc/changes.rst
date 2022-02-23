@@ -5,7 +5,11 @@ desispec Change Log
 0.51.12 (unreleased)
 --------------------
 
-* No changes yet.
+* Remove unnecessary ``specter.psf`` import, which also allows ``desispec``
+  utilities to be imported without explicitly requiring ``specter`` (PR
+  `#1709`_). 
+
+.. _`#1709`: https://github.com/desihub/desispec/pull/1709
 
 0.51.11 (2022-02-21)
 --------------------
