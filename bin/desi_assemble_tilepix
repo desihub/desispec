@@ -61,6 +61,10 @@ if args.specprod is not None:
 
 specprod = os.environ['SPECPROD']
 
+if args.outfile is not None:
+    #- get abspath because we will chdir later
+    args.outfile = os.path.abspath(args.outfile)
+
 if args.expfile is None:
     args.expfile = f'exposures-{specprod}.fits'
 
@@ -107,7 +111,7 @@ if args.outfile:
                 rows.append((int(tileid), survey, program, int(petal),int(pix)))
 
     tx = Table(rows=rows,
-            names=('TILEID', 'SURVEY', 'PROGRAM', 'PETAL', 'HEALPIX'),
+            names=('TILEID', 'SURVEY', 'PROGRAM', 'PETAL_LOC', 'HEALPIX'),
             dtype=(np.int32, str, str, np.int16, np.int32) )
 
     tx.meta['EXTNAME'] = 'TILEPIX'
@@ -125,6 +129,7 @@ if args.outfile:
 if not args.check:
     sys.exit(0)
 
+log.info('Checking for missing or extra healpix')
 nbad = 0
 for survey, program in list(np.unique(exp['SURVEY', 'PROGRAM'])):
     if isinstance(survey, bytes):
