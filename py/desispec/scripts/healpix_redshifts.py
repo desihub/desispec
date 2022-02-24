@@ -26,7 +26,7 @@ def parse(options=None):
     p.add_argument('--nside', type=int, default=64,
             help='healpix nside (default 64)')
     p.add_argument('--expfile', type=str, required=False,
-            help='input production 0exposures file')
+            help='input production exposures file')
     p.add_argument("--nosubmit", action="store_true",
             help="generate scripts but don't submit batch jobs")
     p.add_argument("--noafterburners", action="store_true",

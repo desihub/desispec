@@ -1209,6 +1209,8 @@ def make_tile_qa_plot(
     # AR reading
     h = fits.open(tileqafits)
     hdr = h["FIBERQA"].header
+    # AR switching to np.float32 to avoid error when dividing by zeros
+    hdr["GOALTIME"] = np.float32(hdr["GOALTIME"])
     fiberqa = h["FIBERQA"].data
     petalqa = h["PETALQA"].data
 

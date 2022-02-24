@@ -214,14 +214,37 @@ for ifile, rrfile in enumerate(redrockfiles):
     if args.group == 'perexp':
         data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                 index=icol, name='NIGHT')
+        icol += 1
         data.add_column(np.full(nrows, hdr['EXPID'], dtype=np.int32),
-                index=icol+1, name='EXPID')
+                index=icol, name='EXPID')
     elif args.group == 'pernight':
         data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                 index=icol, name='NIGHT')
     elif args.group == 'cumulative':
         data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
                 index=icol, name='LASTNIGHT')
+    elif args.group == 'healpix':
+        data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
+                index=icol, name='HEALPIX')
+
+    icol += 1
+
+    # SPGRPVAL = night for pernight, expid for perexp, subset for custom coadds
+    if 'SPGRPVAL' in hdr.keys():
+        val = hdr['SPGRPVAL']
+        # if int, try to make int32, otherwise let numpy pick dtype
+        if isinstance(val, int):
+            if np.int32(val) == val:
+                dtype = np.int32
+            else:
+                dtype = np.int64
+        else:
+            dtype = None
+
+        data.add_column(np.full(nrows, hdr['SPGRPVAL'], dtype=dtype),
+                index=icol, name='SPGRPVAL')
+    else:
+        log.warning(f'SPGRPVAL keyword missing from {rrfile}')
 
     zcatdata.append(data)
 
@@ -258,7 +281,7 @@ zcat = np.array(zcat)
 #- Inherit header from first input, but remove keywords that don't apply
 #- across multiple files
 header = fitsio.read_header(redrockfiles[0], 0)
-for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID']:
+for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL']:
     if key in header:
         header.delete(key)
 
