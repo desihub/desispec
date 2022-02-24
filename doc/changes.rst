@@ -8,8 +8,16 @@ desispec Change Log
 * Remove unnecessary ``specter.psf`` import, which also allows ``desispec``
   utilities to be imported without explicitly requiring ``specter`` (PR
   `#1709`_). 
+* Let plot_spectra show errors even with --rebin (PR `#1714`_, `#1708`_).
+* add SPGRPVAL to desi_zcatalog for custom coadds/redshift group tracking
+  (PR `#1712`_).
+* desi_assemble_tilepix replacement for desi_map_tilepix (PR `#1713`_).
 
+.. _`#1708`: https://github.com/desihub/desispec/pull/1708
 .. _`#1709`: https://github.com/desihub/desispec/pull/1709
+.. _`#1712`: https://github.com/desihub/desispec/pull/1712
+.. _`#1713`: https://github.com/desihub/desispec/pull/1713
+.. _`#1714`: https://github.com/desihub/desispec/pull/1714
 
 0.51.11 (2022-02-21)
 --------------------
