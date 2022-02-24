@@ -61,7 +61,14 @@ if args.specprod is not None:
 
 specprod = os.environ['SPECPROD']
 
+if args.outfile is None and not args.check:
+    log.warning("Normally you'd want --check and/or --outfile, but proceeding anyway")
+
 if args.outfile is not None:
+    if not args.outfile.endswith( ('.fits', '.ecsv') ):
+        log.error(f'--outfile must be .fits or .ecsv, not {args.outfile}')
+        sys.exit(1)
+
     args.outfile = os.path.abspath(args.outfile)
 
 reduxdir = desispec.io.specprod_root()
@@ -94,7 +101,7 @@ for tileid in tileids:
     assert 'r' not in camword
     assert 'z' not in camword
     for petal in range(10):
-        if camword_union([camword, f'a{petal}']) != camword:
+        if str(petal) not in camword:
             log.debug(f'Dropping tileid {tileid} petal {petal} not in camword {camword}')
             del tilepix[str(tileid)][str(petal)]
 
@@ -148,7 +155,8 @@ for survey, program in list(np.unique(exp['SURVEY', 'PROGRAM'])):
             nbad += 1
 
     #- Check for extra directories
-    for dirname in sorted(glob.glob(f'healpix/{survey}/{program}/*/*')):
+    for dirname in sorted(glob.glob(f'healpix/{survey}/{program}/[0-9]*/[0-9]*')):
+        # could still get pathological cases like 123blat, so try/except test:
         try:
             pix = int(os.path.basename(dirname))
         except ValueError:
