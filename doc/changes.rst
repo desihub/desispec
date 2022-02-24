@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.51.12 (unreleased)
+0.51.13 (unreleased)
+--------------------
+
+* No changes yet.
+
+0.51.12 (2022-02-23)
 --------------------
 
 * Remove unnecessary ``specter.psf`` import, which also allows ``desispec``
