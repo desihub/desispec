@@ -391,7 +391,11 @@ def main():
                 datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
         for col in TARGETINGBITCOLS:
             datamodel[col] = np.zeros(1, dtype=np.int64)
-        
+
+        # This bit of code loops through all the fiberassign headers and figures
+        # out which secondary catalogs are (ever) used for fiber assignment, so
+        # we can cache them (below).
+            
         if args.get_secondary_targetdirs:
             fiberfiles = np.hstack(glob(os.path.join(fiberassign_dir, '???', 'fiberassign-*.fits*')))
             #I = rand.choice(len(fiberfiles), size=50, replace=False) # for testing
@@ -425,7 +429,7 @@ def main():
         # To speed things up, read and cache all the large secondary target catalogs and
         # the TOO files *once*. Now, not all these catalogs are actually used but we
         # don't know which ones yet until we read all the fiberassign headers.
-        ##print('Hack! Only read one secondary catalog!')
+
         #cachefiles = np.hstack([
         #    glob('/global/cfs/cdirs/desi/target/catalogs/dr9/*/targets/*/secondary/*/*targets-*-secondary*.fits'),
         #    #glob('/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/*targets-*-secondary*.fits'),
@@ -454,7 +458,10 @@ def main():
         #    ])
         
         cachefiles = np.hstack([
-                ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits'],
+                ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
+                 ],
                 glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
         
         mpargs = []
@@ -462,7 +469,6 @@ def main():
             if cachefile.replace('.fits', '-dr9photometry.fits') in cachefiles and '.ecsv' not in cachefile: # just read the photometry
                 continue
             mpargs.append([cachefile])
-            
         if args.mp > 1:
             with multiprocessing.Pool(args.mp) as P:
                 photocache1 = P.map(_cache_one_catalog, mpargs)
