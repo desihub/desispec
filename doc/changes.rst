@@ -12,7 +12,9 @@ desispec Change Log
 * add SPGRPVAL to desi_zcatalog for custom coadds/redshift group tracking
   (PR `#1712`_).
 * desi_assemble_tilepix replacement for desi_map_tilepix (PR `#1713`_).
+* fix read_tile_spectra for group='cumulative' (PR `#1696`_).
 
+.. _`#1696`: https://github.com/desihub/desispec/pull/1696
 .. _`#1708`: https://github.com/desihub/desispec/pull/1708
 .. _`#1709`: https://github.com/desihub/desispec/pull/1709
 .. _`#1712`: https://github.com/desihub/desispec/pull/1712
