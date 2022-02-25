@@ -485,12 +485,12 @@ def main():
         out = out[srt]    
 
         out.meta['EXTNAME'] = 'TARGETPHOT'
-        log.info('Writing {} objects to {}'.format(len(out), outfile))
+        log.info('Writing {:,} objects to {}'.format(len(out), outfile))
         out.write(outfile, overwrite=True)
 
         outfile_zcat = outfile.replace('-targetphot.fits', '-targetphot-zcat.fits')
         zcat.meta['EXTNAME'] = 'ZCATALOG'
-        log.info('Writing {} objects to {}'.format(len(zcat), outfile_zcat))
+        log.info('Writing {:,} objects to {}'.format(len(zcat), outfile_zcat))
         zcat.write(outfile_zcat, overwrite=True)
 
         # For testing and validation, also write out the objects without
@@ -532,7 +532,7 @@ def main():
         outfile_miss = outfile.replace('-targetphot.fits', '-targetphot-missing.fits')
 
         out_miss.meta['EXTNAME'] = 'TARGETPHOT-MISSING'
-        log.info('Writing {} objects to {}'.format(len(out_miss), outfile_miss))
+        log.info('Writing {:,} objects to {}'.format(len(out_miss), outfile_miss))
         out_miss.write(outfile_miss, overwrite=True)
         
     if args.tractorphot:
@@ -571,7 +571,7 @@ def main():
         out = out[srt] 
 
         out.meta['EXTNAME'] = 'TRACTORPHOT'
-        log.info('Writing {} objects to {}'.format(len(out), outfile))
+        log.info('Writing {:,} objects to {}'.format(len(out), outfile))
         out.write(outfile, overwrite=True)
         
 if __name__ == '__main__':
