@@ -110,7 +110,7 @@ def main():
         for coadd_type in ['cumulative', 'perexp', 'pernight']:
             log.info('Working on coadd type {}'.format(coadd_type))
             zcatfiles = sorted(set(glob(os.path.join(args.reduxdir, 'zcatalog', '{}-*-{}.fits'.format(zprefix, coadd_type)))))
-            for zcatfile in zcatfiles[5:]:
+            for zcatfile in zcatfiles:
                 log.info('Working on redshift catalog {}'.format(zcatfile))
                 if coadd_type == 'cumulative':
                     columns = basecolumns + ['LASTNIGHT']

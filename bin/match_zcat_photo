@@ -3,7 +3,8 @@
 """Match data release redshift catalogs against the original photometric
 (target) catalogs.
 
-time /global/u2/i/ioannis/code/desihub/desispec/bin/match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/fuji --mp 1 -o /global/cscratch1/sd/ioannis/photocatalog --targetphot --validate-files
+time /global/u2/i/ioannis/code/desihub/desispec/bin/match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/fuji --mp 32 -o /global/cscratch1/sd/ioannis/photocatalog --outprefix fuji --targetphot
+time /global/u2/i/ioannis/code/desihub/desispec/bin/match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/fuji --mp 32 -o /global/cscratch1/sd/ioannis/photocatalog --outprefix fuji --tractorphot
 
 """
 import os, sys, argparse, pdb
@@ -16,9 +17,10 @@ from astropy.io import fits
 from astropy.table import Table, vstack
 from desispec.io import specprod_root
 from desimodel.footprint import radec2pix
+from desitarget.targets import decode_targetid, decode_negative_targetid
 
 from desiutil.log import get_logger, DEBUG
-log = get_logger(DEBUG)
+log = get_logger()#DEBUG)
 
 desi_root = os.environ.get('DESI_ROOT')
 fiberassign_dir = os.path.join(desi_root, 'target', 'fiberassign', 'tiles', 'trunk')
@@ -34,6 +36,18 @@ TARGETINGBITCOLS = [
     'SV1_SCND_TARGET', 'SV2_SCND_TARGET', 'SV3_SCND_TARGET',
     ]
     
+def _read_one_zcat(args):
+    return read_one_zcat(*args) 
+
+def read_one_zcat(catfile):
+    log.info('Reading {}'.format(catfile))
+    hdr = fitsio.read_header(catfile, ext='ZCATALOG')
+    survey, program = hdr['SURVEY'], hdr['PROGRAM']
+    cat = Table(fitsio.read(catfile, columns=['TARGETID', 'TILEID', 'TARGET_RA', 'TARGET_DEC']))
+    cat['SURVEY'] = survey
+    cat['PROGRAM'] = program
+    return cat
+
 def _cache_one_catalog(args):
     return cache_one_catalog(*args) 
 
@@ -42,26 +56,15 @@ def cache_one_catalog(cachefile):
     if '.ecsv' in cachefile:
         cat = Table.read(cachefile)
         key = 'TOO'
-        #if 'sv3' in cachefile:
-        #    key = 'TOO_sv3'
-        #else:
-        #    key = 'TOO_main'
     else:
         cat = fitsio.read(cachefile, columns='TARGETID') # just targetid
-        #cat = Table(fitsio.read(cachefile))
         key = cachefile
     return {key: cat}
 
-def _targets_one_healpix(args):
-    return targets_one_healpix(*args)
+def _tractorphot_one(args):
+    return tractorphot_one(*args)
 
-def _targets_one_tile(args):
-    return targets_one_tile(*args)
-
-def _tractor_one_brick(args):
-    return tractor_one_brick(*args)
-
-def tractor_one_brick(cat):
+def tractorphot_one(cat):
     """Retrieve the Tractor catalog for all the objects in this catalog (one brick)."""
 
     assert(np.all(cat['PHOTSYS'] == cat['PHOTSYS'][0]))
@@ -97,56 +100,20 @@ def tractor_one_brick(cat):
 
     return tractor
 
-def targets_one_healpix(healpix, zcat, survey, program, tileids, photocache,
-                        datamodel, reduxdir, validate_files=False):
-    """Build the photometric target catalog for all the objects on a single tile."""
+def _targetphot_one(args):
+    return targetphot_one(*args)
 
-    # check that the spectra exist as a validation step
-    if validate_files:
-        coaddfile = os.path.join(reduxdir, 'healpix', survey, program, str(healpix//100), str(healpix),
-                                 'coadd-{}-{}-{}.fits'.format(survey, program, healpix))
-        redrockfile = os.path.join(reduxdir, 'healpix', survey, program, str(healpix//100), str(healpix),
-                                   'redrock-{}-{}-{}.fits'.format(survey, program, healpix))
-        if not os.path.isfile(coaddfile):
-            log.warning('Missing {}'.format(coaddfile))
-        if not os.path.isfile(redrockfile):
-            log.warning('Missing {}'.format(redrockfile))
+def targetphot_one(zcat, photocache, datamodel, reduxdir):
+    """Build the photometric target catalog for all the objects on a single tile."""
 
     # build the full photometric catalog
     targetdirs, TOO = [], None
-    for tileid in tileids:
+    for tileid in set(zcat['TILEID']):
         _targetdirs, _TOO = get_targetdirs(tileid, photocache)
         if _TOO is not None:
             TOO = _TOO
         targetdirs.append(_targetdirs)
     targetdirs = np.hstack(targetdirs)
-    out = read_target_photo(zcat, photocache, datamodel, targetdirs, TOO=TOO)
-
-    srt = np.hstack([np.where(tid == out['TARGETID'])[0] for tid in zcat['TARGETID']])
-    out = out[srt]    
-    assert(np.all(out['TARGETID'] == zcat['TARGETID']))
-
-    return out
-
-def targets_one_tile(tileid, zcat, photocache, datamodel, reduxdir, coadd_type, validate_files=False):
-    """Build the photometric target catalog for all the objects on a single tile."""
-
-    # check that the spectra exist as a validation step
-    if validate_files:
-        assert(len(np.unique(zcat['LASTNIGHT'])) == 1) # unique?
-        lastnight = str(zcat['LASTNIGHT'][0])
-        for petal in set(zcat['PETAL_LOC']):
-            coaddfile = os.path.join(reduxdir, 'tiles', coadd_type, str(tileid), lastnight,
-                                     'coadd-{}-{}-thru{}.fits'.format(str(petal), tileid, lastnight))
-            redrockfile = os.path.join(reduxdir, 'tiles', coadd_type, str(tileid), lastnight,
-                                       'redrock-{}-{}-thru{}.fits'.format(str(petal), tileid, lastnight))
-            if not os.path.isfile(coaddfile):
-                log.warning('Missing {}'.format(coaddfile))
-            if not os.path.isfile(redrockfile):
-                log.warning('Missing {}'.format(redrockfile))
-    
-    # build the full photometric catalog
-    targetdirs, TOO = get_targetdirs(tileid, photocache)
     out = read_target_photo(zcat, photocache, datamodel, targetdirs, TOO=TOO)
 
     return out
@@ -193,11 +160,6 @@ def get_targetdirs(tileid, photocache):
     # any ToOs?
     if 'TOO' in fahdr:
         TOO = photocache['TOO']
-        ## special case, fragile!
-        #if 'sv3' in fahdr['TOO']:
-        #    TOO = photocache['TOO_sv3']
-        #else:
-        #    TOO = photocache['TOO_main']
     else:
         TOO = None
 
@@ -332,9 +294,6 @@ def read_target_photo(zcat, photocache, datamodel, targetdirs, TOO=None):
     # np.hstack will sometimes complain even if the tables are identical...
     #photo = Table(np.hstack(photo))
     photo = vstack(photo)
-    #for col in photo[0].colnames:
-    #    if not photo[0][col].dtype == photo[1][col].dtype:
-    #        log.warning('Mismatching dtype in column {}'.format(col))
 
     # make sure there are no duplicates...?
     _, uindx = np.unique(photo['TARGETID'], return_index=True) 
@@ -346,11 +305,6 @@ def read_target_photo(zcat, photocache, datamodel, targetdirs, TOO=None):
     srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
     out[I] = photo[srt]
     
-    ## photometric columns can be out of order...
-    #for col in photo.colnames:
-    #    #print(col)
-    #    out[col][I] = photo[srt][col]
-
     return out
 
 def main():
@@ -358,13 +312,12 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--reduxdir', type=str, help='spectro redux base dir overrides $DESI_SPECTRO_REDUX/$SPECPROD')
     p.add_argument('-o', '--outdir', type=str, required=True, help='output directory file')
+    p.add_argument('--outprefix', type=str, required=True, help='output file prefix')
     p.add_argument('--mp', type=int, default=1, help='number of multiprocessing cores')
-    p.add_argument('--validate-files', action='store_true', help='Validate individual files.')
     p.add_argument('--get-secondary-targetdirs', action='store_true', help='Figure out which secondary target catalogs actually were used to design tiles.')
     p.add_argument('--targetphot', action='store_true', help='Build the photo-targets catalogs.')
     p.add_argument('--tractorphot', action='store_true', help='Build the photo-tractor catalogs.')
-    p.add_argument('--overwrite-targetphot', action='store_true', help='Overwrite existing photo-targets files.')
-    p.add_argument('--overwrite-tractorphot', action='store_true', help='Overwrite existing photo-tractor files.')
+    p.add_argument('--overwrite', action='store_true', help='Overwrite existing photo-targets files.')
     
     args = p.parse_args()
     log = get_logger()
@@ -376,11 +329,15 @@ def main():
         os.makedirs(args.outdir, exist_ok=True)
 
     # for testing
-    rand = np.random.RandomState(seed=1)
+    #rand = np.random.RandomState(seed=1)
     rand = None
 
     if args.targetphot:
-
+        outfile = os.path.join(args.outdir, '{}-targetphot.fits'.format(args.outprefix))
+        if os.path.isfile(outfile) and not args.overwrite:
+            log.info('Output file {} exists; use --overwrite'.format(outfile))
+            return
+            
         # Fragile! Read a single row of a single target catalog in order to get the
         # correct photometric data model. Add all the _TARGET columns at the end
         datamodel = Table(fitsio.read('/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark/targets-dark-hp-0.fits', rows=0))
@@ -482,164 +439,140 @@ def main():
                     photocache[key] = vstack((_photocache1[key], photocache[key]), metadata_conflicts='silent') # stack the TOO catalogs
             photocache.update(_photocache1)
 
-        # handle the zpix catalogs
-        zprefix = 'zpix'
-        columns = ['TARGETID', 'HEALPIX', 'TARGET_RA', 'TARGET_DEC']
-        
-        zcatfiles = sorted(set(glob(os.path.join(args.reduxdir, 'zcatalog', '{}-*.fits'.format(zprefix)))))
-        zcatfiles = ['/global/cfs/cdirs/desi/spectro/redux/fuji/zcatalog/zpix-sv1-dark.fits']
+        # Read all the zpix catalogs in parallel.
+        zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
+        mpargs = []
         for zcatfile in zcatfiles:
-            outfile = os.path.join(args.outdir, os.path.basename(zcatfile).replace('{}-'.format(zprefix), '{}-targetphot-'.format(zprefix)))        
-            if os.path.isfile(outfile) and not args.overwrite_targetphot:
-                log.info('Output file {} exists; use --overwrite-targetphot'.format(outfile))
-                continue
+            mpargs.append([zcatfile])
+        if args.mp > 1:
+            with multiprocessing.Pool(args.mp) as P:
+                zcat = P.map(_read_one_zcat, mpargs)
+        else:
+            zcat = [read_one_zcat(mparg[0]) for mparg in mpargs]
 
-            log.info('Working on redshift catalog {}'.format(zcatfile))            
-            zcat = Table(fitsio.read(zcatfile, 'ZCATALOG', columns=columns))
-            tileids = np.unique(fitsio.read(zcatfile, 'EXP_FIBERMAP', columns='TILEID'))
-
-            hdr = fitsio.read_header(zcatfile, ext='ZCATALOG')
-            survey, program = hdr['SURVEY'], hdr['PROGRAM']
-            
-            # multiprocess over healpixels
-            mpargs = [[healpix, zcat[healpix == zcat['HEALPIX']], survey, program, tileids, photocache, datamodel,
-                       args.reduxdir, args.validate_files] for healpix in set(zcat['HEALPIX'])]
-                    
-            if args.mp > 1:
-                with multiprocessing.Pool(args.mp) as P:
-                    out = P.map(_targets_one_healpix, mpargs)
-            else:
-                out = [targets_one_healpix(*mparg) for mparg in mpargs]
-    
-            # stack and write out
-            try:
-                out = Table(np.hstack(out))
-
-                # skies and stuck positioners can appear multiple times
-                #aa = out['TARGETID']
-                #aa[~np.in1d(np.arange(len(aa)), np.unique(aa, return_index=True)[1], assume_unique=True)]
-                _, uindx = np.unique(out['TARGETID'], return_index=True)
-                out = out[uindx]
-                
-                srt = np.hstack([np.where(tid == out['TARGETID'])[0] for tid in zcat['TARGETID']])
-                out = out[srt]    
-                assert(np.all(out['TARGETID'] == zcat['TARGETID']))
-            except:
-                pdb.set_trace()
-            out.meta['EXTNAME'] = 'TARGETPHOT'
-            log.info('Writing {} objects to {}'.format(len(out), outfile))
-            out.write(outfile, overwrite=True)
-
-            del out
-    
-        # handle the ztile catalogs
-        zprefix = 'ztile'
-        basecolumns = ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC']
+        # stack and choose unique TARGETIDs
+        zcat = vstack(zcat)
+        _, uindx = np.unique(zcat['TARGETID'], return_index=True)
+        zcat = zcat[uindx]
         
-        #for coadd_type in ['pernight']:
-        for coadd_type in ['cumulative', 'perexp', 'pernight']:
-            log.info('Working on coadd type {}'.format(coadd_type))
-            zcatfiles = sorted(set(glob(os.path.join(args.reduxdir, 'zcatalog', '{}-*-{}.fits'.format(zprefix, coadd_type)))))
-            #print('Hack!')
-            #pdb.set_trace()
-            #zcatfiles = [zcatfiles[3]]
-            #zcatfiles = ['/global/cfs/cdirs/desi/spectro/redux/fuji/zcatalog/ztile-special-dark-{}.fits'.format(coadd_type)]
-            zcatfiles = ['/global/cfs/cdirs/desi/spectro/redux/fuji/zcatalog/ztile-sv2-bright-cumulative.fits']
-            for zcatfile in zcatfiles:
-                outfile = os.path.join(args.outdir, os.path.basename(zcatfile).replace('{}-'.format(zprefix), '{}-targetphot-'.format(zprefix)))
-                if os.path.isfile(outfile) and not args.overwrite_targetphot:
-                    log.info('Output file {} exists; use --overwrite-targetphot'.format(outfile))
-                    continue
-    
-                if coadd_type == 'cumulative':
-                    columns = basecolumns + ['LASTNIGHT']
-                elif coadd_type == 'perexp':
-                    columns = basecolumns + ['NIGHT', 'EXPID']
-                elif coadd_type == 'pernight':
-                    columns = basecolumns + ['NIGHT']
-    
-                log.info('Working on redshift catalog {}'.format(zcatfile))
-                zcat = Table(fitsio.read(zcatfile, 'ZCATALOG', columns=columns))
-                    
-                #print('Hack to just one tile!')
-                #zcat = zcat[(zcat['TILEID'] > 81101) * (zcat['TILEID'] < 81107)]
-                if rand is not None:
-                    #zcat = zcat[zcat['TILEID'] == 81108]
-                    J = rand.choice(len(zcat), size=100, replace=False)
-                    zcat = zcat[J]
+        log.info('Found {:,} unique TARGETIDs and {:,} unique tiles from {} redshift catalogs'.format(
+            len(zcat), len(set(zcat['TILEID'])), len(zcatfiles)))
+
+        if rand is not None:
+            #zcat = zcat[zcat['TILEID'] == 81108]
+            J = rand.choice(len(zcat), size=500, replace=False)
+            zcat = zcat[J]
+
+        # ~10^4 objects have NaN coordinates; handle those separately
+        inan = np.isnan(zcat['TARGET_RA'])
+        zcat_nan = zcat[inan]
+        zcat = zcat[np.logical_not(inan)]
+            
+        # Multiprocess over nside=8 healpixels. This approach we will 
+        pixels = radec2pix(8, zcat['TARGET_RA'], zcat['TARGET_DEC'])
+        mpargs = [[zcat[pixel == pixels], photocache, datamodel, args.reduxdir]
+                  for pixel in set(pixels)]
                 
-                # multiprocess over tiles
-                mpargs = [[tileid, zcat[tileid == zcat['TILEID']], photocache, datamodel,
-                           args.reduxdir, coadd_type, args.validate_files] for tileid in set(zcat['TILEID'])]
-                        
-                if args.mp > 1:
-                    with multiprocessing.Pool(args.mp) as P:
-                        out = P.map(_targets_one_tile, mpargs)
-                else:
-                    out = [targets_one_tile(*mparg) for mparg in mpargs]
-    
-                # stack and write out
-                try:
-                    out = Table(np.hstack(out))
+        if args.mp > 1:
+            with multiprocessing.Pool(args.mp) as P:
+                out = P.map(_targetphot_one, mpargs)
+        else:
+            out = [targetphot_one(*mparg) for mparg in mpargs]
 
-                    # Objects *can* be observed multiple times (on different
-                    # tiles), especially skies and stuck positioners, so handle
-                    # that here.
+        # stack, sort, and write out
+        out = vstack(out)
+        srt = np.hstack([np.where(tid == out['TARGETID'])[0] for tid in zcat['TARGETID']])
+        out = out[srt]    
 
-                    _, uindx = np.unique(out['TARGETID'], return_index=True)
-                    out = out[uindx]
-                    
-                    srt = np.hstack([np.where(tid == out['TARGETID'])[0] for tid in zcat['TARGETID']])
-                    #srt[~np.in1d(np.arange(len(srt)), np.unique(srt, return_index=True)[1], assume_unique=True)]
-                    
-                    out = out[srt]    
-                    assert(np.all(out['TARGETID'] == zcat['TARGETID']))
-                except:
-                    pdb.set_trace()                    
-                out.meta['EXTNAME'] = 'TARGETPHOT'
-                log.info('Writing {} objects to {}'.format(len(out), outfile))
-                out.write(outfile, overwrite=True)
+        out.meta['EXTNAME'] = 'TARGETPHOT'
+        log.info('Writing {} objects to {}'.format(len(out), outfile))
+        out.write(outfile, overwrite=True)
 
-                del out
+        outfile_zcat = outfile.replace('-targetphot.fits', '-targetphot-zcat.fits')
+        zcat.meta['EXTNAME'] = 'ZCATALOG'
+        log.info('Writing {} objects to {}'.format(len(zcat), outfile_zcat))
+        zcat.write(outfile_zcat, overwrite=True)
 
-                pdb.set_trace()
+        # For testing and validation, also write out the objects without
+        # photometry.
+        imiss = out['RELEASE'] == 0
+        if np.sum(imiss) > 0:
+            zcat_miss = vstack((zcat_nan, zcat[imiss]))
+        else:
+            zcat_miss = zcat_nan
+        out_miss = zcat_miss['TARGETID', 'SURVEY', 'PROGRAM', 'TARGET_RA', 'TARGET_DEC']
+        nmiss = len(out_miss)
+        
+        I = out_miss['TARGETID'] >= 0
+        objid, brickid, release, mock, sky, gaia = decode_targetid(out_miss['TARGETID'][I])
+
+        J = out_miss['TARGETID'] < 0
+        ra, dec, group = decode_negative_targetid(out_miss['TARGETID'][J])
+
+        out_miss['OBJID'] = np.zeros(nmiss, np.int64)
+        out_miss['BRICKID'] = np.zeros(nmiss, np.int64)
+        out_miss['RELEASE'] = np.zeros(nmiss, np.int64)
+        out_miss['SKY'] = np.zeros(nmiss, int)
+        out_miss['GAIADR'] = np.zeros(nmiss, int)
+        out_miss['RA'] = np.zeros(nmiss, np.float64)
+        out_miss['DEC'] = np.zeros(nmiss, np.float64)
+        out_miss['GROUP'] = np.zeros(nmiss, int)
+
+        out_miss['OBJID'][I] = objid
+        out_miss['BRICKID'][I] = brickid
+        out_miss['RELEASE'][I] = release
+        out_miss['SKY'][I] = sky
+        out_miss['GAIADR'][I] = gaia
+        out_miss['RA'][J] = ra
+        out_miss['DEC'][J] = dec
+        out_miss['GROUP'][J] = group
+
+        out_miss = out_miss[np.argsort(out_miss['TARGETID'])]
+
+        outfile_miss = outfile.replace('-targetphot.fits', '-targetphot-missing.fits')
+
+        out_miss.meta['EXTNAME'] = 'TARGETPHOT-MISSING'
+        log.info('Writing {} objects to {}'.format(len(out_miss), outfile_miss))
+        out_miss.write(outfile_miss, overwrite=True)
         
     if args.tractorphot:
+        outfile = os.path.join(args.outdir, '{}-tractorphot.fits'.format(args.outprefix))
+        if os.path.isfile(outfile) and not args.overwrite:
+            log.info('Output file {} exists; use --overwrite'.format(outfile))
+            return
 
-        targetfiles = sorted(set(glob(os.path.join(args.outdir, '*-targetphot-*.fits'))))
-        for targetfile in targetfiles:
+        targetfile = os.path.join(args.outdir, '{}-targetphot.fits'.format(args.outprefix))
+        log.info('Reading {}'.format(targetfile))
+        cat = Table(fitsio.read(targetfile))
 
-            log.info('Working on {}'.format(targetfile))
-            cat = Table(fitsio.read(targetfile))
+        datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0))
+        out = Table(np.hstack(np.repeat(datamodel, len(cat))))
+        out['targetid'] = cat['TARGETID']
 
-            # need to instantiate the data model here
-            cat = cat[np.where((cat['PHOTSYS'] != '')*(cat['MORPHTYPE'] != ''))[0]] # need to identify skies!
-            cat = cat[:5000]
+        # trim
+        cat = cat[np.where(cat['BRICKNAME'] != '')[0]]
 
-            # multiprocess over bricks
-            mpargs = [[cat[brick == cat['BRICKNAME']]] for brick in set(cat['BRICKNAME'])]
-                        
-            if args.mp > 1:
-                with multiprocessing.Pool(args.mp) as P:
-                    out = P.map(_tractor_one_brick, mpargs)
-            else:
-                out = [tractor_one_brick(mparg[0]) for mparg in mpargs]
+        if rand is not None:
+            J = rand.choice(len(cat), size=200, replace=False)
+            cat = cat[J]
+        
+        # multiprocess over bricks
+        mpargs = [[cat[brick == cat['BRICKNAME']]] for brick in set(cat['BRICKNAME'])]
+                    
+        if args.mp > 1:
+            with multiprocessing.Pool(args.mp) as P:
+                out = P.map(_tractorphot_one, mpargs)
+        else:
+            out = [tractorphot_one(mparg[0]) for mparg in mpargs]
 
-            out = Table(np.hstack(out))
-            pdb.set_trace()
-    
-        ## Fragile! Read a single row of a single target catalog in order to get the
-        ## correct photometric data model. Add all the _TARGET columns at the end
-        #datamodel = Table(fitsio.read('/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark/targets-dark-hp-0.fits', rows=0))
-        #for col in datamodel.colnames:
-        #    if '_TARGET' in col:
-        #        datamodel.remove_column(col)
-        #    else:
-        #        datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        #for col in TARGETINGBITCOLS:
-        #    datamodel[col] = np.zeros(1, dtype=np.int64)
+        # stack, sort, and write out
+        out = vstack(out)
+        srt = np.hstack([np.where(tid == out['targetid'])[0] for tid in cat['TARGETID']])
+        out = out[srt] 
 
-        #out.meta['EXTNAME'] = 'TRACTORPHOT'
+        out.meta['EXTNAME'] = 'TRACTORPHOT'
+        log.info('Writing {} objects to {}'.format(len(out), outfile))
+        out.write(outfile, overwrite=True)
         
 if __name__ == '__main__':
     main()
