@@ -16,7 +16,6 @@ from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
 import numba
 
-import specter.psf
 from desispec.io import read_image
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert

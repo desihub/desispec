@@ -1221,6 +1221,9 @@ class TestIO(unittest.TestCase):
         self.assertEqual(parse_cameras(None), None)
         self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2']), 'a1b2')
 
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2'], loglevel='WARNING'), 'a1b2')
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2'], loglevel='warning'), 'a1b2')
+
     def test_shorten_filename(self):
         """Test desispec.io.meta.shorten_filename"""
         from ..io.meta import shorten_filename, specprod_root
