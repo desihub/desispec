@@ -359,6 +359,7 @@ def main():
     p.add_argument('-o', '--outdir', type=str, required=True, help='output directory file')
     p.add_argument('--outprefix', type=str, required=True, help='output file prefix')
     p.add_argument('--mp', type=int, default=1, help='number of multiprocessing cores')
+    p.add_argument('--filenside', type=int, default=4, help='healpix nside for tractorphot catalogs.')
     p.add_argument('--get-secondary-targetdirs', action='store_true', help='Figure out which secondary target catalogs actually were used to design tiles.')
     p.add_argument('--targetphot', action='store_true', help='Build the photo-targets catalogs.')
     p.add_argument('--tractorphot', action='store_true', help='Build the photo-tractor catalogs.')
@@ -525,7 +526,7 @@ def main():
         # Multiprocess over nside=8 healpixels which is how the non-secondary
         # targeting catalogs are organized on-disk.
         pixels = radec2pix(8, zcat['TARGET_RA'], zcat['TARGET_DEC'])
-        log.info('Dividing the sample in {} nside=8 healpixels.'.format(len(set(pixels))))
+        log.info('Dividing the sample into {} nside=8 healpixels.'.format(len(set(pixels))))
         mpargs = [[zcat[pixel == pixels], photocache, datamodel, args.reduxdir]
                   for pixel in set(pixels)]
                 
@@ -556,14 +557,21 @@ def main():
 
     # Build Tractor photometry.
     if args.tractorphot:
-        outfile = os.path.join(args.outdir, 'tractorphot-{}.fits'.format(args.outprefix))
-        if os.path.isfile(outfile) and not args.overwrite:
-            log.info('Output file {} exists; use --overwrite'.format(outfile))
+        any_outfile = glob(os.path.join(args.outdir, 'tractorphot-nside{}-hp*-{}.fits'.format(
+            args.filenside, args.outprefix)))
+        if len(any_outfile) > 0 and not args.overwrite:
+            log.info('One or more tractorphot output files exist; use --overwrite')
             return
-
+        
         targetfile = os.path.join(args.outdir, 'targetphot-{}.fits'.format(args.outprefix))
         log.info('Reading {}'.format(targetfile))
-        cat = Table(fitsio.read(targetfile))
+
+        if rand is not None:
+            N = fitsio.FITS(targetfile)[1].get_nrows()
+            J = rand.choice(N, size=10000, replace=False)
+            cat = Table(fitsio.read(targetfile, rows=J))
+        else:
+            cat = Table(fitsio.read(targetfile))
 
         datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0))
         out = Table(np.hstack(np.repeat(datamodel, len(cat))))
@@ -571,26 +579,44 @@ def main():
             out[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
         out['targetid'] = cat['TARGETID']
 
-        if rand is not None:
-            J = rand.choice(len(cat), size=1000, replace=False)
-            cat = cat[J]
-
         # First build the catalog for objects with a well-defined BRICKNAME.
         igood = np.where(cat['BRICKNAME'] != '')[0]
         cat_good = cat[igood]
 
-        # multiprocess over bricks
+        # loop over args.filenside healpixels and multiprocess over bricks
         log.info('Gathering Tractor photometry for {:,} objects with a BRICKNAME from the targeting catalog'.format(
             len(cat_good)))
 
-        mpargs = [[cat_good[brick == cat_good['BRICKNAME']], None, None] for brick in set(cat_good['BRICKNAME'])]
-        if args.mp > 1:
-            with multiprocessing.Pool(args.mp) as P:
-                out_good = P.map(_tractorphot_one, mpargs)
-        else:
-            out_good = [_tractorphot_one(mparg) for mparg in mpargs]
-        out_good = vstack(out_good)
-        
+        pixels = radec2pix(args.filenside, cat_good['RA'], cat_good['DEC'])
+        npix = len(set(pixels))
+        for ipix, pixel in enumerate(set(pixels)):
+            log.info('Working on healpix {}/{} (nside={})'.format(ipix+1, npix, args.filenside))
+
+            I = pixel == pixels
+            log.info('Dividing the sample into {} unique bricks.'.format(len(set(cat_good['BRICKNAME'][I]))))
+            mpargs = []
+            for brick in set(cat_good['BRICKNAME'][I]):
+                J = brick == cat_good['BRICKNAME'][I]
+                mpargs.append([cat_good[I][J], None, None])
+                
+            if args.mp > 1:
+                with multiprocessing.Pool(args.mp) as P:
+                    out_good = P.map(_tractorphot_one, mpargs)
+            else:
+                out_good = [_tractorphot_one(mparg) for mparg in mpargs]
+            out_good = vstack(out_good)
+
+            # Write out an output catalog that we *may* add to, below.
+            outfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
+                args.filenside, pixel, args.outprefix))
+
+            out_good.meta['EXTNAME'] = 'TRACTORPHOT'
+            out_good.meta['FILENSID'] = args.filenside
+            log.info('Writing {:,} objects to {}'.format(len(out_good), outfile))
+            out_good.write(outfile, overwrite=True)
+            del out_good
+        del cat_good
+            
         # Next, use positional matching to get photometry for as many
         # of the "missing" objects as possible.
         imiss = np.where(cat['BRICKNAME'] == '')[0]
@@ -634,28 +660,46 @@ def main():
             supplement = [_tractorphot_one(mparg) for mparg in mpargs]
         supplement = vstack(supplement)
 
-        # Stack with the "good" results and then find which objects are *still*
-        # missing (should be all from secondary programs) and write out two
-        # output files.
-        out = vstack((out_good, supplement))
-        out = out[np.argsort(out['targetid'])]
+        # Stack with the "good" results by reading the temporary files written
+        # to disk and then writing out the final catalog.
+        isupplement_good = np.where(supplement['brickname'] != '')[0]
+        isupplement_miss = np.where(supplement['brickname'] == '')[0]
 
-        igood_final = np.where(out['brickname'] != '')[0]
-        out_final = out[igood_final]
-
-        out_final.meta['EXTNAME'] = 'TRACTORPHOT'
-        log.info('Writing {:,} objects to {}'.format(len(out_final), outfile))
-        out_final.write(outfile, overwrite=True)
-
-        imiss_still = np.where(out['brickname'] == '')[0]
-        if len(imiss_still) > 0:
-            I = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in out['targetid'][imiss_still]])
+        if len(isupplement_good) > 0:
+            supplement_good = supplement[isupplement_good]
+        
+            pixels = radec2pix(args.filenside, supplement_good['ra'], supplement_good['dec'])
+            for ipix, pixel in enumerate(set(pixels)):
+                I = pixel == pixels
+                log.info('Adding {} targets to healpix {}/{} (nside={})'.format(
+                    np.sum(I), ipix+1, len(set(pixels)), args.filenside))
+    
+                outfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
+                    args.filenside, pixel, args.outprefix))
+                out = Table(fitsio.read(outfile))
+                log.info('Read {:,} objects from {}'.format(len(out), outfile))
+    
+                out = vstack((out, supplement_good[I]))
+                out = out[np.argsort(out['targetid'])]
+    
+                out.meta['EXTNAME'] = 'TRACTORPHOT'
+                out.meta['FILENSID'] = args.filenside
+                log.info('Writing {:,} objects to {}'.format(len(out), outfile))
+                out.write(outfile, overwrite=True)
+                del out
+                
+        # Finally, for diagnostic purposes, write out which objects are *still*
+        # missing (should be all from secondary programs).
+        if len(isupplement_miss) > 0:
+            supplement_miss = supplement[isupplement_miss]
+            
+            I = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in supplement_miss['targetid']])
             out_miss = cat[I]
             
             outfile_miss = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
             out_miss.meta['EXTNAME'] = 'TARGETPHOT'
             log.info('Writing {:,} objects to {}'.format(len(out_miss), outfile_miss))
             out_miss.write(outfile_miss, overwrite=True)
-            
+
 if __name__ == '__main__':
     main()
