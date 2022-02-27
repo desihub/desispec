@@ -66,7 +66,19 @@ def one_tile(tileid, zcat, coadd_type, reduxdir):
                     specfile = os.path.join(filedir, '{}-{}-{}-exp{}.fits'.format(prefix, petal, tileid, '{:08}'.format(expid)))
                     if not os.path.isfile(specfile):
                         raise IOError('Missing {}'.format(specfile))
-        
+    else:
+        for spgrpval in set(zcat['SPGRPVAL']):
+            filedir = os.path.join(reduxdir, 'tiles', coadd_type, str(tileid), str(spgrpval))
+            I = spgrpval == zcat['SPGRPVAL']
+            for petal in set(zcat['PETAL_LOC'][I]):
+                J = petal == zcat['PETAL_LOC'][I]
+                for prefix in ['coadd', 'redrock']:
+                    specfile = glob(os.path.join(filedir, '{}-{}-{}-{}'.format(prefix, petal, tileid, '*.fits')))
+                    try:
+                        assert(len(specfile) == 1)
+                    except:
+                        raise IOError('Problematic {}'.format(specfile))
+            
 def main():
 
     p = argparse.ArgumentParser()
@@ -107,9 +119,10 @@ def main():
         zprefix = 'ztile'
         basecolumns = ['TARGETID', 'TILEID', 'PETAL_LOC', 'TARGET_RA', 'TARGET_DEC']
         
-        for coadd_type in ['cumulative', 'perexp', 'pernight']:
+        for coadd_type in ['cumulative', 'perexp', 'pernight', '1x_depth', '4x_depth', 'lowspeed']:
             log.info('Working on coadd type {}'.format(coadd_type))
-            zcatfiles = sorted(set(glob(os.path.join(args.reduxdir, 'zcatalog', '{}-*-{}.fits'.format(zprefix, coadd_type)))))
+            zcatfiles = sorted(set(glob(os.path.join(args.reduxdir, 'zcatalog', '{}-*{}.fits'.format(zprefix, coadd_type)))))
+                                                                                       
             for zcatfile in zcatfiles:
                 log.info('Working on redshift catalog {}'.format(zcatfile))
                 if coadd_type == 'cumulative':
@@ -118,7 +131,9 @@ def main():
                     columns = basecolumns + ['NIGHT', 'EXPID']
                 elif coadd_type == 'pernight':
                     columns = basecolumns + ['NIGHT']
-    
+                elif coadd_type == '1x_depth' or coadd_type == '4x_depth' or coadd_type == 'lowspeed':
+                    columns = basecolumns + ['SPGRPVAL']
+                    
                 zcat = Table(fitsio.read(zcatfile, 'ZCATALOG', columns=columns))
                     
                 # multiprocess over tiles
