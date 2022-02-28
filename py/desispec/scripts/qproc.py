@@ -232,9 +232,9 @@ def main(args=None):
 
         # using the trace shift script
         if args.auto  :
-            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","continuum":((obstype=="FLAT")|(obstype=="TESTFLAT")),"sky":((obstype=="SCIENCE")|(obstype=="SKY"))})
+            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","degyy":0,"continuum":((obstype=="FLAT")|(obstype=="TESTFLAT")),"sky":((obstype=="SCIENCE")|(obstype=="SKY"))})
         else :
-            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy"})
+            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","degyy":0})
         tmp_args = trace_shifts_script.parse(options=options)
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 
