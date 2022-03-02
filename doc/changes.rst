@@ -2,10 +2,19 @@
 desispec Change Log
 ===================
 
-0.51.13 (unreleased)
---------------------
+0.52.0 (unreleased)
+-------------------
 
 * No changes yet.
+
+0.51.13 (2022-02-28)
+--------------------
+
+* ``desi_zcatalog --patch-missing-ivar-w12`` option to patch missing
+  FLUX_IVAR_W1/W2 values that weren't propagated by early fiberassign
+  (PR `#1717`_).
+
+.. _`#1717`: https://github.com/desihub/desispec/pull/1717
 
 0.51.12 (2022-02-23)
 --------------------

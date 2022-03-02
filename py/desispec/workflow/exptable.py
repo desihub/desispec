@@ -67,7 +67,7 @@ def exposure_table_column_defs():
                 ('EFFTIME_ETC', float, -99.),
                 ('SURVEY', 'S10', 'unknown'),
                 ('FA_SURV', 'S10', 'unknown'),
-                ('FAPRGRM', 'S10', 'unknown'),
+                ('FAPRGRM', 'S20', 'unknown'),
                 ('GOALTIME', float, -99.),
                 ('GOALTYPE', 'S10', 'unknown'),
                 ('EBVFAC', float, 1.0),
