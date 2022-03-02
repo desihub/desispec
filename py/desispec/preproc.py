@@ -873,7 +873,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 log.warning(f'Camera {camera} Missing keyword SATURLEV{amp} in header and nothing in calib data; using {saturlev_adu} ADU')
         header['SATULEV'+amp] = (saturlev_adu,"saturation or non lin. level, in ADU, inc. bias")
 
-
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
 
@@ -922,6 +921,28 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  calc_overscan(raw_overscan_col[j])
             overscan_col[j]=o
             rdnoise[j]=r
+
+
+        # define a band in the active CCD region next to the overscan
+        left_amp = ov_col[1].start < rawimage.shape[1]//2
+        col_width=10
+        if left_amp :
+            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+        else :
+            active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
+        # measure sum over columns in band
+        active_col_val = np.sum(rawimage[active_col].astype(float),axis=1)
+        # subtract median filter (to limit effect of neighboring truly bright fiber)
+        active_col_val -= median_filter(active_col_val,100)
+        # flag rows with large signal in active region
+        badrows=(active_col_val>50000.)
+        if np.any(badrows) :
+            log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(camera,amp,np.where(badrows)[0],active_col_val[badrows]))
+            # do not use overscan value for those, use interpolation
+            goodrows = ~badrows
+            rr=np.arange(nrows)
+            overscan_col[badrows] = np.interp(rr[badrows],rr[goodrows],overscan_col[goodrows])
+
         overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
