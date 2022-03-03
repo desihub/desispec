@@ -125,6 +125,16 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         log.error(f"no exposure qa data for tile {tile}")
         return None, None
 
+    # AR median EBVFAC for the tile (default = 1)
+    # AR EBVFAC comes from here: https://github.com/desihub/fiberassign/blob/c9ef922dae336860959ae8cf1d2c07b1b8eb99a3/py/fiberassign/fba_launch_io.py#L1965
+    # AR EBVFAC = 10.0 ** (2.165 * np.median(ebv) / 2.5))
+    if "EBVFAC" in exposure_qa_meta:
+        ebvfac_med = exposure_qa_meta["EBVFAC"]
+        log.info("using EBVFAC_MED = {:.2f}".format(ebvfac_med))
+    else:
+        ebvfac_med = 1.0
+        log.warning("no EBVFAC keyword in exposure_qa_meta, using EBVFAC_MED = 1")
+
     # stack qa tables
     if len(expids) > 1 :
         exposure_fiberqa_tables = vstack(exposure_fiberqa_tables)
@@ -273,8 +283,10 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         tile_fiberqa_table["EFFTIME_SPEC"][i] = np.sum(exposure_fiberqa_tables['EFFTIME_SPEC'][jj]*((exposure_fiberqa_tables['QAFIBERSTATUS'][jj]&bad_fibers_mask)==0))
 
     # set bit of LOWEFFTIME per fiber
+    # AR using the tile-median EBV
     minimal_efftime = qa_params["tile_qa"]["fiber_rel_mintfrac"]*exposure_qa_meta["MINTFRAC"]*exposure_qa_meta["GOALTIME"]
-    low_efftime_fibers = np.where(tile_fiberqa_table["EFFTIME_SPEC"]<minimal_efftime)[0]
+    ebvfac_fibers = 10. ** (2.165 * tile_fiberqa_table["EBV"] / 2.5)
+    low_efftime_fibers = np.where(tile_fiberqa_table["EFFTIME_SPEC"] * (ebvfac_fibers / ebvfac_med) ** 2 < minimal_efftime)[0]
     tile_fiberqa_table['QAFIBERSTATUS'][low_efftime_fibers] |= fibermask.mask("LOWEFFTIME")
 
     # good fibers are the fibers with efftime above the threshold
