@@ -99,14 +99,14 @@ def tractorphot_one(cat, bricks, supplement):
         objid = fitsio.read(tractorfile, columns='OBJID')
         I = np.where(np.isin(objid, cat['BRICK_OBJID']))[0]
     
-        tractor = Table(fitsio.read(tractorfile, rows=I))
+        tractor = Table(fitsio.read(tractorfile, rows=I, upper=True))
     
         # sort explicitly in order to ensure order
-        srt = np.hstack([np.where(objid == tractor['objid'])[0] for objid in cat['BRICK_OBJID']])
+        srt = np.hstack([np.where(objid == tractor['OBJID'])[0] for objid in cat['BRICK_OBJID']])
         tractor = tractor[srt]
-        assert(np.all(tractor['objid'] == cat['BRICK_OBJID']))
+        assert(np.all(tractor['OBJID'] == cat['BRICK_OBJID']))
 
-        tractor['targetid'] = cat['TARGETID']
+        tractor['TARGETID'] = cat['TARGETID']
 
         return tractor
         
@@ -123,8 +123,8 @@ def tractorphot_one(cat, bricks, supplement):
         for region in ['south', 'north']:
             tractorfile = os.path.join(dr9dir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
             if os.path.isfile(tractorfile):
-                _tractor = fitsio.read(tractorfile, columns=['ra', 'dec'])
-                coord_tractor = SkyCoord(ra=_tractor['ra']*u.deg, dec=_tractor['dec']*u.deg)
+                _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC'], upper=True)
+                coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
 
                 # Some targets can appear twice (with different targetids), so
                 # to make sure we do it right, we have to loop. Example:
@@ -571,13 +571,19 @@ def main():
             J = rand.choice(N, size=10000, replace=False)
             cat = Table(fitsio.read(targetfile, rows=J))
         else:
-            cat = Table(fitsio.read(targetfile))
+            print('Hack!')
+            _tar = fitsio.read(targetfile, columns='TARGETID')
+            _I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347]))
+            cat = Table(fitsio.read(targetfile, rows=_I))            
+            #cat = Table(fitsio.read(targetfile))
+
+        pdb.set_trace()
 
         datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0))
         out = Table(np.hstack(np.repeat(datamodel, len(cat))))
         for col in datamodel.colnames:
             out[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        out['targetid'] = cat['TARGETID']
+        out['TARGETID'] = cat['TARGETID']
 
         # First build the catalog for objects with a well-defined BRICKNAME.
         igood = np.where(cat['BRICKNAME'] != '')[0]
@@ -646,7 +652,7 @@ def main():
         supplement = Table(np.hstack(np.repeat(datamodel, len(cat_miss))))
         for col in datamodel.colnames:
             supplement[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        supplement['targetid'] = zcat_miss['TARGETID']
+        supplement['TARGETID'] = zcat_miss['TARGETID']
 
         # multiprocess over bricks
         mpargs = []
@@ -662,13 +668,13 @@ def main():
 
         # Stack with the "good" results by reading the temporary files written
         # to disk and then writing out the final catalog.
-        isupplement_good = np.where(supplement['brickname'] != '')[0]
-        isupplement_miss = np.where(supplement['brickname'] == '')[0]
+        isupplement_good = np.where(supplement['BRICKNAME'] != '')[0]
+        isupplement_miss = np.where(supplement['BRICKNAME'] == '')[0]
 
         if len(isupplement_good) > 0:
             supplement_good = supplement[isupplement_good]
         
-            pixels = radec2pix(args.filenside, supplement_good['ra'], supplement_good['dec'])
+            pixels = radec2pix(args.filenside, supplement_good['RA'], supplement_good['DEC'])
             for ipix, pixel in enumerate(set(pixels)):
                 I = pixel == pixels
                 log.info('Adding {} targets to healpix {}/{} (nside={})'.format(
@@ -680,7 +686,7 @@ def main():
                 log.info('Read {:,} objects from {}'.format(len(out), outfile))
     
                 out = vstack((out, supplement_good[I]))
-                out = out[np.argsort(out['targetid'])]
+                out = out[np.argsort(out['TARGETID'])]
     
                 out.meta['EXTNAME'] = 'TRACTORPHOT'
                 out.meta['FILENSID'] = args.filenside
@@ -693,7 +699,7 @@ def main():
         if len(isupplement_miss) > 0:
             supplement_miss = supplement[isupplement_miss]
             
-            I = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in supplement_miss['targetid']])
+            I = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in supplement_miss['TARGETID']])
             out_miss = cat[I]
             
             outfile_miss = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
