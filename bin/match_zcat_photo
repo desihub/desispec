@@ -96,8 +96,9 @@ def tractorphot_one(cat, bricks, supplement):
             log.warning('Unable to find Tractor catalog {}'.format(tractorfile))
             raise IOError
     
-        objid = fitsio.read(tractorfile, columns='OBJID')
-        I = np.where(np.isin(objid, cat['BRICK_OBJID']))[0]
+        _tractor = fitsio.read(tractorfile, columns=['OBJID', 'BRICK_PRIMARY'], upper=True)
+        _tractor = _tractor[_tractor['BRICK_PRIMARY']]
+        I = np.where(np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
     
         tractor = Table(fitsio.read(tractorfile, rows=I, upper=True))
     
@@ -123,7 +124,8 @@ def tractorphot_one(cat, bricks, supplement):
         for region in ['south', 'north']:
             tractorfile = os.path.join(dr9dir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
             if os.path.isfile(tractorfile):
-                _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC'], upper=True)
+                _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True) 
+                _tractor = _tractor[_tractor['BRICK_PRIMARY']] # only primary targets
                 coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
 
                 # Some targets can appear twice (with different targetids), so
