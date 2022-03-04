@@ -110,6 +110,7 @@ def tractorphot_one(cat, bricks, supplement):
         I = np.where(_tractor['BRICK_PRIMARY'] * np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
 
         if len(I) == 0: # some secondary programs have BRICKNAME!='' and BRICK_OBJID==0 (i.e., not populated)
+            pdb.set_trace()
             return Table()
 
         tractor = Table(fitsio.read(tractorfile, rows=I, upper=True))
@@ -117,7 +118,10 @@ def tractorphot_one(cat, bricks, supplement):
         # sort explicitly in order to ensure order
         srt = np.hstack([np.where(objid == tractor['OBJID'])[0] for objid in cat['BRICK_OBJID']])
         tractor = tractor[srt]
-        assert(np.all((tractor['BRICKID'] == cat['BRICKID'])*(tractor['OBJID'] == cat['BRICK_OBJID'])))
+        try:
+            assert(np.all((tractor['BRICKID'] == cat['BRICKID'])*(tractor['OBJID'] == cat['BRICK_OBJID'])))
+        except:
+            pdb.set_trace()
 
         tractor['TARGETID'] = cat['TARGETID']
         
@@ -588,11 +592,13 @@ def main():
             J = rand.choice(N, size=10000, replace=False)
             cat = Table(fitsio.read(targetfile, rows=J))
         else:
-            #print('Hack!!!!!')
-            #_tar = fitsio.read(targetfile, columns='TARGETID')
+            print('Hack!!!!!')
+            _tar = fitsio.read(targetfile, columns='TARGETID')
             #_I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347]))
-            #cat = Table(fitsio.read(targetfile, rows=_I))            
-            cat = Table(fitsio.read(targetfile))
+            # 39628509856927757  0352p315  503252        4109    9010 # brick_primary==False
+            _I = np.where(np.isin(_tar, [39628509856927757]))
+            cat = Table(fitsio.read(targetfile, rows=_I))            
+            #cat = Table(fitsio.read(targetfile))
 
         # Some secondary programs (e.g., 39632961435338613, 39632966921487347)
         # have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Fix those here
@@ -642,6 +648,8 @@ def main():
             # positional matching, so raise an exception. Hopefully this will
             # never happen but if it does then it means we need to keep track of
             # these "missing" objects here.
+            pdb.set_trace()
+
             if len(out_good) == 0 or len(out_good) != np.sum(I):
                 log.warning('Some targets did not match on BRICKNAME and OBJID in healpix {}'.format(pixel))
                 raise ValueError
