@@ -50,9 +50,18 @@ def read_one_zcat(catfile):
     log.info('Reading {}'.format(catfile))
     hdr = fitsio.read_header(catfile, ext='ZCATALOG')
     survey, program = hdr['SURVEY'], hdr['PROGRAM']
-    cat = Table(fitsio.read(catfile, columns=['TARGETID', 'TILEID', 'TARGET_RA', 'TARGET_DEC']))
+    cat = Table(fitsio.read(catfile, ext='ZCATALOG', columns=['TARGETID', 'TILEID', 'TARGET_RA', 'TARGET_DEC']))
     cat['SURVEY'] = survey
     cat['PROGRAM'] = program
+    return cat
+
+def _read_one_potential_targets(args):
+    return read_one_potential_targets(*args) 
+
+def read_one_potential_targets(catfile):
+    log.info('Reading {}'.format(catfile))
+    targetid = fitsio.read(catfile, ext='POTENTIAL_ASSIGNMENTS', columns='TARGETID')
+    pdb.set_trace()
     return cat
 
 def _cache_one_catalog(args):
@@ -97,18 +106,21 @@ def tractorphot_one(cat, bricks, supplement):
             raise IOError
     
         _tractor = fitsio.read(tractorfile, columns=['OBJID', 'BRICK_PRIMARY'], upper=True)
-        _tractor = _tractor[_tractor['BRICK_PRIMARY']]
-        I = np.where(np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
-    
+        #_tractor = _tractor[_tractor['BRICK_PRIMARY']]
+        I = np.where(_tractor['BRICK_PRIMARY'] * np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
+
+        if len(I) == 0: # some secondary programs have BRICKNAME!='' and BRICK_OBJID==0 (i.e., not populated)
+            return Table()
+
         tractor = Table(fitsio.read(tractorfile, rows=I, upper=True))
     
         # sort explicitly in order to ensure order
         srt = np.hstack([np.where(objid == tractor['OBJID'])[0] for objid in cat['BRICK_OBJID']])
         tractor = tractor[srt]
-        assert(np.all(tractor['OBJID'] == cat['BRICK_OBJID']))
+        assert(np.all((tractor['BRICKID'] == cat['BRICKID'])*(tractor['OBJID'] == cat['BRICK_OBJID'])))
 
         tractor['TARGETID'] = cat['TARGETID']
-
+        
         return tractor
         
     # use positional matching
@@ -566,6 +578,9 @@ def main():
             return
         
         targetfile = os.path.join(args.outdir, 'targetphot-{}.fits'.format(args.outprefix))
+        if not os.path.isfile(targetfile):
+            log.warning('Targeting photometric catalog {} missing'.format(targetfile))
+            raise IOError
         log.info('Reading {}'.format(targetfile))
 
         if rand is not None:
@@ -573,13 +588,21 @@ def main():
             J = rand.choice(N, size=10000, replace=False)
             cat = Table(fitsio.read(targetfile, rows=J))
         else:
-            print('Hack!')
-            _tar = fitsio.read(targetfile, columns='TARGETID')
-            _I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347]))
-            cat = Table(fitsio.read(targetfile, rows=_I))            
-            #cat = Table(fitsio.read(targetfile))
+            #print('Hack!!!!!')
+            #_tar = fitsio.read(targetfile, columns='TARGETID')
+            #_I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347]))
+            #cat = Table(fitsio.read(targetfile, rows=_I))            
+            cat = Table(fitsio.read(targetfile))
 
-        pdb.set_trace()
+        # Some secondary programs (e.g., 39632961435338613, 39632966921487347)
+        # have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Fix those here
+        # using decode_targetid.
+        fix = np.where((cat['BRICKNAME'] != '') * (cat['BRICK_OBJID'] == 0))[0]
+        if len(fix) > 0:
+            log.info('Repairing BRICK_OBJID for {} objects using decode_targetid'.format(len(fix)))
+            fix_objid, fix_brickid, _, _, _, _ = decode_targetid(cat['TARGETID'][fix])
+            assert(np.all(fix_brickid == cat['BRICKID'][fix]))
+            cat['BRICK_OBJID'][fix] = fix_objid
 
         datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0))
         out = Table(np.hstack(np.repeat(datamodel, len(cat))))
@@ -614,6 +637,15 @@ def main():
                 out_good = [_tractorphot_one(mparg) for mparg in mpargs]
             out_good = vstack(out_good)
 
+            # This can happen for healpix with just a couple targets; however,
+            # if it does it means we're going to miss targets when we do our
+            # positional matching, so raise an exception. Hopefully this will
+            # never happen but if it does then it means we need to keep track of
+            # these "missing" objects here.
+            if len(out_good) == 0 or len(out_good) != np.sum(I):
+                log.warning('Some targets did not match on BRICKNAME and OBJID in healpix {}'.format(pixel))
+                raise ValueError
+            
             # Write out an output catalog that we *may* add to, below.
             outfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
                 args.filenside, pixel, args.outprefix))
@@ -628,86 +660,87 @@ def main():
         # Next, use positional matching to get photometry for as many
         # of the "missing" objects as possible.
         imiss = np.where(cat['BRICKNAME'] == '')[0]
-        cat_miss = cat[imiss]
-
-        log.info('Gathering Tractor photometry using positional matching for {:,} additional objects'.format(
-            len(cat_miss)))
-
-        zcatfile = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
-        zcat = Table(fitsio.read(zcatfile))
-        I = np.hstack([np.where(tid == zcat['TARGETID'])[0] for tid in cat_miss['TARGETID']])
-        zcat_miss = zcat[I]
-        assert(np.all(cat_miss['TARGETID'] == zcat_miss['TARGETID']))
-
-        # get the brickname in parallel        
-        bricks = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'))
-
-        mpargs = [[bricks, ra, dec] for ra, dec in zip(zcat_miss['TARGET_RA'], zcat_miss['TARGET_DEC'])]
-        if args.mp > 1:
-            with multiprocessing.Pool(args.mp) as P:
-                bricknames = P.map(_get_brickname, mpargs)
-        else:
-            bricknames = [_get_brickname(mparg) for mparg in mpargs]
-        zcat_miss['BRICKNAME'] = np.hstack(bricknames)
-
-        # initialize the output table
-        supplement = Table(np.hstack(np.repeat(datamodel, len(cat_miss))))
-        for col in datamodel.colnames:
-            supplement[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        supplement['TARGETID'] = zcat_miss['TARGETID']
-
-        # multiprocess over bricks
-        mpargs = []
-        for brick in set(zcat_miss['BRICKNAME']):
-            I = brick == zcat_miss['BRICKNAME']
-            mpargs.append([zcat_miss[I], bricks, supplement[I]])
-        if args.mp > 1:
-            with multiprocessing.Pool(args.mp) as P:
-                supplement = P.map(_tractorphot_one, mpargs)
-        else:
-            supplement = [_tractorphot_one(mparg) for mparg in mpargs]
-        supplement = vstack(supplement)
-
-        # Stack with the "good" results by reading the temporary files written
-        # to disk and then writing out the final catalog.
-        isupplement_good = np.where(supplement['BRICKNAME'] != '')[0]
-        isupplement_miss = np.where(supplement['BRICKNAME'] == '')[0]
-
-        if len(isupplement_good) > 0:
-            supplement_good = supplement[isupplement_good]
+        if len(imiss) > 0:
+            cat_miss = cat[imiss]
+    
+            log.info('Gathering Tractor photometry using positional matching for {:,} additional objects'.format(
+                len(cat_miss)))
+    
+            zcatfile = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
+            zcat = Table(fitsio.read(zcatfile))
+            I = np.hstack([np.where(tid == zcat['TARGETID'])[0] for tid in cat_miss['TARGETID']])
+            zcat_miss = zcat[I]
+            assert(np.all(cat_miss['TARGETID'] == zcat_miss['TARGETID']))
+    
+            # get the brickname in parallel        
+            bricks = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'))
+    
+            mpargs = [[bricks, ra, dec] for ra, dec in zip(zcat_miss['TARGET_RA'], zcat_miss['TARGET_DEC'])]
+            if args.mp > 1:
+                with multiprocessing.Pool(args.mp) as P:
+                    bricknames = P.map(_get_brickname, mpargs)
+            else:
+                bricknames = [_get_brickname(mparg) for mparg in mpargs]
+            zcat_miss['BRICKNAME'] = np.hstack(bricknames)
+    
+            # initialize the output table
+            supplement = Table(np.hstack(np.repeat(datamodel, len(cat_miss))))
+            for col in datamodel.colnames:
+                supplement[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
+            supplement['TARGETID'] = zcat_miss['TARGETID']
+    
+            # multiprocess over bricks
+            mpargs = []
+            for brick in set(zcat_miss['BRICKNAME']):
+                I = brick == zcat_miss['BRICKNAME']
+                mpargs.append([zcat_miss[I], bricks, supplement[I]])
+            if args.mp > 1:
+                with multiprocessing.Pool(args.mp) as P:
+                    supplement = P.map(_tractorphot_one, mpargs)
+            else:
+                supplement = [_tractorphot_one(mparg) for mparg in mpargs]
+            supplement = vstack(supplement)
+    
+            # Stack with the "good" results by reading the temporary files written
+            # to disk and then writing out the final catalog.
+            isupplement_good = np.where(supplement['BRICKNAME'] != '')[0]
+            isupplement_miss = np.where(supplement['BRICKNAME'] == '')[0]
+    
+            if len(isupplement_good) > 0:
+                supplement_good = supplement[isupplement_good]
+            
+                pixels = radec2pix(args.filenside, supplement_good['RA'], supplement_good['DEC'])
+                for ipix, pixel in enumerate(set(pixels)):
+                    I = pixel == pixels
+                    log.info('Adding {} targets to healpix {}/{} (nside={})'.format(
+                        np.sum(I), ipix+1, len(set(pixels)), args.filenside))
         
-            pixels = radec2pix(args.filenside, supplement_good['RA'], supplement_good['DEC'])
-            for ipix, pixel in enumerate(set(pixels)):
-                I = pixel == pixels
-                log.info('Adding {} targets to healpix {}/{} (nside={})'.format(
-                    np.sum(I), ipix+1, len(set(pixels)), args.filenside))
-    
-                outfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
-                    args.filenside, pixel, args.outprefix))
-                out = Table(fitsio.read(outfile))
-                log.info('Read {:,} objects from {}'.format(len(out), outfile))
-    
-                out = vstack((out, supplement_good[I]))
-                out = out[np.argsort(out['TARGETID'])]
-    
-                out.meta['EXTNAME'] = 'TRACTORPHOT'
-                out.meta['FILENSID'] = args.filenside
-                log.info('Writing {:,} objects to {}'.format(len(out), outfile))
-                out.write(outfile, overwrite=True)
-                del out
+                    outfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
+                        args.filenside, pixel, args.outprefix))
+                    out = Table(fitsio.read(outfile))
+                    log.info('Read {:,} objects from {}'.format(len(out), outfile))
+        
+                    out = vstack((out, supplement_good[I]))
+                    out = out[np.argsort(out['TARGETID'])]
+        
+                    out.meta['EXTNAME'] = 'TRACTORPHOT'
+                    out.meta['FILENSID'] = args.filenside
+                    log.info('Writing {:,} objects to {}'.format(len(out), outfile))
+                    out.write(outfile, overwrite=True)
+                    del out
+                    
+            # Finally, for diagnostic purposes, write out which objects are *still*
+            # missing (should be all from secondary programs).
+            if len(isupplement_miss) > 0:
+                supplement_miss = supplement[isupplement_miss]
                 
-        # Finally, for diagnostic purposes, write out which objects are *still*
-        # missing (should be all from secondary programs).
-        if len(isupplement_miss) > 0:
-            supplement_miss = supplement[isupplement_miss]
-            
-            I = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in supplement_miss['TARGETID']])
-            out_miss = cat[I]
-            
-            outfile_miss = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
-            out_miss.meta['EXTNAME'] = 'TARGETPHOT'
-            log.info('Writing {:,} objects to {}'.format(len(out_miss), outfile_miss))
-            out_miss.write(outfile_miss, overwrite=True)
+                I = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in supplement_miss['TARGETID']])
+                out_miss = cat[I]
+                
+                outfile_miss = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
+                out_miss.meta['EXTNAME'] = 'TARGETPHOT'
+                log.info('Writing {:,} objects to {}'.format(len(out_miss), outfile_miss))
+                out_miss.write(outfile_miss, overwrite=True)
 
 if __name__ == '__main__':
     main()
