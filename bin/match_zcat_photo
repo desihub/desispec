@@ -153,8 +153,9 @@ def tractorphot_one(cat, bricks, supplement):
         for region in ['south', 'north']:
             tractorfile = os.path.join(dr9dir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
             if os.path.isfile(tractorfile):
-                _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True) 
-                _tractor = _tractor[_tractor['BRICK_PRIMARY']] # only primary targets
+                _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
+                iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
+                _tractor = _tractor[iprimary] 
                 coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
 
                 # Some targets can appear twice (with different targetids), so
@@ -165,12 +166,11 @@ def tractorphot_one(cat, bricks, supplement):
                 # --------------- ------ ------- ------------------ ----------------- ----- ------- ------- ----- ------ ------- ------- ----- ---------
                 # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
                 # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025                
-
                 for indx_cat, (ra, dec) in enumerate(zip(cat['TARGET_RA'], cat['TARGET_DEC'])):
                     coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
                     indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
                     if d2d < rad:
-                        tractor = fitsio.read(tractorfile, rows=indx_tractor, upper=True)
+                        tractor = fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True)
                         for col in tractor.dtype.names:
                             supplement[col][indx_cat] = tractor[col][0]
                             
