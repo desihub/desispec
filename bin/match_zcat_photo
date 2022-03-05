@@ -6,6 +6,8 @@
 time match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/fuji --mp 32 -o /global/cscratch1/sd/ioannis/photocatalog --outprefix fuji --targetphot --tractorphot
 time match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/guadalupe --mp 32 -o /global/cscratch1/sd/ioannis/photocatalog --outprefix guadalupe --targetphot --tractorphot
 
+time match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/fuji -o /global/cscratch1/sd/ioannis/photocatalog --outprefix fuji --validate-tractorphot
+
 """
 import os, sys, argparse, pdb
 from glob import glob
@@ -104,13 +106,27 @@ def tractorphot_one(cat, bricks, supplement):
         if not os.path.isfile(tractorfile):
             log.warning('Unable to find Tractor catalog {}'.format(tractorfile))
             raise IOError
-    
-        _tractor = fitsio.read(tractorfile, columns=['OBJID', 'BRICK_PRIMARY'], upper=True)
-        #_tractor = _tractor[_tractor['BRICK_PRIMARY']]
-        I = np.where(_tractor['BRICK_PRIMARY'] * np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
 
-        if len(I) == 0: # some secondary programs have BRICKNAME!='' and BRICK_OBJID==0 (i.e., not populated)
-            pdb.set_trace()
+        # Some commissioning and SV targets can have brick_primary==False, so don't require it here.
+        #<Table length=1>
+        #     TARGETID     BRICKNAME BRICKID BRICK_OBJID RELEASE CMX_TARGET DESI_TARGET   SV1_DESI_TARGET   SV2_DESI_TARGET SV3_DESI_TARGET SCND_TARGET
+        #      int64          str8    int32     int32     int16    int64       int64           int64             int64           int64         int64
+        #----------------- --------- ------- ----------- ------- ---------- ----------- ------------------- --------------- --------------- -----------
+        #39628509856927757  0352p315  503252        4109    9010          0           0 2305843009213693952               0               0           0
+        #<Table length=1>
+        #     TARGETID         TARGET_RA          TARGET_DEC     TILEID SURVEY PROGRAM
+        #      int64            float64            float64       int32   str7    str6
+        #----------------- ------------------ ------------------ ------ ------ -------
+        #39628509856927757 35.333944142134406 31.496490061792002  80611    sv1  bright
+
+        _tractor = fitsio.read(tractorfile, columns=['OBJID', 'BRICK_PRIMARY'], upper=True)
+        #I = np.where(_tractor['BRICK_PRIMARY'] * np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
+        I = np.where(np.isin(_tractor['OBJID'], cat['BRICK_OBJID']))[0]
+
+        # Some secondary programs have BRICKNAME!='' and BRICK_OBJID==0 (i.e.,
+        # not populated). However, there should always be a match here because
+        # we "repair" brick_objid in the main function.
+        if len(I) == 0: 
             return Table()
 
         tractor = Table(fitsio.read(tractorfile, rows=I, upper=True))
@@ -118,10 +134,7 @@ def tractorphot_one(cat, bricks, supplement):
         # sort explicitly in order to ensure order
         srt = np.hstack([np.where(objid == tractor['OBJID'])[0] for objid in cat['BRICK_OBJID']])
         tractor = tractor[srt]
-        try:
-            assert(np.all((tractor['BRICKID'] == cat['BRICKID'])*(tractor['OBJID'] == cat['BRICK_OBJID'])))
-        except:
-            pdb.set_trace()
+        assert(np.all((tractor['BRICKID'] == cat['BRICKID'])*(tractor['OBJID'] == cat['BRICK_OBJID'])))
 
         tractor['TARGETID'] = cat['TARGETID']
         
@@ -157,7 +170,7 @@ def tractorphot_one(cat, bricks, supplement):
                     coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
                     indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
                     if d2d < rad:
-                        tractor = fitsio.read(tractorfile, rows=indx_tractor)
+                        tractor = fitsio.read(tractorfile, rows=indx_tractor, upper=True)
                         for col in tractor.dtype.names:
                             supplement[col][indx_cat] = tractor[col][0]
                             
@@ -381,6 +394,7 @@ def main():
     p.add_argument('--get-secondary-targetdirs', action='store_true', help='Figure out which secondary target catalogs actually were used to design tiles.')
     p.add_argument('--targetphot', action='store_true', help='Build the photo-targets catalogs.')
     p.add_argument('--tractorphot', action='store_true', help='Build the photo-tractor catalogs.')
+    p.add_argument('--validate-tractorphot', action='store_true', help='Validate the photo-tractor catalogs.')
     p.add_argument('--overwrite', action='store_true', help='Overwrite existing photo-targets files.')
     
     args = p.parse_args()
@@ -403,7 +417,7 @@ def main():
             
         # Fragile! Read a single row of a single target catalog in order to get the
         # correct photometric data model. Add all the _TARGET columns at the end
-        datamodel = Table(fitsio.read('/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark/targets-dark-hp-0.fits', rows=0))
+        datamodel = Table(fitsio.read('/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark/targets-dark-hp-0.fits', rows=0, upper=True))
         for col in datamodel.colnames:
             if '_TARGET' in col:
                 datamodel.remove_column(col)
@@ -592,13 +606,13 @@ def main():
             J = rand.choice(N, size=10000, replace=False)
             cat = Table(fitsio.read(targetfile, rows=J))
         else:
-            print('Hack!!!!!')
-            _tar = fitsio.read(targetfile, columns='TARGETID')
+            #print('Hack!!!!!')
+            #_tar = fitsio.read(targetfile, columns='TARGETID')
             #_I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347]))
             # 39628509856927757  0352p315  503252        4109    9010 # brick_primary==False
-            _I = np.where(np.isin(_tar, [39628509856927757]))
-            cat = Table(fitsio.read(targetfile, rows=_I))            
-            #cat = Table(fitsio.read(targetfile))
+            #_I = np.where(np.isin(_tar, [39628509856927757]))
+            #cat = Table(fitsio.read(targetfile, rows=_I))            
+            cat = Table(fitsio.read(targetfile))
 
         # Some secondary programs (e.g., 39632961435338613, 39632966921487347)
         # have BRICKNAME!='' & BRICKID!=0, but BRICK_OBJID==0. Fix those here
@@ -610,7 +624,7 @@ def main():
             assert(np.all(fix_brickid == cat['BRICKID'][fix]))
             cat['BRICK_OBJID'][fix] = fix_objid
 
-        datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0))
+        datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0, upper=True))
         out = Table(np.hstack(np.repeat(datamodel, len(cat))))
         for col in datamodel.colnames:
             out[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
@@ -648,8 +662,6 @@ def main():
             # positional matching, so raise an exception. Hopefully this will
             # never happen but if it does then it means we need to keep track of
             # these "missing" objects here.
-            pdb.set_trace()
-
             if len(out_good) == 0 or len(out_good) != np.sum(I):
                 log.warning('Some targets did not match on BRICKNAME and OBJID in healpix {}'.format(pixel))
                 raise ValueError
@@ -713,7 +725,7 @@ def main():
             # to disk and then writing out the final catalog.
             isupplement_good = np.where(supplement['BRICKNAME'] != '')[0]
             isupplement_miss = np.where(supplement['BRICKNAME'] == '')[0]
-    
+
             if len(isupplement_good) > 0:
                 supplement_good = supplement[isupplement_good]
             
@@ -749,6 +761,110 @@ def main():
                 out_miss.meta['EXTNAME'] = 'TARGETPHOT'
                 log.info('Writing {:,} objects to {}'.format(len(out_miss), outfile_miss))
                 out_miss.write(outfile_miss, overwrite=True)
+
+    # Validate the Tractor photometry against the original redshift catalogs.
+    if args.validate_tractorphot:
+        outcat = []
+        outzcat = []
+        
+        zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
+        #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'zpix-sv3-dark.fits'))
+        #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv1-other-cumulative.fits'))        
+        for zcatfile in zcatfiles:
+            log.info('Validating {}'.format(zcatfile))
+            zcat = Table(fitsio.read(zcatfile))
+            hdr = fitsio.read_header(zcatfile, ext=1)
+            zcat['SURVEY'] = hdr['SURVEY']
+            zcat['PROGRAM'] = hdr['PROGRAM']
+
+            # Toss out skies and stuck positioners.
+            _, _, _, _, sky, _ = decode_targetid(zcat['TARGETID'])
+            keep = (sky == 0) * (zcat['TARGETID'] > 0)    
+            zcat = zcat[keep]
+        
+            # read the appropriate Tractor catalog
+            pixels = radec2pix(args.filenside, zcat['TARGET_RA'], zcat['TARGET_DEC'])
+            log.info('Working on {} pixels'.format(len(set(pixels))))
+            for pixel in set(pixels):
+                I = pixel == pixels
+                
+                catfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-fuji.fits'.format(args.filenside, pixel))
+                if not os.path.isfile(catfile):
+                    log.info('No Tractor photometry for {} objects from {}'.format(np.sum(I), catfile))
+                    # make sure they're all in the missing catalog
+                    missfile = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
+                    miss = Table(fitsio.read(missfile))
+                    assert(np.sum(np.isin(miss['TARGETID'], zcat['TARGETID'][I])) == np.sum(I))
+                    continue
+                    
+                log.info('Reading {} objects from {}'.format(np.sum(I), catfile))
+                cat = Table(fitsio.read(catfile))
+
+                targetid = np.intersect1d(cat['TARGETID'], zcat['TARGETID'][I])
+                cat = cat[np.isin(cat['TARGETID'], targetid)]
+                _zcat = zcat[I][np.isin(zcat['TARGETID'][I], targetid)]
+                J = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in _zcat['TARGETID']])
+                cat = cat[J]
+                assert(np.all(cat['TARGETID'] == _zcat['TARGETID']))
+
+                #if np.sum(np.isin(_zcat['TARGETID'], 39627805369044130)) > 0:
+                #    pdb.set_trace()
+                
+                #keep = _zcat['BRICKNAME'] != ''
+                #if np.sum(keep) == 0:
+                #    continue
+                #cat = cat[keep]
+                #_zcat = _zcat[keep]
+                
+                diff = (cat['BRICKID'] != _zcat['BRICKID'])
+                diff = np.logical_or(diff, cat['OBJID'] != _zcat['BRICK_OBJID'])
+                #diff = np.logical_or(diff, cat['flux_g'] != _zcat['FLUX_R'])
+                #diff = np.logical_or(diff, cat['flux_r'] != _zcat['FLUX_R'])
+                #diff = np.logical_or(diff, cat['flux_z'] != _zcat['FLUX_Z'])
+                #diff = np.logical_or(diff, cat['flux_w1'] != _zcat['FLUX_W1'])
+                #diff = np.logical_or(diff, cat['flux_w2'] != _zcat['FLUX_W2'])
+                diff = np.where(diff)[0]
+        
+                if np.sum(diff) > 0:
+                    outcat.append(cat[diff])
+                    outzcat.append(_zcat[diff])
+                        
+                    #objid, brickid, release, mock, sky, gaia = decode_targetid(_zcat['TARGETID'][diff])
+                    #for dd in diff:
+                    #    print(_zcat['BRICKID'][dd], cat['brickid'][dd], _zcat['BRICK_OBJID'][dd], cat['objid'][dd])
+                    #print(set(release))
+
+        if len(outcat) > 0:
+            outcat = vstack(outcat)
+            outzcat = vstack(outzcat)
+            
+            outcat = outcat['TARGETID', 'RA', 'DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'BRICK_PRIMARY']
+            outzcat = outzcat['TARGETID', 'TARGET_RA', 'TARGET_DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']
+            
+            #for col in ['targetid', 'ra', 'dec', 'release', 'brickname', 'brickid', 'objid', 'brick_primary', 'flux_g', 'flux_r', 'flux_z', 'flux_w1', 'flux_w2']:
+            #    outcat.rename_column(col, '{}_tractor'.format(col).upper())
+            for col in ['TARGETID', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']:
+                if col == 'BRICK_OBJID':
+                    outzcat.rename_column(col, 'OBJID_ZCAT')
+                else:
+                    outzcat.rename_column(col, '{}_ZCAT'.format(col))
+            
+            #out = hstack((outcat, outzcat))
+            
+            tractorcols = np.array(outcat.colnames)
+            zcols = np.array(outzcat.colnames)
+            
+            out = Table()
+            for ii in np.arange(len(zcols)):
+                out[zcols[ii]] = outzcat[zcols[ii]]
+                out[tractorcols[ii]] = outcat[tractorcols[ii]]
+            out['BRICK_PRIMARY'] = outcat['BRICK_PRIMARY']
+            for col in outzcat.colnames:
+                if '_TARGET' in col:
+                    out[col] = outzcat[col]
+    
+            outfile = os.path.join(args.outdir, 'tractorphot-validate-{}.fits'.format(args.outprefix))
+            out.write(outfile, overwrite=True)
 
 if __name__ == '__main__':
     main()
