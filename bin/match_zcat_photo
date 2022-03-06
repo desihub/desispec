@@ -7,6 +7,7 @@ time match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/fuji --mp 
 time match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/guadalupe --mp 32 -o /global/cscratch1/sd/ioannis/photocatalog --outprefix guadalupe --targetphot --tractorphot
 
 time match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/fuji -o /global/cscratch1/sd/ioannis/photocatalog --outprefix fuji --validate-tractorphot
+time match_zcat_photo --reduxdir /global/cfs/cdirs/desi/spectro/redux/guadalupe -o /global/cscratch1/sd/ioannis/photocatalog --outprefix guadalupe --validate-tractorphot
 
 """
 import os, sys, argparse, pdb
@@ -423,7 +424,7 @@ def main():
     p.add_argument('--mp', type=int, default=1, help='number of multiprocessing cores')
     p.add_argument('--filenside', type=int, default=4, help='healpix nside for tractorphot catalogs.')
     p.add_argument('--get-secondary-targetdirs', action='store_true', help='Figure out which secondary target catalogs actually were used to design tiles.')
-    p.add_argument('--test', action='store_true', help='.')
+    p.add_argument('--ntest', type=int, default=None, help='Test on a randomly selected sample of NTEST objects.')
     p.add_argument('--targetphot', action='store_true', help='Build the photo-targets catalogs.')
     p.add_argument('--tractorphot', action='store_true', help='Build the photo-tractor catalogs.')
     p.add_argument('--validate-tractorphot', action='store_true', help='Validate the photo-tractor catalogs.')
@@ -438,8 +439,10 @@ def main():
     if not os.path.isdir(args.outdir):
         os.makedirs(args.outdir, exist_ok=True)
 
-    rand = np.random.RandomState(seed=1) # for testing
-    #rand = None
+    if args.ntest is not None:
+        rand = np.random.RandomState(seed=1)
+    else:
+        rand = None
 
     if args.targetphot:
         outfile = os.path.join(args.outdir, 'targetphot-{}.fits'.format(args.outprefix))
@@ -579,7 +582,7 @@ def main():
 
         if rand is not None:
             #zcat = zcat[zcat['TILEID'] == 81108]
-            J = rand.choice(len(zcat), size=1000, replace=False)
+            J = rand.choice(len(zcat), size=args.ntest, replace=False)
             zcat = zcat[J]
 
         ## ~10^4 objects have NaN coordinates; handle those separately (all these have negative TARGETIDs)
@@ -635,7 +638,7 @@ def main():
 
         if rand is not None:
             N = fitsio.FITS(targetfile)[1].get_nrows()
-            J = rand.choice(N, size=10000, replace=False)
+            J = rand.choice(N, size=args.ntest, replace=False)
             cat = Table(fitsio.read(targetfile, rows=J))
         else:
             #print('Hack!!!!!')
@@ -840,8 +843,7 @@ def main():
                     # make sure they're all in the missing catalog
                     missfile = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
                     miss = Table(fitsio.read(missfile))
-                    if rand is not None:
-                        assert(np.sum(np.isin(miss['TARGETID'], zcat['TARGETID'][I])) == np.sum(I))
+                    assert(np.sum(np.isin(miss['TARGETID'], zcat['TARGETID'][I])) == np.sum(I))
                     continue
                     
                 log.info('Reading {} objects from {}'.format(np.sum(I), catfile))
