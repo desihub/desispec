@@ -14,12 +14,19 @@ from glob import glob
 import numpy as np
 import fitsio
 import multiprocessing
+import healpy as hp
+
 import astropy
 from astropy.io import fits
 from astropy.table import Table, vstack
+import astropy.units as u
+from astropy.coordinates import SkyCoord
+
 from desispec.io import specprod_root
 from desimodel.footprint import radec2pix
 from desitarget.targets import decode_targetid
+from desitarget.io import desitarget_resolve_dec
+from desitarget.geomask import is_in_gal_box, pixarea2nside
 
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
@@ -37,6 +44,23 @@ TARGETINGBITCOLS = [
     'SCND_TARGET',
     'SV1_SCND_TARGET', 'SV2_SCND_TARGET', 'SV3_SCND_TARGET',
     ]
+
+def _resolve(cat, split=desitarget_resolve_dec()):
+    # "Resolve" whether the target is in the north or south. The
+    # algorithm here is taken from desitarget.targets.resolve, which was
+    # written by ADM. (Note we can't use that method directly because we
+    # don't necessarily have photsys or release).
+    nside = pixarea2nside(1)
+    theta, phi = np.radians(90-cat['TARGET_DEC']), np.radians(cat['TARGET_RA'])
+    pixnum = hp.ang2pix(nside, theta, phi, nest=True)
+    # ADM find the pixels north of the Galactic plane...
+    allpix = np.arange(hp.nside2npix(nside))
+    theta, phi = hp.pix2ang(nside, allpix, nest=True)
+    ra, dec = np.degrees(phi), 90-np.degrees(theta)
+    pixn = is_in_gal_box([ra, dec], [0., 360., 0., 90.], radec=True)
+    # ADM which objects are in pixels north of the Galactic plane.
+    galn = pixn[pixnum]
+    return (cat['TARGET_DEC'] >= split) & galn # True=North
 
 def _get_brickname(args):
     return get_brickname(*args)
@@ -141,39 +165,46 @@ def tractorphot_one(cat, bricks, supplement):
         return tractor
         
     # use positional matching
-    else:
-        import astropy.units as u
-        from astropy.coordinates import SkyCoord
-
+    else:        
         rad = 1.0 * u.arcsec
-        
         brick = cat['BRICKNAME'][0]
 
-        # This is not correct---we should actually do a "resolve" here.
-        for region in ['south', 'north']:
-            tractorfile = os.path.join(dr9dir, region, 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
-            if os.path.isfile(tractorfile):
-                _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
-                iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
-                _tractor = _tractor[iprimary] 
-                coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
+        # resolve north/south
+        tractorfile_north = os.path.join(dr9dir, 'north', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
+        tractorfile_south = os.path.join(dr9dir, 'south', 'tractor', brick[:3], 'tractor-{}.fits'.format(brick))
+        if os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
+            tractorfile = tractorfile_north
+        elif not os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
+            tractorfile = tractorfile_south
+        elif os.path.isfile(tractorfile_north) and os.path.isfile(tractorfile_south):
+            if np.median(cat['TARGET_DEC']) < desitarget_resolve_dec():
+                tractorfile = tractorfile_south
+            else:
+                tractorfile = tractorfile_north
+        elif not os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
+            return supplement            
+                
+        _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
+        iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
+        _tractor = _tractor[iprimary] 
+        coord_tractor = SkyCoord(ra=_tractor['RA']*u.deg, dec=_tractor['DEC']*u.deg)
 
-                # Some targets can appear twice (with different targetids), so
-                # to make sure we do it right, we have to loop. Example:
-                #
-                #     TARGETID    SURVEY PROGRAM     TARGET_RA          TARGET_DEC    OBJID BRICKID RELEASE  SKY  GAIADR    RA     DEC   GROUP BRICKNAME
-                #      int64       str7    str6       float64            float64      int64  int64   int64  int64 int64  float64 float64 int64    str8
-                # --------------- ------ ------- ------------------ ----------------- ----- ------- ------- ----- ------ ------- ------- ----- ---------
-                # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
-                # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025                
-                for indx_cat, (ra, dec) in enumerate(zip(cat['TARGET_RA'], cat['TARGET_DEC'])):
-                    coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
-                    indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
-                    if d2d < rad:
-                        tractor = fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True)
-                        for col in tractor.dtype.names:
-                            supplement[col][indx_cat] = tractor[col][0]
-                            
+        # Some targets can appear twice (with different targetids), so
+        # to make sure we do it right, we have to loop. Example:
+        #
+        #     TARGETID    SURVEY PROGRAM     TARGET_RA          TARGET_DEC    OBJID BRICKID RELEASE  SKY  GAIADR    RA     DEC   GROUP BRICKNAME
+        #      int64       str7    str6       float64            float64      int64  int64   int64  int64 int64  float64 float64 int64    str8
+        # --------------- ------ ------- ------------------ ----------------- ----- ------- ------- ----- ------ ------- ------- ----- ---------
+        # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
+        # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025                
+        for indx_cat, (ra, dec) in enumerate(zip(cat['TARGET_RA'], cat['TARGET_DEC'])):
+            coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+            indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
+            if d2d < rad:
+                tractor = fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True)
+                for col in tractor.dtype.names:
+                    supplement[col][indx_cat] = tractor[col][0]
+                    
         return supplement
 
 def _targetphot_one(args):
@@ -392,6 +423,7 @@ def main():
     p.add_argument('--mp', type=int, default=1, help='number of multiprocessing cores')
     p.add_argument('--filenside', type=int, default=4, help='healpix nside for tractorphot catalogs.')
     p.add_argument('--get-secondary-targetdirs', action='store_true', help='Figure out which secondary target catalogs actually were used to design tiles.')
+    p.add_argument('--test', action='store_true', help='.')
     p.add_argument('--targetphot', action='store_true', help='Build the photo-targets catalogs.')
     p.add_argument('--tractorphot', action='store_true', help='Build the photo-tractor catalogs.')
     p.add_argument('--validate-tractorphot', action='store_true', help='Validate the photo-tractor catalogs.')
@@ -406,8 +438,8 @@ def main():
     if not os.path.isdir(args.outdir):
         os.makedirs(args.outdir, exist_ok=True)
 
-    #rand = np.random.RandomState(seed=1) # for testing
-    rand = None
+    rand = np.random.RandomState(seed=1) # for testing
+    #rand = None
 
     if args.targetphot:
         outfile = os.path.join(args.outdir, 'targetphot-{}.fits'.format(args.outprefix))
@@ -608,9 +640,13 @@ def main():
         else:
             #print('Hack!!!!!')
             #_tar = fitsio.read(targetfile, columns='TARGETID')
-            #_I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347]))
+            #_junk = fitsio.read(os.path.join(args.outdir, 'tractorphot-validate-fuji.fits'), columns=['TARGETID', 'BRICKNAME_ZCAT'])
+            #_junk = _junk[_junk['BRICKNAME_ZCAT'] == '']
+            #_I = np.where(np.isin(_tar, _junk['TARGETID']))[0]
+            #_tar = fitsio.read(targetfile, columns='TARGETID')
+            #_I = np.where(np.isin(_tar, [39632961435338613, 39632966921487347, 39628509856927757]))
             # 39628509856927757  0352p315  503252        4109    9010 # brick_primary==False
-            #_I = np.where(np.isin(_tar, [39628509856927757]))
+            #_I = np.where(np.isin(_tar, [39628509856927757]))[0]
             #cat = Table(fitsio.read(targetfile, rows=_I))            
             cat = Table(fitsio.read(targetfile))
 
@@ -665,7 +701,7 @@ def main():
             if len(out_good) == 0 or len(out_good) != np.sum(I):
                 log.warning('Some targets did not match on BRICKNAME and OBJID in healpix {}'.format(pixel))
                 raise ValueError
-            
+
             # Write out an output catalog that we *may* add to, below.
             outfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
                 args.filenside, pixel, args.outprefix))
@@ -676,13 +712,13 @@ def main():
             out_good.write(outfile, overwrite=True)
             del out_good
         del cat_good
-            
+                
         # Next, use positional matching to get photometry for as many
         # of the "missing" objects as possible.
         imiss = np.where(cat['BRICKNAME'] == '')[0]
         if len(imiss) > 0:
             cat_miss = cat[imiss]
-    
+
             log.info('Gathering Tractor photometry using positional matching for {:,} additional objects'.format(
                 len(cat_miss)))
     
@@ -691,17 +727,27 @@ def main():
             I = np.hstack([np.where(tid == zcat['TARGETID'])[0] for tid in cat_miss['TARGETID']])
             zcat_miss = zcat[I]
             assert(np.all(cat_miss['TARGETID'] == zcat_miss['TARGETID']))
-    
-            # get the brickname in parallel        
+
+            ## old algorithm: get the brickname in parallel
+            #mpargs = [[bricks, ra, dec] for ra, dec in zip(zcat_miss['TARGET_RA'], zcat_miss['TARGET_DEC'])]
+            #if args.mp > 1:
+            #    with multiprocessing.Pool(args.mp) as P:
+            #        bricknames = P.map(_get_brickname, mpargs)
+            #else:
+            #    bricknames = [_get_brickname(mparg) for mparg in mpargs]
+            #zcat_miss['BRICKNAME'] = np.hstack(bricknames)
+            
+            # get the brickname by matching on brick center
             bricks = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'))
-    
-            mpargs = [[bricks, ra, dec] for ra, dec in zip(zcat_miss['TARGET_RA'], zcat_miss['TARGET_DEC'])]
-            if args.mp > 1:
-                with multiprocessing.Pool(args.mp) as P:
-                    bricknames = P.map(_get_brickname, mpargs)
-            else:
-                bricknames = [_get_brickname(mparg) for mparg in mpargs]
-            zcat_miss['BRICKNAME'] = np.hstack(bricknames)
+
+            coord_bricks = SkyCoord(ra=bricks['RA']*u.deg, dec=bricks['DEC']*u.deg)
+            coord_miss = SkyCoord(ra=zcat_miss['TARGET_RA']*u.deg, dec=zcat_miss['TARGET_DEC']*u.deg)
+            indx_bricks, d2d, _ = coord_miss.match_to_catalog_sky(coord_bricks)
+            zcat_miss['BRICKNAME'] = bricks[indx_bricks]['BRICKNAME']
+
+            # resolve into north and south
+            # edit: don't do this because some secondary programs enter the Galactic plane!
+            #_resolve(zcat_miss)
     
             # initialize the output table
             supplement = Table(np.hstack(np.repeat(datamodel, len(cat_miss))))
@@ -788,13 +834,14 @@ def main():
             for pixel in set(pixels):
                 I = pixel == pixels
                 
-                catfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-fuji.fits'.format(args.filenside, pixel))
+                catfile = os.path.join(args.outdir, 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(args.filenside, pixel, args.outprefix))
                 if not os.path.isfile(catfile):
                     log.info('No Tractor photometry for {} objects from {}'.format(np.sum(I), catfile))
                     # make sure they're all in the missing catalog
                     missfile = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
                     miss = Table(fitsio.read(missfile))
-                    assert(np.sum(np.isin(miss['TARGETID'], zcat['TARGETID'][I])) == np.sum(I))
+                    if rand is not None:
+                        assert(np.sum(np.isin(miss['TARGETID'], zcat['TARGETID'][I])) == np.sum(I))
                     continue
                     
                 log.info('Reading {} objects from {}'.format(np.sum(I), catfile))
@@ -803,7 +850,10 @@ def main():
                 targetid = np.intersect1d(cat['TARGETID'], zcat['TARGETID'][I])
                 cat = cat[np.isin(cat['TARGETID'], targetid)]
                 _zcat = zcat[I][np.isin(zcat['TARGETID'][I], targetid)]
-                J = np.hstack([np.where(tid == cat['TARGETID'])[0] for tid in _zcat['TARGETID']])
+                J = [np.where(tid == cat['TARGETID'])[0] for tid in _zcat['TARGETID']]
+                if len(J) == 0: # can happen when testing
+                    continue
+                J = np.hstack(J)
                 cat = cat[J]
                 assert(np.all(cat['TARGETID'] == _zcat['TARGETID']))
 
@@ -835,33 +885,34 @@ def main():
                     #print(set(release))
 
         if len(outcat) > 0:
-            outcat = vstack(outcat)
-            outzcat = vstack(outzcat)
+            _outcat = vstack(outcat)
+            _outzcat = vstack(outzcat)
             
-            outcat = outcat['TARGETID', 'RA', 'DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'BRICK_PRIMARY']
-            outzcat = outzcat['TARGETID', 'TARGET_RA', 'TARGET_DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']
-            
-            #for col in ['targetid', 'ra', 'dec', 'release', 'brickname', 'brickid', 'objid', 'brick_primary', 'flux_g', 'flux_r', 'flux_z', 'flux_w1', 'flux_w2']:
-            #    outcat.rename_column(col, '{}_tractor'.format(col).upper())
+            outcat = _outcat['TARGETID', 'RA', 'DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']
+            outzcat = _outzcat['TARGETID', 'TARGET_RA', 'TARGET_DEC', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']
+
             for col in ['TARGETID', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2']:
                 if col == 'BRICK_OBJID':
                     outzcat.rename_column(col, 'OBJID_ZCAT')
                 else:
                     outzcat.rename_column(col, '{}_ZCAT'.format(col))
-            
             #out = hstack((outcat, outzcat))
-            
+
+            # interlace the columns in the output table
             tractorcols = np.array(outcat.colnames)
             zcols = np.array(outzcat.colnames)
-            
             out = Table()
             for ii in np.arange(len(zcols)):
                 out[zcols[ii]] = outzcat[zcols[ii]]
                 out[tractorcols[ii]] = outcat[tractorcols[ii]]
-            out['BRICK_PRIMARY'] = outcat['BRICK_PRIMARY']
-            for col in outzcat.colnames:
+
+            # add brick_primary, survey, program, and the targeting bits
+            out['BRICK_PRIMARY'] = _outcat['BRICK_PRIMARY']
+            for col in _outzcat.colnames:
                 if '_TARGET' in col:
-                    out[col] = outzcat[col]
+                    out[col] = _outzcat[col]
+            out['SURVEY'] = _outzcat['SURVEY']
+            out['PROGRAM'] = _outzcat['PROGRAM']
     
             outfile = os.path.join(args.outdir, 'tractorphot-validate-{}.fits'.format(args.outprefix))
             out.write(outfile, overwrite=True)
