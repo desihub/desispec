@@ -803,14 +803,14 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
             colnames = data.names
         except AttributeError:
             colnames = data.colnames
+        masked = dict()
         for col in colnames:
             if data[col].dtype.kind == 'f':
                 if isinstance(data[col], MaskedColumn):
                     bad = np.isnan(data[col].data.data[0:mr])
-                    masked = True
+                    masked[col] = True
                 else:
                     bad = np.isnan(data[col][0:mr])
-                    masked = False
                 if np.any(bad):
                     if bad.ndim == 1:
                         log.warning("%d rows of bad data detected in column " +
@@ -825,7 +825,7 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
                     #
                     # TODO: is this replacement appropriate for all columns?
                     #
-                    if masked:
+                    if col in masked:
                         data[col].data.data[0:mr][bad] = -9999.0
                     else:
                         data[col][0:mr][bad] = -9999.0
@@ -834,7 +834,13 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
             good_rows = np.ones((mr,), dtype=np.bool)
         else:
             good_rows = rowfilter(data[0:mr])
-        data_list = [data[col][0:mr][good_rows].tolist() for col in colnames]
+        log.info("Row filter applied on %s.", tn)
+        data_list = list()
+        for col in colnames:
+            if col in masked:
+                data_list.append(data[col].data.data[0:mr][good_rows].tolist())
+            else:
+                data_list.append(data[col][0:mr][good_rows].tolist())
         data_names = [col.lower() for col in colnames]
         finalrows = len(data_list[0])
         log.info("Initial column conversion complete on %s.", tn)
