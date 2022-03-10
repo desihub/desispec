@@ -23,7 +23,7 @@ import sys
 
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, MaskedColumn
 from astropy.time import Time
 from pytz import utc
 
@@ -638,7 +638,12 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
             colnames = data.colnames
         for col in colnames:
             if data[col].dtype.kind == 'f':
-                bad = np.isnan(data[col][0:mr])
+                if isinstance(data[col], MaskedColumn):
+                    bad = np.isnan(data[col].data.data[0:mr])
+                    masked = True
+                else:
+                    bad = np.isnan(data[col][0:mr])
+                    masked = False
                 if np.any(bad):
                     if bad.ndim == 1:
                         log.warning("%d rows of bad data detected in column " +
@@ -653,7 +658,10 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
                     #
                     # TODO: is this replacement appropriate for all columns?
                     #
-                    data[col][0:mr][bad] = -9999.0
+                    if masked:
+                        data[col].data.data[0:mr][bad] = -9999.0
+                    else:
+                        data[col][0:mr][bad] = -9999.0
         log.info("Integrity check complete on %s.", tn)
         if rowfilter is None:
             good_rows = np.ones((mr,), dtype=np.bool)
@@ -1085,7 +1093,7 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'tiles-{specprod}.csv'.format(specprod=os.environ['SPECPROD'])),
+    loader = [{'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Tile,
                'hdu': 'TILE_COMPLETENESS',
                'q3c': 'tilera',
@@ -1165,6 +1173,7 @@ def main():
                'tcls': Fiberassign,
                'hdu': 'FIBERASSIGN',
                'preload': _tileid,
+               'rowfilter': lambda x: x['TARGETID'] > 0,
                'q3c': 'target_ra',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
@@ -1173,6 +1182,7 @@ def main():
                'tcls': Potential,
                'hdu': 'POTENTIAL_ASSIGNMENTS',
                'preload': _tileid,
+               'rowfilter': lambda x: x['TARGETID'] > 0,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
               }]
