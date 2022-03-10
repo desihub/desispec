@@ -358,7 +358,7 @@ class Target(SchemaMixin, Base):
     gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
     gaia_duplicated_source = Column(Boolean, nullable=False)
     gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
-    gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)
+    gaia_astrometric_params_solved = Column(Boolean, nullable=False)
     parallax = Column(REAL, nullable=False)
     parallax_ivar = Column(REAL, nullable=False)
     pmra = Column(REAL, nullable=False)
