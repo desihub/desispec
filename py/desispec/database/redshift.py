@@ -135,24 +135,24 @@ class Tile(SchemaMixin, Base):
     """
 
     tileid = Column(Integer, primary_key=True, autoincrement=False)
-    survey = Column(String(7), nullable=False)
-    faprgrm = Column(String(15), nullable=False)
-    program = Column(String(6), nullable=False)  # will be filled via desispec.io.meta.faflavor2program()
-    faflavor = Column(String(18), nullable=False)
-    nexp = Column(Integer, nullable=False)  # In principle this could be replaced by a count of exposures
+    survey = Column(String(20), nullable=False)
+    program = Column(String(6), nullable=False)
+    faprgrm = Column(String(20), nullable=False)
+    faflavor = Column(String(20), nullable=False)
+    nexp = Column(BigInteger, nullable=False)  # In principle this could be replaced by a count of exposures
     exptime = Column(DOUBLE_PRECISION, nullable=False)
     tilera = Column(DOUBLE_PRECISION, nullable=False)   #- Calib exposures don't have RA, dec
     tiledec = Column(DOUBLE_PRECISION, nullable=False)
-    efftime_etc = Column(REAL, nullable=False)
+    efftime_etc = Column(DOUBLE_PRECISION, nullable=False)
     efftime_spec = Column(DOUBLE_PRECISION, nullable=False)
     efftime_gfa = Column(DOUBLE_PRECISION, nullable=False)
     goaltime = Column(DOUBLE_PRECISION, nullable=False)
-    obsstatus = Column(String(8), nullable=False)
-    lrg_efftime_dark = Column(REAL, nullable=False)
-    elg_efftime_dark = Column(REAL, nullable=False)
-    bgs_efftime_bright = Column(REAL, nullable=False)
+    obsstatus = Column(String(20), nullable=False)
+    lrg_efftime_dark = Column(DOUBLE_PRECISION, nullable=False)
+    elg_efftime_dark = Column(DOUBLE_PRECISION, nullable=False)
+    bgs_efftime_bright = Column(DOUBLE_PRECISION, nullable=False)
     lya_efftime_dark = Column(DOUBLE_PRECISION, nullable=False)
-    goaltype = Column(String(6), nullable=False)
+    goaltype = Column(String(20), nullable=False)
     mintfrac = Column(DOUBLE_PRECISION, nullable=False)
     lastnight = Column(Integer, nullable=False) # In principle this could be replaced by MAX(night) grouped by exposures.
 
@@ -1087,8 +1087,7 @@ def main():
     #
     loader = [{'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'tiles-{specprod}.csv'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Tile,
-               'insert': {'faflavor': ('program',)},
-               'convert': {'program': faflavor2program},
+               'hdu': 'TILE_COMPLETENESS',
                'q3c': 'tilera',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
@@ -1096,8 +1095,8 @@ def main():
               {'filepaths': os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'exposures-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                'tcls': Exposure,
                'hdu': 'EXPOSURES',
-               'insert': {'faflavor': ('program',), 'mjd': ('date_obs',)},
-               'convert': {'program': faflavor2program, 'date_obs': lambda x: Time(x, format='mjd').to_value('datetime').replace(tzinfo=utc)},
+               'insert': {'mjd': ('date_obs',)},
+               'convert': {'date_obs': lambda x: Time(x, format='mjd').to_value('datetime').replace(tzinfo=utc)},
                'q3c': 'tilera',
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
