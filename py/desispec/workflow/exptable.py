@@ -838,8 +838,8 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             outdict['LASTSTEP'] = 'skysub'
             outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'short_exposure')
             outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'EXPTIME={outdict["EXPTIME"]:.1f}s lt {threshold_exptime:.1f}')
-            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
-                        f" than {threshold_exptime}s. Processing through sky subtraction.")
+            log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']:.2f} less" +
+                        f" than {threshold_exptime:.1f}s. Processing through sky subtraction.")
         elif outdict['SURVEY'] == 'main':
             ## Define thresholds
             threshold_speed, threshold_efftime = 0., 0.
@@ -863,15 +863,15 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                                                 f'efftime={outdict["EFFTIME_ETC"]:.1f}s '
                                                 + f'lt {threshold_efftime:.1f}')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} "
-                            + f"with EFFTIME={outdict['EFFTIME_ETC']} "
-                            + f"less than {threshold_efftime:.4f}. "
+                            + f"with EFFTIME={outdict['EFFTIME_ETC']:.2f} "
+                            + f"less than {threshold_efftime:.1f}. "
                             + f"Processing through sky subtraction.")
             ## Cut on Speed:
             elif speed < threshold_speed:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
                 outdict['COMMENTS'] = np.append(outdict['COMMENTS'],
-                                                f'speed={speed:.4f} lt {threshold_speed:.4f}')
+                                                f'speed={speed:.3f} lt {threshold_speed:.3f}')
                 log.warning(f"LASTSTEP CHANGE. Science exposure {exp} "
                             + f"with speed={speed:.4f} less than threshold "
                             + f"speed={threshold_speed:.4f}. "
