@@ -618,70 +618,88 @@ class Potential(SchemaMixin, Base):
         return "Potential(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
 
 
-class ZCat(SchemaMixin, Base):
-    """Representation of the zcat table.
+class Zpix(SchemaMixin, Base):
+    """Representation of the ``ZCATALOG`` table in zpix files.
     """
 
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
-    chi2 = Column(Float, nullable=False)
-    coeff_0 = Column(Float, nullable=False)
-    coeff_1 = Column(Float, nullable=False)
-    coeff_2 = Column(Float, nullable=False)
-    coeff_3 = Column(Float, nullable=False)
-    coeff_4 = Column(Float, nullable=False)
-    coeff_5 = Column(Float, nullable=False)
-    coeff_6 = Column(Float, nullable=False)
-    coeff_7 = Column(Float, nullable=False)
-    coeff_8 = Column(Float, nullable=False)
-    coeff_9 = Column(Float, nullable=False)
-    z = Column(Float, index=True, nullable=False)
-    zerr = Column(Float, nullable=False)
+    survey = Column(String(7), primary_key=True, autoincrement=False)
+    program = Column(String(6), primary_key=True, autoincrement=False)
+    healpix = Column(Integer, nullable=False)
+    spgrpval = Column(Integer, nullable=False)
+    z = Column(DOUBLE_PRECISION, index=True, nullable=False)
+    zerr = Column(DOUBLE_PRECISION, nullable=False)
     zwarn = Column(BigInteger, index=True, nullable=False)
+    chi2 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_0 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_1 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_2 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_3 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_4 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_5 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_6 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_7 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_8 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_9 = Column(DOUBLE_PRECISION, nullable=False)
     npixels = Column(BigInteger, nullable=False)
-    spectype = Column(String, index=True, nullable=False)
-    subtype = Column(String, index=True, nullable=False)
+    spectype = Column(String(6), index=True, nullable=False)
+    subtype = Column(String(20), index=True, nullable=False)
     ncoeff = Column(BigInteger, nullable=False)
-    deltachi2 = Column(Float, nullable=False)
-    brickname = Column(String, index=True, nullable=False)
-    numexp = Column(Integer, nullable=False, default=-1)
-    numtile = Column(Integer, nullable=False)
+    deltachi2 = Column(DOUBLE_PRECISION, nullable=False)
+    coadd_fiberstatus = Column(Integer, nullable=False)
     #
-    # Columns that are just copied from the target table.
+    # Skipping columns that are in other tables.
     #
-    # brickid = Column(Integer, nullable=False)
-    # brick_objid = Column(Integer, nullable=False)
-    # ra = Column(Float, nullable=False)
-    # dec = Column(Float, nullable=False)
-    # flux_g = Column(Float, nullable=False)
-    # flux_r = Column(Float, nullable=False)
-    # flux_z = Column(Float, nullable=False)
-    # flux_w1 = Column(Float, nullable=False)
-    # flux_w2 = Column(Float, nullable=False)
-    # mw_transmission_g = Column(Float, nullable=False)
-    # mw_transmission_r = Column(Float, nullable=False)
-    # mw_transmission_z = Column(Float, nullable=False)
-    # mw_transmission_w1 = Column(Float, nullable=False)
-    # mw_transmission_w2 = Column(Float, nullable=False)
-    # psfdepth_g = Column(Float, nullable=False)
-    # psfdepth_r = Column(Float, nullable=False)
-    # psfdepth_z = Column(Float, nullable=False)
-    # galdepth_g = Column(Float, nullable=False)
-    # galdepth_r = Column(Float, nullable=False)
-    # galdepth_z = Column(Float, nullable=False)
-    # shapedev_r = Column(Float, nullable=False)
-    # shapedev_e1 = Column(Float, nullable=False)
-    # shapedev_e2 = Column(Float, nullable=False)
-    # shapeexp_r = Column(Float, nullable=False)
-    # shapeexp_e1 = Column(Float, nullable=False)
-    # shapeexp_e2 = Column(Float, nullable=False)
-    # subpriority = Column(Float, nullable=False)
-    # desi_target = Column(BigInteger, nullable=False)
-    # bgs_target = Column(BigInteger, nullable=False)
-    # mws_target = Column(BigInteger, nullable=False)
-    # hpxpixel = Column(BigInteger, nullable=False)
+    coadd_numexp = Column(SmallInteger, nullable=False)
+    coadd_exptime = Column(REAL, nullable=False)
+    coadd_numnight = Column(SmallInteger, nullable=False)
+    coadd_numtile = Column(SmallInteger, nullable=False)
+    mean_delta_x = Column(REAL, nullable=False)
+    rms_delta_x = Column(REAL, nullable=False)
+    mean_delta_y = Column(REAL, nullable=False)
+    rms_delta_y = Column(REAL, nullable=False)
+    mean_fiber_ra = Column(DOUBLE_PRECISION, nullable=False)
+    std_fiber_ra = Column(REAL, nullable=False)
+    mean_fiber_dec = Column(DOUBLE_PRECISION, nullable=False)
+    std_fiber_dec = Column(REAL, nullable=False)
+    mean_psf_to_fiber_specflux = Column(REAL, nullable=False)
+    tsnr_gpbdark_b = Column(REAL, nullable=False)
+    tsnr_elg_b = Column(REAL, nullable=False)
+    tsnr_gpbbright_b = Column(REAL, nullable=False)
+    tsnr_lya_b = Column(REAL, nullable=False)
+    tsnr_bgs_b = Column(REAL, nullable=False)
+    tsnr_gpbbackup_b = Column(REAL, nullable=False)
+    tsnr_qso_b = Column(REAL, nullable=False)
+    tsnr_lrg_b = Column(REAL, nullable=False)
+    tsnr_gpbdark_r = Column(REAL, nullable=False)
+    tsnr_elg_r = Column(REAL, nullable=False)
+    tsnr_gpbbright_r = Column(REAL, nullable=False)
+    tsnr_lya_r = Column(REAL, nullable=False)
+    tsnr_bgs_r = Column(REAL, nullable=False)
+    tsnr_gpbbackup_r = Column(REAL, nullable=False)
+    tsnr_qso_r = Column(REAL, nullable=False)
+    tsnr_lrg_r = Column(REAL, nullable=False)
+    tsnr_gpbdark_z = Column(REAL, nullable=False)
+    tsnr_elg_z = Column(REAL, nullable=False)
+    tsnr_gpbbright_z = Column(REAL, nullable=False)
+    tsnr_lya_z = Column(REAL, nullable=False)
+    tsnr_bgs_z = Column(REAL, nullable=False)
+    tsnr_gpbbackup_z = Column(REAL, nullable=False)
+    tsnr_qso_z = Column(REAL, nullable=False)
+    tsnr_lrg_z = Column(REAL, nullable=False)
+    tsnr_gpbdark = Column(REAL, nullable=False)
+    tsnr_elg = Column(REAL, nullable=False)
+    tsnr_gpbbright = Column(REAL, nullable=False)
+    tsnr_lya = Column(REAL, nullable=False)
+    tsnr_bgs = Column(REAL, nullable=False)
+    tsnr_gpbbackup = Column(REAL, nullable=False)
+    tsnr_qso = Column(REAL, nullable=False)
+    tsnr_lrg = Column(REAL, nullable=False)
+    zcat_nspec = Column(SmallInteger, nullable=False)
+    zcat_primary = Column(Boolean, nullable=False)
 
     def __repr__(self):
-        return "ZCat(targetid={0.targetid:d})".format(self)
+        return "Zpix(targetid={0.targetid:d}, survey='{0.survey}', program='{0.program}')".format(self)
 
 
 def _frameid(data):
@@ -725,6 +743,29 @@ def _tileid(data):
         log.debug("Adding PLATE_RA, PLATE_DEC.")
         data['PLATE_RA'] = data['TARGET_RA']
         data['PLATE_DEC'] = data['TARGET_DEC']
+    return data
+
+
+def _survey_program(data):
+    """Add ``SURVEY`` and ``PROGRAM`` columns to zpix table.
+    Parameters
+    ----------
+    data : :class:`astropy.table.Table`
+        The initial data read from the file.
+
+    Returns
+    -------
+    :class:`astropy.table.Table`
+        Updated data table.
+    """
+    try:
+        survey = data.meta['SURVEY']
+        program = data.meta['PROGRAM']
+    except KeyError:
+        log.error("Could not find SURVEY or PROGRAM in metadata!")
+        raise
+    data.add_column(np.array([survey]*len(data)), name='SURVEY', index=1)
+    data.add_column(np.array([program]*len(data)), name='PROGRAM', index=2)
     return data
 
 
@@ -1266,9 +1307,9 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepaths': [os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                             os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-potential-targets-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
-                             os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-missing-{specprod}.fits'.format(specprod=os.environ['SPECPROD']))],
+    loader = [{'filepaths': [os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),],
+                             # os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-potential-targets-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
+                             # os.path.join('/global/cscratch1/sd/ioannis/photocatalog', os.environ['SPECPROD'], 'targetphot-missing-{specprod}.fits'.format(specprod=os.environ['SPECPROD']))],
                'tcls': Target,
                'hdu': 'TARGETPHOT',
                'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
@@ -1298,37 +1339,18 @@ def main():
                'preload': _frameid,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
-              }]
-    # loader = [{'filepaths': os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
-    #            'tcls': Truth,
-    #            'hdu': 'TRUTH',
-    #            'expand': None,
-    #            'convert': None,
-    #            'index': None,
-    #            'q3c': False,
-    #            'chunksize': options.chunksize,
-    #            'maxrows': options.maxrows},
-    #           {'filepaths': glob.glob(os.path.join(os.environ['DESI_TARGET'], 'catalogs', 'dr9', '1.1.1', 'targets', 'main', 'resolve', 'dark', 'targets-dark-hp-*.fits')),
-    #            'tcls': Target,
-    #            'hdu': 'TARGETS',
-    #            'expand': {'DCHISQ': ('dchisq_psf', 'dchisq_rex', 'dchisq_dev', 'dchisq_exp', 'dchisq_ser',)},
-    #            'convert': None,
-    #            'index': None,
-    #            'q3c': postgresql,
-    #            'chunksize': options.chunksize,
-    #            'maxrows': options.maxrows},
-    #           {'filepaths': os.path.join(options.datapath, 'spectro', 'redux', 'mini', 'zcatalog-mini.fits'),
-    #            'tcls': ZCat,
-    #            'hdu': 'ZCATALOG',
-    #            'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
-    #                                 'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
-    #            'convert': None,
-    #            'rowfilter': lambda x: ((x['TARGETID'] != 0) & (x['TARGETID'] != -1)),
-    #            'q3c': postgresql,
-    #            'chunksize': options.chunksize,
-    #            'maxrows': options.maxrows}]
+              },
+              {'filepaths': glob.glob(os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'zcatalog', 'zpix-*.fits')),
+               'tcls': Zpix,
+               'hdu': 'ZCATALOG',
+               'preload': _survey_program,
+               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
+               }]
     #
-    # Load the tables that correspond to a single file.
+    # Load the tables that correspond to a small set of files.
     #
     for l in loader:
         tn = l['tcls'].__tablename__
@@ -1381,16 +1403,6 @@ def main():
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())
-    #
-    # Find targetids that need to be loaded.
-    #
-    # dbSession.query(Fiberassign.targetid)
-    #
-    # Update truth table.
-    #
-    # for h in ('BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'WD'):
-    #     update_truth(os.path.join(options.datapath, 'targets', 'truth-dark.fits'),
-    #                  'TRUTH_' + h)
     return 0
 
 
