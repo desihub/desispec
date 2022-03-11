@@ -797,6 +797,7 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             ## If defined, use effective time and speed.
             ## Otherwise set local variables to high value so we pass the relevant cuts
             ## while leaving the output values as the defaults
+            efftime, speed = 1.0E5, 1.0E5
             if outdict['EFFTIME_ETC'] > 0.:
                 efftime = outdict['EFFTIME_ETC']
                 ## Define survey speed for QA
@@ -813,8 +814,6 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
                 outdict['SPEED'] = speed
             else:
                 log.warning("No EFFTIME_ETC found. Not performing speed cut.")
-                efftime = 1.0E5
-                speed = 1.0E5
 
         ## Flag the exposure based on PROGRAM information
         ## Define thresholds
@@ -842,26 +841,16 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EXPTIME={outdict['EXPTIME']} less" +
                         f" than {threshold_exptime}s. Processing through sky subtraction.")
         elif outdict['SURVEY'] == 'main':
-            ## If defined, use GOALTIME. Otherwise set to 0 so that we always pass the relevant cuts
-            if outdict['GOALTIME'] > 0.:
-                goaltime = outdict['GOALTIME']
-            else:
-                log.warning("No GOALTIME found. Not performing S/N cut.")
-                goaltime = 0.
-
             ## Define thresholds
-            threshold_percent_goal = 0.05
-            threshold_speed_dark = 1/5.  # = 0.5*(1/2.5) = half the survey threshold
-            threshold_speed_bright = 1/12.  # = 0.5*(1/6) = half the survey threshold
-            threshold_efftime = threshold_percent_goal * goaltime  # 0.0 if GOALTIME not defined in headers
-
-            threshold_speed = 0.
+            threshold_speed, threshold_efftime = 0., 0.
             if outdict['GOALTYPE'] == 'dark':
-                threshold_speed = threshold_speed_dark
+                threshold_speed = 1/5.  # = 0.5*(1/2.5) = half the survey threshold
+                threshold_efftime = 100.
             elif outdict['GOALTYPE'] == 'bright':
-                threshold_speed = threshold_speed_bright
+                threshold_speed = 1/12.  # = 0.5*(1/6) = half the survey threshold
+                threshold_efftime = 20.
             elif outdict['GOALTYPE'] == 'backup':
-                pass
+                threshold_efftime = 0.5
             elif outdict['GOALTYPE'] != coldefault_dict['GOALTYPE']:
                 log.warning(f"Couldn't understand GOALTYPE={outdict['GOALTYPE']}")
 
@@ -870,17 +859,23 @@ def summarize_exposure(raw_data_dir, night, exp, obstypes=None, colnames=None, c
             if efftime < threshold_efftime:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_sn')
-                outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'efftime={outdict["EFFTIME_ETC"]:.1f}s lt {threshold_efftime:.1f}')
-                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with EFFTIME={outdict['EFFTIME_ETC']} " +
-                            f"less than {threshold_percent_goal}% GOALTIME ({outdict['GOALTIME']}) = " +
-                            f"{threshold_efftime:.4f}. Processing through sky subtraction.")
+                outdict['COMMENTS'] = np.append(outdict['COMMENTS'],
+                                                f'efftime={outdict["EFFTIME_ETC"]:.1f}s '
+                                                + f'lt {threshold_efftime:.1f}')
+                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} "
+                            + f"with EFFTIME={outdict['EFFTIME_ETC']} "
+                            + f"less than {threshold_efftime:.4f}. "
+                            + f"Processing through sky subtraction.")
             ## Cut on Speed:
             elif speed < threshold_speed:
                 outdict['LASTSTEP'] = 'skysub'
                 outdict['EXPFLAG'] = np.append(outdict['EXPFLAG'], 'low_speed')
-                outdict['COMMENTS'] = np.append(outdict['COMMENTS'], f'speed={speed:.4f} lt {threshold_speed:.4f}')
-                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} with speed={speed:.4f} less than threshold " +
-                            f"speed={threshold_speed:.4f}. Processing through sky subtraction.")
+                outdict['COMMENTS'] = np.append(outdict['COMMENTS'],
+                                                f'speed={speed:.4f} lt {threshold_speed:.4f}')
+                log.warning(f"LASTSTEP CHANGE. Science exposure {exp} "
+                            + f"with speed={speed:.4f} less than threshold "
+                            + f"speed={threshold_speed:.4f}. "
+                            + f"Processing through sky subtraction.")
 
     log.info(f'Done summarizing exposure: {exp}')
     return outdict
