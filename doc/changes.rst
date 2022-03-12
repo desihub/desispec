@@ -6,9 +6,9 @@ desispec Change Log
 -------------------
 
 * Warning files produced by QSO afterburners will now be called
-  ``.misscamera.txt`` (PR `#1777`_).
+  ``.misscamera.txt`` (PR `#1732`_).
 
-.. _`#1777`: https://github.com/desihub/desispec/pull/1777
+.. _`#1732`: https://github.com/desihub/desispec/pull/1732
 
 0.51.13 (2022-02-28)
 --------------------
