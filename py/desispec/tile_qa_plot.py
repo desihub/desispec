@@ -1319,10 +1319,10 @@ def make_tile_qa_plot(
         ax.set_xlabel("Z")
         ax.set_ylabel("Per tile fractional count")
         if hdr["FAPRGRM"].lower() == "bright":
-            ax.set_xlim(0, 1.5)
+            ax.set_xlim(-0.1, 1.5)
             ax.set_ylim(0, 0.4)
         else:
-            ax.set_xlim(0, 6)
+            ax.set_xlim(-0.1, 6)
             ax.set_ylim(0, 0.2)
         ax.grid(True)
         # AR n(z) : ratio
@@ -1347,14 +1347,20 @@ def make_tile_qa_plot(
         nontgt |= (fiberqa["DESI_TARGET"] & desi_mask[msk]) > 0
     for msk in ["UNASSIGNED", "STUCKPOSITIONER", "BROKENFIBER"]:
         nontgt |= (fiberqa["QAFIBERSTATUS"] & fibermask[msk]) > 0
+    # AR identifying secondary-only targets
+    # AR we use here DESI_TARGET: this will work for Main tiles only
+    # AR that is sufficient for our goal
+    scndonly = fiberqa["DESI_TARGET"] == desi_mask["SCND_ANY"]
+    #
     sels = [
-        (~nontgt) & (fiberqa["QAFIBERSTATUS"] == 0),
+        (~nontgt) & (fiberqa["QAFIBERSTATUS"] == 0) & (~scndonly),
+        (~nontgt) & (fiberqa["QAFIBERSTATUS"] == 0) & (scndonly),
         (~nontgt) & (fiberqa["QAFIBERSTATUS"] > 0),
-        nontgt
+        nontgt,
     ]
-    labels = ["QAFIBERSTATUS = 0", "QAFIBERSTATUS > 0", "non-TGT"]
-    cs = ["b", "r", "y"]
-    zorders = [1, 1, 0]
+    labels = ["QAFIBERSTATUS = 0","QAFIBERSTATUS = 0 SCND-only",  "QAFIBERSTATUS > 0", "non-TGT"]
+    cs = ["b", "lime", "r", "y"]
+    zorders = [1, 1, 1, 0]
     for sel, label, c, zorder in zip(sels, labels, cs, zorders):
         ax.scatter(fiberqa["FIBER"][sel], np.log10(0.1 + fiberqa["Z"][sel]), s=0.1, c=c, alpha=1.0, zorder=zorder, label="{} ({} fibers)".format(label, sel.sum()))
     for petal in range(10):
@@ -1367,8 +1373,8 @@ def make_tile_qa_plot(
     ax.set_ylim(ylim)
     ax.set_yticks(np.log10(0.1 + yticks))
     ax.set_yticklabels(yticks.astype(str))
-    ax.grid(True)
-    ax.legend(loc=2, markerscale=10, fontsize=7)
+    ax.grid()
+    ax.legend(loc=1, markerscale=10, fontsize=6, ncol=2)
 
     show_efftime = True # else show TSNR
 
