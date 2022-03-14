@@ -993,7 +993,7 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
             good_rows = np.ones((mr,), dtype=np.bool)
         else:
             good_rows = rowfilter(data[0:mr])
-        log.info("Row filter applied on %s.", tn)
+        log.info("Row filter applied on %s; %d rows remain.", tn, good_rows.sum())
         data_list = list()
         for col in colnames:
             if col in masked:
