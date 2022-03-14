@@ -48,7 +48,7 @@ import astropy
 from astropy.io import fits
 from astropy.table import Table, vstack, join
 import astropy.units as u
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import SkyCoord, match_coordinates_sky
 
 from desispec.io import specprod_root
 from desimodel.footprint import radec2pix
@@ -166,7 +166,7 @@ def cache_one_catalog(cachefile):
 def _tractorphot_one(args):
     return tractorphot_one(*args)
 
-def tractorphot_one(cat, bricks):#, supplement):
+def tractorphot_one(cat, bricks, datamodel):
     """Retrieve the Tractor catalog for all the objects in this catalog (one brick)."""
 
     assert(np.all(cat['BRICKNAME'] == cat['BRICKNAME'][0]))
@@ -174,6 +174,9 @@ def tractorphot_one(cat, bricks):#, supplement):
     
     idr9 = np.where((cat['RELEASE'] > 0) * (cat['BRICKID'] > 0) * (cat['BRICK_OBJID'] > 0))[0]
     ipos = np.delete(np.arange(len(cat)), idr9)
+
+    out = Table(np.hstack(np.repeat(datamodel, len(cat))))
+    out['TARGETID'] = cat['TARGETID']
     
     # DR9 targeting photometry exists
     if len(idr9) > 0:
@@ -216,16 +219,17 @@ def tractorphot_one(cat, bricks):#, supplement):
         #if len(I) == 0: 
         #    return Table()
 
-        tractor = Table(fitsio.read(tractorfile, rows=I, upper=True))
+        tractor_dr9 = Table(fitsio.read(tractorfile, rows=I, upper=True))
     
         # sort explicitly in order to ensure order
-        srt = np.hstack([np.where(objid == tractor['OBJID'])[0] for objid in cat['BRICK_OBJID'][idr9]])
-        tractor = tractor[srt]
-        assert(np.all((tractor['BRICKID'] == cat['BRICKID'][idr9])*(tractor['OBJID'] == cat['BRICK_OBJID'][idr9])))
+        srt = np.hstack([np.where(objid == tractor_dr9['OBJID'])[0] for objid in cat['BRICK_OBJID'][idr9]])
+        tractor_dr9 = tractor_dr9[srt]
+        assert(np.all((tractor_dr9['BRICKID'] == cat['BRICKID'][idr9])*(tractor_dr9['OBJID'] == cat['BRICK_OBJID'][idr9])))
 
-        tractor['TARGETID'] = cat['TARGETID'][idr9]
-        
-        return tractor
+        tractor_dr9['TARGETID'] = cat['TARGETID'][idr9]
+
+        out[idr9] = tractor_dr9
+        del tractor_dr9
         
     # use positional matching
     if len(ipos) > 0:
@@ -244,7 +248,7 @@ def tractorphot_one(cat, bricks):#, supplement):
             else:
                 tractorfile = tractorfile_north
         elif not os.path.isfile(tractorfile_north) and not os.path.isfile(tractorfile_south):
-            return Table()
+            return out
                 
         _tractor = fitsio.read(tractorfile, columns=['RA', 'DEC', 'BRICK_PRIMARY'], upper=True)
         iprimary = np.where(_tractor['BRICK_PRIMARY'])[0] # only primary targets
@@ -260,20 +264,17 @@ def tractorphot_one(cat, bricks):#, supplement):
         # 234545047666699    sv1   other 150.31145983340912 2.587887211205909    11  345369      53     0      0     0.0     0.0     0  1503p025
         # 243341140688909    sv1   other 150.31145983340912 2.587887211205909    13  345369      55     0      0     0.0     0.0     0  1503p025
 
-        tractor = []
         for indx_cat, (ra, dec, targetid) in enumerate(zip(cat['TARGET_RA'][ipos], cat['TARGET_DEC'][ipos], cat['TARGETID'][ipos])):
             coord_cat = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
             indx_tractor, d2d, _ = coord_cat.match_to_catalog_sky(coord_tractor)
             if d2d < rad:
                 _tractor = Table(fitsio.read(tractorfile, rows=iprimary[indx_tractor], upper=True))
                 _tractor['TARGETID'] = targetid
-                tractor.append(_tractor)
-                #for col in tractor.dtype.names:
-                #    supplement[col][indx_cat] = tractor[col][0]
-        if len(tractor) > 0:
-            return vstack(tractor)
-        else:
-            return Table()
+                out[ipos[indx_cat]] = _tractor[0]
+
+    assert(np.all(cat['TARGETID'] == out['TARGETID']))
+
+    return out
 
 def _targetphot_one(args):
     return targetphot_one(*args)
@@ -807,10 +808,9 @@ def main():
             minicat['BRICK_OBJID'][fix] = fix_objid
 
         datamodel = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/south/tractor/000/tractor-0001m002.fits', rows=0, upper=True))
-        out = Table(np.hstack(np.repeat(datamodel, len(minicat))))
         for col in datamodel.colnames:
-            out[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        out['TARGETID'] = minicat['TARGETID']
+            datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
+        datamodel['BRICK_PRIMARY'] = True
         
         # Infer brickname from the survey-bricks.fits file
         inobrickname = np.where(minicat['BRICKNAME'] == '')[0]
@@ -822,24 +822,28 @@ def main():
                 raise IOError
             log.info('Reading {}'.format(bricksfile))
             bricks = Table(fitsio.read(bricksfile))
-            
-            coord_bricks = SkyCoord(ra=bricks['RA']*u.deg, dec=bricks['DEC']*u.deg)
-            coord_nobrickname = SkyCoord(ra=minicat['TARGET_RA'][inobrickname]*u.deg, dec=minicat['TARGET_DEC'][inobrickname]*u.deg)
-            indx_bricks, d2d, _ = coord_nobrickname.match_to_catalog_sky(coord_bricks)
-            minicat['BRICKNAME'][inobrickname] = bricks[indx_bricks]['BRICKNAME']
-            
-            #I = np.hstack([np.where(tid == zcat['TARGETID'])[0] for tid in minicat['TARGETID'][inobrickname]])
-            #zcat_miss = zcat[I]
-            #assert(np.all(cat_miss['TARGETID'] == zcat_miss['TARGETID']))
 
-            ## old algorithm: get the brickname in parallel
-            #mpargs = [[bricks, ra, dec] for ra, dec in zip(zcat_miss['TARGET_RA'], zcat_miss['TARGET_DEC'])]
-            #if args.mp > 1:
-            #    with multiprocessing.Pool(args.mp) as P:
-            #        bricknames = P.map(_get_brickname, mpargs)
-            #else:
-            #    bricknames = [_get_brickname(mparg) for mparg in mpargs]
-            #zcat_miss['BRICKNAME'] = np.hstack(bricknames)
+            # Coordinate-matching on the brick center doesn't work because you
+            # can be on the edge of a given brick and end up closer to the
+            # center of the *wrong* brick! E.g., 39628417158614201, (RA,
+            # Dec)=(195.2896551546565, 27.124626805141048) is 460.99 arcsec from
+            # 1952p270 (which is correct) but 453.74 arcsec from 1953p272 (which
+            # is incorrect):
+            # https://www.legacysurvey.org/viewer/?ra=195.2896551546565&dec=27.124626805141048&layer=ls-dr9&zoom=16&bricks&sources-dr9
+
+            #coord_bricks = SkyCoord(ra=bricks['RA']*u.deg, dec=bricks['DEC']*u.deg)
+            #coord_nobrickname = SkyCoord(ra=minicat['TARGET_RA'][inobrickname]*u.deg, dec=minicat['TARGET_DEC'][inobrickname]*u.deg)
+            #indx_bricks, d2d, _ = match_coordinates_sky(coord_nobrickname, coord_bricks)
+            #minicat['BRICKNAME'][inobrickname] = bricks[indx_bricks]['BRICKNAME']
+            
+            # Get the brickname in parallel.
+            mpargs = [[bricks, ra, dec] for ra, dec in zip(minicat[inobrickname]['TARGET_RA'], minicat[inobrickname]['TARGET_DEC'])]
+            if args.mp > 1:
+                with multiprocessing.Pool(args.mp) as P:
+                    bricknames = P.map(_get_brickname, mpargs)
+            else:
+                bricknames = [_get_brickname(mparg) for mparg in mpargs]
+            minicat['BRICKNAME'][inobrickname] = np.hstack(bricknames)
         else:
             bricks = None
             
@@ -854,14 +858,19 @@ def main():
 
         missing = []
         for ipix, pixel in enumerate(set(pixels)):
+            #if pixel != 40:
+            #if ipix+1 != 6:
+            #    continue
             log.info('Working on healpix {}/{} (nside={})'.format(ipix+1, npix, args.filenside))
 
-            I = pixel == pixels
-            log.info('Dividing the sample into {} unique bricks.'.format(len(set(minicat['BRICKNAME'][I]))))
+            I = np.where(pixel == pixels)[0]
+            bricknames = minicat['BRICKNAME'][I]
+            
+            log.info('Dividing the sample into {} unique bricks.'.format(len(set(bricknames))))
             mpargs = []
-            for brick in set(minicat['BRICKNAME'][I]):
-                J = brick == minicat['BRICKNAME'][I]
-                mpargs.append([minicat[I][J], bricks])
+            for brick in set(bricknames):
+                J = np.where(brick == bricknames)[0]
+                mpargs.append([minicat[I[J]], bricks, datamodel])
                 
             if args.mp > 1:
                 with multiprocessing.Pool(args.mp) as P:
@@ -870,37 +879,30 @@ def main():
                 tractor = [_tractorphot_one(mparg) for mparg in mpargs]
             tractor = vstack(tractor)
 
-            # If there are any objects with missing Tractor photometry, keep track of them here.
-            if len(tractor) == 0:
-                imiss = np.ones(len(minicat[I][J]), bool)
-            else:
-                imiss = np.logical_not(np.isin(minicat['TARGETID'][I][J], tractor['TARGETID']))
-                
-            if np.sum(imiss) > 0:
-                missing.append(cat[I][J][imiss])
-
-            ## This can happen for healpix with just a couple targets; however,
-            ## if it does it means we're going to miss targets when we do our
-            ## positional matching, so raise an exception. Hopefully this will
-            ## never happen but if it does then it means we need to keep track of
-            ## these "missing" objects here.
-            #if len(tractor) == 0 or len(tractor) != np.sum(I):
-            #    log.warning('Some targets did not match on BRICKNAME and OBJID in healpix {}'.format(pixel))
-            #    raise ValueError
-
-            # Write out.
             if len(tractor) > 0:
-                if args.potential_targets:
-                    outfile = os.path.join(args.outdir, 'tractorphot', 'tractorphot-potential-targets-nside{}-hp{:03d}-{}.fits'.format(
-                        args.filenside, pixel, args.outprefix))
-                else:
-                    outfile = os.path.join(args.outdir, 'tractorphot', 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
-                        args.filenside, pixel, args.outprefix))
-    
-                tractor.meta['EXTNAME'] = 'TRACTORPHOT'
-                tractor.meta['FILENSID'] = args.filenside
-                log.info('Writing {:,} objects to {}'.format(len(tractor), outfile))
-                tractor.write(outfile, overwrite=True)
+                # I don't understand why the Tables aren't sorted???
+                srt = np.hstack([np.where(tid == tractor['TARGETID'])[0] for tid in minicat['TARGETID'][I]])
+                tractor = tractor[srt]
+                assert(np.all(cat['TARGETID'][I] == tractor['TARGETID']))
+        
+                # If there are any objects with missing Tractor photometry, keep track of them here.
+                imiss = np.where(tractor['BRICKNAME'] == '')[0]
+                if len(imiss) > 0:
+                    missing.append(cat[I[imiss]])
+                    
+                igood = np.where(tractor['BRICKNAME'] != '')[0]
+                if len(igood) > 0:
+                    if args.potential_targets:
+                        outfile = os.path.join(args.outdir, 'tractorphot', 'tractorphot-potential-targets-nside{}-hp{:03d}-{}.fits'.format(
+                            args.filenside, pixel, args.outprefix))
+                    else:
+                        outfile = os.path.join(args.outdir, 'tractorphot', 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
+                            args.filenside, pixel, args.outprefix))
+        
+                    tractor.meta['EXTNAME'] = 'TRACTORPHOT'
+                    tractor.meta['FILENSID'] = args.filenside
+                    log.info('Writing {:,} objects to {}'.format(len(tractor[igood]), outfile))
+                    tractor[igood].write(outfile, overwrite=True)
             #del minicat
 
         if len(missing) > 0:
@@ -918,6 +920,10 @@ def main():
     if args.validate_tractorphot:
         outcat = []
         outzcat = []
+
+        missfile = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
+        log.info('Reading {}'.format(missfile))
+        miss = Table(fitsio.read(missfile))
         
         zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
         #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'zpix-sv3-dark.fits'))
@@ -938,19 +944,17 @@ def main():
             pixels = radec2pix(args.filenside, zcat['TARGET_RA'], zcat['TARGET_DEC'])
             log.info('Working on {} pixels'.format(len(set(pixels))))
             for pixel in set(pixels):
-                I = pixel == pixels
+                I = np.where(pixel == pixels)[0]
                 
                 catfile = os.path.join(args.outdir, 'tractorphot', 'tractorphot-nside{}-hp{:03d}-{}.fits'.format(
                     args.filenside, pixel, args.outprefix))
                 if not os.path.isfile(catfile):
-                    log.info('No Tractor photometry for {} objects from {}'.format(np.sum(I), catfile))
-                    # make sure they're all in the missing catalog
-                    missfile = os.path.join(args.outdir, 'targetphot-missing-{}.fits'.format(args.outprefix))
-                    miss = Table(fitsio.read(missfile))
-                    assert(np.sum(np.isin(miss['TARGETID'], zcat['TARGETID'][I])) == np.sum(I))
+                    log.info('No Tractor photometry found for {} objects in catalog {}'.format(len(I), catfile))
+                    # Make sure they're all in the missing catalog.
+                    assert(np.sum(np.isin(miss['TARGETID'], zcat['TARGETID'][I])) == len(I))
                     continue
                     
-                log.info('Reading {} objects from {}'.format(np.sum(I), catfile))
+                log.info('Reading {} objects from {}'.format(len(I), catfile))
                 cat = Table(fitsio.read(catfile))
 
                 targetid = np.intersect1d(cat['TARGETID'], zcat['TARGETID'][I])
