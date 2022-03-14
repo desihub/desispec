@@ -390,6 +390,8 @@ class Target(SchemaMixin, Base):
     sv2_scnd_target = Column(BigInteger, nullable=False)
     sv3_scnd_target = Column(BigInteger, nullable=False)
 
+    # fiberassign = relationship("Fiberassign", back_populates="target")
+    # potential = relationship("Potential", back_populates="target")
     # zpix_redshifts = relationship("Zpix", back_populates="target")
     # ztile_redshifts = relationship("Ztile", back_populates="target")
 
@@ -615,6 +617,7 @@ class Fiberassign(SchemaMixin, Base):
     plate_dec = Column(DOUBLE_PRECISION, nullable=False)
 
     tile = relationship("Tile", back_populates="fiberassign")
+    # target = relationship("Target", back_populates="fiberassign")
 
     def __repr__(self):
         return "Fiberassign(tileid={0.tileid:d}, fiber={0.fiber:d})".format(self)
@@ -630,6 +633,7 @@ class Potential(SchemaMixin, Base):
     location = Column(Integer, primary_key=True)
 
     tile = relationship("Tile", back_populates="potential")
+    # target = relationship("Target", back_populates="potenial")
 
     def __repr__(self):
         return "Potential(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
