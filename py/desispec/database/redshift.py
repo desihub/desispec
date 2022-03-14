@@ -107,159 +107,159 @@ class SchemaMixin(object):
 #         return "<Truth(targetid={0.targetid:d})>".format(self)
 
 
-class Tractor(SchemaMixin, Base):
-    """Representation of the TRACTORPHOT table in tractorphot files.
-
-    Notes
-    -----
-    The various ``APFLUX`` (aperture flux) and ``LC`` (light curve) columns,
-    which are vector-valued, are not yet implemented.
-    """
-
-    release = Column(SmallInteger, nullable=False)
-    brickid = Column(Integer, nullable=False)
-    brickname = Column(String(8), nullable=False)
-    objid = Column(Integer, nullable=False)
-    brick_primary = Column(Boolean, nullable=False)
-    maskbits = Column(SmallInteger, nullable=False)
-    fitbits = Column(SmallInteger, nullable=False)
-    morphtype = Column(String(3), nullable=False)
-    ra = Column(DOUBLE_PRECISION, nullable=False)
-    dec = Column(DOUBLE_PRECISION, nullable=False)
-    ra_ivar = Column(REAL, nullable=False)
-    dec_ivar = Column(REAL, nullable=False)
-    bx = Column(REAL, nullable=False)
-    by = Column(REAL, nullable=False)
-    dchisq_psf = Column(REAL, nullable=False)
-    dchisq_rex = Column(REAL, nullable=False)
-    dchisq_dev = Column(REAL, nullable=False)
-    dchisq_exp = Column(REAL, nullable=False)
-    dchisq_ser = Column(REAL, nullable=False)
-    ebv = Column(REAL, nullable=False)
-    mjd_min = Column(DOUBLE_PRECISION, nullable=False)
-    mjd_max = Column(DOUBLE_PRECISION, nullable=False)
-    ref_cat = Column(String(2), nullable=False)
-    ref_id = Column(BigInteger, nullable=False)
-    pmra = Column(REAL, nullable=False)
-    pmdec = Column(REAL, nullable=False)
-    parallax = Column(REAL, nullable=False)
-    pmra_ivar = Column(REAL, nullable=False)
-    pmdec_ivar = Column(REAL, nullable=False)
-    parallax_ivar = Column(REAL, nullable=False)
-    ref_epoch = Column(REAL, nullable=False)
-    gaia_phot_g_mean_mag = Column(REAL, nullable=False)
-    gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_g_n_obs = Column(SmallInteger, nullable=False)
-    gaia_phot_bp_mean_mag = Column(REAL, nullable=False)
-    gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_bp_n_obs = Column(SmallInteger, nullable=False)
-    gaia_phot_rp_mean_mag = Column(REAL, nullable=False)
-    gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)
-    gaia_phot_rp_n_obs = Column(SmallInteger, nullable=False)
-    gaia_phot_variable_flag = Column(Boolean, nullable=False)
-    gaia_astrometric_excess_noise = Column(REAL, nullable=False)
-    gaia_astrometric_excess_noise_sig = Column(REAL, nullable=False)
-    gaia_astrometric_n_obs_al = Column(SmallInteger, nullable=False)
-    gaia_astrometric_n_good_obs_al = Column(SmallInteger, nullable=False)
-    gaia_astrometric_weight_al = Column(REAL, nullable=False)
-    gaia_duplicated_source = Column(Boolean, nullable=False)
-    gaia_a_g_val = Column(REAL, nullable=False)
-    gaia_e_bp_min_rp_val = Column(REAL, nullable=False)
-    gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
-    gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
-    gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)
-    flux_g = Column(REAL, nullable=False)
-    flux_r = Column(REAL, nullable=False)
-    flux_z = Column(REAL, nullable=False)
-    flux_w1 = Column(REAL, nullable=False)
-    flux_w2 = Column(REAL, nullable=False)
-    flux_w3 = Column(REAL, nullable=False)
-    flux_w4 = Column(REAL, nullable=False)
-    flux_ivar_g = Column(REAL, nullable=False)
-    flux_ivar_r = Column(REAL, nullable=False)
-    flux_ivar_z = Column(REAL, nullable=False)
-    flux_ivar_w1 = Column(REAL, nullable=False)
-    flux_ivar_w2 = Column(REAL, nullable=False)
-    flux_ivar_w3 = Column(REAL, nullable=False)
-    flux_ivar_w4 = Column(REAL, nullable=False)
-    fiberflux_g = Column(REAL, nullable=False)
-    fiberflux_r = Column(REAL, nullable=False)
-    fiberflux_z = Column(REAL, nullable=False)
-    fibertotflux_g = Column(REAL, nullable=False)
-    fibertotflux_r = Column(REAL, nullable=False)
-    fibertotflux_z = Column(REAL, nullable=False)
-    # APFLUX...
-    mw_transmission_g = Column(REAL, nullable=False)
-    mw_transmission_r = Column(REAL, nullable=False)
-    mw_transmission_z = Column(REAL, nullable=False)
-    mw_transmission_w1 = Column(REAL, nullable=False)
-    mw_transmission_w2 = Column(REAL, nullable=False)
-    mw_transmission_w3 = Column(REAL, nullable=False)
-    mw_transmission_w4 = Column(REAL, nullable=False)
-    nobs_g = Column(SmallInteger, nullable=False)
-    nobs_r = Column(SmallInteger, nullable=False)
-    nobs_z = Column(SmallInteger, nullable=False)
-    nobs_w1 = Column(SmallInteger, nullable=False)
-    nobs_w2 = Column(SmallInteger, nullable=False)
-    nobs_w3 = Column(SmallInteger, nullable=False)
-    nobs_w4 = Column(SmallInteger, nullable=False)
-    fracflux_g = Column(REAL, nullable=False)
-    fracflux_r = Column(REAL, nullable=False)
-    fracflux_z = Column(REAL, nullable=False)
-    fracflux_w1 = Column(REAL, nullable=False)
-    fracflux_w2 = Column(REAL, nullable=False)
-    fracflux_w3 = Column(REAL, nullable=False)
-    fracflux_w4 = Column(REAL, nullable=False)
-    fracmasked_g = Column(REAL, nullable=False)
-    fracmasked_r = Column(REAL, nullable=False)
-    fracmasked_z = Column(REAL, nullable=False)
-    fracin_g = Column(REAL, nullable=False)
-    fracin_r = Column(REAL, nullable=False)
-    fracin_z = Column(REAL, nullable=False)
-    anymask_g = Column(SmallInteger, nullable=False)
-    anymask_r = Column(SmallInteger, nullable=False)
-    anymask_z = Column(SmallInteger, nullable=False)
-    allmask_g = Column(SmallInteger, nullable=False)
-    allmask_r = Column(SmallInteger, nullable=False)
-    allmask_z = Column(SmallInteger, nullable=False)
-    wisemask_w1 = Column(SmallInteger, nullable=False)
-    wisemask_w2 = Column(SmallInteger, nullable=False)
-    psfsize_g = Column(REAL, nullable=False)
-    psfsize_r = Column(REAL, nullable=False)
-    psfsize_z = Column(REAL, nullable=False)
-    psfdepth_g = Column(REAL, nullable=False)
-    psfdepth_r = Column(REAL, nullable=False)
-    psfdepth_z = Column(REAL, nullable=False)
-    galdepth_g = Column(REAL, nullable=False)
-    galdepth_r = Column(REAL, nullable=False)
-    galdepth_z = Column(REAL, nullable=False)
-    nea_g = Column(REAL, nullable=False)
-    nea_r = Column(REAL, nullable=False)
-    nea_z = Column(REAL, nullable=False)
-    blob_nea_g = Column(REAL, nullable=False)
-    blob_nea_r = Column(REAL, nullable=False)
-    blob_nea_z = Column(REAL, nullable=False)
-    psfdepth_w1 = Column(REAL, nullable=False)
-    psfdepth_w2 = Column(REAL, nullable=False)
-    psfdepth_w3 = Column(REAL, nullable=False)
-    psfdepth_w4 = Column(REAL, nullable=False)
-    wise_coadd_id = Column(String(8), nullable=False)
-    wise_x = Column(REAL, nullable=False)
-    wise_y = Column(REAL, nullable=False)
-    # LC FLUX...
-    sersic = Column(REAL, nullable=False)
-    sersic_ivar = Column(REAL, nullable=False)
-    shape_r = Column(REAL, nullable=False)
-    shape_r_ivar = Column(REAL, nullable=False)
-    shape_e1 = Column(REAL, nullable=False)
-    shape_e1_ivar = Column(REAL, nullable=False)
-    shape_e2 = Column(REAL, nullable=False)
-    shape_e2_ivar = Column(REAL, nullable=False)
-    photsys = Column(String(1), nullable=False)
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
-
-    def __repr__(self):
-        return "Tractor(targetid={0.targetid})".format(self)
+# class Tractor(SchemaMixin, Base):
+#     """Representation of the TRACTORPHOT table in tractorphot files.
+#
+#     Notes
+#     -----
+#     The various ``APFLUX`` (aperture flux) and ``LC`` (light curve) columns,
+#     which are vector-valued, are not yet implemented.
+#     """
+#
+#     release = Column(SmallInteger, nullable=False)
+#     brickid = Column(Integer, nullable=False)
+#     brickname = Column(String(8), nullable=False)
+#     objid = Column(Integer, nullable=False)
+#     brick_primary = Column(Boolean, nullable=False)
+#     maskbits = Column(SmallInteger, nullable=False)
+#     fitbits = Column(SmallInteger, nullable=False)
+#     morphtype = Column(String(3), nullable=False)
+#     ra = Column(DOUBLE_PRECISION, nullable=False)
+#     dec = Column(DOUBLE_PRECISION, nullable=False)
+#     ra_ivar = Column(REAL, nullable=False)
+#     dec_ivar = Column(REAL, nullable=False)
+#     bx = Column(REAL, nullable=False)
+#     by = Column(REAL, nullable=False)
+#     dchisq_psf = Column(REAL, nullable=False)
+#     dchisq_rex = Column(REAL, nullable=False)
+#     dchisq_dev = Column(REAL, nullable=False)
+#     dchisq_exp = Column(REAL, nullable=False)
+#     dchisq_ser = Column(REAL, nullable=False)
+#     ebv = Column(REAL, nullable=False)
+#     mjd_min = Column(DOUBLE_PRECISION, nullable=False)
+#     mjd_max = Column(DOUBLE_PRECISION, nullable=False)
+#     ref_cat = Column(String(2), nullable=False)
+#     ref_id = Column(BigInteger, nullable=False)
+#     pmra = Column(REAL, nullable=False)
+#     pmdec = Column(REAL, nullable=False)
+#     parallax = Column(REAL, nullable=False)
+#     pmra_ivar = Column(REAL, nullable=False)
+#     pmdec_ivar = Column(REAL, nullable=False)
+#     parallax_ivar = Column(REAL, nullable=False)
+#     ref_epoch = Column(REAL, nullable=False)
+#     gaia_phot_g_mean_mag = Column(REAL, nullable=False)
+#     gaia_phot_g_mean_flux_over_error = Column(REAL, nullable=False)
+#     gaia_phot_g_n_obs = Column(SmallInteger, nullable=False)
+#     gaia_phot_bp_mean_mag = Column(REAL, nullable=False)
+#     gaia_phot_bp_mean_flux_over_error = Column(REAL, nullable=False)
+#     gaia_phot_bp_n_obs = Column(SmallInteger, nullable=False)
+#     gaia_phot_rp_mean_mag = Column(REAL, nullable=False)
+#     gaia_phot_rp_mean_flux_over_error = Column(REAL, nullable=False)
+#     gaia_phot_rp_n_obs = Column(SmallInteger, nullable=False)
+#     gaia_phot_variable_flag = Column(Boolean, nullable=False)
+#     gaia_astrometric_excess_noise = Column(REAL, nullable=False)
+#     gaia_astrometric_excess_noise_sig = Column(REAL, nullable=False)
+#     gaia_astrometric_n_obs_al = Column(SmallInteger, nullable=False)
+#     gaia_astrometric_n_good_obs_al = Column(SmallInteger, nullable=False)
+#     gaia_astrometric_weight_al = Column(REAL, nullable=False)
+#     gaia_duplicated_source = Column(Boolean, nullable=False)
+#     gaia_a_g_val = Column(REAL, nullable=False)
+#     gaia_e_bp_min_rp_val = Column(REAL, nullable=False)
+#     gaia_phot_bp_rp_excess_factor = Column(REAL, nullable=False)
+#     gaia_astrometric_sigma5d_max = Column(REAL, nullable=False)
+#     gaia_astrometric_params_solved = Column(SmallInteger, nullable=False)
+#     flux_g = Column(REAL, nullable=False)
+#     flux_r = Column(REAL, nullable=False)
+#     flux_z = Column(REAL, nullable=False)
+#     flux_w1 = Column(REAL, nullable=False)
+#     flux_w2 = Column(REAL, nullable=False)
+#     flux_w3 = Column(REAL, nullable=False)
+#     flux_w4 = Column(REAL, nullable=False)
+#     flux_ivar_g = Column(REAL, nullable=False)
+#     flux_ivar_r = Column(REAL, nullable=False)
+#     flux_ivar_z = Column(REAL, nullable=False)
+#     flux_ivar_w1 = Column(REAL, nullable=False)
+#     flux_ivar_w2 = Column(REAL, nullable=False)
+#     flux_ivar_w3 = Column(REAL, nullable=False)
+#     flux_ivar_w4 = Column(REAL, nullable=False)
+#     fiberflux_g = Column(REAL, nullable=False)
+#     fiberflux_r = Column(REAL, nullable=False)
+#     fiberflux_z = Column(REAL, nullable=False)
+#     fibertotflux_g = Column(REAL, nullable=False)
+#     fibertotflux_r = Column(REAL, nullable=False)
+#     fibertotflux_z = Column(REAL, nullable=False)
+#     # APFLUX...
+#     mw_transmission_g = Column(REAL, nullable=False)
+#     mw_transmission_r = Column(REAL, nullable=False)
+#     mw_transmission_z = Column(REAL, nullable=False)
+#     mw_transmission_w1 = Column(REAL, nullable=False)
+#     mw_transmission_w2 = Column(REAL, nullable=False)
+#     mw_transmission_w3 = Column(REAL, nullable=False)
+#     mw_transmission_w4 = Column(REAL, nullable=False)
+#     nobs_g = Column(SmallInteger, nullable=False)
+#     nobs_r = Column(SmallInteger, nullable=False)
+#     nobs_z = Column(SmallInteger, nullable=False)
+#     nobs_w1 = Column(SmallInteger, nullable=False)
+#     nobs_w2 = Column(SmallInteger, nullable=False)
+#     nobs_w3 = Column(SmallInteger, nullable=False)
+#     nobs_w4 = Column(SmallInteger, nullable=False)
+#     fracflux_g = Column(REAL, nullable=False)
+#     fracflux_r = Column(REAL, nullable=False)
+#     fracflux_z = Column(REAL, nullable=False)
+#     fracflux_w1 = Column(REAL, nullable=False)
+#     fracflux_w2 = Column(REAL, nullable=False)
+#     fracflux_w3 = Column(REAL, nullable=False)
+#     fracflux_w4 = Column(REAL, nullable=False)
+#     fracmasked_g = Column(REAL, nullable=False)
+#     fracmasked_r = Column(REAL, nullable=False)
+#     fracmasked_z = Column(REAL, nullable=False)
+#     fracin_g = Column(REAL, nullable=False)
+#     fracin_r = Column(REAL, nullable=False)
+#     fracin_z = Column(REAL, nullable=False)
+#     anymask_g = Column(SmallInteger, nullable=False)
+#     anymask_r = Column(SmallInteger, nullable=False)
+#     anymask_z = Column(SmallInteger, nullable=False)
+#     allmask_g = Column(SmallInteger, nullable=False)
+#     allmask_r = Column(SmallInteger, nullable=False)
+#     allmask_z = Column(SmallInteger, nullable=False)
+#     wisemask_w1 = Column(SmallInteger, nullable=False)
+#     wisemask_w2 = Column(SmallInteger, nullable=False)
+#     psfsize_g = Column(REAL, nullable=False)
+#     psfsize_r = Column(REAL, nullable=False)
+#     psfsize_z = Column(REAL, nullable=False)
+#     psfdepth_g = Column(REAL, nullable=False)
+#     psfdepth_r = Column(REAL, nullable=False)
+#     psfdepth_z = Column(REAL, nullable=False)
+#     galdepth_g = Column(REAL, nullable=False)
+#     galdepth_r = Column(REAL, nullable=False)
+#     galdepth_z = Column(REAL, nullable=False)
+#     nea_g = Column(REAL, nullable=False)
+#     nea_r = Column(REAL, nullable=False)
+#     nea_z = Column(REAL, nullable=False)
+#     blob_nea_g = Column(REAL, nullable=False)
+#     blob_nea_r = Column(REAL, nullable=False)
+#     blob_nea_z = Column(REAL, nullable=False)
+#     psfdepth_w1 = Column(REAL, nullable=False)
+#     psfdepth_w2 = Column(REAL, nullable=False)
+#     psfdepth_w3 = Column(REAL, nullable=False)
+#     psfdepth_w4 = Column(REAL, nullable=False)
+#     wise_coadd_id = Column(String(8), nullable=False)
+#     wise_x = Column(REAL, nullable=False)
+#     wise_y = Column(REAL, nullable=False)
+#     # LC FLUX...
+#     sersic = Column(REAL, nullable=False)
+#     sersic_ivar = Column(REAL, nullable=False)
+#     shape_r = Column(REAL, nullable=False)
+#     shape_r_ivar = Column(REAL, nullable=False)
+#     shape_e1 = Column(REAL, nullable=False)
+#     shape_e1_ivar = Column(REAL, nullable=False)
+#     shape_e2 = Column(REAL, nullable=False)
+#     shape_e2_ivar = Column(REAL, nullable=False)
+#     photsys = Column(String(1), nullable=False)
+#     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+#
+#     def __repr__(self):
+#         return "Tractor(targetid={0.targetid})".format(self)
 
 
 class Target(SchemaMixin, Base):
@@ -390,6 +390,9 @@ class Target(SchemaMixin, Base):
     sv2_scnd_target = Column(BigInteger, nullable=False)
     sv3_scnd_target = Column(BigInteger, nullable=False)
 
+    # zpix_redshifts = relationship("Zpix", back_populates="target")
+    # ztile_redshifts = relationship("Ztile", back_populates="target")
+
     def __repr__(self):
         return "Target(targetid={0.targetid})".format(self)
 
@@ -442,6 +445,11 @@ class Tile(SchemaMixin, Base):
     goaltype = Column(String(20), nullable=False)
     mintfrac = Column(DOUBLE_PRECISION, nullable=False)
     lastnight = Column(Integer, nullable=False) # In principle this could be replaced by MAX(night) grouped by exposures.
+
+    exposures = relationship("Exposure", back_populates="tile")
+    fiberassign = relationship("Fiberassign", back_populates="tile")
+    potential = relationship("Potential", back_populates="tile")
+    ztile_redshifts = relationship("Ztile", back_populates="tile")
 
     def __repr__(self):
         return "Tile(tileid={0.tileid:d})".format(self)
@@ -508,6 +516,9 @@ class Exposure(SchemaMixin, Base):
     efftime_bright_gfa = Column(DOUBLE_PRECISION, nullable=False)
     efftime_backup_gfa = Column(DOUBLE_PRECISION, nullable=False)
 
+    tile = relationship("Tile", back_populates="exposures")
+    frames = relationship("Frame", back_populates="exposure")
+
     def __repr__(self):
         return "Exposure(night={0.night:d}, expid={0.expid:d}, tileid={0.tileid:d})".format(self)
 
@@ -565,6 +576,8 @@ class Frame(SchemaMixin, Base):
     # 25 MINTFRAC             D
     # 26 GOALTIME             D
 
+    exposure = relationship("Exposure", back_populates="frames")
+
     def __repr__(self):
         return "Frame(expid={0.expid:d}, camera='{0.camera}')".format(self)
 
@@ -584,7 +597,7 @@ class Fiberassign(SchemaMixin, Base):
     """
 
     tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
-    targetid = Column(BigInteger, primary_key=True, index=True)
+    targetid = Column(BigInteger, primary_key=True, index=True)  # potential ForeignKey on Target
     petal_loc = Column(SmallInteger, nullable=False)
     device_loc = Column(Integer, nullable=False)
     location = Column(Integer, primary_key=True)
@@ -601,6 +614,8 @@ class Fiberassign(SchemaMixin, Base):
     plate_ra = Column(DOUBLE_PRECISION, nullable=False)
     plate_dec = Column(DOUBLE_PRECISION, nullable=False)
 
+    tile = relationship("Tile", back_populates="fiberassign")
+
     def __repr__(self):
         return "Fiberassign(tileid={0.tileid:d}, fiber={0.fiber:d})".format(self)
 
@@ -610,9 +625,11 @@ class Potential(SchemaMixin, Base):
     """
 
     tileid = Column(Integer, ForeignKey('tile.tileid'), primary_key=True, index=True)
-    targetid = Column(BigInteger, primary_key=True, index=True)
+    targetid = Column(BigInteger, primary_key=True, index=True)  # potential ForeignKey on Target
     fiber = Column(Integer, nullable=False)
     location = Column(Integer, primary_key=True)
+
+    tile = relationship("Tile", back_populates="potential")
 
     def __repr__(self):
         return "Potential(tileid={0.tileid:d}, targetid={0.targetid:d}, location={0.location:d})".format(self)
@@ -622,11 +639,12 @@ class Zpix(SchemaMixin, Base):
     """Representation of the ``ZCATALOG`` table in zpix files.
     """
 
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # potential ForeignKey on Target
     survey = Column(String(7), primary_key=True, autoincrement=False)
     program = Column(String(6), primary_key=True, autoincrement=False)
-    healpix = Column(Integer, nullable=False)
+    spgrp = Column(String(10), nullable=False)
     spgrpval = Column(Integer, nullable=False)
+    healpix = Column(Integer, nullable=False)
     z = Column(DOUBLE_PRECISION, index=True, nullable=False)
     zerr = Column(DOUBLE_PRECISION, nullable=False)
     zwarn = Column(BigInteger, index=True, nullable=False)
@@ -698,8 +716,98 @@ class Zpix(SchemaMixin, Base):
     zcat_nspec = Column(SmallInteger, nullable=False)
     zcat_primary = Column(Boolean, nullable=False)
 
+    # target = relationship("Target", back_populates="zpix_redshifts")
+
     def __repr__(self):
         return "Zpix(targetid={0.targetid:d}, survey='{0.survey}', program='{0.program}')".format(self)
+
+
+class Ztile(SchemaMixin, Base):
+    """Representation of the ``ZCATALOG`` table in ztile files.
+    """
+
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)  # potential ForeignKey on Target
+    survey = Column(String(7), nullable=False)
+    program = Column(String(6), nullable=False)
+    spgrp = Column(String, primary_key=True, autoincrement=False)
+    spgrpval = Column(Integer, primary_key=True, autoincrement=False)
+    z = Column(DOUBLE_PRECISION, index=True, nullable=False)
+    zerr = Column(DOUBLE_PRECISION, nullable=False)
+    zwarn = Column(BigInteger, index=True, nullable=False)
+    chi2 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_0 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_1 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_2 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_3 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_4 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_5 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_6 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_7 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_8 = Column(DOUBLE_PRECISION, nullable=False)
+    coeff_9 = Column(DOUBLE_PRECISION, nullable=False)
+    npixels = Column(BigInteger, nullable=False)
+    spectype = Column(String(6), index=True, nullable=False)
+    subtype = Column(String(20), index=True, nullable=False)
+    ncoeff = Column(BigInteger, nullable=False)
+    deltachi2 = Column(DOUBLE_PRECISION, nullable=False)
+    coadd_fiberstatus = Column(Integer, nullable=False)
+    #
+    # Skipping columns that are in other tables.
+    #
+    tileid = Column(Integer, ForeignKey("tile.tileid"), primary_key=True, autoincrement=False)
+    coadd_numexp = Column(SmallInteger, nullable=False)
+    coadd_exptime = Column(REAL, nullable=False)
+    coadd_numnight = Column(SmallInteger, nullable=False)
+    coadd_numtile = Column(SmallInteger, nullable=False)
+    mean_delta_x = Column(REAL, nullable=False)
+    rms_delta_x = Column(REAL, nullable=False)
+    mean_delta_y = Column(REAL, nullable=False)
+    rms_delta_y = Column(REAL, nullable=False)
+    mean_fiber_ra = Column(DOUBLE_PRECISION, nullable=False)
+    std_fiber_ra = Column(REAL, nullable=False)
+    mean_fiber_dec = Column(DOUBLE_PRECISION, nullable=False)
+    std_fiber_dec = Column(REAL, nullable=False)
+    mean_psf_to_fiber_specflux = Column(REAL, nullable=False)
+    tsnr2_gpbdark_b = Column(REAL, nullable=False)
+    tsnr2_elg_b = Column(REAL, nullable=False)
+    tsnr2_gpbbright_b = Column(REAL, nullable=False)
+    tsnr2_lya_b = Column(REAL, nullable=False)
+    tsnr2_bgs_b = Column(REAL, nullable=False)
+    tsnr2_gpbbackup_b = Column(REAL, nullable=False)
+    tsnr2_qso_b = Column(REAL, nullable=False)
+    tsnr2_lrg_b = Column(REAL, nullable=False)
+    tsnr2_gpbdark_r = Column(REAL, nullable=False)
+    tsnr2_elg_r = Column(REAL, nullable=False)
+    tsnr2_gpbbright_r = Column(REAL, nullable=False)
+    tsnr2_lya_r = Column(REAL, nullable=False)
+    tsnr2_bgs_r = Column(REAL, nullable=False)
+    tsnr2_gpbbackup_r = Column(REAL, nullable=False)
+    tsnr2_qso_r = Column(REAL, nullable=False)
+    tsnr2_lrg_r = Column(REAL, nullable=False)
+    tsnr2_gpbdark_z = Column(REAL, nullable=False)
+    tsnr2_elg_z = Column(REAL, nullable=False)
+    tsnr2_gpbbright_z = Column(REAL, nullable=False)
+    tsnr2_lya_z = Column(REAL, nullable=False)
+    tsnr2_bgs_z = Column(REAL, nullable=False)
+    tsnr2_gpbbackup_z = Column(REAL, nullable=False)
+    tsnr2_qso_z = Column(REAL, nullable=False)
+    tsnr2_lrg_z = Column(REAL, nullable=False)
+    tsnr2_gpbdark = Column(REAL, nullable=False)
+    tsnr2_elg = Column(REAL, nullable=False)
+    tsnr2_gpbbright = Column(REAL, nullable=False)
+    tsnr2_lya = Column(REAL, nullable=False)
+    tsnr2_bgs = Column(REAL, nullable=False)
+    tsnr2_gpbbackup = Column(REAL, nullable=False)
+    tsnr2_qso = Column(REAL, nullable=False)
+    tsnr2_lrg = Column(REAL, nullable=False)
+    zcat_nspec = Column(SmallInteger, nullable=False)
+    zcat_primary = Column(Boolean, nullable=False)
+
+    tile = relationship("Tile", back_populates="ztile_redshifts")
+    # target = relationship("Target", back_populates="ztile_redshifts")
+
+    def __repr__(self):
+        return "Ztile(targetid={0.targetid:d}, tileid={0.tileid:d}, spgrp='{0.spgrp}', spgrpval={0.spgrpval:d})".format(self)
 
 
 def _frameid(data):
@@ -747,7 +855,8 @@ def _tileid(data):
 
 
 def _survey_program(data):
-    """Add ``SURVEY`` and ``PROGRAM`` columns to zpix table.
+    """Add ``SURVEY``, ``PROGRAM``, ``SPGRP`` columns to zpix and ztile tables.
+
     Parameters
     ----------
     data : :class:`astropy.table.Table`
@@ -757,15 +866,20 @@ def _survey_program(data):
     -------
     :class:`astropy.table.Table`
         Updated data table.
+
+    Raises
+    ------
+    KeyError
+        If a necessary header could not be found.
     """
-    try:
-        survey = data.meta['SURVEY']
-        program = data.meta['PROGRAM']
-    except KeyError:
-        log.error("Could not find SURVEY or PROGRAM in metadata!")
-        raise
-    data.add_column(np.array([survey]*len(data)), name='SURVEY', index=1)
-    data.add_column(np.array([program]*len(data)), name='PROGRAM', index=2)
+    for i, key in enumerate(('SURVEY', 'PROGRAM', 'SPGRP')):
+        try:
+            val = data.meta[key]
+        except KeyError:
+            log.error("Could not find %s in metadata!", key)
+            raise
+        log.debug("Adding %s column.", key)
+        data.add_column(np.array([val]*len(data)), name=key, index=i+1)
     return data
 
 
@@ -1349,7 +1463,18 @@ def main():
                'rowfilter': lambda x: x['TARGETID'] > 0,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows
+               },
+              {'filepaths': glob.glob(os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['SPECPROD'], 'zcatalog', 'ztile-*.fits')),
+               'tcls': Ztile,
+               'hdu': 'ZCATALOG',
+               'preload': _survey_program,
+               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+               'rowfilter': lambda x: x['TARGETID'] > 0,
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows
                }]
+
     #
     # Load the tables that correspond to a small set of files.
     #
