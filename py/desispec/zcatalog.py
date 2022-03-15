@@ -16,7 +16,7 @@ Usage:
 This function combines individual redshift catalogs from a given release into a single compilation 
 catalog. The output catalog is saved in a FITS file in a user-specified location and filename. 
 
-This function can be used for 'fuji' (SV) or 'guadalupe' (Main) by setting the keyword `spec_release`.
+This function can be used for 'fuji' (SV) or 'guadalupe' (Main) by setting the keyword `specprod`.
 By default, this function aggregates all the columns for the redshift catalogs, and adds columns to 
 quantify the number of coadded spectra listed in the catalogs for each TARGETID and to identify the 
 primary ("best") spectrum out of them using the `find_primary_spectra` function. Optionally, the 
@@ -26,41 +26,121 @@ and `TSNR2_LRG` columns as they are needed as input for `find_primary_spectra`.
 
 Usage:
 ------
-   create_summary_catalog(spec_release = 'fuji', version = 'zpix', all_columns = True, \
+   create_summary_catalog(specprod, survey_name, specgroup = 'zpix', all_columns = True, \
                           columns_list = None, output_filename = './zcat-all.fits')
 
 Ragadeepika Pucha, Stephanie Juneau, and DESI data team 
-Version: 2022, March 2nd
+Version: 2022, March 15th
 """
 
 ####################################################################################################
 ####################################################################################################
 
 import numpy as np
+import os
 from glob import glob
 from astropy.io import fits
 from astropy.table import Table, Column, vstack, join
 
+## DESI related functions
+from desispec.io import specprod_root
+from desiutil.log import get_logger
+
 ####################################################################################################
 ####################################################################################################
 
-def create_summary_catalog(spec_release = 'fuji', version = 'zpix',\
+log = get_logger()
+
+def get_tables(specprod, specgroup = 'zpix', all_files = True, survey = None, program = None):
+    """
+    This function finds the required catalog filenames for a given specprod and specgroup.
+    
+    Parameters
+    ----------
+    
+    specprod : str
+        Internal Release Name for the DESI Spectral Release
+        This is required to create the directory path for the redshift catalogs.
+        (fuji|guadalupe|other names in the future)
+    
+    specgroup : str
+        The option to run the code on ztile* files or zpix* files.
+        It can either be 'zpix' or 'ztile'. Default is 'zpix'
+        
+    all_files : bool
+        Whether or not to list out all the filenames under the given specprod and specgroup.
+        Default is True
+        If all_files = False, survey and program are required inputs
+        
+    survey : str
+        The SURVEY of the given redshift catalog (cmx|special|sv1|sv2|sv3)
+        
+    program : str
+        The PROGRAM of the given redshift catalog (dark|bright|backup|other)
+        
+    Returns
+    -------
+    
+    zcat : str or list
+    If all_files = True, the function returns the list of filenames of the catalogs.
+    Otherwise, the function returns the filename for a given specgroup, survey, and program.
+    """
+    
+    ## Check that survey and program are set
+    if (all_files == False)&((survey is None)|(program is None)):
+        log.error('survey or program is missing')
+        raise ValueError('survey or program is missing')
+    
+    ## Spectral Directory Path for a given internal release name
+    specred_dir = specprod_root(specprod)
+
+    ## Directory path to all the redshift catalogs
+    zcat_dir = f'{specred_dir}/zcatalog'
+    
+    if all_files:
+        ## Find all the filenames for a given specgroup
+        if (specgroup == 'zpix'):
+            ## List of all zpix* catalogs: zpix-survey-program.fits
+            zcat = glob(f'{zcat_dir}/zpix*')
+        elif (specgroup == 'ztile'):
+            ## List of all ztile* catalogs, considering only cumulative catalogs
+            zcat = glob(f'{zcat_dir}/ztile*cumulative.fits')
+    else:
+        ## If all_files is False, we get only a specific catalog
+        ## survey and program are needed in this case
+        if (specgroup == 'zpix'):
+            # zpix-survey-program.fits
+            zcat = f'{zcat_dir}/zpix-{survey}-{program}.fits'
+        elif (specgroup == 'ztile'):
+            # Considering only *cumulative.fits files: ztile-survey-program-cumulative.fits
+            zcat = f'{zcat_dir}/ztile-{survey}-{program}-cumulative.fits'
+            
+    return (zcat)
+    
+####################################################################################################
+####################################################################################################   
+
+def create_summary_catalog(specprod, survey_name, specgroup = 'zpix', \
                            all_columns = True, columns_list = None, output_filename = './zcat-all.fits'):
     """
     This function combines all the individual redshift catalogs for either 'zpix' or 'ztile' 
     with the desired columns (all columns, or a pre-selected list, or a user-given list).
     It further adds 'NSPEC' and 'PRIMARY' columns, two for SV(or MAIN),
-    and two for the entire combined redshift catalog
+    and two for the entire combined redshift catalog.
     
     Parameters
     ----------
     
-    spec_release : str
+    specprod : str
         Internal Release Name for the DESI Spectral Release
         This is required to create the directory path for the redshift catalogs.
         (fuji|guadalupe|other names in the future)
+        
+    survey_name : str
+        'sv' or 'main'. This is required for adding survey-based primary flags 
+        and also for defining the list of '*_TARGET' columns.
     
-    version : str
+    specgroup : str
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'. Default is 'zpix'
         
@@ -71,6 +151,8 @@ def create_summary_catalog(spec_release = 'fuji', version = 'zpix',\
         If all_columns = False, list of columns to include in the final table.
         If None, a list of pre-decided summary columns will be used. Default is None.
         The columns_list must include 'TARGETID', 'ZWARN', and 'TSNR2_LRG' columns.
+        If the user-given columns_list does not include 'SURVEY' and 'PROGRAM',
+        those columns are added to the final table.
         
     output_filename : str
         Path+Filename for the output summary redshift catalog.
@@ -85,47 +167,49 @@ def create_summary_catalog(spec_release = 'fuji', version = 'zpix',\
 
     """
     
+    ############################### Checking the inputs ##################################
+    
+    ## Initial check 1
+    ## Test whether the specprod exists or not
+    ## Spectral Directory Path for a given internal release name
+    specred_dir = specprod_root(specprod)    
+    if (os.path.isdir(specred_dir) == False):
+        log.error(f'"{specprod}" directory does not exist')
+        raise OSError(f'"{specprod}" directory does not exist')
+        
+    ## Initial check 2
+    ## If specgroup = something else by mistake  
+    if (specgroup != 'zpix')&(specgroup != 'ztile'):
+        log.error(f'"{specgroup}" not recognized')
+        raise NameError(f'"{specgroup}" not recognized')
+        
+    ## Initial check 3
+    ## Check that survey_name is either sv or main
+    if (survey_name != 'sv')&(survey_name != 'main'):
+        log.error(f'"{survey_name}" not recognized')
+        raise NameError(f'"{survey_name}" not recognized')
+    
+    ## Initial check 4
     ## The columns_list must include 'TARGETID', 'ZWARN', and 'TSNR2_LRG' columns
     ## If this keyword is set, test the columns
     ## If one of more of these columns are missing, it will produce an error message and exit   
     ## This check works only when all_columns = False
     if (all_columns == False)&(columns_list is not None):
         if (('TARGETID' not in columns_list)|('ZWARN' not in columns_list)|\
-            ('TSNR2_LRG' not in columns_list)):
-            print ('WARNING: One or more of the required columns are missing!')
-            return    
-    
-    ## Spectral Directory Path for a given internal release name
-    specred_dir = f'/global/cfs/cdirs/desi/spectro/redux/{spec_release}'
-    
-    ## Directory path to all the redshift catalogs
-    zcat_dir = f'{specred_dir}/zcatalog'
-    
-    ## Defining survey_name -- whether it is SV or Main
-    if (spec_release == 'fuji'):
-        survey_name = 'sv'
-    else:
-        survey_name = 'main'
+            ('TSNR2_LRG' not in columns_list)):   
+            log.error('One or more of the required columns are missing!')
+            raise ValueError('One or more of the required columns are missing!')
+        
+    ######################################################################################
     
     ## Get the list of redshift catalogs
-    if (version == 'zpix'):
-        ## List of all zpix* catalogs: zpix-survey-program.fits
-        zcat = glob(f'{zcat_dir}/zpix*')
-    elif (version == 'ztile'):
-        ## List of all ztile* catalogs, considering only cumulative catalogs
-        ## ztile-survey-program-cumulative.fits
-        zcat = glob(f'{zcat_dir}/ztile*cumulative.fits')
-    else:
-        # If version = something else by mistake
-        # The error message will be printed and the function will exit.
-        print ('WARNING: version not recognized')
-        return
+    zcat = get_tables(specprod = specprod, specgroup = specgroup, all_files = True)
         
     ## Sorting the list of zcatalogs by name
     ## This is to keep it neat, clean, and in order
     zcat.sort()
     
-    ## Get all the zcatalogs for a given spectral release and version
+    ## Get all the zcatalogs for a given spectral release and specgroup
     ## Add the required columns or select a few of them
     ## Adding all the tables into a single list
     tables = []
@@ -137,22 +221,16 @@ def create_summary_catalog(spec_release = 'fuji', version = 'zpix',\
         survey = arr[1]
         program = arr[2].split('.')[0]
         
-        ## Sanity check -- can be removed later
-        print (survey, program)
-        
-        ## Create variable names for every table
-        table_name = f'{survey}_{program}'
-        
-        ## The function 'fix_tables' adds the required columns 
+        ## The function 'update_tables' adds the required columns 
         ## Returns the final table with all or selected columns
-        vars()[table_name] = fix_tables(survey, program, spec_release = spec_release,\
-                                        version = version, all_columns = all_columns, \
+        fixed_table = update_tables(specprod = specprod, survey_name = survey_name,\
+                                        survey = survey, program = program,\
+                                        specgroup = specgroup, all_columns = all_columns, \
                                         columns_list = columns_list)
         
         ## Appending the tables to the list
-        tables.append(vars()[table_name])
+        tables.append(fixed_table)
         
-    
     ## Stacking all the tables into a final table
     tab = vstack(tables)
     
@@ -182,19 +260,14 @@ def create_summary_catalog(spec_release = 'fuji', version = 'zpix',\
     tab[f'{survey_name.upper()}_PRIMARY'][is_survey] = specprim
     
     ## For convenience, sort by SURVEY, PROGRAM, and (HEALPIX or TILEID) 
-    if (version == 'zpix'):
+    ## Sort only if the required columns are available
+    if (specgroup == 'zpix')&('HEALPIX' in tab.colnames):
         tab.sort(['SURVEY', 'PROGRAM', 'HEALPIX'])
-    else:
+    elif (specgroup == 'ztile')&('TILEID' in tab.colnames)&('LASTNIGHT' in tab.colnames):
         tab.sort(['SURVEY', 'PROGRAM', 'TILEID', 'LASTNIGHT'])
-    
-    ## Add the final table as a HDU
-    hdu0 = fits.PrimaryHDU()
-    hdu1 = fits.BinTableHDU(tab)
-    
-    ## Final HDUList
-    hdu = fits.HDUList([hdu0, hdu1])
-    ## Save this to the output_filename location
-    hdu.writeto(output_filename, overwrite = True)
+   
+    tab.meta['EXTNAME'] = 'ZCATALOG'
+    tab.write(output_filename, overwrite = True)
     
 ####################################################################################################
 ####################################################################################################
@@ -218,8 +291,8 @@ def add_target_columns(tab, survey, program):
         
     Returns
     -------
-    tab : Astropy Table
-        The final table after adding all the required '*_TARGET' columns
+        
+        None. The table is changed in-place by adding all the required '*_TARGET' columns
 
     """
 
@@ -262,13 +335,10 @@ def add_target_columns(tab, survey, program):
             col4 = Column(np.array([0]*len(tab)), name = f'{sv.upper()}_SCND_TARGET', dtype = '>i8')
             tab.add_columns((col1, col2, col3, col4))
     
-    return (tab)
-
 ####################################################################################################
 ####################################################################################################
 
-
-def fix_tables(survey, program, spec_release = 'fuji', version = 'zpix', \
+def update_tables(specprod, survey_name, survey, program, specgroup = 'zpix', \
                all_columns = True, columns_list = None):
     """
     This function adds all the required columns and returns the table with all columns, 
@@ -276,6 +346,14 @@ def fix_tables(survey, program, spec_release = 'fuji', version = 'zpix', \
     
     Parameters
     ----------
+    
+    specprod : str
+        Internal Release Name for the DESI Spectral Release
+        This is required to create the directory path for the redshift catalogs.
+        (fuji|guadalupe|other names in the future)
+        
+    survey_name : str
+        sv or main. This is required to define the '*_TARGET' columns.
     
     survey : str
         Survey of the redshift catalog 
@@ -285,12 +363,7 @@ def fix_tables(survey, program, spec_release = 'fuji', version = 'zpix', \
         PROGRAM of the redshift catalog
         dark|bright|backup|other
         
-    spec_release : str
-        Internal Release Name for the DESI Spectral Release
-        This is required to create the directory path for the redshift catalogs.
-        (fuji|guadalupe|other names in the future)
-    
-    version : str
+    specgroup : str
         The option to run the code on ztile* files or zpix* files.
         It can either be 'zpix' or 'ztile'. Default is 'zpix'
         For ztile, it works only on ztile*cumulative.fits files.
@@ -302,33 +375,17 @@ def fix_tables(survey, program, spec_release = 'fuji', version = 'zpix', \
         If all_columns = False, list of columns to include in the final table.
         If None, a list of pre-decided summary columns will be used. Default is None.
         The columns_list must include 'TARGETID', 'ZWARN', and 'TSNR2_LRG' columns.
+        If the user-given columns_list does not include 'SURVEY' and 'PROGRAM',
+        those columns are added to the table.
 
     Returns
     -------
-    
-    table : Astropy table
-        Final table with added empty columns as needed.
+    None. The function modifies the input table and adds all the required '*_TARGET' columns
 
     """
     
-    ## Spectral Directory Path for a given internal release name
-    specred_dir = f'/global/cfs/cdirs/desi/spectro/redux/{spec_release}'
-    
-    ## Directory path to all the redshift catalogs
-    zcat_dir = f'{specred_dir}/zcatalog'
-    
-    ## Get the filename of the redshift catalog given its survey and program
-    if (version == 'zpix'):
-        # zpix-survey-program.fits
-        filename = f'{zcat_dir}/zpix-{survey}-{program}.fits'
-    elif (version == 'ztile'):
-        # Considering only *cumulative.fits files: ztile-survey-program-cumulative.fits
-        filename = f'{zcat_dir}/ztile-{survey}-{program}-cumulative.fits'
-    else:
-        # If version = something else by mistake
-        # The error message will be printed and the function will exit.
-        print ('WARNING: version not recognized')
-        return
+    filename = get_tables(specprod = specprod, specgroup = specgroup, all_files = False,\
+                          survey = survey, program = program)
 
     ## Load the ZCATALOG table, along with the meta data
     tab = Table.read(filename, hdu = 'ZCATALOG')
@@ -351,17 +408,17 @@ def fix_tables(survey, program, spec_release = 'fuji', version = 'zpix', \
     ## immediately after TARGETID
     
     ## Add the TARGET columns -- only for SV, not needed for Main
-    if (spec_release == 'fuji'):
+    if (survey_name == 'sv'):
         ## Add the other target columns that are not present in the redshift catalogs
         ## Depends on the survey and program
         ## The function `add_target_columns` adds the required columns based on survey and program
-        tab = add_target_columns(tab, survey = survey, program = program)
+        add_target_columns(tab, survey = survey, program = program)
         
         ## Making a list of all the '*_TARGET* columns 
         ## This is for rearranging the columns into proper order
-        target_cols = ['CMX_TARGET', 'DESI_TARGET','BGS_TARGET','MWS_TARGET', 'SCND_TARGET',\
-                       'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', \
-                       'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', \
+        target_cols = ['CMX_TARGET', 'DESI_TARGET','BGS_TARGET','MWS_TARGET', 'SCND_TARGET',
+                       'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 
+                       'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 
                        'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET']
     else:
         ## There are no missing columns for main survey
@@ -396,24 +453,35 @@ def fix_tables(survey, program, spec_release = 'fuji', version = 'zpix', \
     else:
         if (columns_list == None):
             ## These are the pre-selected list of columns
-            pre_selected_cols = ['TARGETID', 'SURVEY', 'PROGRAM', \
-                               'TARGET_RA', 'TARGET_DEC', 'Z', 'ZERR', 'ZWARN',\
-                               'COADD_FIBERSTATUS',  'CHI2', 'DELTACHI2', \
-                               'MASKBITS', 'SPECTYPE', 'FLUX_G', 'FLUX_R', \
-                               'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G',\
-                               'FLUX_IVAR_R', 'FLUX_IVAR_Z','FLUX_IVAR_W1', \
-                               'FLUX_IVAR_W2', 'TSNR2_LRG', 'TSNR2_BGS', 'TSNR2_ELG',\
+            pre_selected_cols = ['TARGETID', 'SURVEY', 'PROGRAM', 
+                               'TARGET_RA', 'TARGET_DEC', 'Z', 'ZERR', 'ZWARN',
+                               'COADD_FIBERSTATUS',  'CHI2', 'DELTACHI2', 
+                               'MASKBITS', 'SPECTYPE', 'FLUX_G', 'FLUX_R', 
+                               'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G',
+                               'FLUX_IVAR_R', 'FLUX_IVAR_Z','FLUX_IVAR_W1', 
+                               'FLUX_IVAR_W2', 'TSNR2_LRG', 'TSNR2_BGS', 'TSNR2_ELG',
                                'TSNR2_QSO', 'TSNR2_LYA'] + target_cols
             
             ## Add HEALPIX for zpix* files, and TILEID, LASTNIGHT for ztile* files
-            if (version == 'zpix'):
+            if (specgroup == 'zpix'):
                 req_columns = pre_selected_cols[0:3]+['HEALPIX']+pre_selected_cols[3:]
             else:
                 req_columns = pre_selected_cols[0:3]+['TILEID', 'LASTNIGHT']+pre_selected_cols[3:]
             
         else:
             ## Input user list of required columns
-            req_columns = columns_list
+            ## Checking if the user list has SURVEY and PROGRAM
+            ## Otherwise, we need to add these columns for getting the PRIMARY flags
+            if ('SURVEY' in columns_list)&('PROGRAM' in columns_list):
+                req_columns = columns_list
+            else:
+                cols = ['SURVEY', 'PROGRAM']
+                ## Find what are not available in the columns list
+                cols_diff = list(set(cols).difference(columns_list))
+                cols_diff.sort(reverse = True)
+                ## Reverse = True so that SURVEY appears first
+                req_columns = columns_list+cols_diff
+                
             
     ## Final table with the required columns
     t_final = tab[req_columns]
@@ -422,7 +490,6 @@ def fix_tables(survey, program, spec_release = 'fuji', version = 'zpix', \
     
 ####################################################################################################
 ####################################################################################################
-
 
 def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
     """
@@ -515,4 +582,3 @@ def find_primary_spectra(table, sort_column = 'TSNR2_LRG'):
 
 ####################################################################################################
 ####################################################################################################
-
