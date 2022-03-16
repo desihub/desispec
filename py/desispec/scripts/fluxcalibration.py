@@ -235,7 +235,6 @@ def main(args) :
         return
 
     if not args.use_gpu: desispec.fluxcalibration.use_gpu = False
-    print("DEBUG USE GPU: ",desispec.fluxcalibration.use_gpu)
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux,
             model_fibers%500,
             highest_throughput_nstars=args.highest_throughput,
