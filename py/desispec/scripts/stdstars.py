@@ -47,7 +47,7 @@ def parse(options=None):
                          nargs='*',
                          help='List of TARGETIDs of standards overriding the targeting info')
     parser.add_argument('--mpi', action='store_true', help='Use MPI')
-    parser.add_argument('--ignore-gpu', action='store_true', help='Ignore GPU, if available')
+    parser.add_argument('--use-gpu', action='store_true', help='Use GPU, if available')
 
     log = get_logger()
     args = None
@@ -145,7 +145,7 @@ def main(args, comm=None) :
         if rank == 0:
             log.info('multiprocess parallelizing with {} processes'.format(ncpu))
 
-    if args.ignore_gpu and desispec.fluxcalibration.use_gpu:
+    if not args.use_gpu and desispec.fluxcalibration.use_gpu:
         # Opt-out of GPU usage
         desispec.fluxcalibration.use_gpu = False
         if rank == 0:

@@ -73,6 +73,9 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
     parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
+    parser.add_argument("--extract-size", type=int, default=22, help="Size to use for GPU extract subcomm")
+    parser.add_argument("--gpuspecter", action="store_true", help="Use GPU specter")
+    parser.add_argument("--gpuextract", action="store_true", help="Use GPU extraction")
     parser.add_argument("--skygradpca", action="store_true", help="Fit sky gradient")
 
     return parser
@@ -307,8 +310,10 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20 * nspectro, 25
+        if system_name == 'perlmutter-gpu': ncores += 2 * nspectro # + 2/spectrum for I/O
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
+        if system_name == 'perlmutter-gpu': ncores += 2 * nspectro # + 2/spectrum for I/O
     elif jobdesc in ('DARK'):
         ncores, runtime = ncameras, 5
     elif jobdesc in ('CCDCALIB'):

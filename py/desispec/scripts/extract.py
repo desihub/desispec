@@ -183,7 +183,7 @@ def gpu_specter_check_input_options(args):
         except ImportError:
             return False, 'cannot import cupy'
         if not (is_numba_cuda_available and is_cupy_available):
-            return False, 'gpu is not available'
+            return False, f'gpu is not available ({is_numba_cuda_available=}, {is_cupy_available=})'
 
     if args.decorrelate_fibers:
         msg = "--decorrelate-fibers not implemented with --gpu-specter"
@@ -208,6 +208,7 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         log.critical(message)
         raise ValueError(message)
 
+    import gpu_specter
     import gpu_specter.io
     import gpu_specter.core
     import gpu_specter.mpi
@@ -315,9 +316,9 @@ def main_gpu_specter(args, comm=None, timing=None, coordinator=None):
         img.meta['WAVEMIN'] = (wmin, 'First wavelength [Angstroms]')
         img.meta['WAVEMAX'] = (wmax, 'Last wavelength [Angstroms]')
         img.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
-        img.meta['SPECTER'] = ('dev', 'https://github.com/desihub/gpu_specter')
-        img.meta['IN_PSF']  = (_trim(args.psf), 'Input spectral PSF')
-        img.meta['IN_IMG']  = (_trim(args.input), 'Input image')
+        img.meta['SPECTER'] = (gpu_specter.__version__, 'https://github.com/desihub/gpu_specter')
+        img.meta['IN_PSF']  = (io.shorten_filename(args.psf), 'Input spectral PSF')
+        img.meta['IN_IMG']  = io.shorten_filename(args.input)
         depend.add_dependencies(img.meta)
 
         #- Check if input PSF was itself a traceshifted version of another PSF
