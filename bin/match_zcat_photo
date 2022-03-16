@@ -34,6 +34,8 @@ Sequence of commands for a given release (here, fuji)
 
    Output files:
      targetphot-potential-targets-fuji.fits
+     targetphot-potential-targets-zcat-fuji.fits
+     targetphot-potential-targets-missing-fuji.fits
      tractorphot-potential-targets-nside4-hp???-fuji.fits
 
 """
@@ -735,7 +737,11 @@ def main():
         # used to generate the targetphot file. Note that this intermediate
         # catalog is needed in order to do positional Tractor photometry
         # gathering, below.
-        outfile_zcat = outfile.replace('targetphot-', 'targetphot-zcat-')
+        if args.potential_targets:        
+            outfile_zcat = os.path.join(args.outdir, 'targetphot-potential-targets-zcat-{}.fits'.format(args.outprefix))
+        else:
+            outfile_zcat = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
+        
         zcat.meta['EXTNAME'] = 'ZCATALOG'
         log.info('Writing {:,} objects to {}'.format(len(zcat), outfile_zcat))
         zcat.write(outfile_zcat, overwrite=True)
@@ -754,7 +760,7 @@ def main():
             return
 
         if args.potential_targets:        
-            zcatfile = os.path.join(args.outdir, 'targetphot-zcat-potential-targets-{}.fits'.format(args.outprefix))
+            zcatfile = os.path.join(args.outdir, 'targetphot-potential-targets-zcat-{}.fits'.format(args.outprefix))
             targetfile = os.path.join(args.outdir, 'targetphot-potential-targets-{}.fits'.format(args.outprefix))
         else:
             zcatfile = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
@@ -955,11 +961,13 @@ def main():
                     continue
                     
                 log.info('Reading {} objects from {}'.format(len(I), catfile))
-                cat = Table(fitsio.read(catfile))
 
-                targetid = np.intersect1d(cat['TARGETID'], zcat['TARGETID'][I])
-                cat = cat[np.isin(cat['TARGETID'], targetid)]
-                _zcat = zcat[I][np.isin(zcat['TARGETID'][I], targetid)]
+                _targetids = fitsio.read(catfile, columns='TARGETID')
+                targetids = np.intersect1d(_targetids, zcat['TARGETID'][I])
+
+                rows = np.where(np.isin(_targetids, targetids))[0]
+                cat = Table(fitsio.read(catfile, rows=rows))
+                _zcat = zcat[I][np.isin(zcat['TARGETID'][I], cat['TARGETID'])]
                 J = [np.where(tid == cat['TARGETID'])[0] for tid in _zcat['TARGETID']]
                 if len(J) == 0: # can happen when testing
                     continue
