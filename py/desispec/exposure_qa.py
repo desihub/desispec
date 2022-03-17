@@ -89,6 +89,10 @@ def compute_exposure_qa(night, expid, specprod_dir):
     poorposition=(dist_mm>qa_params["poor_fiber_offset_mm"])
     fiberqa_table['QAFIBERSTATUS'][poorposition] |= fibermask.mask('POORPOSITION')
 
+    tsnr2_petals = -99 + np.zeros(5000, dtype=int)
+    tsnr2_ebvs = np.zeros(5000)
+    tsnr2_good = np.zeros(5000, dtype=bool)
+    tsnr2_vals = np.zeros(5000)
     petal_tsnr2=np.zeros(10)
     worst_rdnoise = 0
 
@@ -296,11 +300,29 @@ def compute_exposure_qa(night, expid, specprod_dir):
             continue
         scores = fitsio.read(cframe_filename,"SCORES")
         print(scores.dtype.names)
+
+        # AR for tsnr2_vals and petal_tsnr2, we use tsnr2 corrected to the median EBV of the tile
+        # AR hence we need to first read all petals
+        # AR and perform computation after this loop on petals
         tsnr2_key  = qa_params["tsnr2_key"]
-        tsnr2_vals = scores[tsnr2_key]
+        fm = fitsio.read(cframe_filename,"FIBERMAP",columns=["PETAL_LOC", "FIBER", "EBV"])
+        if len(fm) != len(scores):
+            msg = "FIBERMAP and SCORES do not have the same number of rows ({} != {})".format(len(fm), len(scores))
+            log.error(msg)
+            raise ValueError(msg)
+        if (qa_params["tsnr2_band"] != "r") | (qa_params["tsnr2_key"][-2:] != "_R"):
+            log.warning(
+                "qa_params['tsnr2_band']={} or qa_params['tsnr2_key']={} are not r-band based as expected -> we do not correct TSNR2 to the median EBV of the tile".format(
+                    qa_params["tsnr2_band"], qa_params["tsnr2_key"],
+                )
+            )
+            fm["EBV"] = 0 # AR setting EBV to zero
+        tsnr2_petals[fm["FIBER"]] = fm["PETAL_LOC"]
+        tsnr2_ebvs[fm["FIBER"]] = fm["EBV"]
         good = ((fiberqa_table['QAFIBERSTATUS'][entries]&bad_positions_mask)==0)
-        petal_tsnr2[petal] = np.median(tsnr2_vals[good])
-        log.info("petal #{} median {} = {}".format(petal,tsnr2_key,petal_tsnr2[petal]))
+        tsnr2_good[fm["FIBER"]] = good
+        tsnr2_vals[fm["FIBER"]] = scores[tsnr2_key]
+        log.info("petal #{} median {} = {}".format(petal,tsnr2_key,np.median(scores[tsnr2_key][good])))
 
         tsnr2_for_efftime_vals = np.zeros(entries.size)
         for band in ["B","R","Z"] :
@@ -363,6 +385,25 @@ def compute_exposure_qa(night, expid, specprod_dir):
             petalqa_table[k] /= mval
             log.info("{} = {}".format(k,list(petalqa_table[k])))
 
+    # AR for tsnr2_vals and petal_tsnr2, we use tsnr2 corrected to the median EBV of the tile
+    # AR we use an ebv-scaling with 10 * (- 2.165 * ebv / 2.5 ) ** 2
+    # AR which is valid here because:
+    # AR - qa_params["tsnr2_band"] and qa_params["tsnr2_key"] are r-band based, i.e. we use TSNR2_*_R
+    # AR - EFFTIME is proportional to TSNR2, so the EBV-dependency is similar,
+    # AR   except for a multiplicative factor which cancels out here as we take a ratio
+    ebvfac_coeff = 2.165
+    ebvfac_fibers = 10. ** (ebvfac_coeff * tsnr2_ebvs / 2.5)
+    sel = tsnr2_ebvs > 0
+    if sel.sum() == 0:
+        ebvmed = 0
+    else:
+        ebvmed = np.median(tsnr2_ebvs[sel])
+    ebvfac_med = 10. ** (ebvfac_coeff * ebvmed / 2.5)
+    tsnr2_vals *= (ebvfac_fibers / ebvfac_med) ** 2
+    for petal in np.unique(tsnr2_petals[tsnr2_petals != -99]):
+        sel = (tsnr2_petals == petal) & (tsnr2_good)
+        petal_tsnr2[petal] = np.median(tsnr2_vals[sel])
+        log.info("petal #{} median {} after normalizing to the tile-median EBV= {}".format(petal, tsnr2_key, petal_tsnr2[petal]))
     petal_tsnr2_frac = np.zeros(npetal)
     if np.all(petal_tsnr2==0) :
          fiberqa_table['QAFIBERSTATUS'] |= fibermask.mask("BADPETALSNR")
