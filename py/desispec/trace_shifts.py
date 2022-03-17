@@ -16,7 +16,6 @@ from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
 import numba
 
-import specter.psf
 from desispec.io import read_image
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
@@ -450,7 +449,7 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
     return swdx,sw,svar,swy,swx,swl
 
 
-def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2,image_rebin=4) :
+def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers, width=7,deg=2,image_rebin=4) :
     """
     Measure x offsets from a preprocessed image and a trace set
 
@@ -461,9 +460,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
                   used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
         image : DESI preprocessed image object
+        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
 
     Optional:
-        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
         width  : extraction boxcar width, default is 5
         deg    : degree of polynomial fit as a function of y, only used to find and mask outliers
         image_rebin : rebinning of CCD rows to run faster (with rebin=4 loss of precision <0.01 pixel)
@@ -486,8 +485,11 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
 
+
     if image.mask is not None :
-        image.ivar *= (image.mask==0)
+        image_ivar = image.ivar*(image.mask==0)
+    else :
+        image_ivar = image.ivar
 
     error_floor = 0.04 # pixel
 
@@ -498,13 +500,13 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     # image rebinning to got faster !!!
     if image_rebin>1 :
         pix=image.pix[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1).sum(1)
-        ivar=image.ivar[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1)
+        ivar=image_ivar[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1)
         hasnozero=(np.sum(ivar==0,axis=1)==0)
         ivar=ivar.sum(1)*hasnozero
         n0   = pix.shape[0]
     else :
         pix  = image.pix
-        ivar = image.ivar
+        ivar = image_ivar
 
     y  = np.arange(n0)+0.5 # this 0.5 is important when rebinning to avoid a bias on y (here y = CCD_rows//rebin + 0.5 )
     xx = np.tile(np.arange(n1),(n0,1))
@@ -536,10 +538,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         x_of_y     = np.interp(y,ty,tx)
 
         swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix,ivar,x_of_y,wave_of_y,hw=hw)
-        jj      = np.where(sw>0)[0]
 
         # rebin
-        tn0   = jj.size
+        tn0   = sw.size
         rebin = 100//image_rebin
         sw  = sw[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swdx = swdx[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
@@ -548,8 +549,6 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         swy = swy[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swl = swl[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
 
-
-
         snr = sw/np.sqrt(svar+(svar==0)) # signal to noise in bin
         ok             = (snr>3) # keep only high snr pixels
         fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
@@ -557,11 +556,6 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fx             = (swx/(sw+(sw==0)))[ok]
         fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
         fl             = (swl/(sw+(sw==0)))[ok]
-
-        """
-        import matplotlib.pyplot as plt
-        plt.errorbar(fy,fdx,fex,fmt="o")
-        """
 
         good_fiber=True
         for loop in range(10) :

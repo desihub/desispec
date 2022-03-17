@@ -20,9 +20,18 @@ def parse_args():  # options=None):
                              "specified, default  is 'perexp,pernight'. If "+
                              "'false' or 'None' then no redshifts are submitted")
     parser.add_argument("--dry-run-level", type=int, default=0, required=False,
-                        help="If nonzero, this is a simulated run. If dry_run=1 the scripts will be written or submitted. "+
-                             "If dry_run=2, the scripts will not be writter or submitted. Logging will remain the same "+
+                        help="If nonzero, this is a simulated run. If level=1 the scripts will be written but not submitted. "+
+                             "If level=2, the scripts will not be written or submitted. Logging will remain the same "+
                              "for testing as though scripts are being submitted. Default is 0 (false).")
+    parser.add_argument("--tiles", type=str, required=False, default=None,
+                        help="Comma separated list of TILEIDs to include; use -99 to include arcs/flats")
+    parser.add_argument("--surveys", type=str, required=False, default=None,
+                        help="Comma separated list of surveys to include (e.g. sv1,sv3 or main); "+
+                             "use --proc-obstypes to filter out arcs/flats if desired")
+    parser.add_argument("--laststeps", type=str, required=False, default=None,
+                        help="Comma separated list of LASTSTEP's to process "
+                             + "(e.g. all, skysub, fluxcalib, ignore); "
+                             + "by default we only process 'all'.")
     # File and dir defs
     #parser.add_argument("-s", "--specprod", type=str, required=False, default=None,
     #                    help="Subdirectory under DESI_SPECTRO_REDUX to write the output files. "+\
@@ -48,8 +57,13 @@ def parse_args():  # options=None):
     parser.add_argument("--error-if-not-available", action="store_true",
                         help="Raise an error instead of reporting and moving on if an exposure "+\
                              "table doesn't exist.")
-    parser.add_argument("--overwrite-existing-tables", action="store_true",
-                        help="Give this flag if you want to submit jobs even if scripts already exist.")
+    parser.add_argument("--append-to-proc-table", action="store_true",
+                        help="Give this flag if you want to submit jobs even if proc table exists."+
+                        " Note this will skip existing exposures present in proc table.")
+    parser.add_argument("--ignore-proc-table-failures", action="store_true",
+                        help="Give this flag if you want to submit jobs even if "+
+                        " there are incomplete jobs in the existing proc table."+
+                        " Only to be used after vetting proc table failures.")
     parser.add_argument("--dont-check-job-outputs", action="store_true",
                         help="If all files for a pending job exist and this is False, then the script will not be "+
                              "submitted. If some files exist and this is True, only the "+
@@ -58,6 +72,20 @@ def parse_args():  # options=None):
                         help="Must be False if --dont-check-job-outputs is False. If False, jobs with some prior data "+
                              "are pruned using PROCCAMWORD to only process the remaining cameras not found to exist.")
     args = parser.parse_args()
+
+    # convert str lists to actual lists
+    if args.proc_obstypes is not None:
+        args.proc_obstypes = [pobstype.strip().lower() for pobstype in
+                                   args.proc_obstypes.split(',')]
+
+    if args.tiles is not None:
+        args.tiles = [int(tileid) for tileid in args.tiles.split(',')]
+
+    if args.surveys is not None:
+        args.surveys = [survey.strip().lower() for survey in args.surveys.split(',')]
+
+    if args.laststeps is not None:
+        args.laststeps = [laststep.strip().lower() for laststep in args.laststeps.split(',')]
 
     return args
 

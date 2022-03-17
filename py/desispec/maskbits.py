@@ -59,6 +59,9 @@ fibermask:
     - [RESTRICTED,      3, "INFO: Positioner has restricted reach (but might still be on valid target)"]
     - [MISSINGPOSITION, 8, "Fiber location information is missing"]
     - [BADPOSITION,     9, "Fiber >100 microns from target location"]
+    - [POORPOSITION,   10, "Fiber >30 microns from target location"]
+    - [LOWTRANSMISSION, 12, "Low fiber transmission. Cannot use for sky."]
+    - [LOWEFFTIME,     15, "Effective time for this fiber is too low"]
     - [BADFIBER,       16, "Unusable fiber"]
     - [BADTRACE,       17, "Bad trace solution"]
     - [BADFLAT,        18, "Bad fiber flat"]
@@ -68,6 +71,14 @@ fibermask:
     - [BADAMPB,        22, "Issues in the amplifier readouts of camera B make this unusable"]
     - [BADAMPR,        23, "Issues in the amplifier readouts of camera R make this unusable"]
     - [BADAMPZ,        24, "Issues in the amplifier readouts of camera Z make this unusable"]
+#- Following bits are reserved for spectro QA (see more precise definition in data/qa/qa-params.yaml)
+    - [BADPETALPOS,    25, "Too many fibers with bad positioning in petal"]
+    - [BADPETALSKY,    26, "Bad sky model across petal"]
+    - [BADPETALSTDSTAR,27, "To few standard stars or rms between stars too large in the petal"]
+    - [BADPETALFLUXCAL,28, "Unphysical flux calibration for the petal (calib vector too high or too low)"]
+    - [BADPETALSNR,    29, "TSNR is too low for this petal compared to the others"]
+    - [BADREADNOISE,   30, "Bad read noise in one of the 3 cameras"]
+    - [RESERVED31,     31, "Reserved sign bit; do not use"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
 specmask:
@@ -81,6 +92,7 @@ specmask:
     - [BAD2DFIT,     7, "Bad fit of extraction 2D model to pixel data"]
     - [NODATA,       8, "No data exists"]
     - [BADFIBER,     9, "fibermask has a non-zero bit"]
+    - [BADCOLUMN,    10, "Bad CCD column biases the flux"]
 
 #- zmask: reasons why redshift fitting failed
 """)
@@ -91,6 +103,8 @@ try:
     specmask = BitMask('specmask', _bitdefs)
     ccdmask = BitMask('ccdmask', _bitdefs)
     fibermask = BitMask('fibermask', _bitdefs)
+    extractmaskval = ccdmask.mask("BAD|HOT|DEAD|SATURATED|COSMIC|PIXFLATZERO|PIXFLATLOW|HIGHVAR")
+
 except TypeError:
     #
     # This is needed to allow documentation to build even if desiutil is not

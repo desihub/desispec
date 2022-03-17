@@ -868,7 +868,10 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=10.,deg=2,debug=False,highest_throughput_nstars=0,exposure_seeing_fwhm=1.1, stdcheck=True) :
+def compute_flux_calibration(frame, input_model_wave, input_model_flux,
+        input_model_fibers, nsig_clipping=10., deg=2, debug=False,
+        highest_throughput_nstars=0, exposure_seeing_fwhm=1.1, stdcheck=True,
+        nsig_flux_scale=3) :
 
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
@@ -881,8 +884,9 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
       input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
       exposure_seeing_fwhm : (optional) seeing FWHM in arcsec of the exposure
-      stdcheck: check if the model stars are actually standards according 
+      stdcheck: check if the model stars are actually standards according
                 to the fibermap and only rely on those
+      nsig_flux_scale: n sigma cutoff on the flux scale among standard stars
 
     Returns:
          desispec.FluxCalib object
@@ -979,7 +983,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         stdfibers = np.intersect1d(input_model_fibers, stdfibers)
     else:
         stdfibers = input_model_fibers
-    
+
     log.info("Std stars fibers: {}".format(stdfibers))
 
     stdstars = tframe[stdfibers]
@@ -1026,9 +1030,9 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         if "EXPTIME" in frame.meta : fluxcal *= frame.meta["EXPTIME"]
 
         # fit scale factor
-        ivar = (stdstars.mask==0)*stdstars.ivar
-        scaleivar = np.sum(ivar*(fluxcal[None,:]*convolved_model_flux)**2)
-        scale = np.sum(ivar*fluxcal[None,:]*convolved_model_flux*stdstars.flux)/scaleivar
+        # use a median instead of an optimal fit here
+        waveindices = np.where(fluxcal>0.5*np.median(fluxcal))[0]
+        scale = np.median(stdstars.flux[:,waveindices]/(fluxcal[waveindices][None,:]*convolved_model_flux[:,waveindices]*point_source_correction[stdfibers,None]))
         log.info("Scale factor = {:4.3f}".format(scale))
         minscale = 0.0001
         if scale<minscale :
@@ -1043,8 +1047,6 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         ccalibration = np.tile(fluxcal,(nfibers,1))
         ccalibivar = 1/(ccalibration**2+(ccalibration==0)) # 100% uncertainty!
         mask = np.ones(ccalibration.shape,dtype=int)
-        mccalibration = fluxcal
-
 
         fibercorr = dict()
         fibercorr_comments = dict()
@@ -1244,11 +1246,22 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             medscale = np.median(scale[badfiber==0])
             rmscorr = 1.4*np.median(np.abs(scale[badfiber==0]-medscale))
             log.info("iter {} mean median rms scale = {:4.3f} {:4.3f} {:4.3f}".format(iteration,mscale,medscale,rmscorr))
-            bad=(np.abs(scale-medscale)>3*rmscorr)
+            if nsig_flux_scale>0 :
+                bad=(np.abs(scale-medscale)> nsig_flux_scale*rmscorr)
+            else :
+                bad=np.repeat(False,scale.size)
             if np.sum(bad)>0 :
                 good=~bad
-                log.info("iter {} use {} stars, discarding 3 sigma outlier stars with medcorr = {}".format(iteration,np.sum(good),scale[bad]))
+                log.info("iter {} use {} stars, discarding {} sigma outlier stars with medcorr = {}".format(iteration,np.sum(good),nsig_flux_scale,scale[bad]))
                 mscale=1./np.mean(1./scale[good][badfiber[good]==0])
+                newly_bad = bad&(badfiber==0)&(np.abs(scale-1)>0.05)
+                if np.sum(newly_bad)>0 :
+                    log.info("Newly bad fiber(s) at scale(s) = {}".format(list(scale[newly_bad])))
+                    i=np.argmax(np.abs(scale[newly_bad]-1))
+                    new_badfiber_index = np.where(newly_bad)[0][i]
+                    log.info("Set worst fiber ({}) as badfiber".format(new_badfiber_index))
+                    badfiber[new_badfiber_index] = 1
+
             else :
                 log.info("iter {} use {} stars".format(iteration,np.sum(badfiber==0)))
 
@@ -1353,14 +1366,18 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     fibercorr["PSF_TO_FIBER_FLUX"]=psf_to_fiber_flux_correction(frame.fibermap,exposure_seeing_fwhm)
     fibercorr_comments["PSF_TO_FIBER_FLUX"]="multiplication correction to apply to get the fiber flux spectrum"
 
+    # save information about the standard stars used in the fit
+    stdstar_fibermap = stdstars.fibermap[badfiber==0]
+    #log.info("number of stars used in fit = {}".format(len(stdstar_fibermap)))
+
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration, fibercorr=fibercorr)
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration, fibercorr=fibercorr, stdstar_fibermap=stdstar_fibermap)
 
 
 
 class FluxCalib(object):
     def __init__(self, wave, calib, ivar, mask, meancalib=None,
-                 fibercorr=None, fibercorr_comments=None):
+                 fibercorr=None, fibercorr_comments=None, stdstar_fibermap=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -1371,6 +1388,7 @@ class FluxCalib(object):
             meancalib : 1D[nwave] mean convolved calibration (optional)
             fibercorr : dictionary of 1D arrays of size nspec (optional)
             fibercorr_comments : dictionnary of string (explaining the fibercorr)
+            stdstar_fibermap : table with the fibermap of the std stars actually used
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
@@ -1391,7 +1409,7 @@ class FluxCalib(object):
         self.meancalib = meancalib
         self.fibercorr = fibercorr
         self.fibercorr_comments= fibercorr_comments
-
+        self.stdstar_fibermap = stdstar_fibermap
         self.meta = dict(units='photons/(erg/s/cm^2)')
 
     def __repr__(self):
@@ -1490,7 +1508,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
 
     # Unpack model
     exptime = frame.meta['EXPTIME']
-    
+
     # Standard stars
     stdfibers = np.where(isStdStar(frame.fibermap))[0]
     stdstars = frame[stdfibers]

@@ -226,7 +226,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     # #-----
     # #- Did it work?
-    # #- (this combination of fibermap, simspec, and zbest is a pain)
+    # #- (this combination of fibermap, simspec, and redrock is a pain)
     expid = 2
     fmfile = io.findfile('fibermap', night=night, expid=expid)
     fibermap = io.read_fibermap(fmfile)
@@ -244,13 +244,13 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     num_missing = 0
     for pix in pixels:
-        zfile = io.findfile('zbest', groupname=pix)
+        zfile = io.findfile('redrock', groupname=pix)
         if not os.path.exists(zfile):
             log.error('Missing {}'.format(zfile))
             num_missing += 1
 
     if num_missing > 0:
-        log.critical('{} zbest files missing'.format(num_missing))
+        log.critical('{} redrock files missing'.format(num_missing))
         sys.exit(1)
 
     print()
@@ -258,22 +258,22 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Pixel     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for pix in pixels:
-        zfile = io.findfile('zbest', groupname=pix)
+        zfile = io.findfile('redrock', groupname=pix)
         if not os.path.exists(zfile):
             log.error('Missing {}'.format(zfile))
             continue
 
         zfx = fits.open(zfile, memmap=False)
-        zbest = zfx['ZBEST'].data
-        for i in range(len(zbest['Z'])):
-            objtype = zbest['SPECTYPE'][i]
-            z, zwarn = zbest['Z'][i], zbest['ZWARN'][i]
+        redrock = zfx['REDSHIFTS'].data
+        for i in range(len(redrock['Z'])):
+            objtype = redrock['SPECTYPE'][i]
+            z, zwarn = redrock['Z'][i], redrock['ZWARN'][i]
 
-            j = np.where(fibermap['TARGETID'] == zbest['TARGETID'][i])[0][0]
+            j = np.where(fibermap['TARGETID'] == redrock['TARGETID'][i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
             oiiflux = 0.0
             if truetype == 'ELG':
-                k = np.where(elginfo['TARGETID'] == zbest['TARGETID'][i])[0][0]
+                k = np.where(elginfo['TARGETID'] == redrock['TARGETID'][i])[0][0]
                 oiiflux = elginfo['OIIFLUX'][k]
 
             truez = siminfo['REDSHIFT'][j]

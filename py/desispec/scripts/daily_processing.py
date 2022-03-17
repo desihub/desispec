@@ -11,16 +11,21 @@ import glob
 
 ## Import some helper functions, you can see their definitions by uncomenting the bash shell command
 from desispec.workflow.tableio import load_tables, write_tables, write_table
-from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, get_printable_banner
-from desispec.workflow.timing import during_operating_hours, what_night_is_it, nersc_start_time, nersc_end_time
-from desispec.workflow.exptable import default_exptypes_for_exptable, get_exposure_table_column_defs, validate_badamps, \
-                                       get_exposure_table_path, get_exposure_table_name, summarize_exposure
-from desispec.workflow.proctable import default_exptypes_for_proctable, get_processing_table_path, get_processing_table_name, erow_to_prow
+from desispec.workflow.utils import verify_variable_with_environment, pathjoin, listpath, \
+                                    get_printable_banner, sleep_and_report
+from desispec.workflow.timing import during_operating_hours, what_night_is_it
+from desispec.workflow.exptable import default_obstypes_for_exptable, get_exposure_table_column_defs, \
+    get_exposure_table_path, get_exposure_table_name, summarize_exposure
+from desispec.workflow.proctable import default_obstypes_for_proctable, \
+                                        get_processing_table_path, \
+                                        get_processing_table_name, \
+                                        erow_to_prow, default_prow
 from desispec.workflow.procfuncs import parse_previous_tables, flat_joint_fit, arc_joint_fit, get_type_and_tile, \
                                         science_joint_fit, define_and_assign_dependency, create_and_submit, \
                                         update_and_recurvsively_submit, checkfor_and_submit_joint_job
 from desispec.workflow.queue import update_from_queue, any_jobs_not_complete
-from desispec.io.util import difference_camwords, parse_badamps
+from desispec.io.util import difference_camwords, parse_badamps, validate_badamps
+
 
 def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path=None, path_to_data=None,
                              expobstypes=None, procobstypes=None, z_submit_types=None, camword=None, badcamword=None,
@@ -100,13 +105,13 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Define the obstypes to process
     if procobstypes is None:
-        procobstypes = default_exptypes_for_proctable()
+        procobstypes = default_obstypes_for_proctable()
     elif isinstance(procobstypes, str):
         procobstypes = procobstypes.split(',')
 
     ## Define the obstypes to save information for in the exposure table
     if expobstypes is None:
-        expobstypes = default_exptypes_for_exptable()
+        expobstypes = default_obstypes_for_exptable()
     elif isinstance(expobstypes, str):
         expobstypes = expobstypes.split(',')
 
@@ -176,23 +181,18 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
         exps_to_ignore = np.sort(np.array(exps_to_ignore).astype(int))
         print(f"\nReceived exposures to ignore: {exps_to_ignore}")
         exps_to_ignore = set(exps_to_ignore)
-        
-    ## Adjust wait times if simulating things
-    speed_modifier = 1
-    if dry_run:
-        speed_modifier = 0.1
 
     ## Get context specific variable values
-    nersc_start = nersc_start_time(night=true_night)
-    nersc_end = nersc_end_time(night=true_night)
     colnames, coltypes, coldefaults = get_exposure_table_column_defs(return_default_values=True)
 
     ## Define where to find the data
     path_to_data = verify_variable_with_environment(var=path_to_data,var_name='path_to_data', env_name='DESI_SPECTRO_DATA')
     specprod = verify_variable_with_environment(var=specprod,var_name='specprod',env_name='SPECPROD')
 
-    ## Define the files to look for
-    file_glob = os.path.join(path_to_data, str(night), '*', 'checksum-*')
+    ## Define the naming scheme for the raw data
+    ## Manifests (describing end of cals, etc.) don't have a data file, so search for those separately
+    data_glob = os.path.join(path_to_data, str(night), '*', 'desi-*.fit*')
+    manifest_glob = os.path.join(path_to_data, str(night), '*', 'manifest_*.json')
 
     ## Determine where the exposure table will be written
     if exp_table_path is None:
@@ -221,15 +221,19 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
 
     ## Get relevant data from the tables
     all_exps = set(etable['EXPID'])
-    arcs,flats,sciences, arcjob,flatjob, \
-    curtype,lasttype, curtile,lasttile, internal_id = parse_previous_tables(etable, ptable, night)
+    arcs, flats, sciences, calibjobs, curtype, lasttype, \
+    curtile, lasttile, internal_id = parse_previous_tables(etable, ptable, night)
+    do_bias = ('bias' in procobstypes or 'dark' in procobstypes)
 
     ## While running on the proper night and during night hours,
     ## or doing a dry_run or override_night, keep looping
     while ( (night == what_night_is_it()) and during_operating_hours(dry_run=dry_run) ) or ( override_night is not None ):
         ## Get a list of new exposures that have been found
         print(f"\n\n\nPreviously known exposures: {all_exps}")
-        located_exps = set(sorted([int(os.path.basename(os.path.dirname(fil))) for fil in glob.glob(file_glob)]))
+        data_exps = set(sorted([int(os.path.basename(os.path.dirname(fil))) for fil in glob.glob(data_glob)]))
+        manifest_exps = set(sorted([int(os.path.basename(os.path.dirname(fil))) for fil in glob.glob(manifest_glob)]))
+        located_exps = data_exps.union(manifest_exps)
+
         new_exps = located_exps.difference(all_exps)
         all_exps = located_exps # i.e. new_exps.union(all_exps)
         print(f"\nNew exposures: {new_exps}\n\n")
@@ -255,17 +259,24 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             if erow is None:
                 continue
             elif type(erow) is str:
+                writeout = False
                 if exp in exps_to_ignore:
                     print(f"Located {erow} in exposure {exp}, but the exposure was listed in the expids to ignore. Ignoring this.")
-                elif erow == 'endofarcs' and arcjob is None and 'arc' in procobstypes:
+                elif erow == 'endofarcs' and calibjobs['psfnight'] is None and 'arc' in procobstypes:
                     print("\nLocated end of arc calibration sequence flag. Processing psfnight.\n")
-                    ptable, arcjob, internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run_level, queue=queue)
-                elif erow == 'endofflats' and flatjob is None and 'flat' in procobstypes:
+                    ptable, calibjobs['psfnight'], internal_id = arc_joint_fit(ptable, arcs, internal_id, dry_run=dry_run_level, queue=queue)
+                    writeout = True
+                elif erow == 'endofflats' and calibjobs['nightlyflat'] is None and 'flat' in procobstypes:
                     print("\nLocated end of long flat calibration sequence flag. Processing nightlyflat.\n")
-                    ptable, flatjob, internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run_level, queue=queue)
-                elif 'short' in erow and flatjob is None:
+                    ptable, calibjobs['nightlyflat'], internal_id = flat_joint_fit(ptable, flats, internal_id, dry_run=dry_run_level, queue=queue)
+                    writeout = True
+                elif 'short' in erow and calibjobs['nightlyflat'] is None:
                     print("\nLocated end of short flat calibration flag. Removing flats from list for nightlyflat processing.\n")
                     flats = []
+                if writeout and dry_run_level < 3:
+                    write_tables([ptable], tablenames=[proc_table_pathname])
+                    sleep_and_report(2, message_suffix=f"after joint fit", dry_run=dry_run)
+                del writeout
                 continue
             else:
                 ## Else it's a real row so start processing it
@@ -275,52 +286,108 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             erow['BADAMPS'] = badamps
             unproc = False
             if exp in exps_to_ignore:
-                print("\n{} given as exposure id to ignore. Not processing.".format(exp))
+                print(f"\n{exp} given as exposure id to ignore. Not processing.")
                 erow['LASTSTEP'] = 'ignore'
                 # erow['EXPFLAG'] = np.append(erow['EXPFLAG'], )
                 unproc = True
             elif erow['LASTSTEP'] == 'ignore':
-                print("\n{} identified by the pipeline as something to ignore. Not processing.".format(exp))
+                print(f"\n{exp} identified by the pipeline as something to ignore. Not processing.")
                 unproc = True
             elif erow['OBSTYPE'] not in procobstypes:
-                print("\n{} not in obstypes to process: {}. Not processing.".format(erow['OBSTYPE'], procobstypes))
+                print(f"\n{erow['OBSTYPE']} not in obstypes to process: {procobstypes}. Not processing.")
                 unproc = True
             elif str(erow['OBSTYPE']).lower() == 'arc' and float(erow['EXPTIME']) > 8.0:
                 print("\nArc exposure with EXPTIME greater than 8s. Not processing.")
+                unproc = True
+            elif str(erow['OBSTYPE']).lower() == 'dark' and np.abs(float(erow['EXPTIME'])-300.) > 1:
+                print("\nDark exposure with EXPTIME not consistent with 300s. Not processing.")
+                unproc = True
+            elif str(erow['OBSTYPE']).lower() == 'dark' and calibjobs['ccdcalib'] is not None:
+                print("\nDark exposure found, but already proocessed dark with" +
+                      f" expID {calibjobs['ccdcalib']['EXPID']}. Skipping this one.")
                 unproc = True
 
             print(f"\nFound: {erow}")
             etable.add_row(erow)
             if unproc:
                 unproc_table.add_row(erow)
+                sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
+                if dry_run_level < 3:
+                    write_tables([etable, unproc_table], tablenames=[exp_table_pathname, unproc_table_pathname])
                 continue
 
             curtype,curtile = get_type_and_tile(erow)
 
+            if lasttype is None and curtype != 'dark' and do_bias:
+                print("\nNo dark found at the beginning of the night."
+                      + "Submitting nightlybias before processing exposures.\n")
+                prow = default_prow()
+                prow['INTID'] = internal_id
+                prow['OBSTYPE'] = 'zero'
+                internal_id += 1
+                prow['JOBDESC'] = 'nightlybias'
+                prow['NIGHT'] = night
+                prow['CALIBRATOR'] = 1
+                prow['PROCCAMWORD'] = finalcamword
+                prow = create_and_submit(prow, dry_run=dry_run_level,
+                                         queue=queue,
+                                         strictly_successful=True,
+                                         check_for_outputs=check_for_outputs,
+                                         resubmit_partial_complete=resubmit_partial_complete)
+                calibjobs['nightlybias'] = prow.copy()
+                ## Add the processing row to the processing table
+                ptable.add_row(prow)
+                ## Write out the processing table
+                if dry_run_level < 3:
+                    write_tables([ptable], tablenames=[proc_table_pathname])
+                    sleep_and_report(2, message_suffix=f"after nightlybias",
+                                     dry_run=dry_run)
+
             if lasttype is not None and ((curtype != lasttype) or (curtile != lasttile)):
-                ptable, arcjob, flatjob, \
-                sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                                      lasttype, internal_id, dry_run=dry_run_level,
-                                                                      queue=queue, strictly_successful=False,
-                                                                      check_for_outputs=check_for_outputs,
-                                                                      resubmit_partial_complete=resubmit_partial_complete,
-                                                                      z_submit_types=z_submit_types)
+                old_iid = internal_id
+                ptable, calibjobs, sciences, internal_id \
+                    = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
+                                                    lasttype, internal_id,
+                                                    dry_run=dry_run_level,
+                                                    queue=queue,
+                                                    strictly_successful=True,
+                                                    check_for_outputs=check_for_outputs,
+                                                    resubmit_partial_complete=resubmit_partial_complete,
+                                                    z_submit_types=z_submit_types)
+                ## if internal_id changed that means we submitted a joint job
+                ## so lets write that out and pause
+                if (internal_id > old_iid) and (dry_run_level < 3):
+                    write_tables([ptable], tablenames=[proc_table_pathname])
+                    sleep_and_report(2, message_suffix=f"after joint fit", dry_run=dry_run)
+                del old_iid
 
             prow = erow_to_prow(erow)
             prow['INTID'] = internal_id
             internal_id += 1
-            prow['JOBDESC'] = prow['OBSTYPE']
-            prow = define_and_assign_dependency(prow, arcjob, flatjob)
+            if prow['OBSTYPE'] == 'dark':
+                prow['JOBDESC'] = 'ccdcalib'
+            else:
+                prow['JOBDESC'] = prow['OBSTYPE']
+            prow = define_and_assign_dependency(prow, calibjobs)
             print(f"\nProcessing: {prow}\n")
             prow = create_and_submit(prow, dry_run=dry_run_level, queue=queue,
-                                     strictly_successful=False, check_for_outputs=check_for_outputs,
+                                     strictly_successful=True, check_for_outputs=check_for_outputs,
                                      resubmit_partial_complete=resubmit_partial_complete)
+
+            ## If processed a dark, assign that to the dark job
+            if curtype == 'dark':
+                prow['CALIBRATOR'] = 1
+                calibjobs['ccdcalib'] = prow.copy()
+
+            ## Add the processing row to the processing table
             ptable.add_row(prow)
 
             ## Note: Assumption here on number of flats
-            if curtype == 'flat' and flatjob is None and int(erow['SEQTOT']) < 5:
+            if curtype == 'flat' and calibjobs['nightlyflat'] is None \
+                    and int(erow['SEQTOT']) < 5 \
+                    and np.abs(float(erow['EXPTIME'])-120.) < 1.:
                 flats.append(prow)
-            elif curtype == 'arc' and arcjob is None:
+            elif curtype == 'arc' and calibjobs['psfnight'] is None:
                 arcs.append(prow)
             elif curtype == 'science' and prow['LASTSTEP'] != 'skysub':
                 sciences.append(prow)
@@ -332,38 +399,41 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
             sys.stdout.flush()
             sys.stderr.flush()
 
-            time.sleep(10*speed_modifier)
-            write_tables([etable, ptable, unproc_table],
-                         tablenames=[exp_table_pathname, proc_table_pathname, unproc_table_pathname])
+            if dry_run_level < 3:
+                write_tables([etable, ptable], tablenames=[exp_table_pathname, proc_table_pathname])
+            sleep_and_report(2, message_suffix=f"after exposure", dry_run=dry_run)
 
-        print("\nReached the end of curent iteration of new exposures.")
-        print("Waiting {}s before looking for more new data".format(data_cadence_time*speed_modifier))
-        time.sleep(data_cadence_time*speed_modifier)
+        print("\nReached the end of current iteration of new exposures.")
+        sleep_and_report(data_cadence_time, message_suffix=f"before looking for more new data",
+                         dry_run=(dry_run and (override_night is not None) and (not continue_looping_debug)))
 
         if len(ptable) > 0:
-            ptable = update_from_queue(ptable, start_time=nersc_start, end_time=nersc_end, dry_run=dry_run_level)
-            # ptable, nsubmits = update_and_recurvsively_submit(ptable,start_time=nersc_start,end_time=nersc_end,
+            ptable = update_from_queue(ptable, dry_run=dry_run_level)
+            # ptable, nsubmits = update_and_recurvsively_submit(ptable,
             #                                                   ptab_name=proc_table_pathname, dry_run=dry_run_level)
 
             ## Exposure table doesn't change in the interim, so no need to re-write it to disk
-            write_table(ptable, tablename=proc_table_pathname)
-            time.sleep(30*speed_modifier)
+            if dry_run_level < 3:
+                write_table(ptable, tablename=proc_table_pathname)
+            sleep_and_report(10, message_suffix=f"after updating queue information", dry_run=dry_run)
 
     ## Flush the outputs
     sys.stdout.flush()
     sys.stderr.flush()
     ## No more data coming in, so do bottleneck steps if any apply
-    ptable, arcjob, flatjob, \
-    sciences, internal_id = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, arcjob, flatjob,
-                                                          lasttype, internal_id, dry_run=dry_run_level,
-                                                          queue=queue, strictly_successful=False,
-                                                          check_for_outputs=check_for_outputs,
-                                                          resubmit_partial_complete=resubmit_partial_complete,
-                                                          z_submit_types=z_submit_types)
+    ptable, calibjobs, sciences, internal_id \
+        = checkfor_and_submit_joint_job(ptable, arcs, flats, sciences, calibjobs,
+                                        lasttype, internal_id,
+                                        dry_run=dry_run_level, queue=queue,
+                                        strictly_successful=True,
+                                        check_for_outputs=check_for_outputs,
+                                        resubmit_partial_complete=resubmit_partial_complete,
+                                        z_submit_types=z_submit_types)
 
     ## All jobs now submitted, update information from job queue and save
-    ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end, dry_run=dry_run_level)
-    write_table(ptable, tablename=proc_table_pathname)
+    ptable = update_from_queue(ptable, dry_run=dry_run_level)
+    if dry_run_level < 3:
+        write_table(ptable, tablename=proc_table_pathname)
 
     print(f"Completed submission of exposures for night {night}.")
 
@@ -380,14 +450,17 @@ def daily_processing_manager(specprod=None, exp_table_path=None, proc_table_path
     # ii,nsubmits = 0, 0
     # while ii < 4 and any_jobs_not_complete(ptable['STATUS']):
     #     print(f"Starting iteration {ii} of queue updating and resubmissions of failures.")
-    #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits, start_time=nersc_start,end_time=nersc_end,
+    #     ptable, nsubmits = update_and_recurvsively_submit(ptable, submits=nsubmits,
     #                                                       ptab_name=proc_table_pathname, dry_run=dry_run_level)
-    #     write_table(ptable, tablename=proc_table_pathname)
+    #     if dry_run_level < 3:
+    #          write_table(ptable, tablename=proc_table_pathname)
     #     if any_jobs_not_complete(ptable['STATUS']):
-    #         time.sleep(queue_cadence_time*speed_modifier)
+    #         sleep_and_report(queue_cadence_time, message_suffix=f"after resubmitting job to queue",
+    #                          dry_run=(dry_run and (override_night is not None) and not (continue_looping_debug)))
     #
-    #     ptable = update_from_queue(ptable,start_time=nersc_start,end_time=nersc_end)
-    #     write_table(ptable, tablename=proc_table_pathname)
+    #     ptable = update_from_queue(ptable, dry_run=dry_run_level)
+    #     if dry_run_level < 3:
+    #          write_table(ptable, tablename=proc_table_pathname)
     #     ## Flush the outputs
     #     sys.stdout.flush()
     #     sys.stderr.flush()

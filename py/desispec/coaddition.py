@@ -22,32 +22,169 @@ from desispec.spectra import Spectra
 from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.specscore import compute_coadd_scores
+from desispec.util import ordered_unique
 
-def coadd_fibermap(fibermap) :
+#- Fibermap columns that come from targeting or MTL files
+fibermap_target_cols = (
+    'TARGETID',
+    'TARGET_RA',
+    'TARGET_DEC',
+    'PMRA',
+    'PMDEC',
+    'REF_EPOCH',
+    'LAMBDA_REF',
+    'FA_TARGET',
+    'FA_TYPE',
+    'OBJTYPE',
+    'NUMTARGET',
+    'OBSCONDITIONS',
+    'MORPHTYPE',
+    'FLUX_G',
+    'FLUX_R',
+    'FLUX_Z',
+    'FLUX_IVAR_G',
+    'FLUX_IVAR_R',
+    'FLUX_IVAR_Z',
+    'REF_ID',
+    'REF_CAT',
+    'GAIA_PHOT_G_MEAN_MAG',
+    'GAIA_PHOT_BP_MEAN_MAG',
+    'GAIA_PHOT_RP_MEAN_MAG',
+    'PARALLAX',
+    'EBV',
+    'FLUX_W1',
+    'FLUX_W2',
+    'FIBERFLUX_G',
+    'FIBERFLUX_R',
+    'FIBERFLUX_Z',
+    'FIBERTOTFLUX_G',
+    'FIBERTOTFLUX_R',
+    'FIBERTOTFLUX_Z',
+    'MASKBITS',
+    'SERSIC',
+    'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2',
+    'PHOTSYS',
+    'PRIORITY_INIT',
+    'NUMOBS_INIT',
+    'RELEASE',
+    'BRICKID',
+    'BRICKNAME', 'BRICK_OBJID',
+    'BLOBDIST',
+    'FIBERFLUX_IVAR_G',
+    'FIBERFLUX_IVAR_R',
+    'FIBERFLUX_IVAR_Z',
+    'CMX_TARGET',
+    'SV0_TARGET',
+    'SV1_TARGET',
+    'SV2_TARGET',
+    'SV3_TARGET',
+    'DESI_TARGET',
+    'BGS_TARGET',
+    'MWS_TARGET',
+    'SCND_TARGET',
+    'HPXPIXEL',
+)
+
+#- PRIORITY could change between tiles; SUBPRIORITY won't but keep 'em together
+fibermap_mtl_cols = (
+    'PRIORITY',
+    'SUBPRIORITY',
+)
+
+#- Fibermap columns that were added by fiberassign
+#- ... same per target, regardless of assignment
+fibermap_fiberassign_target_cols = (
+    'FA_TARGET', 'FA_TYPE', 'OBJTYPE',
+    )
+#- ... varies per assignment
+fibermap_fiberassign_cols = (
+    'PETAL_LOC', 'DEVICE_LOC', 'LOCATION', 'FIBER', 'FIBERSTATUS',
+    'FIBERASSIGN_X', 'FIBERASSIGN_Y',
+    'LAMBDA_REF', 'PLATE_RA', 'PLATE_DEC',
+    )
+
+#- Fibermap columns added frome the platemaker coordinates file
+fibermap_coords_cols = (
+    'NUM_ITER', 'FIBER_X', 'FIBER_Y', 'DELTA_X', 'DELTA_Y',
+    'FIBER_RA', 'FIBER_DEC',
+    )
+
+#- Fibermap columns with exposure metadata
+fibermap_exp_cols = (
+    'NIGHT', 'EXPID', 'MJD', 'TILEID', 'EXPTIME'
+    )
+
+#- Fibermap columns added by flux calibration
+fibermap_cframe_cols = (
+    'PSF_TO_FIBER_SPECFLUX',
+    )
+
+#- Columns to include in the per-exposure EXP_FIBERMAP
+fibermap_perexp_cols = \
+    ('TARGETID',) + \
+    fibermap_mtl_cols + \
+    fibermap_exp_cols + \
+    fibermap_fiberassign_cols + \
+    fibermap_coords_cols + fibermap_cframe_cols
+
+def coadd_fibermap(fibermap, onetile=False):
+    """
+    Coadds fibermap
+
+    Args:
+        fibermap (Table or ndarray): fibermap of individual exposures
+
+    Options:
+        onetile (bool): this is a coadd of a single tile, not across tiles
+
+    Returns: (coadded_fibermap, exp_fibermap) Tables
+
+
+    coadded_fibermap contains the coadded_fibermap for the columns that can
+    be coadded, while exp_fibermap is the subset of columns of the original
+    fibermap that can't be meaningfully coadded because they are per-exposure
+    quantities like FIBER_X.
+
+    If onetile is True, the coadded_fibermap includes additional columns like
+    MEAN_FIBER_X that are meaningful if coadding a single tile, but not if
+    coadding across tiles.
+    """
 
     log = get_logger()
     log.debug("'coadding' fibermap")
 
-    targets = np.unique(fibermap["TARGETID"])
-    ntarget = targets.size
+    if onetile:
+        ntile = len(np.unique(fibermap['TILEID']))
+        if ntile != 1:
+            msg = f'input has {ntile} tiles, but onetile=True option'
+            log.error(msg)
+            raise ValueError(msg)
 
-    jj=np.zeros(ntarget,dtype=int)
-    for i,tid in enumerate(targets) :
-        jj[i]=np.where(fibermap["TARGETID"]==tid)[0][0]
-    tfmap=fibermap[jj]
+    #- Get TARGETIDs, preserving order in which they first appear
+    targets, ii = ordered_unique(fibermap["TARGETID"], return_index=True)
+    tfmap = fibermap[ii]
+    assert np.all(targets == tfmap['TARGETID'])
+    ntarget = targets.size
 
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
     tfmap['COADD_EXPTIME'] = np.zeros(len(tfmap), dtype=np.float32) - 1
+    tfmap['COADD_NUMNIGHT'] = np.zeros(len(tfmap), dtype=np.int16) - 1
+    tfmap['COADD_NUMTILE'] = np.zeros(len(tfmap), dtype=np.int16) - 1
 
-    # smarter values for some columns
+    # some cols get combined into mean or rms
     mean_cols = [
         'DELTA_X', 'DELTA_Y',
-        'FIBER_X', 'FIBER_Y',
         'FIBER_RA', 'FIBER_DEC',
-        'FIBERASSIGN_X', 'FIBERASSIGN_Y'
+        'PSF_TO_FIBER_SPECFLUX',
         ]
-    rms_cols = ['DELTA_X', 'DELTA_Y']  #- rms_cols must also be in mean_cols
+    if onetile:
+        mean_cols.extend(['FIBER_X', 'FIBER_Y'])
+
+    #- rms_cols and std_cols must also be in mean_cols
+    rms_cols = ['DELTA_X', 'DELTA_Y']
+    std_cols = ['FIBER_RA', 'FIBER_DEC']
+
     for k in mean_cols:
         if k in fibermap.colnames :
             if k.endswith('_RA') or k.endswith('_DEC'):
@@ -58,33 +195,39 @@ def coadd_fibermap(fibermap) :
                 xx = Column(np.zeros(ntarget, dtype=dtype))
                 tfmap.add_column(xx,name='MEAN_'+k)
             if k in rms_cols:
-                xx = Column(np.zeros(ntarget, dtype=dtype))
+                xx = Column(np.zeros(ntarget, dtype=np.float32))
                 tfmap.add_column(xx,name='RMS_'+k)
+            if k in std_cols:
+                xx = Column(np.zeros(ntarget, dtype=np.float32))
+                tfmap.add_column(xx,name='STD_'+k)
 
             tfmap.remove_column(k)
 
-    first_last_cols = ['NIGHT','EXPID','TILEID','SPECTROID','FIBER','MJD']
-    for k in first_last_cols:
-        if k in fibermap.colnames :
-            if k in ['MJD']:
-                dtype = np.float32
-            else:
-                dtype = np.int32
-            if not 'FIRST_'+k in tfmap.dtype.names :
-                xx = Column(np.arange(ntarget, dtype=dtype))
-                tfmap.add_column(xx,name='FIRST_'+k)
-            if not 'LAST_'+k in tfmap.dtype.names :
-                xx = Column(np.arange(ntarget, dtype=dtype))
-                tfmap.add_column(xx,name='LAST_'+k)
-            if not 'NUM_'+k in tfmap.dtype.names :
-                xx = Column(np.arange(ntarget, dtype=np.int16))
-                tfmap.add_column(xx,name='NUM_'+k)
+    #- TODO: should any of these be retained?
+    # first_last_cols = ['NIGHT','EXPID','TILEID','SPECTROID','FIBER','MJD']
+    # for k in first_last_cols:
+    #     if k in fibermap.colnames :
+    #         if k in ['MJD']:
+    #             dtype = np.float32
+    #         else:
+    #             dtype = np.int32
+    #         if not 'FIRST_'+k in tfmap.dtype.names :
+    #             xx = Column(np.arange(ntarget, dtype=dtype))
+    #             tfmap.add_column(xx,name='FIRST_'+k)
+    #         if not 'LAST_'+k in tfmap.dtype.names :
+    #             xx = Column(np.arange(ntarget, dtype=dtype))
+    #             tfmap.add_column(xx,name='LAST_'+k)
+    #         if not 'NUM_'+k in tfmap.dtype.names :
+    #             xx = Column(np.arange(ntarget, dtype=np.int16))
+    #             tfmap.add_column(xx,name='NUM_'+k)
+
+    tfmap.rename_column('FIBERSTATUS', 'COADD_FIBERSTATUS')
 
     for i,tid in enumerate(targets) :
         jj = fibermap["TARGETID"]==tid
 
         #- coadded FIBERSTATUS = bitwise AND of input FIBERSTATUS
-        tfmap['FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap['FIBERSTATUS'][jj])
+        tfmap['COADD_FIBERSTATUS'][i] = np.bitwise_and.reduce(fibermap['FIBERSTATUS'][jj])
 
         #- Only FIBERSTATUS=0 were included in the coadd
         fiberstatus_nonamp_bits = get_all_nonamp_fiberbitmask_val()
@@ -94,6 +237,14 @@ def coadd_fibermap(fibermap) :
         allamps_flagged = ( (targ_fibstatuses & fiberstatus_amp_bits) == fiberstatus_amp_bits )
         good_coadds = np.bitwise_not( nonamp_fiberstatus_flagged | allamps_flagged )
         tfmap['COADD_NUMEXP'][i] = np.count_nonzero(good_coadds)
+
+        # Note: NIGHT and TILEID may not be present when coadding previously
+        # coadded spectra.
+        if 'NIGHT' in fibermap.colnames:
+            tfmap['COADD_NUMNIGHT'][i] = len(np.unique(fibermap['NIGHT'][jj][good_coadds]))
+        if 'TILEID' in fibermap.colnames:
+            tfmap['COADD_NUMTILE'][i] = len(np.unique(fibermap['TILEID'][jj][good_coadds]))
+        
         if 'EXPTIME' in fibermap.colnames :
             tfmap['COADD_EXPTIME'][i] = np.sum(fibermap['EXPTIME'][jj][good_coadds])
         for k in mean_cols:
@@ -104,40 +255,85 @@ def coadd_fibermap(fibermap) :
         for k in rms_cols:
             if k in fibermap.colnames :
                 vals=fibermap[k][jj]
-                # RMS includes mean offset, not same as std
-                tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2))
+                # RMS includes mean offset, not same as STD
+                tfmap['RMS_'+k][i] = np.sqrt(np.mean(vals**2)).astype(np.float32)
 
-        for k in first_last_cols:
-            if k in fibermap.colnames :
+        #- STD of FIBER_RA, FIBER_DEC in arcsec, handling cos(dec) and RA wrap
+        if 'FIBER_RA' in fibermap.colnames:
+            dec = fibermap['TARGET_DEC'][jj][0]
+            vals = fibermap['FIBER_RA'][jj]
+            std = np.std(vals+360.0) * 3600 / np.cos(np.radians(dec)) 
+            tfmap['STD_FIBER_RA'][i] = std
+
+        if 'FIBER_DEC' in fibermap.colnames:
+            vals = fibermap['FIBER_DEC'][jj]
+            tfmap['STD_FIBER_DEC'][i] = np.std(vals) * 3600
+
+        #- future proofing possibility of other STD cols
+        for k in std_cols:
+            if k in fibermap.colnames and k not in ('FIBER_RA', 'FIBER_DEC') :
                 vals=fibermap[k][jj]
-                tfmap['FIRST_'+k][i] = np.min(vals)
-                tfmap['LAST_'+k][i] = np.max(vals)
-                tfmap['NUM_'+k][i] = np.unique(vals).size
+                # STD removes mean offset, not same as RMS
+                tfmap['STD_'+k][i] = np.std(vals).astype(np.float32)
 
-        for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR','DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
+        #- TODO: see above, should any of these be retained?
+        # for k in first_last_cols:
+        #     if k in fibermap.colnames :
+        #         vals=fibermap[k][jj]
+        #         tfmap['FIRST_'+k][i] = np.min(vals)
+        #         tfmap['LAST_'+k][i] = np.max(vals)
+        #         tfmap['NUM_'+k][i] = np.unique(vals).size
+
+        for k in ['FIBER_RA_IVAR', 'FIBER_DEC_IVAR',
+                  'DELTA_X_IVAR', 'DELTA_Y_IVAR'] :
             if k in fibermap.colnames :
                 tfmap[k][i]=np.sum(fibermap[k][jj])
 
     #- Remove some columns that apply to individual exp but not coadds
     #- (even coadds of the same tile)
-    for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER']:
+    for k in ['NIGHT', 'EXPID', 'MJD', 'EXPTIME', 'NUM_ITER',
+            'PSF_TO_FIBER_SPECFLUX']:
         if k in tfmap.colnames:
             tfmap.remove_column(k)
 
-    return tfmap
+    #- Remove columns that don't apply to coadds across tiles
+    if not onetile:
+        for k in ['TILEID', 'FIBER', 'FIBER_X', 'FIBER_Y',
+                'PRIORITY', 'PETAL_RA', 'PETAL_DEC', 'LAMBDA_REF',
+                'FIBERASSIGN_X', 'FIBERASSIGN_Y',
+                'PETAL_LOC', 'DEVICE_LOC', 'LOCATION'
+                ]:
+            if k in tfmap.colnames:
+                tfmap.remove_column(k)
 
-def coadd(spectra, cosmics_nsig=0.) :
+    #- keep exposure-specific columns that are present in the input fibermap
+    ii = np.isin(fibermap_perexp_cols, fibermap.dtype.names)
+    keepcols = tuple(np.array(fibermap_perexp_cols)[ii])
+    if isinstance(fibermap, Table):
+        exp_fibermap = fibermap[keepcols].copy()
+    else:
+        exp_fibermap = Table(fibermap, copy=False)[keepcols].copy()
+
+    return tfmap, exp_fibermap
+
+def coadd(spectra, cosmics_nsig=0.0, onetile=False) :
     """
-    Coaddition the spectra for each target and each camera. The input spectra is modified.
+    Coadd spectra for each target and each camera, modifying input spectra obj.
 
     Args:
        spectra: desispec.spectra.Spectra object
 
     Options:
        cosmics_nsig: float, nsigma clipping threshold for cosmics rays
+       onetile: bool, if True, inputs are from a single tile
+
+    Notes: if `onetile` is True, additional tile-specific columns
+       like LOCATION and FIBER are included the FIBERMAP; otherwise
+       these are only in the EXP_FIBERMAP since for the same target they could
+       be different on different tiles.
     """
     log = get_logger()
-    targets = np.unique(spectra.fibermap["TARGETID"])
+    targets = ordered_unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
     log.debug("number of targets= {}".format(ntarget))
     for b in spectra.bands :
@@ -152,7 +348,12 @@ def coadd(spectra, cosmics_nsig=0.) :
         trdata=np.zeros((ntarget,spectra.resolution_data[b].shape[1],nwave),dtype=spectra.resolution_data[b].dtype)
 
         fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
-        good_fiberstatus = ( (spectra.fibermap["FIBERSTATUS"] & fiberstatus_bits) == 0 )
+        if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
+            fiberstatus = spectra.fibermap['FIBERSTATUS']
+        else:
+            fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
+
+        good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
         for i,tid in enumerate(targets) :
             jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 
@@ -247,11 +448,30 @@ def coadd(spectra, cosmics_nsig=0.) :
     else:
         orig_scores = None
 
-    spectra.fibermap=coadd_fibermap(spectra.fibermap)
+    spectra.fibermap, exp_fibermap = coadd_fibermap(spectra.fibermap, onetile=onetile)
+    spectra.exp_fibermap = exp_fibermap
     spectra.scores=None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
-def coadd_cameras(spectra,cosmics_nsig=0.) :
+
+def coadd_cameras(spectra, cosmics_nsig=0., onetile=False) :
+    """
+    Return coadd across both exposures and cameras
+
+    Args:
+       spectra: desispec.spectra.Spectra object
+
+    Options:
+       cosmics_nsig: float, nsigma clipping threshold for cosmics rays
+       onetile: bool, if True, inputs are from a single tile
+
+    If `onetile` is True, additional tile-specific columns
+    like LOCATION and FIBER are included the FIBERMAP; otherwise
+    these are only in the EXP_FIBERMAP since for the same target they could
+    be different on different tiles.
+
+    Note: unlike `coadd`, this does not modify the input spectra object
+    """
 
     #check_alignement_of_camera_wavelength(spectra)
 
@@ -272,19 +492,22 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
             wave=np.append(wave,spectra.wave[b][spectra.wave[b]>wave[-1]+tolerance])
     nwave=wave.size
 
-    # check alignment
+    # check alignment, caching band wavelength grid indices as we go
+    windict = {}
     number_of_overlapping_cameras=np.zeros(nwave)
     for b in spectra.bands :
-        windices=np.argmin((np.tile(wave,(spectra.wave[b].size,1))-np.tile(spectra.wave[b],(wave.size,1)).T)**2,axis=1)
-        dist=np.sqrt(np.max(spectra.wave[b] - wave[windices]))
-        log.debug("camera {} max dist= {}A".format(b,dist))
-        if dist > tolerance :
-            log.error("Cannot directly coadd the camera spectra because wavelength are not aligned, use --lin-step or --log10-step to resample to a common grid")
-            sys.exit(12)
+        imin = np.argmin(np.abs(spectra.wave[b][0] - wave))
+        windices = np.arange(imin, imin+len(spectra.wave[b]), dtype=int)
+        dwave = spectra.wave[b] - wave[windices]
+        if np.any(np.abs(dwave) > tolerance):
+            msg = "Input wavelength grids (band '{}') are not aligned. Use --lin-step or --log10-step to resample to a common grid.".format(b)
+            log.error(msg)
+            raise ValueError(msg)
         number_of_overlapping_cameras[windices] += 1
+        windict[b] = windices
 
     # targets
-    targets = np.unique(spectra.fibermap["TARGETID"])
+    targets = ordered_unique(spectra.fibermap["TARGETID"])
     ntarget=targets.size
     log.debug("number of targets= {}".format(ntarget))
 
@@ -312,12 +535,17 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
         log.debug("coadding band '{}'".format(b))
 
         # indices
-        windices=np.argmin((np.tile(wave,(spectra.wave[b].size,1))-np.tile(spectra.wave[b],(wave.size,1)).T)**2,axis=1)
+        windices = windict[b]
 
         band_ndiag = spectra.resolution_data[b].shape[1]
 
         fiberstatus_bits = get_all_fiberbitmask_with_amp(b)
-        good_fiberstatus = ( (spectra.fibermap["FIBERSTATUS"] & fiberstatus_bits) == 0 )
+        if 'FIBERSTATUS' in spectra.fibermap.dtype.names:
+            fiberstatus = spectra.fibermap['FIBERSTATUS']
+        else:
+            fiberstatus = spectra.fibermap['COADD_FIBERSTATUS']
+
+        good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
         for i,tid in enumerate(targets) :
             jj=np.where( (spectra.fibermap["TARGETID"]==tid) & good_fiberstatus )[0]
 
@@ -405,8 +633,9 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
 
     if 'COADD_NUMEXP' in spectra.fibermap.colnames:
         fibermap = spectra.fibermap
+        exp_fibermap = spectra.exp_fibermap
     else:
-        fibermap = coadd_fibermap(spectra.fibermap)
+        fibermap, exp_fibermap = coadd_fibermap(spectra.fibermap, onetile=onetile)
 
     bands=""
     for b in sbands :
@@ -417,8 +646,18 @@ def coadd_cameras(spectra,cosmics_nsig=0.) :
     else :
         dmask=None
 
-    res=Spectra(bands=[bands,],wave={bands:wave,},flux={bands:flux,},ivar={bands:ivar,},mask=dmask,resolution_data={bands:rdata,},
-                fibermap=fibermap,meta=spectra.meta,extra=spectra.extra,scores=None)
+    res = Spectra(
+            bands=[bands,],
+            wave={bands:wave,},
+            flux={bands:flux,},
+            ivar={bands:ivar,},
+            mask=dmask,
+            resolution_data={bands:rdata,},
+            fibermap=fibermap,
+            exp_fibermap=exp_fibermap,
+            meta=spectra.meta,
+            extra=spectra.extra,
+            scores=None)
 
     if spectra.scores is not None:
         orig_scores = spectra.scores.copy()

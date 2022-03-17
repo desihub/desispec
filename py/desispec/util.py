@@ -50,6 +50,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             input_time = max(input_time, os.stat(x).st_mtime)
 
     if err > 0:
+        log.critical("FAILED err={} {}".format(err, cmd))
         return err
 
     #- Check if outputs already exist and that their timestamp is after
@@ -440,32 +441,41 @@ def healpix_degrade_fixed(nside, pixel):
     return (subnside, subpixel)
 
 
-def parse_fibers(fiber_string) :
+def parse_int_args(arg_string, include_end=False) :
     """
-    Short func that parses a string containing a comma separated list of 
+    Short func that parses a string containing a comma separated list of
     integers, which can include ":" or ".." or "-" labeled ranges
 
     Args:
-        fiber_string (str) : list of integers or integer ranges
+        arg_string (str) : list of integers or integer ranges
+
+    Options:
+        include_end (bool): if True, include end-value in ranges
 
     Returns (array 1-D):
         1D numpy array listing all of the integers given in the list,
         including enumerations of ranges given.
 
-    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1,2,3,4
+    unless `include_end` is True, which then returns 1,2,3,4,5
     """
-    if fiber_string is None :
-        return np.array([])
+    if arg_string is None :
+        return np.array([], dtype=int)
     else:
-        fiber_string = str(fiber_string)
+        arg_string = str(arg_string)
 
-    if len(fiber_string.strip(' \t'))==0:
+    if len(arg_string.strip(' \t'))==0:
         return np.array([])
+
+    if include_end:
+        pad = 1
+    else:
+        pad = 0
 
     fibers=[]
 
     log = get_logger()
-    for sub in fiber_string.split(',') :
+    for sub in arg_string.split(',') :
         sub = sub.replace(' ','')
         if sub.isdigit() :
             fibers.append(int(sub))
@@ -477,11 +487,82 @@ def parse_fibers(fiber_string) :
                 tmp = sub.split(symbol)
                 if (len(tmp) == 2) and tmp[0].isdigit() and tmp[1].isdigit() :
                     match = True
-                    for f in range(int(tmp[0]),int(tmp[1])) :
+                    for f in range(int(tmp[0]),int(tmp[1])+pad) :
                         fibers.append(f)
 
         if not match:
-            log.warning("parsing error. Didn't understand {}".format(sub))
-            sys.exit(1)
+            msg = "parsing error. Didn't understand {}".format(sub)
+            log.error(msg)
+            raise ValueError(msg)
 
     return np.array(fibers)
+
+def parse_fibers(fiber_string, include_end=False) :
+    """
+    Short func that parses a string containing a comma separated list of
+    integers, which can include ":" or ".." or "-" labeled ranges
+
+    Args:
+        fiber_string (str) : list of integers or integer ranges
+
+    Options:
+        include_end (bool): if True, include end-value in ranges
+
+    Returns (array 1-D):
+        1D numpy array listing all of the integers given in the list,
+        including enumerations of ranges given.
+
+    Note: this follows python-style ranges, i,e, 1:5 or 1..5 returns 1, 2, 3, 4
+    unless `include_end` is True, which then returns 1,2,3,4,5
+    """
+    return parse_int_args(fiber_string, include_end)
+
+def ordered_unique(ar, return_index=False):
+    """Find the unique elements of an array in the order they first appear
+
+    Like numpy.unique, but preserves original order instead of sorting
+
+    Args:
+        ar: array-like data to find unique elements
+
+    Options:
+        return_index: if True also return indices in ar where items first appear
+    """
+    ar = np.asarray(ar)
+    unique, sortedidx = np.unique(ar, return_index=True)
+    ii = np.argsort(sortedidx)
+    indices = sortedidx[ii]
+    unique = ar[indices]
+
+    if return_index:
+        return unique, indices
+    else:
+        return unique
+
+#- Not yet used, but a snippet of code that might be useful
+#- e.g. for mapping TARGETID to the rows in which they appear
+def itemindices(a):
+    """
+    Return dict[key] -> list of indices i where a[i] == key
+
+    Args:
+        a : array-like of hashable values
+
+    Return dict[key] -> list of indices i where a[i] == key
+
+    The dict keys are inserted in the order that they first appear in a,
+    and the value lists of indices are sorted
+
+    e.g. itemindices([10,30,20,30]) -> {10: [0], 30: [1, 3], 20: [2]}
+    """
+    #- there is probably a more efficient way of doing this, but this code
+    #- can map 100k targetids in <50ms which is sufficient
+    idmap = dict()
+    for i, x in enumerate(a):
+        if x not in idmap:
+            idmap[x] = [i,]
+        else:
+            idmap[x].append(i)
+
+    return idmap
+

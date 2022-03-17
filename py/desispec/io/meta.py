@@ -18,9 +18,12 @@ from desiutil.log import get_logger
 from .util import healpix_subdirectory
 
 
-def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname=None,
-    nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
-    download=False, outdir=None, qaprod_dir=None):
+def findfile(filetype, night=None, expid=None, camera=None,
+        tile=None, groupname=None, nside=64,
+        band=None, spectrograph=None,
+        survey=None, faprogram=None,
+        rawdata_dir=None, specprod_dir=None,
+        download=False, outdir=None, qaprod_dir=None):
     """Returns location where file should be
 
     Args:
@@ -31,10 +34,12 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
         tile : integer tile (pointing) number
-        groupname : spectral grouping name (brick name or healpix pixel)
+        groupname : spectral grouping name (healpix pixel, tile "cumulative" or "pernight")
         nside : healpix nside
         band : one of 'b','r','z' identifying the camera band
         spectrograph : integer spectrograph number, 0-9
+        survey : e.g. sv1, sv3, main, special
+        faprogram : fiberassign program, e.g. dark, bright
 
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
@@ -56,14 +61,15 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         #
         raw = '{rawdata_dir}/{night}/{expid:08d}/desi-{expid:08d}.fits.fz',
         coordinates = '{rawdata_dir}/{night}/{expid:08d}/coordinates-{expid:08d}.fits',
-        fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        fiberassign = '{rawdata_dir}/{night}/{expid:08d}/fiberassign-{tile:06d}.fits.gz',
+        etc = '{rawdata_dir}/{night}/{expid:08d}/etc-{expid:08d}.json',
         #
         # preproc/
         # Note: fibermap files will eventually move to preproc.
         #
-        # fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
-        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
+        tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
         # Note: calib has been renamed to fluxcalib, but that has not propagated fully through the pipeline.
@@ -75,38 +81,53 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
         fluxcalib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
         frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
         psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
+        fitpsf='{specprod_dir}/exposures/{night}/{expid:08d}/fit-psf-{camera}-{expid:08d}.fits',
         qframe = '{specprod_dir}/exposures/{night}/{expid:08d}/qframe-{camera}-{expid:08d}.fits',
         sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits',
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
+        skycorr = '{specprod_dir}/exposures/{night}/{expid:08d}/skycorr-{camera}-{expid:08d}.fits',
+        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
+        fiberflatexp = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflatexp-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
+        calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
+        #  qa
+        exposureqa = '{specprod_dir}/exposures/{night}/{expid:08d}/exposure-qa-{expid:08d}.fits',
+        tileqa     = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.fits',
+        tileqapng  = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/tile-qa-{tile:d}-{nightprefix}{night}.png',
+        zmtl  = '{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/zmtl-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         #
         # calibnight/
         #
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
+        biasnight = '{specprod_dir}/calibnight/{night}/biasnight-{camera}-{night}.fits.gz',
+        badfibers =  '{specprod_dir}/calibnight/{night}/badfibers-{night}.csv',
+        badcolumns = '{specprod_dir}/calibnight/{night}/badcolumns-{camera}-{night}.csv',
         #
-        # spectra- hp based
+        # spectra- healpix based
         #
-        zcatalog='{specprod_dir}/zcatalog-{specprod}.fits',
-        coadd_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/coadd-{nside:d}-{groupname}.fits',
-        redrock_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/redrock-{nside:d}-{groupname}.h5',
-        spectra_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/spectra-{nside:d}-{groupname}.fits',
-        zbest_hp = '{specprod_dir}/spectra-{nside:d}/{hpixdir}/zbest-{nside:d}-{groupname}.fits',
+        zcatalog   = '{specprod_dir}/zcatalog-{specprod}.fits',
+        coadd_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/coadd-{survey}-{faprogram}-{groupname}.fits',
+        rrdetails_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/rrdetails-{survey}-{faprogram}-{groupname}.h5',
+        spectra_hp = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/spectra-{survey}-{faprogram}-{groupname}.fits',
+        redrock_hp   = '{specprod_dir}/healpix/{survey}/{faprogram}/{hpixdir}/redrock-{survey}-{faprogram}-{groupname}.fits',
         #
         # spectra- tile based
         #
-        coadd_tile='{specprod_dir}/tiles/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{night}.fits',
-        redrock_tile='{specprod_dir}/tiles/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{night}.h5',
-        spectra_tile='{specprod_dir}/tiles/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{night}.fits',
-        zbest_tile='{specprod_dir}/tiles/{tile:d}/{night}/zbest-{spectrograph:d}-{tile:d}-{night}.fits',
+        coadd_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/coadd-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        rrdetails_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/rrdetails-{spectrograph:d}-{tile:d}-{nightprefix}{night}.h5',
+        spectra_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/spectra-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
+        redrock_tile='{specprod_dir}/tiles/{groupname}/{tile:d}/{night}/redrock-{spectrograph:d}-{tile:d}-{nightprefix}{night}.fits',
         #
         # spectra- single exp tile based
         #
-        coadd_single='{specprod_dir}/tiles/{tile:d}/exposures/coadd-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        redrock_single='{specprod_dir}/tiles/{tile:d}/exposures/redrock-{spectrograph:d}-{tile:d}-{expid:08d}.h5',
-        spectra_single='{specprod_dir}/tiles/{tile:d}/exposures/spectra-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        zbest_single='{specprod_dir}/tiles/{tile:d}/exposures/zbest-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
+        coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
+        spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        redrock_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/redrock-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
+        tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
         #
         # Deprecated QA files below this point.
         #
@@ -133,19 +154,42 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
     )
     location['desi'] = location['raw']
 
+    #- default group is "cumulative" for tile-based files
+    if groupname is None and tile is not None and filetype in (
+            'spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa', 'tileqapng', 'zmtl',
+            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile',
+            ):
+        groupname = 'cumulative'
+
+    if str(groupname) == "cumulative":
+        nightprefix = "thru"
+    elif groupname == 'perexp':
+        nightprefix = "exp"
+    else:
+        nightprefix = ""
+
     if tile is not None:
-        log.info("Tile-based files selected; healpix-based files and input will be ignored.")
-        location['coadd'] = location['coadd_tile']
-        location['redrock'] = location['redrock_tile']
-        location['spectra'] = location['spectra_tile']
-        location['zbest'] = location['zbest_tile']
+        log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
+        if groupname == 'perexp':
+            location['coadd'] = location['coadd_single']
+            location['redrock'] = location['redrock_single']
+            location['spectra'] = location['spectra_single']
+            location['rrdetails'] = location['rrdetails_single']
+            location['tileqa'] = location['tileqa_single']
+            location['tileqapng'] = location['tileqapng_single']
+        else:
+            location['coadd'] = location['coadd_tile']
+            location['redrock'] = location['redrock_tile']
+            location['spectra'] = location['spectra_tile']
+            location['rrdetails'] = location['rrdetails_tile']
+            # tileqa/tileqapng default already correct for pernight/cumulative
     else:
         location['coadd'] = location['coadd_hp']
         location['redrock'] = location['redrock_hp']
         location['spectra'] = location['spectra_hp']
-        location['zbest'] = location['zbest_hp']
+        location['rrdetails'] = location['rrdetails_hp']
 
-    if groupname is not None:
+    if groupname is not None and tile is None:
         hpix = int(groupname)
         log.debug('healpix_subdirectory(%d, %d)', nside, hpix)
         hpixdir = healpix_subdirectory(nside, hpix)
@@ -190,15 +234,19 @@ def findfile(filetype, night=None, expid=None, camera=None, tile=None, groupname
            and camera in ['b', 'r', 'z']:
             raise ValueError('Specify camera=b0,r1..z9, not camera=b/r/z + spectrograph')
 
-        if camera != '*' and re.match('[brz\*\?][0-9\*\?]', camera) is None:
+        if camera != '*' and re.match(r'[brz\*\?][0-9\*\?]', camera) is None:
             raise ValueError('Camera {} should be b0,r1..z9, or with ?* wildcards'.format(camera))
 
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'tile':tile, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band,
-        'spectrograph':spectrograph
+        'spectrograph':spectrograph, 'nightprefix':nightprefix,
         }
+
+    #- survey and faprogram should be lower, but don't trip on None
+    actual_inputs['survey'] = None if survey is None else survey.lower()
+    actual_inputs['faprogram'] = None if faprogram is None else faprogram.lower()
 
     if 'rawdata_dir' in required_inputs:
         actual_inputs['rawdata_dir'] = rawdata_dir
@@ -501,6 +549,53 @@ def qaprod_root(specprod_dir=None):
     if specprod_dir is None:
         specprod_dir = specprod_root()
     return os.path.join(specprod_dir, 'QA')
+
+def faflavor2program(faflavor):
+    """
+    Map FAFLAVOR keywords to what we wish we had set for FAPRGRM
+
+    Args:
+        faflavor (str or array of str): FAFLAVOR keywords from fiberassign
+
+    Returns:
+        faprgm (str or array of str): what FAPRGM would be if we had set it
+        (dark, bright, backup, other)
+
+    Note: this was standardized by sv3 and main, but evolved during sv1 and sv2
+    """
+    #- Handle scalar or array input, upcasting bytes to str as needed
+    scalar_input = np.isscalar(faflavor)
+    faflavor = np.atleast_1d(faflavor).astype(str)
+
+    #- Default FAPRGRM is "other"
+    faprogram = np.tile('other', len(faflavor)).astype('U6')
+
+    #- FAFLAVOR options that map to FAPRGM='dark'
+    #- Note: some sv1 tiles like 80605 had "cmx" in the faflavor name
+    dark  = faflavor == 'cmxelg'
+    dark |= faflavor == 'cmxlrgqso'
+    dark |= faflavor == 'sv1elg'
+    dark |= faflavor == 'sv1elgqso'
+    dark |= faflavor == 'sv1lrgqso'
+    dark |= faflavor == 'sv1lrgqso2'
+    dark |= np.char.endswith(faflavor, 'dark')
+
+    #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
+    bright  = faflavor == 'sv1bgsmws'
+    bright |= (faflavor != 'sv1unwisebluebright') & np.char.endswith(faflavor, 'bright')
+
+    #- SV1 FAFLAVOR options that map to FAPRGRM='backup'
+    backup  = faflavor == 'sv1backup1'
+    backup |= np.char.endswith(faflavor, 'backup')
+
+    faprogram[dark] = 'dark'
+    faprogram[bright] = 'bright'
+    faprogram[backup] = 'backup'
+
+    if scalar_input:
+        return str(faprogram[0])
+    else:
+        return faprogram
 
 
 def get_pipe_database():

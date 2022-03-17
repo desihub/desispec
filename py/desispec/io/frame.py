@@ -14,10 +14,10 @@ from astropy.table import Table
 import warnings
 
 from desiutil.depend import add_dependencies
-from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from ..frame import Frame
+from .fibermap import read_fibermap
 from .meta import findfile, get_nights, get_exposures
 from .util import fitsheader, native_endian, makepath
 from . import iotime
@@ -46,7 +46,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     #- Ignore some known and harmless units warnings
     import warnings
     warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fits unit.*")
-    warnings.filterwarnings('ignore', message=".*'10\*\*6 arcsec.* did not parse as fits unit.*")
+    warnings.filterwarnings('ignore', message=r".*'10\*\*6 arcsec.* did not parse as fits unit.*")
 
     if header is not None:
         hdr = fitsheader(header)
@@ -55,7 +55,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
 
     add_dependencies(hdr)
 
-    # Vette
+    # Vet
     diagnosis = frame.vet()
     if diagnosis != 0:
         raise IOError("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
@@ -84,11 +84,12 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         qrimg.header["NDIAG"] =frame.ndiag
         hdus.append(qrimg)
     if fibermap is not None:
-        fibermap = encode_table(fibermap)  #- unicode -> bytes
+        fibermap = Table(fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        add_dependencies(fibermap.meta)
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.fibermap is not None:
-        fibermap = encode_table(frame.fibermap)  #- unicode -> bytes
+        fibermap = Table(frame.fibermap)
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.spectrograph is not None:
@@ -100,7 +101,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         hdus.append( fits.ImageHDU(frame.chi2pix.astype('f4'), name='CHI2PIX' ) )
 
     if frame.scores is not None :
-        scores_tbl = encode_table(frame.scores)  #- unicode -> bytes
+        scores_tbl = Table(frame.scores)
         scores_tbl.meta['EXTNAME'] = 'SCORES'
         hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
         if frame.scores_comments is not None : # add comments in header
@@ -190,11 +191,7 @@ def read_frame(filename, nspec=None, skip_resolution=False):
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
 
     if 'FIBERMAP' in fx:
-        fibermap = Table.read(fx, 'FIBERMAP')
-        if 'DESIGN_X' in fibermap.colnames:
-            fibermap.rename_column('DESIGN_X', 'FIBERASSIGN_X')
-        if 'DESIGN_Y' in fibermap.colnames:
-            fibermap.rename_column('DESIGN_Y', 'FIBERASSIGN_Y')
+        fibermap = read_fibermap(filename)
     else:
         fibermap = None
 

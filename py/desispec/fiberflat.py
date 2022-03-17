@@ -14,14 +14,12 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
 from desispec.maskedmedian import masked_median
-from desispec.calibfinder import CalibFinder
 from desispec import util
 import scipy,scipy.sparse
 import sys
 from desiutil.log import get_logger
 import math
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
-
 
 def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=15,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
@@ -99,7 +97,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     wave = frame.wave.copy()  #- this will become part of output too
     ivar = frame.ivar.copy()
     flux = frame.flux.copy()
-
+    camera = frame.meta['CAMERA']
 
     # iterative fitting and clipping to get precise mean spectrum
 
@@ -169,9 +167,9 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             F[w]= flux[fib,w]/mean_spectrum[w]
             try :
                 smooth_fiberflat[fib,:] = spline_fit(wave,wave[w],F[w],smoothing_res,ivar[fib,w]*mean_spectrum[w]**2,max_resolution=1.5*smoothing_res)
-            except ValueError as err  :
-                log.error("Error when smoothing the flat")
-                log.error("Setting ivar=0 for fiber {} because spline fit failed".format(fib))
+            except (ValueError, TypeError) as err  :
+                log.error("Error when smoothing the {} flat".format(camera))
+                log.error("Setting ivar=0 for {} fiber {} because spline fit failed".format(camera, fib))
                 ivar[fib,:] *= 0
             chi2 = ivar[fib,:]*(flux[fib,:]-mean_spectrum*smooth_fiberflat[fib,:])**2
             w=np.isnan(chi2)
@@ -267,7 +265,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                 continue
             try :
                 smooth_fiberflat[fiber] = spline_fit(wave,wave[ok],flux[fiber,ok]/M[ok],smoothing_res,ivar[fiber,ok]*M[ok]**2,max_resolution=1.5*smoothing_res)*(ivar[fiber,:]*M**2>0)
-            except ValueError as err  :
+            except (ValueError, TypeError) as err  :
                 log.error("Error when smoothing the flat")
                 log.error("Setting ivar=0 for fiber {} because spline fit failed".format(fiber))
                 ivar[fiber,:] *= 0
@@ -347,7 +345,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                 break
             try :
                 smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
-            except ValueError as e :
+            except (ValueError, TypeError) as e :
                 print("error in spline_fit")
                 mask[fiber] += fiberflat_mask
                 fiberflat_ivar[fiber] = 0.

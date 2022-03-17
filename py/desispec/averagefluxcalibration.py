@@ -1,11 +1,14 @@
 import numpy as np
 import scipy.constants
 from desimodel.io import load_desiparams
+from desiutil.log import get_logger
 
 class AverageFluxCalib(object):
     def __init__(self, wave, average_calib, atmospheric_extinction, seeing_term, \
                  pivot_airmass, pivot_seeing,\
-                 atmospheric_extinction_uncertainty = None, seeing_term_uncertainty = None):
+                 atmospheric_extinction_uncertainty = None, seeing_term_uncertainty = None,\
+                 median_seeing = None, median_ffracflux = None, fac_wave_power = None, ffracflux_wave = None,
+                 first_night = None):
         """Lightweight wrapper object for average flux calibration data
 
         Args:
@@ -17,6 +20,11 @@ class AverageFluxCalib(object):
             pivot_seeing : float, seeing value for average_calib (same definition and unit as SEEING keyword in images)
             atmospheric_extinction_uncertainty : 1D[nwave] uncertainty on extinction term, magnitude
             seeing_term_uncertainty : 1D[nwave], uncertainty on seeing term magnitude
+            median_seeing : float, median seeing [arcsec]
+            median_ffracflux : float, median GFA FIBER_FRACFLUX
+            fac_wave_power : float, wavelength-dependence of the fiber acceptance (wave ** fac_wave_power)
+            ffracflux_wave : 1D[nwave], fiber acceptance for {median_seeing, median_ffrac} at 6500A, following wave ** fac_wave_power
+            first_night : first night for which this calibration is usable
 
         All arguments become attributes,
         the calib vector should be in units of [electrons]/[1e-17 erg/cm^2].
@@ -38,6 +46,11 @@ class AverageFluxCalib(object):
         self.pivot_seeing = pivot_seeing
         self.atmospheric_extinction_uncertainty = atmospheric_extinction_uncertainty
         self.seeing_term_uncertainty = seeing_term_uncertainty
+        self.median_seeing = median_seeing
+        self.median_ffracflux = median_ffracflux
+        self.fac_wave_power = fac_wave_power
+        self.ffracflux_wave = ffracflux_wave
+        self.first_night = first_night
         self.meta = dict(units='electrons/(1e-17 erg/cm^2)')
         self.desiparams = load_desiparams()
 
@@ -80,4 +93,14 @@ class AverageFluxCalib(object):
         cspeed *= 1e10 # A/s
         energy = hplanck*cspeed/self.wave # (erg/photon)
         cal_scale *= energy # scale*value in (electron/photon)
+        # AR dividing by ffracflux_wave if present
+        # AR (if present, it means the average_calib has been multiplied by it)
+        if self.ffracflux_wave is not None:
+            cal_scale /= self.ffracflux_wave
+        else :
+            default_fiber_fracflux = 0.6
+            log = get_logger()
+            log.warning("Considering a default fiber frac flux of {} to convert calib to throughput".format(default_fiber_fracflux))
+            cal_scale /= default_fiber_fracflux
+
         return cal_scale * self.value(airmass,seeing)

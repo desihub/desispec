@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+
+"""
+Coadding and fitting redshift by healpix, assuming spectral
+regrouping has already happened
+"""
+
+from desispec.scripts import healpix_redshifts
+
+if __name__ == '__main__':
+    args = healpix_redshifts.parse()
+    healpix_redshifts.main(args)
+
+

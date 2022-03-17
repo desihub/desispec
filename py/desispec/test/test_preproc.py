@@ -17,7 +17,7 @@ from desispec import io
 def xy2hdr(xyslice):
     '''
     convert 2D slice into IRAF style [a:b,c:d] header value
-    
+
     e.g. xyslice2header(np.s_[0:10, 5:20]) -> '[6:20,1:10]'
     '''
     yy, xx = xyslice
@@ -25,28 +25,28 @@ def xy2hdr(xyslice):
     return value
 
 class TestPreProc(unittest.TestCase):
-    
+
     def tearDown(self):
         pass
         if os.path.isdir(self.calibdir) :
-            shutil.rmtree(self.calibdir) 
+            shutil.rmtree(self.calibdir)
 
     def setUp(self):
         #- catch specific warnings so that we can find and fix
         # warnings.filterwarnings("error", ".*did not parse as fits unit.*")
-        
+
         #- Create temporary calib directory
         self.calibdir  = os.path.join(os.environ['HOME'], 'preproc_unit_test')
         if not os.path.exists(self.calibdir): os.makedirs(self.calibdir)
-        #- Copy test calibration-data.yaml file 
+        #- Copy test calibration-data.yaml file
         specdir=os.path.join(self.calibdir,"spec/sp0")
         if not os.path.isdir(specdir) :
             os.makedirs(specdir)
         for c in "brz" :
             shutil.copy(resource_filename('desispec', 'test/data/ql/{}0.yaml'.format(c)),os.path.join(specdir,"{}0.yaml".format(c)))
-        #- Set calibration environment variable    
+        #- Set calibration environment variable
         os.environ["DESI_SPECTRO_CALIB"] = self.calibdir
-        
+
         self.calibfile = os.path.join(self.calibdir,'test-calib-askjapqwhezcpasehadfaqp.fits')
         self.rawfile   = os.path.join(self.calibdir,'desi-raw-askjapqwhezcpasehadfaqp.fits')
         self.pixfile   = os.path.join(self.calibdir,'test-pix-askjapqwhezcpasehadfaqp.fits')
@@ -54,12 +54,12 @@ class TestPreProc(unittest.TestCase):
         primary_hdr = dict()
         primary_hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
         primary_hdr['DOSVER']   = 'SIM' # ICS version
-        
+
         hdr = dict()
         hdr['CAMERA'] = 'b0'
         hdr['DETECTOR'] = 'SIM' # CCD chip identifier
         hdr['FEEVER']   = 'SIM' # readout electronic
-       
+
         #- [x,y] 1-indexed for FITS; in reality the amps will be symmetric
         #- but the header definitions don't require that to make sure we are
         #- getting dimensions correct
@@ -94,14 +94,14 @@ class TestPreProc(unittest.TestCase):
         hdr['BIASSECD'] = xy2hdr(np.s_[ny+2*nover_row:ny+ny+2*nover_row, nx+nover:nx+2*nover])
         hdr['DATASECD'] = xy2hdr(np.s_[ny+2*nover_row:ny+ny+2*nover_row, nx+2*nover:nx+2*nover+nx])
         hdr['CCDSECD'] =  xy2hdr(np.s_[ny:ny+ny, nx:nx+nx])
-        
+
         hdr['NIGHT'] = '20150102'
         hdr['EXPID'] = 1
         hdr['EXPTIME'] = 10.0
 
         # add to header the minimal set of keywords needed to
         # identify the config in the ccd_calibration.yaml file
-        
+
         self.primary_header = primary_hdr
         self.header = hdr
         self.rawimage = np.zeros((2*self.ny+2*self.noverscan_row, 2*self.nx+2*self.noverscan))
@@ -109,12 +109,12 @@ class TestPreProc(unittest.TestCase):
         self.offset_row = {'A':50.0, 'B':50.5, 'C':20.3, 'D':40.4}
         self.gain = {'A':1.0, 'B':1.5, 'C':0.8, 'D':1.2}
         self.rdnoise = {'A':2.0, 'B':2.2, 'C':2.4, 'D':2.6}
-        
+
         self.quad = {
             'A': np.s_[0:ny, 0:nx], 'B': np.s_[0:ny, nx:nx+nx],
             'C': np.s_[ny:ny+ny, 0:nx], 'D': np.s_[ny:ny+ny, nx:nx+nx],
         }
-        
+
         for amp in ('A', 'B', 'C', 'D'):
             self.header['GAIN'+amp] = self.gain[amp]
             self.header['RDNOISE'+amp] = self.rdnoise[amp]
@@ -195,18 +195,18 @@ class TestPreProc(unittest.TestCase):
     def test_amp_ids(self):
         """Test auto-detection of amp names"""
         hdr = dict(
-            CCDSECA=self.header['CCDSECA'],
-            CCDSECB=self.header['CCDSECB'],
-            CCDSECC=self.header['CCDSECC'],
-            CCDSECD=self.header['CCDSECD'],
+            BIASSECA=self.header['BIASSECA'],
+            BIASSECB=self.header['BIASSECB'],
+            BIASSECC=self.header['BIASSECC'],
+            BIASSECD=self.header['BIASSECD'],
             )
         self.assertEqual(get_amp_ids(hdr), ['A', 'B', 'C', 'D'])
 
         hdr = dict(
-            CCDSEC1=self.header['CCDSECA'],
-            CCDSEC2=self.header['CCDSECB'],
-            CCDSEC3=self.header['CCDSECC'],
-            CCDSEC4=self.header['CCDSECD'],
+            BIASSEC1=self.header['BIASSECA'],
+            BIASSEC2=self.header['BIASSECB'],
+            BIASSEC3=self.header['BIASSECC'],
+            BIASSEC4=self.header['BIASSECD'],
             )
         self.assertEqual(get_amp_ids(hdr), ['1', '2', '3', '4'])
 
@@ -263,12 +263,12 @@ class TestPreProc(unittest.TestCase):
         #b1 = io.read_raw(self.rawfile, 'b1')
         #r1 = io.read_raw(self.rawfile, 'r1')
         #z9 = io.read_raw(self.rawfile, 'Z9')
-        
+
         self.assertEqual(b0.meta['CAMERA'], 'b0')
         #self.assertEqual(b1.meta['CAMERA'], 'b1')
         #self.assertEqual(r1.meta['CAMERA'], 'r1')
         #self.assertEqual(z9.meta['CAMERA'], 'z9')
-        
+
     def test_32_64(self):
         '''
         64-bit integers aren't supported for compressed HDUs;
@@ -290,9 +290,9 @@ class TestPreProc(unittest.TestCase):
         io.write_raw(self.rawfile, data32, self.header, primary_header = self.primary_header, camera='b3')
         #- Should be 16-bit CompImageHDU
         io.write_raw(self.rawfile, data16, self.header, primary_header = self.primary_header, camera='b4')
-        
+
         fx = fits.open(self.rawfile)
-                
+
         #- Blank PrimaryHDU should have been inserted
         self.assertTrue(isinstance(fx[0], fits.PrimaryHDU))
         self.assertTrue(fx[0].data == None)
@@ -300,17 +300,17 @@ class TestPreProc(unittest.TestCase):
         self.assertTrue(isinstance(fx[1], fits.ImageHDU))
         self.assertEqual(fx[1].data.dtype, np.dtype('>i8'))
         self.assertEqual(fx[1].header['EXTNAME'], 'B0')
-        
+
         #- 64-bit image written uncompressed
         self.assertTrue(isinstance(fx[2], fits.ImageHDU))
         self.assertEqual(fx[2].data.dtype, np.dtype('>i8'))
         self.assertEqual(fx[2].header['EXTNAME'], 'B1')
-        
+
         #- 64-bit image with small numbers converted to 32-bit compressed
         self.assertTrue(isinstance(fx[3], fits.CompImageHDU))
         self.assertEqual(fx[3].data.dtype, np.int32)
         self.assertEqual(fx[3].header['EXTNAME'], 'B2')
-        
+
         #- 32-bit image written compressed
         self.assertTrue(isinstance(fx[4], fits.CompImageHDU))
         self.assertEqual(fx[4].data.dtype, np.int32)
@@ -329,24 +329,24 @@ class TestPreProc(unittest.TestCase):
         #- Missing GAIN* and RDNOISE* are warnings but not errors
         #    if keyword.startswith('GAIN') or keyword.startswith('RDNOISE'):
         #        continue
-        
+
         #- DATE-OBS, NIGHT, and EXPID are also optional
         #- (but maybe they should be required...)
         #   if keyword in ('DATE-OBS', 'NIGHT', 'EXPID'):
         #       continue
-        
+
         #  if os.path.exists(self.rawfile):
         #      os.remove(self.rawfile)
         #      value = self.header[keyword]
-        
+
         #       del self.header[keyword]
-        
+
         #       with self.assertRaises(KeyError):
         #           io.write_raw(self.rawfile, self.rawimage, self.header, primary_header = self.primary_header)
-        
+
         #      self.header[keyword] = value
-        
-        #dateobs = self.header 
+
+        #dateobs = self.header
 
     #- striving for 100% coverage...
     def test_pedantic(self):

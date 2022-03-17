@@ -8,6 +8,7 @@ import os
 import glob
 import time
 import datetime
+import subprocess
 import astropy.io
 import numpy as np
 from astropy.table import Table
@@ -15,15 +16,39 @@ from desiutil.log import get_logger
 
 from ..util import healpix_degrade_fixed
 
+def checkgzip(filename):
+    """
+    Check for existence of filename, with or without .gz extension
 
-def iterfiles(root, prefix):
+    Args:
+        filename (str): filename to check for
+
+    Returns path of existing file without or without .gz,
+    or raises FileNotFoundError if neither exists
+    """
+    if os.path.exists(filename):
+        return filename
+
+    if filename.endswith('.gz'):
+        altfilename = filename[0:-3]
+    else:
+        altfilename = filename + '.gz'
+
+    if os.path.exists(altfilename):
+        return altfilename
+    else:
+        raise FileNotFoundError(f'Neither {filename} nor {altfilename}')
+
+def iterfiles(root, prefix, suffix=None):
     '''
     Returns iterator over files starting with `prefix` found under `root` dir
+    Optionally also check if filename ends with `suffix`
     '''
     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
         for filename in filenames:
             if filename.startswith(prefix):
-                yield os.path.join(dirpath, filename)
+                if suffix is None or filename.endswith(suffix):
+                    yield os.path.join(dirpath, filename)
 
 def header2wave(header):
     """Converts header keywords into a wavelength grid.
@@ -155,15 +180,14 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray.
     """
     from astropy.table import Table
-    from desiutil.io import encode_table
 
     log = get_logger()
 
     #- Convert data as needed
     if isinstance(data, (np.recarray, np.ndarray, Table)):
-        outdata = encode_table(data, encoding='ascii')
+        outdata = Table(data)
     else:
-        outdata = encode_table(_dict2ndarray(data), encoding='ascii')
+        outdata = Table(_dict2ndarray(data))
 
     # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
     hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
@@ -418,7 +442,7 @@ def decode_camword(camword):
             searchstr = searchstr[1:]
     return sorted(camlist)
 
-def parse_cameras(cameras):
+def parse_cameras(cameras, loglevel='INFO'):
     """
     Function that takes in a representation
     of all spectrographs and outputs a string that succinctly lists all
@@ -430,11 +454,14 @@ def parse_cameras(cameras):
     Args:
        cameras, str. 1-d array, list: Either a str that is a comma separated list or a series of spectrographs.
                                       Also accepts a list or iterable that is processed with create_camword().
+    Options:
+        loglevel, str: use e.g. "WARNING" to avoid INFO-level log messages for just this call
+
     Returns (str):
        camword, str. A string representing all information about the spectrographs/cameras
                      given in the input iterable, e.g. a01234678b59z9
     """
-    log = get_logger()
+    log = get_logger(loglevel)
     if cameras is None:
         camword = None
     elif type(cameras) is str:
@@ -523,6 +550,49 @@ def difference_camwords(fullcamword,badcamword):
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
 
+def camword_union(camwords, full_spectros_only=False):
+    """
+    Returns the union of a list of camwords. Optionally can return only
+    those spectros with complete b, r, and z cameras. Note this intentionally
+    does the union before truncating spectrographs, so two partial camwords
+    can lead to an entire spectrograph,
+
+       e.g. [a0b1z1, a3r1z2] -> [a013z2] if full_spectros_only=False
+            [a0b1z1, a3r1z2] -> [a013] if full_spectros_only=True
+
+    even through no camword has a complete set of camera 1, a complete set is
+    represented in the union.
+
+    Args:
+        camwords, list or array of strings. List of camwords.
+        full_spectros_only, bool. True if only complete spectrographs with
+                  b, r, and z cameras in the funal union should be returned.
+
+    Returns:
+        final_camword, str. The final union of all input camwords, where
+             truncation of incomplete spectrographs may or may not be performed
+             based on full_spectros_only.
+    """
+    camword = ''
+    if np.isscalar(camwords):
+        if not isinstance(camwords, str):
+            ValueError(f"camwords must be array-like or str. Received type: {type(camwords)}")
+        else:
+            camword = camwords
+    else:
+        cams = set(decode_camword(camwords[0]))
+        for camword in camwords[1:]:
+            cams = cams.union(set(decode_camword(camword)))
+        camword = create_camword(list(cams))
+
+    if full_spectros_only:
+        full_sps = np.sort(camword_to_spectros(camword,
+                                               full_spectros_only=True)).astype(str)
+        final_camword = 'a' + ''.join(full_sps)
+    else:
+        final_camword = camword
+    return final_camword
+
 def camword_to_spectros(camword, full_spectros_only=False):
     """
     Takes a camword as input and returns any spectrograph represented within that camword. By default this includes partial
@@ -581,6 +651,52 @@ def parse_badamps(badamps,joinsymb=','):
         cam_petal_amps.append((camera, int(petal), amplifier))
     return cam_petal_amps
 
+def validate_badamps(badamps,joinsymb=','):
+    """
+    Checks (and transforms) badamps string for consistency with the for need in an exposure or processing table
+    for use in the Pipeline. Specifically ensure they come in (camera,petal,amplifier) sets,
+    with appropriate checking of those values to make sure they're valid. Returns the input string
+    except removing whitespace and replacing potential character separaters with joinsymb (default ',').
+    Returns None if None is given.
+
+    Args:
+        badamps, str. A string of {camera}{petal}{amp} entries separated by symbol given with joinsymb (comma
+                      by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
+        joinsymb, str. The symbol separating entries in the str list given by badamps.
+
+    Returns:
+        newbadamps, str. Input badamps string of {camera}{petal}{amp} entries separated by symbol given with
+                      joinsymb (comma by default). I.e. [brz][0-9][ABCD]. Example: 'b7D,z8A'.
+                      Differs from input in that other symbols used to separate terms are replaced by joinsymb
+                      and whitespace is removed.
+
+    """
+    if badamps is None:
+        return badamps
+
+    log = get_logger()
+    ## Possible other joining symbols to automatically replace
+    symbs = [';', ':', '|', '.', ',','-','_']
+
+    ## Not necessary, as joinsymb would just be replaced with itself, but this is good better form
+    if joinsymb in symbs:
+        symbs.remove(joinsymb)
+
+    ## Remove whitespace and replace possible joining symbols with the designated one.
+    newbadamps = badamps.replace(' ', '').strip()
+    for symb in symbs:
+        newbadamps = newbadamps.replace(symb, joinsymb)
+
+    ## test that the string can be parsed. Raises exception if it fails to parse
+    throw = parse_badamps(newbadamps, joinsymb=joinsymb)
+
+    ## Inform user of the result
+    if badamps == newbadamps:
+        log.info(f'Badamps given as: {badamps} verified to work')
+    else:
+        log.info(f'Badamps given as: {badamps} verified to work with modifications to: {newbadamps}')
+    return newbadamps
+
 def get_speclog(nights, rawdir=None):
     """
     Scans raw data headers to return speclog of observations. Slow.
@@ -618,7 +734,7 @@ def get_speclog(nights, rawdir=None):
 
 def replace_prefix(filepath, oldprefix, newprefix):
     """
-    Replace prefix in filepath even if prefix is elsewhere in filepath
+    Replace filename prefix even if prefix is elsewhere in path or filename
 
     Args:
         filepath : filename, optionally including path
@@ -638,6 +754,33 @@ def replace_prefix(filepath, oldprefix, newprefix):
     filename = filename.replace(oldprefix, newprefix, 1)
     return os.path.join(path, filename)
 
+def get_tempfilename(filename):
+    """
+    Returns unique tempfile in same directory as filename with same extension
+
+    Args:
+        filename (str): input filename
+
+    Returns unique filename in same directory
+
+    Example intended usage::
+
+       tmpfile = get_tempfile(filename)
+       table.write(tmpfile)
+       os.rename(tmpfile, filename)
+
+    By keeping the same extension as the input file, this preserves the
+    ability of table.write to derive the format to use, and if something
+    goes wrong with the I/O it doesn't leave a corrupted partially written
+    file with the final name.  The tempfile includes the PID to provide some
+    race condition protection (the last one do do os.rename wins, but at least
+    different processes won't corrupt each other's files).
+    """
+    base, extension = os.path.splitext(filename)
+    pid = os.getpid()
+    tempfile = f'{base}_tmp{pid}{extension}'
+    return tempfile
+
 def addkeys(hdr1, hdr2, skipkeys=None):
     """
     Add new header keys from hdr2 to hdr1, skipping skipkeys
@@ -652,16 +795,35 @@ def addkeys(hdr1, hdr2, skipkeys=None):
     #- standard keywords that should be skipped
     stdkeys = ['EXTNAME', 'COMMENT', 'CHECKSUM', 'DATASUM',
                 'PCOUNT', 'GCOUNT', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
-                'XTENSION', 'TFIELDS']
+                'XTENSION', 'TFIELDS', 'SIMPLE']
 
-    for key, value in hdr2.items():
+    for key in hdr2.keys():
         if key not in stdkeys and \
                ((skipkeys is None) or (key not in skipkeys)) \
                and not key.startswith('TTYPE') \
                and not key.startswith('TFORM') \
                and not key.startswith('TUNIT') \
                and key not in hdr1:
-            log.debug(f'Adding {key}')
-            hdr1[key] = value
+            log.debug('Adding %s', key)
+            hdr1[key] = hdr2[key]
         else:
-            log.debug(f'Skipping {key}')
+            log.debug('Skipping %s', key)
+
+def is_svn_current(dirname):
+    """
+    Return True/False for if svn checkout dirname is up-to-date with server
+
+    Raises ValueError if unable to determine (e.g. dirname isn't svn checkout)
+    """
+    cmd = f"svn diff -r BASE:HEAD {dirname}"
+    args = cmd.split()
+    try:
+        results = subprocess.run(args, check=True, stdout=subprocess.PIPE).stdout
+        #- no stdout = no diffs = up-to-date
+        return len(results) == 0
+    except subprocess.CalledProcessError:
+        log = get_logger()
+        msg = f'FAILED {cmd}'
+        log.error(msg)
+        raise ValueError(msg)
+

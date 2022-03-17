@@ -67,13 +67,17 @@ def write_spectra(outfile, spec, units=None):
 
     # metadata goes in empty primary HDU
     hdr = fitsheader(spec.meta)
+    hdr['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(hdr)
 
     all_hdus.append(fits.PrimaryHDU(header=hdr))
 
     # Next is the fibermap
     fmap = spec.fibermap.copy()
-    fmap.meta["EXTNAME"] = "FIBERMAP"
+    fmap.meta['EXTNAME'] = 'FIBERMAP'
+    fmap.meta['LONGSTRN'] = 'OGIP 1.0'
+    add_dependencies(fmap.meta)
+
     with warnings.catch_warnings():
         #- nanomaggies aren't an official IAU unit but don't complain
         warnings.filterwarnings('ignore', '.*nanomaggies.*')
@@ -87,11 +91,28 @@ def write_spectra(outfile, spec, units=None):
             assert name == colname
             comment = fibermap_comments[name]
             hdu.header[key] = (name, comment)
-        else:
-            pass
-            #print('Unknown comment for {}'.format(colname))
 
     all_hdus.append(hdu)
+
+    # Optional: exposure-fibermap, used in coadds
+    if spec.exp_fibermap is not None:
+        expfmap = spec.exp_fibermap.copy()
+        expfmap.meta["EXTNAME"] = "EXP_FIBERMAP"
+        with warnings.catch_warnings():
+            #- nanomaggies aren't an official IAU unit but don't complain
+            warnings.filterwarnings('ignore', '.*nanomaggies.*')
+            hdu = fits.convenience.table_to_hdu(expfmap)
+
+        # Add comments for exp_fibermap columns.
+        for i, colname in enumerate(expfmap.dtype.names):
+            if colname in fibermap_comments:
+                key = "TTYPE{}".format(i+1)
+                name = hdu.header[key]
+                assert name == colname
+                comment = fibermap_comments[name]
+                hdu.header[key] = (name, comment)
+
+        all_hdus.append(hdu)
 
     # Now append the data for all bands
 
@@ -147,6 +168,11 @@ def write_spectra(outfile, spec, units=None):
                     if value in spec.scores_comments.keys() :
                         hdu.header[key] = (value, spec.scores_comments[value])
 
+    if spec.extra_catalog is not None:
+        extra_catalog = encode_table(spec.extra_catalog)
+        extra_catalog.meta['EXTNAME'] = 'EXTRA_CATALOG'
+        all_hdus.append(fits.convenience.table_to_hdu(extra_catalog))
+
     t0 = time.time()
     all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
     os.rename("{}.tmp".format(outfile), outfile)
@@ -192,12 +218,14 @@ def read_spectra(infile, single=False):
 
     bands = []
     fmap = None
+    expfmap = None
     wave = None
     flux = None
     ivar = None
     mask = None
     res = None
     extra = None
+    extra_catalog = None
     scores = None
 
     # For efficiency, go through the HDUs in disk-order.  Use the
@@ -209,8 +237,12 @@ def read_spectra(infile, single=False):
         name = hdus[h].header["EXTNAME"]
         if name == "FIBERMAP":
             fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+        elif name == "EXP_FIBERMAP":
+            expfmap = encode_table(Table(hdus[h].data, copy=True).as_array())
         elif name == "SCORES":
             scores = encode_table(Table(hdus[h].data, copy=True).as_array())
+        elif name == 'EXTRA_CATALOG':
+            extra_catalog = encode_table(Table(hdus[h].data, copy=True).as_array())
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -257,7 +289,9 @@ def read_spectra(infile, single=False):
     # they will be caught by the constructor.
 
     spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
-        fibermap=fmap, meta=meta, extra=extra, single=single, scores=scores)
+        fibermap=fmap, exp_fibermap=expfmap,
+        meta=meta, extra=extra, extra_catalog=extra_catalog,
+        single=single, scores=scores)
 
     return spec
 
@@ -326,7 +360,8 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
     return spec
 
 def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
-        single=False, targets=None, fibers=None, zbest=True):
+                      single=False, targets=None, fibers=None, redrock=True,
+                      group=None):
     """
     Read and return combined spectra for a tile/night
 
@@ -341,11 +376,12 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         single (bool) : if True, use float32 instead of double precision
         targets (array-like) : filter by TARGETID
         fibers (array-like) : filter by FIBER
-        zbest (bool) : if True, also return row-matched zbest redshift catalog
+        redrock (bool) : if True, also return row-matched redrock redshift catalog
+        group (str) : reads spectra in group (pernight, cumulative, ...)
 
-    Returns: spectra or (spectra, zbest)
+    Returns: spectra or (spectra, redrock)
         combined Spectra obj for all matching targets/fibers filter
-        row-matched zbest catalog (if zbest=True)
+        row-matched redrock catalog (if redrock=True)
 
     Raises:
         ValueError if no files or matching spectra are found
@@ -358,7 +394,14 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         #- will automatically use $SPECPROD if specprod=None
         reduxdir = specprod_root(specprod)
 
-    tiledir = os.path.join(reduxdir, 'tiles', str(tileid), str(night))
+    tiledir = os.path.join(reduxdir, 'tiles')
+    nightstr = str(night)
+    if group is not None:
+        tiledir = os.path.join(tiledir, group)
+        if group == 'cumulative':
+            nightstr = 'thru'+nightstr
+
+    tiledir = os.path.join(tiledir, str(tileid), str(night))
 
     if coadd:
         log.debug(f'Reading coadds from {tiledir}')
@@ -367,7 +410,7 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         log.debug(f'Reading spectra from {tiledir}')
         prefix = 'spectra'
 
-    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{night}.fits')
+    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits')
 
     if len(specfiles) == 0:
         raise ValueError(f'No spectra found in {tiledir}')
@@ -375,7 +418,7 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
     specfiles = sorted(specfiles)
 
     spectra = list()
-    zbests = list()
+    redshifts = list()
     for filename in specfiles:
         log.debug(f'reading {os.path.basename(filename)}')
         sp = read_spectra(filename, single=single)
@@ -388,46 +431,45 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
 
         if sp.num_spectra() > 0:
             spectra.append(sp)
-            if zbest:
-                #- Read matching zbest file for this spectra/coadd file
-                zbfile = os.path.basename(filename).replace(prefix, 'zbest', 1)
-                log.debug(f'Reading {zbfile}')
-                zbfile = os.path.join(tiledir, zbfile)
-                zb = Table.read(zbfile, 'ZBEST')
+            if redrock:
+                #- Read matching redrock file for this spectra/coadd file
+                rrfile = os.path.basename(filename).replace(prefix, 'redrock', 1)
+                log.debug(f'Reading {rrfile}')
+                rrfile = os.path.join(tiledir, rrfile)
+                rr = Table.read(rrfile, 'REDSHIFTS')
 
-                #- Trim zb to only have TARGETIDs in filtered spectra sp
-                keep = np.in1d(zb['TARGETID'], sp.fibermap['TARGETID'])
-                zb = zb[keep]
+                #- Trim rr to only have TARGETIDs in filtered spectra sp
+                keep = np.in1d(rr['TARGETID'], sp.fibermap['TARGETID'])
+                rr = rr[keep]
 
                 #- spectra files can have multiple entries per TARGETID,
-                #- while zbest files have only 1.  Expand to match spectra.
+                #- while redrock files have only 1.  Expand to match spectra.
                 #- Note: astropy.table.join changes the order
-                if len(sp.fibermap) > len(zb):
-                    zbx = Table()
-                    zbx['TARGETID'] = sp.fibermap['TARGETID']
-                    zbx = astropy.table.join(zbx, zb, keys='TARGETID')
+                if len(sp.fibermap) > len(rr):
+                    rrx = Table()
+                    rrx['TARGETID'] = sp.fibermap['TARGETID']
+                    rrx = astropy.table.join(rrx, rr, keys='TARGETID')
                 else:
-                    zbx = zb
+                    rrx = rr
 
-                #- Sort the zbx Table to match the order of sp['TARGETID']
+                #- Sort the rrx Table to match the order of sp['TARGETID']
                 ii = np.argsort(sp.fibermap['TARGETID'])
-                jj = np.argsort(zbx['TARGETID'])
+                jj = np.argsort(rrx['TARGETID'])
                 kk = np.argsort(ii[jj])
-                zbx = zbx[kk]
+                rrx = rrx[kk]
 
                 #- Confirm that we got all that expanding and sorting correct
-                assert np.all(sp.fibermap['TARGETID'] == zbx['TARGETID'])
-                zbests.append(zbx)
+                assert np.all(sp.fibermap['TARGETID'] == rrx['TARGETID'])
+                redshifts.append(rrx)
 
     if len(spectra) == 0:
         raise ValueError('No spectra found matching filters')
 
     spectra = stack(spectra)
 
-    if zbest:
-        zbests = astropy.table.vstack(zbests)
-        assert np.all(spectra.fibermap['TARGETID'] == zbests['TARGETID'])
-        return (spectra, zbests)
+    if redrock:
+        redshifts = astropy.table.vstack(redshifts)
+        assert np.all(spectra.fibermap['TARGETID'] == redshifts['TARGETID'])
+        return (spectra, redshifts)
     else:
         return spectra
-

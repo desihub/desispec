@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Combine individual zbest files into a single zcatalog
+Combine individual redrock files into a single zcatalog
 
 NOTE: this could get factored out into script vs. algorithm vs. I/O, but
 that would obfuscate the current short simplicity of this script.  Do that
@@ -15,15 +15,18 @@ Fall 2015
 
 from __future__ import absolute_import, division, print_function
 
-import sys, os
-import numpy as np
-from astropy.table import Table, vstack
-from desiutil.log import get_logger,DEBUG
-from desispec import io
-
+import sys, os, glob
 import argparse
 
+import numpy as np
 from numpy.lib.recfunctions import append_fields
+
+import fitsio
+from astropy.table import Table, hstack, vstack
+
+from desiutil.log import get_logger
+from desispec import io
+from desispec.zcatalog import find_primary_spectra
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -75,106 +78,316 @@ def match(table1,table2,key="TARGETID") :
 
     log.debug(f'Done with matching tables on {key}')
     return table1
-    
+
+def load_sv1_ivar_w12(hpix, targetids):
+    """
+    Load FLUX_IVAR_W1/W2 from sv1 target files for requested targetids
+
+    Args:
+        hpix (int): nside=8 nested healpix
+        targetids (array): TARGETIDs to include
+
+    Returns table of TARGETID, FLUX_IVAR_W1, FLUX_IVAR_W2
+
+    Note: this is only for the special case of sv1 dark/bright and the
+    FLUX_IVAR_W1/W2 columns which were not included in fiberassign for
+    tiles designed before 20201212.
+
+    Note: nside=8 nested healpix is hardcodes for simplicity because that is
+    what was used for sv1 target selection and this is not trying to be a
+    more generic targetid lookup function.
+    """
+    log = get_logger()
+    #- the targets could come from any version of desitarget, so search all,
+    #- but once a TARGETID is found it will be the same answer (for FLUX_IVAR*)
+    #- as any other version because it is propagated from the same dr9 input
+    #- Tractor files.
+    targetdir = os.path.join(os.environ['DESI_TARGET'], 'catalogs', 'dr9')
+    fileglob = f'{targetdir}/*/targets/sv1/resolve/*/sv1targets-*-hp-{hpix}.fits'
+    sv1targetfiles = sorted(glob.glob(fileglob))
+    nfiles = len(sv1targetfiles)
+    ntarg = len(np.unique(targetids))
+    log.info(f'Searching {nfiles} sv1 target files for {ntarg} targets in nside=8 healpix={hpix}')
+    columns = ['TARGETID', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2']
+    targets = list()
+    found_targetids = list()
+    for filename in sv1targetfiles:
+        tx = fitsio.read(filename, 1, columns=columns)
+        keep = np.isin(tx['TARGETID'], targetids)
+        keep &= ~np.isin(tx['TARGETID'], found_targetids)
+        targets.append(tx[keep])
+        found_targetids.extend(tx['TARGETID'][keep])
+
+        if np.all(np.isin(targetids, found_targetids)):
+            break
+
+    targets = np.hstack(targets)
+
+    missing = np.isin(targetids, targets['TARGETID'], invert=True)
+    if np.any(missing):
+        nmissing = np.sum(missing)
+        log.error(f'{nmissing} TARGETIDs not found in sv1 healpix={hpix}')
+
+    return targets
+
+
+#--------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("-i", "--indir",   type=str,  help="input directory")
-parser.add_argument("-o", "--outfile", type=str,  help="output file")
-parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
-parser.add_argument("--match", type=str, nargs="*", help="match other tables (targets,truth...)")
-parser.add_argument("--fibermap", action = "store_true", help="add some columns from fibermap stored in zbest files")
-parser.add_argument("--spectra-scores", action = "store_true", help="add some columns from scores stored in spectra files (found in same directory as zbest file)")
+parser.add_argument("-i", "--indir",  type=str,
+        help="input directory")
+parser.add_argument("-o", "--outfile",type=str,
+        help="output file")
+parser.add_argument("--minimal", action='store_true',
+        help="only include minimal output columns")
+parser.add_argument("-t", "--tiles", type=str,
+        help="ascii file with tileids to include (one per line)")
+parser.add_argument("--prefix", type=str, default='redrock',
+        help="prefix of redrock files (older versions used 'zbest' "
+             "instead of 'redrock'")
+parser.add_argument("-g", "--group", type=str,
+        help="Add columns specific to this spectral grouping "
+             "e.g. pernight adds NIGHT column from input header keyword")
+parser.add_argument("--header", type=str, nargs="*",
+        help="KEYWORD=VALUE entries to add to the output header")
+parser.add_argument('--patch-missing-ivar-w12', action='store_true',
+        help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
+
+# parser.add_argument("--match", type=str, nargs="*",
+#         help="match other tables (targets,truth...)")
 
 args = parser.parse_args()
 
-
 log=get_logger()
-if args.verbose :
-    log=get_logger(DEBUG)
-else :
-    log=get_logger()
 
 if args.indir is None:
-    log.error('--input directory required')
+    log.error('--indir directory required')
     sys.exit(1)
     
 if args.outfile is None:
     args.outfile = io.findfile('zcatalog')
 
-import fitsio
-zbestfiles = sorted(io.iterfiles(args.indir, 'zbest'))
-data = list()
-for zbestfile in zbestfiles:
-    zbest = fitsio.read(zbestfile, 'ZBEST')
-    log.debug("{} {}".format(zbestfile, len(zbest)))
-    if args.fibermap :
-        fibermap = fitsio.read(zbestfile, 'FIBERMAP')
-        # new zbest structured array with two more columns ...
-        ndtype=np.dtype( zbest.dtype.descr + [
-            ("RA", "f8"),
-            ("DEC", "f8"),
-            ("FLUX_G", "f4"),
-            ("FLUX_R", "f4"),
-            ("FLUX_Z", "f4"),
-            ])
-        nzbest=np.zeros(zbest.shape,dtype=ndtype)
-        # copy 
-        for k in zbest.dtype.names : nzbest[k]=zbest[k]
-        # add RA and Dec
-        # we have to match the targetids and get a unique set of values
-        # because the fibermap can contain several entries for the same target
-        tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
-        tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
-        if "TARGET_RA" in fibermap.dtype.names:
-            #- new format: TARGET_RA/DEC + FLUX
-            nzbest["RA"] = fibermap["TARGET_RA"][tmp2]
-            nzbest["DEC"] = fibermap["TARGET_DEC"][tmp2]
-            nzbest["FLUX_G"] = fibermap["FLUX_G"][tmp2]
-            nzbest["FLUX_R"] = fibermap["FLUX_R"][tmp2]
-            nzbest["FLUX_Z"] = fibermap["FLUX_Z"][tmp2]
+#- Get redrock*.fits files in subdirs, excluding e.g. redrock*.log
+
+log.info(f'Looking for redrock files in subdirectories of {args.indir}')
+if args.tiles is not None:
+    tiles = np.atleast_1d(np.loadtxt(args.tiles, dtype=int))
+    ntiles = len(tiles)
+    log.info(f'Filtering to {ntiles} tiles from {args.tiles}')
+    redrockfiles = list()
+    for tileid in tiles:
+        tmp = sorted(io.iterfiles(f'{args.indir}/{tileid}', prefix=args.prefix, suffix='.fits'))
+        if len(tmp) > 0:
+            redrockfiles.extend(tmp)
         else:
-            #- old format: RA/DEC_TARGET + MAG
-            nzbest["RA"] = fibermap["RA_TARGET"][tmp2]
-            nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
-            nzbest["FLUX_G"] = 10**(0.4*(22.5 - fibermap["MAG"][:,0][tmp2]))
-            nzbest["FLUX_R"] = 10**(0.4*(22.5 - fibermap["MAG"][:,1][tmp2]))
-            nzbest["FLUX_Z"] = 10**(0.4*(22.5 - fibermap["MAG"][:,2][tmp2]))
+            log.error(f'no redrock files found in {args.indir}/{tileid}')
+else:
+    redrockfiles = sorted(io.iterfiles(args.indir, prefix=args.prefix, suffix='.fits'))
 
-        zbest=nzbest
+nfiles = len(redrockfiles)
+if nfiles == 0:
+    msg = f'No redrock files found in {args.indir}'
+    log.critical(msg)
+    raise ValueError(msg)
+
+zcatdata = list()
+exp_fibermaps = list()
+for ifile, rrfile in enumerate(redrockfiles):
+    log.info(f'Reading {ifile+1}/{nfiles} {rrfile}')
+    with fitsio.FITS(rrfile) as fx:
+        hdr = fx[0].read_header()
+        if args.group is not None and 'SPGRP' in hdr and \
+                hdr['SPGRP'] != args.group:
+            log.warning("Skipping {} with SPGRP {} != args.group {}".format(
+                rrfile, hdr['SPGRP'], args.group))
+            continue
+
+        if 'ZBEST' in fx: #check if the older hdu name for REDSHIFT exist, in which case we read only the FIBERMAP and no TSNR2.
+            redshifts = fx['ZBEST'].read()
+            fibermap = fx['FIBERMAP'].read()
+            assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
+            if ['EXP_FIBERMAP','TSNR2'] in fx:
+                expfibermap = fx['EXP_FIBERMAP'].read()
+                tsnr2 = fx['TSNR2'].read()
+                assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+            else:
+                expfibermap = None
+                tsnr2 = None
+
+        else:
+            redshifts = fx['REDSHIFTS'].read()
+            fibermap = fx['FIBERMAP'].read()
+            expfibermap = fx['EXP_FIBERMAP'].read()
+            tsnr2 = fx['TSNR2'].read()
+            assert np.all(redshifts['TARGETID'] == fibermap['TARGETID'])
+            assert np.all(redshifts['TARGETID'] == tsnr2['TARGETID'])
+
+    if args.minimal:
+        fmcols = ['TARGET_RA', 'TARGET_DEC', 'FLUX_G', 'FLUX_R', 'FLUX_Z']
+        for colname in fibermap.dtype.names:
+            if colname.endswith('_TARGET') and colname != 'FA_TARGET':
+                fmcols.append(colname)
+        if args.prefix == 'zbest':
+            fibermap_=Table(fibermap[fmcols])
+            fibermap_.rename_column('TARGET_RA','RA')
+            fibermap_.rename_column('TARGET_DEC','DEC')
+            fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SCND_TARGET'])
+            data = hstack( [Table(redshifts), fibermap_] )
+
+        else:
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+
+    else:
+        fmcols = list(fibermap.dtype.names)
+        fmcols.remove('TARGETID')
+        if tsnr2 is not None:
+            tsnr2cols = list(tsnr2.dtype.names)
+            tsnr2cols.remove('TARGETID')
+            data = hstack([
+                Table(redshifts),
+                Table(fibermap[fmcols]),
+                Table(tsnr2[tsnr2cols]),
+                ])
+        else:
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+
+    #- Add group specific columns, recognizing some some of them may
+    #- have already been inherited from the fibermap.
+    #- Put these columns right after TARGETID
+    nrows = len(data)
+    icol = 1
+    if args.group in ('perexp', 'pernight', 'cumulative'):
+        if 'TILEID' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['TILEID'], dtype=np.int32),
+                    index=icol, name='TILEID')
+            icol += 1
+        if 'PETAL_LOC' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['PETAL'], dtype=np.int16),
+                    index=icol, name='PETAL_LOC')
+            icol += 1
+
+    if args.group == 'perexp':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+        icol += 1
+        data.add_column(np.full(nrows, hdr['EXPID'], dtype=np.int32),
+                index=icol, name='EXPID')
+    elif args.group == 'pernight':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+    elif args.group == 'cumulative':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='LASTNIGHT')
+    elif args.group == 'healpix':
+        data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
+                index=icol, name='HEALPIX')
+
+    icol += 1
+
+    # SPGRPVAL = night for pernight, expid for perexp, subset for custom coadds
+    if 'SPGRPVAL' in hdr.keys():
+        val = hdr['SPGRPVAL']
+        # if int, try to make int32, otherwise let numpy pick dtype
+        if isinstance(val, int):
+            if np.int32(val) == val:
+                dtype = np.int32
+            else:
+                dtype = np.int64
+        else:
+            dtype = None
+
+        data.add_column(np.full(nrows, hdr['SPGRPVAL'], dtype=dtype),
+                index=icol, name='SPGRPVAL')
+    else:
+        log.warning(f'SPGRPVAL keyword missing from {rrfile}')
+
+    zcatdata.append(data)
+
+    if expfibermap is not None:
+        exp_fibermaps.append(expfibermap)
 
 
-    if args.spectra_scores :
-        specfile=os.path.join(os.path.dirname(zbestfile),os.path.basename(zbestfile).replace("zbest","spectra"))
-        scores = fitsio.read(specfile, 'SCORES')
-        newtypes=[]
-        for k in scores.dtype.names :
-             newtypes.append((k,"f4"))
-        ndtype=np.dtype( zbest.dtype.descr + newtypes )
-        nzbest=np.zeros(zbest.shape,dtype=ndtype)
-        for k in zbest.dtype.names : nzbest[k]=zbest[k]
-        tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
-        tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
-        for k in scores.dtype.names :
-            nzbest[k] = scores[k][tmp2]
-        zbest=nzbest
+log.info('Stacking zcat')
+zcat = vstack(zcatdata)
+if exp_fibermaps:
+    log.info('Stacking exposure fibermaps')
+    expfm = np.hstack(exp_fibermaps)
+else:
+    expfm = None
 
-    data.append(zbest)
-   
+#- if TARGETIDs appear more than once, which one is best within this catalog?
+if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
+    log.info('Finding best spectrum for each target')
+    nspec, primary = find_primary_spectra(zcat)
+    zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
+    zcat['ZCAT_PRIMARY'] = primary
+else:
+    log.info('Missing TSNR2_LRG or ZWARN; not adding ZCAT_PRIMARY/_NSPEC')
 
-zcat = np.hstack(data)
+if args.patch_missing_ivar_w12:
+    from desimodel.footprint import radec2pix
+    missing = (zcat['FLUX_IVAR_W1'] < 0) | (zcat['FLUX_IVAR_W2'] < 0)
+    missing &= zcat['OBJTYPE'] == 'TGT'
+    missing &= zcat['TARGETID'] > 0
 
+    if not np.any(missing):
+        log.info('No targets missing FLUX_IVAR_W1/W2 to patch')
+    else:
+        #- Load targets from sv1 targeting files
+        ra = zcat['TARGET_RA']
+        dec = zcat['TARGET_DEC']
+        nside = 8  #- use for sv1 targeting
+        hpix8 = radec2pix(nside, ra, dec)
+        for hpix in np.unique(hpix8[missing]):
+            hpixmiss = (hpix == hpix8) & missing
+            targets = load_sv1_ivar_w12(hpix, zcat['TARGETID'][hpixmiss])
 
-if args.match:
-    for filename in args.match :
-        log.info("matching {}".format(filename))
-        zcat = match(zcat,fitsio.read(filename))
+            #- create dict[TARGETID] -> row number
+            targetid2idx = dict(zip(targets['TARGETID'],
+                                    np.arange(len(targets))))
 
-header = fitsio.read_header(zbestfiles[0], 0)
+            #- patch missing values, if they are in the targets file
+            for i in np.where(hpixmiss)[0]:
+                tid = zcat['TARGETID'][i]
+                try:
+                    j = targetid2idx[ tid ]
+                    zcat['FLUX_IVAR_W1'][i] = targets['FLUX_IVAR_W1'][j]
+                    zcat['FLUX_IVAR_W2'][i] = targets['FLUX_IVAR_W2'][j]
+                except KeyError:
+                    log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
 
-fitsio.write(args.outfile, zcat, header=header, extname='ZCATALOG', clobber=True)
-log.info("wrote {}".format(args.outfile))
+#- we're done adding columns, convert to numpy array for fitsio
+zcat = np.array(zcat)
 
+#- untested with new formats, so commenting out for now
+# if args.match:
+#     for filename in args.match :
+#         log.info("matching {}".format(filename))
+#         zcat = match(zcat,fitsio.read(filename))
 
+#- Inherit header from first input, but remove keywords that don't apply
+#- across multiple files
+header = fitsio.read_header(redrockfiles[0], 0)
+for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL']:
+    if key in header:
+        header.delete(key)
 
+if args.header is not None:
+    for keyval in args.header:
+        key, value = keyval.split('=', maxsplit=1)
+        try:
+            header[key] = int(value)
+        except ValueError:
+            header[key] = value
 
+log.info(f'Writing {args.outfile}')
+tmpfile = args.outfile + '.tmp'
+fitsio.write(tmpfile, zcat, header=header, extname='ZCATALOG', clobber=True)
+
+if not args.minimal and expfm is not None:
+    fitsio.write(tmpfile, expfm, extname='EXP_FIBERMAP')
+
+os.rename(tmpfile, args.outfile)
+
+log.info("Successfully wrote {}".format(args.outfile))
 

@@ -19,16 +19,28 @@ def parse(options=None):
     import argparse
 
     parser = argparse.ArgumentParser("Coadd all spectra per target, and optionally resample on linear or logarithmic wavelength grid")
-    parser.add_argument("-i","--infile", type=str, nargs='+', help="input spectra file or input frame files")
-    parser.add_argument("-o","--outfile", type=str,  help="output spectra file")
-    parser.add_argument("--nsig", type=float, default=4, help="nsigma rejection threshold for cosmic rays")
-    parser.add_argument("--lin-step", type=float, default=None, help="resampling to single linear wave array of given step in A")
-    parser.add_argument("--log10-step", type=float, default=None, help="resampling to single log10 wave array of given step in units of log10")
-    parser.add_argument("--wave-min", type=float, default=None, help="specify the min wavelength in A (default is the min wavelength in the input spectra), used only with option --lin-step or --log10-step")
-    parser.add_argument("--wave-max", type=float, default=None, help="specify the max wavelength in A (default is the max wavelength in the input spectra, approximate), used only with option --lin-step or --log10-step)")
-    parser.add_argument("--fast", action="store_true", help="fast resampling, at the cost of correlated pixels and no resolution matrix (used only with option --lin-step or --log10-step)")
-    parser.add_argument("--nproc", type=int, default=1, help="multiprocessing")
-    parser.add_argument("--coadd-cameras", action="store_true", help="coadd spectra of different cameras. works only if wavelength grids are aligned")
+    parser.add_argument("-i","--infile", type=str, nargs='+',
+            help="input spectra file or input frame files")
+    parser.add_argument("-o","--outfile", type=str,
+            help="output spectra file")
+    parser.add_argument("--nsig", type=float, default=4,
+            help="nsigma rejection threshold for cosmic rays (default %(default)s)")
+    parser.add_argument("--lin-step", type=float, default=None,
+            help="resampling to single linear wave array of given step in A")
+    parser.add_argument("--log10-step", type=float, default=None,
+            help="resampling to single log10 wave array of given step in units of log10")
+    parser.add_argument("--wave-min", type=float, default=None,
+            help="specify the min wavelength in A (default is the min wavelength in the input spectra), used only with option --lin-step or --log10-step")
+    parser.add_argument("--wave-max", type=float, default=None,
+            help="specify the max wavelength in A (default is the max wavelength in the input spectra, approximate), used only with option --lin-step or --log10-step)")
+    parser.add_argument("--fast", action="store_true",
+            help="fast resampling, at the cost of correlated pixels and no resolution matrix (used only with option --lin-step or --log10-step)")
+    parser.add_argument("--nproc", type=int, default=1,
+            help="number of multiprocessing cores to use")
+    parser.add_argument("--coadd-cameras", action="store_true",
+            help="coadd spectra of different cameras. works only if wavelength grids are aligned")
+    parser.add_argument("--onetile", action="store_true",
+            help="input spectra are from a single tile")
 
 
     if options is None:
@@ -102,6 +114,11 @@ def main(args=None):
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
             camera = frame.meta['CAMERA']
+            tileid = frame.meta['TILEID']
+            # Add NIGHT and TILEID to fibermap so we can compute COADD_NUMNIGHT
+            # and COADD_NUMTILE.
+            frame.fibermap['NIGHT'] = night
+            frame.fibermap['TILEID'] = tileid
             frames[(night,expid,camera)] = frame
             if args.coadd_cameras:
                 cam,spec = camera[0],camera[1]
@@ -122,8 +139,7 @@ def main(args=None):
                         for cam in camlist:
                             frames.pop((night,expid,cam+spec))
                             log.warning("Removing {}{} from Night {} EXP {}".format(cam,spec,night,expid))
-        #import pdb
-        #pdb.set_trace()
+                            
         spectra = frames2spectra(frames)
 
         #- hacks to make SpectraLite like a Spectra
@@ -133,10 +149,11 @@ def main(args=None):
 
     if args.coadd_cameras :
         log.info("coadding cameras ...")
-        spectra = coadd_cameras(spectra,cosmics_nsig=args.nsig)
+        spectra = coadd_cameras(spectra, cosmics_nsig=args.nsig,
+                onetile=args.onetile)
     else :
         log.info("coadding ...")
-        coadd(spectra,cosmics_nsig=args.nsig)
+        coadd(spectra, cosmics_nsig=args.nsig, onetile=args.onetile)
 
     if args.lin_step is not None :
         log.info("resampling ...")

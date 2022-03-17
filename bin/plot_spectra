@@ -5,8 +5,9 @@ import sys
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-import fitsio
-from desispec.io import read_spectra
+#import fitsio
+from desiutil.log import get_logger
+from desispec.io import read_spectra, read_table
 from desispec.interpolation import resample_flux
 from astropy.table import Table
 import redrock.templates
@@ -20,8 +21,8 @@ parser.add_argument('-t','--targetid', type = int, default = None, required = Fa
                     help = 'plot specific targetid')
 parser.add_argument('--rebin',type = int, default = None, required = False,
                     help = 'rebin')
-parser.add_argument('--zbest',type = str, default = None, required = False,
-                    help = 'zbest file')
+parser.add_argument('--redrock',type = str, default = None, required = False,
+                    help = 'redrock file')
 parser.add_argument('--spectype',type = str, default = None, required = False,
                     help = 'spectype to select')
 parser.add_argument('--ylim', type=float, default=None, required=False, nargs=2,
@@ -34,26 +35,35 @@ parser.add_argument('--errors', action='store_true',
                     help = 'show error bars')
 parser.add_argument('--only-valid', action='store_true',
                     help = 'show error bars')
+parser.add_argument('--zrange', type=float, default=None, required=False, nargs=2,
+                    help = 'zmin zmax (if with redredock)')
 
 
 args        = parser.parse_args()
 
-if  args.zbest is not None :
+log = get_logger()
+
+if  args.redrock is not None :
     #- Load redrock templates
     templates = dict()
     for filename in redrock.templates.find_templates():
         tx = redrock.templates.Template(filename)
         templates[(tx.template_type, tx.sub_type)] = tx
 
-if args.zbest is None and args.rest_frame :
+if args.redrock is None and args.rest_frame :
     args.rest_frame = False
-    print("cannot show rest-frame wavelength without a zbest file")
+    print("cannot show rest-frame wavelength without a redrock file")
 
 spectra = []
 for filename in args.infile :
     spec=read_spectra(filename)
     if args.only_valid :
-        good=(spec.fibermap["FIBERSTATUS"]==0)
+        if "FIBERSTATUS" in spec.fibermap.dtype.names :
+            good=(spec.fibermap["FIBERSTATUS"]==0)
+        elif "COADD_FIBERSTATUS" in spec.fibermap.dtype.names :
+            good=(spec.fibermap["COADD_FIBERSTATUS"]==0)
+        else :
+            log.error("cannot find FIBERSTATUS nor COADD_FIBERSTATUS in fibermap")
         spec=spec[good]
     spectra.append(spec)
 
@@ -61,16 +71,23 @@ targetids=None
 if ( targetids is None ) and ( args.targetid is not None ) :
     targetids=[args.targetid,]
 
-zbest=None
-if  args.zbest is not None :
-    zbest=Table.read(args.zbest,"ZBEST")
+redshifts=None
+if  args.redrock is not None :
+    try:
+        redshifts=read_table(args.redrock, "REDSHIFTS")
+    except KeyError:
+        redshifts=read_table(args.redrock, "ZBEST")
 
-if ( targetids is None ) and ( zbest is not None ) and ( args.spectype is not None ):
-    selection = np.where((zbest["SPECTYPE"]==args.spectype)&(zbest["ZWARN"]==0))[0]
+if ( targetids is None ) and ( redshifts is not None ) and ( args.spectype is not None ):
+    selection = np.where((redshifts["SPECTYPE"]==args.spectype)&(redshifts["ZWARN"]==0))[0]
     targetids=np.unique(spectra[0].fibermap["TARGETID"][selection])
 
 if targetids is None :
     targetids=np.unique(spectra[0].fibermap["TARGETID"])
+
+if redshifts is not None and args.zrange is not None :
+    selection = np.in1d(spectra[0].fibermap["TARGETID"],targetids)&(redshifts["Z"]>=args.zrange[0])&(redshifts["Z"]<=args.zrange[1])
+    targetids=np.unique(spectra[0].fibermap["TARGETID"][selection])
 
 
 lines = {
@@ -95,26 +112,34 @@ for tid in targetids :
     line="TARGETID={}".format(tid)
 
     model_flux=dict()
-    if zbest is not None :
-        j=np.where(zbest["TARGETID"]==tid)[0][0]
-        line += " ZBEST={} SPECTYPE={} ZWARN={}".format(zbest["Z"][j],zbest["SPECTYPE"][j],zbest["ZWARN"][j])
-        zval=zbest["Z"][j]
-        tx = templates[(zbest['SPECTYPE'][j], zbest['SUBTYPE'][j])]
+    if redshifts is not None :
+        j=np.where(redshifts["TARGETID"]==tid)[0][0]
+        line += " Z={} SPECTYPE={} ZWARN={}".format(redshifts["Z"][j],redshifts["SPECTYPE"][j],redshifts["ZWARN"][j])
+        zval=redshifts["Z"][j]
+        tx = templates[(redshifts['SPECTYPE'][j], redshifts['SUBTYPE'][j])]
         for band in spectra[0].bands:
             model_flux[band] = np.zeros(spectra[0].wave[band].shape)
-            coeff = zbest['COEFF'][j][0:tx.nbasis]
+            coeff = redshifts['COEFF'][j][0:tx.nbasis]
             model = tx.flux.T.dot(coeff).T
-            mx = resample_flux(spectra[0].wave[band], tx.wave*(1+zbest['Z'][j]), model)
+            mx = resample_flux(spectra[0].wave[band], tx.wave*(1+redshifts['Z'][j]), model)
             k=np.where(spectra[0].fibermap["TARGETID"]==tid)[0][0]
             model_flux[band] = spectra[0].R[band][k].dot(mx)
 
     fig=plt.figure(figsize=[10,6])
     ax = fig.add_subplot(111)
     print(line)
+    something_to_show = False
     for spec in spectra :
         jj=np.where(spec.fibermap["TARGETID"]==tid)[0]
-        fiber=spec.fibermap["FIBER"][jj[0]]
-
+        if np.sum(jj)==0 :
+            log.warning("TARGETID {} not in spectra".format(tid))
+            continue
+        something_to_show = True
+        if "FIBER" in spec.fibermap.dtype.names :
+            fiber=spec.fibermap["FIBER"][jj[0]]
+        else :
+            log.warning("no FIBER column in spectra file FIBERMAP")
+            fiber=-1
         wavescale=1.
         if args.rest_frame :
             wavescale = 1./(1+zval)
@@ -127,19 +152,28 @@ for tid in targetids :
                 if args.rebin is not None and args.rebin>0:
                     rwave=np.linspace(spec.wave[b][0],spec.wave[b][-1],spec.wave[b].size//args.rebin)
                     rflux,rivar = resample_flux(rwave,spec.wave[b],spec.flux[b][j],ivar=spec.ivar[b][j]*(spec.mask[b][j]==0))
-                    plt.plot(wavescale*rwave,rflux)
-                else :
-                    if args.errors :
-                        plt.errorbar(wavescale*spec.wave[b][i],spec.flux[b][j,i],1./np.sqrt(spec.ivar[b][j,i]))
-                    else :
-                        plt.plot(wavescale*spec.wave[b][i],spec.flux[b][j,i])
+                else:
+                    rwave = spec.wave[b][i]
+                    rflux = spec.flux[b][j, i]
+                    rivar = spec.ivar[b][j, i]
+                if args.errors:
+                    plt.fill_between(wavescale*rwave, rflux-1./np.sqrt(rivar),
+                                     rflux+1./np.sqrt(rivar), alpha=0.5)
+                    line, = plt.plot(wavescale*rwave, rflux)
+                    plt.plot(wavescale*rwave, 1/np.sqrt(rivar)-2,
+                             color=line.get_color(), linestyle='--')
+                else:
+                    plt.plot(wavescale*rwave, rflux)
 
                 c=np.polyfit(spec.wave[b][i],spec.flux[b][j,i],3)
                 pol=np.poly1d(c)(spec.wave[b][i])
 
         print(spec.fibermap[jj])
 
-    if zbest is not None :
+    if not something_to_show :
+        log.error("no data to show")
+        sys.exit(1)
+    if redshifts is not None :
         for band in spectra[0].bands:
             plt.plot(wavescale*spectra[0].wave[band],model_flux[band],"-",alpha=0.6)
             for elem in lines :
@@ -156,7 +190,7 @@ for tid in targetids :
     props = dict(boxstyle='round', facecolor='yellow', alpha=0.2)
     bla="TID = {}".format(tid)
     bla+="\nFIBER = {}".format(fiber)
-    if zbest is not None :
+    if redshifts is not None :
         bla+="\nZ  = {:4.3f}".format(zval)
     plt.text(0.9,0.9,bla,fontsize=12, bbox=props,transform = ax.transAxes,verticalalignment='top', horizontalalignment='right')
     if args.ylim is not None:

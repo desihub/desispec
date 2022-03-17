@@ -393,6 +393,9 @@ Full desispec API Reference
 
 .. automodule:: desispec.util
     :members:
+    
+.. automodule:: desispec.workflow.schedule
+    :members:
 
 .. automodule:: desispec.xytraceset
     :members:

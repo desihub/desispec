@@ -140,6 +140,11 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
                     if value in fluxcalib.fibercorr_comments.keys() :
                         hdu.header[key] = (value, fluxcalib.fibercorr_comments[value])
 
+    if fluxcalib.stdstar_fibermap is not None :
+        fibermap = encode_table(fluxcalib.stdstar_fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'STDSTAR_FIBERMAP'
+        hx.append( fits.convenience.table_to_hdu(fibermap) )
+
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
@@ -175,13 +180,17 @@ def read_flux_calibration(filename):
             fibercorr = None
             fibercorr_comments = None
 
-
+        if 'STDSTAR_FIBERMAP' in fx:
+            stdstar_fibermap = fx['STDSTAR_FIBERMAP'].data
+        else :
+            stdstar_fibermap = None
 
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask,
-                          fibercorr=fibercorr, fibercorr_comments=fibercorr_comments)
+                          fibercorr=fibercorr, fibercorr_comments=fibercorr_comments,
+                          stdstar_fibermap = stdstar_fibermap)
     fluxcalib.header = header
 
     return fluxcalib
@@ -212,6 +221,13 @@ def write_average_flux_calibration(outfile, averagefluxcalib):
       hx.append( fits.ImageHDU(averagefluxcalib.atmospheric_extinction_uncertainty.astype('f4'), name='ATERM_ERR') )
     if averagefluxcalib.seeing_term_uncertainty is not None :
         hx.append( fits.ImageHDU(averagefluxcalib.seeing_term_uncertainty.astype('f4'), name='STERM_ERR') )
+    # AR wave-dependent FIBER_FRACFLUX curve for the median seeing and median FIBER_FRACFLUX of the used exposures
+    if averagefluxcalib.ffracflux_wave is not None:
+        hx.append( fits.ImageHDU(averagefluxcalib.ffracflux_wave.astype('f4'), name='FFRACFLUX_WAVE') )
+        hx[-1].header['MDSEEING'] = averagefluxcalib.median_seeing
+        hx[-1].header['MDFFRACF'] = averagefluxcalib.median_ffracflux
+        hx[-1].header['FACWPOW'] = averagefluxcalib.fac_wave_power
+        hx[-1].header['FSTNIGHT'] = averagefluxcalib.first_night
 
     t0 = time.time()
     hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
@@ -245,6 +261,16 @@ def read_average_flux_calibration(filename):
             seeing_term_uncertainty = native_endian(fx["STERM_ERR"].data.astype('f8'))
         else :
             seeing_term_uncertainty = None
+        if "FFRACFLUX_WAVE" in fx:
+            median_seeing          = fx["FFRACFLUX_WAVE"].header["MDSEEING"]
+            median_ffracflux       = fx["FFRACFLUX_WAVE"].header["MDFFRACF"]
+            fac_wave_power         = fx["FFRACFLUX_WAVE"].header["FACWPOW"]
+            ffracflux_wave         = native_endian(fx["FFRACFLUX_WAVE"].data.astype('f8'))
+            first_night            = fx["FFRACFLUX_WAVE"].header["FSTNIGHT"]
+        else:
+            median_seeing, median_ffracflux, fac_wave_power, ffracflux_wave = None, None, None, None
+            first_night = None
+
 
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
@@ -256,7 +282,12 @@ def read_average_flux_calibration(filename):
                                   pivot_airmass=pivot_airmass,
                                   pivot_seeing=pivot_seeing,
                                   atmospheric_extinction_uncertainty=atmospheric_extinction_uncertainty,
-                                  seeing_term_uncertainty=seeing_term_uncertainty)
+                                  seeing_term_uncertainty=seeing_term_uncertainty,
+                                  median_seeing=median_seeing,
+                                  median_ffracflux=median_ffracflux,
+                                  fac_wave_power=fac_wave_power,
+                                  ffracflux_wave=ffracflux_wave,
+                                  first_night=first_night)
 
     return afluxcalib
 

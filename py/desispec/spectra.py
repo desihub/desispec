@@ -49,8 +49,10 @@ class Spectra(object):
         Dictionary of arrays specifying the block diagonal resolution matrix.
         The object for each band must be in one of the formats supported
         by the Resolution class constructor.
-    fibermap
+    fibermap, Table-like, optional
         Extended fibermap to use. If not specified, a fake one is created.
+    exp_fibermap, Table-like, optional
+        Exposure-specific fibermap columns, which may not apply to a coadd.
     meta : :class:`dict`, optional
         Dictionary of arbitrary properties.
     extra : :class:`dict`, optional
@@ -60,14 +62,19 @@ class Spectra(object):
         which are arrays of the same size as the flux array.
     single : :class:`bool`, optional
         If ``True``, store data in memory as single precision.
-    scores
+    scores :
         QA scores table.
+    scores_comments :
+        dict[column] = comment to include in output file
     extra_catalog : numpy or astropy Table, optional
         optional table of metadata, rowmatched to fibermap,
         e.g. a redshift catalog for these spectra
     """
-    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None, resolution_data=None,
-        fibermap=None, meta=None, extra=None, single=False, scores=None, extra_catalog=None):
+    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None,
+            resolution_data=None, fibermap=None, exp_fibermap=None,
+            meta=None, extra=None,
+            single=False, scores=None, scores_comments=None,
+            extra_catalog=None):
         
         self._bands = bands
         self._single = single
@@ -75,10 +82,14 @@ class Spectra(object):
         if single:
             self._ftype = np.float32
 
+        #- optional "scores" measured from the spectra
         if scores is not None:
             self.scores = Table(scores)
         else:
             self.scores = None
+
+        #- optional comments to document what each score means
+        self.scores_comments = scores_comments
 
         self.meta = None
         if meta is None:
@@ -135,6 +146,11 @@ class Spectra(object):
             self.fibermap = fibermap.copy()
         else:
             self.fibermap = None
+
+        if exp_fibermap is not None:
+            self.exp_fibermap = exp_fibermap.copy()
+        else:
+            self.exp_fibermap = None
 
         if extra_catalog is not None:
             self.extra_catalog = extra_catalog.copy()
@@ -247,105 +263,19 @@ class Spectra(object):
             return 0
 
 
-    def select(self, nights=None, bands=None, targets=None, fibers=None, invert=False):
-        """
-        Select a subset of the data.
-
-        This filters the data based on a logical AND of the different
-        criteria, optionally inverting that selection.
-
+    def _get_slice(self, index, bands=None):
+        """Slice spectra by index.
         Args:
-            nights (list): optional list of nights to select.
             bands (list): optional list of bands to select.
-            targets (list): optional list of target IDs to select.
-            fibers (list): list/array of fiber indices to select.
-            invert (bool): after combining all criteria, invert selection.
 
-        Returns (Spectra):
-            a new Spectra object containing the selected data.
+        Note: This function is intended to be private,
+              to be used by __getitem__() and select().
         """
-        keep_bands = None
-        if bands is None:
-            keep_bands = self.bands
-        else:
-            keep_bands = [ x for x in self.bands if x in bands ]
-        if len(keep_bands) == 0:
-            raise RuntimeError("no valid bands were selected!")
-
-        if 'NIGHT' in self.fibermap.colnames: # not present in data model of coadds
-            keep_nights = None
-            if nights is None:
-                keep_nights = [ True for x in self.fibermap["NIGHT"] ]
-            else:
-                keep_nights = [ (x in nights) for x in self.fibermap["NIGHT"] ]
-            if sum(keep_nights) == 0:
-                raise RuntimeError("no valid nights were selected!")
-        else:
-            keep_nights = np.ones(len(self.fibermap), bool)
-
-        keep_targets = None
-        if targets is None:
-            keep_targets = [ True for x in self.fibermap["TARGETID"] ]
-        else:
-            keep_targets = [ (x in targets) for x in self.fibermap["TARGETID"] ]
-        if sum(keep_targets) == 0:
-            raise RuntimeError("no valid targets were selected!")
-
-        keep_fibers = None
-        if fibers is None:
-            keep_fibers = [ True for x in self.fibermap["FIBER"] ]
-        else:
-            keep_fibers = [ (x in fibers) for x in self.fibermap["FIBER"] ]
-        if sum(keep_fibers) == 0:
-            raise RuntimeError("no valid fibers were selected!")
-
-        keep_rows = [ (x and y and z) for x, y, z in zip(keep_nights, keep_targets, keep_fibers) ]
-        if invert:
-            keep_rows = [ not x for x in keep_rows ]
-
-        keep = [ i for i, x in enumerate(keep_rows) if x ]
-        if len(keep) == 0:
-            raise RuntimeError("selection has no spectra")
-
-        keep_wave = {}
-        keep_flux = {}
-        keep_ivar = {}
-        keep_mask = None
-        keep_res = None
-        keep_extra = None
-        if self.mask is not None:
-            keep_mask = {}
-        if self.resolution_data is not None:
-            keep_res = {}
-        if self.extra is not None:
-            keep_extra = {}
-
-        for b in keep_bands:
-            keep_wave[b] = self.wave[b]
-            keep_flux[b] = self.flux[b][keep,:]
-            keep_ivar[b] = self.ivar[b][keep,:]
-            if self.mask is not None:
-                keep_mask[b] = self.mask[b][keep,:]
-            if self.resolution_data is not None:
-                keep_res[b] = self.resolution_data[b][keep,:,:]
-            if self.extra is not None:
-                keep_extra[b] = {}
-                for ex in self.extra[b].items():
-                    keep_extra[b][ex[0]] = ex[1][keep,:]
-
-        ret = Spectra(keep_bands, keep_wave, keep_flux, keep_ivar, 
-            mask=keep_mask, resolution_data=keep_res, 
-            fibermap=self.fibermap[keep], meta=self.meta, extra=keep_extra,
-            single=self._single)
-
-        return ret
-
-    def __getitem__(self, index):
-        """Slice spectra by index"""
         if isinstance(index, numbers.Integral):
             index = slice(index, index+1)
 
-        bands = copy.copy(self.bands)
+        if bands is None:
+            bands = copy.copy(self.bands)
         flux = dict()
         ivar = dict()
         wave = dict()
@@ -368,8 +298,14 @@ class Spectra(object):
 
         if self.fibermap is not None:
             fibermap = self.fibermap[index].copy()
+
+            exp_fibermap = None
+            if self.exp_fibermap is not None:
+                j = np.in1d(self.exp_fibermap['TARGETID'], fibermap['TARGETID'])
+                exp_fibermap = self.exp_fibermap[j].copy()
         else:
             fibermap = None
+            exp_fibermap = None
 
         if self.extra_catalog is not None:
             extra_catalog = self.extra_catalog[index].copy()
@@ -384,10 +320,76 @@ class Spectra(object):
             scores = None
 
         sp = Spectra(bands, wave, flux, ivar,
-            mask=mask, resolution_data=rdat, fibermap=fibermap,
-            meta=self.meta, extra=extra, scores=scores, extra_catalog=extra_catalog,
+            mask=mask, resolution_data=rdat,
+            fibermap=fibermap, exp_fibermap=exp_fibermap,
+            meta=self.meta, extra=extra, single=self._single,
+            scores=scores, extra_catalog=extra_catalog,
         )
         return sp
+
+
+    def select(self, nights=None, exposures=None, bands=None, targets=None, fibers=None, invert=False, return_index=False):
+        """
+        Select a subset of the data.
+
+        This filters the data based on a logical AND of the different
+        criteria, optionally inverting that selection.
+
+        Args:
+            nights (list): optional list of nights to select.
+            exposures (list): optional list of exposures to select.
+            bands (list): optional list of bands to select.
+            targets (list): optional list of target IDs to select.
+            fibers (list): list/array of fiber indices to select.
+            invert (bool): after combining all criteria, invert selection.
+            return_index (bool): if True, also return the indices of selected spectra.
+
+        Returns:
+            spectra: a new Spectra object containing the selected data.
+            indices (list, optional): indices of selected spectra. Only provided if return_index is True.
+        """
+        if bands is None:
+            keep_bands = self.bands
+        else:
+            keep_bands = [ x for x in self.bands if x in bands ]
+        if len(keep_bands) == 0:
+            raise RuntimeError("no valid bands were selected!")
+
+        keep_rows = np.ones(len(self.fibermap), bool)
+        for fm_select,fm_var in zip([nights, exposures, targets, fibers],
+                                    ['NIGHT', 'EXPID', 'TARGETID', 'FIBER']):
+            if fm_select is not None:
+                keep_selection = np.isin(self.fibermap[fm_var], fm_select)
+                if sum(keep_selection) == 0:
+                    raise RuntimeError("no valid "+fm_var+" were selected!")
+                keep_rows = keep_rows & keep_selection
+
+        if invert:
+            keep_rows = np.invert(keep_rows)
+
+        keep, = np.where(keep_rows)
+        if len(keep) == 0:
+            raise RuntimeError("selection has no spectra")
+
+        sp = self._get_slice(keep_rows, bands=keep_bands)
+
+        if return_index:
+            return (sp, keep)
+
+        return sp
+
+    def __getitem__(self, index):
+        """ Slice spectra by index.
+            Index can be an arbitrary slice, for example:
+                spectra[0]       #- single index -> slice 0:1
+                spectra[0:10]    #- slice
+                spectra[ [0,12,56,34] ]  #- list of indices, doesn't have to be sorted
+                spectra[ spectra.fibermap['FIBER'] < 20 ]  #- boolean array
+
+        """
+        #- __getitem__ differs from _get_slice as it has a single argument
+        return self._get_slice(index)
+
 
     def update(self, other):
         """
@@ -404,7 +406,9 @@ class Spectra(object):
         Returns:
             nothing (object updated in place).
 
-        Note: does not support updating extra_catalog
+        Note: if fibermap, scores and extra_catalog exist in the new data, they
+        are appended to the existing tables. If those new tables have different columns,
+        only columns with identical names will be appended. Spectra.meta is unchanged.
         """
 
         # Does the other Spectra object have any data?
@@ -476,11 +480,13 @@ class Spectra(object):
         # Compute which targets / exposures are new
 
         nother = len(other.fibermap)
-        exists = np.zeros(nother, dtype=np.int)
+        exists = np.zeros(nother, dtype=int)
 
         indx_original = []
 
-        if self.fibermap is not None:
+        if ( (self.fibermap is not None) and
+            all([x in fm.keys() for x in ['EXPID', 'FIBER']
+                                for fm in [self.fibermap, other.fibermap]]) ):
             for r in range(nother):
                 expid = other.fibermap[r]["EXPID"]
                 fiber = other.fibermap[r]["FIBER"]
@@ -509,6 +515,16 @@ class Spectra(object):
             newfmap = encode_table(np.zeros( (nold + nnew, ),
                                    dtype=self.fibermap.dtype))
         
+        newscores = None
+        if self.scores is not None:
+            newscores = encode_table(np.zeros( (nold + nnew, ),
+                                   dtype=self.scores.dtype))
+
+        newextra_catalog = None
+        if self.extra_catalog is not None:
+            newextra_catalog = encode_table(np.zeros( (nold + nnew, ),
+                                   dtype=self.extra_catalog.dtype))
+
         newwave = {}
         newflux = {}
         newivar = {}
@@ -549,7 +565,10 @@ class Spectra(object):
 
         if nold > 0:
             # We have some data (i.e. we are not starting with an empty Spectra)
-            newfmap[:nold] = self.fibermap
+            for newtable, original_table in zip([newfmap, newscores, newextra_catalog],
+                                           [self.fibermap, self.scores, self.extra_catalog]):
+                if original_table is not None:
+                    newtable[:nold] = original_table
 
             for b in self.bands:
                 newflux[b][:nold,:] = self.flux[b]
@@ -589,7 +608,16 @@ class Spectra(object):
         # Append new spectra
 
         if nnew > 0:
-            newfmap[nold:] = other.fibermap[indx_new]
+            for newtable, othertable in zip([newfmap, newscores, newextra_catalog],
+                                           [other.fibermap, other.scores, other.extra_catalog]):
+                if othertable is not None:
+                    if newtable.dtype == othertable.dtype:
+                        newtable[nold:] = othertable[indx_new]
+                    else:
+                    #- if table contents do not match, still merge what we can, based on key names
+                    # (possibly with numpy automatic casting)
+                        for k in set(newtable.keys()).intersection(set(othertable.keys())):
+                            newtable[k][nold:] = othertable[k][indx_new]
 
             for b in other.bands:
                 newflux[b][nold:,:] = other.flux[b][indx_new].astype(self._ftype)
@@ -624,6 +652,8 @@ class Spectra(object):
         self.resolution_data = newres
         self.R = newR
         self.extra = newextra
+        self.scores = newscores
+        self.extra_catalog = newextra_catalog
 
         return
 
@@ -680,6 +710,20 @@ def stack(speclist):
     else:
         fibermap = None
 
+    if speclist[0].exp_fibermap is not None:
+        if isinstance(speclist[0].exp_fibermap, np.ndarray):
+            #- note named arrays need hstack not vstack
+            exp_fibermap = np.hstack([sp.exp_fibermap for sp in speclist])
+        else:
+            import astropy.table
+            if isinstance(speclist[0].exp_fibermap, astropy.table.Table):
+                exp_fibermap = astropy.table.vstack([sp.exp_fibermap for sp in speclist])
+            else:
+                raise ValueError("Can't stack exp_fibermaps of type {}".format(
+                    type(speclist[0].exp_fibermap)))
+    else:
+        exp_fibermap = None
+
     if speclist[0].extra_catalog is not None:
         if isinstance(speclist[0].extra_catalog, np.ndarray):
             #- note named arrays need hstack not vstack
@@ -711,7 +755,8 @@ def stack(speclist):
         scores = None
 
     sp = Spectra(bands, wave, flux, ivar,
-        mask=mask, resolution_data=rdat, fibermap=fibermap,
+        mask=mask, resolution_data=rdat,
+        fibermap=fibermap, exp_fibermap=exp_fibermap,
         meta=speclist[0].meta, extra=extra, scores=scores,
         extra_catalog=extra_catalog,
     )

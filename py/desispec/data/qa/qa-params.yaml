@@ -1,0 +1,109 @@
+# QA parameters read by exposure_qa.py
+exposure_qa:
+
+ # max cutoff on fiber offset in mm for poor and bad positioning
+ poor_fiber_offset_mm : 0.030
+ bad_fiber_offset_mm  : 0.100
+
+ # maximum read noise rms per CCD pixel in electrons
+ max_readnoise : 10
+
+ # maximum fraction of fibers with bad positioning
+ # per petal
+ max_frac_of_bad_positions_per_petal : 0.6
+
+ # minimum number of valid standard stars per petal
+ min_number_of_good_stdstars_per_petal : 3
+
+ # maximum rms of calibration error per star
+ # (ratio of calibrated flux to model in rband)
+ max_rms_of_rflux_ratio_of_stdstars : 0.2
+
+ # maximum rms of calibration error per star
+ # (ratio of calibrated flux to model in rband)
+ # in case there are less than the min number of stars
+ # (in practice 2 stars). The requirement is more strict
+ max_rms_of_rflux_ratio_of_stdstars_if_few_stars : 0.05
+
+
+ # tsnr parameters
+ tsnr2_band : r
+ tsnr2_key : TSNR2_LRG_R
+ tsnr2_petal_minfrac : 0.5
+ tsnr2_petal_maxfrac : 2.
+ tsnr2_for_efftime_dark : 'TSNR2_ELG'
+ tsnr2_for_efftime_bright : 'TSNR2_BGS'
+ tsnr2_for_efftime_backup : 'TSNR2_BGS'
+
+ # comment: do not include STUCKPOSITIONER and RESTRICTED since they could be validly used for SKY targets
+ # bad POSITIONING flag
+ bad_positions_mask : "BROKENFIBER|MISSINGPOSITION|BADPOSITION|POORPOSITION"
+ # bad QAFIBERSTATUS flag
+ bad_qafstatus_mask : "UNASSIGNED|BROKENFIBER|MISSINGPOSITION|BADPOSITION|POORPOSITION|BADFIBER|BADTRACE|BADFLAT|BADARC|MANYBADCOL|MANYREJECTED|BADAMPB|BADAMPR|BADAMPZ|BADPETALPOS|BADPETALSKY|BADPETALSTDSTAR|BADPETALFLUXCAL|BADPETALSNR|BADREADNOISE"
+ # bad QAFIBERSTATUS per-petal flag
+ bad_petal_mask : "BADPETALPOS|BADPETALSKY|BADPETALSTDSTAR|BADPETALFLUXCAL|BADPETALSNR|BADREADNOISE"
+
+# QA parameters read by tile_qa.py
+tile_qa:
+
+# fibers in a tile are considered valid if their efftime > fiber_rel_mintfrac * mintfrac * goaltime
+# where mintfrac and goaltime are read in the FIBERMAP header of the spectro files where they
+# have been copied from the fiberassign file.
+# The value of 0.85 has been chosen based on the redshift success rate as a function of TSNR2_ELG, TSNR2_LRG, and TSNR2_BGS.
+# Approximate thresholds:
+# TSNR2_ELG = 80   -> EFFTIME_SPEC = 688.0 sec -> fiber_rel_mintfrac*MINTFRAC = 0.688 -> fiber_rel_mintfrac = 0.81
+# TSNR2_LRG = 60   -> EFFTIME_SPEC = 739.6 sec -> fiber_rel_mintfrac*MINTFRAC = 0.739 -> fiber_rel_mintfrac = 0.87
+# TSNR2_BGS = 1000 -> EFFTIME_SPEC = 140.0 sec -> fiber_rel_mintfrac*MINTFRAC = 0.78  -> fiber_rel_mintfrac = 0.91
+ fiber_rel_mintfrac : 0.85
+
+
+
+# minimum number of valid fibers (best in 2021/06 would be 4400 and we would 'allow' 3 non-functional petals)
+ min_number_of_good_fibers : 3000
+
+# QA parameters read by tile_qa_plot.py
+tile_qa_plot:
+
+ # redshift grid
+ bins :
+  zmin : -0.05
+  zmax : 6.05
+  dz : 0.05
+
+ # DELTACHI2 cut for the n(z)
+ dchi2_min : 50
+
+ # tsnr key
+ tsnr2_key : TSNR2_LRG
+
+ # tracers
+ tracers :
+
+  BGS_BRIGHT :
+   program : BRIGHT
+   zmin : 0.05
+   zmax : 0.40
+  BGS_FAINT :
+   program : BRIGHT
+   zmin : 0.05
+   zmax : 0.40
+  LRG :
+   program : DARK
+   zmin : 0.40
+   zmax : 1.00
+  ELG_LOP :
+   program : DARK
+   zmin : 0.60
+   zmax : 1.60
+  QSO :
+   program : DARK
+   zmin : 0.9
+   zmax : 2.1
+
+ # {BRZ}THRUFRAC
+ thrufrac_min : 0.8
+ thrufrac_max : 1.2
+
+ # sky
+ skythrurms_max : 0.05
+ skychi2pdf_max : 1.5

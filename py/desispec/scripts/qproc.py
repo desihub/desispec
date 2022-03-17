@@ -106,7 +106,7 @@ def main(args=None):
             print("ERROR: Need to specify camera to open a raw fits image (with all cameras in different fits HDUs)")
             print("Try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_qproc --help' for more options")
             sys.exit(12)
-        image = read_raw(args.image, args.camera,fill_header=[1,])
+        image = read_raw(args.image, args.camera, args.fibermap, fill_header=[1,])
 
     
     if args.auto :
@@ -173,6 +173,20 @@ def main(args=None):
     else :
         fibermap = None
 
+    # select fibermap for one spectrograph
+    if fibermap is not None:
+        try:
+            if args.camera is not None:
+                camera = args.camera
+            else:
+                camera = image.meta['CAMERA']
+            petal = int(camera[-1])
+            fibermap = fibermap[fibermap['PETAL_LOC'] == petal]
+
+        except Exception as e:
+            log.error(e)
+
+
     if "OBSTYPE" in image.meta :
         obstype = image.meta["OBSTYPE"].upper()
         image.meta["OBSTYPE"]=obstype # make sure it's upper case
@@ -218,9 +232,9 @@ def main(args=None):
 
         # using the trace shift script
         if args.auto  :
-            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","continuum":((obstype=="FLAT")|(obstype=="TESTFLAT")),"sky":((obstype=="SCIENCE")|(obstype=="SKY"))})
+            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","degyy":0,"continuum":((obstype=="FLAT")|(obstype=="TESTFLAT")),"sky":((obstype=="SCIENCE")|(obstype=="SKY"))})
         else :
-            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy"})
+            options = option_list({"psf":args.psf,"image":"dummy","outpsf":"dummy","degyy":0})
         tmp_args = trace_shifts_script.parse(options=options)
         tset = trace_shifts_script.fit_trace_shifts(image=image,args=tmp_args)
 

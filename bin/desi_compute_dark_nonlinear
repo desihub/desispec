@@ -8,6 +8,8 @@ desi_compute_dark_nonlinear --days 20200729 20200730 --camera b0 \
         --biasfile bias-20200729-b0.fits.gz
 """
 
+import astropy.io.fits as pyfits
+
 import argparse
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -29,6 +31,8 @@ parser.add_argument('--nights', type=int, nargs="*",
                     help='YEARMMDD nights to use for ZEROs and DARKs')
 parser.add_argument('--first-expid', type=int, required=False,
                     help='First EXPID to include')
+parser.add_argument('--last-expid', type=int, required=False,
+                    help='Last EXPID to include')
 parser.add_argument('--darkfile', type=str, required=True,
                     help='output dark model file')
 parser.add_argument('--biasfile', type=str, required=True,
@@ -100,11 +104,10 @@ else:
     daynight = 'NIGHT'
     nights = args.nights
 
-#- Get table of what exposures were taken on those days
 speclog_file = os.path.join(tempdir, 'speclog.csv')
 if os.path.exists(speclog_file):
     log.info(f'Reading speclog from {speclog_file}')
-    speclog = Table.read(speclog_file)
+    speclog = Table.read(speclog_file, format='ascii',fill_values=None)   #the None is needed to avoid masking
 else:
     log.info(f'Generating speclog for nights {nights}')
     speclog = desispec.io.util.get_speclog(nights)
@@ -133,6 +136,24 @@ if args.first_expid is not None:
         log.critical('No exposures! exiting...')
         sys.exit(1)
 
+if args.last_expid is not None:
+    keep = speclog['EXPID'] <= args.last_expid
+    speclog = speclog[keep]
+    if len(speclog) == 0:
+        log.critical('No exposures! exiting...')
+        sys.exit(1)
+
+colnames = speclog.colnames
+if 'CAMWORD' in colnames and 'BADCAMWORD' in colnames and 'BADAMPS' in colnames:
+    goodcamwords=[desispec.io.util.difference_camwords(s['CAMWORD'],s['BADCAMWORD']) for s in speclog]
+    goodcamlists=[desispec.io.util.decode_camword(camword) for camword in goodcamwords]
+    keep = np.array([(args.camera in goodcam and args.camera not in badamp) for goodcam,badamp in zip(goodcamlists,speclog['BADAMPS'])])
+    keep &= speclog['LASTSTEP']=='all'
+    speclog = speclog[keep]
+    if len(speclog) == 0:
+        log.critical('No exposures! exiting...')
+        sys.exit(1)
+
 #- group EXPTIMEs by integer
 speclog['EXPTIME_INT'] = speclog['EXPTIME'].astype(int)
 
@@ -150,8 +171,8 @@ for exptime in np.unique(speclog['EXPTIME_INT']):
 speclog = speclog[keep]
 
 #- Print some summary stats before continuing
-isZero = speclog['OBSTYPE'] == 'ZERO'
-isDark = speclog['OBSTYPE'] == 'DARK'
+isZero = (speclog['OBSTYPE'] == 'ZERO') | (speclog['OBSTYPE'] == 'zero')
+isDark = (speclog['OBSTYPE'] == 'DARK') | (speclog['OBSTYPE'] == 'dark')
 for night in nights:
     ii = speclog[daynight] == night
     nzeros = np.count_nonzero(ii & isZero)
@@ -177,8 +198,11 @@ for night in nights:
 
     for row in speclog[ii][args.nskip_zeros:]:
         rawfile = findfile('raw', row['NIGHT'], row['EXPID'])
-        zerofiles.append(rawfile)
-        all_zerofiles.append(rawfile)
+        # check cam exists for this file
+        with pyfits.open(rawfile) as hdulist :
+            if args.camera in hdulist :
+                zerofiles.append(rawfile)
+                all_zerofiles.append(rawfile)
 
     biasfile = f'{tempdir}/bias-{night}-{args.camera}.fits'
     if os.path.exists(biasfile):
@@ -209,11 +233,17 @@ for exptime in darktimes:
     ii = (speclog['EXPTIME_INT'] == exptime)
     for row in speclog[isDark & ii]:
         day, night, expid = row[daynight], row['NIGHT'], row['EXPID']
-        rawfiles.append(findfile('raw', night, expid, args.camera))
-        biasfiles.append(f'{tempdir}/bias-{day}-{args.camera}.fits')
-
+        filename = findfile('raw', night, expid, args.camera)
+        with pyfits.open(filename) as hdulist :
+            if args.camera in hdulist :
+                biasfile=f'{tempdir}/bias-{day}-{args.camera}.fits'
+                if os.path.isfile(biasfile):
+                    rawfiles.append(filename)
+                    biasfiles.append(biasfile)
     compute_dark_file(rawfiles, darkfile, args.camera, bias=biasfiles,
         exptime=exptime)
+
+
 
 #- Read the individual combined dark images
 log.info('Reading darks for individual EXPTIMEs')
@@ -221,9 +251,10 @@ darkimages = list()
 darkheaders = list()
 for exptime in darktimes:
     darkfile = f'{tempdir}/dark-{args.camera}-{exptime}.fits'
-    img, hdr = fitsio.read(darkfile, 'DARK', header=True)
-    darkimages.append(img*exptime)
-    darkheaders.append(hdr)
+    if os.path.isfile(darkfile) :
+        img, hdr = fitsio.read(darkfile, 'DARK', header=True)
+        darkimages.append(img*exptime)
+        darkheaders.append(hdr)
 
 darkimages = np.array(darkimages)
 

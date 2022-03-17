@@ -80,7 +80,7 @@ def all_tasks(night, nside, expid=None):
 
     This uses the filesystem to query the raw data for a particular night and
     return a dictionary containing all possible tasks for each task type.  For
-    objects which span multiple nights (e.g. spectra, zbest), this returns the
+    objects which span multiple nights (e.g. spectra, redrock), this returns the
     tasks which are touched by the given night.
 
     Args:

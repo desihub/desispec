@@ -1,0 +1,174 @@
+#!/usr/bin/env python
+
+"""
+Assemble individual tilepix files into output summary files mapping which
+tiles cover which healpix
+"""
+
+import os, sys, glob, json
+from copy import deepcopy
+import argparse
+
+def getpix(tilepix, tileids):
+    """
+    Return which healpix are covered by these tileids
+
+    Args:
+        tilepix: dict[tileid][petal] = list of healpix
+        tileids: array-like list of tileids
+
+    Returns:
+        array of healpix covered by these tiles according to tilepix
+    """
+    pix = list()
+    for tileid in tileids:
+        t = str(tileid)
+        for petal in range(10):
+            p = str(petal)
+            if p in tilepix[t]:
+                pix.extend(tilepix[t][p])
+
+    pix = np.unique(pix)
+    return pix
+
+#-------------------------------------------------------------------------
+
+p = argparse.ArgumentParser()
+p.add_argument('-s', '--specprod', type=str,
+        help='override $SPECPROD')
+p.add_argument('-o', '--outfile', type=str,
+        help='output fits file; .json will also be created')
+p.add_argument('-e', '--expfile', type=str,
+        help='input exposures fits file (default exposures-$SPECPROD.fits)')
+p.add_argument('--check', action='store_true',
+        help='perform checks comparing tilepix map to files on disk')
+
+args = p.parse_args()
+
+#- not just asking for --help, so proceed with slower imports
+import numpy as np
+from astropy.table import Table
+
+from desiutil.log import get_logger
+import desispec.io
+from desispec.io.util import parse_cameras, camword_union
+
+log = get_logger()
+
+#- defaults for args
+if args.specprod is not None:
+    os.environ['SPECPROD'] = args.specprod
+
+specprod = os.environ['SPECPROD']
+
+if args.outfile is None and not args.check:
+    log.warning("Normally you'd want --check and/or --outfile, but proceeding anyway")
+
+if args.outfile is not None:
+    if not args.outfile.endswith( ('.fits', '.ecsv') ):
+        log.error(f'--outfile must be .fits or .ecsv, not {args.outfile}')
+        sys.exit(1)
+
+    args.outfile = os.path.abspath(args.outfile)
+
+reduxdir = desispec.io.specprod_root()
+log.info(f'Inspecting {reduxdir}')
+
+if args.expfile is None:
+    args.expfile = f'{reduxdir}/exposures-{specprod}.fits'
+
+#- read exposures and frames in this production
+log.info(f'Reading exposures from {args.expfile}')
+exp = Table.read(args.expfile, 'EXPOSURES')
+frames = Table.read(args.expfile, 'FRAMES')
+
+#- Load all individual tilepix files
+tileids, firstindex = np.unique(exp['TILEID'], return_index=True) 
+tilepix = dict()
+for tileid, i in zip(tileids, firstindex):
+    night = exp['NIGHT'][i]
+    expid = exp['EXPID'][i]
+    fn = desispec.io.findfile('tilepix', tile=tileid, night=night, expid=expid)
+    with open(fn) as fx:
+        tilepix.update( json.load(fx) )
+
+#- filter out petals that don't have frames
+for tileid in tileids:
+    ii = frames['TILEID'] == tileid
+    camword = parse_cameras(np.unique(frames['CAMERA'][ii]), loglevel='warning')
+    #- should only be complete petals, not individual cameras left
+    assert 'b' not in camword
+    assert 'r' not in camword
+    assert 'z' not in camword
+    for petal in range(10):
+        if str(petal) not in camword:
+            log.debug(f'Dropping tileid {tileid} petal {petal} not in camword {camword}')
+            del tilepix[str(tileid)][str(petal)]
+
+if args.outfile:
+    #- convert to a table
+    rows = list()
+    for tileid in tilepix:
+        ii = exp['TILEID'] == int(tileid)
+        survey = exp['SURVEY'][ii][0]
+        program = exp['PROGRAM'][ii][0]
+        for petal in tilepix[tileid]:
+            for pix in tilepix[tileid][petal]:
+                rows.append((int(tileid), survey, program, int(petal),int(pix)))
+
+    tx = Table(rows=rows,
+            names=('TILEID', 'SURVEY', 'PROGRAM', 'PETAL_LOC', 'HEALPIX'),
+            dtype=(np.int32, str, str, np.int16, np.int32) )
+
+    tx.meta['EXTNAME'] = 'TILEPIX'
+    tx.meta['HPXNSIDE'] = 64
+    tx.meta['HPXNEST'] = True
+    tx.write(args.outfile, overwrite=True)
+    log.info(f'Wrote {args.outfile}')
+
+    jsonout = os.path.splitext(args.outfile)[0] + '.json'
+    with open(jsonout, 'w') as fx:
+        json.dump(tilepix, fx)
+    log.info(f'Wrote {jsonout}')
+
+#- if not checking, we're done and can exit
+if not args.check:
+    sys.exit(0)
+
+log.info('Checking for missing or extra healpix')
+nbad = 0
+for survey, program in list(np.unique(exp['SURVEY', 'PROGRAM'])):
+    if isinstance(survey, bytes):
+        survey = survey.decode()
+    if isinstance(program, bytes):
+        program = program.decode()
+
+    ii = (exp['SURVEY'] == survey) & (exp['PROGRAM'] == program)
+    tileids = np.unique(exp['TILEID'][ii])
+    healpix = getpix(tilepix, tileids)
+    log.info(f'{survey} {program} {len(healpix)} healpix')
+    for pix in healpix:
+        fn = desispec.io.findfile('redrock', groupname=pix,
+                survey=survey, faprogram=program)
+        if not os.path.exists(fn):
+            log.error(f'MISSING {fn}')
+            nbad += 1
+
+    #- Check for extra directories
+    for dirname in sorted(glob.glob(f'healpix/{survey}/{program}/[0-9]*/[0-9]*')):
+        # could still get pathological cases like 123blat, so try/except test:
+        try:
+            pix = int(os.path.basename(dirname))
+        except ValueError:
+            continue
+
+        if pix not in healpix:
+            log.error(f'EXTRA directory {dirname}')
+            nbad += 1
+
+if nbad == 0:
+    log.info('Good -- no missing or extra healpix dirs found')
+else:
+    log.error(f'{nbad} problems found; see log messages above')
+
+

@@ -2,17 +2,24 @@
 # -*- coding: utf-8 -*-
 """Test desispec.io.
 """
+
+import sys
+if __name__ == '__main__':
+    print('Run this instead:')
+    print('python setup.py test -m desispec.test.test_io')
+    sys.exit(1)
+
 import unittest
 from unittest.mock import patch, MagicMock
 import os
-import sys
 import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
 from pkg_resources import resource_filename
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, MaskedColumn
+import fitsio
 from ..frame import Frame
 
 
@@ -204,6 +211,44 @@ class TestIO(unittest.TestCase):
         #
         write_bintable(self.testfile, data, header=hdr, extname='FOOBAR', clobber=True)
 
+    def test_read_table(self):
+        """test desispec.io.table.read_table"""
+        from ..io.table import read_table
+
+        t = Table()
+        t['a'] = ['a', 'b', '']
+        t['x'] = [1.0, 2.0, np.NaN]
+        t['blat'] = [10, 20, 30]
+        t.meta['EXTNAME'] = 'TABLE'
+        t.meta['BLAT'] = 'foo'
+
+        testfile = os.path.join(self.testDir, 'testtable.fits')
+        t.write(testfile)
+
+        tx = read_table(testfile)
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
+
+        #- read a non-default extension
+        t.meta['EXTNAME'] = 'KUMQUAT'
+        fitsio.write(testfile, np.array(t), header=t.meta, extname='KUMQUAT')
+
+        tx = read_table(testfile, 'KUMQUAT')
+        self.assertEqual(tx.meta['EXTNAME'], 'KUMQUAT')
+
+        for col in tx.colnames:
+            self.assertFalse( isinstance(tx[col], MaskedColumn) )
+
+        self.assertEqual(t['a'][2], '')
+        self.assertTrue(np.isnan(t['x'][2]))
+        self.assertTrue(np.all(t['blat'] == tx['blat']))
+        self.assertEqual(t.meta, tx.meta)
 
     #- Some macs fail `assert_called_with` tests due to equivalent paths
     #- of `/private/var` vs. `/var`, so skip this test on Macs.
@@ -397,6 +442,53 @@ class TestIO(unittest.TestCase):
             self.assertTrue(xsky.flux.dtype.isnative)
             self.assertEqual(sky.mask.dtype, xsky.mask.dtype)
 
+    def test_skycorr_rw(self):
+        """Test reading and writing skycorr files.
+        """
+        from ..skycorr import SkyCorr
+        from ..io.skycorr import read_skycorr, write_skycorr
+        nspec, nwave = 5,10
+        wave  = np.linspace(4000.,8000,nwave)
+        dwave = 0.02*np.random.uniform(size=(nspec, nwave))
+        dlsf  = 0.1*np.random.uniform(size=(nspec, nwave))
+        header = {"HELLO":"WORLD"}
+        skycorr = SkyCorr(wave=wave, dwave=dwave, dlsf=dlsf, header=header)
+        write_skycorr(self.testfile, skycorr)
+        xskycorr = read_skycorr(self.testfile)
+        self.assertTrue(np.all(skycorr.wave.astype('f8')  == xskycorr.wave))
+        self.assertTrue(np.all(skycorr.dwave.astype('f4').astype('f8') == xskycorr.dwave))
+        self.assertTrue(np.all(skycorr.dlsf.astype('f4').astype('f8')  == xskycorr.dlsf))
+
+    def test_skycorr_pca_rw(self):
+        """Test reading and writing skycorr files.
+        """
+        from ..skycorr import SkyCorrPCA
+        from ..io.skycorr import read_skycorr_pca, write_skycorr_pca
+        nspec, nwave = 5,10
+        wave  = np.linspace(4000.,8000,nwave)
+        dwave_mean = 0.02*np.random.uniform(size=(nspec, nwave))
+        dwave_eigenvectors = 0.02*np.random.uniform(size=(3,nspec, nwave))
+        dwave_eigenvalues = np.random.uniform(size=12)
+        dlsf_mean  = 0.1*np.random.uniform(size=(nspec, nwave))
+        dlsf_eigenvectors = 0.1*np.random.uniform(size=(3,nspec, nwave))
+        dlsf_eigenvalues = np.random.uniform(size=12)
+
+        header = {"HELLO":"WORLD"}
+        skycorr = SkyCorrPCA(wave=wave,
+                             dwave_mean=dwave_mean,
+                             dwave_eigenvectors=dwave_eigenvectors,
+                             dwave_eigenvalues=dwave_eigenvalues,
+                             dlsf_mean=dlsf_mean,
+                             dlsf_eigenvectors=dlsf_eigenvectors,
+                             dlsf_eigenvalues=dlsf_eigenvalues,
+                             header=header)
+        write_skycorr_pca(self.testfile, skycorr)
+        xskycorr = read_skycorr_pca(self.testfile)
+        self.assertTrue(np.all(skycorr.wave.astype('f8')  == xskycorr.wave))
+        self.assertTrue(np.all(skycorr.dwave_mean.astype('f4').astype('f8') == xskycorr.dwave_mean))
+        self.assertTrue(np.all(skycorr.dlsf_mean.astype('f4').astype('f8')  == xskycorr.dlsf_mean))
+
+
     # fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave
     def test_fiberflat_rw(self):
         """Test reading and writing fiberflat files.
@@ -433,16 +525,16 @@ class TestIO(unittest.TestCase):
         from ..io.fibermap import empty_fibermap
         fm1 = empty_fibermap(20)
         self.assertTrue(np.all(fm1['FIBER'] == np.arange(20)))
-        self.assertTrue(np.all(fm1['SPECTROID'] == 0))
+        self.assertTrue(np.all(fm1['PETAL_LOC'] == 0))
 
         fm2 = empty_fibermap(25, specmin=10)
         self.assertTrue(np.all(fm2['FIBER'] == np.arange(25)+10))
-        self.assertTrue(np.all(fm2['SPECTROID'] == 0))
+        self.assertTrue(np.all(fm2['PETAL_LOC'] == 0))
         self.assertTrue(np.all(fm2['LOCATION'][0:10] == fm1['LOCATION'][10:20]))
 
         fm3 = empty_fibermap(10, specmin=495)
         self.assertTrue(np.all(fm3['FIBER'] == np.arange(10)+495))
-        self.assertTrue(np.all(fm3['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
+        self.assertTrue(np.all(fm3['PETAL_LOC'] == [0,0,0,0,0,1,1,1,1,1]))
 
     # See https://github.com/astropy/astropy/issues/5267
     # @unittest.skipIf(PY3, "Skipping due to known problem with round-tripping in Python 3.")
@@ -621,6 +713,36 @@ class TestIO(unittest.TestCase):
             self.assertTrue(data2.dtype.isnative, dtype+' is not native endian')
             self.assertTrue(np.all(data1 == data2))
 
+    def test_checkzip(self):
+        """Test desispec.io.util.checkzip"""
+        from ..io.util import checkgzip
+
+        #- create test files
+        fitsfile = os.path.join(self.testDir, 'abc.fits')
+        gzfile = os.path.join(self.testDir, 'xyz.fits.gz')
+        fx = open(fitsfile, 'w'); fx.close()
+        fx = open(gzfile, 'w'); fx.close()
+
+        #- non-gzip file exists
+        fn = checkgzip(fitsfile)
+        self.assertEqual(fn, fitsfile)
+
+        #- looking for .gz but finding non-gz
+        fn = checkgzip(fitsfile+'.gz')
+        self.assertEqual(fn, fitsfile)
+
+        #- gzip file exists
+        fn = checkgzip(gzfile)
+        self.assertEqual(fn, gzfile)
+
+        #- looking for non-gzip file but finding gzip file
+        fn = checkgzip(gzfile[0:-3])
+        self.assertEqual(fn, gzfile)
+
+        #- Don't find what isn't there
+        with self.assertRaises(FileNotFoundError):
+            checkgzip(os.path.join(self.testDir, 'nope.fits'))
+
     def test_findfile(self):
         """Test desispec.io.meta.findfile and desispec.io.download.filepath2url.
         """
@@ -652,24 +774,24 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
-            foo = findfile('spectra')
+            foo = findfile('spectra', survey='main', groupname=123)
         the_exception = cm.exception
-        self.assertEqual(str(the_exception), "Required input 'groupname' is not set for type 'spectra'!")
+        self.assertEqual(str(the_exception), "Required input 'faprogram' is not set for type 'spectra'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']
-        x = findfile('spectra', groupname=123)
+        x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
         self.assertTrue(x is not None)
         with self.assertRaises(KeyError):
-            x = findfile('fibermap', night='20150101', expid=123)
+            x = findfile('raw', night='20150101', expid=123)
         os.environ['DESI_SPECTRO_DATA'] = self.testEnv['DESI_SPECTRO_DATA']
 
         #- Some require $DESI_SPECTRO_REDUX; others to not
         del os.environ['DESI_SPECTRO_REDUX']
-        x = findfile('fibermap', night='20150101', expid=123)
+        x = findfile('raw', night='20150101', expid=123)
         self.assertTrue(x is not None)
         with self.assertRaises(KeyError):
-            x = findfile('spectra', groupname=123)
+            x = findfile('spectra', night=20201020, tile=20111, spectrograph=2)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
         #- Camera is case insensitive
@@ -698,16 +820,63 @@ class TestIO(unittest.TestCase):
             a = findfile('cframe', night=20200317, expid=18, camera='Hasselblad')
 
         # Test healpix versus tiles
-        a = findfile('spectra', groupname='5286')
+        a = findfile('spectra', groupname='5286', survey='main', faprogram='BRIGHT')
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                         os.environ['SPECPROD'], 'spectra-64', '52', '5286',
-                         'spectra-64-5286.fits')
+                         os.environ['SPECPROD'],
+                         'healpix', 'main', 'bright', '52', '5286',
+                         'spectra-main-bright-5286.fits')
         self.assertEqual(a, b)
-        a = findfile('spectra', tile=68000, night='20200314', spectrograph=2)
+        a = findfile('spectra', tile=68000, night=20200314, spectrograph=2)
         b = os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                         os.environ['SPECPROD'], 'tiles', '68000', '20200314',
-                         'spectra-2-68000-20200314.fits')
+                         os.environ['SPECPROD'], 'tiles', 'cumulative',
+                         '68000', '20200314',
+                         'spectra-2-68000-thru20200314.fits')
         self.assertEqual(a, b)
+
+        #- cumulative vs. pernight
+        tileid = 1234
+        night = 20201010
+        expid = 555666
+        sp = 9
+        tile_filetypes = ('spectra', 'coadd', 'redrock', 'tileqa', 'tileqapng', 'zmtl')
+
+        #- groupname='cumulative' is default
+        for filetype in tile_filetypes:
+            filepath = findfile(filetype, tile=tileid, night=night, spectrograph=sp)
+            filepath2 = findfile(filetype, tile=tileid, night=night, spectrograph=sp, groupname='cumulative')
+            self.assertEqual(filepath, filepath2)
+            dirname, filename = os.path.split(filepath)
+            self.assertTrue(dirname.endswith(f'tiles/cumulative/{tileid}/{night}'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.png'))
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-thru{night}.fits'))
+
+        #- groupname='pernight' is different
+        for filetype in tile_filetypes:
+            filepath = findfile(filetype, tile=tileid, night=night, spectrograph=sp, groupname='pernight')
+            dirname, filename = os.path.split(filepath)
+            self.assertTrue(dirname.endswith(f'tiles/pernight/{tileid}/{night}'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.png'))  #- no "thru"
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-{night}.fits'))  #- no "thru"
+
+        #- groupname='perexp' is also different
+        for filetype in tile_filetypes:
+            if filetype == 'zmtl':
+                #- zmtl doesn't apply for perexp
+                continue
+
+            #- NOTE: perexp uses expid input, not night input
+            filepath = findfile(filetype, tile=tileid, expid=expid, spectrograph=sp, groupname='perexp')
+            dirname, filename = os.path.split(filepath)
+            self.assertTrue(dirname.endswith(f'tiles/perexp/{tileid}/{expid:08d}'))
+            if filetype.endswith('png'):
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.png'))  #- exp not thru
+            else:
+                self.assertTrue(filename.endswith(f'{tileid}-exp{expid:08d}.fits'))  #- exp not thru
+
 
     def test_findfile_outdir(self):
         """Test using desispec.io.meta.findfile with an output directory.
@@ -716,6 +885,42 @@ class TestIO(unittest.TestCase):
         outdir = '/blat/foo/bar'
         x = findfile('fibermap', night='20150101', expid=123, outdir=outdir)
         self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
+
+    def test_sv1_faflavor2program(self):
+        """Test desispec.io.meta.sv1_faflavor2program
+        """
+        from ..io.meta import faflavor2program
+        flavor = [
+            'cmxelg', 'cmxlrgqso',
+            'sv1elg', 'sv1elgqso', 'sv1lrgqso', 'sv1lrgqso2',
+            'sv1bgsmws', 'sv1backup1', 'blat', 'foo',
+            'sv2dark', 'sv3bright', 'mainbackup',
+            'sv1unwisebluebright', 'sv1unwisegreen', 'sv1unwisebluefaint']
+        program = np.array([
+            'dark', 'dark', 'dark', 'dark', 'dark', 'dark',
+            'bright', 'backup', 'other', 'other',
+            'dark', 'bright', 'backup',
+            'other', 'other', 'other'])
+
+        #- list input
+        p = faflavor2program(flavor)
+        for i in range(len(flavor)):
+            self.assertEqual(p[i], program[i], f'flavor {flavor[i]}')
+
+        #- array input
+        p = faflavor2program(np.array(flavor))
+        self.assertTrue(np.all(p==program))
+
+        #- bytes
+        p = faflavor2program(np.array(flavor).astype(bytes))
+        self.assertTrue(np.all(p==program))
+
+        #- scalar input, strings or bytes
+        for i, f in enumerate(flavor):
+            p = faflavor2program(f)
+            self.assertEqual(p, program[i])
+            p = faflavor2program(bytes(f, encoding='utf8'))
+            self.assertEqual(p, program[i])
 
     def test_get_nights(self):
         """ Test desispec.io.meta.get_nights
@@ -906,6 +1111,23 @@ class TestIO(unittest.TestCase):
             diff = difference_camwords(fcw, bcw)
             self.assertEqual(diff, truth)
 
+    def test_camword_union(self):
+        """ Test desispec.io.camword_union
+        """
+        from ..io.util import camword_union
+        fcamwords = [['a01b2r2r3', 'a01z2'],
+                     ['a013', 'a2'],
+                     ['a013456789b2r2', 'a01b2z2'],
+                     ['a013456789b2r2', 'a0'],
+                     ['a0b1r1z12']]
+        truecams = ['a012r3', 'a0123', 'a0123456789', 'a013456789b2r2', 'a01z2']
+        truespecs = ['a012', 'a0123', 'a0123456789', 'a013456789', 'a01']
+        for fcws, truecamw, truespecw in zip(fcamwords, truecams, truespecs):
+            outcw = camword_union(fcws, full_spectros_only=False)
+            self.assertEqual(outcw, truecamw)
+            outcw = camword_union(fcws, full_spectros_only=True)
+            self.assertEqual(outcw, truespecw)
+
     def test_replace_prefix(self):
         """Test desispec.io.util.replace_prefix
         """
@@ -916,6 +1138,20 @@ class TestIO(unittest.TestCase):
         oldfile = 'blat-foo-blat.fits'
         newfile = 'quat-foo-blat.fits'
         self.assertEqual(replace_prefix(oldfile, 'blat', 'quat'), newfile)
+
+    def test_get_tempfilename(self):
+        """test desispec.io.util.get_tempfilename
+        """
+        from ..io.util import get_tempfilename
+        filename = '/a/b/c.fits'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.fits'))
+
+        filename = 'blat.ecsv'
+        tempfile = get_tempfilename(filename)
+        self.assertNotEqual(filename, tempfile)
+        self.assertTrue(tempfile.endswith('.ecsv'))
 
     def test_find_fibermap(self):
         '''Test finding (non)gzipped fiberassign files'''
@@ -984,6 +1220,9 @@ class TestIO(unittest.TestCase):
         self.assertEqual(parse_cameras('a01234,b5,r5,z56'), 'a012345z6')
         self.assertEqual(parse_cameras(None), None)
         self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2']), 'a1b2')
+
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2'], loglevel='WARNING'), 'a1b2')
+        self.assertEqual(parse_cameras(['b1', 'r1', 'z1', 'b2'], loglevel='warning'), 'a1b2')
 
     def test_shorten_filename(self):
         """Test desispec.io.meta.shorten_filename"""

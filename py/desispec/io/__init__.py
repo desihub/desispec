@@ -35,8 +35,12 @@ from .params import read_params
 from .qa import (read_qa_frame, read_qa_data, write_qa_frame, write_qa_brick,
                  load_qa_frame, write_qa_exposure, write_qa_multiexp, load_qa_multiexp,
                  qafile_from_framefile)
+from .exposure_tile_qa import (read_exposure_qa, write_exposure_qa, read_tile_qa, write_tile_qa)
 from .raw import read_raw, write_raw
 from .sky import read_sky, write_sky
+from .skycorr import (read_skycorr, write_skycorr, read_skycorr_pca, write_skycorr_pca)
+from .skygradpca import read_skygradpca, write_skygradpca
+from .table import read_table
 from .util import (header2wave, fitsheader, native_endian, makepath,
                    write_bintable, iterfiles, healpix_degrade_fixed,
                    healpix_subdirectory, replace_prefix)

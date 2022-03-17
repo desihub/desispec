@@ -1,9 +1,16 @@
 #!/usr/bin/env python
 '''
 Calculate stand alone tsnr tables for a given desispec prod.
+
+Use MPI:
+    salloc -N 2 -C haswell -q interactive -t 00:30:00
+
+    # 2 nodes, 2 mpi ranks reducing 2 nights (1 per rank) with 32 processes.
+    srun -N 2 -n 2 -c 32 python desi_tsnr_afterburner
 '''
 
 import os,sys
+import json
 import glob
 import itertools
 import argparse
@@ -19,10 +26,12 @@ from   pkg_resources import resource_filename
 from   desispec.io import read_sky
 from   desispec.io import read_fiberflat
 from   pathlib import Path
-from   desispec.io.meta import findfile, specprod_root
+from   desispec.io.meta import findfile, specprod_root, faflavor2program
 from   desispec.calibfinder import CalibFinder
 from   desispec.io import read_frame
 from   desispec.io import read_fibermap
+from   desispec.io import findfile
+from   desispec.io import read_table
 from   desispec.io.fluxcalibration import read_flux_calibration
 from   desiutil.log import get_logger
 from   desispec.tsnr import calc_tsnr2,tsnr2_to_efftime
@@ -31,6 +40,9 @@ from   desiutil.depend import getdep
 from   desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
 from   desispec.skymag import compute_skymag
 from   desispec.efftime import compute_efftime
+from   desispec.parallel import  stdouterr_redirected, use_mpi
+from   desispec.util import parse_int_args
+
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
@@ -42,31 +54,36 @@ def parse(options=None):
     parser.add_argument('--details-dir', type=str, default = None, required=False,
                         help = 'Dir. to write per-exposure per-camera files with per-fiber tSNR details')
     parser.add_argument('--prod', type = str, default = None, required=False,
-                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
-    parser.add_argument('--cameras', type = str, default = None, required=False,
+                        help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  ' +
+                               'or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. ' +
+                               'Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
+    parser.add_argument('-c', '--cameras', type = str, default = None, required=False,
                         help = 'Cameras to reduce (comma separated)')
-    parser.add_argument('--expids', type = str, default = None, required=False,
+    parser.add_argument('-e', '--expids', type = str, default = None, required=False,
                         help = 'Comma separated list of exp ids to process')
-    parser.add_argument('--nights', type = str, default = None, required=False,
-                        help = 'Comma separated list of nights to process')
+    parser.add_argument('-n', '--nights', type = str, default = None, required=False,
+                        help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--recompute', action='store_true',
                         help = 'Recompute TSNR values')
     parser.add_argument('--alpha_only', action='store_true',
                         help = 'Only compute the alpha for tsnr.')
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Multiprocessing.')
-    parser.add_argument('--efftime-config', type = str, default = None, required=False,
-                        help = 'Use this config file instead of default data/tsnr/tsnr-efftime.yaml')
-    parser.add_argument('--tile-completeness', type = str, default = None, required=False,
-                        help = 'Ouput tile completeness table')
+    parser.add_argument('-t', '--tile-completeness', type = str, default = None, required=False,
+                        help = 'Output tile completeness table')
     parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
-                        help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits (optional, will not affect exposures after SV1)')
+                        help = 'Path to auxiliary tiles tables, like /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits ' +
+                               '(optional, will not affect exposures after SV1)')
     parser.add_argument('--gfa-proc-dir', type = str, default = None, required=False,
                         help = 'Directory where the GFA processing from Aaron can be found, like /global/cfs/cdirs/desi/survey/GFA/')
     parser.add_argument('--skymags', type = str, default = None, required=False,
                         help = 'path to table with sky magnitudes. Expected keys=NIGHT,EXPID,SKY_MAG_G,SKY_MAG_R,SKY_MAG_Z')
     parser.add_argument('--compute-skymags', action='store_true',
                         help = 'recompute sky mags')
+    parser.add_argument('--mpi', action='store_true',
+                        help = 'Paralleize TSNR recomputation across multiple nodes using mpi4py. Requires args.update to be False.')
+    parser.add_argument('--add-badexp', action='store_true',
+                        help = "Include entries for known bad exposures that weren't processed")
 
     args = None
     if options is None:
@@ -75,6 +92,75 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
+
+def update_targ_info(entry, targ_in):
+    """
+    Updates and returns information from targeting dictionary derived from a header or table row.
+
+    Args:
+        entry, dict: the currently known information about an exposure
+        targ_in, dict: dictionary with a single value per key (either built from header
+                    or from a Table).
+
+    Returns:
+        entry, dict: the currently known information about an exposure updated with information about
+                    SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, and GOALTIME if available in targ_in
+    """
+    targ_keys = list(targ_in.keys())
+    targ_defs = {
+        "SURVEY" : "unknown",
+        "GOALTYPE" : "unknown",
+        "FAPRGRM" : "unknown",
+        "FAFLAVOR" : "unknown",
+        "MINTFRAC" : 0.9,
+        "GOALTIME" : 0.,
+    }
+
+    for key,default in targ_defs.items():
+        ## If the key is defined to anything other than default, don't overwrite
+        if key in entry.keys() and entry[key] != default:
+            continue
+        ## Otherwise if the key is in the target dict, assign that
+        elif key in targ_keys:
+            if isinstance(default,str):
+                entry[key] = targ_in[key].strip().lower()
+            else:
+                entry[key] = targ_in[key]
+        ## Otherwise if the key isn't in the entry, assign it the default
+        elif key not in entry.keys():
+            entry[key] = default
+
+    if "FAFLAVOR" in targ_keys :
+        faflavor=targ_in["FAFLAVOR"].strip().lower()
+
+        if entry["FAPRGRM"] == "unknown"  :
+            entry["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
+
+        if entry["SURVEY"]=="unknown" :
+            #- despite the name, "cmxlrgqso" and "cmxelg" are sv1 tiles
+            if faflavor.find("sv1")>=0. or faflavor in ('cmxlrgqso', 'cmxelg') :
+                entry["SURVEY"]="sv1"
+            elif faflavor.find("sv2")>=0. :
+                entry["SURVEY"]="sv2"
+            elif faflavor.find("cmx")>=0. :
+                entry["SURVEY"]="cmx"
+
+    entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
+    if entry["GOALTYPE"]=="unknown" :
+        if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0. or \
+           entry["FAPRGRM"].find("elg")>=0. or entry["FAPRGRM"].find("dark")>=0. :
+            entry["GOALTYPE"]="dark"
+        elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
+            entry["GOALTYPE"]="bright"
+
+    if entry['FAPRGRM'].startswith('dith'):
+        if entry['SURVEY'] == 'unknown':
+            entry['SURVEY'] = 'cmx'
+
+    if entry['GOALTYPE'] in ('unknown', 'other'):
+        entry['GOALTYPE'] = faflavor2program(entry['FAFLAVOR'])
+
+    return entry
 
 
 def read_gfa_data(gfa_proc_dir) :
@@ -93,7 +179,7 @@ def read_gfa_data(gfa_proc_dir) :
         if len(filenames)==0 : continue
         filename=filenames[-1]
         log.info(f"Reading {filename}")
-        table=Table.read(filename,2)# HDU2 is average over frames during spectro exposure and median across CCDs
+        table=read_table(filename,2)# HDU2 is average over frames during spectro exposure and median across CCDs
         tables.append(table)
     if len(tables)==0 :
         log=get_logger()
@@ -120,17 +206,33 @@ def compute_tsnr_values(cframe_filename,cframe_hdulist,night,expid,camera,specpr
 
     Returns: astropy.table.Table obkect with TSNR values
     """
+    log = get_logger()
 
     calib  = findfile('fluxcalib', night=night, expid=expid,
                       camera=camera, specprod_dir=specprod_dir)
-    flat = cframe_hdulist[0].header['FIBERFLT']
+
+    hdr0 = cframe_hdulist[0].header
+    hdr1 = cframe_hdulist[1].header
+
+    if 'FIBERFLT' not in hdr0:
+        log.critical('Failed to find FIBERFLT in cframe hdr of {:08d} on {}'.format(expid, night))
+        log.info('Trying CalibFinder.')
+
+        flat = CalibFinder([hdr0, hdr1]).findfile('FIBERFLAT')
+
+    else:
+        flat = cframe_hdulist[0].header['FIBERFLT']
+
     if 'SPECPROD' in flat:
         flat = flat.replace('SPECPROD', specprod_dir)
-    elif 'SPCALIB' in flat:
+    if 'SPCALIB' in flat:
         hdr  = fitsio.read_header(cframe_filename)
         flat = flat.replace('SPCALIB', getdep(hdr, 'DESI_SPECTRO_CALIB'))
+
+    if os.path.exists(flat):
+        log.info('Retrieved {}'.format(flat))
     else:
-        raise ValueError('Failed on flat retrieval for {}.'.format(hdr))
+        raise ValueError('Failed on flat retrieval for {} on {}.'.format(expid, night))
 
     iin = cframe_filename.replace('cframe', 'frame')
     sky = cframe_filename.replace('cframe', 'sky')
@@ -180,34 +282,75 @@ def update_table(table1,table2,keys) :
     log.info("keep {} entries, replace {}, add {}".format(np.sum(keep),np.sum(replace),len(table2)-np.sum(replace)))
 
     if np.sum(keep)>0 :
+        for k in table2.dtype.names :
+            if k not in table1.dtype.names :
+                log.info("add new column {}".format(k))
+                table1[k]=np.zeros(len(table1),dtype=table2[k].dtype)
         return vstack([table1[keep],table2])
     else :
         return table2
 
-def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir) :
+def compute_summary_tables(summary_rows,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,specprod_dir, add_badexp=True) :
     """ Compute summary tables.
 
     Args:
       summary_rows: list of dictionnaries
       output_filename: str, output filename
-      efftime_config: dictionnary with scaling factors from TSNR2 to effective exp. time
       preexisting_tsnr2_expid_table: None or astropy.table.Table, update this table if not None
       preexisting_tsnr2_frame_table: None or astropy.table.Table, update this table if not None
       specprod_dir: str, production directory
+
+    Options:
+      add_badexp (bool): add known bad exposures that weren't processed
 
     Returns tsnr2_expid_table , tsnr2_frame_table
     """
     log = get_logger()
 
     #- Create camera summary table; specify names to preserve column order
+    ## Get copy of the columns, one to preserve the original cols and one to add any new cols encountered
     colnames = list(summary_rows[0].keys())
-    for row in summary_rows :
-        if len(row.keys()) != len(colnames) :
-            log.error("colnames={} but row={}".format(colnames,row))
-            sys.exit(12)
+    orig_colnames = list(summary_rows[0].keys())
+    first_print = True
+    for ii,row in enumerate(summary_rows):
+        missing = [key for key in orig_colnames if key not in row.keys()]
+        additional =  [key for key in row.keys() if key not in orig_colnames]
+        if len(missing) > 0 or len(additional) > 0:
+            ## Only print the column names once to reduce verbosity
+            if first_print:
+                log.warning(f"First row of summary_rows had colnames={orig_colnames}")
+                first_print = False
+            ## List missing columns compared to the first row (if any)
+            if len(missing) > 0:
+                log.warning(f"Row {ii} differs from first, row is missing columns={missing}" )
+            ## Could have both additional and missing columns, so this is independent check. List additional
+            if len(additional) > 0:
+                log.warning(f"Row {ii} differs from first, row has additional columns={additional}" )
 
-    cam_summary = Table(rows=summary_rows, names=colnames)
-    cam_summary.meta['EXTNAME'] = 'TSNR2_FRAME'
+        ## Beyond the differences listed above, make sure to keep a complete list of column names
+        ## for the table generation
+        newcols =  [key for key in row.keys() if key not in colnames]
+        if len(newcols) > 0:
+            log.warning(f"Identified the following new columns: {newcols}. Adding to colnames.")
+            colnames.extend(newcols)
+
+
+    #- specify names to preserve column order
+    masked_cam_summary = Table(rows=summary_rows, names=colnames)
+    for col in masked_cam_summary.colnames:
+        if isinstance(masked_cam_summary[col],Table.MaskedColumn):
+            if col in ['NIGHT', 'EXPID', 'TILEID']:
+                log.warning(f'Column {col} identified as masked column, filling masked rows with value 0 .')
+                masked_cam_summary[col].set_fill_value(0)
+            elif col in ['SURVEY', 'FAPRGRM', 'FAFLAVOR', 'GOALTYPE']:
+                log.warning(f'Column {col} identified as masked column, filling masked rows with value "unknown".')
+                masked_cam_summary[col].set_fill_value('unknown')
+            else:
+                log.warning(f'Column {col} identified as masked column, filling masked rows with value 0.0.')
+                masked_cam_summary[col].set_fill_value(0.0)
+    cam_summary = masked_cam_summary.filled()
+
+    cam_summary.meta['EXTNAME'] = 'FRAMES'
 
     tsnr2_colnames = [x for x in cam_summary.colnames if x.startswith('TSNR2_')]
 
@@ -227,7 +370,9 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
         ii = (cam_summary['EXPID'] == expid)
 
         row = dict()
-        for k in ["NIGHT","EXPID","TILEID","AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE","MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
+        for k in ["NIGHT","EXPID","TILEID","TILERA","TILEDEC","MJD",
+                  "AIRMASS","EBV","SEEING_ETC","EFFTIME_ETC","SURVEY","GOALTYPE",
+                  "MINTFRAC","FAPRGRM","FAFLAVOR","GOALTIME"] :
             row[k]=cam_summary[k][ii][0]
         # mean
         row["EXPTIME"]=float(np.mean(cam_summary['EXPTIME'][ii]))
@@ -245,12 +390,15 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     colnames = list(rows[0].keys())
     exp_summary = Table(rows=rows, names=colnames)
-    exp_summary.meta['EXTNAME'] = 'TSNR2_EXPID'
+    exp_summary.meta['EXTNAME'] = 'EXPOSURES'
 
-
-    # check the production exposure table
-    for night in np.unique(exp_summary["NIGHT"]) :
+    if add_badexp:
+      # check the production exposure table
+      for night in np.unique(exp_summary["NIGHT"]) :
         prod_table_filename = os.path.join(specprod_dir,"exposure_tables/{}/exposure_table_{}.csv".format(night//100,night))
+        if not os.path.isfile(prod_table_filename) :
+            log.warning("cannot find prod. exposure table {}".format(prod_table_filename))
+            continue
         prod_table = Table.read(prod_table_filename)
         missing = (~(np.in1d(prod_table["EXPID"],exp_summary["EXPID"])))&(prod_table["TILEID"]>0)
         nmissing=np.sum(missing)
@@ -259,21 +407,53 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
             ucam=np.unique(cam_summary["CAMERA"])
 
             for i in np.where(missing)[0] :
+
+                #- If the exposure was supposed to be processed but is unexpectedly
+                #- missing from prod, log error but don't add it to table because
+                #- we are in an ambiguous/error state of processing
+                if prod_table["LASTSTEP"][i] == 'all':
+                    tileid = prod_table['TILEID'][i]
+                    expid = prod_table['EXPID'][i]
+                    log.error(f'Tile {tileid} night {night} expid {expid} missing from prod; not adding to exposure table ')
+                    continue
+
                 entry={}
                 entry["EXPID"]=prod_table["EXPID"][i]
                 entry["NIGHT"]=night
                 entry["TILEID"]=prod_table["TILEID"][i]
+                entry["MJD"] = prod_table["MJD-OBS"][i]
                 entry["AIRMASS"]=0.
                 entry["EBV"]=0.
+                # EBVFAC from https://github.com/desihub/fiberassign/blob/466a99b926892be60c3c9679f521785e865ce315/py/fiberassign/fba_launch_io.py#L1658
+                if "EBVFAC" in prod_table.dtype.names:
+                    entry["EBV"] = 2.5 * np.log10(prod_table["EBVFAC"][i]) / 2.165
                 entry["EXPTIME"]=prod_table["EXPTIME"][i]
                 entry['SEEING_ETC']=0.
-                entry['EFFTIME_ETC']=0.
-                entry["SURVEY"]="unknown"
-                entry["GOALTYPE"]="unknown"
-                entry["MINTFRAC"]=0.9
-                entry["FAPRGRM"]="unknown"
-                entry["FAFLAVOR"]="unknown"
-                entry["GOALTIME"]=0.
+                entry["EFFTIME_ETC"] = 0.
+                if "EFFTIME_ETC" in prod_table.dtype.names:
+                    entry["EFFTIME_ETC"] = prod_table["EFFTIME_ETC"][i]
+
+                # SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME
+                targ_dict = {key : prod_table[key][i] for key in prod_table.dtype.names}
+                entry = update_targ_info(entry, targ_dict)
+
+                # Get TILERA, TILEDEC from fiberassign file (*.fits or *.fits.gz)
+                # as of 20210624: SURVEY present in table_exposure since 20210611 only
+                dirname = os.path.dirname(findfile("raw", night, entry["EXPID"]))
+                fns = glob.glob( os.path.join(dirname, "fiberassign-{:06d}.fits*".format(entry["TILEID"])) )
+                if len(fns) > 0:
+                    fiberassign_header = fits.getheader(fns[0], 0)
+                    targ_dict = {key : fiberassign_header[key] for key in fiberassign_header.keys()}
+                    if 'SURVEY' not in targ_dict and 'FA_SURV' in targ_dict:
+                        targ_dict['SURVEY'] = targ_dict['FA_SURV']
+
+                    entry = update_targ_info(entry, targ_dict)
+                    entry['TILERA'] = fiberassign_header['TILERA']
+                    entry['TILEDEC'] = fiberassign_header['TILEDEC']
+                else:
+                    log.error(f'No fiberassign*.fits* file in {dirname}')
+                    entry["TILERA"] = -999.0
+                    entry["TILEDEC"] = -999.0
 
                 vals=[]
                 for j,k in enumerate(exp_summary.dtype.names) :
@@ -281,6 +461,7 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                         vals.append(entry[k])
                     else :
                         vals.append(0.)
+
                 log.warning("Adding missing exposure {}".format(vals))
                 exp_summary.add_row(vals)
 
@@ -297,6 +478,42 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
                     cam_summary.add_row(vals)
 
 
+    log.info("Add effective times from TSNR2 values")
+
+    exp_summary['LRG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_LRG'],"LRG")
+    exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG")
+    exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS")
+
+    for program in ['DARK','BRIGHT','BACKUP']:
+        if f'TSNR2_GPB{program}' in exp_summary.dtype.names:
+            exp_summary[f'GPB_EFFTIME_{program}']   = tsnr2_to_efftime(exp_summary[f'TSNR2_GPB{program}'],f'GPB{program}')
+        else:
+            exp_summary[f'TSNR2_GPB{program}'] = 0.
+            exp_summary[f'GPB_EFFTIME_{program}'] = 0.
+
+    if 'TSNR2_LYA' in exp_summary.dtype.names:
+        exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA")
+
+    # EFFTIME SPEC FOR GOALTYPE dark determined by TSNR2_ELG before Sept 1, 2021 and TSNR2_LRG after
+    before_sept2021 = (exp_summary["NIGHT"]<20210901)
+    after_sept2021 = ~before_sept2021
+    exp_summary['EFFTIME_SPEC'] = np.zeros(len(exp_summary))
+    exp_summary['EFFTIME_SPEC'][before_sept2021] = exp_summary['ELG_EFFTIME_DARK'][before_sept2021]
+    exp_summary['EFFTIME_SPEC'][after_sept2021]  = exp_summary['LRG_EFFTIME_DARK'][after_sept2021]
+
+    # EFFTIME SPEC FOR GOALTYPE bright determined by TSNR2_BGS.
+    ii = (exp_summary['GOALTYPE']=='bright')
+    exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
+
+    # EFFTIME SPEC FOR GOALTYPE backup determined by TSNR2_GPBBACKUP.
+    # If no 'GPB_EFFTIME_BACKUP' then default to the BGS time
+    ii = (exp_summary['GOALTYPE']=='backup')
+    if 'GPB_EFFTIME_BACKUP' in exp_summary.dtype.names and len(ii) > 0 and np.any(exp_summary['EFFTIME_SPEC'][ii]>0.):
+        exp_summary['EFFTIME_SPEC'][ii] = exp_summary['GPB_EFFTIME_BACKUP'][ii]
+    else:
+        exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
+
+
     if preexisting_tsnr2_expid_table is not None :
         log.debug("Update to preexisting")
 
@@ -306,25 +523,16 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
                 preexisting_tsnr2_expid_table[k] = np.array(np.repeat("unknown",nentries),dtype='<U16')
-        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV"]:
+        for k in ["GOALTIME","MINTFRAC","SEEING_ETC","EFFTIME_ETC","AIRMASS","EBV","LRG_EFFTIME_DARK"]:
             if k not in preexisting_tsnr2_expid_table.dtype.names :
                 log.warning("adding column {}".format(k))
                 preexisting_tsnr2_expid_table[k] = np.array(np.repeat(0.,nentries),dtype=float)
 
         exp_summary = update_table(preexisting_tsnr2_expid_table,exp_summary,["EXPID"])
+
     if preexisting_tsnr2_frame_table is not None :
         log.debug("Update to preexisting")
         cam_summary = update_table(preexisting_tsnr2_frame_table,cam_summary,["EXPID","CAMERA"])
-
-    log.info("Add effective times from TSNR2 values")
-    exp_summary['ELG_EFFTIME_DARK']   = tsnr2_to_efftime(exp_summary['TSNR2_ELG'],"ELG","DARK")
-    exp_summary['BGS_EFFTIME_BRIGHT'] = tsnr2_to_efftime(exp_summary['TSNR2_BGS'],"BGS","BRIGHT")
-    if 'TSNR2_LYA' in exp_summary.colnames :
-        exp_summary['LYA_EFFTIME_DARK'] = tsnr2_to_efftime(exp_summary['TSNR2_LYA'],"LYA","DARK")
-
-    exp_summary['EFFTIME_SPEC'] = exp_summary['ELG_EFFTIME_DARK']
-    ii = (exp_summary['GOALTYPE']=='bright')|(exp_summary['GOALTYPE']=='backup')
-    exp_summary['EFFTIME_SPEC'][ii] = exp_summary['BGS_EFFTIME_BRIGHT'][ii]
 
     # sort table rows
     ii = np.argsort(exp_summary['EXPID'])
@@ -335,8 +543,18 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
 
     if 'TSNR2_ALPHA' in exp_summary.dtype.names : exp_summary.remove_column('TSNR2_ALPHA')
 
-    # sort table columns
-    neworder=['NIGHT','EXPID','TILEID','SURVEY','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE','MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA','TSNR2_BGS','ELG_EFFTIME_DARK','BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA','FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC','SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA','EFFTIME_BACKUP_GFA']
+    #- standardizing N>>1 sv1-era FAPRGRM/FAFLAVOR into dark/bright/backup/other
+    exp_summary['PROGRAM'] = faflavor2program(exp_summary['FAFLAVOR'])
+
+    neworder=['NIGHT','EXPID','TILEID','TILERA','TILEDEC','MJD',
+              'SURVEY','PROGRAM','FAPRGRM','FAFLAVOR','EXPTIME','EFFTIME_SPEC','GOALTIME','GOALTYPE',
+              'MINTFRAC','AIRMASS','EBV','SEEING_ETC','EFFTIME_ETC','TSNR2_ELG','TSNR2_QSO','TSNR2_LRG','TSNR2_LYA',
+              'TSNR2_BGS','TSNR2_GPBDARK','TSNR2_GPBBRIGHT','TSNR2_GPBBACKUP','LRG_EFFTIME_DARK','ELG_EFFTIME_DARK',
+              'BGS_EFFTIME_BRIGHT','LYA_EFFTIME_DARK','GPB_EFFTIME_DARK','GPB_EFFTIME_BRIGHT','GPB_EFFTIME_BACKUP',
+              'TRANSPARENCY_GFA','SEEING_GFA','FIBER_FRACFLUX_GFA','FIBER_FRACFLUX_ELG_GFA','FIBER_FRACFLUX_BGS_GFA',
+              'FIBERFAC_GFA','FIBERFAC_ELG_GFA','FIBERFAC_BGS_GFA','AIRMASS_GFA','SKY_MAG_AB_GFA','SKY_MAG_G_SPEC',
+              'SKY_MAG_R_SPEC','SKY_MAG_Z_SPEC','EFFTIME_GFA','EFFTIME_DARK_GFA','EFFTIME_BRIGHT_GFA',
+              'EFFTIME_BACKUP_GFA']
 
     if not np.all(np.in1d(exp_summary.dtype.names,neworder)) :
         missing=~np.in1d(exp_summary.dtype.names,neworder)
@@ -356,13 +574,13 @@ def compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_t
     return exp_summary, cam_summary
 
 def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename,output_csv_filename=None) :
-    """ Writes a summary fits file.
+    """Writes a summary fits file.
 
     Args:
-     tsnr2_expid_table: astropy.table.Table
-     tsnr2_frame_table: astropy.table.Table
-     output_fits_filename: str, output fits filename
-     output_csv_filename: str, output csv filename
+        tsnr2_expid_table: astropy.table.Table
+        tsnr2_frame_table: astropy.table.Table
+        output_fits_filename: str, output fits filename
+        output_csv_filename: str, output csv filename
 
     Returns nothing
     """
@@ -380,13 +598,16 @@ def write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filenam
 
     # also write first table as csv
     if output_csv_filename is not None :
+        # make a copy before modifying precision of columns
+        tsnr2_expid_table = tsnr2_expid_table.copy(copy_data=True)
         for k in tsnr2_expid_table.keys() :
             if k.find("TIME")>=0 or k.find("SNR2")>=0 :
                 try :
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),1)
                 except ValueError as e :
                     log.warning("cannot change number of digits for col {}: {}".format(k,e))
-            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("FIBERFAC")>=0 or k.find("TRANS")>=0 or k.find("MAG")>=0 or k.find("AIRMASS")>=0 or k.find("EBV")>=0 :
+            if k.find("SEEING")>=0 or k.find("FWHM")>=0 or k.find("FIBER_FRACFLUX")>=0 or k.find("FIBERFAC")>=0 or \
+               k.find("TRANS")>=0 or k.find("MAG")>=0 or k.find("AIRMASS")>=0 or k.find("EBV")>=0 :
                 try :
                     tsnr2_expid_table[k]=np.around(tsnr2_expid_table[k].astype(float),3)
                 except ValueError as e :
@@ -479,20 +700,62 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
     entry['NIGHT'] = np.int32(night)
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(tileid)
+    entry['TILERA'] = hdr['TILERA']
+    entry['TILEDEC'] = hdr['TILEDEC']
+    entry['MJD'] = hdr['MJD-OBS']
     entry['EXPTIME'] = np.float32(hdr['EXPTIME'])
     entry['AIRMASS'] = np.float32(hdr['AIRMASS'])
-    if 'EBV' in fibermap.dtype.names :
-        entry['EBV'] = np.median(fibermap["EBV"])
-    else :
-        entry['EBV'] = 0.
-    if "SEEING" in hdr :
-        entry['SEEING_ETC'] = np.float32(hdr['SEEING'])
+    entry['EBV'] = 0.
+    if 'EBV' in fibermap.dtype.names:
+        sel = (fibermap["EBV"] > 0)
+        if sel.sum() > 0:
+            entry['EBV'] = np.median(fibermap['EBV'][sel])
+    if "ACQFWHM" in hdr :
+        # FWHM of the guide star PSF, in arcseconds, measured in the initial acquisition image.
+        entry['SEEING_ETC'] = np.float32(hdr['ACQFWHM'])
+
+        log.debug('Retrieved ACQFWHM from frame hdr.')
+
+    elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):
+        with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file:
+            etcdata = json.load(etc_file)
+        try:
+            entry['SEEING_ETC'] = np.float32(etcdata['expinfo']['acq_fwhm'])
+        except:
+            entry['SEEING_ETC'] = np.float32(0.)
+
+        log.debug('Retrieved ACQFWHM from etc json.')
     else :
         entry['SEEING_ETC'] = 0.
-    if "ACTTEFF" in hdr :
-        entry['EFFTIME_ETC'] = np.float32(hdr['ACTTEFF'])
-    else :
-        entry['EFFTIME_ETC'] = 0.
+
+        log.debug('Failed to retrieved ACQFWHM from frame hdr.')
+
+    ##  https://github.com/desihub/desietc/blob/main/header.md
+    if "ETCTEFF" in hdr :
+        entry['EFFTIME_ETC'] = np.float32(hdr['ETCTEFF'])
+
+        log.debug('Retrieved ETCTEFF from frame hdr.')
+
+    elif os.path.exists(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])):
+        with open(findfile('etc', night=entry['NIGHT'], expid=entry['EXPID'])) as etc_file:
+            etcdata = json.load(etc_file)
+
+        try:
+            entry['EFFTIME_ETC'] = np.float32(etcdata['expinfo']['efftime'])
+        except:
+            entry['EFFTIME_ETC'] = np.float32(0.)
+
+        log.debug('Retrieved ETCTEFF from etc json.')
+
+    else:
+        entry['EFFTIME_ETC'] = np.float32(0.)
+
+        log.debug('Failed to retrieve ETCTEFF from etc json.')
+
+    #- treat NaN the same as missing data, i.e. 0.0
+    #- e.g. 20210516/00088872/etc-00088872.json etcdata['expinfo']['efftime']
+    if np.isnan(entry['EFFTIME_ETC']):
+        entry['EFFTIME_ETC'] = 0.0
 
     entry['CAMERA'] = camera
     for key in table.colnames:
@@ -507,43 +770,10 @@ def func(prod,night,expid,camera,recompute,alpha_only,details_dir) :
         if key.startswith('TSNR2_ALPHA'):
             entry['TSNR2_ALPHA'] = np.median(table[key]).astype(np.float32)
 
-    #- Add information from targeting
+    #- Add information from targeting (SURVEY, GOALTYPE, FAPRGRM, FAFLAVOR, MINTFRAC, GOALTIME)
     fibermap_header = cframe_hdulist["FIBERMAP"].header
-    for k in ["SURVEY","GOALTYPE","FAPRGRM","FAFLAVOR"] :
-        if k in fibermap_header :
-            entry[k] = fibermap_header[k].strip().lower()
-        else :
-            entry[k] = "unknown"
-
-    if "FAFLAVOR" in fibermap_header :
-        faflavor=fibermap_header["FAFLAVOR"].strip().lower()
-
-        if entry["FAPRGRM"] == "unknown"  :
-            entry["FAPRGRM"] = faflavor.replace("sv1","").replace("sv2","").replace("cmx","")
-
-        if entry["SURVEY"]=="unknown" :
-            if faflavor.find("sv1")>=0. : entry["SURVEY"]="sv1"
-            elif faflavor.find("sv2")>=0. : entry["SURVEY"]="sv2"
-            elif faflavor.find("cmx")>=0. : entry["SURVEY"]="cmx"
-
-    if entry["GOALTYPE"]=="unknown" :
-        if entry["FAPRGRM"].find("qso")>=0. or entry["FAPRGRM"].find("lrg")>=0.  or entry["FAPRGRM"].find("elg")>=0. or entry["FAPRGRM"].find("dark")>=0. :
-            entry["GOALTYPE"]="dark"
-        elif entry["FAPRGRM"].find("mws")>=0. or entry["FAPRGRM"].find("bgs")>=0. or entry["FAPRGRM"].find("bright")>=0. :
-            entry["GOALTYPE"]="bright"
-
-    k="MINTFRAC"
-    if k in fibermap_header :
-        entry[k] = fibermap_header[k]
-    else :
-        entry[k] = 0.9
-
-
-    k="GOALTIME"
-    if k in fibermap_header :
-        entry[k] = fibermap_header[k]
-    else :
-        entry[k] = 0.
+    targ_dict = {key : fibermap_header[key] for key in fibermap_header.keys()}
+    entry = update_targ_info(entry, targ_dict)
 
     cframe_hdulist.close()
     return entry
@@ -607,11 +837,44 @@ def main():
         log.critical("Output filename '{}' is incorrect. It has to end with '.fits'.".format(args.outfile))
         sys.exit(1)
 
-    log.info('outfile = {}'.format(args.outfile))
-    if args.details_dir is not None : log.info('details-dir = {}'.format(args.details_dir))
+    if args.mpi and use_mpi():
+        from mpi4py import  MPI
+        from desispec.parallel import default_nproc
 
-    log.info('prod = {}'.format(args.prod))
+        comm  = MPI.COMM_WORLD
+        rank  = comm.Get_rank()
+        size  = comm.Get_size()
 
+        args.nproc = default_nproc
+
+        multinode = True
+
+        if args.update:
+            log.critical('--update is not supported for the --mpi option.  Remove --update.')
+            raise RuntimeError()
+
+        if not args.recompute:
+            log.critical('need --recompute for the --mpi option.  Add --recompute.')
+            raise RuntimeError()
+
+        if (args.tile_completeness is not None):
+            if os.path.isfile(args.tile_completeness):
+                log.critical('Tile file exists.  Provide a new tile file path..')
+                raise RuntimeError()
+
+    else:
+        comm  = None
+        rank  = 0
+        size  = 1
+
+        multinode = False
+
+    if rank == 0:
+        log.info('outfile = {}'.format(args.outfile))
+        if args.details_dir is not None :
+            log.info('details-dir = {}'.format(args.details_dir))
+
+        log.info('prod = {}'.format(args.prod))
 
     if args.cameras is None:
         petals  = np.arange(10).astype(str)
@@ -634,25 +897,31 @@ def main():
             except ValueError as e :
                 log.warning("ignore {}".format(dirname))
     else :
-        nights=[int(val) for val in args.nights.split(",")]
+        nights = parse_int_args(args.nights)
 
-    log.info('cameras = {}'.format(cameras))
-    log.info("nights = {}".format(nights))
-    if expids is not None : log.info('expids = {}'.format(expids))
-
-    efftime_config_filename = args.efftime_config
-    if efftime_config_filename is None :
-        efftime_config_filename  = resource_filename('desispec', 'data/tsnr/tsnr-efftime.yaml')
-    with open(efftime_config_filename) as f:
-        efftime_config = yaml.load(f, Loader=yaml.FullLoader)
-    log.info("Eff. time scale factors = {}".format(efftime_config))
+    if rank == 0:
+        log.info('cameras = {}'.format(cameras))
+        log.info("nights = {}".format(nights))
+        if expids is not None :
+            log.info('expids = {}'.format(expids))
 
     preexisting_tsnr2_expid_table = None
     preexisting_tsnr2_frame_table = None
+    ## Check for existing files
+    ## If opening returns a keyerror due to misnamed HDU, try the old naming convention
     if args.update and os.path.isfile(args.outfile) :
         log.info("Will append pre-existing table {}".format(args.outfile))
-        preexisting_tsnr2_expid_table = Table.read(args.outfile,"TSNR2_EXPID")
-        preexisting_tsnr2_frame_table = Table.read(args.outfile,"TSNR2_FRAME")
+        try:
+            preexisting_tsnr2_expid_table = read_table(args.outfile,"EXPOSURES")
+        except KeyError:
+            log.warning("Couldn't find the EXPOSURES HDU, looking for old format name TSNR2_EXPID")
+            preexisting_tsnr2_expid_table = read_table(args.outfile,"TSNR2_EXPID")
+        try:
+            preexisting_tsnr2_frame_table = read_table(args.outfile,"FRAMES")
+        except KeyError:
+            log.warning("Couldn't find the FRAMES HDU, looking for old format name TSNR2_FRAME")
+            preexisting_tsnr2_frame_table = read_table(args.outfile,"TSNR2_FRAME")
+
 
 
     # starting computing
@@ -660,8 +929,7 @@ def main():
 
     summary_rows  = list()
 
-    for count,night in enumerate(nights) :
-
+    def one_night(count, night, rows, tmpfilename):
         dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
         night_expids=[]
         for dirname in dirnames :
@@ -673,7 +941,7 @@ def main():
         if expids is not None :
             night_expids = np.intersect1d(expids,night_expids)
             if night_expids.size == 0 :
-                continue
+                return
         log.info("{} {}".format(night,night_expids))
 
         #pool = multiprocessing.Pool(ncpu)
@@ -687,122 +955,244 @@ def main():
             for func_arg in func_args :
                 entry = func(**func_arg)
                 if entry is not None :
-                    summary_rows.append(entry)
+                    rows.append(entry)
         else :
             log.info("Multiprocessing with {} procs".format(args.nproc))
             pool = multiprocessing.Pool(args.nproc)
             results  =  pool.map(_func, func_args)
             for entry in results :
                 if entry is not None :
-                    summary_rows.append(entry)
+                    rows.append(entry)
             pool.close()
             pool.join()
 
-
-        # write result after every other night
-        if len(summary_rows)>0 :
-            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
-            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+        # write result after every night.
+        if len(rows)>0 :
+            tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(rows,
+                                                                         preexisting_tsnr2_expid_table,
+                                                                         preexisting_tsnr2_frame_table,args.prod,
+                                                                         add_badexp=args.add_badexp)
             write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=tmpfilename)
-            log.info("wrote {} entries in tmp file {}".format(len(summary_rows),tmpfilename))
+            log.info("wrote {} entries in tmp file {}".format(len(rows),tmpfilename))
+
+    if comm is not None:
+        comm.barrier()
+
+        nights     = comm.bcast(nights, root=0)
+
+        #- which nights should this rank process
+        ranknights = nights[rank:len(nights):size]
+
+        if len(ranknights) > 0:
+            rank_summary_rows = list()
+
+            log.info('Rank {:d} processes nights {} with nproc={}'.format(rank, ranknights, default_nproc))
+
+            outdir = os.path.dirname(args.outfile)
+            if outdir == "" :
+                outdir = "."
+            logfile = outdir+'/desi_tsnr_afterburner_{:d}_{:d}_{:d}.log'.format(ranknights[0], ranknights[-1], rank)
+
+            if os.path.isfile(logfile):
+                os.unlink(logfile)
+
+            with stdouterr_redirected(to=logfile):
+                for count,night in enumerate(ranknights):
+                    tmpfilename=args.outfile.replace(".fits","_tmp_{:d}.fits".format(rank))
+
+                    one_night(count, night, rank_summary_rows, tmpfilename)
+        else:
+            log.warning('Rank {:d} has no nights to process'.format(rank))
 
 
-    tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,efftime_config,preexisting_tsnr2_expid_table,preexisting_tsnr2_frame_table,args.prod)
+        comm.barrier()
 
+    else:
+        for count,night in enumerate(nights):
+            tmpfilename=args.outfile.replace(".fits","_tmp.fits")
 
-    if args.skymags is not None :
-        skymags_table = Table.read(args.skymags)
-        add_skymags_columns(tsnr2_expid_table,skymags_table)
+            one_night(count, night, summary_rows, tmpfilename)
 
-    if args.compute_skymags :
-        skymag_rows=[]
-        for count,night in enumerate(nights) :
+    if (comm is None) | (rank == 0):
+        log.info('Gathering TSNR tmp tables (over ranks: {}, {})'.format(multinode, size))
 
-            dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
-            night_expids=[]
-            for dirname in dirnames :
-                try :
-                    expid=int(os.path.basename(dirname))
-                    night_expids.append(expid)
-                except ValueError as e :
-                    log.warning("ignore {}".format(dirname))
-            if expids is not None :
-                night_expids = np.intersect1d(expids,night_expids)
-                if night_expids.size == 0 :
-                    continue
-            log.info("{} {}".format(night,night_expids))
+        tsnr2_expid = []
+        tsnr2_frame = []
 
-            func2_args = []
-            for expid in night_expids :
-                func2_args.append({'night':night,'expid':expid,'specprod_dir':args.prod})
+        for rank in range(size):
+            if multinode:
+                tmpfilename=args.outfile.replace('.fits', '_tmp_{:d}.fits'.format(rank))
+            else:
+                tmpfilename=args.outfile.replace('.fits', '_tmp.fits')
 
-            if args.nproc == 1 :
-                for func2_arg in func2_args :
-                    entry = func2(**func2_arg)
-                    if entry is not None :
-                        skymag_rows.append(entry)
-            else :
-                log.info("Multiprocessing with {} procs".format(args.nproc))
-                pool = multiprocessing.Pool(args.nproc)
-                results  =  pool.map(_func2, func2_args)
-                for entry in results :
-                    if entry is not None :
-                        skymag_rows.append(entry)
-                pool.close()
-                pool.join()
+            try:
+                tmp = fits.open(tmpfilename)
 
-        colnames = list(skymag_rows[0].keys())
-        skymags_table = Table(rows=skymag_rows, names=colnames)
-        add_skymags_columns(tsnr2_expid_table,skymags_table)
+            except:
+                log.warning('{} not found.'.format(tmpfilename))
+                continue
 
-    gfa_table = None
-    if args.gfa_proc_dir is not None :
-        try :
-            gfa_table = read_gfa_data(args.gfa_proc_dir)
-        except PermissionError as e :
-            log.error(e)
-            log.error("could not read some files in {}".format(args.gfa_proc_dir))
-            args.gfa_proc_dir = None
+            hdr = tmp[0].header
 
+            tsnr2_expid.append(Table(tmp['EXPOSURES'].data))
+            tsnr2_frame.append(Table(tmp['FRAMES'].data))
 
-    if args.gfa_proc_dir is not None and gfa_table is not None :
+            # remove temporary file if successful
+            if os.path.isfile(tmpfilename) :
+                log.info("rm temporary file {}".format(tmpfilename))
+                os.unlink(tmpfilename)
 
-        e2i = {e:i for i,e in enumerate(gfa_table["EXPID"])}
-        jj=[]
-        ii=[]
-        for j,e in enumerate(tsnr2_expid_table["EXPID"]) :
-            if e in e2i :
-                jj.append(j)
-                ii.append(e2i[e])
+        tsnr2_expid_table = vstack(tsnr2_expid)
+        tsnr2_frame_table = vstack(tsnr2_frame)
 
-        cols=["TRANSPARENCY","FWHM_ASEC","FIBER_FRACFLUX","FIBER_FRACFLUX_ELG","FIBER_FRACFLUX_BGS","FIBERFAC","FIBERFAC_ELG","FIBERFAC_BGS","SKY_MAG_AB","AIRMASS",]
-        for col in cols :
-            if col in gfa_table.dtype.names :
-                if col == "FWHM_ASEC" :
-                    col2 = "SEEING_GFA"
+        tsnr2_expid_table.meta['EXTNAME'] = 'EXPOSURES'
+        tsnr2_frame_table.meta['EXTNAME'] = 'FRAMES'
+
+        if multinode:
+            write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile.replace('.fits', '_tmp.fits'))
+
+        # tsnr2_expid_table,tsnr2_frame_table = compute_summary_tables(summary_rows,
+        #                                                               preexisting_tsnr2_expid_table,
+        #                                                               preexisting_tsnr2_frame_table,args.prod,
+        #                                                               add_badexp=add_badexp)
+
+        if args.skymags is not None :
+            skymags_table = Table.read(args.skymags)
+            add_skymags_columns(tsnr2_expid_table,skymags_table)
+
+        if args.compute_skymags :
+            skymag_rows=[]
+            for count,night in enumerate(nights) :
+                dirnames = sorted(glob.glob('{}/exposures/{}/*'.format(args.prod,night)))
+                night_expids=[]
+                for dirname in dirnames :
+                    try :
+                        expid=int(os.path.basename(dirname))
+                        night_expids.append(expid)
+                    except ValueError as e :
+                        log.warning("ignore {}".format(dirname))
+                if expids is not None :
+                    night_expids = np.intersect1d(expids,night_expids)
+                    if night_expids.size == 0 :
+                        continue
+                log.info("{} {}".format(night,night_expids))
+
+                func2_args = []
+                for expid in night_expids :
+                    func2_args.append({'night':night,'expid':expid,'specprod_dir':args.prod})
+
+                if args.nproc == 1 :
+                    for func2_arg in func2_args :
+                        entry = func2(**func2_arg)
+                        if entry is not None :
+                            skymag_rows.append(entry)
                 else :
-                    col2 = col+"_GFA"
-                tsnr2_expid_table[col2]=np.zeros(len(tsnr2_expid_table),dtype=float)
-                tsnr2_expid_table[col2][jj] = gfa_table[col][ii]
+                    log.info("Multiprocessing with {} procs".format(args.nproc))
+                    pool = multiprocessing.Pool(args.nproc)
+                    results  =  pool.map(_func2, func2_args)
+                    for entry in results :
+                        if entry is not None :
+                            skymag_rows.append(entry)
+                    pool.close()
+                    pool.join()
 
+            colnames = list(skymag_rows[0].keys())
+            skymags_table = Table(rows=skymag_rows, names=colnames)
+            add_skymags_columns(tsnr2_expid_table,skymags_table)
 
-    if args.gfa_proc_dir is not None  and (args.skymags is not None or args.compute_skymags) :
+        gfa_table = None
 
-        efftime_dark, efftime_bright, efftime_backup = compute_efftime(tsnr2_expid_table[jj])
-        for col in ["EFFTIME_DARK_GFA","EFFTIME_BRIGHT_GFA","EFFTIME_BACKUP_GFA"] :
-            tsnr2_expid_table[col]=np.zeros(len(tsnr2_expid_table),dtype=float)
-        tsnr2_expid_table["EFFTIME_DARK_GFA"][jj]=efftime_dark
-        tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][jj]=efftime_bright
-        tsnr2_expid_table["EFFTIME_BACKUP_GFA"][jj]=efftime_backup
-        goaltype=tsnr2_expid_table["GOALTYPE"]
-        tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"] # default
-        tsnr2_expid_table["EFFTIME_GFA"][goaltype=="bright"]=tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype=="bright"]
-        tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
+        if args.gfa_proc_dir is not None :
+            try :
+                gfa_table = read_gfa_data(args.gfa_proc_dir)
+            except PermissionError as e :
+                log.error(e)
+                log.error("could not read some files in {}".format(args.gfa_proc_dir))
+                args.gfa_proc_dir = None
 
-    # end of loop on nights
-    if len(summary_rows)>0 :
+        if args.gfa_proc_dir is not None and gfa_table is not None :
+            e2i = {e:i for i,e in enumerate(gfa_table["EXPID"])}
+            jj=[]
+            ii=[]
+            for j,e in enumerate(tsnr2_expid_table["EXPID"]) :
+                if e in e2i :
+                    jj.append(j)
+                    ii.append(e2i[e])
 
-        write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,output_csv_filename=args.outfile.replace(".fits",".csv"))
+            cols=["TRANSPARENCY","FWHM_ASEC","FIBER_FRACFLUX","FIBER_FRACFLUX_ELG","FIBER_FRACFLUX_BGS","FIBERFAC","FIBERFAC_ELG","FIBERFAC_BGS","SKY_MAG_AB","AIRMASS",]
+            for col in cols :
+                if col in gfa_table.dtype.names :
+                    if col == "FWHM_ASEC" :
+                        col2 = "SEEING_GFA"
+                    else :
+                        col2 = col+"_GFA"
+                    tsnr2_expid_table[col2]=np.zeros(len(tsnr2_expid_table),dtype=float)
+                    tsnr2_expid_table[col2][jj] = gfa_table[col][ii]
+
+        if args.gfa_proc_dir is not None  and (args.skymags is not None or args.compute_skymags) :
+            efftime_dark, efftime_bright, efftime_backup = compute_efftime(tsnr2_expid_table[jj])
+            for col in ["EFFTIME_DARK_GFA","EFFTIME_BRIGHT_GFA","EFFTIME_BACKUP_GFA"] :
+                tsnr2_expid_table[col]=np.zeros(len(tsnr2_expid_table),dtype=float)
+            tsnr2_expid_table["EFFTIME_DARK_GFA"][jj]=efftime_dark
+            tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][jj]=efftime_bright
+            tsnr2_expid_table["EFFTIME_BACKUP_GFA"][jj]=efftime_backup
+            goaltype=tsnr2_expid_table["GOALTYPE"]
+            tsnr2_expid_table["EFFTIME_GFA"] = tsnr2_expid_table["EFFTIME_DARK_GFA"] # default
+            tsnr2_expid_table["EFFTIME_GFA"][goaltype=="bright"]=tsnr2_expid_table["EFFTIME_BRIGHT_GFA"][goaltype=="bright"]
+            tsnr2_expid_table["EFFTIME_GFA"][goaltype=="backup"]=tsnr2_expid_table["EFFTIME_BACKUP_GFA"][goaltype=="backup"]
+
+        # end of loop on nights
+
+        if len(tsnr2_frame_table) == 0:
+            log.error("no valid exposures added")
+            return 1
+
+        if args.tile_completeness is not None :
+            # renaming for historical code reasons
+            exposure_table = tsnr2_expid_table
+
+            # get list of tiles to look at
+            selection = np.repeat(True,len(exposure_table))
+            if args.expids is not None or args.nights is not None :
+                if args.expids is not None :
+                    expids = parse_int_args(args.expids)
+                    selection &= np.in1d(exposure_table["EXPID"],expids)
+                if args.nights is not None :
+                    nights = parse_int_args(args.nights)
+                    selection &= np.in1d(exposure_table["NIGHT"],nights)
+
+                # consider only the tiles observed in this selection of exposures
+                tiles=np.unique(exposure_table["TILEID"][selection])
+                # keep all exposures of those tiles
+                selection = np.in1d(exposure_table["TILEID"],tiles)
+
+            new_tile_table = compute_tile_completeness_table(exposure_table[selection],args.prod,auxiliary_table_filenames=args.aux)
+            if os.path.isfile(args.tile_completeness) :
+                previous_table = Table.read(args.tile_completeness)
+                new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
+            new_tile_table.write(args.tile_completeness,overwrite=True)
+            log.info("wrote {}".format(args.tile_completeness))
+
+            if args.tile_completeness.endswith('.fits'):
+                head, ext = os.path.splitext(args.tile_completeness)
+                csvtiles = head + '.csv'
+                new_tile_table.write(csvtiles, overwrite=True)
+                log.info("wrote {}".format(csvtiles))
+
+            # compute_tile_completeness_table may have found new GOALTIME info
+            # from auxiliary_table_filename, so update exposures if needed
+            for tileid, goaltime in new_tile_table['TILEID', 'GOALTIME']:
+                ii = tsnr2_expid_table['TILEID'] == tileid
+                if goaltime>0.0 and np.any(tsnr2_expid_table['GOALTIME'][ii] == 0.0):
+                    tsnr2_expid_table['GOALTIME'][ii] = goaltime
+
+                jj = tsnr2_frame_table['TILEID'] == tileid
+                if goaltime>0.0 and np.any(tsnr2_frame_table['GOALTIME'][jj] == 0.0):
+                    tsnr2_frame_table['GOALTIME'][jj] = goaltime
+
+        output_csv_filename = os.path.splitext(args.outfile)[0] + '.csv'
+        write_summary_tables(tsnr2_expid_table,tsnr2_frame_table,output_fits_filename=args.outfile,
+                             output_csv_filename=output_csv_filename)
 
         # remove temporary file if successful
         if os.path.isfile(args.outfile) :
@@ -814,19 +1204,8 @@ def main():
             if os.path.isfile(tmpfilename) :
                 log.info("rm temporary file {}".format(tmpfilename))
                 os.unlink(tmpfilename)
-    else :
-        log.error("no valid exposures added")
-
-
-    if args.tile_completeness is not None :
-        # reread the exposure table
-        exposure_table = Table.read(args.outfile)
-        new_tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
-        if os.path.isfile(args.tile_completeness) :
-            previous_table = Table.read(args.tile_completeness)
-            new_tile_table = merge_tile_completeness_table(previous_table,new_tile_table)
-        new_tile_table.write(args.tile_completeness,overwrite=True)
-        log.info("wrote {}".format(args.tile_completeness))
+        else :
+            log.error("no valid exposures added")
 
 
 if __name__ == '__main__':
