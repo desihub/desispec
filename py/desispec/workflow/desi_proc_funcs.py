@@ -309,11 +309,15 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
-        ncores, runtime = 20 * nspectro, 25
-        if system_name == 'perlmutter-gpu': ncores += 2 * nspectro # + 2/spectrum for I/O
+        if system_name == 'perlmutter-gpu':
+            ncores, runtime = 32, 25
+        else:
+            ncores, runtime = 20 * nspectro, 25
     elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
-        ncores, runtime = 20 * nspectro, 30
-        if system_name == 'perlmutter-gpu': ncores += 2 * nspectro # + 2/spectrum for I/O
+        if system_name == 'perlmutter-gpu':
+            ncores, runtime = 32, 30
+        else:
+            ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
         ncores, runtime = ncameras, 5
     elif jobdesc in ('CCDCALIB'):
@@ -485,7 +489,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
 
     batch_config = batch.get_config(system_name)
     threads_per_core = batch_config['threads_per_core']
-
+    gpus_per_node = batch_config['gpus_per_node']
     ncameras = len(cameras)
     nexps = 1
     if exp is not None and not np.isscalar(exp) and type(exp) is not str:
@@ -542,6 +546,7 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             fx.write('#SBATCH --qos regular\n'.format(queue))
             # perlmutter-gpu requires projects name with "_g" appended
             fx.write('#SBATCH --account desi_g\n')
+            fx.write('#SBATCH --gpus-per-node={}\n'.format(gpus_per_node))
         else:
             fx.write('#SBATCH --qos {}\n'.format(queue))
             fx.write('#SBATCH --account desi\n')
@@ -593,6 +598,9 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             fx.write("export OMP_NUM_THREADS={}\n".format(threads_per_core))
         else:
             fx.write("export OMP_NUM_THREADS=1\n")
+        if system_name == 'perlmutter-gpu':
+            fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
+            fx.write("module load cudatoolkit\n\n")
 
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             if nightlybias:

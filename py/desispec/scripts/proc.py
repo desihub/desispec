@@ -732,7 +732,7 @@ def main(args=None, comm=None):
 
             run_extraction = True
 
-            if args.gpuextract:
+            if args.gpuextract and len(cmds) > 0:
                 #- GPU extraction currently assumes single node extraction group
                 #- If extract size is not provided, use 1 rank per GPU available plus 2 ranks for IO
                 #- On Perlmutter GPU, --extract-size 22 provides the best performance.
@@ -778,14 +778,12 @@ def main(args=None, comm=None):
                         print('RUNNING: {}'.format(cmds[camera]))
 
                     if args.gpuextract:
-                        if comm_extract.rank == 0: print('GPU EXTRACTION')
                         desispec.scripts.extract.main_gpu_specter(extract_args, coordinator=coordinator)
                     elif args.gpuspecter:
-                        if comm_extract.rank == 0: print('NON-GPU GPU EXTRACTION')
                         desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
                     else:
-                        if comm_extract.rank == 0: print('CPU EXTRACTION')
                         desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
+                    comm_extract.barrier()
 
                     if comm_extract.rank == 0:
                         for outfile in outputs[camera]:
