@@ -1124,9 +1124,11 @@ def main(args=None, comm=None):
             err = 0
             if subcomm is None:
                 #- Using multiprocessing
+                log.info(f'Rank {rank=} fitting sp{sp=} stdstars with multiprocessing')
                 err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
             else:
                 #- Using MPI
+                log.info(f'Rank {rank=} fitting sp{sp=} stdstars with mpi')
                 try:
                     cmdargs = cmd.split()[1:]
                     cmdargs = desispec.scripts.stdstars.parse(cmdargs)
@@ -1139,6 +1141,7 @@ def main(args=None, comm=None):
                     err = 1
 
             if err != 0:
+                log.info(f'Rank {rank=} stdstar failure {err=}')
                 error_count += 1
 
         timer.stop('stdstarfit')
