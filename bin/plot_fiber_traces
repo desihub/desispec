@@ -71,7 +71,7 @@ if args.image is not None :
         vmin=args.vmin
     if args.vmax is not None :
         vmax=args.vmax
-    plt.imshow(img,origin=0,vmin=vmin,vmax=vmax,aspect="auto")
+    plt.imshow(img,origin="lower",vmin=vmin,vmax=vmax,aspect="auto")
 
 for i,fiber in enumerate(fibers) :
     x = tset.x_vs_wave(fiber,wave)

@@ -69,7 +69,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         fibermap = '{specprod_dir}/preproc/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
-        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
+        tilepix = '{specprod_dir}/preproc/{night}/{expid:08d}/tilepix-{tile}.json',
         #
         # exposures/
         # Note: calib has been renamed to fluxcalib, but that has not propagated fully through the pipeline.
@@ -86,6 +86,7 @@ def findfile(filetype, night=None, expid=None, camera=None,
         sframe = '{specprod_dir}/exposures/{night}/{expid:08d}/sframe-{camera}-{expid:08d}.fits',
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         skycorr = '{specprod_dir}/exposures/{night}/{expid:08d}/skycorr-{camera}-{expid:08d}.fits',
+        fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         fiberflatexp = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflatexp-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
         calibstars = '{specprod_dir}/exposures/{night}/{expid:08d}/calibstars-{expid:08d}.csv',
@@ -121,10 +122,12 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #
         # spectra- single exp tile based
         #
-        coadd_single='{specprod_dir}/tiles/{tile:d}/exposures/coadd-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        rrdetails_single='{specprod_dir}/tiles/{tile:d}/exposures/rrdetails-{spectrograph:d}-{tile:d}-{expid:08d}.h5',
-        spectra_single='{specprod_dir}/tiles/{tile:d}/exposures/spectra-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
-        redrock_single='{specprod_dir}/tiles/{tile:d}/exposures/redrock-{spectrograph:d}-{tile:d}-{expid:08d}.fits',
+        coadd_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/coadd-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        rrdetails_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/rrdetails-{spectrograph:d}-{tile:d}-exp{expid:08d}.h5',
+        spectra_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/spectra-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        redrock_single='{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/redrock-{spectrograph:d}-{tile:d}-exp{expid:08d}.fits',
+        tileqa_single  = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.fits',
+        tileqapng_single = '{specprod_dir}/tiles/perexp/{tile:d}/{expid:08d}/tile-qa-{tile:d}-exp{expid:08d}.png',
         #
         # Deprecated QA files below this point.
         #
@@ -151,12 +154,35 @@ def findfile(filetype, night=None, expid=None, camera=None,
     )
     location['desi'] = location['raw']
 
+    #- default group is "cumulative" for tile-based files
+    if groupname is None and tile is not None and filetype in (
+            'spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa', 'tileqapng', 'zmtl',
+            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile',
+            ):
+        groupname = 'cumulative'
+
+    if str(groupname) == "cumulative":
+        nightprefix = "thru"
+    elif groupname == 'perexp':
+        nightprefix = "exp"
+    else:
+        nightprefix = ""
+
     if tile is not None:
         log.debug("Tile-based files selected; healpix-based files and input will be ignored.")
-        location['coadd'] = location['coadd_tile']
-        location['redrock'] = location['redrock_tile']
-        location['spectra'] = location['spectra_tile']
-        location['rrdetails'] = location['rrdetails_tile']
+        if groupname == 'perexp':
+            location['coadd'] = location['coadd_single']
+            location['redrock'] = location['redrock_single']
+            location['spectra'] = location['spectra_single']
+            location['rrdetails'] = location['rrdetails_single']
+            location['tileqa'] = location['tileqa_single']
+            location['tileqapng'] = location['tileqapng_single']
+        else:
+            location['coadd'] = location['coadd_tile']
+            location['redrock'] = location['redrock_tile']
+            location['spectra'] = location['spectra_tile']
+            location['rrdetails'] = location['rrdetails_tile']
+            # tileqa/tileqapng default already correct for pernight/cumulative
     else:
         location['coadd'] = location['coadd_hp']
         location['redrock'] = location['redrock_hp']
@@ -171,18 +197,6 @@ def findfile(filetype, night=None, expid=None, camera=None,
         #- set to anything so later logic will trip on groupname not hpixdir
         hpixdir = 'hpix'
     log.debug("hpixdir = '%s'", hpixdir)
-
-    #- default group is "cumulative" for tile-based files
-    if groupname is None and tile is not None and filetype in (
-            'spectra', 'coadd', 'redrock', 'rrdetails', 'tileqa', 'tileqapng', 'zmtl',
-            'spectra_tile', 'coadd_tile', 'redrock_tile', 'rrdetails_tile',
-            ):
-        groupname = 'cumulative'
-
-    if str(groupname) == "cumulative":
-        nightprefix = "thru"
-    else:
-        nightprefix = ""
 
     #- Do we know about this kind of file?
     if filetype not in location:
@@ -568,7 +582,7 @@ def faflavor2program(faflavor):
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='bright'
     bright  = faflavor == 'sv1bgsmws'
-    bright |= np.char.endswith(faflavor, 'bright')
+    bright |= (faflavor != 'sv1unwisebluebright') & np.char.endswith(faflavor, 'bright')
 
     #- SV1 FAFLAVOR options that map to FAPRGRM='backup'
     backup  = faflavor == 'sv1backup1'

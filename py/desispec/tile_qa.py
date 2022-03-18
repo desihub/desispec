@@ -81,13 +81,19 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         if exposure_qa_meta is None :
             exposure_qa_meta = exposure_fiberqa_table.meta
             # AR case no GOALTIME, MINTFRAC (can happen for early tiles):
-            # - set GOALTIME=1000/150/30 for dark,cmx/bright/backup
+            # - set GOALTIME:
+            #   - to 1000/150/30 for dark,cmx/bright/backup;
+            #   - to 0 if TILEID=80715 (sv1m31), 80718 (sv1rosette)
             # - set MINTFRAC=0.9
             if "GOALTIME" not in exposure_qa_meta:
-                fafn = findfile("fiberassign", night=night, expid=expid, tile=tileid)
+                fafn = findfile("fiberassign", night=exposure_night, expid=expid, tile=tileid)
                 if not os.path.isfile(fafn):
-                    log.error("missing {}".format(fafn))
-                    raise FileNotFoundError("missing {}".format(fafn))
+                    log.warning("missing {}".format(fafn))
+                    fafn=fafn.replace(".fits.gz",".fits")
+                    log.warning("trying {}...".format(fafn))
+                    if not os.path.isfile(fafn):
+                        log.error("missing {}".format(fafn))
+                        raise FileNotFoundError("missing {}".format(fafn))
                 fahdr = fitsio.read_header(fafn, 0)
                 if "TARG" not in fahdr:
                     log.error("TARG keyword missing in {} header".format(fafn))
@@ -99,6 +105,8 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
                     exposure_qa_meta["GOALTIME"] = 150
                 elif prog == "backup":
                     exposure_qa_meta["GOALTIME"] = 30
+                elif tileid in [80715, 80718]:
+                    exposure_qa_meta["GOALTIME"] = 0
                 if "GOALTIME" in exposure_qa_meta:
                     log.warning("no GOALTIME -> setting GOALTIME={}, as prog={}".format(exposure_qa_meta["GOALTIME"], prog))
                 else:
@@ -131,10 +139,12 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
     fibermaps=[]
     scores=[]
     redshifts=[]
+    exp_fibermaps=[] # fibermaps of all frames
     ### zqsos=[]
     for coadd_file in coadd_files :
         log.info("reading {}".format(coadd_file))
         fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"FIBERMAP")))
+        exp_fibermaps.append(_rm_meta_keywords(Table.read(coadd_file,"EXP_FIBERMAP")))
         scores.append(_rm_meta_keywords(Table.read(coadd_file,"SCORES")))
 
         redrock_file = replace_prefix(coadd_file, "coadd", "redrock")
@@ -171,12 +181,27 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
     ###     zqsos=vstack(zqsos)
     ### else :
     ###     zqsos=None
+    exp_fibermap=vstack(exp_fibermaps)
     targetids=fibermap["TARGETID"]
+
+    # and / or of the fiberstatus of the individual exposures
+    if fibermap['TARGETID'].size == exp_fibermap['TARGETID'].size :
+        or_fiberstatus  = fibermap['COADD_FIBERSTATUS'].copy()
+        and_fiberstatus = fibermap['COADD_FIBERSTATUS'].copy()
+    else :
+        or_fiberstatus   = np.zeros_like(fibermap['COADD_FIBERSTATUS'])
+        and_fiberstatus  = np.zeros_like(fibermap['COADD_FIBERSTATUS'])
+        for i,tid in enumerate(targetids) :
+            jj = (exp_fibermap["TARGETID"]==tid)
+            and_fiberstatus[i] = np.bitwise_and.reduce(exp_fibermap['FIBERSTATUS'][jj])
+            or_fiberstatus[i]  = np.bitwise_or.reduce(exp_fibermap['FIBERSTATUS'][jj])
 
     tile_fiberqa_table = Table()
     for k in ['TARGETID','PETAL_LOC','DEVICE_LOC', 'LOCATION', 'FIBER', 'TARGET_RA', 'TARGET_DEC', 'MEAN_FIBER_X', 'MEAN_FIBER_Y', 'MEAN_DELTA_X', 'MEAN_DELTA_Y', 'RMS_DELTA_X', 'RMS_DELTA_Y','DESI_TARGET', 'BGS_TARGET', 'EBV'] :
         if k in fibermap.dtype.names :
             tile_fiberqa_table[k]=fibermap[k]
+        else :
+            log.warning(f"missing keyword {k} in fibermap")
 
     # add TSNR info
     scores_tid_to_index = {tid:index for index,tid in enumerate(scores["TARGETID"])}
@@ -229,6 +254,11 @@ def compute_tile_qa(night, tileid, specprod_dir, exposure_qa_dir=None, group='cu
         jj = (exposure_fiberqa_tables["TARGETID"]==tid)
         and_qafiberstatus[i] = np.bitwise_and.reduce(exposure_fiberqa_tables['QAFIBERSTATUS'][jj])
         or_qafiberstatus[i] = np.bitwise_or.reduce(exposure_fiberqa_tables['QAFIBERSTATUS'][jj])
+
+    # also add OR of the coadd fiberstatus (which includes extra info like BADAMPB,R,Z)
+    # (the and/or_qafiberstatus array have the same target id ordering as the fibermap)
+    and_qafiberstatus |= and_fiberstatus
+    or_qafiberstatus  |= or_fiberstatus
 
     # tile QAFIBERSTATUS is AND of input exposures (+ LOWEFFTIME, see below)
     tile_fiberqa_table["QAFIBERSTATUS"]= and_qafiberstatus

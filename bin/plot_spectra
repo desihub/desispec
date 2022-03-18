@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import fitsio
 from desiutil.log import get_logger
-from desispec.io import read_spectra
+from desispec.io import read_spectra, read_table
 from desispec.interpolation import resample_flux
 from astropy.table import Table
 import redrock.templates
@@ -74,9 +74,9 @@ if ( targetids is None ) and ( args.targetid is not None ) :
 redshifts=None
 if  args.redrock is not None :
     try:
-        redshifts=Table.read(args.redrock, "REDSHIFTS")
+        redshifts=read_table(args.redrock, "REDSHIFTS")
     except KeyError:
-        redshifts=Table.read(args.redrock, "ZBEST")
+        redshifts=read_table(args.redrock, "ZBEST")
 
 if ( targetids is None ) and ( redshifts is not None ) and ( args.spectype is not None ):
     selection = np.where((redshifts["SPECTYPE"]==args.spectype)&(redshifts["ZWARN"]==0))[0]
@@ -152,12 +152,18 @@ for tid in targetids :
                 if args.rebin is not None and args.rebin>0:
                     rwave=np.linspace(spec.wave[b][0],spec.wave[b][-1],spec.wave[b].size//args.rebin)
                     rflux,rivar = resample_flux(rwave,spec.wave[b],spec.flux[b][j],ivar=spec.ivar[b][j]*(spec.mask[b][j]==0))
-                    plt.plot(wavescale*rwave,rflux)
-                else :
-                    if args.errors :
-                        plt.errorbar(wavescale*spec.wave[b][i],spec.flux[b][j,i],1./np.sqrt(spec.ivar[b][j,i]))
-                    else :
-                        plt.plot(wavescale*spec.wave[b][i],spec.flux[b][j,i])
+                else:
+                    rwave = spec.wave[b][i]
+                    rflux = spec.flux[b][j, i]
+                    rivar = spec.ivar[b][j, i]
+                if args.errors:
+                    plt.fill_between(wavescale*rwave, rflux-1./np.sqrt(rivar),
+                                     rflux+1./np.sqrt(rivar), alpha=0.5)
+                    line, = plt.plot(wavescale*rwave, rflux)
+                    plt.plot(wavescale*rwave, 1/np.sqrt(rivar)-2,
+                             color=line.get_color(), linestyle='--')
+                else:
+                    plt.plot(wavescale*rwave, rflux)
 
                 c=np.polyfit(spec.wave[b][i],spec.flux[b][j,i],3)
                 pol=np.poly1d(c)(spec.wave[b][i])

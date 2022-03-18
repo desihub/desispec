@@ -16,11 +16,15 @@ def parse(options=None):
     p.add_argument('-o', '--outdir', type=str,
             help='output directory')
     p.add_argument('--nzeros', type=int, default=25,
-            help='number of input ZEROS to use (saves memory)')
-    p.add_argument('--minzeros', type=int, default=20,
-            help='minimum number of good ZEROs required')
+            help='max number of input ZEROS to use (saves memory) [%(default)s]')
+    p.add_argument('--minzeros', type=int, default=15,
+            help='minimum number of good ZEROs required [%(default)s]')
+    p.add_argument('--nskip', type=int, default=2,
+            help='Number of zeros at start to skip [%(default)s]')
+    p.add_argument('--anyzeros', action='store_true',
+            help='allow non-calib ZEROs to be used')
     p.add_argument('--mpi', action='store_true',
-            help='use_mpi')
+            help='use MPI for parallelism')
 
     args = p.parse_args(options)  #- uses sys.argv if options is None
 
@@ -41,4 +45,3 @@ def main(args=None, comm=None):
 
     del args.__dict__['mpi']
     compute_nightly_bias(**args.__dict__, comm=comm)
-

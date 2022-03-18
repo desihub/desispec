@@ -15,7 +15,7 @@ Fall 2015
 
 from __future__ import absolute_import, division, print_function
 
-import sys, os
+import sys, os, glob
 import argparse
 
 import numpy as np
@@ -26,6 +26,7 @@ from astropy.table import Table, hstack, vstack
 
 from desiutil.log import get_logger
 from desispec import io
+from desispec.zcatalog import find_primary_spectra
 
 def match(table1,table2,key="TARGETID") :
     """
@@ -77,7 +78,60 @@ def match(table1,table2,key="TARGETID") :
 
     log.debug(f'Done with matching tables on {key}')
     return table1
-    
+
+def load_sv1_ivar_w12(hpix, targetids):
+    """
+    Load FLUX_IVAR_W1/W2 from sv1 target files for requested targetids
+
+    Args:
+        hpix (int): nside=8 nested healpix
+        targetids (array): TARGETIDs to include
+
+    Returns table of TARGETID, FLUX_IVAR_W1, FLUX_IVAR_W2
+
+    Note: this is only for the special case of sv1 dark/bright and the
+    FLUX_IVAR_W1/W2 columns which were not included in fiberassign for
+    tiles designed before 20201212.
+
+    Note: nside=8 nested healpix is hardcodes for simplicity because that is
+    what was used for sv1 target selection and this is not trying to be a
+    more generic targetid lookup function.
+    """
+    log = get_logger()
+    #- the targets could come from any version of desitarget, so search all,
+    #- but once a TARGETID is found it will be the same answer (for FLUX_IVAR*)
+    #- as any other version because it is propagated from the same dr9 input
+    #- Tractor files.
+    targetdir = os.path.join(os.environ['DESI_TARGET'], 'catalogs', 'dr9')
+    fileglob = f'{targetdir}/*/targets/sv1/resolve/*/sv1targets-*-hp-{hpix}.fits'
+    sv1targetfiles = sorted(glob.glob(fileglob))
+    nfiles = len(sv1targetfiles)
+    ntarg = len(np.unique(targetids))
+    log.info(f'Searching {nfiles} sv1 target files for {ntarg} targets in nside=8 healpix={hpix}')
+    columns = ['TARGETID', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2']
+    targets = list()
+    found_targetids = list()
+    for filename in sv1targetfiles:
+        tx = fitsio.read(filename, 1, columns=columns)
+        keep = np.isin(tx['TARGETID'], targetids)
+        keep &= ~np.isin(tx['TARGETID'], found_targetids)
+        targets.append(tx[keep])
+        found_targetids.extend(tx['TARGETID'][keep])
+
+        if np.all(np.isin(targetids, found_targetids)):
+            break
+
+    targets = np.hstack(targets)
+
+    missing = np.isin(targetids, targets['TARGETID'], invert=True)
+    if np.any(missing):
+        nmissing = np.sum(missing)
+        log.error(f'{nmissing} TARGETIDs not found in sv1 healpix={hpix}')
+
+    return targets
+
+
+#--------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("-i", "--indir",  type=str,
@@ -86,9 +140,19 @@ parser.add_argument("-o", "--outfile",type=str,
         help="output file")
 parser.add_argument("--minimal", action='store_true',
         help="only include minimal output columns")
-parser.add_argument("--tiles", type=str,
+parser.add_argument("-t", "--tiles", type=str,
         help="ascii file with tileids to include (one per line)")
-parser.add_argument("--prefix", type=str, default='redrock', help="prefix of redrock files (older versions used 'zbest' instead of 'redrock'")
+parser.add_argument("--prefix", type=str, default='redrock',
+        help="prefix of redrock files (older versions used 'zbest' "
+             "instead of 'redrock'")
+parser.add_argument("-g", "--group", type=str,
+        help="Add columns specific to this spectral grouping "
+             "e.g. pernight adds NIGHT column from input header keyword")
+parser.add_argument("--header", type=str, nargs="*",
+        help="KEYWORD=VALUE entries to add to the output header")
+parser.add_argument('--patch-missing-ivar-w12', action='store_true',
+        help="Use target files to patch missing FLUX_IVAR_W1/W2 values")
+
 # parser.add_argument("--match", type=str, nargs="*",
 #         help="match other tables (targets,truth...)")
 
@@ -126,11 +190,18 @@ if nfiles == 0:
     log.critical(msg)
     raise ValueError(msg)
 
-data = list()
+zcatdata = list()
 exp_fibermaps = list()
 for ifile, rrfile in enumerate(redrockfiles):
     log.info(f'Reading {ifile+1}/{nfiles} {rrfile}')
     with fitsio.FITS(rrfile) as fx:
+        hdr = fx[0].read_header()
+        if args.group is not None and 'SPGRP' in hdr and \
+                hdr['SPGRP'] != args.group:
+            log.warning("Skipping {} with SPGRP {} != args.group {}".format(
+                rrfile, hdr['SPGRP'], args.group))
+            continue
+
         if 'ZBEST' in fx: #check if the older hdu name for REDSHIFT exist, in which case we read only the FIBERMAP and no TSNR2.
             redshifts = fx['ZBEST'].read()
             fibermap = fx['FIBERMAP'].read()
@@ -161,10 +232,10 @@ for ifile, rrfile in enumerate(redrockfiles):
             fibermap_.rename_column('TARGET_RA','RA')
             fibermap_.rename_column('TARGET_DEC','DEC')
             fibermap_.remove_columns(['DESI_TARGET','BGS_TARGET','MWS_TARGET','SCND_TARGET'])
-            data.append(hstack([Table(redshifts), fibermap_]))
+            data = hstack( [Table(redshifts), fibermap_] )
 
         else:
-            data.append(hstack([Table(redshifts), Table(fibermap[fmcols])]))
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
 
     else:
         fmcols = list(fibermap.dtype.names)
@@ -172,26 +243,121 @@ for ifile, rrfile in enumerate(redrockfiles):
         if tsnr2 is not None:
             tsnr2cols = list(tsnr2.dtype.names)
             tsnr2cols.remove('TARGETID')
-            data.append(hstack(
-            [Table(redshifts), Table(fibermap[fmcols]), Table(tsnr2[tsnr2cols])]
-            ))
+            data = hstack([
+                Table(redshifts),
+                Table(fibermap[fmcols]),
+                Table(tsnr2[tsnr2cols]),
+                ])
         else:
-            data.append(hstack(
-            [Table(redshifts), Table(fibermap[fmcols])]
-            ))
+            data = hstack( [Table(redshifts), Table(fibermap[fmcols])] )
+
+    #- Add group specific columns, recognizing some some of them may
+    #- have already been inherited from the fibermap.
+    #- Put these columns right after TARGETID
+    nrows = len(data)
+    icol = 1
+    if args.group in ('perexp', 'pernight', 'cumulative'):
+        if 'TILEID' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['TILEID'], dtype=np.int32),
+                    index=icol, name='TILEID')
+            icol += 1
+        if 'PETAL_LOC' not in data.colnames:
+            data.add_column(np.full(nrows, hdr['PETAL'], dtype=np.int16),
+                    index=icol, name='PETAL_LOC')
+            icol += 1
+
+    if args.group == 'perexp':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+        icol += 1
+        data.add_column(np.full(nrows, hdr['EXPID'], dtype=np.int32),
+                index=icol, name='EXPID')
+    elif args.group == 'pernight':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='NIGHT')
+    elif args.group == 'cumulative':
+        data.add_column(np.full(nrows, hdr['NIGHT'], dtype=np.int32),
+                index=icol, name='LASTNIGHT')
+    elif args.group == 'healpix':
+        data.add_column(np.full(nrows, hdr['HPXPIXEL'], dtype=np.int32),
+                index=icol, name='HEALPIX')
+
+    icol += 1
+
+    # SPGRPVAL = night for pernight, expid for perexp, subset for custom coadds
+    if 'SPGRPVAL' in hdr.keys():
+        val = hdr['SPGRPVAL']
+        # if int, try to make int32, otherwise let numpy pick dtype
+        if isinstance(val, int):
+            if np.int32(val) == val:
+                dtype = np.int32
+            else:
+                dtype = np.int64
+        else:
+            dtype = None
+
+        data.add_column(np.full(nrows, hdr['SPGRPVAL'], dtype=dtype),
+                index=icol, name='SPGRPVAL')
+    else:
+        log.warning(f'SPGRPVAL keyword missing from {rrfile}')
+
+    zcatdata.append(data)
 
     if expfibermap is not None:
         exp_fibermaps.append(expfibermap)
 
 
 log.info('Stacking zcat')
-zcat = np.array(vstack(data))
+zcat = vstack(zcatdata)
 if exp_fibermaps:
     log.info('Stacking exposure fibermaps')
     expfm = np.hstack(exp_fibermaps)
 else:
     expfm = None
 
+#- if TARGETIDs appear more than once, which one is best within this catalog?
+if 'TSNR2_LRG' in zcat.colnames and 'ZWARN' in zcat.colnames:
+    log.info('Finding best spectrum for each target')
+    nspec, primary = find_primary_spectra(zcat)
+    zcat['ZCAT_NSPEC'] = nspec.astype(np.int16)
+    zcat['ZCAT_PRIMARY'] = primary
+else:
+    log.info('Missing TSNR2_LRG or ZWARN; not adding ZCAT_PRIMARY/_NSPEC')
+
+if args.patch_missing_ivar_w12:
+    from desimodel.footprint import radec2pix
+    missing = (zcat['FLUX_IVAR_W1'] < 0) | (zcat['FLUX_IVAR_W2'] < 0)
+    missing &= zcat['OBJTYPE'] == 'TGT'
+    missing &= zcat['TARGETID'] > 0
+
+    if not np.any(missing):
+        log.info('No targets missing FLUX_IVAR_W1/W2 to patch')
+    else:
+        #- Load targets from sv1 targeting files
+        ra = zcat['TARGET_RA']
+        dec = zcat['TARGET_DEC']
+        nside = 8  #- use for sv1 targeting
+        hpix8 = radec2pix(nside, ra, dec)
+        for hpix in np.unique(hpix8[missing]):
+            hpixmiss = (hpix == hpix8) & missing
+            targets = load_sv1_ivar_w12(hpix, zcat['TARGETID'][hpixmiss])
+
+            #- create dict[TARGETID] -> row number
+            targetid2idx = dict(zip(targets['TARGETID'],
+                                    np.arange(len(targets))))
+
+            #- patch missing values, if they are in the targets file
+            for i in np.where(hpixmiss)[0]:
+                tid = zcat['TARGETID'][i]
+                try:
+                    j = targetid2idx[ tid ]
+                    zcat['FLUX_IVAR_W1'][i] = targets['FLUX_IVAR_W1'][j]
+                    zcat['FLUX_IVAR_W2'][i] = targets['FLUX_IVAR_W2'][j]
+                except KeyError:
+                    log.warning(f'TARGETID {tid} (row {i}) not found in sv1 targets')
+
+#- we're done adding columns, convert to numpy array for fitsio
+zcat = np.array(zcat)
 
 #- untested with new formats, so commenting out for now
 # if args.match:
@@ -199,7 +365,20 @@ else:
 #         log.info("matching {}".format(filename))
 #         zcat = match(zcat,fitsio.read(filename))
 
+#- Inherit header from first input, but remove keywords that don't apply
+#- across multiple files
 header = fitsio.read_header(redrockfiles[0], 0)
+for key in ['SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL', 'NIGHT', 'EXPID', 'HPXPIXEL']:
+    if key in header:
+        header.delete(key)
+
+if args.header is not None:
+    for keyval in args.header:
+        key, value = keyval.split('=', maxsplit=1)
+        try:
+            header[key] = int(value)
+        except ValueError:
+            header[key] = value
 
 log.info(f'Writing {args.outfile}')
 tmpfile = args.outfile + '.tmp'
@@ -211,8 +390,4 @@ if not args.minimal and expfm is not None:
 os.rename(tmpfile, args.outfile)
 
 log.info("Successfully wrote {}".format(args.outfile))
-
-
-
-
 

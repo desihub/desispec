@@ -18,9 +18,11 @@ from desitarget.targetmask import desi_mask, bgs_mask
 from desitarget.targetmask import zwarn_mask as desitarget_zwarn_mask
 from desitarget.targets import main_cmx_or_sv
 from desitarget.targets import zcut as lya_zcut
+from desitarget.geomask import match_to
 # AR desispec
 from desispec.fiberbitmasking import get_skysub_fiberbitmask_val
 from desispec.io import findfile
+from desispec.tile_qa_plot import get_tilecov
 # AR matplotlib
 import matplotlib
 from matplotlib.backends.backend_pdf import PdfPages
@@ -304,7 +306,7 @@ def create_mp4(fns, outmp4, duration=15):
         _ = os.system("cp {} {}/tmp-{:04d}.png".format(fns[i], tmpoutdir, i))
     print(fns)
     # AR ffmpeg settings
-    default_fps = 25. # ffmpeg default fps 
+    default_fps = 25. # ffmpeg default fps
     pts_fac = "{:.1f}".format(duration / (n_img / default_fps))
     # cmd = "ffmpeg -i {}/tmp-%04d.png -filter:v 'setpts={}*PTS' {}".format(tmpoutdir, pts_fac, outmp4)
     # AR following encoding so that mp4 are displayed in safari, firefox
@@ -591,10 +593,11 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                                 mydict[camera]["isflag"] = np.zeros(0, dtype=bool)
                             mydict[camera]["flux"] =  np.append(mydict[camera]["flux"], h["FLUX"].data, axis=0)
                             mydict[camera]["petals"] = np.append(mydict[camera]["petals"], petal + np.zeros(h["FLUX"].data.shape[0], dtype=int))
-                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0)
+                            band = camera.lower()[0]
+                            mydict[camera]["isflag"] = np.append(mydict[camera]["isflag"], (h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0)
                             if tileid is None:
                                 tileid = h["FIBERMAP"].header["TILEID"]
-                            print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val()) > 0).sum(), "/", sel.sum())
+                            print("\t", night, expid, camera+str(petal), ((h["FIBERMAP"].data["FIBERSTATUS"] & get_skysub_fiberbitmask_val(band=band)) > 0).sum(), "/", sel.sum())
                     print(night, expid, camera, mydict[camera]["isflag"].sum(), "/", mydict[camera]["isflag"].size)
                 #
                 fig = plt.figure(figsize=(20, 10))
@@ -627,7 +630,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids):
                     ax.text(0.99, 0.92, "CAMERA={}".format(camera), color="k", fontsize=15, fontweight="bold", ha="right", transform=ax.transAxes)
                     if ic == 0:
                         ax.set_title("EXPID={:08d}  NIGHT={}  TILED={}  {} SKY fibers".format(
-                            expid, night, tileid, nsky) 
+                            expid, night, tileid, nsky)
                         )
                     ax.set_xlim(xlim)
                     if ic == 2:
@@ -783,7 +786,87 @@ def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group=
     plt.close()
 
 
-def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25, group='cumulative'):
+def plot_newlya(
+    ax,
+    ntilecovs,
+    nnewlyas,
+    tileids=None,
+    title=None,
+    xlabel="Number of observed tiles",
+    ylabel="Number of newly identified LYA candidates",
+    xlim=(0.5, 6.5),
+    ylim=(0, 400),
+    nvalifiber_norm=3900,
+):
+    """
+    Plot the number of newly identified Ly-a vs. the tile observations coverage for a list of tiles.
+
+    Args:
+        ax: pyplot Axes object
+        ntilecovs: list of average number of previously observed tiles (list or np.array() of floats)
+        nnewlyas: list of newly identified Ly-a (with a valid fiber) (list or np.array() of ints)
+        tileids (optional, defaults to None): tileids (to report outliers) (list or np.array() of ints)
+        title (optional, defaults to None): plot title (str)
+        xlabel (optional, defaults to "Number of observed tiles"): plot xlabel (str)
+        ylabel (optional, defaults to "Number of newly identified LYA candidates"): plot ylabel(str)
+        xlim (optional, defaults to (0.5, 6.5)): plot xlim (tuple)
+        ylim (optional, defaults to (0, 400): plot ylim (tuple)
+        nvalifiber_norm (optional, defaults to 3900): number of valid fibers to normalize to, for the expected regions (int)
+    """
+    # AR approximate expected locations:
+    # AR - blue, green, red: approximative 1-sigma, 2-sigma, 3-sigma
+    # AR - exponential curve set:
+    # AR   - using 2021 + Jan. 2022 dark tiles from the daily
+    # AR   - using nvalifiber_norm = 3900
+    # AR - sigma: using here Poisson (though not 100% correct, as there is some normalizations in there...)
+    myfunc = lambda nobs, n, alpha: n * np.exp( alpha * (nobs - 1.))
+    n, alpha = 295, -0.7
+    tmpxs = np.linspace(1, xlim[1], 1000)
+    tmpys = myfunc(tmpxs, n, alpha)
+    ax.plot(tmpxs, tmpys, color="k", zorder=0)
+    for nsig, col in zip([1, 2, 3], ["b", "g", "r"]):
+        if nsig == 1:
+            ax.fill_between(tmpxs, tmpys - np.sqrt(tmpys), tmpys + np.sqrt(tmpys), color=col, alpha=0.25)
+        else:
+            ax.fill_between(tmpxs, tmpys - nsig * np.sqrt(tmpys), tmpys - (nsig-1) * np.sqrt(tmpys), color=col, alpha=0.25)
+            ax.fill_between(tmpxs, tmpys + (nsig - 1) * np.sqrt(tmpys), tmpys + nsig * np.sqrt(tmpys), color=col, alpha=0.25)
+    ax.text(0.975, 0.55, r"Blue  : approx. expected 1$\sigma$", color="b", ha="right", transform=ax.transAxes)
+    ax.text(0.975, 0.50, r"Green: approx. expected 2$\sigma$", color="g", ha="right", transform=ax.transAxes)
+    ax.text(0.975, 0.45, r"Red   : approx. expected 3$\sigma$", color="r", ha="right", transform=ax.transAxes)
+    # AR clipping so that each point is visible on the plot
+    ys = np.clip(nnewlyas, ylim[0], ylim[1])
+    ax.scatter(ntilecovs, ys, color="k", s=30, alpha=0.8, zorder=1)
+    # AR 3-sigma outliers
+    ii = np.where(np.abs(ys - myfunc(ntilecovs, n, alpha)) > 3 * np.sqrt(myfunc(ntilecovs, n, alpha)))[0]
+    for i in ii:
+        if tileids is not None:
+            label = "TILEID={}".format(tileids[i])
+        else:
+            label = None
+        ax.scatter(ntilecovs[i], nnewlyas[i], marker="x", s=80, zorder=2, label=label)
+    #
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    ax.yaxis.set_major_locator(MultipleLocator(50))
+    ax.grid()
+    if (ii.size > 0) & (tileids is not None):
+        ax.legend(loc=1)
+
+
+def create_petalnz_pdf(
+    outpdf,
+    night,
+    prod,
+    tileids,
+    surveys,
+    dchi2_threshold=25,
+    group="cumulative",
+    newlya_ecsv=None,
+):
     """
     For a given night, create a per-petal, per-tracer n(z) pdf file.
 
@@ -797,11 +880,14 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
     Options:
         dchi2_threshold (optional, defaults to 25): DELTACHI2 value to split the sample (float)
         group (str): tile group "cumulative" or "pernight"
+        newlya_ecsv (defaults to None): if set, table saving the per-tile number of newly identified
+            Ly-a and the tile coverage (if no dark tiles, no file will be saved).
 
     Notes:
         Only displays:
             - sv1, sv2, sv3, main, as otherwise the plotted tracers are not relevant;
-            - FAPRGRM="bright" or "dark" tileids.
+            - FAPRGRM="bright" or "dark" tileids;
+            - for the main survey, tiles with EFFTIME > MINTFRAC * GOALTIME.
         If the tile-qa-TILEID-thruNIGHT.fits file is missing, that tileid is skipped.
         For the Lya, work from the zmtl*fits files, trying to mimick what is done in desitarget.mtl.make_mtl().
         The LRG, ELG, QSO, BGS_BRIGHT, BGS_FAINT bit are the same for sv1, sv2, sv3, main,
@@ -822,8 +908,30 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
             )
         )
         tileids, surveys = tileids[sel], surveys[sel]
-    #
+    # AR for main tiles, restrict to tiles with EFFTIME > MINTFRAC * GOALTIME
+    # AR we also read the tile-qa*fits header below in the loop,
+    # AR    but it is simpler/safer to do separate this first loop
+    # AR    to modify the tileids, surveys, if need be.
+    sel = np.ones(len(tileids), dtype=bool)
+    for i in range(len(tileids)):
+        if surveys[i] == "main":
+            fn = findfile("tileqa", night=night, tile=tileids[i], groupname=group, specprod_dir=prod)
+            if not os.path.isfile(fn):
+                log.warning("no {} file, proceeding to next tile".format(fn))
+                continue
+            hdr = fits.getheader(fn, "FIBERQA")
+            if hdr["EFFTIME"] < hdr["MINTFRAC"] * hdr["GOALTIME"]:
+                sel[i] = False
+                log.info(
+                    "discarding main survey TILEID={}, as EFFTIME={:.1f} < MINTFRAC*GOALTIME={:.2f}*{:.0f}={:.1f}".format(
+                        tileids[i], hdr["EFFTIME"], hdr["MINTFRAC"], hdr["GOALTIME"], hdr["MINTFRAC"] * hdr["GOALTIME"],
+                    )
+                )
+    tileids, surveys = tileids[sel], surveys[sel]
     # AR gather all infos from the zmtl*fits files
+    # AR and few extra infos for dark tiles for Ly-a:
+    # AR - PRIORITY from the redrock*fits EXP_FIBERMAP
+    # AR - nb of previously observed overlapping tiles
     ds = {"bright" : [], "dark" : []}
     ntiles = {"bright" : 0, "dark" : 0}
     for tileid, survey in zip(tileids, surveys):
@@ -843,6 +951,7 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
             continue
         # AR reading zmtl files
         istileid = False
+        ntilecov = None
         for petal in petals:
             fn = findfile('zmtl', night=night, tile=tileid, spectrograph=petal, groupname=group, specprod_dir=prod)
             if not os.path.isfile(fn):
@@ -872,6 +981,42 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
                         sel |= (d["DESI_TARGET"] & desi_mask[msk]) > 0
                 log.info("selecting {} tracer targets from {}".format(sel.sum(), fn))
                 d = d[sel]
+                # AR further infos for dark tiles for Ly-a
+                if faprgrm == "dark":
+                    # AR PRIORITY from EXP_FIBERMAP
+                    try:
+                        rrfn = fn.replace("zmtl", "redrock")
+                        rrd = Table.read(rrfn, hdu="EXP_FIBERMAP")
+                    except FileNotFoundError:
+                        rrfn = fn.replace("zmtl", "zbest")
+                        rrd = Table.read(rrfn, hdu="FIBERMAP")
+                    # AR taking unique TARGETIDs, in case of several exposures
+                    # AR    (in which case, PRIORITY is the same for all exposures)
+                    _, rrii = np.unique(rrd["TARGETID"], return_index=True)
+                    rrd = rrd[rrii]
+                    # AR matching to d
+                    rrii = match_to(rrd["TARGETID"], d["TARGETID"])
+                    rrd = rrd[rrii]
+                    msg = None
+                    if (len(rrd) != len(d)):
+                        msg = "only {} / {} matched objects between {} and {}".format(
+                            len(rrd), len(d), rrfn, fn,
+                        )
+                    else:
+                        if ((rrd["TARGETID"] != d["TARGETID"]).sum() > 0):
+                            msg = "{} mismatches between {} and {}".format(
+                                (rrd["TARGETID"] != d["TARGETID"]).sum(), rrfn, fn,
+                            )
+                    if msg is not None:
+                        log.error(msg)
+                        raise ValueError(msg)
+                    # AR add PRIORITY
+                    d["PRIORITY"] = rrd["PRIORITY"].copy()
+                    # AR add number of previous tiles observed
+                    if ntilecov is None:
+                        ntilecov, _ = get_tilecov(tileid, surveys=survey, programs=faprgrm.upper(), lastnight=night)
+                    d["NTILECOV"] = ntilecov + np.zeros(len(d))
+                # AR append
                 ds[faprgrm].append(d)
         if istileid:
             ntiles[faprgrm] += 1
@@ -942,11 +1087,18 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
                 # AR - fraction of ZOK fibers, per tracer
                 # AR - fraction of LYA candidates for QSOs
                 fig = plt.figure(figsize=(40, 5))
-                gs = gridspec.GridSpec(1, 3, wspace=0.5)
+                gs = gridspec.GridSpec(1, 4, wspace=0.5)
                 title = "SURVEY={} : {} tiles from {}".format(
                     survey,
                     " and ".join(["{} {}".format(ntiles_surv[faprgrm], faprgrm.upper()) for faprgrm in faprgrms]),
                     night,
+                )
+                if "dark" in ntiles_surv:
+                    tmpn = ntiles_surv["dark"]
+                else:
+                    tmpn = 0
+                title_dark = "SURVEY={} : {} DARK tiles from {}".format(
+                    survey, tmpn, night,
                 )
                 # AR fraction of ~VALID fibers, bright+dark together
                 ax = plt.subplot(gs[0])
@@ -999,12 +1151,56 @@ def create_petalnz_pdf(outpdf, night, prod, tileids, surveys, dchi2_threshold=25
                         islya = (isqso) & (ds[faprgrm]["LYA"])
                         ys[petal] = islya.sum() / isqso.sum()
                     ax.plot(petals, ys, "-o", color=colors["QSO"])
-                ax.set_title(title)
+                ax.set_title(title_dark)
                 ax.set_xlabel("PETAL_LOC")
                 ax.set_ylabel("fraction of LYA candidates\n(VALID QSO fibers only)")
+                ax.set_xlim(-0.5, 9.5)
                 ax.xaxis.set_major_locator(MultipleLocator(1))
                 ax.set_ylim(0, 1)
                 ax.grid()
+                # AR - newly identified Ly-a = f(ntilecov)
+                ax = plt.subplot(gs[3])
+                xlim, ylim = (0.5, 6.5), (0, 400)
+                nvalifiber_norm = 3900
+                if "dark" in faprgrms:
+                    faprgrm = "dark"
+                    isnewlya = ds[faprgrm]["SURVEY"] == survey
+                    isnewlya &= ds[faprgrm]["VALID"]
+                    isnewlya &= (ds[faprgrm][dtkey] & desi_mask["QSO"]) > 0
+                    isnewlya &= ds[faprgrm]["LYA"]
+                    isnewlya &= ds[faprgrm]["PRIORITY"] == desi_mask["QSO"].priorities["UNOBS"]
+                    #
+                    dark_tileids = np.unique(ds[faprgrm]["TILEID"])
+                    tmpd = Table()
+                    for key in ["TILEID", "LASTNIGHT", "NVALIDFIBER", "NTILECOV", "NNEWLYA"]:
+                        if key == "NTILECOV":
+                            tmpd[key] = np.zeros(len(dark_tileids))
+                        else:
+                            tmpd[key] = np.zeros(len(dark_tileids), dtype=int)
+                    for i in range(len(dark_tileids)):
+                        sel = ds[faprgrm]["TILEID"] == dark_tileids[i]
+                        tmpd["TILEID"][i] = dark_tileids[i]
+                        tmpd["LASTNIGHT"][i] = night
+                        tmpd["NVALIDFIBER"][i] = ((sel) & (ds[faprgrm]["VALID"])).sum()
+                        tmpd["NTILECOV"][i] = ds[faprgrm]["NTILECOV"][sel][0]
+                        tmpd["NNEWLYA"][i] = ((sel) & (isnewlya)).sum()
+                    plot_newlya(
+                        ax,
+                        tmpd["NTILECOV"],
+                        tmpd["NNEWLYA"] / (tmpd["NVALIDFIBER"] / nvalifiber_norm),
+                        tileids=tmpd["TILEID"],
+                        xlim=xlim,
+                        ylim=ylim,
+                    )
+                    if newlya_ecsv is not None:
+                        tmpd.write(newlya_ecsv, overwrite=True)
+                else:
+                    ax.set_xlim(xlim)
+                    ax.set_ylim(ylim)
+                    ax.grid()
+                ax.set_title(title_dark)
+                ax.set_xlabel("Avg nb of previously observed overlapping tiles on {}".format(night))
+                ax.set_ylabel("Number of newly identified LYA candidates\n(VALID QSO fibers only, normalized to {} fibers)".format(nvalifiber_norm))
                 #
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close()
@@ -1298,7 +1494,7 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
             "This pdf displays the sframe image for the sky fibers for each Main exposure (one exposure per page).\nWatch it and report unsual features (easy to say!)",
             "This pdf displays the tile-qa-TILEID-thru{}.png files for the Main tiles (one tile per page).\nWatch it, in particular the Z vs. FIBER plot, and report unsual features (easy to say!)".format(night),
             "This plot displays all the SKY fibers for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
-            "This pdf displays the per-tracer, per-petal n(z) for the {} night.\nWatch it and report unsual features (easy to say!)".format(night),
+            "This pdf displays the per-tracer, per-petal n(z) for the {} night.\nWatch it and report unsual features (easy to say!)\nIn particular, if some maindark tiles have been observed, pay attention to the two Ly-a related plots on the first row.".format(night),
         ]
     ):
         html.write(
@@ -1338,4 +1534,3 @@ def write_nightqa_html(outfns, night, prod, css, surveys=None, nexp=None, ntile=
     write_html_today(html)
     html.write("</html></body>\n")
     html.close()
-

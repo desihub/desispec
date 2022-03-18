@@ -302,7 +302,8 @@ def main(args=None, comm=None):
             fibermap = os.path.join(preprocdir, os.path.basename(fibermap))
 
             tileid = hdr['TILEID']
-            tilepix = os.path.join(preprocdir, f'tilepix-{tileid}.json')
+            # tilepix = os.path.join(preprocdir, f'tilepix-{tileid}.json')
+            tilepix = findfile('tilepix', args.night, args.expid, tile=tileid)
 
             log.info('Creating fibermap {}'.format(fibermap))
             cmd = 'assemble_fibermap -n {} -e {} -o {} -t {}'.format(
@@ -1006,6 +1007,13 @@ def main(args=None, comm=None):
                 else :
                     log.warning("No SKYCORR file, do you need to update DESI_SPECTRO_CALIB?")
             cmd += " --fit-offsets"
+            if args.skygradpca:
+                skygradpca_filename = findcalibfile([hdr, camhdr[camera]], 'SKYGRADPCA')
+                if skygradpca_filename is not None :
+                    cmd += " --skygradpca {}".format(skygradpca_filename)
+                else :
+                    log.warning("No SKYGRADPCA file, do you need to update DESI_SPECTRO_CALIB?")
+
 
             err = runcmd(cmd, inputs=[framefile, fiberflatfile], outputs=[skyfile,])
             if err != 0:

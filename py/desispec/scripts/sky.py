@@ -9,6 +9,7 @@ from desispec.io import write_qa_frame
 from desispec.io import shorten_filename
 from desispec.io import write_skycorr
 from desispec.io import read_skycorr_pca
+from desispec.io import read_skygradpca
 from desispec.skycorr import SkyCorr
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
@@ -52,6 +53,8 @@ def parse(options=None):
                         help = 'use this PCA frames file for interpolation of wavelength and/or LSF adjustment')
     parser.add_argument('--fit-offsets', action = 'store_true', default = False, required=False,
                         help = 'fit offsets in sectors of CCD specified in calib yaml file, like OFFCOLSD:"2057:3715" for columns 2057 to 3715 (excluded), in amplifier D')
+    parser.add_argument('--skygradpca', type=str, default=None, required=False,
+                        help = 'file name of sky gradient PCA file for fitting sky gradients')
 
     args = None
     if options is None:
@@ -91,7 +94,10 @@ def main(args) :
     else :
         pcacorr = None
 
-
+    if args.skygradpca is not None:
+        skygradpca = read_skygradpca(args.skygradpca)
+    else:
+        skygradpca = None
 
 
     # compute sky model
@@ -101,7 +107,8 @@ def main(args) :
                            adjust_wavelength=args.adjust_wavelength,\
                            adjust_lsf=args.adjust_lsf,\
                            only_use_skyfibers_for_adjustments=(not args.adjust_with_more_fibers),\
-                           pcacorr=pcacorr,fit_offsets=args.fit_offsets,fiberflat=fiberflat
+                           pcacorr=pcacorr,fit_offsets=args.fit_offsets,fiberflat=fiberflat,
+                           skygradpca=skygradpca
     )
 
     if args.save_adjustments is not None :

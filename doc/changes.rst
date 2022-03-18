@@ -2,10 +2,224 @@
 desispec Change Log
 ===================
 
-0.50.2 (unreleased)
+0.52.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Warning files produced by QSO afterburners will now be called
+  ``.misscamera.txt`` (PR `#1732`_).
+
+.. _`#1732`: https://github.com/desihub/desispec/pull/1732
+
+0.51.13 (2022-02-28)
+--------------------
+
+* ``desi_zcatalog --patch-missing-ivar-w12`` option to patch missing
+  FLUX_IVAR_W1/W2 values that weren't propagated by early fiberassign
+  (PR `#1717`_).
+
+.. _`#1717`: https://github.com/desihub/desispec/pull/1717
+
+0.51.12 (2022-02-23)
+--------------------
+
+* Remove unnecessary ``specter.psf`` import, which also allows ``desispec``
+  utilities to be imported without explicitly requiring ``specter`` (PR
+  `#1709`_).
+* Let plot_spectra show errors even with --rebin (PR `#1714`_, `#1708`_).
+* add SPGRPVAL to desi_zcatalog for custom coadds/redshift group tracking
+  (PR `#1712`_).
+* desi_assemble_tilepix replacement for desi_map_tilepix (PR `#1713`_).
+* fix read_tile_spectra for group='cumulative' (PR `#1696`_).
+
+.. _`#1696`: https://github.com/desihub/desispec/pull/1696
+.. _`#1708`: https://github.com/desihub/desispec/pull/1708
+.. _`#1709`: https://github.com/desihub/desispec/pull/1709
+.. _`#1712`: https://github.com/desihub/desispec/pull/1712
+.. _`#1713`: https://github.com/desihub/desispec/pull/1713
+.. _`#1714`: https://github.com/desihub/desispec/pull/1714
+
+0.51.11 (2022-02-21)
+--------------------
+
+* qso_qn afterburner fix for case when all inputs are masked (PR `#1704`_).
+
+.. _`#1704`: https://github.com/desihub/desispec/pull/1704
+
+0.51.10 (2022-02-18)
+--------------------
+
+* tile-qa avoid divide-by-zero crash on unknown goaltime (PR `#1698`_).
+* propagate HEALPIX into zpix redshift catalogs (PR `#1699`_).
+* Fix GOALTIME in exposures FRAMES HDU; avoid EFFTIME_ETC NaN (PR `#1701`_).
+
+.. _`#1698`: https://github.com/desihub/desispec/pull/1698
+.. _`#1699`: https://github.com/desihub/desispec/pull/1699
+.. _`#1701`: https://github.com/desihub/desispec/pull/1701
+
+0.51.9 (2022-02-17)
+-------------------
+
+Fuji cleanup bugfixes.
+
+* tile-qa goaltime special case for tiles 80715,80718 (PR `#1689`_).
+* qso afterburner output breadcrumb file if missing input camera (PR `#1691`_).
+* fix unwisebrightblue PROGRAM=other not bright (PR `#1694`_).
+* fix tsnr afterburner GOALTIME exp vs. tile consistency (PR `#1694`_).
+* fix plot_spectra with astropy 5 (PR `#1695`_).
+
+.. _`#1689`: https://github.com/desihub/desispec/pull/1689
+.. _`#1691`: https://github.com/desihub/desispec/pull/1691
+.. _`#1694`: https://github.com/desihub/desispec/pull/1694
+.. _`#1695`: https://github.com/desihub/desispec/pull/1695
+
+0.51.8 (2022-02-13)
+-------------------
+
+Bugfixes for Fuji; all impacted tiles/nights/healpix rerun with this tag,
+remaining tiles/nights/healpix are backwards compatible.
+
+* Set specmask BADFIBER only for impacted cameras, not all BRZ
+  (PRs `#1674`_ (master), `#1678`_ (fuji))
+* Fix assemble_fibermap with input NaNs for astropy 5.0 (PR `#1681`_).
+* Use only 120s flats for nightlyflat (PR `#1682`_).
+* Add desi_purge_tilenight script (PR `#1683`_).
+* Fix healpix input expid bookkeeping (PR `#1684`_).
+
+.. _`#1674`: https://github.com/desihub/desispec/pull/1674
+.. _`#1678`: https://github.com/desihub/desispec/pull/1678
+.. _`#1681`: https://github.com/desihub/desispec/pull/1681
+.. _`#1682`: https://github.com/desihub/desispec/pull/1682
+.. _`#1683`: https://github.com/desihub/desispec/pull/1683
+.. _`#1684`: https://github.com/desihub/desispec/pull/1684
+
+0.51.7 (2022-02-10)
+-------------------
+
+* fix tile-qa expid bookkeeping (PR `#1670`_).
+* desi_tile_qa exposure/night bookkeeping fix (PR `#1672`_).
+* Fix tsnr_afterburner exposure files SURVEY column (PR `#1675`_).
+
+.. _`#1670`: https://github.com/desihub/desispec/pull/1670
+.. _`#1672`: https://github.com/desihub/desispec/pull/1672
+.. _`#1675`: https://github.com/desihub/desispec/pull/1675
+
+0.51.6 (2022-02-09)
+-------------------
+
+Used for Fuji healpix redshifts and cleanup of failed tile-qa.
+Backwards compatible with previously run steps.
+
+* Make tile-qa robust to missing cameras (PR `#1665`_)
+* Refactor healpix redshifts workflow (PR `#1668`_)
+
+.. _`#1665`: https://github.com/desihub/desispec/pull/1665
+.. _`#1668`: https://github.com/desihub/desispec/pull/1668
+
+0.51.5 (2022-02-07)
+-------------------
+
+Used for processing nightly biases for Fuji nights 20210331 and 20210422,
+and Guadalupe night 20210629.  Backwards compatible with other nights.
+
+* Additional desi_compute_nightlybias options for flexibility on which ZEROs
+  to use (PR `#1662`_).
+
+.. _`#1662`: https://github.com/desihub/desispec/pull/1662
+
+0.51.4 (2022-02-04)
+-------------------
+
+Pipelining fix for Fuji; previously run impacted nights will be resubmitted.
+
+* Fix stdstar camword logic when input exposures have different cameras
+  available (PR `#1658`_).
+
+.. _`#1658`: https://github.com/desihub/desispec/pull/1658
+
+0.51.3 (2022-01-31)
+-------------------
+
+NOTE: this tag fixes a crash, but also produces slightly different humidity
+correction for a small set Fuji/Guadalupe exposures already run with an
+earlier tag.  This note will be updated if those exposures are reprocessed
+with this tag.
+
+* Fix fiberflat humidity correction indexing bug when hear (but not at)
+  upper limit of model humidity range (PR `#1642`_).
+
+.. _`#1642`: https://github.com/desihub/desispec/pull/1642
+
+0.51.2 (2022-01-27)
+-------------------
+
+Fuji bug fixes (impacted nights will be re-run; nights run with earlier
+tags not impacted)
+
+* fix pipeline bug on nights with multiple 300s darks (PR `#1635`_).
+* fix ``io.findfile(..., groupname='perexp')`` (PR `#1637`_).
+
+.. _`#1635`: https://github.com/desihub/desispec/pull/1635
+.. _`#1637`: https://github.com/desihub/desispec/pull/1637
+
+0.51.1 (2022-01-26)
+-------------------
+
+Fuji bugfix tag made from the fuji branch mid-processing.  These changes
+fix crashes but do not impact any data that were already successfully run.
+
+* Updated desi_find_badpos script to cross-reference flagged petals against
+  existing bad-exposure tables.
+* Fix fiberflat crash when almost all input data are masked for a fiber
+  (PR `#1629`_).
+* Fix tile QA for cases when input fiberassign file is not gzipped
+  (PR `#1630`_).
+* Fix zcat stacking typo (PR `#1633`_).
+
+.. _`#1629`: https://github.com/desihub/desispec/pull/1629
+.. _`#1630`: https://github.com/desihub/desispec/pull/1630
+.. _`#1633`: https://github.com/desihub/desispec/pull/1633
+
+0.51.0 (2022-01-24)
+-------------------
+
+This version will be used for Fuji.
+
+Algorithm update:
+
+* Normalize fiberflat variation of each fiber for humidity correction
+  (PR `#1621`_).
+
+Metadata tracking updates:
+
+* Add BADAMP[BRZ] bits to QAFIBERSTATUS (PR `#1610`_).
+* specgroup metadata in spectra, coadd, zcat files (PR `#1618`_).
+
+New and fixed scripts / functions:
+
+* Add desispec.zcatalog.find_primary_spectra (PR `#1609`_).
+* Add desispec.tile_qa.get_tilecov tile coverage plotting
+  (PRs `#1613`_, `#1617`_).
+* Fix bookkeeping of nights and tiles in coadds (issue `#1349`_) and enable
+  coadding of previously coadded cframe files (issue `#1359`_) (PR `#1616`_).
+* Ensure ``tilepix.fits`` only contains healpixels with reduced data (issue
+  `#1374`_). Also fix issues `#1373`_ and `#1379`_ (PR `#1614`_).
+* Add desi_find_badpos script to find exp-petals with catastrophic positioning
+  (PR `#1620`_).
+
+.. _`#1349`: https://github.com/desihub/desispec/issues/1349
+.. _`#1359`: https://github.com/desihub/desispec/issues/1359
+.. _`#1373`: https://github.com/desihub/desispec/issues/1373
+.. _`#1374`: https://github.com/desihub/desispec/issues/1374
+.. _`#1379`: https://github.com/desihub/desispec/issues/1379
+.. _`#1609`: https://github.com/desihub/desispec/pull/1609
+.. _`#1610`: https://github.com/desihub/desispec/pull/1610
+.. _`#1613`: https://github.com/desihub/desispec/pull/1613
+.. _`#1614`: https://github.com/desihub/desispec/pull/1614
+.. _`#1616`: https://github.com/desihub/desispec/pull/1616
+.. _`#1617`: https://github.com/desihub/desispec/pull/1617
+.. _`#1618`: https://github.com/desihub/desispec/pull/1618
+.. _`#1620`: https://github.com/desihub/desispec/pull/1620
+.. _`#1621`: https://github.com/desihub/desispec/pull/1621
 
 0.50.1 (2022-01-20)
 -------------------

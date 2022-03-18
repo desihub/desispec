@@ -67,6 +67,7 @@ def write_spectra(outfile, spec, units=None):
 
     # metadata goes in empty primary HDU
     hdr = fitsheader(spec.meta)
+    hdr['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(hdr)
 
     all_hdus.append(fits.PrimaryHDU(header=hdr))
@@ -74,6 +75,7 @@ def write_spectra(outfile, spec, units=None):
     # Next is the fibermap
     fmap = spec.fibermap.copy()
     fmap.meta['EXTNAME'] = 'FIBERMAP'
+    fmap.meta['LONGSTRN'] = 'OGIP 1.0'
     add_dependencies(fmap.meta)
 
     with warnings.catch_warnings():
@@ -358,7 +360,8 @@ def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=Fa
     return spec
 
 def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
-        single=False, targets=None, fibers=None, redrock=True):
+                      single=False, targets=None, fibers=None, redrock=True,
+                      group=None):
     """
     Read and return combined spectra for a tile/night
 
@@ -374,6 +377,7 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         targets (array-like) : filter by TARGETID
         fibers (array-like) : filter by FIBER
         redrock (bool) : if True, also return row-matched redrock redshift catalog
+        group (str) : reads spectra in group (pernight, cumulative, ...)
 
     Returns: spectra or (spectra, redrock)
         combined Spectra obj for all matching targets/fibers filter
@@ -390,7 +394,14 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         #- will automatically use $SPECPROD if specprod=None
         reduxdir = specprod_root(specprod)
 
-    tiledir = os.path.join(reduxdir, 'tiles', str(tileid), str(night))
+    tiledir = os.path.join(reduxdir, 'tiles')
+    nightstr = str(night)
+    if group is not None:
+        tiledir = os.path.join(tiledir, group)
+        if group == 'cumulative':
+            nightstr = 'thru'+nightstr
+
+    tiledir = os.path.join(tiledir, str(tileid), str(night))
 
     if coadd:
         log.debug(f'Reading coadds from {tiledir}')
@@ -399,7 +410,7 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         log.debug(f'Reading spectra from {tiledir}')
         prefix = 'spectra'
 
-    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{night}.fits')
+    specfiles = glob.glob(f'{tiledir}/{prefix}-?-{tileid}-{nightstr}.fits')
 
     if len(specfiles) == 0:
         raise ValueError(f'No spectra found in {tiledir}')
@@ -462,4 +473,3 @@ def read_tile_spectra(tileid, night, specprod=None, reduxdir=None, coadd=False,
         return (spectra, redshifts)
     else:
         return spectra
-

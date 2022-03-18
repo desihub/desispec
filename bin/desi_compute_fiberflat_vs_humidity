@@ -156,7 +156,7 @@ def main():
 
             selection=(humidity_table["HUMIDITY"]>=min_humidity)&(humidity_table["HUMIDITY"]<max_humidity)
             if np.sum(selection)<2 : continue
-            nights=humidity_table["NIGHT"][selection]
+            nights=np.unique(humidity_table["NIGHT"][selection])
             log.info("Humidity bin #{} nights={}".format(bin_index,list(nights)))
 
             # loop on nights with fiberflat
@@ -194,8 +194,30 @@ def main():
             hdulist[0].header["EXTNAME"]="WAVELENGTH"
             hdulist[0].header["CAMERA"]=cam
 
-            tmp=np.array(fiberflats_in_bin)
-            fiberflat_in_bin = np.median(tmp,axis=0)
+            fiberflats_in_bin = np.array(fiberflats_in_bin)
+            fiberflat_in_bin  = np.ones((fiberflats_in_bin.shape[1],fiberflats_in_bin.shape[2]))
+            for fiber in range(fiberflat_in_bin.shape[0]) :
+                # median value of flat for this fiber across wavelength for each night
+                medval=np.median(fiberflats_in_bin[:,fiber,:],axis=-1)
+                # and across nights, selecting the ones with the largest value
+                ii=np.argsort(medval)[-5:]
+                medmedval=np.median(medval[ii])
+                if medmedval<0.01 :
+                    log.warning(f"median flat={medmedval}, no good data for fiber {fiber} in humidity bin {bin_index}")
+                    continue
+                # keep only measurements where median flat is stable
+                good=np.abs(medval/medmedval-1)<0.1
+                if np.sum(good)<2 :
+                    log.warning(f"no good data for fiber {fiber} with median flats={medval} in humidity bin {bin_index}")
+                    continue
+                # normalize correction per fiber by median flat
+                norm = np.median(fiberflats_in_bin[good,fiber])
+                fiberflats_in_bin[good,fiber] /= norm
+                fiberflat_in_bin[fiber] = np.median(fiberflats_in_bin[good,fiber],axis=0)
+
+            # filtering across fibers
+            fiberflat_in_bin = median_filter(fiberflat_in_bin,[5,1])
+
             hdulist.append(pyfits.ImageHDU(fiberflat_in_bin,name=extname))
             hdulist[extname].header["MEDHUM"]=np.median(bhumids_in_bin)
             hdulist[extname].header["MINHUM"]=np.min(bhumids_in_bin)

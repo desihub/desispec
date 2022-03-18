@@ -442,7 +442,7 @@ def decode_camword(camword):
             searchstr = searchstr[1:]
     return sorted(camlist)
 
-def parse_cameras(cameras):
+def parse_cameras(cameras, loglevel='INFO'):
     """
     Function that takes in a representation
     of all spectrographs and outputs a string that succinctly lists all
@@ -454,11 +454,14 @@ def parse_cameras(cameras):
     Args:
        cameras, str. 1-d array, list: Either a str that is a comma separated list or a series of spectrographs.
                                       Also accepts a list or iterable that is processed with create_camword().
+    Options:
+        loglevel, str: use e.g. "WARNING" to avoid INFO-level log messages for just this call
+
     Returns (str):
        camword, str. A string representing all information about the spectrographs/cameras
                      given in the input iterable, e.g. a01234678b59z9
     """
-    log = get_logger()
+    log = get_logger(loglevel)
     if cameras is None:
         camword = None
     elif type(cameras) is str:
@@ -546,6 +549,49 @@ def difference_camwords(fullcamword,badcamword):
         else:
             log.info(f"Can't remove {cam}: not in the fullcamword. fullcamword={fullcamword}, badcamword={badcamword}")
     return create_camword(full_cameras)
+
+def camword_union(camwords, full_spectros_only=False):
+    """
+    Returns the union of a list of camwords. Optionally can return only
+    those spectros with complete b, r, and z cameras. Note this intentionally
+    does the union before truncating spectrographs, so two partial camwords
+    can lead to an entire spectrograph,
+
+       e.g. [a0b1z1, a3r1z2] -> [a013z2] if full_spectros_only=False
+            [a0b1z1, a3r1z2] -> [a013] if full_spectros_only=True
+
+    even through no camword has a complete set of camera 1, a complete set is
+    represented in the union.
+
+    Args:
+        camwords, list or array of strings. List of camwords.
+        full_spectros_only, bool. True if only complete spectrographs with
+                  b, r, and z cameras in the funal union should be returned.
+
+    Returns:
+        final_camword, str. The final union of all input camwords, where
+             truncation of incomplete spectrographs may or may not be performed
+             based on full_spectros_only.
+    """
+    camword = ''
+    if np.isscalar(camwords):
+        if not isinstance(camwords, str):
+            ValueError(f"camwords must be array-like or str. Received type: {type(camwords)}")
+        else:
+            camword = camwords
+    else:
+        cams = set(decode_camword(camwords[0]))
+        for camword in camwords[1:]:
+            cams = cams.union(set(decode_camword(camword)))
+        camword = create_camword(list(cams))
+
+    if full_spectros_only:
+        full_sps = np.sort(camword_to_spectros(camword,
+                                               full_spectros_only=True)).astype(str)
+        final_camword = 'a' + ''.join(full_sps)
+    else:
+        final_camword = camword
+    return final_camword
 
 def camword_to_spectros(camword, full_spectros_only=False):
     """
