@@ -307,7 +307,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
     elif jobdesc in ('FLAT', 'TESTFLAT'):
         ncores, runtime = 20 * nspectro, 25
-    elif jobdesc in ('SKY', 'TWILIGHT', 'SCIENCE','PRESTDSTAR','POSTSTDSTAR'):
+    elif jobdesc in ('SKY', 'TWILIGHT', 'PRESTDSTAR','POSTSTDSTAR'):
         ncores, runtime = 20 * nspectro, 30
     elif jobdesc in ('DARK'):
         ncores, runtime = ncameras, 5
@@ -319,7 +319,7 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
         ncores, runtime = ncameras, 5
     elif jobdesc == 'NIGHTLYFLAT':
         ncores, runtime = ncameras, 5
-    elif jobdesc in ('STDSTARFIT'):
+    elif jobdesc in ('STDSTARFIT', 'SCIENCE'):
         ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
