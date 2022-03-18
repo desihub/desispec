@@ -296,7 +296,7 @@ def create_summary_catalog(specprod, survey_name, specgroup = 'zpix',
     tab['ZCAT_PRIMARY'] = specprim
     
     ## Adding empty columns for SV|MAIN NSPEC and PRIMARY
-    col1 = Column(np.array([0]*len(tab)), name = f'{survey_name.upper()}_NSPEC', dtype = '>i8')
+    col1 = Column(np.array([0]*len(tab)), name = f'{survey_name.upper()}_NSPEC', dtype = '>i2')
     col2 = Column(np.array([0]*len(tab)), name = f'{survey_name.upper()}_PRIMARY', dtype = 'bool')
     tab.add_columns([col1, col2])
     
