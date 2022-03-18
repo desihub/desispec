@@ -435,6 +435,7 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     ## first file type generated. This is assumed for the automated "terminal step" determination that follows
     expected_by_type = dict()
     expected_by_type['arc'] =     {'psf': 1, 'frame': 0, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
+    expected_by_type['cteflat'] = {'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
     expected_by_type['flat'] =    {'psf': 1, 'frame': 1, 'ff': 1, 'sframe': 0, 'std': 0, 'cframe': 0}
     expected_by_type['science'] = {'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 1, 'std': 1, 'cframe': 1}
     expected_by_type['twilight'] ={'psf': 1, 'frame': 1, 'ff': 0, 'sframe': 0, 'std': 0, 'cframe': 0}
@@ -564,7 +565,8 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
     for row in d_exp:
         expid = int(row['EXPID'])
         ## For those already marked as GOOD or NULL in cached rows, take that and move on
-        if night_info_pre is not None and str(expid) in night_info_pre and night_info_pre[str(expid)][0] in ['GOOD','NULL']:
+        if night_info_pre is not None and str(expid) in night_info_pre \
+                and night_info_pre[str(expid)][0] in ['GOOD','NULL']:
             output[str(expid)] = night_info_pre[str(expid)]
             continue
 
@@ -624,9 +626,12 @@ def calculate_one_night_use_file(night, check_on_disk=False, night_info_pre=None
             if faprog == 'unkwn':
                 faprog = '----'
 
-        if obstype in expected_by_type.keys():
-            expected = expected_by_type[obstype].copy()
-            terminal_step = terminal_steps[obstype]
+        derived_obstype = obstype
+        if obstype == 'flat' and exptime < 2.0:
+            derived_obstype = 'cteflat'
+        if derived_obstype in expected_by_type.keys():
+            expected = expected_by_type[derived_obstype].copy()
+            terminal_step = terminal_steps[derived_obstype]
         else:
             expected = expected_by_type['null'].copy()
             terminal_step = None

@@ -86,9 +86,19 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     #- run command
     if isinstance(cmd, collections.abc.Callable):
         if args is None:
-            return cmd()
-        else:
+            args = []
+
+        try:
             return cmd(*args)
+        except Exception as e:
+            import traceback
+            lines = traceback.format_exception(*sys.exc_info())
+            for line in lines:
+                line = line.strip()
+                log.error(f'{line}')
+            log.critical("FAILED {cmd=} with {args=}".format(err, cmd))
+            raise e
+
     else:
         if args is None:
             err = sp.call(cmd, shell=True)

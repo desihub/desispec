@@ -5,7 +5,10 @@ desispec Change Log
 0.52.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Warning files produced by QSO afterburners will now be called
+  ``.misscamera.txt`` (PR `#1732`_).
+
+.. _`#1732`: https://github.com/desihub/desispec/pull/1732
 
 0.51.13 (2022-02-28)
 --------------------
@@ -21,7 +24,7 @@ desispec Change Log
 
 * Remove unnecessary ``specter.psf`` import, which also allows ``desispec``
   utilities to be imported without explicitly requiring ``specter`` (PR
-  `#1709`_). 
+  `#1709`_).
 * Let plot_spectra show errors even with --rebin (PR `#1714`_, `#1708`_).
 * add SPGRPVAL to desi_zcatalog for custom coadds/redshift group tracking
   (PR `#1712`_).

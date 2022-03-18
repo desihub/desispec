@@ -45,6 +45,7 @@ from desispec.sky import subtract_sky
 from desispec.util import runcmd
 import desispec.scripts.extract
 import desispec.scripts.specex
+import desispec.scripts.stdstars
 import desispec.scripts.nightly_bias
 from desispec.maskbits import ccdmask
 
@@ -1129,12 +1130,27 @@ def main(args=None, comm=None):
 
         #- Hardcoded stdstar model version
         starmodels = os.path.join(
-                os.getenv('DESI_BASIS_TEMPLATES'), 'stdstar_templates_v2.2.fits')
+            os.getenv('DESI_BASIS_TEMPLATES'), 'stdstar_templates_v2.2.fits')
 
         #- Fit stdstars per spectrograph (not per-camera)
         spectro_nums = sorted(framefiles.keys())
-        ## for sp in spectro_nums[rank::size]:
-        for i in range(rank, len(spectro_nums), size):
+
+        if args.mpistdstars and comm is not None:
+            #- If using MPI parallelism in stdstar fit, divide comm into subcommunicators.
+            #- (spectro_start, spectro_step) determine stride pattern over spectro_nums.
+            #- Split comm by at most len(spectro_nums)
+            num_subcomms = min(size, len(spectro_nums))
+            subcomm_index = rank % num_subcomms
+            if rank == 0:
+                log.info(f"Splitting comm of {size=} into {num_subcomms=} for stdstar fitting")
+            subcomm = comm.Split(color=subcomm_index)
+            spectro_start, spectro_step = subcomm_index, num_subcomms
+        else:
+            #- Otherwise, use multiprocessing assuming 1 MPI rank per spectrograph
+            spectro_start, spectro_step = rank, size
+            subcomm = None
+
+        for i in range(spectro_start, len(spectro_nums), spectro_step):
             sp = spectro_nums[i]
 
             stdfile = findfile('stdstars', night, expid, spectrograph=sp)
@@ -1149,8 +1165,27 @@ def main(args=None, comm=None):
                 cmd += " --maxstdstars {}".format(args.maxstdstars)
 
             inputs = framefiles[sp] + skyfiles[sp] + fiberflatfiles[sp]
-            err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
-            if err != 0:
+            err = 0
+            if subcomm is None:
+                #- Using multiprocessing
+                log.info(f'Rank {rank=} fitting sp{sp=} stdstars with multiprocessing')
+                err = runcmd(cmd, inputs=inputs, outputs=[stdfile])
+            else:
+                #- Using MPI
+                log.info(f'Rank {rank=} fitting sp{sp=} stdstars with mpi')
+                try:
+                    cmdargs = cmd.split()[1:]
+                    cmdargs = desispec.scripts.stdstars.parse(cmdargs)
+                    err = runcmd(desispec.scripts.stdstars.main, 
+                        args=(cmdargs, subcomm), inputs=inputs, outputs=[stdfile]
+                    )
+                except:
+                    #- Catches sys.exit from stdstars.main
+                    log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
+                    err = 1
+
+            if err not in (0, None):
+                log.info(f'Rank {rank=} stdstar failure {err=}')
                 error_count += 1
 
         timer.stop('stdstarfit')

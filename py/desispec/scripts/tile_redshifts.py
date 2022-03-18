@@ -358,10 +358,13 @@ def write_redshift_script(batchscript, outdir,
 
     logdir = os.path.join(outdir, 'logs')
 
+    account='desi'
+    redrock_gpu_opts=''
+    srun_redrock_gpu_opts=''
     if system_name=='perlmutter-gpu':
         account='desi_g'
-    else:
-        account='desi'
+        redrock_gpu_opts='--gpu --max-gpuprocs 4'
+        srun_redrock_gpu_opts='--gpu-bind=map_gpu:3,2,1,0'
 
     with open(batchscript, 'w') as fx:
         fx.write(f"""#!/bin/bash
@@ -474,7 +477,7 @@ for SPECTRO in {spectro_string}; do
         echo $(basename $redrock) already exists, skipping redshifts
     elif [ -f $coadd ]; then
         echo Running redrock on $(basename $coadd), see $rrlog
-        cmd="srun -N {redrock_nodes} -n {cores_per_node*redrock_nodes//redrock_cores_per_rank} -c {threads_per_core*redrock_cores_per_rank} --cpu-bind=cores rrdesi_mpi -i $coadd -o $redrock -d $rrdetails"
+        cmd="srun -N {redrock_nodes} -n {cores_per_node*redrock_nodes//redrock_cores_per_rank} -c {threads_per_core*redrock_cores_per_rank} --cpu-bind=cores {srun_redrock_gpu_opts} rrdesi_mpi -i $coadd -o $redrock -d $rrdetails {redrock_gpu_opts}"
         echo RUNNING $cmd &> $rrlog
         $cmd &>> $rrlog &
         sleep 0.5

@@ -599,6 +599,41 @@ def get_calibration_image(cfinder, keyword, entry, header=None):
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
+def find_overscan_cosmic_trails(rawimage, ov_col, col_width=10,
+        threshold=50000., smooth=100):
+    """
+    Find overscan columns that might be impacted by a trail from bright cosmic
+
+    Args:
+        rawimage: numpy 2D array of raw image
+        ov_col: tuple(yslice, xslice) from parse_sec_keyword('BIASSECx') defining overscan region
+
+    Options:
+        col_width: number of pixels from overscan region to consider
+        threshold: ADU threshold for what might cause a problematic trail
+        smooth: median filter smoothing scale
+
+    Returns (badrows, active_col_val) where badrows is a boolean array
+    of whether each row is bad or not, and active_col_val is an array of
+    column-summed and row median-filtered from the active region of the CCD
+    next to the overscan region.
+    """
+    # define a band in the active CCD region next to the overscan
+    left_amp = ov_col[1].start < rawimage.shape[1]//2
+    if left_amp :
+        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].start-col_width:ov_col[1].start]
+    else :
+        active_col = np.s_[ov_col[0].start:ov_col[0].stop, ov_col[1].stop:ov_col[1].stop+col_width]
+
+    # measure sum over columns in band
+    active_col_val = np.sum(rawimage[active_col].astype(float),axis=1)
+    # subtract median filter (to limit effect of neighboring truly bright fiber)
+    active_col_val -= median_filter(active_col_val, smooth)
+    # flag rows with large signal in active region
+    badrows=(active_col_val>threshold)
+
+    return badrows, active_col_val
+
 def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True,
             bkgsub_dark=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.5,
             ccd_calibration_filename=None, nocrosstalk=False, nogain=False,
@@ -873,7 +908,6 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
                 log.warning(f'Camera {camera} Missing keyword SATURLEV{amp} in header and nothing in calib data; using {saturlev_adu} ADU')
         header['SATULEV'+amp] = (saturlev_adu,"saturation or non lin. level, in ADU, inc. bias")
 
-
         # Generate the overscan images
         raw_overscan_col = rawimage[ov_col].copy()
 
@@ -922,6 +956,23 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             o,r =  calc_overscan(raw_overscan_col[j])
             overscan_col[j]=o
             rdnoise[j]=r
+
+        # find rows impacted by a large cosmic charge deposit
+        badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col)
+        if np.any(badrows) :
+            log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(
+                camera,amp,np.where(badrows)[0],active_col_val[badrows]))
+            # do not use overscan value for those, use interpolation
+            goodrows = ~badrows
+            rr=np.arange(nrows)
+            try:
+                overscan_col[badrows] = np.interp(rr[badrows],rr[goodrows],overscan_col[goodrows])
+            except ValueError:
+                # If can't interpolate, log error but don't crash and let ostep do the flagging
+                ngood = np.sum(goodrows)
+                nbad = np.sum(badrows)
+                log.error(f'Camera {camera} amp {amp} unable to interpolate overscan_col over {nbad} bad rows using {ngood} good rows')
+
         overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
         log.info(f"Camera {camera} amp {amp} overscan max-min per row (OSTEP) = {overscan_step:2f} ADU")
