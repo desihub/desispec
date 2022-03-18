@@ -73,6 +73,7 @@ def get_shared_desi_proc_parser():
     parser.add_argument("--timingfile", type=str, help='save runtime info to this json file; augment if pre-existing')
     parser.add_argument("--no-xtalk", action="store_true", help='diable fiber crosstalk correction')
     parser.add_argument("--system-name", type=str, help='Batch system name (cori-haswell, perlmutter-gpu, ...)')
+    parser.add_argument("--mpistdstars", action="store_true", help="Use MPI parallelism in stdstar fitting instead of multiprocessing")
     parser.add_argument("--skygradpca", action="store_true", help="Fit sky gradient")
 
     return parser
@@ -320,7 +321,10 @@ def determine_resources(ncameras, jobdesc, queue, nexps=1, forced_runtime=None, 
     elif jobdesc == 'NIGHTLYFLAT':
         ncores, runtime = ncameras, 5
     elif jobdesc in ('STDSTARFIT'):
-        ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
+        # former version with multiprocessing on many nodes
+        # ncores, runtime = 20 * ncameras, (6+2*nexps) #ncameras, 10
+        #- new version using MPI on one node
+        ncores, runtime = ncameras, (6+2*nexps) #ncameras, 10
     elif jobdesc == 'NIGHTLYBIAS':
         ncores, runtime = 15, 5
         nodes = 2
@@ -577,6 +581,9 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
         if '--mpi' not in cmd:
             cmd += ' --mpi'
 
+        if jobdesc.lower() == 'stdstarfit':
+            cmd += ' --mpistdstars'
+
         cmd += f' --timingfile {timingfile}'
 
         fx.write(f'# {jobdesc} exposure with {ncameras} cameras\n')
@@ -626,12 +633,15 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
                 fx.write('{}\n'.format(srun))
 
         else:
-            if jobdesc.lower() in ['science','prestdstar']:
-                fx.write('\n# Do steps through skysub at full MPI parallelism\n')
-                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd} --nofluxcalib'
+            if jobdesc.lower() in ['science', 'prestdstar', 'stdstarfit']:
+                fx.write('\n# Do steps through stdstarfit at full MPI parallelism\n')
+                srun = f'srun -N {nodes} -n {ncores} -c {threads_per_core} --cpu-bind=cores {cmd}'
+                if jobdesc.lower() in ['science', 'prestdstar']:
+                    srun += ' --nofluxcalib'
                 fx.write('echo Running {}\n'.format(srun))
                 fx.write('{}\n'.format(srun))
-            if jobdesc.lower() in ['science', 'stdstarfit', 'poststdstar']:
+
+            if jobdesc.lower() in ['science', 'poststdstar']:
                 if nodes*4 > ncameras:
                     #- only one rank per camera; multiprocessing fans out the rest
                     ntasks = ncameras
