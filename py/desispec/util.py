@@ -87,9 +87,9 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     if isinstance(cmd, collections.abc.Callable):
         if args is None:
             args = []
+
         try:
-            cmd(*args)
-            return 0
+            return cmd(*args)
         except Exception as e:
             import traceback
             lines = traceback.format_exception(*sys.exc_info())
@@ -97,7 +97,8 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
                 line = line.strip()
                 log.error(f'{line}')
             log.critical("FAILED {cmd=} with {args=}".format(err, cmd))
-            return 1
+            raise e
+
     else:
         if args is None:
             err = sp.call(cmd, shell=True)

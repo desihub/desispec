@@ -1140,7 +1140,7 @@ def main(args=None, comm=None):
                     log.error('stdstars.main failed for {}'.format(os.path.basename(stdfile)))
                     err = 1
 
-            if err != 0:
+            if err not in (0, None):
                 log.info(f'Rank {rank=} stdstar failure {err=}')
                 error_count += 1
 
