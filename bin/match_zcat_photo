@@ -118,7 +118,7 @@ def read_one_zcat(catfile):
 def _read_one_potential_targets(args):
     return read_one_potential_targets(*args) 
 
-def read_one_potential_targets(tileid, bricks):
+def read_one_potential_targets(tileid):
     stileid = '{:06d}'.format(tileid)
     fiberfile = os.path.join(fiberassign_dir, stileid[:3], 'fiberassign-{}.fits.gz'.format(stileid))
     #log.info('Reading {}'.format(fiberfile))
@@ -136,22 +136,26 @@ def read_one_potential_targets(tileid, bricks):
 
     targets = fitsio.read(fiberfile, ext='TARGETS', columns=['TARGETID', 'RA', 'DEC'])
     out = join(out, targets, keys='TARGETID', join_type='left')
+    
     out.rename_column('RA', 'TARGET_RA')
     out.rename_column('DEC', 'TARGET_DEC')
-    if False:
-        out['BRICKID'] = brickid[keep]
-        out['OBJID'] = objid[keep]
-        out['RELEASE'] = release[keep]
-        out['BRICKNAME'] = np.zeros(len(out), dtype=bricks['BRICKNAME'].dtype)
-        out['PHOTSYS'] = np.zeros(len(out), dtype='U1')
-        idr9 = np.where((out['RELEASE'] > 9000) * (out['RELEASE'] < 9050))[0]
-        if len(idr9) > 0:
-            photsys = release_to_photsys(out['RELEASE'][idr9])
-            out['PHOTSYS'][idr9] = photsys
-            for bid in set(out['BRICKID'][idr9]):
-                J = bid == bricks['BRICKID']
-                I = np.where(bid == out['BRICKID'][idr9])[0]
-                out['BRICKNAME'][idr9[I]] = bricks['BRICKNAME'][J]
+
+    # Old code to populate the brick columns. However, this procedure is not
+    # correct for secondary targets, so don't do it.
+    #bricks = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'))
+    #out['BRICKID'] = brickid[keep]
+    #out['OBJID'] = objid[keep]
+    #out['RELEASE'] = release[keep]
+    #out['BRICKNAME'] = np.zeros(len(out), dtype=bricks['BRICKNAME'].dtype)
+    #out['PHOTSYS'] = np.zeros(len(out), dtype='U1')
+    #idr9 = np.where((out['RELEASE'] > 9000) * (out['RELEASE'] < 9050))[0]
+    #if len(idr9) > 0:
+    #    photsys = release_to_photsys(out['RELEASE'][idr9])
+    #    out['PHOTSYS'][idr9] = photsys
+    #    for bid in set(out['BRICKID'][idr9]):
+    #        J = bid == bricks['BRICKID']
+    #        I = np.where(bid == out['BRICKID'][idr9])[0]
+    #        out['BRICKNAME'][idr9[I]] = bricks['BRICKNAME'][J]
     return out
 
 def _cache_one_catalog(args):
@@ -160,7 +164,7 @@ def _cache_one_catalog(args):
 def cache_one_catalog(cachefile):
     log.info('Reading and caching {}'.format(cachefile))
     if '.ecsv' in cachefile:
-        cat = Table.read(cachefile)
+        cat = Table.read(cachefile, guess=False, format='ascii.ecsv')
         key = 'TOO'
     else:
         cat = fitsio.read(cachefile, columns='TARGETID') # just targetid
@@ -283,18 +287,114 @@ def tractorphot_one(cat, bricks, datamodel):
 def _targetphot_one(args):
     return targetphot_one(*args)
 
-def targetphot_one(input_cat, photocache, datamodel, reduxdir):
-    """Build the photometric target catalog for all the objects on a single tile.
+def targetphot_one(input_cat, photocache=None, racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
+    """Build the targetphot catalog for all the objects on a single tile."""
+    from desispec.io.photo import build_targetphot
+    targetphot = build_targetphot(input_cat, photocache=photocache,
+                                  racolumn=racolumn, deccolumn=deccolumn)
+    return targetphot
+
+def _get_secondary_targetdirs():
+    """Scrape all fiberassign headers to find which secondary catalogs are ever used.
+
+    This list of files can then be cached (separately).
 
     """
-    from desispec.io.photo import get_targetdirs, read_targetphot
+    fiberfiles = np.hstack(glob(os.path.join(fiberassign_dir, '???', 'fiberassign-*.fits*')))
+    #I = rand.choice(len(fiberfiles), size=50, replace=False) # for testing
+    #fiberfiles = fiberfiles[I]
+    targetdirs = []
+    for ii, fiberfile in enumerate(fiberfiles):
+        if ii % 500 == 0:
+            log.info('Working on fiberfile {}/{}'.format(ii, len(fiberfiles)))
+        fahdr = fits.getheader(fiberfile, ext=0)        
+        if 'SCND' in fahdr:
+            if fahdr['SCND'].strip() != '-':
+                targetdirs += [fahdr['SCND']]
+    targetdirs = np.unique(np.hstack(targetdirs))
+    final_targetdirs = []
+    for ii, targetdir in enumerate(targetdirs):
+        # can be a KPNO directory!
+        if 'DESIROOT' in targetdir:
+            targetdir = os.path.join(desi_root, targetdir.replace('DESIROOT/', ''))
+        if targetdir[:6] == '/data/':
+            targetdir = os.path.join(desi_root, targetdir.replace('/data/', ''))
+        if os.path.isdir(targetdir):
+            targetdir = glob(os.path.join(targetdir, '*.fits'))
+        for targetdir1 in np.atleast_1d(targetdir):                
+            if os.path.isfile(targetdir1):
+                log.info('Found secondary targets catalog {}'.format(targetdir1))
+                final_targetdirs.append(targetdir1)
+            else:
+                log.warning('Targets directory {} not found.'.format(targetdir))
+    final_targetdirs = np.unique(final_targetdirs)
+    log.debug(final_targetdirs)
 
-    targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
-    targetphot = read_targetphot(input_cat, targetdirs, photocache=photocache, datamodel=datamodel)
+    return final_targetdirs
 
-    pdb.set_trace()
+def _build_secondarycache(mp=1):
+    """To speed things up, read and cache all the large secondary target catalogs
+    and the TOO files *once*. Now, not all these catalogs are actually used but
+    we don't know which ones yet until we read all the fiberassign headers.
 
-    return targetphot
+    """
+    # Figure out which secondary target catalogs actually were used to design
+    # tiles but only do this one time.
+    #cachefiles = _get_secondary_targetdirs()
+
+    #cachefiles = np.hstack([
+    #    glob('/global/cfs/cdirs/desi/target/catalogs/dr9/*/targets/*/secondary/*/*targets-*-secondary*.fits'),
+    #    #glob('/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/*targets-*-secondary*.fits'),
+    #    glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
+    #    ])
+    
+    cachefiles = np.hstack([
+        ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+         #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/bright/targets-bright-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/targets-dark-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/bright/targets-bright-secondary.fits',
+         '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits',
+         '/global/cfs/cdirs/desi/target/secondary/sv1/dedicated/0.49.0/DC3R2_GAMA_priorities.fits'],
+        glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
+        ])
+    
+    #cachefiles = np.hstack([
+    #        ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+    #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
+    #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
+    #         ],
+    #        glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
+    
+    mpargs = []
+    for cachefile in cachefiles:
+        if cachefile.replace('.fits', '-dr9photometry.fits') in cachefiles and '.ecsv' not in cachefile: # just read the photometry
+            continue
+        mpargs.append([cachefile])
+    if mp > 1:
+        with multiprocessing.Pool(mp) as P:
+            photocache1 = P.map(_cache_one_catalog, mpargs)
+    else:
+        photocache1 = [cache_one_catalog(mparg[0]) for mparg in mpargs]
+    
+    photocache = {}
+    for _photocache1 in photocache1:
+        for key in _photocache1.keys():
+            if key in photocache.keys():
+                photocache[key] = vstack((_photocache1[key], photocache[key]), metadata_conflicts='silent') # stack the TOO catalogs
+        photocache.update(_photocache1)
+
+    return photocache
 
 def main():
 
@@ -304,8 +404,7 @@ def main():
     p.add_argument('--outprefix', type=str, required=True, help='output file prefix')
     p.add_argument('--mp', type=int, default=1, help='number of multiprocessing cores')
     p.add_argument('--filenside', type=int, default=4, help='healpix nside for tractorphot catalogs.')
-    p.add_argument('--get-secondary-targetdirs', action='store_true', help='Figure out which secondary target catalogs actually were used to design tiles.')
-    p.add_argument('--no-cache', action='store_true', help='Do not cache the secondary target catalogs.')
+    p.add_argument('--no-secondarycache', action='store_true', help='Do not cache the secondary target catalogs.')
     p.add_argument('--ntest', type=int, default=None, help='Test on a randomly selected sample of NTEST objects.')
     p.add_argument('--potential-targets', action='store_true', help='Gather photometry for the potential targets.')
     p.add_argument('--targetphot', action='store_true', help='Build the photo-targets catalogs.')
@@ -329,6 +428,7 @@ def main():
     else:
         rand = None
 
+    # Build the targetphot catalog.
     if args.targetphot:
         if args.potential_targets:        
             outfile = os.path.join(args.outdir, 'targetphot-potential-targets-{}.fits'.format(args.outprefix))
@@ -339,108 +439,12 @@ def main():
             log.info('Output file {} exists; use --overwrite'.format(outfile))
             return
 
-        # Fragile! Read a single row of a single target catalog in order to get the
-        # correct photometric data model. Add all the _TARGET columns at the end
-        datamodel = Table(fitsio.read('/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/resolve/dark/targets-dark-hp-0.fits', rows=0, upper=True))
-        for col in datamodel.colnames:
-            if '_TARGET' in col:
-                datamodel.remove_column(col)
-            else:
-                datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
-        for col in TARGETINGBITCOLS:
-            datamodel[col] = np.zeros(1, dtype=np.int64)
-
-        # This bit of code loops through all the fiberassign headers and figures
-        # out which secondary catalogs are (ever) used for fiber assignment, so
-        # we can cache them (below).
-            
-        if args.get_secondary_targetdirs:
-            fiberfiles = np.hstack(glob(os.path.join(fiberassign_dir, '???', 'fiberassign-*.fits*')))
-            #I = rand.choice(len(fiberfiles), size=50, replace=False) # for testing
-            #fiberfiles = fiberfiles[I]
-            targetdirs = []
-            for ii, fiberfile in enumerate(fiberfiles):
-                if ii % 500 == 0:
-                    log.info('Working on fiberfile {}/{}'.format(ii, len(fiberfiles)))
-                fahdr = fits.getheader(fiberfile, ext=0)        
-                if 'SCND' in fahdr:
-                    if fahdr['SCND'].strip() != '-':
-                        targetdirs += [fahdr['SCND']]
-            targetdirs = np.unique(np.hstack(targetdirs))
-            final_targetdirs = []
-            for ii, targetdir in enumerate(targetdirs):
-                # can be a KPNO directory!
-                if 'DESIROOT' in targetdir:
-                    targetdir = os.path.join(desi_root, targetdir.replace('DESIROOT/', ''))
-                if targetdir[:6] == '/data/':
-                    targetdir = os.path.join(desi_root, targetdir.replace('/data/', ''))
-                if os.path.isdir(targetdir):
-                    targetdir = glob(os.path.join(targetdir, '*.fits'))
-                for targetdir1 in np.atleast_1d(targetdir):                
-                    if os.path.isfile(targetdir1):
-                        log.info('Found secondary targets catalog {}'.format(targetdir1))
-                        final_targetdirs.append(targetdir1)
-                    else:
-                        log.warning('Targets directory {} not found.'.format(targetdir))
-            log.info(np.unique(final_targetdirs))
-        
-        # To speed things up, read and cache all the large secondary target catalogs and
-        # the TOO files *once*. Now, not all these catalogs are actually used but we
-        # don't know which ones yet until we read all the fiberassign headers.
-        if not args.no_cache:
-            #cachefiles = np.hstack([
-            #    glob('/global/cfs/cdirs/desi/target/catalogs/dr9/*/targets/*/secondary/*/*targets-*-secondary*.fits'),
-            #    #glob('/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/*targets-*-secondary*.fits'),
-            #    glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
-            #    ])
-        
-            cachefiles = np.hstack([
-                ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
-                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/bright/targets-bright-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/targets-dark-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/bright/targets-bright-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits',
-                 '/global/cfs/cdirs/desi/target/secondary/sv1/dedicated/0.49.0/DC3R2_GAMA_priorities.fits'],
-                glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
-                ])
-            
-            #cachefiles = np.hstack([
-            #        ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-            #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
-            #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
-            #         ],
-            #        glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
-            
-            mpargs = []
-            for cachefile in cachefiles:
-                if cachefile.replace('.fits', '-dr9photometry.fits') in cachefiles and '.ecsv' not in cachefile: # just read the photometry
-                    continue
-                mpargs.append([cachefile])
-            if args.mp > 1:
-                with multiprocessing.Pool(args.mp) as P:
-                    photocache1 = P.map(_cache_one_catalog, mpargs)
-            else:
-                photocache1 = [cache_one_catalog(mparg[0]) for mparg in mpargs]
-            
+        # Optionally cache the targetids of all the secondary target
+        # catalogs. This cache is used in desispec.io.photo.build_targetphot.
+        if args.no_secondarycache:
             photocache = {}
-            for _photocache1 in photocache1:
-                for key in _photocache1.keys():
-                    if key in photocache.keys():
-                        photocache[key] = vstack((_photocache1[key], photocache[key]), metadata_conflicts='silent') # stack the TOO catalogs
-                photocache.update(_photocache1)
         else:
-            photocache = {}
+            photocache = _build_secondarycache(mp=args.mp)
     
         if args.potential_targets:
             # Assume that the nominal/parent zcat catalog has been previously generated.
@@ -455,15 +459,11 @@ def main():
                 #parent_zcat = parent_zcat[parent_zcat['TILEID'] == 81108]
                 J = rand.choice(len(parent_zcat), size=args.ntest, replace=False)
                 parent_zcat = parent_zcat[J]
-
             tileids = np.unique(parent_zcat['TILEID'])
 
-            bricks = None
-            #bricks = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'))
-                        
             # Multiprocess over tiles
             log.info('Dividing the sample into {} unique tiles.'.format(len(tileids)))
-            mpargs = [[tileid, bricks] for tileid in tileids]
+            mpargs = [[tileid] for tileid in tileids]
                     
             if args.mp > 1:
                 with multiprocessing.Pool(args.mp) as P:
@@ -481,8 +481,7 @@ def main():
         else:
             # Read all the zpix catalogs in parallel.
             zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
-            print('Hack!!')
-            zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv3-dark-cumulative.fits'))
+            #zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv3-dark-cumulative.fits'))
             mpargs = []
             for zcatfile in zcatfiles:
                 mpargs.append([zcatfile])
@@ -496,7 +495,6 @@ def main():
             # the unique TARGETIDs.
             zcat = vstack(zcat)
             _, _, _, _, sky, _ = decode_targetid(zcat['TARGETID'])
-            #objid, brickid, release, mock, sky, gaia = decode_targetid(zcat['TARGETID'])
             keep = (sky == 0) * (zcat['TARGETID'] > 0)
             if np.sum(keep) > 0:
                 log.info('Keeping {}/{} objects after removing sky targets and stuck positioners)'.format(
@@ -506,32 +504,24 @@ def main():
             _, uindx = np.unique(zcat['TARGETID'], return_index=True)
             zcat = zcat[uindx]
             zcat = zcat[np.argsort(zcat['TARGETID'])]
+
+            if rand is not None:
+                J = rand.choice(len(zcat), size=args.ntest, replace=False)
+                zcat = zcat[J]
             
             log.info('Found {:,} unique TARGETIDs and {:,} unique tiles from {} redshift catalogs'.format(
                 len(zcat), len(set(zcat['TILEID'])), len(zcatfiles)))
     
-        if rand is not None:
-            #zcat = zcat[zcat['TILEID'] == 81108]
-            J = rand.choice(len(zcat), size=args.ntest, replace=False)
-            zcat = zcat[J]
-
         if args.potential_targets:
             # Multiprocess over tiles
             log.info('Dividing the sample into {} unique tiles.'.format(len(set(zcat['TILEID']))))
-            mpargs = [[zcat[zcat['TILEID'] == tileid], photocache, datamodel, args.reduxdir]
-                      for tileid in set(zcat['TILEID'])]
+            mpargs = [[zcat[zcat['TILEID'] == tileid], photocache, 'RA', 'DEC'] for tileid in set(zcat['TILEID'])]
         else:
-            ## ~10^4 objects have NaN coordinates; handle those separately (all these have negative TARGETIDs)
-            #inan = np.isnan(zcat['TARGET_RA'])
-            #zcat_nan = zcat[inan]
-            #zcat = zcat[np.logical_not(inan)]
-    
-            # Multiprocess over nside=8 healpixels which is how the non-secondary
-            # targeting catalogs are organized on-disk.
+            # Multiprocess over nside=8 healpixels which is how the
+            # non-secondary targeting catalogs are organized on-disk.
             pixels = radec2pix(8, zcat['TARGET_RA'], zcat['TARGET_DEC'])
             log.info('Dividing the sample into {} nside=8 healpixels.'.format(len(set(pixels))))
-            mpargs = [[zcat[pixel == pixels], photocache, datamodel, args.reduxdir]
-                      for pixel in set(pixels)]
+            mpargs = [[zcat[pixel == pixels], photocache, 'TARGET_RA', 'TARGET_DEC'] for pixel in set(pixels)]
                     
         if args.mp > 1:
             with multiprocessing.Pool(args.mp) as P:
@@ -539,32 +529,31 @@ def main():
         else:
             out = [targetphot_one(*mparg) for mparg in mpargs]
 
-        pdb.set_trace()
-
         # stack, sort, and write out
-        out = vstack(out)
-        out = out[np.argsort(out['TARGETID'])]
-
-        out.meta['EXTNAME'] = 'TARGETPHOT'
-        log.info('Writing {:,} objects to {}'.format(len(out), outfile))
-        out.write(outfile, overwrite=True)
-        del out, photocache
-
-        # Also write out the redshift catalog (with a minimal number of columns)
-        # used to generate the targetphot file. Note that this intermediate
-        # catalog is needed in order to do positional Tractor photometry
-        # gathering, below.
-        if args.potential_targets:        
-            outfile_zcat = os.path.join(args.outdir, 'targetphot-potential-targets-zcat-{}.fits'.format(args.outprefix))
-        else:
-            outfile_zcat = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
-        
-        zcat.meta['EXTNAME'] = 'ZCATALOG'
-        log.info('Writing {:,} objects to {}'.format(len(zcat), outfile_zcat))
-        zcat.write(outfile_zcat, overwrite=True)
-        del zcat
+        if len(out) > 0:
+            out = vstack(out)
+            out = out[np.argsort(out['TARGETID'])]
     
-    # Build Tractor photometry.
+            out.meta['EXTNAME'] = 'TARGETPHOT'
+            log.info('Writing {:,} objects to {}'.format(len(out), outfile))
+            out.write(outfile, overwrite=True)
+            del out, photocache
+    
+            # Also write out the redshift catalog (with a minimal number of columns)
+            # used to generate the targetphot file. Note that this intermediate
+            # catalog is needed in order to do positional Tractor photometry
+            # gathering, below.
+            if args.potential_targets:        
+                outfile_zcat = os.path.join(args.outdir, 'targetphot-potential-targets-zcat-{}.fits'.format(args.outprefix))
+            else:
+                outfile_zcat = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
+            
+            zcat.meta['EXTNAME'] = 'ZCATALOG'
+            log.info('Writing {:,} objects to {}'.format(len(zcat), outfile_zcat))
+            zcat.write(outfile_zcat, overwrite=True)
+            del zcat
+        
+    # Build the tractorphot catalogs.
     if args.tractorphot:
         if args.potential_targets:
             any_outfile = glob(os.path.join(args.outdir, 'tractorphot', 'tractorphot-potential-targets-nside{}-hp*-{}.fits'.format(

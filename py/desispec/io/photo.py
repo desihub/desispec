@@ -55,14 +55,20 @@ def get_targetdirs(tileid, fiberassign_dir=None):
             targetdirs += [fahdr['SCND']]
 
     if 'TOO' in fahdr:
-        targetdirs += [fahdr['TOO']]
+        TOOfile = fahdr['TOO']
+        # can be a KPNO directory!
+        if 'DESIROOT' in TOOfile:
+            TOOfile = os.path.join(desi_root, TOOfile.replace('DESIROOT/', ''))
+        if TOOfile[:6] == '/data/': # fragile
+            TOOfile = os.path.join(desi_root, TOOfile.replace('/data/', ''))
+        if os.path.isfile(TOOfile):
+            targetdirs += [TOOfile]
     
     for ii, targetdir in enumerate(targetdirs):
         # for secondary targets, targetdir can be a filename
         if targetdir[-4:] == 'fits': # fragile...
             targetdir = os.path.dirname(targetdir)
         if not os.path.isdir(targetdir):
-            # can be a KPNO directory!
             if 'DESIROOT' in targetdir:
                 targetdir = os.path.join(desi_root, targetdir.replace('DESIROOT/', ''))
             if targetdir[:6] == '/data/':
@@ -82,22 +88,12 @@ def get_targetdirs(tileid, fiberassign_dir=None):
         
     return targetdirs
 
-def read_targetphot(input_cat, targetdirs, photocache=None, datamodel=None):
-    """Find and stack the photometric targeting information given a set of targets.
-
-    Args:
-        input_cat (astropy.table.Table): input table with the following
-          (required) columns: TARGETID, TARGET_RA, TARGET_DEC
-
-    Returns a table of targeting photometry using a consistent data model across
-    primary (DR9) targets, secondary targets, and targets of opportunity.
+def _targetphot_datamodel():
+    """Initialize the targetphot data model by reading a nominal targeting catalog.
 
     """
     #from pkg_resources import resource_filename
-    from desimodel.footprint import radec2pix
     
-    # Initialize the output catalog and data model by reading a nominal
-    # targeting catalog from the desitarget unit test directory.
     #datamodel_file = resource_filename('desitarget.test', 't/targets.fits')
     datamodel_file = os.path.join(os.environ.get('DESI_ROOT'), 'target', 'catalogs', 'dr9', '1.1.1', 'targets',
                                   'main', 'resolve', 'dark', 'targets-dark-hp-0.fits')
@@ -123,12 +119,39 @@ def read_targetphot(input_cat, targetdirs, photocache=None, datamodel=None):
             datamodel[col] = np.zeros(datamodel[col].shape, dtype=datamodel[col].dtype)
     for col in TARGETINGBITCOLS:
         datamodel[col] = np.zeros(1, dtype=np.int64)
+        
+    return datamodel
+
+def build_targetphot(input_cat, photocache=None, racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
+    """Find and stack the photometric targeting information given a set of targets.
+
+    Args:
+        input_cat (astropy.table.Table): input table with the following
+          (required) columns: TARGETID, TILEID, RACOLUMN, DECCOLUMN
+
+    Returns a table of targeting photometry using a consistent data model across
+    primary (DR9) targets, secondary targets, and targets of opportunity.
+
+    """
+    import astropy
+    from desimodel.footprint import radec2pix
+
+    if len(input_cat) == 0:
+        log.warning('No objects in input catalog.')
+        return Table()
+
+    for col in ['TARGETID', 'TILEID', racolumn, deccolumn]:
+        if col not in input_cat.colnames:
+            log.warning('Missing required input column {}'.format(col))
+            raise ValueError
+
+    # Get the unique list of targetdirs
+    targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
     
+    datamodel = _targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(input_cat))))
     out['TARGETID'] = input_cat['TARGETID']
 
-    targetdirs = np.unique(targetdirs)
-    
     photo, photofiles = [], []
     for targetdir in targetdirs:
         # Handle secondary targets, which have a (very!) different data model.
@@ -146,12 +169,12 @@ def read_targetphot(input_cat, targetdirs, photocache=None, datamodel=None):
             alltargetfiles = glob(os.path.join(targetdir, '*-hp-*.fits'))
             filenside = fitsio.read_header(alltargetfiles[0], ext=1)['FILENSID']
             # https://github.com/desihub/desispec/issues/1711
-            if np.any(np.isnan(input_cat['TARGET_RA'])): # some SV1 targets have nan in RA,DEC
+            if np.any(np.isnan(input_cat[racolumn])): # some SV1 targets have nan in RA,DEC
                 log.warning('Some RA, DEC are NaN in target directory {}'.format(targetdir))
-            notnan = np.isfinite(input_cat['TARGET_RA'])
+            notnan = np.isfinite(input_cat[racolumn])
             targetfiles = []
             if np.sum(notnan) > 0:
-                pixlist = radec2pix(filenside, input_cat['TARGET_RA'][notnan], input_cat['TARGET_DEC'][notnan])
+                pixlist = radec2pix(filenside, input_cat[racolumn][notnan], input_cat[deccolumn][notnan])
                 for pix in set(pixlist):
                     # /global/cfs/cdirs/desi/target/catalogs/gaiadr2/0.48.0/targets/sv1/resolve/supp/sv1targets-supp-hp-128.fits doesn't exist...
                     _targetfile = alltargetfiles[0].split('hp-')[0]+'hp-{}.fits'.format(pix) # fragile
@@ -192,10 +215,11 @@ def read_targetphot(input_cat, targetdirs, photocache=None, datamodel=None):
                 continue
 
             if 'ToO' in targetfile:
-                photo1 = Table.read(targetfile)
+                photo1 = Table.read(targetfile, guess=False, format='ascii.ecsv')
                 I = np.where(np.isin(photo1['TARGETID'], input_cat['TARGETID']))[0]
                 log.debug('Matched {} TOO targets'.format(len(I)))
                 if len(I) > 0:
+                    photo1 = photo1[I]
                     _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
                     for col in _photo.colnames: # not all these columns will exist...
                         if col in photo1.colnames:
