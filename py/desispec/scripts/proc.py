@@ -784,13 +784,6 @@ def main(args=None, comm=None):
                         desispec.scripts.extract.main_gpu_specter(extract_args, comm=comm_extract)
                     else:
                         desispec.scripts.extract.main_mpi(extract_args, comm=comm_extract)
-                    comm_extract.barrier()
-
-                    if comm_extract.rank == 0:
-                        for outfile in outputs[camera]:
-                            if not os.path.exists(outfile):
-                                log.error(f'Camera {camera} extraction missing output {outfile}')
-                                error_count += 1
 
             comm.barrier()
 
@@ -801,6 +794,16 @@ def main(args=None, comm=None):
                     err = runcmd(cmds[camera], inputs=inputs[camera], outputs=outputs[camera])
                     if err != 0:
                         error_count += 1
+
+        #- check for missing output files and log
+        for camera in args.cameras:
+            for outfile in outputs[camera]:
+                if not os.path.exists(outfile):
+                    if comm is not None:
+                        if comm.rank > 0:
+                            continue
+                    log.error(f'Camera {camera} extraction missing output {outfile}')
+                    error_count += 1
 
         timer.stop('extract')
         if comm is not None:
