@@ -797,13 +797,14 @@ def main(args=None, comm=None):
 
         #- check for missing output files and log
         for camera in args.cameras:
-            for outfile in outputs[camera]:
-                if not os.path.exists(outfile):
-                    if comm is not None:
-                        if comm.rank > 0:
-                            continue
-                    log.error(f'Camera {camera} extraction missing output {outfile}')
-                    error_count += 1
+            if camera in cmds:
+                for outfile in outputs[camera]:
+                    if not os.path.exists(outfile):
+                        if comm is not None:
+                            if comm.rank > 0:
+                                continue
+                        log.error(f'Camera {camera} extraction missing output {outfile}')
+                        error_count += 1
 
         timer.stop('extract')
         if comm is not None:
