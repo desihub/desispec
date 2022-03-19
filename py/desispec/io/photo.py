@@ -81,7 +81,7 @@ def get_targetdirs(tileid, fiberassign_dir=None):
             log.debug('Found targets directory or file {}'.format(targetdir))
             targetdirs[ii] = targetdir
         else:
-            log.warning('Targets directory or file {} not found.'.format(targetdir))
+            #log.warning('Targets directory or file {} not found.'.format(targetdir))
             continue
 
     targetdirs = np.unique(np.hstack(targetdirs))
@@ -122,12 +122,17 @@ def _targetphot_datamodel():
         
     return datamodel
 
-def build_targetphot(input_cat, photocache=None, racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
+def build_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
+                     racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
         input_cat (astropy.table.Table): input table with the following
-          (required) columns: TARGETID, TILEID, RACOLUMN, DECCOLUMN
+          (required) columns: TARGETID, RACOLUMN, DECCOLUMN
+        tileids (int scalar or array): set of tileids corresponding to the input
+          targets (required if targetdirs is None)
+        targetdirs (int scalar or array): output of get_targetdirs corresponding
+          to the input targets (required if tileids is None)
 
     Returns a table of targeting photometry using a consistent data model across
     primary (DR9) targets, secondary targets, and targets of opportunity.
@@ -140,13 +145,18 @@ def build_targetphot(input_cat, photocache=None, racolumn='TARGET_RA', deccolumn
         log.warning('No objects in input catalog.')
         return Table()
 
-    for col in ['TARGETID', 'TILEID', racolumn, deccolumn]:
+    for col in ['TARGETID', racolumn, deccolumn]:
         if col not in input_cat.colnames:
             log.warning('Missing required input column {}'.format(col))
             raise ValueError
 
+    if targetdirs is None and tileids is None:
+        log.warning('Must provide tileids or targetdirs input.')
+        raise ValueError
+
     # Get the unique list of targetdirs
-    targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
+    if targetdirs is None:
+        targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(np.atleast_1d(tileids))]))
     
     datamodel = _targetphot_datamodel()
     out = Table(np.hstack(np.repeat(datamodel, len(input_cat))))

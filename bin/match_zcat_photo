@@ -110,7 +110,7 @@ def read_one_zcat(catfile):
     log.info('Reading {}'.format(catfile))
     hdr = fitsio.read_header(catfile, ext='ZCATALOG')
     survey, program = hdr['SURVEY'], hdr['PROGRAM']
-    cat = Table(fitsio.read(catfile, ext='ZCATALOG', columns=['TARGETID', 'TILEID', 'TARGET_RA', 'TARGET_DEC']))
+    cat = Table(fitsio.read(catfile, ext='ZCATALOG', columns=['TARGETID', 'TILEID', 'TARGET_RA', 'TARGET_DEC', 'PETAL_LOC']))
     cat['SURVEY'] = survey
     cat['PROGRAM'] = program
     return cat
@@ -137,9 +137,6 @@ def read_one_potential_targets(tileid):
     targets = fitsio.read(fiberfile, ext='TARGETS', columns=['TARGETID', 'RA', 'DEC'])
     out = join(out, targets, keys='TARGETID', join_type='left')
     
-    out.rename_column('RA', 'TARGET_RA')
-    out.rename_column('DEC', 'TARGET_DEC')
-
     # Old code to populate the brick columns. However, this procedure is not
     # correct for secondary targets, so don't do it.
     #bricks = Table(fitsio.read('/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/survey-bricks.fits.gz'))
@@ -162,7 +159,7 @@ def _cache_one_catalog(args):
     return cache_one_catalog(*args) 
 
 def cache_one_catalog(cachefile):
-    log.info('Reading and caching {}'.format(cachefile))
+    log.info('Caching {}'.format(cachefile))
     if '.ecsv' in cachefile:
         cat = Table.read(cachefile, guess=False, format='ascii.ecsv')
         key = 'TOO'
@@ -287,10 +284,15 @@ def tractorphot_one(cat, bricks, datamodel):
 def _targetphot_one(args):
     return targetphot_one(*args)
 
-def targetphot_one(input_cat, photocache=None, racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
+def targetphot_one(input_cat, tileids, photocache=None, racolumn='TARGET_RA',
+                   deccolumn='TARGET_DEC'):
     """Build the targetphot catalog for all the objects on a single tile."""
     from desispec.io.photo import build_targetphot
-    targetphot = build_targetphot(input_cat, photocache=photocache,
+
+    # Get the unique list of targetdirs
+    targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
+    
+    targetphot = build_targetphot(input_cat, targetdirs=targetdirs, photocache=photocache,
                                   racolumn=racolumn, deccolumn=deccolumn)
     return targetphot
 
@@ -515,13 +517,14 @@ def main():
         if args.potential_targets:
             # Multiprocess over tiles
             log.info('Dividing the sample into {} unique tiles.'.format(len(set(zcat['TILEID']))))
-            mpargs = [[zcat[zcat['TILEID'] == tileid], photocache, 'RA', 'DEC'] for tileid in set(zcat['TILEID'])]
+            mpargs = [[zcat[zcat['TILEID'] == tileid], tileid, photocache, 'RA', 'DEC'] for tileid in set(zcat['TILEID'])]
         else:
             # Multiprocess over nside=8 healpixels which is how the
             # non-secondary targeting catalogs are organized on-disk.
+            tileids = np.unique(zcat['TILEID'])
             pixels = radec2pix(8, zcat['TARGET_RA'], zcat['TARGET_DEC'])
             log.info('Dividing the sample into {} nside=8 healpixels.'.format(len(set(pixels))))
-            mpargs = [[zcat[pixel == pixels], photocache, 'TARGET_RA', 'TARGET_DEC'] for pixel in set(pixels)]
+            mpargs = [[zcat[pixel == pixels], tileids, photocache, 'TARGET_RA', 'TARGET_DEC'] for pixel in set(pixels)]
                     
         if args.mp > 1:
             with multiprocessing.Pool(args.mp) as P:
