@@ -607,7 +607,6 @@ def create_desi_proc_batch_script(night, exp, cameras, jobdesc, queue, runtime=N
             fx.write("export OMP_NUM_THREADS=1\n")
         if system_name == 'perlmutter-gpu':
             fx.write("export MPICH_GPU_SUPPORT_ENABLED=1\n")
-            fx.write("module load cudatoolkit\n\n")
 
         if jobdesc.lower() not in ['science', 'prestdstar', 'stdstarfit', 'poststdstar']:
             if nightlybias:
