@@ -53,10 +53,10 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord, match_coordinates_sky
 
 from desispec.io import specprod_root
+
 from desimodel.footprint import radec2pix
 from desitarget.targets import decode_targetid
 from desitarget.io import release_to_photsys, desitarget_resolve_dec
-from desitarget.geomask import is_in_gal_box, pixarea2nside
 
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
@@ -82,6 +82,8 @@ def _resolve(cat, split=desitarget_resolve_dec()):
     # algorithm here is taken from desitarget.targets.resolve, which was
     # written by ADM. (Note we can't use that method directly because we
     # don't necessarily have photsys or release).
+    from desitarget.geomask import is_in_gal_box, pixarea2nside
+
     nside = pixarea2nside(1)
     theta, phi = np.radians(90-cat['TARGET_DEC']), np.radians(cat['TARGET_RA'])
     pixnum = hp.ang2pix(nside, theta, phi, nest=True)
@@ -281,210 +283,18 @@ def tractorphot_one(cat, bricks, datamodel):
 def _targetphot_one(args):
     return targetphot_one(*args)
 
-def targetphot_one(zcat, photocache, datamodel, reduxdir):
-    """Build the photometric target catalog for all the objects on a single tile."""
-
-    # build the full photometric catalog
-    targetdirs, TOO = [], None
-    for tileid in set(zcat['TILEID']):
-        _targetdirs, _TOO = get_targetdirs(tileid, photocache)
-        if _TOO is not None:
-            TOO = _TOO
-        targetdirs.append(_targetdirs)
-    targetdirs = np.hstack(targetdirs)
-    out = read_target_photo(zcat, photocache, datamodel, targetdirs, TOO=TOO)
-
-    return out
-
-def get_targetdirs(tileid, photocache):
-    """Get the targets catalog used to build a given fiberassign catalog."""
-    stileid = '{:06d}'.format(tileid)
-    fiberfile = os.path.join(fiberassign_dir, stileid[:3], 'fiberassign-{}.fits.gz'.format(stileid))
-    if not os.path.isfile(fiberfile):
-        fiberfile = fiberfile.replace('.gz', '')
-        if not os.path.isfile(fiberfile):
-            log.warning('Fiber assignment file {} not found!'.format(fiberfile))
-    log.debug('Reading {} header.'.format(fiberfile))
-    # old versions of fitsio can't handle CONTINUE header cards!
-    #fahdr = fitsio.read_header(fiberfile, ext=0)
-    fahdr = fits.getheader(fiberfile, ext=0)
-    targetdirs = [fahdr['TARG']]
-    for moretarg in ['TARG2', 'TARG3', 'TARG4']:
-        if moretarg in fahdr:
-            if 'gaia' not in fahdr[moretarg]: # skip
-                targetdirs += [fahdr[moretarg]]
-    if 'SCND' in fahdr:
-        if fahdr['SCND'].strip() != '-':
-            targetdirs += [fahdr['SCND']]
-
-    for ii, targetdir in enumerate(targetdirs):
-        # for secondary targets, targetdir can be a filename
-        if targetdir[-4:] == 'fits': # fragile...
-            targetdir = os.path.dirname(targetdir)
-        if not os.path.isdir(targetdir):
-            # can be a KPNO directory!
-            if 'DESIROOT' in targetdir:
-                targetdir = os.path.join(desi_root, targetdir.replace('DESIROOT/', ''))
-            if targetdir[:6] == '/data/':
-                targetdir = os.path.join(desi_root, targetdir.replace('/data/', ''))
-            
-        if os.path.isdir(targetdir):
-            log.debug('Found targets directory {}'.format(targetdir))
-            targetdirs[ii] = targetdir
-        else:
-            log.warning('Targets directory {} not found.'.format(targetdir))
-            continue
-
-    # any ToOs?
-    if 'TOO' in fahdr:
-        TOO = photocache['TOO']
-    else:
-        TOO = None
-
-    targetdirs = np.unique(np.hstack(targetdirs))
-        
-    return targetdirs, TOO
-
-def read_target_photo(zcat, photocache, datamodel, targetdirs, TOO=None):
-    """For a given tile, given a set of target directories and (optionally) a
-    TOOfile used to build the set of targets, read and stack all the photometric
-    targeting information for all objects.
+def targetphot_one(input_cat, photocache, datamodel, reduxdir):
+    """Build the photometric target catalog for all the objects on a single tile.
 
     """
-    # initialize the output catalog
-    out = Table(np.hstack(np.repeat(datamodel, len(zcat))))
-    out['TARGETID'] = zcat['TARGETID']
+    from desispec.io.photo import get_targetdirs, read_targetphot
 
-    targetdirs = np.unique(targetdirs)
-    
-    photo, photofiles = [], []
-    for targetdir in targetdirs:
-        # Handle secondary targets, which have a different data model;
-        # update on 2021 July 31: these catalogs are missing DR9
-        # photometry, so we have to skip them for now.
-        if 'secondary' in targetdir:
-            #continue                    
-            if 'sv1' in targetdir: # special case
-                if 'dedicated' in targetdir:
-                    targetfiles = glob(os.path.join(targetdir, 'DC3R2_GAMA_priorities.fits'))
-                else:
-                    targetfiles = glob(os.path.join(targetdir, '*-secondary-dr9photometry.fits'))
-            else:
-                targetfiles = glob(os.path.join(targetdir, '*-secondary.fits'))
-        else:
-            alltargetfiles = glob(os.path.join(targetdir, '*-hp-*.fits'))
-            filenside = fitsio.read_header(alltargetfiles[0], ext=1)['FILENSID']
-            # https://github.com/desihub/desispec/issues/1711
-            if np.any(np.isnan(zcat['TARGET_RA'])): # some SV1 targets have nan in RA,DEC
-                log.warning('Some RA, DEC are NaN in target directory {}'.format(targetdir))
-            notnan = np.isfinite(zcat['TARGET_RA'])
-            
-            targetfiles = []
-            if np.sum(notnan) > 0:
-                pixlist = radec2pix(filenside, zcat['TARGET_RA'][notnan], zcat['TARGET_DEC'][notnan])
-                for pix in set(pixlist):
-                    # /global/cfs/cdirs/desi/target/catalogs/gaiadr2/0.48.0/targets/sv1/resolve/supp/sv1targets-supp-hp-128.fits doesn't exist...
-                    _targetfile = alltargetfiles[0].split('hp-')[0]+'hp-{}.fits'.format(pix)
-                    if os.path.isfile(_targetfile):
-                        targetfiles.append(_targetfile)
+    targetdirs = np.unique(np.hstack([get_targetdirs(tileid) for tileid in set(input_cat['TILEID'])]))
+    targetphot = read_targetphot(input_cat, targetdirs, photocache=photocache, datamodel=datamodel)
 
-        targetfiles = np.unique(targetfiles)
+    pdb.set_trace()
 
-        if len(targetfiles) == 0:
-            continue
-
-        #print(targetfiles)
-        for ifile, targetfile in enumerate(targetfiles):
-            # If this is a secondary target catalog, use the cache. Also note
-            # that secondary target catalogs are missing some or all of the DR9
-            # photometry columns we need, so only copy what exists, e.g.,
-            #   /global/cfs/cdirs/desi/spectro/redux/everest/healpix/sv3/bright/153/15343/redrock-sv3-bright-15343.fits
-            if targetfile in photocache.keys():
-                if type(photocache[targetfile]) == astropy.table.Table:
-                    I = np.where(np.isin(photocache[targetfile]['TARGETID'], zcat['TARGETID']))[0]
-                else:
-                    photo_targetid = photocache[targetfile]
-                    I = np.where(np.isin(photo_targetid, zcat['TARGETID']))[0]
-                    
-                log.debug('Matched {} targets in {}'.format(len(I), targetfile))
-                if len(I) > 0:
-                    if type(photocache[targetfile]) == astropy.table.Table:
-                        cachecat = photocache[targetfile][I]
-                    else:
-                        cachecat = Table(fitsio.read(targetfile, rows=I))
-                    
-                    _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
-                    for col in _photo.colnames: # not all these columns will exist...
-                        if col in cachecat.colnames:
-                            _photo[col] = cachecat[col]
-                    photofiles.append(targetfile)
-                    photo.append(_photo)
-                continue
-
-            # get the correct extension name or number
-            tinfo = fitsio.FITS(targetfile)
-            for _tinfo in tinfo:
-                extname = _tinfo.get_extname()
-                if 'TARGETS' in extname:
-                    break
-            if extname == '':
-                extname = 1
-                
-            # fitsio does not preserve the order of the rows but we'll sort later.
-            photo_targetid = tinfo[extname].read(columns='TARGETID')
-            I = np.where(np.isin(photo_targetid, zcat['TARGETID']))[0]
-            #if len(I) == 0:
-            #    log.warning('No matching targets!')
-            #    raise ValueError
-            
-            log.debug('Matched {} targets in {}'.format(len(I), targetfile))
-            if len(I) > 0:
-                photo1 = tinfo[extname].read(rows=I)
-                # Columns can be out of order, so sort them here based on the
-                # data model so we can stack below.
-                _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
-                for col in _photo.colnames: # all these columns should exist...
-                    if col in photo1.dtype.names:
-                        _photo[col] = photo1[col]
-                    else:
-                        log.debug('Skipping missing column {} from {}'.format(col, targetfile))
-                del photo1
-                photofiles.append(targetfile)
-                photo.append(_photo)
-
-    # handle ToO targets
-    if TOO is not None:
-        I = np.where(np.isin(TOO['TARGETID'], zcat['TARGETID']))[0]
-        log.debug('Matched {} TOO targets'.format(len(I)))
-        if len(I) > 0:
-            cachecat = TOO[I]
-            _photo = Table(np.hstack(np.repeat(datamodel, len(I))))
-            for col in _photo.colnames: # not all these columns will exist...
-                if col in cachecat.colnames:
-                    _photo[col] = cachecat[col]
-            photofiles.append('TOO')
-            photo.append(_photo)
-
-    # backup programs have no target catalog photometry at all
-    if len(photo) == 0:
-        log.warning('No photometry found at all!')
-        photo = [out] # empty set
-
-    # np.hstack will sometimes complain even if the tables are identical...
-    #photo = Table(np.hstack(photo))
-    photo = vstack(photo)
-
-    # make sure there are no duplicates...?
-    _, uindx = np.unique(photo['TARGETID'], return_index=True) 
-    photo = photo[uindx]
-    assert(len(np.unique(photo['TARGETID'])) == len(photo))
-
-    # sort explicitly in order to ensure order
-    I = np.where(np.isin(out['TARGETID'], photo['TARGETID']))[0]
-    srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
-    out[I] = photo[srt]
-    
-    return out
+    return targetphot
 
 def main():
 
@@ -495,6 +305,7 @@ def main():
     p.add_argument('--mp', type=int, default=1, help='number of multiprocessing cores')
     p.add_argument('--filenside', type=int, default=4, help='healpix nside for tractorphot catalogs.')
     p.add_argument('--get-secondary-targetdirs', action='store_true', help='Figure out which secondary target catalogs actually were used to design tiles.')
+    p.add_argument('--no-cache', action='store_true', help='Do not cache the secondary target catalogs.')
     p.add_argument('--ntest', type=int, default=None, help='Test on a randomly selected sample of NTEST objects.')
     p.add_argument('--potential-targets', action='store_true', help='Gather photometry for the potential targets.')
     p.add_argument('--targetphot', action='store_true', help='Build the photo-targets catalogs.')
@@ -576,59 +387,61 @@ def main():
         # To speed things up, read and cache all the large secondary target catalogs and
         # the TOO files *once*. Now, not all these catalogs are actually used but we
         # don't know which ones yet until we read all the fiberassign headers.
-
-        #cachefiles = np.hstack([
-        #    glob('/global/cfs/cdirs/desi/target/catalogs/dr9/*/targets/*/secondary/*/*targets-*-secondary*.fits'),
-        #    #glob('/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/*targets-*-secondary*.fits'),
-        #    glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
-        #    ])
-    
-        cachefiles = np.hstack([
-            ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-             #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
-             #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-             #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-             #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-             #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/bright/targets-bright-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/targets-dark-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/bright/targets-bright-secondary.fits',
-             '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits',
-             '/global/cfs/cdirs/desi/target/secondary/sv1/dedicated/0.49.0/DC3R2_GAMA_priorities.fits'],
-            glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
-            ])
+        if not args.no_cache:
+            #cachefiles = np.hstack([
+            #    glob('/global/cfs/cdirs/desi/target/catalogs/dr9/*/targets/*/secondary/*/*targets-*-secondary*.fits'),
+            #    #glob('/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/*targets-*-secondary*.fits'),
+            #    glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
+            #    ])
         
-        #cachefiles = np.hstack([
-        #        ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
-        #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
-        #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
-        #         ],
-        #        glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
-        
-        mpargs = []
-        for cachefile in cachefiles:
-            if cachefile.replace('.fits', '-dr9photometry.fits') in cachefiles and '.ecsv' not in cachefile: # just read the photometry
-                continue
-            mpargs.append([cachefile])
-        if args.mp > 1:
-            with multiprocessing.Pool(args.mp) as P:
-                photocache1 = P.map(_cache_one_catalog, mpargs)
+            cachefiles = np.hstack([
+                ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.48.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary-dr9photometry.fits',
+                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/bright/sv1targets-bright-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.50.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+                 #'/global/cfs/cdirs/desi/target/catalogs/dr9/0.52.0/targets/sv1/secondary/dark/sv1targets-dark-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/bright/targets-bright-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.0.0/targets/main/secondary/dark/targets-dark-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/bright/targets-bright-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits',
+                 '/global/cfs/cdirs/desi/target/secondary/sv1/dedicated/0.49.0/DC3R2_GAMA_priorities.fits'],
+                glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')
+                ])
+            
+            #cachefiles = np.hstack([
+            #        ['/global/cfs/cdirs/desi/target/catalogs/dr9/0.51.0/targets/sv1/secondary/dark/sv1targets-dark-secondary-dr9photometry.fits',
+            #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/bright/sv3targets-bright-secondary.fits',
+            #         '/global/cfs/cdirs/desi/target/catalogs/dr9/0.57.0/targets/sv3/secondary/dark/sv3targets-dark-secondary.fits',
+            #         ],
+            #        glob('/global/cfs/cdirs/desi/survey/ops/surveyops/trunk/mtl/*/ToO/ToO.ecsv')])
+            
+            mpargs = []
+            for cachefile in cachefiles:
+                if cachefile.replace('.fits', '-dr9photometry.fits') in cachefiles and '.ecsv' not in cachefile: # just read the photometry
+                    continue
+                mpargs.append([cachefile])
+            if args.mp > 1:
+                with multiprocessing.Pool(args.mp) as P:
+                    photocache1 = P.map(_cache_one_catalog, mpargs)
+            else:
+                photocache1 = [cache_one_catalog(mparg[0]) for mparg in mpargs]
+            
+            photocache = {}
+            for _photocache1 in photocache1:
+                for key in _photocache1.keys():
+                    if key in photocache.keys():
+                        photocache[key] = vstack((_photocache1[key], photocache[key]), metadata_conflicts='silent') # stack the TOO catalogs
+                photocache.update(_photocache1)
         else:
-            photocache1 = [cache_one_catalog(mparg[0]) for mparg in mpargs]
-        
-        photocache = {}
-        for _photocache1 in photocache1:
-            for key in _photocache1.keys():
-                if key in photocache.keys():
-                    photocache[key] = vstack((_photocache1[key], photocache[key]), metadata_conflicts='silent') # stack the TOO catalogs
-            photocache.update(_photocache1)
-
+            photocache = {}
+    
         if args.potential_targets:
             # Assume that the nominal/parent zcat catalog has been previously generated.
             parent_zcatfile = os.path.join(args.outdir, 'targetphot-zcat-{}.fits'.format(args.outprefix))
@@ -668,6 +481,8 @@ def main():
         else:
             # Read all the zpix catalogs in parallel.
             zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-*-cumulative.fits'))
+            print('Hack!!')
+            zcatfiles = glob(os.path.join(args.reduxdir, 'zcatalog', 'ztile-sv3-dark-cumulative.fits'))
             mpargs = []
             for zcatfile in zcatfiles:
                 mpargs.append([zcatfile])
@@ -723,6 +538,8 @@ def main():
                 out = P.map(_targetphot_one, mpargs)
         else:
             out = [targetphot_one(*mparg) for mparg in mpargs]
+
+        pdb.set_trace()
 
         # stack, sort, and write out
         out = vstack(out)
