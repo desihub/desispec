@@ -14,6 +14,8 @@ from astropy.table import Table, vstack
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 
+from desitarget.io import desitarget_resolve_dec
+
 from desiutil.log import get_logger, DEBUG
 log = get_logger()#DEBUG)
 
@@ -64,6 +66,9 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
             TOOfile = os.path.join(desi_root, TOOfile.replace('DESIROOT/', ''))
         if TOOfile[:6] == '/data/': # fragile
             TOOfile = os.path.join(desi_root, TOOfile.replace('/data/', ''))
+        if 'afternoon_planning' in TOOfile:
+            TOOfile = TOOfile.replace('afternoon_planning/surveyops', 'survey/ops/surveyops') # fragile!
+            
         if os.path.isfile(TOOfile):
             targetdirs += [TOOfile]
     
@@ -76,7 +81,6 @@ def gather_targetdirs(tileid, fiberassign_dir=None):
                 targetdir = os.path.join(desi_root, targetdir.replace('DESIROOT/', ''))
             if targetdir[:6] == '/data/':
                 targetdir = os.path.join(desi_root, targetdir.replace('/data/', ''))
-
             if 'afternoon_planning' in targetdir:
                 targetdir = targetdir.replace('afternoon_planning/surveyops', 'survey/ops/surveyops') # fragile!
             
@@ -258,7 +262,7 @@ def _targetphot_datamodel(from_file=False):
     return datamodel
 
 def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
-                      racolumn='TARGET_RA', deccolumn='TARGET_DEC'):
+                      racolumn='TARGET_RA', deccolumn='TARGET_DEC', columns=None):
     """Find and stack the photometric targeting information given a set of targets.
 
     Args:
@@ -268,6 +272,7 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
           targets (required if targetdirs is None)
         targetdirs (int scalar or array): output of gather_targetdirs corresponding
           to the input targets (required if tileids is None)
+        columns (str array): return this subset of columns
 
     Returns a table of targeting photometry using a consistent data model across
     primary (DR9) targets, secondary targets, and targets of opportunity.
@@ -404,7 +409,8 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
 
     # backup programs have no target catalog photometry at all
     if len(photo) == 0:
-        log.warning('No photometry found at all!')
+        log.warning('No targeting photometry found.')
+        raise ValueError
         photo = [out] # empty set
 
     # np.hstack will sometimes complain even if the tables are identical...
@@ -420,6 +426,9 @@ def gather_targetphot(input_cat, tileids=None, targetdirs=None, photocache=None,
     I = np.where(np.isin(out['TARGETID'], photo['TARGETID']))[0]
     srt = np.hstack([np.where(tid == photo['TARGETID'])[0] for tid in out['TARGETID'][I]])
     out[I] = photo[srt]
+
+    if columns is not None:
+        out = out[columns]
     
     return out
 
@@ -746,33 +755,41 @@ def _gather_tractorphot_onebrick(input_cat, dr9dir, radius_match):
 
     return out
 
-def gather_tractorphot(input_cat, dr9dir=None, radius_match=1.0):
+def gather_tractorphot(input_cat, dr9dir=None, radius_match=1.0, columns=None):
     """Retrieve the Tractor catalog for all the objects in this catalog (one brick).
 
     Args:
         input_cat (astropy.table.Table): input table with the following
-          (required) columns: TARGETID, BRICKNAME, RELEASE, BRICKID, BRICK_OBJID,
-          PHOTSYS, TARGET_RA, TARGET_DEC
+          (required) columns: TARGETID, TARGET_RA, TARGET_DEC. Additional
+          optional columns that will ensure proper matching are BRICKNAME,
+          RELEASE, PHOTSYS, BRICKID, and BRICK_OBJID.
         dr9dir (str): full path to the location of the DR9 Tractor catalogs
         radius_match (float, arcsec): matching radius (default, 1 arcsec)
+        columns (str array): return this subset of columns
 
     Returns a table of Tractor photometry. Matches are identified either using
     BRICKID and BRICK_OBJID or using positional matching (1 arcsec radius).
 
     """
     from desitarget.targets import decode_targetid    
-    from desitarget.io import desitarget_resolve_dec
     from desiutil.brick import brickname
 
     if len(input_cat) == 0:
         log.warning('No objects in input catalog.')
         return Table()
 
-    for col in ['TARGETID', 'BRICKNAME', 'RELEASE', 'BRICKID', 'BRICK_OBJID',
-                'PHOTSYS', 'TARGET_RA', 'TARGET_DEC']:
+    for col in ['TARGETID', 'TARGET_RA', 'TARGET_DEC']:
         if col not in input_cat.colnames:
             log.warning('Missing required input column {}'.format(col))
             raise ValueError
+
+    # If these columns don't exist, add them with blank entries:
+    COLS = [('RELEASE', (1,), '>i2'), ('BRICKID', (1,), '>i4'), 
+            ('BRICKNAME', (1,), '<U8'), ('BRICK_OBJID', (1,), '>i4'),
+            ('PHOTSYS', (1,), '<U1')]
+    for col in COLS:
+        if col[0] not in input_cat.colnames:
+            input_cat[col[0]] = np.zeros(col[1], dtype=col[2])
 
     if dr9dir is None:
         dr9dir = '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9'
@@ -808,5 +825,8 @@ def gather_tractorphot(input_cat, dr9dir=None, radius_match=1.0):
     for brickname in set(bricknames):
         I = np.where(brickname == bricknames)[0]
         out[I] = _gather_tractorphot_onebrick(input_cat[I], dr9dir, radius_match)
+
+    if columns is not None:
+        out = out[columns]
 
     return out
